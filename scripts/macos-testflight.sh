@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT/sow-dist/deploy/macos/sow_macos.xcodeproj"
-EXPORT_OPTIONS="$ROOT/sow-dist/deploy/macos/ExportOptions.plist"
 VERSION_NAME="${SOW_MACOS_VERSION_NAME:-$(tr -d '[:space:]' < "$ROOT/.version")}"
 BUILD_NUMBER="${SOW_MACOS_BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD)}"
 MIN_BUILD_NUMBER="${SOW_MACOS_MIN_BUILD_NUMBER:-408}"
@@ -18,14 +17,18 @@ MACOS_PROFILE_UUID="${SOW_MACOS_PROVISIONING_PROFILE_UUID:-}"
 ASC_API_KEY="${SOW_ASC_API_KEY:-}"
 ASC_API_ISSUER="${SOW_ASC_API_ISSUER:-}"
 ASC_P8_PATH="${SOW_ASC_P8_PATH:-}"
-ACTIVE_EXPORT_OPTIONS=""
+SIGNING_IDENTITY="${SOW_MACOS_CODE_SIGN_IDENTITY:-}"
+INSTALLER_SIGNING_IDENTITY="${SOW_MACOS_INSTALLER_SIGNING_IDENTITY:-}"
 BUILD_SETTINGS=""
 PACKAGE_STAGE=""
+PROFILE_PLIST=""
+PROFILE_CERTIFICATE=""
 
 cleanup() {
-    [[ -z "$ACTIVE_EXPORT_OPTIONS" ]] || rm -f "$ACTIVE_EXPORT_OPTIONS"
     [[ -z "$BUILD_SETTINGS" ]] || rm -f "$BUILD_SETTINGS"
     [[ -z "$PACKAGE_STAGE" ]] || rm -rf "$PACKAGE_STAGE"
+    [[ -z "$PROFILE_PLIST" ]] || rm -f "$PROFILE_PLIST"
+    [[ -z "$PROFILE_CERTIFICATE" ]] || rm -f "$PROFILE_CERTIFICATE"
 }
 trap cleanup EXIT
 
@@ -54,28 +57,69 @@ security find-identity -v \
     || die "no Mac App Store installer identity found"
 
 if [[ -z "$MACOS_PROFILE_UUID" ]]; then
-    for profile in "$PROFILE_DIR"/*.provisionprofile; do
+    PROFILE_PLIST="$(mktemp "${TMPDIR:-/tmp}/ShadowsOfWar-mac-profile.XXXXXX.plist")"
+    selected_profile=""
+    selected_creation=""
+    for profile in "$PROFILE_DIR"/*.provisionprofile "$PROFILE_DIR"/*.mobileprovision; do
         [[ -f "$profile" ]] || continue
-        profile_name="$(security cms -D -i "$profile" 2>/dev/null \
-            | plutil -extract Name raw -o - - 2>/dev/null || true)"
-        profile_app_id="$(security cms -D -i "$profile" 2>/dev/null \
-            | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)"
-        profile_get_task_allow="$(security cms -D -i "$profile" 2>/dev/null \
-            | plutil -extract Entitlements.get-task-allow raw -o - - 2>/dev/null || true)"
-        profile_beta_reports="$(security cms -D -i "$profile" 2>/dev/null \
-            | plutil -extract Entitlements.beta-reports-active raw -o - - 2>/dev/null || true)"
-        if [[ "$profile_app_id" == "$TEAM_ID.games.shadowsofwar.app" \
-            && "$profile_get_task_allow" == "false" \
-            && "$profile_beta_reports" == "true" \
-            && "$profile_name" == *Mac* ]]; then
-            MACOS_PROFILE_UUID="$(security cms -D -i "$profile" 2>/dev/null \
-                | plutil -extract UUID raw -o - - 2>/dev/null || true)"
-            break
+        security cms -D -i "$profile" > "$PROFILE_PLIST" 2>/dev/null || continue
+        profile_platform="$(plutil -extract Platform.0 raw -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+        profile_app_id="$(plutil -extract Entitlements.application-identifier raw -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+        if [[ -z "$profile_app_id" ]]; then
+            profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$PROFILE_PLIST" 2>/dev/null || true)"
+        fi
+        profile_get_task_allow="$(plutil -extract Entitlements.get-task-allow raw -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+        [[ -n "$profile_get_task_allow" ]] || profile_get_task_allow="false"
+        if [[ "$profile_platform" == "OSX" || "$profile_platform" == "macOS" ]] \
+            && [[ "$profile_app_id" == "$TEAM_ID.games.shadowsofwar.app" \
+            && "$profile_get_task_allow" != "true" ]]; then
+            profile_creation="$(plutil -extract CreationDate raw -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+            if [[ -z "$selected_profile" || "$profile_creation" > "$selected_creation" ]]; then
+                selected_profile="$profile"
+                selected_creation="$profile_creation"
+            fi
         fi
     done
+    if [[ -n "$selected_profile" ]]; then
+        security cms -D -i "$selected_profile" > "$PROFILE_PLIST" 2>/dev/null
+        MACOS_PROFILE_UUID="$(plutil -extract UUID raw -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+    fi
 fi
 [[ -n "$MACOS_PROFILE_UUID" ]] \
     || die "no Mac App Store provisioning profile found for games.shadowsofwar.app; sign in to Xcode or set SOW_MACOS_PROVISIONING_PROFILE_UUID"
+
+if [[ -z "$PROFILE_PLIST" || ! -s "$PROFILE_PLIST" \
+    || "$(plutil -extract UUID raw -o - "$PROFILE_PLIST" 2>/dev/null || true)" != "$MACOS_PROFILE_UUID" ]]; then
+    PROFILE_PLIST="$(mktemp "${TMPDIR:-/tmp}/ShadowsOfWar-mac-profile.XXXXXX.plist")"
+    profile_loaded=false
+    for profile in "$PROFILE_DIR"/*.provisionprofile "$PROFILE_DIR"/*.mobileprovision; do
+        [[ -f "$profile" ]] || continue
+        security cms -D -i "$profile" > "$PROFILE_PLIST" 2>/dev/null || continue
+        profile_uuid="$(plutil -extract UUID raw -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+        if [[ "$profile_uuid" == "$MACOS_PROFILE_UUID" ]]; then
+            profile_loaded=true
+            break
+        fi
+    done
+    [[ "$profile_loaded" == true ]] \
+        || die "Mac App Store profile $MACOS_PROFILE_UUID is not installed in $PROFILE_DIR"
+fi
+
+if [[ -z "$SIGNING_IDENTITY" ]]; then
+    PROFILE_CERTIFICATE="$(mktemp "${TMPDIR:-/tmp}/ShadowsOfWar-mac-profile-cert.XXXXXX.der")"
+    certificate_xml="$(plutil -extract DeveloperCertificates.0 xml1 -o - "$PROFILE_PLIST" 2>/dev/null || true)"
+    certificate_b64="$(printf '%s\n' "$certificate_xml" \
+        | sed -n '/<data>/,/<\/data>/p' | sed '1d;$d' | tr -d '[:space:]')"
+    [[ -n "$certificate_b64" ]] \
+        || die "Mac App Store profile does not contain a distribution certificate"
+    printf '%s' "$certificate_b64" | base64 -D > "$PROFILE_CERTIFICATE"
+    SIGNING_IDENTITY="$(openssl x509 -inform DER -in "$PROFILE_CERTIFICATE" \
+        -fingerprint -sha1 -noout | sed 's/.*=//;s/://g')"
+fi
+[[ -n "$SIGNING_IDENTITY" ]] || die "could not resolve the Mac distribution signing identity"
+security find-identity -v -p codesigning \
+    | grep -Fq "$SIGNING_IDENTITY" \
+    || die "the Mac App Store profile certificate $SIGNING_IDENTITY is not installed in the keychain"
 
 if [[ "${1:-}" == "--upload" ]]; then
     [[ -n "$ASC_API_KEY" && -n "$ASC_API_ISSUER" && -n "$ASC_P8_PATH" ]] \
@@ -95,8 +139,8 @@ xcodebuild \
     -showBuildSettings >"$BUILD_SETTINGS"
 grep -Eq '^    ARCHS = arm64$' "$BUILD_SETTINGS" \
     || die "macOS distribution target is not arm64"
-grep -Eq '^    CODE_SIGN_STYLE = Automatic$' "$BUILD_SETTINGS" \
-    || die "macOS distribution target is not using automatic signing"
+grep -Eq '^    CODE_SIGN_STYLE = (Automatic|Manual)$' "$BUILD_SETTINGS" \
+    || die "macOS distribution target has an unsupported signing mode"
 
 echo "==> Archive macOS"
 echo "==> version=$VERSION_NAME build=$BUILD_NUMBER team=$TEAM_ID architecture=arm64"
@@ -109,48 +153,33 @@ xcodebuild \
     -archivePath "$ARCHIVE" \
     archive \
     -allowProvisioningUpdates \
-    CODE_SIGN_STYLE=Automatic \
+    CODE_SIGN_STYLE=Manual \
+    CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     PROVISIONING_PROFILE_SPECIFIER="$MACOS_PROFILE_UUID" \
     MARKETING_VERSION="$VERSION_NAME" \
     CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
-echo "==> Export macOS package"
-ACTIVE_EXPORT_OPTIONS="${TMPDIR:-/tmp}/ShadowsOfWar-mac-ExportOptions.$$.plist"
-cp "$EXPORT_OPTIONS" "$ACTIVE_EXPORT_OPTIONS"
-/usr/libexec/PlistBuddy -c "Set :destination export" "$ACTIVE_EXPORT_OPTIONS"
-xcodebuild \
-    -exportArchive \
-    -archivePath "$ARCHIVE" \
-    -exportPath "$EXPORT_DIR" \
-    -exportOptionsPlist "$ACTIVE_EXPORT_OPTIONS" \
-    -allowProvisioningUpdates
-
-PACKAGE=""
-PACKAGE_COUNT=0
-while IFS= read -r candidate; do
-    PACKAGE="$candidate"
-    PACKAGE_COUNT=$((PACKAGE_COUNT + 1))
-done < <(find "$EXPORT_DIR" -maxdepth 1 -type f -name '*.pkg' -print)
-
-if [[ "$PACKAGE_COUNT" -eq 0 ]]; then
-    APP_PATH=""
-    APP_COUNT=0
-    while IFS= read -r candidate; do
-        APP_PATH="$candidate"
-        APP_COUNT=$((APP_COUNT + 1))
-    done < <(find "$EXPORT_DIR" -maxdepth 1 -type d -name '*.app' -print)
-    [[ "$APP_COUNT" -eq 1 ]] || die "expected one exported macOS app or package, found $APP_COUNT apps and $PACKAGE_COUNT packages"
-    PACKAGE="$EXPORT_DIR/ShadowsOfWar.pkg"
-    productbuild \
-        --sign "3rd Party Mac Developer Installer: Omar Hernandez Salmeron (HS8F4NGXWN)" \
-        --component "$APP_PATH" /Applications "$PACKAGE"
-elif [[ "$PACKAGE_COUNT" -ne 1 ]]; then
-    die "expected exactly one exported macOS package, found $PACKAGE_COUNT"
+echo "==> Package macOS App Store artifact"
+APP_PATH="$ARCHIVE/Products/Applications/ShadowsOfWar.app"
+[[ -d "$APP_PATH" ]] || die "archive does not contain a macOS app bundle"
+if [[ -z "$INSTALLER_SIGNING_IDENTITY" ]]; then
+    INSTALLER_SIGNING_IDENTITY="$(security find-identity -v -p basic \
+        | awk '/3rd Party Mac Developer Installer:/{hash=$2} END{print hash}')"
 fi
+[[ -n "$INSTALLER_SIGNING_IDENTITY" ]] \
+    || die "could not resolve the Mac App Store installer signing identity"
+security find-identity -v -p basic \
+    | grep -Fq "$INSTALLER_SIGNING_IDENTITY" \
+    || die "the Mac App Store installer signing identity $INSTALLER_SIGNING_IDENTITY is not installed in the keychain"
+mkdir -p "$EXPORT_DIR"
+PACKAGE="$EXPORT_DIR/ShadowsOfWar.pkg"
+productbuild \
+    --sign "$INSTALLER_SIGNING_IDENTITY" \
+    --component "$APP_PATH" /Applications "$PACKAGE"
 
 PACKAGE_STAGE="$(mktemp -d "${TMPDIR:-/tmp}/ShadowsOfWar-mac-pkg.XXXXXX")"
-pkgutil --expand "$PACKAGE" "$PACKAGE_STAGE/expanded"
+pkgutil --expand-full "$PACKAGE" "$PACKAGE_STAGE/expanded"
 APP_PATH="$(find "$PACKAGE_STAGE/expanded" -type d -name '*.app' -print -quit)"
 [[ -n "$APP_PATH" ]] || die "macOS package does not contain an app bundle"
 

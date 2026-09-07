@@ -28,6 +28,8 @@
 	<string>12.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>SOW_WS_URL</key>
 	<string>wss://shadowsofwar.io/ws/</string>
 	<key>SOW_MAPS_URL</key>
