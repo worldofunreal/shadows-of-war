@@ -1311,7 +1311,7 @@
     }
 
     #sow-menu .sow-menu__profile input {
-        font-size: 12px;
+        font-size: 15px;
     }
 
     #sow-menu .sow-menu__profile-link {
@@ -2090,10 +2090,13 @@
 }
 
 .sow-heroes__search { flex: 1 1 auto; }
-.sow-heroes__region { flex: 0 0 142px; }
+.sow-heroes__region {
+    flex: 0 0 148px;
+    width: 148px;
+    min-width: 148px;
+}
 
-.sow-heroes__search input,
-.sow-heroes__region select {
+.sow-heroes__search input {
     display: block;
     width: 100%;
     height: 40px;
@@ -2109,8 +2112,7 @@
 
 .sow-heroes__search input::placeholder { color: var(--sow-muted); }
 
-.sow-heroes__search input:focus-visible,
-.sow-heroes__region select:focus-visible {
+.sow-heroes__search input:focus-visible {
     outline: 2px solid var(--sow-gold-bright);
     outline-offset: 2px;
 }

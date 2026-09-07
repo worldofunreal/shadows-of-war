@@ -358,11 +358,21 @@
         });
     }
 
-    function renderHeroesRegionOptions() {
-        return ["all", "Europe", "Africa", "Asia", "Americas"].map(function (region) {
-            var label = region === "all" ? "All regions" : region;
-            return "<option value='" + esc(region) + "'" + (heroesRegionFilter === region ? " selected" : "") + ">" + esc(label) + "</option>";
-        }).join("");
+    function renderHeroesRegionDropdown() {
+        var regions = ["all", "Europe", "Africa", "Asia", "Americas"];
+        var selectedLabel = heroesRegionFilter === "all" ? "All regions" : heroesRegionFilter;
+        return "<div class='sow-heroes__region sow-control-dropdown' data-heroes-region>" +
+            "<span class='sow-heroes__sr-only' id='sow-heroes-region-label'>Filter leaders by region</span>" +
+            "<button class='sow-control-dropdown__trigger' type='button' data-command='toggle_heroes_region' data-role='heroes-region-trigger' aria-haspopup='listbox' aria-expanded='" + (heroesRegionOpen ? "true" : "false") + "' aria-controls='sow-heroes-region-listbox' aria-labelledby='sow-heroes-region-label'>" +
+                "<span data-heroes-region-value>" + esc(selectedLabel) + "</span><span class='sow-control-dropdown__chevron' aria-hidden='true'>⌄</span>" +
+            "</button>" +
+            "<div class='sow-control-dropdown__menu' id='sow-heroes-region-listbox' role='listbox' aria-label='Filter leaders by region'" + (heroesRegionOpen ? "" : " hidden") + ">" +
+                regions.map(function (region) {
+                    var label = region === "all" ? "All regions" : region;
+                    return "<button class='sow-control-dropdown__option' type='button' role='option' data-command='select_heroes_region' data-role='heroes-region-option' data-region='" + esc(region) + "' aria-selected='" + (heroesRegionFilter === region ? "true" : "false") + "'>" + esc(label) + "</button>";
+                }).join("") +
+            "</div>" +
+        "</div>";
     }
 
     function renderHeroesRoster(activeId) {
@@ -370,6 +380,34 @@
         var filtered = heroesRoster(leaders);
         var cards = filtered.map(function (leader) { return renderHeroesCard(leader, activeId); }).join("");
         return cards || "<p class='sow-menu__empty sow-heroes__empty'>No leaders found.</p>";
+    }
+
+    function refreshHeroesRoster(resetScroll) {
+        var heroesRosterContainer = root.querySelector("[data-heroes-roster]");
+        if (!heroesRosterContainer) return;
+        var activeHeroesId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
+        heroesRosterContainer.innerHTML = renderHeroesRoster(activeHeroesId);
+        if (resetScroll) {
+            var heroesRosterPanel = root.querySelector(".sow-heroes__roster");
+            if (heroesRosterPanel) heroesRosterPanel.scrollTop = 0;
+        }
+    }
+
+    function syncHeroesRegionDropdown(focusTarget) {
+        var dropdown = root.querySelector("[data-heroes-region]");
+        if (!dropdown) return;
+        var trigger = dropdown.querySelector("[data-role='heroes-region-trigger']");
+        var menu = dropdown.querySelector("[role='listbox']");
+        if (!trigger || !menu) return;
+        trigger.setAttribute("aria-expanded", heroesRegionOpen ? "true" : "false");
+        menu.hidden = !heroesRegionOpen;
+        var value = dropdown.querySelector("[data-heroes-region-value]");
+        if (value) value.textContent = heroesRegionFilter === "all" ? "All regions" : heroesRegionFilter;
+        var options = dropdown.querySelectorAll("[data-role='heroes-region-option']");
+        for (var i = 0; i < options.length; i++) {
+            options[i].setAttribute("aria-selected", options[i].dataset.region === heroesRegionFilter ? "true" : "false");
+        }
+        if (focusTarget) focusTarget.focus();
     }
 
     function renderHeroes() {
@@ -384,7 +422,7 @@
                 "<main class='sow-menu__main sow-menu__main--heroes'><section class='sow-menu__heroes-slot' aria-label='Heroes'>" +
                     "<div class='sow-heroes__workspace'>" +
                         "<section class='sow-heroes__featured' aria-labelledby='sow-heroes-selected'><picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(landscapeAsset) + "'><img src='" + esc(portraitAsset) + "' alt='" + esc(activeLeader.name) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__featured-label'>SELECTED</p><h2 id='sow-heroes-selected'>" + esc(activeLeader.name) + "</h2><p class='sow-heroes__civilization'>" + esc(activeLeader.civilization) + "</p><p class='sow-heroes__perk'>" + esc(activeLeader.perk || "Enhanced military & empire bonuses.") + "</p><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'>CONFIRM " + esc(activeLeader.name.toUpperCase()) + " <span>✓</span></button></div></section>" +
-                        "<section class='sow-heroes__roster' aria-label='Leader list'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>Search leaders</span><input data-role='heroes-search' type='search' placeholder='Search leader or civilization' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label><label class='sow-heroes__region'><span class='sow-heroes__sr-only'>Filter leaders by region</span><select data-role='heroes-region' aria-label='Filter leaders by region'>" + renderHeroesRegionOptions() + "</select></label></div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId) + "</div></section>" +
+                        "<section class='sow-heroes__roster' aria-label='Leader list'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>Search leaders</span><input data-role='heroes-search' type='search' placeholder='Search leader or civilization' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId) + "</div></section>" +
                     "</div>" +
                 "</section></main>" +
                 renderFooter("HEROES") + renderMobileNav("heroes") +
@@ -894,6 +932,7 @@
     function render() {
         if (!state) return;
         var screen = currentScreen();
+        heroesRegionOpen = false;
         if (screen === "create" && previousScreen !== "create") {
             createDraft = cloneConfig();
             createOffline = !!state.custom_game_is_sp;
@@ -994,6 +1033,10 @@
     }
 
     root.addEventListener("click", function (event) {
+        if (heroesRegionOpen && !event.target.closest("[data-heroes-region]")) {
+            heroesRegionOpen = false;
+            syncHeroesRegionDropdown();
+        }
         var target = event.target.closest("[data-command]");
         if (!target || !root.contains(target)) return;
         var command = target.dataset.command;
@@ -1011,6 +1054,7 @@
                 mobileHeroesOpen = true;
                 heroesSearchQuery = "";
                 heroesRegionFilter = "all";
+                heroesRegionOpen = false;
                 tempSelectedLeader = state ? state.selected_leader : "Caesar";
                 render();
                 return;
@@ -1189,9 +1233,22 @@
             mobileHeroesOpen = true;
             heroesSearchQuery = "";
             heroesRegionFilter = "all";
+            heroesRegionOpen = false;
             tempSelectedLeader = state ? state.selected_leader : "Caesar";
             settingsOpen = false;
             render();
+            return;
+        }
+        if (command === "toggle_heroes_region") {
+            heroesRegionOpen = !heroesRegionOpen;
+            syncHeroesRegionDropdown();
+            return;
+        }
+        if (command === "select_heroes_region") {
+            heroesRegionFilter = target.dataset.region || "all";
+            heroesRegionOpen = false;
+            refreshHeroesRoster(true);
+            syncHeroesRegionDropdown(root.querySelector("[data-role='heroes-region-trigger']"));
             return;
         }
         if (command === "preview_leader") {
@@ -1366,6 +1423,49 @@
     });
 
     root.addEventListener("keydown", function (event) {
+        var regionTrigger = event.target.closest("[data-role='heroes-region-trigger']");
+        var regionOption = event.target.closest("[data-role='heroes-region-option']");
+        if (regionTrigger) {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                heroesRegionOpen = true;
+                syncHeroesRegionDropdown();
+                var triggerOptions = root.querySelectorAll("[data-role='heroes-region-option']");
+                if (triggerOptions.length) triggerOptions[event.key === "ArrowUp" ? triggerOptions.length - 1 : 0].focus();
+                return;
+            }
+            if (event.key === "Escape" && heroesRegionOpen) {
+                event.preventDefault();
+                heroesRegionOpen = false;
+                syncHeroesRegionDropdown(regionTrigger);
+                return;
+            }
+        }
+        if (regionOption) {
+            var regionOptions = Array.prototype.slice.call(root.querySelectorAll("[data-role='heroes-region-option']"));
+            var regionIndex = regionOptions.indexOf(regionOption);
+            var regionNextIndex = regionIndex;
+            if (event.key === "ArrowDown") regionNextIndex = Math.min(regionOptions.length - 1, regionIndex + 1);
+            if (event.key === "ArrowUp") regionNextIndex = Math.max(0, regionIndex - 1);
+            if (event.key === "Home") regionNextIndex = 0;
+            if (event.key === "End") regionNextIndex = regionOptions.length - 1;
+            if (regionNextIndex !== regionIndex) {
+                event.preventDefault();
+                regionOptions[regionNextIndex].focus();
+                return;
+            }
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                regionOption.click();
+                return;
+            }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                heroesRegionOpen = false;
+                syncHeroesRegionDropdown(root.querySelector("[data-role='heroes-region-trigger']"));
+                return;
+            }
+        }
         if (event.key === "Escape" && profileMatchDetail) {
             profileMatchDetail = null;
             render();
@@ -1507,13 +1607,7 @@
         }
         if (input.dataset && input.dataset.role === "heroes-search") {
             heroesSearchQuery = input.value;
-            var heroesRosterContainer = root.querySelector("[data-heroes-roster]");
-            if (heroesRosterContainer) {
-                var activeHeroesId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
-                heroesRosterContainer.innerHTML = renderHeroesRoster(activeHeroesId);
-                var heroesRosterPanel = root.querySelector(".sow-heroes__roster");
-                if (heroesRosterPanel) heroesRosterPanel.scrollTop = 0;
-            }
+            refreshHeroesRoster(true);
         }
         var createForm = input.closest("form[data-form='create']");
         if (createForm) {
@@ -1540,17 +1634,6 @@
 
     root.addEventListener("change", function (event) {
         var input = event.target;
-        if (input.dataset && input.dataset.role === "heroes-region") {
-            heroesRegionFilter = input.value || "all";
-            var heroesRosterContainer = root.querySelector("[data-heroes-roster]");
-            if (heroesRosterContainer) {
-                var activeHeroesId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
-                heroesRosterContainer.innerHTML = renderHeroesRoster(activeHeroesId);
-                var heroesRosterPanel = root.querySelector(".sow-heroes__roster");
-                if (heroesRosterPanel) heroesRosterPanel.scrollTop = 0;
-            }
-            return;
-        }
         var createForm = input.closest("form[data-form='create']");
         if (createForm) {
             syncCreateDraft(createForm);

@@ -1347,8 +1347,9 @@
 
     .sow-menu__topbar {
         display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 7px;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 6px;
         min-height: 52px;
         padding: 5px 6px;
         backdrop-filter: none;
@@ -1368,26 +1369,37 @@
     }
 
     .sow-menu__avatar,
-    .sow-menu__leader-button,
-    .sow-menu__icon-button {
+    .sow-menu__leader-button {
         width: 44px;
         height: 44px;
         min-width: 44px;
     }
 
-    .sow-menu__profile { flex: 1 1 72px; min-width: 0; }
-    .sow-menu__profile input,
+    .sow-menu__icon-button {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+    }
+
+    .sow-menu__profile { flex: 1 1 auto; min-width: 0; }
+    .sow-menu__profile input {
+        width: 100%;
+        min-width: 0;
+        min-height: 0;
+        height: 24px;
+        font-size: 15px;
+    }
     .sow-menu__join input,
     .sow-menu__field,
     .sow-menu__select { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
     .sow-menu__top-actions {
-        width: 100%;
+        width: auto;
         min-width: 0;
         margin-left: 0;
         justify-content: flex-end;
         gap: 4px;
     }
-    .sow-menu__signin { min-height: 44px; padding: 0 8px; font-size: 8px; }
+    .sow-menu__signin { min-height: 36px; height: 36px; padding: 0 8px; font-size: 10px; }
 
     .sow-menu__main {
         width: 100%;

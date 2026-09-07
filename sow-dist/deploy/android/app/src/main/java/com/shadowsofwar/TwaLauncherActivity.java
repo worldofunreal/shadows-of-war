@@ -1,8 +1,11 @@
 package com.shadowsofwar;
 
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.view.Window;
 
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 import com.google.android.gms.games.GamesSignInClient;
@@ -16,24 +19,44 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /** Opens the TWA and performs a best-effort Play Games identity handoff. */
 public final class TwaLauncherActivity extends LauncherActivity {
     private static final String TAG = "SOW_PGS";
-    private final ExecutorService network = Executors.newSingleThreadExecutor();
     private GamesSignInClient signInClient;
     private boolean requestInFlight;
     private String rendezvousId;
 
     @Override
     protected void onCreate(Bundle state) {
+        hideSystemBars();
         super.onCreate(state);
+        hideSystemBars();
         Log.i(TAG, "TWA launched; starting Play Games in parallel");
         PlayGamesSdk.initialize(getApplicationContext());
         signInClient = PlayGames.getGamesSignInClient(this);
         checkAuthentication();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemBars();
+        }
+    }
+
+    private void hideSystemBars() {
+        Window window = getWindow();
+        window.setStatusBarColor(Color.TRANSPARENT);
+        window.setNavigationBarColor(Color.TRANSPARENT);
+        window.getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
     @Override
@@ -44,12 +67,6 @@ public final class TwaLauncherActivity extends LauncherActivity {
                 .appendQueryParameter("sow_platform", "android")
                 .appendQueryParameter("sow_playgames_rendezvous", rendezvousId)
                 .build();
-    }
-
-    @Override
-    protected void onDestroy() {
-        network.shutdownNow();
-        super.onDestroy();
     }
 
     private void checkAuthentication() {
@@ -90,7 +107,7 @@ public final class TwaLauncherActivity extends LauncherActivity {
 
     private void exchangeCode(String serverAuthCode) {
         Log.i(TAG, "exchanging server auth code");
-        network.execute(() -> {
+        new Thread(() -> {
             try {
                 URL url = new URL(BuildConfig.PLAY_GAMES_AUTH_URL + "/auth/playgames/exchange");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -118,6 +135,6 @@ public final class TwaLauncherActivity extends LauncherActivity {
                 Log.i(TAG, "Play Games handoff unavailable; continuing anonymously");
             }
             runOnUiThread(() -> requestInFlight = false);
-        });
+        }, "sow-playgames-auth").start();
     }
 }

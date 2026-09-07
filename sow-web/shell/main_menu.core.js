@@ -12,6 +12,7 @@
     var browserSearchQuery = "";
     var heroesSearchQuery = "";
     var heroesRegionFilter = "all";
+    var heroesRegionOpen = false;
     var settingsOpen = false;
     var profileOpen = false;
     var profilePublicId = null;
