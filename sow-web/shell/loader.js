@@ -91,6 +91,8 @@
     let loaderText = null;
     let finishing = false;
     let rafId = 0;
+    let finishTimer = 0;
+    let teardownTimer = 0;
     let reportedProgress = null;
 
     function isMobile() {
@@ -194,10 +196,46 @@
         rafId = requestAnimationFrame(tick);
     }
 
+    function cancelFinishTimers() {
+        if (finishTimer) {
+            clearTimeout(finishTimer);
+            finishTimer = 0;
+        }
+        if (teardownTimer) {
+            clearTimeout(teardownTimer);
+            teardownTimer = 0;
+        }
+    }
+
     function buildDom() {
         root = document.getElementById('web-loader');
         if (!root) {
-            return;
+            root = document.createElement('div');
+            root.id = 'web-loader';
+            root.setAttribute('aria-live', 'polite');
+            root.setAttribute('aria-busy', 'true');
+            root.innerHTML = `
+                <picture class="splash-picture">
+                    <source id="splash-mobile" media="(max-width: 599px)">
+                    <img id="splash-bg" class="splash-bg" alt="" decoding="async" fetchpriority="high">
+                </picture>
+                <div id="loader-bar-wrap" class="loader-bar-wrap">
+                    <img id="loader-bar-empty" class="loader-bar-empty" alt="" decoding="async" fetchpriority="high">
+                    <div id="loader-bar-fill" class="loader-bar-fill">
+                        <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low">
+                    </div>
+                    <p id="loader-text" class="loader-text">Loading...</p>
+                </div>
+            `;
+            document.body.appendChild(root);
+
+            const desktopSplash = assetUrl(assetPathVariants('sow-splash-desktop.webp')[0]);
+            const mobileSplash = assetUrl(assetPathVariants('sow-splash-mobile.webp')[0]);
+            const mobileSource = document.getElementById('splash-mobile');
+            if (mobileSource) mobileSource.srcset = mobileSplash;
+            setImgSrc(document.getElementById('splash-bg'), isMobile() ? mobileSplash : desktopSplash);
+            setImgSrc(document.getElementById('loader-bar-empty'), assetUrl(assetPathVariants('loader_empty.webp')[0]));
+            setImgSrc(document.getElementById('loader-bar-full'), assetUrl(assetPathVariants('loader_full.webp')[0]));
         }
 
         const splashBg = document.getElementById('splash-bg');
@@ -232,6 +270,7 @@
 
     function teardown(expectedRoot) {
         if (expectedRoot && root !== expectedRoot) return;
+        cancelFinishTimers();
         stopProgress();
         window.removeEventListener('resize', layout);
         window.removeEventListener('orientationchange', layout);
@@ -242,10 +281,12 @@
         if (root && root.parentNode) {
             root.parentNode.removeChild(root);
         }
+        window.dispatchEvent(new Event('sow:loader-ready'));
         root = null;
         barFill = null;
         barFull = null;
         loaderText = null;
+        finishing = false;
     }
 
     function sowAnalyticsEnvelope(name) {
@@ -287,6 +328,7 @@
         if (!root || finishing) return;
         const closingRoot = root;
         finishing = true;
+        cancelFinishTimers();
         sowTrack('shell_loaded');
         stopProgress();
         root.style.pointerEvents = 'none';
@@ -297,10 +339,14 @@
         }
 
         root.style.transition = `opacity ${FADEOUT_MS}ms ease-out`;
-        setTimeout(() => {
+        finishTimer = setTimeout(() => {
+            finishTimer = 0;
             if (root !== closingRoot) return;
             root.style.opacity = '0';
-            setTimeout(() => teardown(closingRoot), FADEOUT_MS + 30);
+            teardownTimer = setTimeout(() => {
+                teardownTimer = 0;
+                teardown(closingRoot);
+            }, FADEOUT_MS + 30);
         }, 160);
     }
 
@@ -315,8 +361,14 @@
         if (!root) {
             finishing = false;
             buildDom();
+        } else if (finishing) {
+            cancelFinishTimers();
+            finishing = false;
+            root.style.transition = 'none';
+            root.style.opacity = '1';
+            root.style.pointerEvents = 'auto';
+            startProgress();
         }
-        if (finishing) finishing = false;
         const progress = Number(state.loader_progress);
         if (Number.isFinite(progress)) {
             reportedProgress = Math.max(0, Math.min(1, progress));

@@ -270,9 +270,16 @@
             }, 600000);
         })();
     </script>
-    <script src="./sdk/store_portals.js"></script>
+    <script src="./sdk/store_portals.js?v=__BUILD_TS__"></script>
     <script>/* __INLINE_LOADER_JS__ */</script>
     <script>/* __INLINE_MAIN_MENU_JS__ */</script>
+    <script>
+        window.addEventListener('sow:loader-ready', function () {
+            if (typeof window.SOW_startAndroidPlayGamesAutoAuth === 'function') {
+                window.SOW_startAndroidPlayGamesAutoAuth();
+            }
+        }, { once: true });
+    </script>
     <script type="module">
         async function run() {
             var isPortal = window.SOW_RUNTIME && window.SOW_RUNTIME.portal_embed === true

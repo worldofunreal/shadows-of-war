@@ -68,6 +68,7 @@ enum WebMenuCommand {
         target_player_id: u16,
     },
     SignIn,
+    SignOut,
     SetMute {
         value: bool,
     },
@@ -499,6 +500,9 @@ impl SowApp {
                 }
                 WebMenuCommand::SignIn => {
                     crate::store_portals::show_auth_prompt();
+                }
+                WebMenuCommand::SignOut => {
+                    crate::store_portals::sign_out();
                 }
                 WebMenuCommand::SetMute { value } => {
                     self.ui.app.settings_state.mute_all = value;

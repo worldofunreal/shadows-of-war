@@ -455,6 +455,12 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             .to_string()
     };
     let web_purchase_link_js = serde_json::to_string(&web_purchase_link)?;
+    let store_portals_template = format!("src=\"./sdk/store_portals.js?v={ts}\"");
+    let store_portals_src = if cg {
+        format!("src=\"sdk/store_portals.js?v={ts}\"")
+    } else {
+        format!("src=\"../sdk/store_portals.js?v={ts}\"")
+    };
     let html = tpl
         .replace("__VERSION__", version)
         .replace(
@@ -518,14 +524,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 "src=\"../loader.js\""
             },
         )
-        .replace(
-            "src=\"./sdk/store_portals.js\"",
-            if cg {
-                "src=\"sdk/store_portals.js\""
-            } else {
-                "src=\"../sdk/store_portals.js\""
-            },
-        )
+        .replace(&store_portals_template, &store_portals_src)
         .replace(
             "register('./sw.js', { scope: './' })",
             if cg {
@@ -806,8 +805,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
         fs::create_dir_all(out)?;
     }
 
-    let hash = file_sha256(&paths.wasm_input)?;
-    let ts = hash[..10].to_string();
+    let ts = prod::web_fingerprint(paths, version)?[..10].to_string();
     let js = format!("sow_client_{ts}.js");
     let wasm = format!("sow_client_{ts}_bg.wasm");
 
@@ -1416,6 +1414,14 @@ mod tests {
         assert!(
             conf.contains("return 301 https://shadowsofwar.io$request_uri;"),
             "Nginx missing 301 redirect to canonical root"
+        );
+        assert!(
+            conf.contains("server_name play.shadowsofwar.io;"),
+            "Nginx missing dedicated play server_name"
+        );
+        assert!(
+            conf.contains("return 301 https://shadowsofwar.io/play/;"),
+            "Nginx missing 301 redirect from legacy play host to /play/"
         );
         let security =
             fs::read_to_string(root.join("sow-dist/deploy/freebsd/conf.d/00-00-security.conf"))?;

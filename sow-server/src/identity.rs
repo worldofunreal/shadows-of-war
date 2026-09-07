@@ -15,7 +15,7 @@ use std::{
 
 const PLAYGAMES_HANDOFF_TTL: Duration = Duration::from_secs(60);
 const PLAYGAMES_SESSION_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-const PLAYGAMES_RENDEZVOUS_TTL: Duration = Duration::from_secs(10);
+const PLAYGAMES_RENDEZVOUS_TTL: Duration = Duration::from_secs(60);
 const MAX_PLAYGAMES_RENDEZVOUS: usize = 256;
 
 #[derive(Clone)]
@@ -29,7 +29,6 @@ struct IdentityInner {
     handoffs: Mutex<HashMap<String, PlayGamesHandoff>>,
     rendezvous: Mutex<HashMap<String, PlayGamesRendezvous>>,
     sessions: Mutex<HashMap<String, PlayGamesSession>>,
-    access_tokens: Mutex<HashMap<String, PlayGamesAccessToken>>,
 }
 
 struct PlayGamesHandoff {
@@ -53,11 +52,6 @@ struct PlayGamesSession {
     environment: String,
     display_name: String,
     avatar_url: Option<String>,
-}
-
-struct PlayGamesAccessToken {
-    access_token: String,
-    expires_at: Instant,
 }
 
 #[derive(Clone, Debug)]
@@ -174,7 +168,6 @@ impl IdentityState {
                 handoffs: Mutex::new(HashMap::new()),
                 rendezvous: Mutex::new(HashMap::new()),
                 sessions: Mutex::new(HashMap::new()),
-                access_tokens: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -479,22 +472,6 @@ impl IdentityState {
                 None,
             )
             .await?;
-        let ttl = token_response
-            .expires_in
-            .unwrap_or(3600)
-            .saturating_sub(30)
-            .max(60);
-        self.inner
-            .access_tokens
-            .lock()
-            .map_err(|_| "Play Games access-token store is poisoned".to_string())?
-            .insert(
-                account.account_id.clone(),
-                PlayGamesAccessToken {
-                    access_token: token_response.access_token,
-                    expires_at: Instant::now() + Duration::from_secs(ttl),
-                },
-            );
         let handoff_token = random_token();
         self.inner
             .handoffs

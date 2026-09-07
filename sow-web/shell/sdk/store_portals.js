@@ -236,6 +236,28 @@
 
   window.SOW_isAndroidTwa = isAndroidTwa;
 
+  var ANDROID_MODE_KEY = "sow_playgames_mode";
+  var ANDROID_ANONYMOUS_MODE = "anonymous";
+  var ANDROID_PENDING_KEY = "sow_playgames_pending";
+
+  function androidStorage(mode) {
+    try {
+      if (!arguments.length) return window.localStorage.getItem(ANDROID_MODE_KEY);
+      if (mode) window.localStorage.setItem(ANDROID_MODE_KEY, mode);
+      else window.localStorage.removeItem(ANDROID_MODE_KEY);
+    } catch (e) {}
+    return null;
+  }
+
+  function androidPending(value) {
+    try {
+      if (!arguments.length) return sessionStorage.getItem(ANDROID_PENDING_KEY);
+      if (value) sessionStorage.setItem(ANDROID_PENDING_KEY, value);
+      else sessionStorage.removeItem(ANDROID_PENDING_KEY);
+    } catch (e) {}
+    return null;
+  }
+
   window.SOW_openAndroidPlayGames = function (section) {
     if (!isAndroidTwa()) {
       return false;
@@ -263,6 +285,38 @@
     };
   }
 
+  window.SOW_isAndroidPlayGamesAuthenticated = function () {
+    var identity = window.SOW_PLATFORM_IDENTITY;
+    return isAndroidTwa() && identity && identity.provider === "playgames" &&
+      !!identity.externalId && !!identity.token;
+  };
+
+  function hasWouSession() {
+    try {
+      return !!window.localStorage.getItem("wou_session_token") && !!window.localStorage.getItem("wou_user_data");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  window.SOW_getAuthState = function () {
+    var identity = window.SOW_PLATFORM_IDENTITY;
+    if (isAndroidTwa()) {
+      return {
+        platform: "twa",
+        provider: identity && identity.provider === "playgames" ? "playgames" : null,
+        authenticated: !!(identity && identity.provider === "playgames" && identity.externalId && identity.token),
+        pending: !!androidPending(),
+      };
+    }
+    return {
+      platform: "web",
+      provider: identity && identity.provider ? identity.provider : (hasWouSession() ? "wou" : null),
+      authenticated: !!(identity && identity.externalId && identity.token) || hasWouSession(),
+      pending: false,
+    };
+  };
+
   function clearAndroidAuthParam(params, key) {
     params.delete(key);
     var cleanUrl = window.location.pathname +
@@ -270,8 +324,8 @@
     window.history.replaceState({}, document.title, cleanUrl);
   }
 
-  async function pollAndroidPlayGames(base, rendezvousId) {
-    var deadline = Date.now() + 5000;
+  async function pollAndroidPlayGames(base, rendezvousId, timeoutMs) {
+    var deadline = Date.now() + (Number(timeoutMs) || 5000);
     while (Date.now() < deadline) {
       try {
         var response = await fetch(
@@ -279,7 +333,7 @@
           { headers: { "Accept": "application/json" } }
         );
         if (response.status === 204) {
-          await new Promise(function (resolve) { setTimeout(resolve, 100); });
+          await new Promise(function (resolve) { setTimeout(resolve, Math.min(100, Math.max(1, deadline - Date.now()))); });
           continue;
         }
         if (response.status !== 200) {
@@ -301,10 +355,20 @@
     var params = new URLSearchParams(window.location.search);
     var handoff = params.get("sow_playgames_handoff");
     var rendezvousId = params.get("sow_playgames_rendezvous");
+    var anonymousMode = params.get("sow_playgames_mode") === ANDROID_ANONYMOUS_MODE ||
+      androidStorage() === ANDROID_ANONYMOUS_MODE;
     var saved = null;
     try {
       saved = sessionStorage.getItem("sow_playgames_identity");
     } catch (e) {}
+
+    if (anonymousMode) {
+      try { sessionStorage.removeItem("sow_playgames_identity"); } catch (e) {}
+      window.SOW_PLATFORM_IDENTITY = null;
+      clearAndroidAuthParam(params, "sow_playgames_mode");
+      console.info("Play Games anonymous mode enabled");
+      return;
+    }
 
     if (handoff) {
       var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
@@ -319,6 +383,7 @@
       var identity = androidIdentityFromResponse(await response.json());
       window.SOW_PLATFORM_IDENTITY = identity;
       try { sessionStorage.setItem("sow_playgames_identity", JSON.stringify(identity)); } catch (e) {}
+      androidStorage("");
       clearAndroidAuthParam(params, "sow_playgames_handoff");
       console.info("Play Games authentication complete");
       return;
@@ -338,26 +403,91 @@
       } catch (e) {}
     }
 
+    // Native Android authentication runs in parallel with the TWA. Keep the
+    // rendezvous in the URL until the loader-ready hook starts polling it.
     if (rendezvousId) {
-      var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
-      var rendezvousIdentity = await pollAndroidPlayGames(base, rendezvousId);
-      clearAndroidAuthParam(params, "sow_playgames_rendezvous");
-      if (rendezvousIdentity) {
-        window.SOW_PLATFORM_IDENTITY = rendezvousIdentity;
-        try {
-          sessionStorage.setItem("sow_playgames_identity", JSON.stringify(rendezvousIdentity));
-        } catch (e) {}
-        console.info("Play Games rendezvous authentication complete");
-        return;
-      }
+      window.SOW_PLATFORM_IDENTITY = null;
+      return;
     }
 
-    // Play Games is an optional Android enhancement. The native launcher has
-    // already decided whether a silent handoff is available; a missing or
-    // expired handoff must never prevent the anonymous TWA from booting.
     window.SOW_PLATFORM_IDENTITY = null;
     console.info("Play Games unavailable; continuing with anonymous identity");
   };
+
+  var androidAuthResumeBusy = false;
+  async function resumeAndroidAuth() {
+    if (!isAndroidTwa() || androidAuthResumeBusy) return;
+    var pending = androidPending();
+    if (!pending) return;
+    androidAuthResumeBusy = true;
+    try {
+      if (pending.indexOf("signin:") === 0 || pending.indexOf("auto:") === 0) {
+        var rendezvousId = pending.slice(pending.indexOf(":") + 1);
+        var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
+        var identity = await pollAndroidPlayGames(base, rendezvousId, 30000);
+        androidPending(null);
+        if (pending.indexOf("auto:") === 0) {
+          var params = new URLSearchParams(window.location.search);
+          clearAndroidAuthParam(params, "sow_playgames_rendezvous");
+        }
+        if (identity) {
+          window.SOW_PLATFORM_IDENTITY = identity;
+          try { sessionStorage.setItem("sow_playgames_identity", JSON.stringify(identity)); } catch (e) {}
+          androidStorage("");
+          window.SOW_AUTH_CHANGED = true;
+          console.info("Play Games interactive authentication complete");
+        } else {
+          if (pending.indexOf("auto:") === 0) androidStorage(ANDROID_ANONYMOUS_MODE);
+          window.SOW_AUTH_CHANGED = true;
+          console.info("Play Games sign-in cancelled or unavailable; continuing anonymously");
+        }
+      } else if (pending === "signout") {
+        androidPending(null);
+        window.location.reload();
+      }
+    } finally {
+      androidAuthResumeBusy = false;
+    }
+  }
+
+  window.SOW_signInAndroidPlayGames = function () {
+    if (!isAndroidTwa() || window.SOW_isAndroidPlayGamesAuthenticated()) return false;
+    var rendezvousId;
+    try {
+      rendezvousId = crypto.randomUUID().replace(/-/g, "");
+    } catch (e) {
+      rendezvousId = String(Date.now()) + String(Math.random()).slice(2);
+    }
+    androidStorage("");
+    androidPending("signin:" + rendezvousId);
+    window.location.href = "sow://playgames/signin?rendezvous_id=" + encodeURIComponent(rendezvousId);
+    return true;
+  };
+
+  window.SOW_startAndroidPlayGamesAutoAuth = function () {
+    if (!isAndroidTwa() || androidStorage() === ANDROID_ANONYMOUS_MODE || window.SOW_isAndroidPlayGamesAuthenticated()) return false;
+    var rendezvousId = new URLSearchParams(window.location.search).get("sow_playgames_rendezvous");
+    if (!rendezvousId || androidPending()) return false;
+    androidPending("auto:" + rendezvousId);
+    resumeAndroidAuth();
+    return true;
+  };
+
+  window.SOW_signOutAndroidPlayGames = function () {
+    if (!isAndroidTwa()) return false;
+    androidStorage(ANDROID_ANONYMOUS_MODE);
+    try { sessionStorage.removeItem("sow_playgames_identity"); } catch (e) {}
+    window.SOW_PLATFORM_IDENTITY = null;
+    window.SOW_AUTH_CHANGED = true;
+    androidPending("signout");
+    window.location.href = "sow://playgames/signout";
+    return true;
+  };
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") resumeAndroidAuth();
+  });
+  window.addEventListener("pageshow", resumeAndroidAuth);
 
   function refreshPortalFlags() {
     var portal = isPortalEmbed();
@@ -510,9 +640,35 @@
     };
   }
 
+  window.SOW_startWouOAuth = function (provider) {
+    var allowed = { google: true, discord: true, twitter: true, meta: true };
+    provider = allowed[provider] ? provider : "google";
+    try {
+      var returnTo = window.location.href.split("#")[0];
+      var stateObj = { returnTo: returnTo, accountId: "", provider: provider };
+      var statePayload = "";
+      try {
+        statePayload = btoa(unescape(encodeURIComponent(JSON.stringify(stateObj))))
+          .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      } catch (e) {
+        statePayload = encodeURIComponent(JSON.stringify(stateObj));
+      }
+      try { sessionStorage.setItem("wou_oauth_provider", provider); } catch (e) {}
+      var targetUrl = "https://id.worldofunreal.com/api/v1/auth/oauth/login/" +
+        encodeURIComponent(provider) +
+        "?redirect_uri=" + encodeURIComponent("https://worldofunreal.com/auth/callback") +
+        "&state=" + encodeURIComponent(statePayload);
+      window.location.href = targetUrl;
+      return true;
+    } catch (e) {
+      console.warn("WOU login redirect failed:", e);
+      return false;
+    }
+  };
+
   window.SOW_portalShowAuthPrompt = async function () {
     if (isAndroidTwa()) {
-      console.info("Android identity is managed by Play Games Services");
+      window.SOW_signInAndroidPlayGames();
       return;
     }
     if (crazyGamesSdkReady() && window.CrazyGames.SDK.user && window.CrazyGames.SDK.user.showAuthPrompt) {
@@ -529,29 +685,28 @@
       }
       return;
     }
-    // Self-hosted /play/: no portal SDK exists, so route through World of
-    // Unreal identity. The hub returns to this page with ?session_token&
-    // account=, which sowCaptureWouReturn() stores below; the Rust client
-    // already consumes wou_session_token/wou_user_data from localStorage.
+    window.SOW_startWouOAuth(window.SOW_WOU_PROVIDER || "google");
+  };
+
+  window.SOW_signOutWou = function () {
+    if (isAndroidTwa()) return window.SOW_signOutAndroidPlayGames();
     try {
-      var provider = window.SOW_WOU_PROVIDER || "google";
-      var returnTo = window.location.href.split("#")[0];
-      var stateObj = { returnTo: returnTo, accountId: "", provider: provider };
-      var statePayload = "";
-      try {
-        statePayload = btoa(unescape(encodeURIComponent(JSON.stringify(stateObj))))
-          .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      } catch (e2) {
-        statePayload = encodeURIComponent(JSON.stringify(stateObj));
-      }
-      try { sessionStorage.setItem("wou_oauth_provider", provider); } catch (e3) {}
-      var targetUrl = "https://id.worldofunreal.com/api/v1/auth/oauth/login/"
-        + encodeURIComponent(provider)
-        + "?redirect_uri=" + encodeURIComponent("https://worldofunreal.com/auth/callback")
-        + "&state=" + encodeURIComponent(statePayload);
-      window.location.href = targetUrl;
-    } catch (e) {
-      console.warn("WOU login redirect failed:", e);
+      window.localStorage.removeItem("wou_session_token");
+      window.localStorage.removeItem("wou_user_data");
+    } catch (e) {}
+    if (window.SOW_PLATFORM_IDENTITY && window.SOW_PLATFORM_IDENTITY.provider === "wou") {
+      window.SOW_PLATFORM_IDENTITY = null;
+    }
+    window.SOW_AUTH_CHANGED = true;
+    window.location.reload();
+    return true;
+  };
+
+  window.SOW_portalSignOut = function () {
+    if (isAndroidTwa()) {
+      window.SOW_signOutAndroidPlayGames();
+    } else {
+      window.SOW_signOutWou();
     }
   };
 

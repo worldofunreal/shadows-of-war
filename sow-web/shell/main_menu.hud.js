@@ -1,7 +1,12 @@
+(function () {
+    "use strict";
+
     // ─────────────────────────────────────────────────────────
     // HUD CONTROLLER (DOM Overlay for In-Game RTS Matches)
     // ─────────────────────────────────────────────────────────
     var hudRoot = document.getElementById("sow-hud");
+    var hudState = null;
+    var lastHudRaw = "";
     var leaderboardOpen = false;
     var inboxOpen = false;
     var transferOpen = false;
@@ -10,7 +15,7 @@
     var surrenderModalOpen = false;
     var emojiPickerOpen = false;
     var devSidebarOpen = false;
-    var settingsOpen = false;
+    var hudSettingsOpen = false;
 
     var hudInitialized = false;
     var hudRefs = null;
@@ -24,6 +29,24 @@
         "🤢", "🤮", "⚔️", "🛡️", "🏹", "💣", "💥", "💀", "👑", "💪", "🔥", "👀", "🏳️", "🤝", "💔",
         "🔌", "⭐", "🐺"
     ];
+
+    function send(type, extra) {
+        if (typeof window.SOW_menu_command !== "function") return false;
+        var command = Object.assign({ type: type }, extra || {});
+        window.SOW_menu_command(JSON.stringify(command));
+        return true;
+    }
+
+    function asset(path) {
+        var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
+        return base + "/" + path.split("/").map(encodeURIComponent).join("/");
+    }
+
+    function leaderById(id) {
+        var leaders = hudState && Array.isArray(hudState.leaders) ? hudState.leaders : [];
+        var found = leaders.find(function (leader) { return leader.id === id; });
+        return found || leaders[0] || { id: "Caesar", name: "Caesar", slug: "caesar" };
+    }
 
     function ensureHudDom() {
         if (!hudRoot || hudInitialized) return;
@@ -428,7 +451,7 @@
 
     function renderHud() {
         if (!hudRoot) return;
-        if (!state || state.phase !== "Playing" || !state.hud) {
+        if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
             hudRoot.hidden = true;
             leaderboardOpen = false;
             inboxOpen = false;
@@ -436,7 +459,7 @@
             betrayalOpen = false;
             emojiPickerOpen = false;
             devSidebarOpen = false;
-            settingsOpen = false;
+            hudSettingsOpen = false;
 
             hudRoot.dataset.overlayOpen = "false";
             leaderboardRows = Object.create(null);
@@ -452,7 +475,7 @@
         ensureHudDom();
         hudRoot.hidden = false;
 
-        var hud = state.hud;
+        var hud = hudState.hud;
         var quests = hud.quests || {};
         var devTools = hud.dev_tools || {};
         if (hudRefs.questsBtn) {
@@ -583,9 +606,9 @@
         }
 
         if (hudRefs.settings) {
-            hudRefs.settings.classList.toggle("hidden", !settingsOpen);
-            if (settingsOpen && state.settings) {
-                var settings = state.settings;
+            hudRefs.settings.classList.toggle("hidden", !hudSettingsOpen);
+            if (hudSettingsOpen && hudState.settings) {
+                var settings = hudState.settings;
                 var muteInput = hudRefs.settings.querySelector('[data-hud-setting="mute_all"]');
                 var musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
                 var motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
@@ -645,7 +668,7 @@
                 if (hudRefs.endgameBanner) hudRefs.endgameBanner.textContent = isWinner ? "VICTORY" : "DEFEAT";
                 if (hudRefs.endgameTitle) hudRefs.endgameTitle.textContent = isWinner ? "MATCH WON" : "MATCH LOST";
                 if (hudRefs.endgameDesc) hudRefs.endgameDesc.textContent = isWinner ? "Map control secured." : (hud.winner_name ? "Winner: " + hud.winner_name : "Your empire was eliminated.");
-                var activeLeaderId = (hud && hud.player_leader) || (state && state.selected_leader);
+                var activeLeaderId = (hud && hud.player_leader) || (hudState && hudState.selected_leader);
                 var activeLeader = leaderById(activeLeaderId);
                 if (hudRefs.endgamePortrait) {
                     hudRefs.endgamePortrait.src = asset("shell/leaders/" + activeLeader.slug + "_desktop.webp");
@@ -667,7 +690,7 @@
         hudRoot.dataset.overlayOpen = String(Boolean(
             leaderboardOpen || inboxOpen || transferOpen || betrayalOpen ||
             surrenderModalOpen || emojiPickerOpen || isOver
-            || devSidebarOpen || settingsOpen
+            || devSidebarOpen || hudSettingsOpen
         ));
     }
 
@@ -692,7 +715,7 @@
                 send("toggle_inbox");
                 renderHud();
             } else if (cmd === "toggle_settings") {
-                settingsOpen = !settingsOpen;
+                hudSettingsOpen = !hudSettingsOpen;
                 renderHud();
             } else if (cmd === "reset_dev_config") {
                 send("reset_dev_config");
@@ -782,55 +805,32 @@
         });
     }
 
-    function handleStateUpdate(raw) {
-        if (typeof raw !== "string" || raw === lastRaw) {
-            updateDynamic();
-            return;
-        }
-        lastRaw = raw;
-        var previousHud = state && state.phase === "Playing" ? state.hud : null;
+    function handleHudStateUpdate(raw) {
+        if (typeof raw !== "string" || raw === lastHudRaw) return;
+        lastHudRaw = raw;
+        var previousHud = hudState && hudState.phase === "Playing" ? hudState.hud : null;
         try {
-            state = JSON.parse(raw);
+            hudState = JSON.parse(raw);
         } catch (error) {
-            console.warn("[WEB MENU] invalid state:", error);
+            console.warn("[WEB HUD] invalid state:", error);
             return;
         }
-        if (state.phase === "Playing") {
-            state.hud = state.hud || previousHud;
-            if (state.hud && state.hud.dev_tools && typeof state.hud.dev_tools.open === "boolean") {
-                devSidebarOpen = state.hud.dev_tools.open;
+        if (hudState.phase === "Playing") {
+            hudState.hud = hudState.hud || previousHud;
+            if (hudState.hud && hudState.hud.dev_tools && typeof hudState.hud.dev_tools.open === "boolean") {
+                devSidebarOpen = hudState.hud.dev_tools.open;
             }
-        }
-        if (state.phase === "MainMenu" && window.SOW_open_store_after_match) {
-            window.SOW_open_store_after_match = false;
-            mobileStoreOpen = true;
-        }
-        if (typeof window.SOW_syncWebLoader === "function") {
-            window.SOW_syncWebLoader(state);
-        }
-        if (state.waiting && passwordLobbyId != null) {
-            passwordLobbyId = null;
-            passwordDraft = "";
-        }
-        var key = renderKey();
-        if (key !== lastRenderKey) {
-            lastRenderKey = key;
-            render();
-        } else {
-            root.hidden = state.phase !== "MainMenu";
-            updateDynamic();
         }
         renderHud();
     }
 
-    window.SOW_onStateUpdate = handleStateUpdate;
+    window.SOW_onStateUpdate = function (raw) {
+        if (typeof window.SOW_menu_state_update === "function") {
+            window.SOW_menu_state_update(raw);
+        }
+        handleHudStateUpdate(raw);
+    };
 
-    function syncInitialState() {
-        var raw = window.SOW_MENU_STATE;
-        handleStateUpdate(raw);
-    }
-
-    root.hidden = true;
     if (hudRoot) hudRoot.hidden = true;
-    syncInitialState();
+    window.SOW_onStateUpdate(window.SOW_MENU_STATE);
 })();

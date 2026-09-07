@@ -1765,27 +1765,22 @@
 }
 
 #sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
-    display: block;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
+    overflow: hidden;
     padding: 0 4px 8px;
 }
 
 #sow-menu[data-screen="heroes"] .sow-menu__heroes-slot {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
     width: 100%;
     min-height: 0;
     margin: 0 auto;
 }
 
-.sow-heroes__heading {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 24px;
-    padding: 8px 4px 18px;
-    border-bottom: 1px solid var(--sow-line);
-}
-
-.sow-heroes__eyebrow,
 .sow-heroes__featured-label {
     margin: 0 0 5px;
     color: var(--sow-gold);
@@ -1794,40 +1789,21 @@
     letter-spacing: .18em;
 }
 
-.sow-heroes__heading h1 {
-    margin: 0;
-    color: #fff;
-    font-size: clamp(30px, 4vw, 48px);
-    line-height: .95;
-    text-wrap: balance;
-}
-
-.sow-heroes__heading p {
-    margin: 7px 0 0;
-    color: var(--sow-muted);
-    font-size: 13px;
-}
-
-.sow-heroes__count,
-.sow-heroes__section-head span {
-    color: var(--sow-muted);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-}
-
 .sow-heroes__workspace {
     display: grid;
+    flex: 1 1 auto;
     grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr);
     gap: 16px;
-    padding-top: 18px;
+    min-height: 0;
+    padding-top: 14px;
+    overflow: hidden;
 }
 
 .sow-heroes__featured {
     position: relative;
     display: flex;
-    min-height: 420px;
+    min-height: 0;
+    height: 100%;
     flex-direction: column;
     justify-content: end;
     overflow: hidden;
@@ -1895,7 +1871,13 @@
 }
 
 .sow-heroes__roster {
+    min-height: 0;
     min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .sow-heroes__section-head {
@@ -1904,14 +1886,6 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 10px;
-}
-
-.sow-heroes__section-head h2 {
-    margin: 0;
-    color: #fff;
-    font-size: 15px;
-    letter-spacing: .12em;
-    text-transform: uppercase;
 }
 
 .sow-heroes__grid {
@@ -2026,20 +2000,13 @@
         padding-inline: 0;
     }
 
-    .sow-heroes__heading {
-        align-items: start;
-        flex-direction: column;
-        gap: 12px;
-        padding-inline: 0;
-    }
-
     .sow-heroes__workspace {
         grid-template-columns: 1fr;
         padding-top: 14px;
     }
 
     .sow-heroes__featured {
-        min-height: 310px;
+        min-height: 0;
     }
 
     .sow-heroes__featured-copy {
@@ -2056,24 +2023,20 @@
 }
 
 @media (max-width: 340px) {
+    #sow-menu[data-screen="heroes"] .sow-heroes__featured {
+        flex-basis: 164px;
+    }
+
+    .sow-heroes__featured-copy {
+        padding: 10px 12px;
+    }
+
+    .sow-heroes__perk {
+        display: none;
+    }
+
     .sow-heroes__filters { flex-wrap: wrap; }
     .sow-heroes__search { flex-basis: 100%; }
-}
-
-/* Heroes owns the viewport; only the roster is scrollable. */
-#sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-    padding: 0 4px 8px;
-}
-
-#sow-menu[data-screen="heroes"] .sow-menu__heroes-slot {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
 }
 
 .sow-heroes__filters {
@@ -2127,31 +2090,6 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-}
-
-#sow-menu[data-screen="heroes"] .sow-heroes__workspace {
-    display: grid;
-    flex: 1 1 auto;
-    grid-template-columns: minmax(320px, .8fr) minmax(0, 1.2fr);
-    min-height: 0;
-    gap: 16px;
-    padding-top: 14px;
-    overflow: hidden;
-}
-
-#sow-menu[data-screen="heroes"] .sow-heroes__featured {
-    min-height: 0;
-    height: 100%;
-}
-
-#sow-menu[data-screen="heroes"] .sow-heroes__roster {
-    min-width: 0;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: 4px;
-    -webkit-overflow-scrolling: touch;
 }
 
 #sow-menu[data-screen="heroes"] .sow-heroes__section-head {

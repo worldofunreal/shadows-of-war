@@ -1194,23 +1194,7 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
 
 fn build_web(paths: &Paths, version: &str) -> Result<()> {
     compile_wasm(paths, false)?;
-    let fingerprint = input_fingerprint(
-        "web-v7",
-        version,
-        &[
-            &paths.wasm_input,
-            &paths.shell,
-            &paths.assets_shell,
-            &paths.assets_gameplay,
-            &paths.assets_site,
-            &paths.assets_maps,
-            &paths.map_sources,
-            &paths.root.join("sow-i18n/src"),
-            &paths.root.join("sow-i18n/strings"),
-            &paths.root.join("sow-web/site"),
-            &paths.root.join("sow-dist/src/main.rs"),
-        ],
-    )?;
+    let fingerprint = web_fingerprint(paths, version)?;
     let cache = paths.root.join("dist/.sow-state/web-package");
     let cached = fs::read_to_string(&cache).is_ok_and(|value| value.trim() == fingerprint)
         && paths.dist_web.join("play/index.html").is_file()
@@ -1233,6 +1217,26 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     Ok(())
+}
+
+pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
+    input_fingerprint(
+        "web-v7",
+        version,
+        &[
+            &paths.wasm_input,
+            &paths.shell,
+            &paths.assets_shell,
+            &paths.assets_gameplay,
+            &paths.assets_site,
+            &paths.assets_maps,
+            &paths.map_sources,
+            &paths.root.join("sow-i18n/src"),
+            &paths.root.join("sow-i18n/strings"),
+            &paths.root.join("sow-web/site"),
+            &paths.root.join("sow-dist/src/main.rs"),
+        ],
+    )
 }
 
 fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
