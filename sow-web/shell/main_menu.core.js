@@ -28,6 +28,7 @@
     var profileError = "";
     var mobileStoreOpen = false;
     var mobileHeroesOpen = false;
+    var mobileNavActive = null;
     var createDraft = null;
     var createOffline = false;
     var createPrivate = false;

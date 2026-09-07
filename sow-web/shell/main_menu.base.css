@@ -1111,8 +1111,10 @@
    CUSTOM GAME CREATOR (1:1 with Egui custom_game)
    ───────────────────────────────────────────────────────────── */
 .sow-menu__main--custom {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    gap: 18px;
     align-items: stretch;
+    overflow: hidden;
 }
 
 .sow-menu__mode-switcher {
@@ -1148,21 +1150,54 @@
     box-shadow: 0 0 12px rgba(243, 177, 43, 0.2);
 }
 
-.sow-menu__custom-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-    gap: 16px;
-    width: 100%;
-    height: 100%;
+.sow-create__workspace {
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
 }
 
-.sow-menu__custom-col {
+.sow-create__rail {
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 22px 20px;
+}
+
+.sow-create__form {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    gap: 12px;
+}
+
+.sow-create__scroll {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1px 4px 2px 0;
+    scrollbar-gutter: stable;
+}
+
+.sow-create__columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(250px, 0.88fr);
+    gap: 16px;
+    width: 100%;
+    align-items: start;
+}
+
+.sow-create__column {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    min-width: 0;
 }
 
 .sow-menu__custom-card {
+    position: relative;
     padding: 16px;
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1174,7 +1209,9 @@
 .sow-menu__map-preview-wrap {
     position: relative;
     width: 100%;
-    height: 130px;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
     border-radius: 6px;
     background-position: center;
     background-size: cover;
@@ -1297,16 +1334,42 @@
     font-size: 12px;
 }
 
-.sow-menu__custom-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: auto;
-}
-
 .sow-menu__custom-launch-btn {
     height: 52px;
     font-size: 15px;
+}
+
+.sow-create__map-panel {
+    z-index: 3;
+    overflow: visible;
+}
+
+.sow-create__map-select {
+    margin-top: 12px;
+}
+
+.sow-create__rules-row {
+    margin-top: 12px;
+}
+
+.sow-create__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.34fr);
+    gap: 10px;
+    min-width: 0;
+}
+
+.sow-create__actions button {
+    width: 100%;
+    min-height: 52px;
+    height: 52px;
+    margin: 0;
+}
+
+.sow-create__cancel-btn {
+    justify-content: center;
+    padding: 0 16px;
+    text-align: center;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1971,17 +2034,11 @@
         max-height: 240px;
     }
 
-    .sow-menu__custom-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
     .sow-menu__teams-roster {
         grid-template-columns: 1fr;
         gap: 10px;
     }
 
-    .sow-menu__main--custom,
     .sow-menu__main--queue {
         display: flex;
         flex-direction: column;
@@ -1993,6 +2050,8 @@
     #sow-menu *, #sow-hud * {
         scroll-behavior: auto !important;
         transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
     }
 }
 
@@ -2104,13 +2163,17 @@
     #sow-menu .sow-menu__mobile-nav {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-rows: 1fr;
         gap: 4px;
-        min-height: 64px;
-        padding: 4px;
+        height: 84px;
+        min-height: 84px;
+        padding: 5px;
+        box-sizing: border-box;
         border: 1px solid var(--sow-line);
         border-radius: 10px;
         background: rgba(9, 11, 15, 0.94);
         box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18);
+        contain: layout;
     }
 
     #sow-menu .sow-menu__mobile-nav-item {
@@ -2118,26 +2181,58 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
+        gap: 0;
         min-width: 0;
-        min-height: 56px;
-        padding: 4px 2px;
+        height: 72px;
+        min-height: 72px;
+        padding: 2px;
         border: 1px solid transparent;
         border-radius: 7px;
         background: transparent;
         color: var(--sow-muted);
         cursor: pointer;
+        overflow: visible;
     }
 
     #sow-menu .sow-menu__mobile-nav-item > span {
-        font-size: 18px;
-        line-height: 1;
+        display: grid;
+        width: 46px;
+        height: 46px;
+        flex: 0 0 46px;
+        place-items: center;
+        transform: translateY(0) scale(1);
+        transform-origin: center bottom;
+        will-change: transform;
+    }
+
+    #sow-menu .sow-menu__mobile-nav-item > span > img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+    }
+
+    #sow-menu .sow-menu__mobile-nav-item.is-active > span {
+        transform: translateY(-5px) scale(1.14);
+        filter: drop-shadow(0 3px 4px rgba(234, 179, 8, 0.42));
+    }
+
+    #sow-menu .sow-menu__mobile-nav-item.is-entering > span {
+        animation: sow-mobile-nav-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    #sow-menu .sow-menu__mobile-nav-item.is-leaving > span {
+        animation: sow-mobile-nav-leave 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     #sow-menu .sow-menu__mobile-nav-item small {
         font-size: 9px;
         font-weight: 800;
         letter-spacing: 0.06em;
+        line-height: 12px;
+        min-height: 12px;
         text-transform: uppercase;
     }
 
@@ -2150,6 +2245,18 @@
     #sow-menu .sow-menu__mobile-nav-item:focus-visible {
         outline: 2px solid var(--sow-gold-bright);
         outline-offset: -2px;
+    }
+
+    @keyframes sow-mobile-nav-enter {
+        0% { transform: translateY(2px) scale(0.92); filter: none; }
+        72% { transform: translateY(-7px) scale(1.18); filter: drop-shadow(0 4px 5px rgba(234, 179, 8, 0.48)); }
+        100% { transform: translateY(-5px) scale(1.14); filter: drop-shadow(0 3px 4px rgba(234, 179, 8, 0.42)); }
+    }
+
+    @keyframes sow-mobile-nav-leave {
+        0% { transform: translateY(-5px) scale(1.14); filter: drop-shadow(0 3px 4px rgba(234, 179, 8, 0.42)); }
+        28% { transform: translateY(-7px) scale(1.18); filter: drop-shadow(0 4px 5px rgba(234, 179, 8, 0.48)); }
+        100% { transform: translateY(0) scale(1); filter: none; }
     }
 
     #sow-menu[data-screen="home"] .sow-menu__main {
@@ -2239,5 +2346,124 @@
 
     #sow-menu .sow-menu__footer {
         display: none;
+    }
+}
+
+/* Custom game owns its content scroll; the menu viewport never scrolls. */
+#sow-menu[data-screen="create"] .sow-menu__main {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#sow-menu[data-screen="create"] .sow-create__workspace {
+    min-height: 0;
+}
+
+#sow-menu[data-screen="create"] .sow-create__map-panel {
+    isolation: isolate;
+}
+
+#sow-menu[data-screen="create"] .sow-create__map-panel .sow-control-dropdown__menu {
+    z-index: 20;
+}
+
+@media (max-width: 1000px) and (min-width: 681px) {
+    #sow-menu[data-screen="create"] .sow-menu__main--custom {
+        grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 680px), (orientation: portrait) {
+    #sow-menu[data-screen="create"] .sow-menu__main--custom {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 8px;
+        overflow: hidden;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rail {
+        flex: 0 0 auto;
+        padding: 12px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rail h1 {
+        font-size: clamp(25px, 8vw, 36px);
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rail .sow-menu__tagline {
+        max-width: none;
+        margin: 8px 0 10px;
+        font-size: 11px;
+        line-height: 1.35;
+    }
+
+    #sow-menu[data-screen="create"] .sow-menu__mode-switcher {
+        flex-direction: row;
+        margin: 0;
+    }
+
+    #sow-menu[data-screen="create"] .sow-menu__mode-tab {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 9px 6px;
+        font-size: 9px;
+        text-align: center;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__workspace {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        width: 100%;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__form {
+        min-height: 0;
+        gap: 8px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__scroll {
+        padding: 0 1px 2px 0;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__columns {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__column {
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-menu__custom-card {
+        padding: 12px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rules-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        flex: 0 0 auto;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__actions button {
+        min-height: 50px;
+        height: 50px;
+        padding: 0 8px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-align: center;
+        white-space: normal;
     }
 }

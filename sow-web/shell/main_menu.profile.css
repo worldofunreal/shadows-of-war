@@ -2116,7 +2116,7 @@
         width: 100%;
     }
 
-    #sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
+#sow-menu[data-screen="heroes"] .sow-menu__main.sow-menu__main--heroes {
         padding-inline: 0;
     }
 
@@ -2169,6 +2169,23 @@
     }
 
     .sow-heroes__card-copy em { font-size: 9px; }
+}
+
+/* Keep the shared mobile chrome on one immutable grid across every screen. */
+@media (max-width: 599px) and (orientation: portrait) {
+    #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store,
+    #sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes,
+    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        width: calc(100% - 24px);
+        height: 100%;
+        min-height: 0;
+        margin: 0 auto;
+        padding-top: max(8px, env(safe-area-inset-top));
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
 }
 
 @media (max-width: 390px) {

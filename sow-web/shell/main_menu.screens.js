@@ -155,15 +155,20 @@
 
     function renderMobileNav(active) {
         var items = [
-            ["store", "🛒", "Store"],
-            ["heroes", "♜", "Heroes"],
-            ["battle", "⚔", "Battle"],
-            ["profile", "●", "Profile"]
+            ["store", "shell/mobile-nav/store.webp", "Store"],
+            ["heroes", "shell/mobile-nav/heroes.webp", "Heroes"],
+            ["battle", "shell/mobile-nav/battle.webp", "Battle"],
+            ["profile", "shell/mobile-nav/profile.webp", "Profile"]
         ];
+        var previousActive = mobileNavActive;
+        var changed = previousActive !== null && previousActive !== active;
+        mobileNavActive = active;
         return "<nav class='sow-menu__mobile-nav' aria-label='Main menu navigation'>" + items.map(function (item) {
             var selected = active === item[0];
-            return "<button type='button' class='sow-menu__mobile-nav-item" + (selected ? " is-active" : "") + "' data-command='mobile_nav' data-mobile-screen='" + item[0] + "'" +
-                (selected ? " aria-current='page'" : "") + " aria-label='" + esc(item[2]) + "'><span aria-hidden='true'>" + item[1] + "</span><small>" + item[2] + "</small></button>";
+            var entering = changed && selected ? " is-entering" : "";
+            var leaving = changed && previousActive === item[0] ? " is-leaving" : "";
+            return "<button type='button' class='sow-menu__mobile-nav-item" + (selected ? " is-active" : "") + entering + leaving + "' data-command='mobile_nav' data-mobile-screen='" + item[0] + "'" +
+                (selected ? " aria-current='page'" : "") + " aria-label='" + esc(item[2]) + "'><span aria-hidden='true'><img src='" + esc(asset(item[1])) + "' alt='' width='128' height='128' decoding='async' draggable='false'></span><small>" + item[2] + "</small></button>";
         }).join("") + "</nav>";
     }
 
@@ -722,8 +727,8 @@
             "<div class='sow-menu__backdrop'></div>" +
             "<div class='sow-menu__shell'>" +
                 renderTopbar() +
-                "<main class='sow-menu__main sow-menu__main--custom'>" +
-                    "<section class='sow-menu__command'>" +
+                "<main class='sow-menu__main sow-menu__main--custom sow-create'>" +
+                    "<section class='sow-menu__command sow-create__rail'>" +
                         "<p class='sow-menu__eyebrow'>CUSTOM GAME</p>" +
                         "<h1>MATCH<br><em>SETTINGS</em></h1>" +
                         "<p class='sow-menu__tagline'>" + (isSp ? "Configure offline simulation rules, AI tribes, and map dimensions." : "Host a public or private room on official game servers.") + "</p>" +
@@ -731,60 +736,63 @@
                             "<button type='button' class='sow-menu__mode-tab" + (isSp ? " active" : "") + "' data-command='set_session_mode' data-mode='offline'>🎮 SOLO / PRACTICE</button>" +
                             "<button type='button' class='sow-menu__mode-tab" + (!isSp ? " active" : "") + "' data-command='set_session_mode' data-mode='online'>🌐 ONLINE LOBBY</button>" +
                         "</div>" +
-                        "<button class='sow-menu__secondary' type='button' data-command='close_overlay'>← CANCEL</button>" +
                     "</section>" +
-                    "<section class='sow-menu__battlefield'>" +
-                        "<form class='sow-menu__custom-grid' data-form='create'>" +
-                            "<div class='sow-menu__custom-col'>" +
-                                "<div class='sow-menu__custom-card'>" +
-                                    "<div class='sow-menu__map-preview-wrap' style=\"background-image:url('" + esc(mapThumbUrl) + "')\">" +
-                                        "<div class='sow-menu__map-preview-meta'>" +
-                                            "<strong>" + esc(selectedMap.display_name) + "</strong>" +
-                                            "<small>" + selectedMap.width + " × " + selectedMap.height + " TILES</small>" +
-                                        "</div>" +
+                    "<section class='sow-menu__battlefield sow-create__workspace'>" +
+                        "<form class='sow-create__form' data-form='create'>" +
+                            "<div class='sow-create__scroll'>" +
+                                "<div class='sow-create__columns'>" +
+                                    "<div class='sow-create__column'>" +
+                                        "<section class='sow-menu__custom-card sow-create__map-panel'>" +
+                                            "<div class='sow-menu__map-preview-wrap' style=\"background-image:url('" + esc(mapThumbUrl) + "')\">" +
+                                                "<div class='sow-menu__map-preview-meta'>" +
+                                                    "<strong>" + esc(selectedMap.display_name) + "</strong>" +
+                                                    "<small>" + selectedMap.width + " × " + selectedMap.height + " TILES</small>" +
+                                                "</div>" +
+                                            "</div>" +
+                                            "<label class='sow-menu__form-field sow-create__map-select'>SELECT MAP" +
+                                                renderDropdown({ key: "create-map", name: "map_name", value: selectedMap.key, options: mapCatalogOptions }) +
+                                            "</label>" +
+                                        "</section>" +
+                                        "<section class='sow-menu__custom-card'>" +
+                                            "<label class='sow-menu__form-field'>GAME TYPE" +
+                                                "<div class='sow-menu__pill-group'>" + modeOptionsHtml + "</div>" +
+                                            "</label>" +
+                                            "<div class='sow-menu__form-row sow-create__rules-row'>" +
+                                                "<label class='sow-menu__form-field'>BOT DIFFICULTY" +
+                                                    "<div class='sow-menu__pill-group'>" + diffOptionsHtml + "</div>" +
+                                                "</label>" +
+                                                "<label class='sow-menu__form-field'>SPAWN RULES" +
+                                                    "<div class='sow-menu__pill-group'>" + spawnOptionsHtml + "</div>" +
+                                                "</label>" +
+                                            "</div>" +
+                                        "</section>" +
+                                        "<section class='sow-menu__custom-card'>" + spControls + "</section>" +
                                     "</div>" +
-                                    "<label class='sow-menu__form-field' style='margin-top:12px;'>SELECT MAP" +
-                                        renderDropdown({ key: "create-map", name: "map_name", value: selectedMap.key, options: mapCatalogOptions }) +
-                                    "</label>" +
-                                "</div>" +
-                                "<div class='sow-menu__custom-card'>" +
-                                    "<label class='sow-menu__form-field'>GAME TYPE" +
-                                        "<div class='sow-menu__pill-group'>" + modeOptionsHtml + "</div>" +
-                                    "</label>" +
-                                    "<div class='sow-menu__form-row' style='margin-top:12px;'>" +
-                                        "<label class='sow-menu__form-field'>BOT DIFFICULTY" +
-                                            "<div class='sow-menu__pill-group'>" + diffOptionsHtml + "</div>" +
-                                        "</label>" +
-                                        "<label class='sow-menu__form-field'>SPAWN RULES" +
-                                            "<div class='sow-menu__pill-group'>" + spawnOptionsHtml + "</div>" +
-                                        "</label>" +
+                                    "<div class='sow-create__column'>" +
+                                        "<section class='sow-menu__custom-card'>" +
+                                            "<p class='sow-menu__panel-sublabel'>POPULATION &amp; SCALE</p>" +
+                                            "<div class='sow-menu__slider-field'>" +
+                                                "<div class='sow-menu__slider-label'><span>MAX HUMAN PLAYERS</span><b data-val-for='max_players'>" + (config.max_players || 8) + "</b></div>" +
+                                                "<input class='sow-menu__range' name='max_players' type='range' min='2' max='16' step='1' value='" + (config.max_players || 8) + "'>" +
+                                            "</div>" +
+                                            "<div class='sow-menu__slider-field'>" +
+                                                "<div class='sow-menu__slider-label'><span>TRIBES (NEUTRAL BOTS)</span><b data-val-for='bot_count'>" + (config.bot_count != null ? config.bot_count : 128) + "</b></div>" +
+                                                "<input class='sow-menu__range' name='bot_count' type='range' min='0' max='1000' step='8' value='" + (config.bot_count != null ? config.bot_count : 128) + "'>" +
+                                            "</div>" +
+                                            "<div class='sow-menu__slider-field'>" +
+                                                "<div class='sow-menu__slider-label'><span>AI NATIONS (COMPLEX AI)</span><b data-val-for='nation_count'>" + (config.nation_count != null ? config.nation_count : 32) + "</b></div>" +
+                                                "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='400' step='4' value='" + (config.nation_count != null ? config.nation_count : 32) + "'>" +
+                                            "</div>" +
+                                        "</section>" +
+                                        renderFeedback() +
                                     "</div>" +
                                 "</div>" +
-                                "<div class='sow-menu__custom-card'>" + spControls + "</div>" +
                             "</div>" +
-                            "<div class='sow-menu__custom-col'>" +
-                                "<div class='sow-menu__custom-card'>" +
-                                    "<p class='sow-menu__panel-sublabel'>POPULATION &amp; SCALE</p>" +
-                                    "<div class='sow-menu__slider-field'>" +
-                                        "<div class='sow-menu__slider-label'><span>MAX HUMAN PLAYERS</span><b data-val-for='max_players'>" + (config.max_players || 8) + "</b></div>" +
-                                        "<input class='sow-menu__range' name='max_players' type='range' min='2' max='16' step='1' value='" + (config.max_players || 8) + "'>" +
-                                    "</div>" +
-                                    "<div class='sow-menu__slider-field'>" +
-                                        "<div class='sow-menu__slider-label'><span>TRIBES (NEUTRAL BOTS)</span><b data-val-for='bot_count'>" + (config.bot_count != null ? config.bot_count : 128) + "</b></div>" +
-                                        "<input class='sow-menu__range' name='bot_count' type='range' min='0' max='1000' step='8' value='" + (config.bot_count != null ? config.bot_count : 128) + "'>" +
-                                    "</div>" +
-                                    "<div class='sow-menu__slider-field'>" +
-                                        "<div class='sow-menu__slider-label'><span>AI NATIONS (COMPLEX AI)</span><b data-val-for='nation_count'>" + (config.nation_count != null ? config.nation_count : 32) + "</b></div>" +
-                                        "<input class='sow-menu__range' name='nation_count' type='range' min='0' max='400' step='4' value='" + (config.nation_count != null ? config.nation_count : 32) + "'>" +
-                                    "</div>" +
-                                "</div>" +
-                                renderFeedback() +
-                                "<div class='sow-menu__custom-actions'>" +
-                                    "<button class='sow-menu__primary sow-menu__custom-launch-btn' type='submit'>" +
-                                        (isSp ? "START SIMULATION" : "CREATE LOBBY") + " <span>↗</span>" +
-                                    "</button>" +
-                                    "<button class='sow-menu__ghost-button' type='button' data-command='close_overlay'>CANCEL</button>" +
-                                "</div>" +
+                            "<div class='sow-create__actions'>" +
+                                "<button class='sow-menu__primary sow-menu__custom-launch-btn' type='submit'>" +
+                                    (isSp ? "START SIMULATION" : "CREATE LOBBY") + " <span>↗</span>" +
+                                "</button>" +
+                                "<button class='sow-menu__ghost-button sow-create__cancel-btn' type='button' data-command='close_overlay'>CANCEL</button>" +
                             "</div>" +
                         "</form>" +
                     "</section>" +
@@ -1012,8 +1020,10 @@
         var selEnd = isTyping && typeof activeEl.selectionEnd === "number" ? activeEl.selectionEnd : null;
         var scrollTop = null;
         if (sameScreen) {
-            var currentMain = root.querySelector(".sow-menu__main");
-            if (currentMain) scrollTop = currentMain.scrollTop;
+            var currentScrollOwner = screen === "create"
+                ? root.querySelector(".sow-create__scroll")
+                : root.querySelector(".sow-menu__main");
+            if (currentScrollOwner) scrollTop = currentScrollOwner.scrollTop;
         }
 
         if (screen === "home") root.innerHTML = renderHome();
@@ -1047,8 +1057,10 @@
         }
         updateDynamic();
         if (sameScreen && scrollTop !== null) {
-            var nextMain = root.querySelector(".sow-menu__main");
-            if (nextMain) nextMain.scrollTop = scrollTop;
+            var nextScrollOwner = screen === "create"
+                ? root.querySelector(".sow-create__scroll")
+                : root.querySelector(".sow-menu__main");
+            if (nextScrollOwner) nextScrollOwner.scrollTop = scrollTop;
         }
         lastRenderKey = renderKey();
     }

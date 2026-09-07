@@ -1856,6 +1856,19 @@ fn relay_manifest_remote(config: &Config) -> Result<Option<serde_json::Value>> {
         .context("relay host manifest is not valid JSON")
 }
 
+fn relay_boot_git_remote(config: &Config) -> Result<Option<String>> {
+    let boot = output(
+        "ssh",
+        &[
+            &config.relay_host,
+            "sudo journalctl -u sow-relay@0.service --no-pager -n 8000 2>/dev/null | grep '\\[BOOT\\] git=' | tail -1",
+        ],
+    )?;
+    Ok(boot.split_whitespace().find_map(|part| {
+        part.strip_prefix("git=").map(ToString::to_string)
+    }))
+}
+
 fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     let remote = output(
         "ssh",
@@ -1867,6 +1880,7 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     let current = parse_components(&remote);
     let local = parse_components(&fs::read_to_string(release.dir.join("COMPONENTS"))?);
     let relay_remote = relay_manifest_remote(config)?;
+    let relay_boot_git = relay_boot_git_remote(config)?;
     let release_json: serde_json::Value =
         serde_json::from_slice(&fs::read(release.dir.join("release.json"))?)?;
     let relay = release_json
@@ -1908,6 +1922,7 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
                 .get("ws_write_timeout_ms")
                 .and_then(serde_json::Value::as_u64)
                 != Some(expected_knob)
+                || relay_boot_git.as_deref() != Some(expected_git)
         }
     };
     Ok(ComponentPlan {
