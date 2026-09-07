@@ -408,6 +408,10 @@ pub fn show_auth_prompt() {
     call_window_hook("SOW_portalShowAuthPrompt");
 }
 
+pub fn sign_out() {
+    call_window_hook("SOW_portalSignOut");
+}
+
 pub fn poll_auth_changed() -> bool {
     let changed = take_window_bool("SOW_AUTH_CHANGED");
     if changed {

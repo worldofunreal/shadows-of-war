@@ -12,7 +12,8 @@
     var browserSearchQuery = "";
     var heroesSearchQuery = "";
     var heroesRegionFilter = "all";
-    var heroesRegionOpen = false;
+    var dropdownOpenKey = null;
+    var authModalOpen = false;
     var settingsOpen = false;
     var profileOpen = false;
     var profilePublicId = null;
@@ -34,8 +35,6 @@
     var passwordLobbyId = null;
     var passwordDraft = "";
     var pendingCommands = [];
-    var pendingHud = null;
-    var lastHudRaw = "";
 
     var LEADER_REGIONS = {
         caesar: "Europe",
@@ -252,7 +251,9 @@
     }
 
     function renderKey() {
-        var lobbies = state.lobbies || [];
+        var screen = currentScreen();
+        var showsLobbies = !settingsOpen && (screen === "home" || screen === "browser" || screen === "queue");
+        var lobbies = showsLobbies ? state.lobbies || [] : [];
         return JSON.stringify({
             phase: state.phase,
             waiting: state.waiting,
@@ -261,9 +262,6 @@
             name: state.player_name,
             locked: state.name_locked,
             leader: state.selected_leader,
-            level: state.level,
-            xp: state.xp,
-            laurels: state.laurels,
             gems: state.gems,
             selected_skin: state.selected_skin,
             skins: (state.store && state.store.skins || []).map(function (skin) {
@@ -284,7 +282,6 @@
             maps: (state.map_catalog || []).map(function (map) {
                 return [map.key, map.display_name, map.width, map.height];
             }),
-            settings: state.settings,
             lobbies: lobbies.map(stableLobby)
         });
     }

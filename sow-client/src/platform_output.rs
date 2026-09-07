@@ -84,13 +84,31 @@ fn copy_text(_text: &str) {
 fn open_url(url: &str, new_tab: bool) {
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = new_tab;
+        use wasm_bindgen::JsCast;
+
         if let Some(window) = web_sys::window() {
-            // Always new tab on web — game shell must not navigate away.
-            match window.open_with_url_and_target(url, "_blank") {
-                Ok(None) => log::warn!("popup blocked opening url {url}"),
-                Err(e) => log::warn!("failed to open url {url}: {e:?}"),
-                Ok(Some(_)) => {}
+            let is_twa = js_sys::Reflect::get(
+                &window,
+                &wasm_bindgen::JsValue::from_str("SOW_isAndroidTwa"),
+            )
+            .ok()
+            .and_then(|value| value.dyn_into::<js_sys::Function>().ok())
+            .and_then(|function| {
+                function
+                    .call0(&wasm_bindgen::JsValue::NULL)
+                    .ok()
+                    .and_then(|value| value.as_bool())
+            })
+            .unwrap_or(false);
+
+            if is_twa || !new_tab {
+                let _ = window.location().set_href(url);
+            } else {
+                match window.open_with_url_and_target(url, "_blank") {
+                    Ok(None) => log::warn!("popup blocked opening url {url}"),
+                    Err(e) => log::warn!("failed to open url {url}: {e:?}"),
+                    Ok(Some(_)) => {}
+                }
             }
         }
     }

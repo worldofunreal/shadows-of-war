@@ -15,10 +15,6 @@
     var reportBusy = false;
     var deleteArmed = false;
     var deleteBusy = false;
-    var ageDeclined = false;
-    var ageConfirmed = false;
-    try { ageConfirmed = window.localStorage.getItem("sow_age_ok") === "1"; } catch (e) {}
-
     function selfCreds() {
         var id = null;
         var secret = null;
@@ -37,22 +33,14 @@
         }
     }
 
-    function renderAgeGate() {
-        var body = ageDeclined
-            ? "<p>You must be 13 or older to play. Players aged 13–17 need a parent or guardian's permission.</p><a class='sow-age-gate__site-link' href='https://shadowsofwar.io/'>Back to site</a>"
-            : "<p>You must be 13 or older to play. Players aged 13–17 need a parent or guardian's permission.</p>" +
-              "<div class='sow-age-gate__actions'>" +
-              "<button type='button' class='sow-age-gate__confirm' data-command='confirm_age'>I AM 13+ / HAVE PERMISSION</button>" +
-              "<button type='button' class='sow-age-gate__leave' data-command='decline_age'>LEAVE</button></div>";
-        return "<div class='sow-age-gate' role='dialog' aria-modal='true' aria-labelledby='sow-age-gate-title'>" +
-            "<section class='sow-age-gate__dialog'><header class='sow-age-gate__header'><div class='sow-age-gate__portrait'><img src='" + esc(asset("gameplay/avatars/lady_six_sky.webp")) + "' alt='Lady Six Sky' width='52' height='52'><span class='sow-age-gate__mark'>13+</span></div><div><span class='sow-age-gate__eyebrow'>ACCESS CHECK</span><h2 id='sow-age-gate-title'>AGE CHECK</h2></div></header>" +
-            "<div class='sow-age-gate__body'>" + body + "</div><footer class='sow-age-gate__footer'><a href='https://shadowsofwar.io/terms/' target='_blank' rel='noopener'>Terms</a><span aria-hidden='true'>·</span><a href='https://shadowsofwar.io/privacy/' target='_blank' rel='noopener'>Privacy</a></footer></section></div>";
-    }
-
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);
         var name = displayNameDraft != null ? displayNameDraft : (state.player_name || "ANONYMOUS");
-        var signIn = state.name_locked ? "ACCOUNT" : "SIGN IN";
+        var android = typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa();
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { authenticated: false };
+        var signIn = auth.authenticated || state.name_locked ? "ACCOUNT" : "SIGN IN";
+        var androidAuthenticated = android && auth.authenticated;
+        var androidAuthPending = android && auth.pending;
         var accountXp = Math.max(0, Number(state.xp) || 0);
         return "" +
             "<header class='sow-menu__topbar'>" +
@@ -71,7 +59,7 @@
                         "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " XP</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__laurels'><svg class='sow-menu__laurel-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M8 20c-3-2-5-5-5-9 3 1 5 3 6 6M16 20c3-2 5-5 5-9-3 1-5 3-6 6M9 22h6'/></svg><strong data-progression-laurels-value>" + esc(state.laurels) + "</strong></span>" +
                     "</div>" +
-                    "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + signIn + "</button>" +
+                    (androidAuthenticated || androidAuthPending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + (android ? "SIGN IN" : signIn) + "</button>") +
                     "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='Settings'>⚙</button>" +
                 "</div>" +
             "</header>";
@@ -158,9 +146,10 @@
     }
 
     function renderFooter(label) {
+        var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
         return "<footer class='sow-menu__footer'>" + (label ? "<span>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='Game links'>" +
             "<a href='/how-to-play/'>HOW TO PLAY</a><a href='/support/'>SUPPORT</a><a href='/terms/'>TERMS</a><a href='/privacy/'>PRIVACY</a><a href='/cookies/'>COOKIES</a>" +
-            "<a href='https://discord.gg/d6ZDeChSE' target='_blank' rel='noopener noreferrer'>DISCORD</a><a href='https://t.me/shadowsofwario' target='_blank' rel='noopener noreferrer'>TELEGRAM</a><a href='https://github.com/worldofunreal/shadows-of-war' target='_blank' rel='noopener noreferrer'>GITHUB</a>" +
+            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">DISCORD</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">TELEGRAM</a><a href='https://github.com/worldofunreal/shadows-of-war'" + externalAttrs + ">GITHUB</a>" +
             "</nav><span>SHADOWSOFWAR.IO</span></footer>";
     }
 
@@ -180,7 +169,6 @@
 
     function renderHome() {
         var leader = leaderById(state.selected_leader);
-        var settingsOverlay = settingsOpen ? renderSettings() : "";
         return "" +
             "<div class='sow-menu__backdrop'></div>" +
             "<div class='sow-menu__shell'>" +
@@ -193,7 +181,7 @@
                     "</section>" +
                 "</main>" +
                 renderFooter("") + renderMobileNav("battle") +
-            "</div>" + settingsOverlay + renderPasswordModal();
+            "</div>" + renderPasswordModal();
     }
 
     function renderBrowser() {
@@ -330,7 +318,7 @@
                     "<section class='sow-store__section' aria-labelledby='sow-store-leaders'><div class='sow-store__section-head'><h2 id='sow-store-leaders'>Leaders</h2><span>Weekly rotation</span></div><div class='sow-store__leader-grid'>" + (leaders.map(renderStoreLeader).join("") || "<p class='sow-menu__empty'>No leaders available.</p>") + "</div><p class='sow-store__fineprint'>Unlocked leaders have distinct gameplay perks — they are not purely cosmetic. Gem unlocks are final sale, no refunds.</p></section>" +
                     "<section class='sow-store__section' aria-labelledby='sow-store-skins'><div class='sow-store__section-head'><h2 id='sow-store-skins'>Skins</h2><span>Cosmetics</span></div><div class='sow-store__skin-grid'>" + (skins.map(renderStoreSkin).join("") || "<p class='sow-menu__empty'>No skins available.</p>") + "</div></section>" +
                     "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>Gem bundles</h2>" + renderWebPurchaseAction() + "</div><div class='sow-store__bundle-grid'>" + (bundles.map(renderStoreBundle).join("") || "<p class='sow-menu__empty'>Products are not configured yet.</p>") + "</div>" +
-                    "<p class='sow-store__fineprint'>Digital items delivered instantly to your account. <strong>All sales are final — no refunds.</strong> Buying means you consent to immediate delivery and give up the statutory withdrawal right where applicable. See <a href='https://shadowsofwar.io/terms/' target='_blank' rel='noopener'>Terms</a>.</p></section>" +
+                    "<p class='sow-store__fineprint'>Digital items delivered instantly to your account. <strong>All sales are final — no refunds.</strong> Buying means you consent to immediate delivery and give up the statutory withdrawal right where applicable. See <a href='https://shadowsofwar.io/terms/'" + (isAndroidTwa() ? "" : " target='_blank' rel='noopener'") + ">Terms</a>.</p></section>" +
                 "</section></main>" +
                 renderFooter("STORE") + renderMobileNav("store") +
             "</div>";
@@ -358,21 +346,40 @@
         });
     }
 
-    function renderHeroesRegionDropdown() {
-        var regions = ["all", "Europe", "Africa", "Asia", "Americas"];
-        var selectedLabel = heroesRegionFilter === "all" ? "All regions" : heroesRegionFilter;
-        return "<div class='sow-heroes__region sow-control-dropdown' data-heroes-region>" +
-            "<span class='sow-heroes__sr-only' id='sow-heroes-region-label'>Filter leaders by region</span>" +
-            "<button class='sow-control-dropdown__trigger' type='button' data-command='toggle_heroes_region' data-role='heroes-region-trigger' aria-haspopup='listbox' aria-expanded='" + (heroesRegionOpen ? "true" : "false") + "' aria-controls='sow-heroes-region-listbox' aria-labelledby='sow-heroes-region-label'>" +
-                "<span data-heroes-region-value>" + esc(selectedLabel) + "</span><span class='sow-control-dropdown__chevron' aria-hidden='true'>⌄</span>" +
+    function renderDropdown(config) {
+        var value = config.value == null ? "" : String(config.value);
+        var options = config.options || [];
+        var key = String(config.key);
+        var inputAttrs = " data-dropdown-value" + (config.setting ? " data-setting='" + esc(config.setting) + "'" : "");
+        return "<div class='sow-control-dropdown" + (config.className ? " " + esc(config.className) : "") + "' data-control-dropdown data-dropdown-key='" + esc(key) + "'>" +
+            "<button class='sow-control-dropdown__trigger' type='button' data-command='toggle_dropdown' data-dropdown-key='" + esc(key) + "' data-role='dropdown-trigger' aria-haspopup='listbox' aria-expanded='false' aria-controls='sow-dropdown-" + esc(key) + "'>" +
+                "<span data-dropdown-label>" + esc((options.find(function (option) { return String(option.value) === value; }) || {}).label || value) + "</span><span class='sow-control-dropdown__chevron' aria-hidden='true'>⌄</span>" +
             "</button>" +
-            "<div class='sow-control-dropdown__menu' id='sow-heroes-region-listbox' role='listbox' aria-label='Filter leaders by region'" + (heroesRegionOpen ? "" : " hidden") + ">" +
-                regions.map(function (region) {
-                    var label = region === "all" ? "All regions" : region;
-                    return "<button class='sow-control-dropdown__option' type='button' role='option' data-command='select_heroes_region' data-role='heroes-region-option' data-region='" + esc(region) + "' aria-selected='" + (heroesRegionFilter === region ? "true" : "false") + "'>" + esc(label) + "</button>";
+            "<div class='sow-control-dropdown__menu' id='sow-dropdown-" + esc(key) + "' role='listbox' aria-label='" + esc(config.label || "Select an option") + "' hidden>" +
+                options.map(function (option) {
+                    var selected = String(option.value) === value;
+                    return "<button class='sow-control-dropdown__option' type='button' role='option' data-command='select_dropdown' data-dropdown-key='" + esc(key) + "' data-dropdown-option-value='" + esc(option.value) + "' aria-selected='" + (selected ? "true" : "false") + "'>" + esc(option.label) + "</button>";
                 }).join("") +
             "</div>" +
+            "<input type='hidden' name='" + esc(config.name || key) + "' value='" + esc(value) + "' data-dropdown-input" + inputAttrs + ">" +
         "</div>";
+    }
+
+    function renderHeroesRegionDropdown() {
+        return renderDropdown({
+            key: "heroes-region",
+            label: "Filter leaders by region",
+            name: "region",
+            value: heroesRegionFilter,
+            className: "sow-heroes__region",
+            options: [
+                { value: "all", label: "All regions" },
+                { value: "Europe", label: "Europe" },
+                { value: "Africa", label: "Africa" },
+                { value: "Asia", label: "Asia" },
+                { value: "Americas", label: "Americas" }
+            ]
+        });
     }
 
     function renderHeroesRoster(activeId) {
@@ -393,21 +400,50 @@
         }
     }
 
-    function syncHeroesRegionDropdown(focusTarget) {
-        var dropdown = root.querySelector("[data-heroes-region]");
-        if (!dropdown) return;
-        var trigger = dropdown.querySelector("[data-role='heroes-region-trigger']");
-        var menu = dropdown.querySelector("[role='listbox']");
-        if (!trigger || !menu) return;
-        trigger.setAttribute("aria-expanded", heroesRegionOpen ? "true" : "false");
-        menu.hidden = !heroesRegionOpen;
-        var value = dropdown.querySelector("[data-heroes-region-value]");
-        if (value) value.textContent = heroesRegionFilter === "all" ? "All regions" : heroesRegionFilter;
-        var options = dropdown.querySelectorAll("[data-role='heroes-region-option']");
-        for (var i = 0; i < options.length; i++) {
-            options[i].setAttribute("aria-selected", options[i].dataset.region === heroesRegionFilter ? "true" : "false");
+    function syncDropdowns(focusTarget) {
+        var dropdowns = root.querySelectorAll("[data-control-dropdown]");
+        for (var i = 0; i < dropdowns.length; i++) {
+            var dropdown = dropdowns[i];
+            var key = dropdown.dataset.dropdownKey;
+            var open = dropdownOpenKey === key;
+            var trigger = dropdown.querySelector("[data-role='dropdown-trigger']");
+            var menu = dropdown.querySelector("[role='listbox']");
+            if (!trigger || !menu) continue;
+            trigger.setAttribute("aria-expanded", open ? "true" : "false");
+            menu.hidden = !open;
+            var input = dropdown.querySelector("[data-dropdown-value]");
+            var value = input ? input.value : "";
+            var label = dropdown.querySelector("[data-dropdown-label]");
+            var options = dropdown.querySelectorAll("[role='option']");
+            for (var j = 0; j < options.length; j++) {
+                var selected = options[j].dataset.dropdownOptionValue === value;
+                options[j].setAttribute("aria-selected", selected ? "true" : "false");
+                if (label && selected) label.textContent = options[j].textContent;
+            }
         }
         if (focusTarget) focusTarget.focus();
+    }
+
+    function setDropdownOpen(key, open, focusTarget) {
+        dropdownOpenKey = open ? key : null;
+        syncDropdowns(focusTarget);
+    }
+
+    function selectDropdown(key, value) {
+        var dropdown = root.querySelector("[data-control-dropdown][data-dropdown-key='" + key + "']");
+        if (!dropdown) return;
+        var input = dropdown.querySelector("[data-dropdown-input]");
+        if (!input) return;
+        input.value = value;
+        dropdownOpenKey = null;
+        if (key === "heroes-region") {
+            heroesRegionFilter = value || "all";
+            syncDropdowns();
+            refreshHeroesRoster(true);
+            return;
+        }
+        syncDropdowns();
+        input.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
     function renderHeroes() {
@@ -577,13 +613,10 @@
         if (!reportOpen || reportTarget !== profilePublicId) {
             return "<section class='sow-profile__section' aria-label='Conduct'><div class='sow-profile__section-head'><h2>Conduct</h2></div><button type='button' class='sow-menu__ghost-button' data-command='open_report' data-profile-id='" + esc(profilePublicId) + "'>Report player…</button></section>";
         }
-        var options = REPORT_REASONS.map(function (r) {
-            return "<option value='" + esc(r[0]) + "'>" + esc(r[1]) + "</option>";
-        }).join("");
         return "<section class='sow-profile__section' aria-label='Report player'><div class='sow-profile__section-head'><h2>Report player</h2></div>" +
             "<form data-form='report'>" +
             "<label for='sow-report-reason'>Reason</label>" +
-            "<select id='sow-report-reason' name='reason'>" + options + "</select>" +
+            renderDropdown({ key: "report-reason", name: "reason", value: REPORT_REASONS[0][0], options: REPORT_REASONS.map(function (r) { return { value: r[0], label: r[1] }; }) }) +
             "<label for='sow-report-details'>Details (required for Other)</label>" +
             "<textarea id='sow-report-details' name='details' rows='3' maxlength='500' placeholder='What happened?'></textarea>" +
             "<p class='sow-profile__empty'>Filing also blocks this player for you and notifies our moderation team. False reports violate the Terms.</p>" +
@@ -664,8 +697,8 @@
         }).join("");
 
         var mapCatalogOptions = (state && state.map_catalog || []).map(function (m) {
-            return "<option value='" + esc(m.key) + "' " + (m.key === selectedMap.key ? "selected" : "") + ">" + esc(m.display_name) + " (" + m.width + "×" + m.height + ")</option>";
-        }).join("");
+            return { value: m.key, label: m.display_name + " (" + m.width + "×" + m.height + ")" };
+        });
 
         var spControls = isSp ?
             "<div class='sow-menu__slider-field'>" +
@@ -711,7 +744,7 @@
                                         "</div>" +
                                     "</div>" +
                                     "<label class='sow-menu__form-field' style='margin-top:12px;'>SELECT MAP" +
-                                        "<select class='sow-menu__select' name='map_name'>" + mapCatalogOptions + "</select>" +
+                                        renderDropdown({ key: "create-map", name: "map_name", value: selectedMap.key, options: mapCatalogOptions }) +
                                     "</label>" +
                                 "</div>" +
                                 "<div class='sow-menu__custom-card'>" +
@@ -886,9 +919,15 @@
 
     function renderSettings() {
         var settings = state.settings || {};
-        var fullscreen = document.fullscreenElement ? "EXIT FULLSCREEN" : "FULLSCREEN";
         var vol = settings.music_volume == null ? 0.8 : settings.music_volume;
         var volPct = Math.round(vol * 100);
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { platform: isAndroidTwa() ? "twa" : "web", authenticated: false };
+        var providerLabel = auth.platform === "twa" ? "GOOGLE PLAY GAMES" : "WOU-ID ACCOUNT";
+        var accountControl = auth.pending
+            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>GOOGLE PLAY GAMES</span><strong class='sow-menu__account-pending'>CONNECTING…</strong></section>"
+            : auth.authenticated
+            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + providerLabel + "</span><button class='sow-menu__danger' type='button' data-command='sign_out'>SIGN OUT</button></section>"
+            : "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>ANONYMOUS ACCOUNT</span><button class='sow-menu__secondary' type='button' data-command='sign_in'>SIGN IN</button></section>";
         return "" +
             "<div class='sow-menu__overlay'>" +
                 "<section class='sow-menu__modal sow-menu__settings-modal'>" +
@@ -900,12 +939,13 @@
                         "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='Close'>×</button>" +
                     "</div>" +
                     "<div class='sow-menu__form-grid'>" +
+                        accountControl +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
                             "<span>MASTER AUDIO</span>" +
-                            "<select class='sow-menu__select' name='mute_all' data-setting='mute'>" +
-                                "<option value='on' " + (!settings.mute_all ? "selected" : "") + ">AUDIO ENABLED (ON)</option>" +
-                                "<option value='off' " + (settings.mute_all ? "selected" : "") + ">MUTED (OFF)</option>" +
-                            "</select>" +
+                            renderDropdown({ key: "settings-mute", name: "mute_all", setting: "mute", value: settings.mute_all ? "off" : "on", options: [
+                                { value: "on", label: "AUDIO ENABLED (ON)" },
+                                { value: "off", label: "MUTED (OFF)" }
+                            ] }) +
                         "</label>" +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
                             "<div class='sow-menu__slider-label'><span>MUSIC VOLUME</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
@@ -913,15 +953,12 @@
                         "</label>" +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
                             "<span>MOTION &amp; ANIMATION</span>" +
-                            "<select class='sow-menu__select' name='reduced_motion' data-setting='reduced_motion'>" +
-                                "<option value='full' " + (!settings.reduced_motion ? "selected" : "") + ">FULL</option>" +
-                                "<option value='reduced' " + (settings.reduced_motion ? "selected" : "") + ">REDUCED MOTION</option>" +
-                            "</select>" +
+                            renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
+                                { value: "full", label: "FULL" },
+                                { value: "reduced", label: "REDUCED MOTION" }
+                            ] }) +
                         "</label>" +
                     "</div>" +
-                    "<button class='sow-menu__secondary sow-menu__fullscreen-btn' type='button' data-command='toggle_fullscreen'>" +
-                        "⛶ " + fullscreen +
-                    "</button>" +
                     "<div class='sow-menu__modal-actions'>" +
                         "<button class='sow-menu__primary' type='button' data-command='toggle_settings'>DONE <span>✓</span></button>" +
                     "</div>" +
@@ -929,10 +966,24 @@
             "</div>";
     }
 
+    function renderAuthModal() {
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { authenticated: false };
+        var account = auth.authenticated
+            ? "<p class='sow-menu__tagline'>Your WOU-ID account is connected. Sign out to continue with an anonymous account.</p><button class='sow-menu__danger' type='button' data-command='sign_out'>SIGN OUT</button>"
+            : "<p class='sow-menu__tagline'>Sign in with WOU-ID to sync your profile and progression across devices.</p><div class='sow-menu__auth-grid'>" +
+                [["google", "G", "GOOGLE"], ["discord", "◉", "DISCORD"], ["twitter", "𝕏", "X"], ["meta", "∞", "META"]].map(function (provider) {
+                    return "<button class='sow-menu__secondary sow-menu__auth-provider' type='button' data-command='wou_provider' data-provider='" + provider[0] + "'><b aria-hidden='true'>" + provider[1] + "</b><span>" + provider[2] + "</span></button>";
+                }).join("") + "</div>";
+        return "<div class='sow-menu__overlay' data-auth-overlay><section class='sow-menu__modal sow-menu__auth-modal' role='dialog' aria-modal='true' aria-labelledby='sow-auth-title'>" +
+            "<div class='sow-menu__modal-head'><div><p class='sow-menu__panel-label'>WOU-ID</p><h2 id='sow-auth-title'>SIGN IN</h2></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='Close'>×</button></div>" +
+            account +
+            "</section></div>";
+    }
+
     function render() {
         if (!state) return;
         var screen = currentScreen();
-        heroesRegionOpen = false;
+        dropdownOpenKey = null;
         if (screen === "create" && previousScreen !== "create") {
             createDraft = cloneConfig();
             createOffline = !!state.custom_game_is_sp;
@@ -974,9 +1025,8 @@
         else if (screen === "store") root.innerHTML = renderStore();
         else root.innerHTML = "";
 
-        // 13+ eligibility gate (Terms). Blocks the whole menu until confirmed;
-        // the choice persists per device. Under-13s must leave.
-        if (!ageConfirmed) root.innerHTML += renderAgeGate();
+        if (settingsOpen) root.insertAdjacentHTML("beforeend", renderSettings());
+        if (authModalOpen) root.insertAdjacentHTML("beforeend", renderAuthModal());
 
         if (isTyping) {
             var restored = null;
@@ -1000,6 +1050,7 @@
             var nextMain = root.querySelector(".sow-menu__main");
             if (nextMain) nextMain.scrollTop = scrollTop;
         }
+        lastRenderKey = renderKey();
     }
 
     function updateDynamic() {
@@ -1017,6 +1068,15 @@
             if (xpFill) xpFill.style.width = (progressionXp % 100) + "%";
             if (laurelsValue) laurelsValue.textContent = Math.max(0, Number(state.laurels) || 0);
         }
+        var settings = state.settings || {};
+        var muteInput = root.querySelector("[data-setting='mute']");
+        var musicInput = root.querySelector("[data-setting='music_volume']");
+        var motionInput = root.querySelector("[data-setting='reduced_motion']");
+        if (muteInput && document.activeElement !== muteInput) muteInput.value = settings.mute_all ? "off" : "on";
+        if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
+        if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
+        var musicValBadge = root.querySelector("[data-val-for='music_vol']");
+        if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
         var timer = root.querySelector("[data-live-countdown]");
         var lobby = joinedLobby();
         if (timer && lobby) timer.textContent = lobby.is_counting_down ? "STARTING IN " + Math.ceil(lobby.timer_secs) + "s" : "WAITING FOR PLAYERS";
@@ -1033,10 +1093,6 @@
     }
 
     root.addEventListener("click", function (event) {
-        if (heroesRegionOpen && !event.target.closest("[data-heroes-region]")) {
-            heroesRegionOpen = false;
-            syncHeroesRegionDropdown();
-        }
         var target = event.target.closest("[data-command]");
         if (!target || !root.contains(target)) return;
         var command = target.dataset.command;
@@ -1054,7 +1110,7 @@
                 mobileHeroesOpen = true;
                 heroesSearchQuery = "";
                 heroesRegionFilter = "all";
-                heroesRegionOpen = false;
+                dropdownOpenKey = null;
                 tempSelectedLeader = state ? state.selected_leader : "Caesar";
                 render();
                 return;
@@ -1160,18 +1216,6 @@
             render();
             return;
         }
-        if (command === "confirm_age") {
-            ageConfirmed = true;
-            ageDeclined = false;
-            try { window.localStorage.setItem("sow_age_ok", "1"); } catch (e) {}
-            render();
-            return;
-        }
-        if (command === "decline_age") {
-            ageDeclined = true;
-            render();
-            return;
-        }
         if (command === "open_report") {
             reportOpen = true;
             reportTarget = target.dataset.profileId || profilePublicId;
@@ -1233,22 +1277,19 @@
             mobileHeroesOpen = true;
             heroesSearchQuery = "";
             heroesRegionFilter = "all";
-            heroesRegionOpen = false;
+            dropdownOpenKey = null;
             tempSelectedLeader = state ? state.selected_leader : "Caesar";
             settingsOpen = false;
             render();
             return;
         }
-        if (command === "toggle_heroes_region") {
-            heroesRegionOpen = !heroesRegionOpen;
-            syncHeroesRegionDropdown();
+        if (command === "toggle_dropdown") {
+            var dropdownKey = target.dataset.dropdownKey;
+            setDropdownOpen(dropdownKey, dropdownOpenKey !== dropdownKey, target);
             return;
         }
-        if (command === "select_heroes_region") {
-            heroesRegionFilter = target.dataset.region || "all";
-            heroesRegionOpen = false;
-            refreshHeroesRoster(true);
-            syncHeroesRegionDropdown(root.querySelector("[data-role='heroes-region-trigger']"));
+        if (command === "select_dropdown") {
+            selectDropdown(target.dataset.dropdownKey, target.dataset.dropdownOptionValue);
             return;
         }
         if (command === "preview_leader") {
@@ -1362,7 +1403,32 @@
         }
         if (command === "toggle_settings") {
             settingsOpen = !settingsOpen;
+            authModalOpen = false;
             render();
+            return;
+        }
+        if (command === "close_auth") {
+            authModalOpen = false;
+            render();
+            return;
+        }
+        if (command === "wou_provider") {
+            if (typeof window.SOW_startWouOAuth === "function") window.SOW_startWouOAuth(target.dataset.provider);
+            return;
+        }
+        if (command === "sign_in") {
+            if (isAndroidTwa()) {
+                send(command);
+            } else {
+                settingsOpen = false;
+                authModalOpen = true;
+                render();
+            }
+            return;
+        }
+        if (command === "sign_out") {
+            if (isAndroidTwa()) send(command);
+            else if (typeof window.SOW_signOutWou === "function") window.SOW_signOutWou();
             return;
         }
         if (command === "close_password") {
@@ -1381,18 +1447,6 @@
                 });
             } else if (lobbyCode) {
                 target.textContent = "COPY UNAVAILABLE";
-            }
-            return;
-        }
-        if (command === "toggle_fullscreen") {
-            if (document.fullscreenElement) {
-                document.exitFullscreen().catch(function (error) {
-                    console.warn("[WEB MENU] unable to exit fullscreen:", error);
-                });
-            } else if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(function (error) {
-                    console.warn("[WEB MENU] unable to enter fullscreen:", error);
-                });
             }
             return;
         }
@@ -1422,49 +1476,51 @@
         send(command, payload);
     });
 
+    document.addEventListener("pointerdown", function (event) {
+        var dropdown = event.target.closest ? event.target.closest("[data-control-dropdown]") : null;
+        if (dropdownOpenKey && (!dropdown || dropdown.dataset.dropdownKey !== dropdownOpenKey)) {
+            setDropdownOpen(dropdownOpenKey, false);
+        }
+    });
+
     root.addEventListener("keydown", function (event) {
-        var regionTrigger = event.target.closest("[data-role='heroes-region-trigger']");
-        var regionOption = event.target.closest("[data-role='heroes-region-option']");
-        if (regionTrigger) {
+        var dropdownTrigger = event.target.closest("[data-role='dropdown-trigger']");
+        var dropdownOption = event.target.closest("[data-role='dropdown-option'], [data-command='select_dropdown']");
+        if (dropdownTrigger) {
             if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                heroesRegionOpen = true;
-                syncHeroesRegionDropdown();
-                var triggerOptions = root.querySelectorAll("[data-role='heroes-region-option']");
+                var triggerKey = dropdownTrigger.dataset.dropdownKey;
+                setDropdownOpen(triggerKey, true);
+                var triggerOptions = dropdownTrigger.parentElement.querySelectorAll("[data-command='select_dropdown']");
                 if (triggerOptions.length) triggerOptions[event.key === "ArrowUp" ? triggerOptions.length - 1 : 0].focus();
                 return;
             }
-            if (event.key === "Escape" && heroesRegionOpen) {
-                event.preventDefault();
-                heroesRegionOpen = false;
-                syncHeroesRegionDropdown(regionTrigger);
-                return;
-            }
         }
-        if (regionOption) {
-            var regionOptions = Array.prototype.slice.call(root.querySelectorAll("[data-role='heroes-region-option']"));
-            var regionIndex = regionOptions.indexOf(regionOption);
-            var regionNextIndex = regionIndex;
-            if (event.key === "ArrowDown") regionNextIndex = Math.min(regionOptions.length - 1, regionIndex + 1);
-            if (event.key === "ArrowUp") regionNextIndex = Math.max(0, regionIndex - 1);
-            if (event.key === "Home") regionNextIndex = 0;
-            if (event.key === "End") regionNextIndex = regionOptions.length - 1;
-            if (regionNextIndex !== regionIndex) {
+        if (dropdownOption) {
+            var dropdown = dropdownOption.closest("[data-control-dropdown]");
+            var options = dropdown ? Array.prototype.slice.call(dropdown.querySelectorAll("[data-command='select_dropdown']")) : [];
+            var optionIndex = options.indexOf(dropdownOption);
+            var nextIndex = optionIndex;
+            if (event.key === "ArrowDown") nextIndex = Math.min(options.length - 1, optionIndex + 1);
+            if (event.key === "ArrowUp") nextIndex = Math.max(0, optionIndex - 1);
+            if (event.key === "Home") nextIndex = 0;
+            if (event.key === "End") nextIndex = options.length - 1;
+            if (nextIndex !== optionIndex) {
                 event.preventDefault();
-                regionOptions[regionNextIndex].focus();
+                options[nextIndex].focus();
                 return;
             }
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
-                regionOption.click();
+                dropdownOption.click();
                 return;
             }
-            if (event.key === "Escape") {
-                event.preventDefault();
-                heroesRegionOpen = false;
-                syncHeroesRegionDropdown(root.querySelector("[data-role='heroes-region-trigger']"));
-                return;
-            }
+        }
+        if (event.key === "Escape" && dropdownOpenKey) {
+            event.preventDefault();
+            var openKey = dropdownOpenKey;
+            setDropdownOpen(openKey, false, root.querySelector("[data-control-dropdown][data-dropdown-key='" + openKey + "'] [data-role='dropdown-trigger']"));
+            return;
         }
         if (event.key === "Escape" && profileMatchDetail) {
             profileMatchDetail = null;
@@ -1646,6 +1702,38 @@
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
     });
 
-    document.addEventListener("fullscreenchange", function () {
-        if (state && settingsOpen) render();
-    });
+    function handleMenuStateUpdate(raw) {
+        if (typeof raw !== "string" || raw === lastRaw) {
+            updateDynamic();
+            return;
+        }
+        lastRaw = raw;
+        try {
+            state = JSON.parse(raw);
+        } catch (error) {
+            console.warn("[WEB MENU] invalid state:", error);
+            return;
+        }
+        if (state.phase === "MainMenu" && window.SOW_open_store_after_match) {
+            window.SOW_open_store_after_match = false;
+            mobileStoreOpen = true;
+        }
+        if (typeof window.SOW_syncWebLoader === "function") {
+            window.SOW_syncWebLoader(state);
+        }
+        if (state.waiting && passwordLobbyId != null) {
+            passwordLobbyId = null;
+            passwordDraft = "";
+        }
+        var key = renderKey();
+        if (key !== lastRenderKey) {
+            render();
+        } else {
+            root.hidden = state.phase !== "MainMenu";
+            updateDynamic();
+        }
+    }
+
+    window.SOW_menu_state_update = handleMenuStateUpdate;
+    root.hidden = true;
+})();

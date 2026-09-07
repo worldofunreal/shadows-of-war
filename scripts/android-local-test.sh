@@ -167,20 +167,28 @@ if ! grep -q '^Starting:' "$START"; then
 fi
 
 echo "Waiting up to 45s for automatic Play Games authentication and TWA launch..."
+LAUNCH_MARKER='SOW_PGS.*(TWA launched|launching TWA|automatic login suppressed by anonymous mode)'
+AUTH_MARKER='SOW_PGS.*(rendezvous success=true HTTP 2|automatic Play Games authentication unavailable|automatic Play Games login suppressed by anonymous mode)'
+twa_foreground() {
+    local window_state
+    window_state="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
+    rg -q 'TwaLauncherActivity|com\.google\.androidbrowserhelper\.trusted\.LauncherActivity' <<<"$window_state" \
+        && rg -q 'mResumedActivity:.*CustomTabActivity' <<<"$window_state"
+}
+LAUNCH_CONFIRMED=0
 deadline=$((SECONDS + 45))
 while (( SECONDS < deadline )); do
-    if rg -q "SOW_PGS.*TWA launched|SOW_PGS.*launching TWA" "$LOG"; then
+    if rg -q "$LAUNCH_MARKER" "$LOG" || twa_foreground; then
+        LAUNCH_CONFIRMED=1
         break
     fi
     sleep 1
 done
 
-if rg -q "SOW_PGS.*TWA launched|SOW_PGS.*launching TWA" "$LOG"; then
+if (( LAUNCH_CONFIRMED )); then
     deadline=$((SECONDS + 45))
     while (( SECONDS < deadline )); do
-        WINDOW_STATE="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
-        if rg -q 'TwaLauncherActivity|com\.google\.androidbrowserhelper\.trusted\.LauncherActivity' <<<"$WINDOW_STATE" \
-            && rg -q 'mResumedActivity:.*CustomTabActivity' <<<"$WINDOW_STATE"; then
+        if rg -q "$AUTH_MARKER" "$LOG"; then
             break
         fi
         sleep 1
@@ -203,13 +211,17 @@ if ! rg -q 'SOW_PGS' "$APP_LOG"; then
     exit 1
 fi
 
-if ! rg -q "SOW_PGS.*TWA launched|SOW_PGS.*launching TWA" "$LOG"; then
+if (( ! LAUNCH_CONFIRMED )); then
     WINDOW_STATE="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
     if rg -q 'GamesResolutionActivity|SignInActivity' <<<"$WINDOW_STATE"; then
         echo "FAIL: Google Play Games displayed interactive account UI despite profile-creation suppression. Log: $APP_LOG" >&2
     else
         echo "FAIL: Android did not reach the TWA launch. Log: $APP_LOG" >&2
     fi
+    exit 1
+fi
+if ! rg -q "$AUTH_MARKER" "$LOG"; then
+    echo "FAIL: Play Games authentication did not resolve to identity or anonymous fallback. Log: $APP_LOG" >&2
     exit 1
 fi
 
@@ -237,7 +249,7 @@ if [[ ! -s "$SCREENSHOT" ]]; then
     die "Android screenshot is empty; reconnect the device and rerun the local test"
 fi
 
-if rg -q 'SOW_PGS.*rendezvous is ready' "$LOG"; then
+if rg -q 'SOW_PGS.*rendezvous success=true HTTP 2' "$LOG"; then
     echo "PASS: Play Games handoff launched the TWA"
 else
     echo "PASS: anonymous fallback launched the TWA without interactive Play Games UI"

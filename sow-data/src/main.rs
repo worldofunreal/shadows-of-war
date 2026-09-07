@@ -45,7 +45,6 @@ struct PlayGamesHandoff {
 
 struct PlayGamesSession {
     expires_at: Instant,
-    account_id: String,
     external_id: String,
 }
 
@@ -55,7 +54,6 @@ struct PlayGamesAccessToken {
 }
 
 struct VerifiedPlayGamesIdentity {
-    account_id: String,
     external_id: String,
 }
 
@@ -2111,7 +2109,6 @@ async fn handle_playgames_consume(
         token.clone(),
         PlayGamesSession {
             expires_at: now + PLAYGAMES_SESSION_TTL,
-            account_id: handoff.account_id,
             external_id: handoff.external_id.clone(),
         },
     );
@@ -2365,7 +2362,6 @@ impl AppState {
             return Err("Play Games player mismatch".to_string());
         }
         Ok(VerifiedPlayGamesIdentity {
-            account_id: session.account_id.clone(),
             external_id: session.external_id.clone(),
         })
     }
