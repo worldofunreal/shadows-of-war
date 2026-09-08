@@ -28,7 +28,7 @@
     var profileError = "";
     var mobileStoreOpen = false;
     var mobileHeroesOpen = false;
-    var mobileNavActive = null;
+    var mainNavActive = null;
     var createDraft = null;
     var createOffline = false;
     var createPrivate = false;
@@ -230,31 +230,12 @@
     function lobbyThumb(lobby) {
         var base = String(window.SOW_MAPS_URL || "/maps").replace(/\/$/, "");
         var bust = String(window.SOW_MAPS_CACHE_BUST || window.SOW_BUILD_TS || "");
-        return base + "/" + encodeURIComponent((lobby && lobby.map_name) || "world") + "/thumbnail.webp" +
+        var mapKey = String((lobby && lobby.map_name) || "world").trim().toLowerCase();
+        return base + "/" + encodeURIComponent(mapKey) + "/thumbnail.webp" +
             (bust ? "?v=" + encodeURIComponent(bust) : "");
     }
 
-    function stableLobby(lobby) {
-        return {
-            id: lobby.id,
-            kind: lobby.kind,
-            mode: lobby.game_mode,
-            map: lobby.map_name,
-            players: lobby.num_players,
-            max: lobby.max_players,
-            countdown: lobby.is_counting_down,
-            password: lobby.has_password,
-            host: lobby.host_name,
-            names: (lobby.players || []).map(function (player) {
-                return [player.player_id, player.name, player.team];
-            })
-        };
-    }
-
     function renderKey() {
-        var screen = currentScreen();
-        var showsLobbies = !settingsOpen && (screen === "home" || screen === "browser" || screen === "queue");
-        var lobbies = showsLobbies ? state.lobbies || [] : [];
         return JSON.stringify({
             phase: state.phase,
             waiting: state.waiting,
@@ -282,8 +263,7 @@
             notice: state.notice,
             maps: (state.map_catalog || []).map(function (map) {
                 return [map.key, map.display_name, map.width, map.height];
-            }),
-            lobbies: lobbies.map(stableLobby)
+            })
         });
     }
 
