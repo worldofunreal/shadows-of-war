@@ -2197,3 +2197,30 @@
     .sow-heroes__featured-copy { padding: 14px; }
     .sow-heroes__perk { margin: 7px 0 10px; }
 }
+
+@media (min-width: 681px) and (orientation: landscape) {
+    #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store,
+    #sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes {
+        width: min(calc(100% - 48px), 1440px);
+        gap: 12px 16px;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
+        display: grid;
+        grid-template-columns: 84px minmax(0, 1fr);
+        grid-template-rows: 60px minmax(0, 1fr) auto;
+        width: min(calc(100% - 48px), 1440px);
+        height: 100%;
+        min-height: 0;
+        gap: 12px 16px;
+        padding: max(18px, env(safe-area-inset-top)) 0 max(18px, env(safe-area-inset-bottom));
+    }
+}
+
+@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
+    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
+        grid-template-rows: 52px minmax(0, 1fr);
+        gap: 8px 12px;
+        padding: max(5px, env(safe-area-inset-top)) 0 max(5px, env(safe-area-inset-bottom));
+    }
+}

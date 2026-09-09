@@ -18,6 +18,7 @@
   })();
 
   function siteTrack(name, props) {
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '::1') return;
     const event = {
       v: 1,
       name,

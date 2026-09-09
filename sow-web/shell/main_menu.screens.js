@@ -135,8 +135,26 @@
         return lobbyThumbnailCache[url];
     }
 
+    function lobbyMapName(lobby) {
+        var key = String(lobby.map_name || "world").toLowerCase();
+        var knownNames = {
+            eastanglia: "East Anglia",
+            bajacalifornia: "Baja California",
+            eastasia: "East Asia",
+            indiansubcontinent: "Indian Subcontinent",
+            middleeast: "Middle East",
+            northamerica: "North America",
+            southamerica: "South America",
+            southeastasia: "Southeast Asia"
+        };
+        var info = mapInfo(key);
+        var label = String(info.display_name || knownNames[key] || key);
+        if (label.toLowerCase() === key) label = knownNames[key] || label;
+        return label;
+    }
+
     function lobbyLabel(lobby) {
-        return (lobby.game_mode || "FFA") + " " + (lobby.map_name || "WORLD MAP");
+        return (lobby.game_mode || "FFA") + " " + lobbyMapName(lobby);
     }
 
     function renderLobbyCard(lobby) {
@@ -148,8 +166,8 @@
                 "'>" +
                 "<img class='sow-menu__lobby-art' src='" + esc(lobbyThumb(lobby)) + "' alt='' loading='eager' decoding='async'>" +
                 "<div class='sow-menu__lobby-top'><span class='sow-menu__lobby-chip' data-lobby-mode>" + esc(lobby.game_mode || "FFA") + "</span><span class='sow-menu__lobby-chip sow-menu__lobby-chip--status' data-timer-for='" + lobby.id + "'>" + esc(lobbyTimerText(lobby)) + "</span>" + lock + "</div>" +
-                "<h3 data-lobby-map>" + esc(lobby.map_name || "WORLD MAP") + "</h3>" +
-                "<div class='sow-menu__lobby-bottom'><span data-lobby-host>" + esc(lobby.host_name || "OPEN LOBBY") + "</span><span class='sow-menu__lobby-join'>JOIN ↗</span></div>" +
+                "<h3 data-lobby-map>" + esc(lobbyMapName(lobby)) + "</h3>" +
+                "<div class='sow-menu__lobby-bottom'><span class='sow-menu__lobby-join'>JOIN ↗</span></div>" +
             "</article>";
     }
 
@@ -177,14 +195,12 @@
         var art = card.querySelector(".sow-menu__lobby-art");
         var mode = card.querySelector("[data-lobby-mode]");
         var map = card.querySelector("[data-lobby-map]");
-        var host = card.querySelector("[data-lobby-host]");
         var timer = card.querySelector("[data-timer-for]");
         var lock = card.querySelector(".sow-menu__lobby-lock");
         card.dataset.mapName = nextMap;
         card.setAttribute("aria-label", lobbyLabel(lobby));
         if (mode) mode.textContent = lobby.game_mode || "FFA";
-        if (map) map.textContent = lobby.map_name || "WORLD MAP";
-        if (host) host.textContent = lobby.host_name || "OPEN LOBBY";
+        if (map) map.textContent = lobbyMapName(lobby);
         if (timer) timer.textContent = lobbyTimerText(lobby);
         if (lobby.has_password && !lock) {
             card.querySelector(".sow-menu__lobby-top").insertAdjacentHTML("beforeend", "<span class='sow-menu__lobby-lock' aria-label='Password protected'>🔒</span>");
@@ -1206,8 +1222,8 @@
                 profileOpen = false;
                 profilePublicId = null;
                 profileMatchDetail = null;
-                mobileStoreOpen = false;
-                mobileHeroesOpen = true;
+                storeOpen = false;
+                heroesOpen = true;
                 heroesSearchQuery = "";
                 heroesRegionFilter = "all";
                 dropdownOpenKey = null;
@@ -1216,7 +1232,7 @@
                 return;
             }
             if (navScreen === "profile") {
-                mobileStoreOpen = false;
+                storeOpen = false;
                 if (!profileOpen || profilePublicId !== (state && state.public_profile_id)) {
                     openProfile(null);
                 } else {
@@ -1226,16 +1242,16 @@
             }
             if (navScreen === "store") {
                 profileOpen = false;
-                mobileHeroesOpen = false;
-                mobileStoreOpen = true;
+                heroesOpen = false;
+                storeOpen = true;
                 render();
                 return;
             }
             profileOpen = false;
             profilePublicId = null;
             profileMatchDetail = null;
-            mobileHeroesOpen = false;
-            mobileStoreOpen = false;
+            heroesOpen = false;
+            storeOpen = false;
             if (state.show_browser || state.show_create) {
                 send("close_overlay");
             } else {
@@ -1244,15 +1260,15 @@
             return;
         }
         if (command === "open_profile" || command === "open_public_profile") {
-            mobileStoreOpen = false;
-            mobileHeroesOpen = false;
+            storeOpen = false;
+            heroesOpen = false;
             openProfile(target.dataset.profileId || null);
             return;
         }
         if (command === "close_profile") {
             profileOpen = false;
-            mobileStoreOpen = false;
-            mobileHeroesOpen = false;
+            storeOpen = false;
+            heroesOpen = false;
             profilePublicId = null;
             profileData = null;
             profileSearchResults = [];
@@ -1373,8 +1389,8 @@
             profilePublicId = null;
             profileMatchDetail = null;
             profileSearchResults = [];
-            mobileStoreOpen = false;
-            mobileHeroesOpen = true;
+            storeOpen = false;
+            heroesOpen = true;
             heroesSearchQuery = "";
             heroesRegionFilter = "all";
             dropdownOpenKey = null;
@@ -1401,7 +1417,7 @@
             var leaderId = target.dataset.leaderId || tempSelectedLeader;
             if (leaderId) {
                 send("set_leader", { leader_id: leaderId });
-                mobileHeroesOpen = false;
+                heroesOpen = false;
                 heroesSearchQuery = "";
                 heroesRegionFilter = "all";
                 tempSelectedLeader = null;
@@ -1566,7 +1582,7 @@
         }
         if (command === "set_leader") {
             if (send("set_leader", { leader_id: target.dataset.leaderId })) {
-                mobileHeroesOpen = false;
+                heroesOpen = false;
             }
             return;
         }
@@ -1804,7 +1820,7 @@
         }
         if (state.phase === "MainMenu" && window.SOW_open_store_after_match) {
             window.SOW_open_store_after_match = false;
-            mobileStoreOpen = true;
+            storeOpen = true;
         }
         if (typeof window.SOW_syncWebLoader === "function") {
             window.SOW_syncWebLoader(state);

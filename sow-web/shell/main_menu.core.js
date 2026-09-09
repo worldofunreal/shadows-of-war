@@ -26,8 +26,8 @@
     var profileSearchResults = [];
     var profileLoading = false;
     var profileError = "";
-    var mobileStoreOpen = false;
-    var mobileHeroesOpen = false;
+    var storeOpen = false;
+    var heroesOpen = false;
     var mainNavActive = null;
     var createDraft = null;
     var createOffline = false;
@@ -89,8 +89,8 @@
     function currentScreen() {
         if (!state) return "boot";
         if (profileOpen) return "profile";
-        if (mobileHeroesOpen) return "heroes";
-        if (mobileStoreOpen) return "store";
+        if (heroesOpen) return "heroes";
+        if (storeOpen) return "store";
         if (state.waiting) return "queue";
         if (state.show_create) return "create";
         if (state.show_browser) return "browser";
