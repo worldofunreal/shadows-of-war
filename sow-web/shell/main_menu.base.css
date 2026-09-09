@@ -773,7 +773,6 @@
 }
 
 .sow-menu__lobby-top,
-.sow-menu__lobby h3,
 .sow-menu__lobby-bottom {
     position: absolute;
     z-index: 2;
@@ -787,12 +786,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-}
-
-.sow-menu__lobby h3 {
-    right: 12px;
-    bottom: 34px;
-    margin: 0;
 }
 
 .sow-menu__lobby-bottom {
@@ -811,7 +804,7 @@
 .sow-menu__lobby-bottom {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 8px;
 }
 
@@ -846,10 +839,16 @@
 }
 
 .sow-menu__lobby h3 {
-    max-width: 78%;
+    min-width: 0;
+    max-width: calc(100% - 76px);
+    margin: 0;
+    overflow: hidden;
     color: #fff;
     font-size: 16px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
     text-transform: uppercase;
+    white-space: nowrap;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 

@@ -166,8 +166,7 @@
                 "'>" +
                 "<img class='sow-menu__lobby-art' src='" + esc(lobbyThumb(lobby)) + "' alt='' loading='eager' decoding='async'>" +
                 "<div class='sow-menu__lobby-top'><span class='sow-menu__lobby-chip' data-lobby-mode>" + esc(lobby.game_mode || "FFA") + "</span><span class='sow-menu__lobby-chip sow-menu__lobby-chip--status' data-timer-for='" + lobby.id + "'>" + esc(lobbyTimerText(lobby)) + "</span>" + lock + "</div>" +
-                "<h3 data-lobby-map>" + esc(lobbyMapName(lobby)) + "</h3>" +
-                "<div class='sow-menu__lobby-bottom'><span class='sow-menu__lobby-join'>JOIN ↗</span></div>" +
+                "<div class='sow-menu__lobby-bottom'><h3 data-lobby-map>" + esc(lobbyMapName(lobby)) + "</h3><span class='sow-menu__lobby-join'>JOIN ↗</span></div>" +
             "</article>";
     }
 
