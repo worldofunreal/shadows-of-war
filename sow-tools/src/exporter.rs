@@ -1,4 +1,4 @@
-use crate::openfront_import::refresh_catalog;
+use crate::map_source_import::refresh_catalog;
 use crate::poi_extractor::POISpawn;
 use sow_core::map::MapTile;
 use sow_core::map_file::{self, GeoBounds, MapFile, MapSpawn};

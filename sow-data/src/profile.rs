@@ -39,7 +39,8 @@ pub struct MatchParticipantRecord {
     pub tribes_defeated: u32,
     pub xp: u32,
     pub leader_xp: u32,
-    pub laurels: u64,
+    #[serde(rename = "laurels", alias = "crowns")]
+    pub crowns: u64,
     pub rating_delta: Option<i16>,
 }
 

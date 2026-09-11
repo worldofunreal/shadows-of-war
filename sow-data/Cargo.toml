@@ -20,6 +20,9 @@ server = [
     "dep:serde_json",
     "dep:bincode",
     "dep:lettre",
+    "dep:hmac",
+    "dep:sha2",
+    "dep:hex",
 ]
 
 [[bin]]
@@ -43,6 +46,9 @@ reqwest = { workspace = true, optional = true, features = ["json"] }
 bincode = { workspace = true, optional = true }
 redb = { version = "2.1", optional = true }
 lettre = { version = "0.11", optional = true, default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls", "hostname"] }
+hmac = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

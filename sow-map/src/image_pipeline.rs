@@ -1,4 +1,4 @@
-//! OpenFront MapGenerator pipeline: classify encoded RGBA, cleanup, downscale, ocean/shore, pack.
+//! Categorical image pipeline: classify encoded RGBA, cleanup, downscale, ocean/shore, pack.
 //!
 //! Same algorithm as Go `map_generator.go` and `sow-tools image-map`: water when
 //! `alpha < 20` or `blue == 106`; land elevation from blue channel 140..200.
@@ -51,7 +51,7 @@ pub struct ImagePipelineResult {
     pub num_land_tiles: u32,
 }
 
-/// Run the MapGenerator pipeline on OpenFront-encoded RGBA pixels.
+/// Run the image pipeline on source-encoded RGBA pixels.
 ///
 /// When `target_dims` is `Some((w, h))`, downscale to that size (editor OSM path).
 /// When `None`, downscale with `mobile_safe_dims` preserving aspect (CLI image-map path).

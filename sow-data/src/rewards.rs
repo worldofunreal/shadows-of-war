@@ -15,7 +15,7 @@ pub struct RewardInput {
 pub struct MatchReward {
     pub xp: u32,
     pub leader_xp: u32,
-    pub laurels: u64,
+    pub crowns: u64,
 }
 
 const XP_MATCH: u32 = 20;
@@ -25,19 +25,19 @@ const XP_PER_EMPIRE: u32 = 8;
 const XP_PER_TRIBE: u32 = 2;
 const XP_PER_ASSIST: u32 = 5;
 
-const LAURELS_PARTICIPATION: u64 = 25;
-const LAURELS_WIN: u64 = 75;
-const LAURELS_PER_KILL: u64 = 2;
-const LAURELS_PER_EMPIRE: u64 = 5;
-const LAURELS_PER_ASSIST: u64 = 2;
-const LAURELS_TUTORIAL: u64 = 100;
+const CROWNS_PARTICIPATION: u64 = 25;
+const CROWNS_WIN: u64 = 75;
+const CROWNS_PER_KILL: u64 = 2;
+const CROWNS_PER_EMPIRE: u64 = 5;
+const CROWNS_PER_ASSIST: u64 = 2;
+const CROWNS_TUTORIAL: u64 = 100;
 
 pub fn calculate(input: RewardInput) -> MatchReward {
     if input.tutorial {
         return MatchReward {
             xp: 100,
             leader_xp: 100,
-            laurels: LAURELS_TUTORIAL,
+            crowns: CROWNS_TUTORIAL,
         };
     }
 
@@ -50,19 +50,19 @@ pub fn calculate(input: RewardInput) -> MatchReward {
         xp = xp.saturating_add(XP_WIN);
     }
 
-    let mut laurels = LAURELS_PARTICIPATION;
+    let mut crowns = CROWNS_PARTICIPATION;
     if input.won {
-        laurels = laurels.saturating_add(LAURELS_WIN);
+        crowns = crowns.saturating_add(CROWNS_WIN);
     }
-    laurels = laurels.saturating_add((input.kills as u64).saturating_mul(LAURELS_PER_KILL));
-    laurels =
-        laurels.saturating_add((input.empires_defeated as u64).saturating_mul(LAURELS_PER_EMPIRE));
-    laurels = laurels.saturating_add((input.assists as u64).saturating_mul(LAURELS_PER_ASSIST));
+    crowns = crowns.saturating_add((input.kills as u64).saturating_mul(CROWNS_PER_KILL));
+    crowns =
+        crowns.saturating_add((input.empires_defeated as u64).saturating_mul(CROWNS_PER_EMPIRE));
+    crowns = crowns.saturating_add((input.assists as u64).saturating_mul(CROWNS_PER_ASSIST));
 
     MatchReward {
         xp,
         leader_xp: xp,
-        laurels,
+        crowns,
     }
 }
 
@@ -83,7 +83,7 @@ mod tests {
         });
         assert_eq!(loss.xp, 30);
         assert_eq!(loss.leader_xp, 30);
-        assert_eq!(loss.laurels, 35);
+        assert_eq!(loss.crowns, 35);
 
         let win = calculate(RewardInput {
             won: true,
@@ -94,7 +94,7 @@ mod tests {
         });
         assert_eq!(win.xp, 163);
         assert_eq!(win.leader_xp, 163);
-        assert_eq!(win.laurels, 107);
+        assert_eq!(win.crowns, 107);
     }
 
     #[test]
@@ -107,7 +107,7 @@ mod tests {
             super::MatchReward {
                 xp: 100,
                 leader_xp: 100,
-                laurels: 100,
+                crowns: 100,
             }
         );
         assert_eq!(canonical_leader_name("Boudica").as_deref(), Some("Boudica"));

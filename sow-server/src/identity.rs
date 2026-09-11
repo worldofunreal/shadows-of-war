@@ -109,8 +109,6 @@ pub(crate) enum PlayGamesRendezvousPoll {
 #[derive(Deserialize)]
 struct PlayGamesOAuthTokenResponse {
     access_token: String,
-    #[serde(default)]
-    expires_in: Option<u64>,
 }
 
 #[derive(Deserialize)]

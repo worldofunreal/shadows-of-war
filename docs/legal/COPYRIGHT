@@ -6,3 +6,7 @@ Copyright (c) OpenFront Inc. and Contributors. AGPL-3.0-or-later.
 
 Licensed under GNU Affero General Public License v3.0 or later. See LICENSE.
 Third-party notices: docs/legal/NOTICE and docs/legal/NOTICE.deps.
+
+OpenFront-derived map sources and generated map artifacts are licensed under
+CC BY-SA 4.0 as documented in assets/maps/SOURCES.toml and
+docs/legal/LICENSE-ASSETS.

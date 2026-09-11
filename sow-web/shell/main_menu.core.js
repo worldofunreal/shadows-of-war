@@ -28,13 +28,19 @@
     var profileError = "";
     var storeOpen = false;
     var heroesOpen = false;
-    var mainNavActive = null;
     var createDraft = null;
     var createOffline = false;
     var createPrivate = false;
     var createPassword = "";
     var passwordLobbyId = null;
     var passwordDraft = "";
+    var storeCheckoutProduct = null;
+    var storeCheckoutRequestId = null;
+    var storeCheckoutBusy = false;
+    var storeCheckoutInstance = null;
+    var stripePromise = null;
+    var storeCatalogLoading = false;
+    var storeCatalogLoaded = false;
     var pendingCommands = [];
 
     var LEADER_REGIONS = {
@@ -64,6 +70,10 @@
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
+    }
+
+    function currencyAsset(kind) {
+        return asset("gameplay/currency/" + kind + ".webp");
     }
 
     function leaderById(id) {
@@ -245,10 +255,30 @@
             locked: state.name_locked,
             leader: state.selected_leader,
             gems: state.gems,
+            crowns: state.crowns == null ? state.laurels : state.crowns,
             selected_skin: state.selected_skin,
             skins: (state.store && state.store.skins || []).map(function (skin) {
                 return [skin.id, skin.owned, skin.cost_gems];
             }),
+            store: state.store && {
+                gems: state.store.gems,
+                crowns: state.store.crowns == null ? state.store.laurels : state.store.crowns,
+                leaders: (state.store.leaders || []).map(function (leader) {
+                return [leader.id, leader.owned, leader.free_rotation, leader.cost_crowns, leader.cost_laurels, leader.cost_gems];
+                }),
+                skins: (state.store.skins || []).map(function (skin) {
+                    return [skin.id, skin.owned, skin.cost_gems];
+                }),
+                gem_bundles: (state.store.gem_bundles || []).map(function (bundle) {
+                    return [bundle.id, bundle.product_id, bundle.gems, bundle.asset_path];
+                }),
+                direct_leaders: (state.store.leaders || []).map(function (leader) {
+                    return [leader.id, leader.direct_product_id, leader.direct_price_label];
+                }),
+                direct_skins: (state.store.skins || []).map(function (skin) {
+                    return [skin.id, skin.direct_product_id, skin.direct_price_label];
+                })
+            },
             public_profile_id: state.public_profile_id,
             joined: state.joined_lobby_id,
             pending: state.pending_lobby_id,

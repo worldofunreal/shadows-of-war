@@ -1,5 +1,6 @@
 use super::MainMenuState;
 use crate::UiAction;
+use crate::kit::assets::{CurrencyIcon, currency_texture, gem_bundle_texture};
 use crate::kit::components::{BodyText, Button, Card, Heading, Subtitle};
 use crate::ui::asset_loader::AssetLoader;
 use egui::{Color32, CornerRadius, Frame, Layout, Margin, RichText, Stroke, Ui, Vec2};
@@ -92,24 +93,30 @@ fn draw_leader_card(
             ui.add_space(10.0);
             if !offer.owned && !offer.free_rotation {
                 ui.horizontal_wrapped(|ui| {
-                    if Button::secondary(&format!("{} LAURELS", offer.cost_laurels))
-                        .disabled(busy)
-                        .small()
-                        .min_size(egui::vec2(0.0, 44.0))
-                        .show(ui)
-                        .clicked()
+                    if draw_currency_price_button(
+                        ui,
+                        CurrencyIcon::Crown,
+                        offer.cost_crowns,
+                        "CROWNS",
+                        false,
+                        busy,
+                    )
+                    .clicked()
                     {
                         *action = Some(UiAction::UnlockLeader {
                             leader_id: offer.id.clone(),
-                            currency: "laurels".to_string(),
+                            currency: "crowns".to_string(),
                         });
                     }
-                    if Button::primary(&format!("{} GEMS", offer.cost_gems))
-                        .disabled(busy)
-                        .small()
-                        .min_size(egui::vec2(0.0, 44.0))
-                        .show(ui)
-                        .clicked()
+                    if draw_currency_price_button(
+                        ui,
+                        CurrencyIcon::Gem,
+                        offer.cost_gems,
+                        "GEMS",
+                        true,
+                        busy,
+                    )
+                    .clicked()
                     {
                         *action = Some(UiAction::UnlockLeader {
                             leader_id: offer.id.clone(),
@@ -176,12 +183,15 @@ fn draw_skin_card(
                 {
                     *action = Some(UiAction::EquipSkin(skin.id.clone()));
                 }
-            } else if Button::primary(&format!("UNLOCK {} GEMS", skin.cost_gems))
-                .disabled(busy)
-                .small()
-                .min_size(egui::vec2(0.0, 44.0))
-                .show(ui)
-                .clicked()
+            } else if draw_currency_price_button(
+                ui,
+                CurrencyIcon::Gem,
+                skin.cost_gems,
+                "GEMS",
+                true,
+                busy,
+            )
+            .clicked()
             {
                 *action = Some(UiAction::UnlockSkin(skin.id.clone()));
             }
@@ -245,6 +255,83 @@ fn draw_skin_preview(ui: &mut Ui, rect: egui::Rect, style: u8) {
     }
 }
 
+fn draw_currency_price_button(
+    ui: &mut Ui,
+    icon: CurrencyIcon,
+    amount: u64,
+    label: &str,
+    primary: bool,
+    busy: bool,
+) -> egui::Response {
+    let response = if primary {
+        Button::primary("")
+    } else {
+        Button::secondary("")
+    }
+    .disabled(busy)
+    .small()
+    .min_size(Vec2::new(72.0, 44.0))
+    .show(ui);
+    let icon_size = 18.0;
+    let gap = 5.0;
+    let text_color = if primary {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    };
+    let galley = ui.painter().layout_no_wrap(
+        amount.to_string(),
+        egui::FontId::proportional(13.0),
+        text_color,
+    );
+    let total_width = icon_size + gap + galley.size().x;
+    let left = response.rect.center().x - total_width * 0.5;
+    let icon_rect = egui::Rect::from_min_size(
+        egui::pos2(left, response.rect.center().y - icon_size * 0.5),
+        Vec2::splat(icon_size),
+    );
+    if let Some(texture) = currency_texture(ui.ctx(), icon) {
+        ui.painter().image(
+            texture.id(),
+            icon_rect,
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
+    ui.painter().galley(
+        egui::pos2(
+            left + icon_size + gap,
+            response.rect.center().y - galley.size().y * 0.5,
+        ),
+        galley,
+        text_color,
+    );
+    response.on_hover_text(format!("{amount} {label}"))
+}
+
+fn draw_currency_amount(
+    ui: &mut Ui,
+    icon: CurrencyIcon,
+    amount: u64,
+    label: &str,
+    color: Color32,
+    icon_size: f32,
+    text_size: f32,
+) {
+    let inner = ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(amount.to_string())
+                .strong()
+                .size(text_size)
+                .color(color),
+        );
+        if let Some(texture) = currency_texture(ui.ctx(), icon) {
+            ui.add(egui::Image::new(&texture).fit_to_exact_size(Vec2::splat(icon_size)));
+        }
+    });
+    let _ = inner.response.on_hover_text(format!("{amount} {label}"));
+}
+
 pub fn draw(
     root_ui: &mut Ui,
     state: &mut MainMenuState,
@@ -261,13 +348,29 @@ pub fn draw(
         .show(root_ui, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
-                    ui.label(RichText::new("STORE").size(11.0).strong().color(palette::neon_gold()));
+                    ui.label(RichText::new("SHOP").size(11.0).strong().color(palette::neon_gold()));
                     ui.label(RichText::new("Build your war chest").size(24.0).strong());
                 });
                 ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new(format!("{} LAURELS", state.store_catalog.laurels)).strong().color(palette::neon_gold()));
+                    draw_currency_amount(
+                        ui,
+                        CurrencyIcon::Crown,
+                        state.store_catalog.crowns,
+                        "CROWNS",
+                        palette::neon_crown(),
+                        22.0,
+                        14.0,
+                    );
                     ui.add_space(18.0);
-                    ui.label(RichText::new(format!("{} GEMS", state.store_catalog.gems)).strong().color(palette::neon_cyan()));
+                    draw_currency_amount(
+                        ui,
+                        CurrencyIcon::Gem,
+                        state.store_catalog.gems,
+                        "GEMS",
+                        palette::neon_cyan(),
+                        22.0,
+                        14.0,
+                    );
                 });
             });
             ui.add_space(8.0);
@@ -325,10 +428,20 @@ pub fn draw(
                             Card::surface().show(ui, |ui| {
                                 ui.set_min_width(220.0);
                                 ui.vertical_centered(|ui| {
-                                    ui.label(RichText::new(format!("{} GEMS", bundle.gems)).size(20.0).strong().color(palette::neon_cyan()));
-                                    ui.label(RichText::new("RevenueCat checkout").size(11.0).color(palette::text_muted()));
+                                    if let Some(texture) = gem_bundle_texture(ui.ctx(), &bundle.id) {
+                                        ui.add(egui::Image::new(&texture).fit_to_exact_size(egui::vec2(86.0, 86.0)));
+                                    }
+                                    draw_currency_amount(
+                                        ui,
+                                        CurrencyIcon::Gem,
+                                        bundle.gems,
+                                        "GEMS",
+                                        palette::neon_cyan(),
+                                        24.0,
+                                        20.0,
+                                    );
                                     ui.add_space(6.0);
-                                    if Button::primary("BUY ONLINE")
+                                    if Button::primary("BUY")
                                         .disabled(state.store_busy)
                                         .small()
                                         .min_size(egui::vec2(0.0, 44.0))

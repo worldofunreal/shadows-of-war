@@ -3,11 +3,13 @@ use sow_data::db::{PlayGamesMatchOutcome, PlayerDb, PlayerProfile};
 
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::IntoResponse,
     routing::{get, post},
 };
+use hmac::Mac;
 use log::{error, info, warn};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,10 @@ struct AppState {
     db: PlayerDb,
     secret_token: String,
     revenuecat_webhook_secret: Option<String>,
+    stripe_secret_key: Option<String>,
+    stripe_publishable_key: Option<String>,
+    stripe_webhook_secret: Option<String>,
+    revenuecat_stripe_api_key: Option<String>,
     redb_path: String,
     events: std::sync::Mutex<sow_data::events::EventSink>,
     playgames_handoffs: std::sync::Mutex<HashMap<String, PlayGamesHandoff>>,
@@ -37,7 +43,6 @@ const PLAYGAMES_SESSION_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 
 struct PlayGamesHandoff {
     expires_at: Instant,
-    account_id: String,
     external_id: String,
     display_name: String,
     avatar_url: Option<String>,
@@ -258,19 +263,590 @@ struct RevenueCatWebhookEvent {
     app_user_id: String,
     #[serde(default)]
     product_id: Option<String>,
+    #[serde(default)]
+    transaction_id: Option<String>,
+    #[serde(default = "default_purchase_environment")]
+    environment: String,
 }
 
-async fn handle_store_catalog() -> Json<sow_data::commerce::StoreCatalog> {
-    Json(sow_data::commerce::catalog_for_profile(
+fn default_purchase_environment() -> String {
+    "PRODUCTION".to_string()
+}
+
+#[derive(Deserialize)]
+struct StoreCheckoutRequest {
+    public_id: String,
+    auth_secret: String,
+    product_id: String,
+}
+
+#[derive(Serialize)]
+struct StoreCheckoutResponse {
+    client_secret: String,
+    publishable_key: String,
+}
+
+#[derive(Deserialize)]
+struct StorePurchasesRequest {
+    public_id: String,
+    auth_secret: String,
+}
+
+#[derive(Deserialize)]
+struct StripeCheckoutSessionResponse {
+    id: Option<String>,
+    client_secret: Option<String>,
+}
+
+async fn handle_store_catalog(
+    State(state): State<Arc<AppState>>,
+) -> Json<sow_data::commerce::StoreCatalog> {
+    let mut catalog = sow_data::commerce::catalog_for_profile(
         &Default::default(),
         &Default::default(),
         0,
         0,
         sow_data::commerce::current_rotation_period(),
-    ))
+    );
+    catalog.web_checkout_available = state.stripe_secret_key.is_some()
+        && state.stripe_publishable_key.is_some()
+        && state.stripe_webhook_secret.is_some()
+        && state.revenuecat_stripe_api_key.is_some();
+    for leader in &mut catalog.leaders {
+        if stripe_price_id(&leader.direct_product_id).is_none() {
+            leader.direct_product_id.clear();
+            leader.direct_price_label.clear();
+        }
+    }
+    for skin in &mut catalog.skins {
+        if stripe_price_id(&skin.direct_product_id).is_none() {
+            skin.direct_product_id.clear();
+            skin.direct_price_label.clear();
+        }
+    }
+    Json(catalog)
 }
 
-/// POST /store/leaders/unlock — spend authoritative laurels on a leader.
+fn stripe_price_id(product_id: &str) -> Option<String> {
+    let key = format!(
+        "SOW_STRIPE_PRICE_{}",
+        product_id
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character.to_ascii_uppercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>()
+    );
+    if let Some(value) = std::env::var(&key)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+    {
+        return Some(value);
+    }
+    match product_id {
+        // Existing Stripe prices already linked to the production RevenueCat
+        // offering. New direct offers must be explicitly mapped in sow.env.
+        "sow_gems_500" => Some("price_1UBIdc5GjRL6SWJS0cuGDATW".to_string()),
+        "sow_gems_1200" => Some("price_1UBIdn5GjRL6SWJSKdxrkoU2".to_string()),
+        "sow_gems_2600" => Some("price_1UBIdn5GjRL6SWJSMPiDU5pi".to_string()),
+        _ => None,
+    }
+}
+
+async fn handle_store_checkout(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<StoreCheckoutRequest>,
+) -> impl IntoResponse {
+    let product_id = payload.product_id.trim();
+    if !sow_data::commerce::is_store_product(product_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "unknown store product".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
+        Ok(Some(account_id)) => account_id,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "profile not found".to_string(),
+                }),
+            )
+                .into_response();
+        }
+        Err(error) => {
+            error!("checkout profile lookup failed: {error}");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "profile unavailable".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
+    if let Err(error) = state
+        .db
+        .verify_anonymous_secret(&account_id, &payload.auth_secret)
+        .await
+    {
+        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
+    }
+    let Some(secret_key) = state
+        .stripe_secret_key
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "checkout is not configured".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    let Some(publishable_key) = state
+        .stripe_publishable_key
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "checkout is not configured".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    let Some(price_id) = stripe_price_id(product_id) else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "store product is not configured".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    let response = match reqwest::Client::new()
+        .post("https://api.stripe.com/v1/checkout/sessions")
+        .basic_auth(secret_key, None::<&str>)
+        .form(&[
+            ("mode", "payment"),
+            ("ui_mode", "embedded"),
+            ("redirect_on_completion", "never"),
+            ("line_items[0][price]", price_id.as_str()),
+            ("line_items[0][quantity]", "1"),
+            ("client_reference_id", payload.public_id.as_str()),
+            ("metadata[app_user_id]", payload.public_id.as_str()),
+            ("metadata[product_id]", product_id),
+        ])
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            error!("Stripe checkout request failed: {error}");
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: "checkout provider unavailable".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
+    if !response.status().is_success() {
+        warn!("Stripe checkout rejected status={}", response.status());
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                error: "checkout provider rejected the session".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    let session = match response.json::<StripeCheckoutSessionResponse>().await {
+        Ok(session) => session,
+        Err(error) => {
+            error!("Stripe checkout response invalid: {error}");
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: "checkout provider returned an invalid session".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
+    let Some(client_secret) = session.client_secret.filter(|value| !value.is_empty()) else {
+        error!("Stripe checkout response omitted client_secret");
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                error: "checkout provider returned an incomplete session".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    let Some(session_id) = session.id.filter(|value| !value.is_empty()) else {
+        error!("Stripe checkout response omitted session id");
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(ErrorResponse {
+                error: "checkout provider returned an incomplete session".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    if let Err(error) = state
+        .db
+        .record_stripe_purchase(&payload.public_id, &session_id, product_id, "pending")
+        .await
+    {
+        error!("could not persist Stripe pending purchase: {error}");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "purchase state unavailable".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    (
+        StatusCode::OK,
+        Json(StoreCheckoutResponse {
+            client_secret,
+            publishable_key: publishable_key.to_string(),
+        }),
+    )
+        .into_response()
+}
+
+async fn store_account_for_request(
+    state: &AppState,
+    payload: &StorePurchasesRequest,
+) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
+    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
+        Ok(Some(account_id)) => account_id,
+        Ok(None) => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "profile not found".to_string(),
+                }),
+            ));
+        }
+        Err(error) => {
+            error!("purchase history profile lookup failed: {error}");
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "profile unavailable".to_string(),
+                }),
+            ));
+        }
+    };
+    if let Err(error) = state
+        .db
+        .verify_anonymous_secret(&account_id, &payload.auth_secret)
+        .await
+    {
+        return Err((StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })));
+    }
+    Ok(account_id)
+}
+
+async fn handle_store_purchases(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<StorePurchasesRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(&state, &payload).await {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state.db.purchase_history_for_account(&account_id).await {
+        Ok(purchases) => (StatusCode::OK, Json(purchases)).into_response(),
+        Err(error) => {
+            error!("purchase history lookup failed: {error}");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "purchase history unavailable".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn handle_store_purchase(
+    State(state): State<Arc<AppState>>,
+    Path(purchase_id): Path<String>,
+    Json(payload): Json<StorePurchasesRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(&state, &payload).await {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state
+        .db
+        .purchase_record_for_account(&account_id, purchase_id.trim())
+        .await
+    {
+        Ok(Some(purchase)) => (StatusCode::OK, Json(purchase)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "purchase not found".to_string(),
+            }),
+        )
+            .into_response(),
+        Err(error) => {
+            error!("purchase lookup failed: {error}");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "purchase history unavailable".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+fn valid_stripe_signature(payload: &[u8], signature: &str, secret: &str) -> bool {
+    let mut timestamp = None;
+    let mut signatures = Vec::new();
+    for item in signature.split(',') {
+        let Some((key, value)) = item.split_once('=') else {
+            continue;
+        };
+        match key {
+            "t" => timestamp = value.parse::<u64>().ok(),
+            "v1" => signatures.push(value),
+            _ => {}
+        }
+    }
+    let Some(timestamp) = timestamp else {
+        return false;
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    if now.abs_diff(timestamp) > 300 {
+        return false;
+    }
+    let mut mac = <hmac::Hmac<sha2::Sha256> as hmac::Mac>::new_from_slice(secret.as_bytes())
+        .expect("HMAC accepts every key length");
+    mac.update(timestamp.to_string().as_bytes());
+    mac.update(b".");
+    mac.update(payload);
+    signatures.iter().any(|value| {
+        hex::decode(value)
+            .ok()
+            .is_some_and(|expected| mac.clone().verify_slice(&expected).is_ok())
+    })
+}
+
+async fn import_stripe_session_to_revenuecat(
+    api_key: &str,
+    app_user_id: &str,
+    product_id: &str,
+    session_id: &str,
+) -> Result<(), String> {
+    let response = reqwest::Client::new()
+        .post("https://api.revenuecat.com/v1/receipts")
+        .bearer_auth(api_key)
+        .header("X-Platform", "stripe")
+        .json(&serde_json::json!({
+            "app_user_id": app_user_id,
+            "fetch_token": session_id,
+            "product_id": product_id,
+        }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "RevenueCat receipt import returned {}",
+            response.status()
+        ));
+    }
+    Ok(())
+}
+
+async fn handle_stripe_webhook(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> impl IntoResponse {
+    let Some(secret) = state
+        .stripe_webhook_secret
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        error!("Stripe webhook rejected: signing secret is not configured");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "Stripe webhook is not configured".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    let Some(signature) = headers
+        .get("stripe-signature")
+        .and_then(|value| value.to_str().ok())
+    else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "missing Stripe signature".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    if !valid_stripe_signature(&body, signature, secret) {
+        warn!("Unauthorized Stripe webhook request");
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "invalid Stripe signature".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    let payload: serde_json::Value = match serde_json::from_slice(&body) {
+        Ok(payload) => payload,
+        Err(error) => {
+            warn!("Stripe webhook JSON invalid: {error}");
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "invalid Stripe event".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
+    let event_type = payload["type"].as_str().unwrap_or_default();
+    if !matches!(
+        event_type,
+        "checkout.session.completed"
+            | "checkout.session.async_payment_succeeded"
+            | "checkout.session.async_payment_failed"
+            | "checkout.session.expired"
+    ) {
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "ignored" })),
+        )
+            .into_response();
+    }
+    let session = &payload["data"]["object"];
+    let session_id = session["id"].as_str().unwrap_or_default();
+    let app_user_id = session["metadata"]["app_user_id"]
+        .as_str()
+        .unwrap_or_default();
+    let product_id = session["metadata"]["product_id"]
+        .as_str()
+        .unwrap_or_default();
+    if session_id.is_empty()
+        || app_user_id.is_empty()
+        || product_id.is_empty()
+        || !sow_data::commerce::is_store_product(product_id)
+    {
+        warn!("Stripe checkout session metadata is incomplete");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "checkout metadata is incomplete".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    let session_status = match event_type {
+        "checkout.session.async_payment_failed" => "failed",
+        "checkout.session.expired" => "expired",
+        _ if session["payment_status"].as_str() == Some("paid")
+            || event_type == "checkout.session.async_payment_succeeded" => "paid",
+        _ => "pending",
+    };
+    if session_status != "paid" {
+        return match state
+            .db
+            .record_stripe_purchase(app_user_id, session_id, product_id, session_status)
+            .await
+        {
+            Ok(()) => (
+                StatusCode::OK,
+                Json(serde_json::json!({ "status": session_status })),
+            )
+                .into_response(),
+            Err(error) => {
+                error!("could not persist Stripe session state: {error}");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: "purchase state unavailable".to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+        };
+    }
+    let Some(api_key) = state
+        .revenuecat_stripe_api_key
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    else {
+        error!("Stripe webhook cannot import purchase: RevenueCat API key is not configured");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "RevenueCat Stripe import is not configured".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    match import_stripe_session_to_revenuecat(api_key, app_user_id, product_id, session_id).await {
+        Ok(()) => {
+            if let Err(error) = state
+                .db
+                .record_stripe_purchase(app_user_id, session_id, product_id, "submitted")
+                .await
+            {
+                warn!("could not mark Stripe purchase submitted: {error}");
+            }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "status": "imported" })),
+            )
+                .into_response()
+        }
+        Err(error) => {
+            error!("Stripe purchase import failed: {error}");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "purchase delivery unavailable".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /store/leaders/unlock — spend authoritative crowns on a leader.
 async fn handle_unlock_leader(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<UnlockLeaderRequest>,
@@ -481,12 +1057,18 @@ async fn handle_revenuecat_webhook(
     if refund {
         return match state
             .db
-            .revoke_revenuecat_gems(&event.id, &event.app_user_id, product_id)
+            .revoke_revenuecat_product(
+                &event.id,
+                &event.app_user_id,
+                product_id,
+                event.transaction_id.as_deref(),
+                &event.environment,
+            )
             .await
         {
             Ok((account, true)) => {
                 info!(
-                    "RevenueCat gems revoked account={} product={} gems={} type={}",
+                    "RevenueCat purchase revoked account={} product={} gems={} type={}",
                     account_hint(Some(&account.id)),
                     product_id,
                     account.profile.gems,
@@ -504,7 +1086,7 @@ async fn handle_revenuecat_webhook(
             )
                 .into_response(),
             Err(error) => {
-                error!("RevenueCat gem revocation failed: {error}");
+                error!("RevenueCat purchase revocation failed: {error}");
                 (
                     StatusCode::SERVICE_UNAVAILABLE,
                     Json(ErrorResponse {
@@ -517,7 +1099,13 @@ async fn handle_revenuecat_webhook(
     }
     match state
         .db
-        .grant_revenuecat_gems(&event.id, &event.app_user_id, product_id)
+        .grant_revenuecat_product(
+            &event.id,
+            &event.app_user_id,
+            product_id,
+            event.transaction_id.as_deref(),
+            &event.environment,
+        )
         .await
     {
         Ok((account, true)) => {
@@ -1054,6 +1642,18 @@ async fn main() {
     let revenuecat_webhook_secret = std::env::var("SOW_REVENUECAT_WEBHOOK_SECRET")
         .ok()
         .filter(|value| !value.trim().is_empty());
+    let stripe_secret_key = std::env::var("SOW_STRIPE_SECRET_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let stripe_publishable_key = std::env::var("SOW_STRIPE_PUBLISHABLE_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let stripe_webhook_secret = std::env::var("SOW_STRIPE_WEBHOOK_SECRET")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let revenuecat_stripe_api_key = std::env::var("SOW_REVENUECAT_STRIPE_API_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
 
     let crazygames_api_key = std::env::var("CRAZYGAMES_API_KEY").ok();
 
@@ -1072,11 +1672,13 @@ async fn main() {
     };
 
     info!(
-        "Config - Port: {}, Valkey: {}, Secret: [REDACTED], CG API Key Configured: {}, RevenueCat Webhook Configured: {}",
+        "Config - Port: {}, Valkey: {}, Secret: [REDACTED], CG API Key Configured: {}, RevenueCat Webhook Configured: {}, Stripe Checkout Configured: {}, Stripe Webhook Configured: {}",
         port,
         sanitized_valkey,
         crazygames_api_key.is_some(),
-        revenuecat_webhook_secret.is_some()
+        revenuecat_webhook_secret.is_some(),
+        stripe_secret_key.is_some() && stripe_publishable_key.is_some(),
+        stripe_webhook_secret.is_some() && revenuecat_stripe_api_key.is_some()
     );
 
     // Open REDB persistent database
@@ -1127,6 +1729,10 @@ async fn main() {
         db: player_db,
         secret_token,
         revenuecat_webhook_secret,
+        stripe_secret_key,
+        stripe_publishable_key,
+        stripe_webhook_secret,
+        revenuecat_stripe_api_key,
         redb_path: redb_path.clone(),
         events: std::sync::Mutex::new(event_sink),
         playgames_handoffs: std::sync::Mutex::new(HashMap::new()),
@@ -1154,6 +1760,9 @@ async fn main() {
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
         .route("/auth/playgames/consume", post(handle_playgames_consume))
         .route("/store/catalog", get(handle_store_catalog))
+        .route("/store/checkout", post(handle_store_checkout))
+        .route("/store/purchases", post(handle_store_purchases))
+        .route("/store/purchases/{purchase_id}", post(handle_store_purchase))
         .route("/store/leaders/unlock", post(handle_unlock_leader))
         .route("/store/skins/unlock", post(handle_unlock_skin))
         .route("/store/skins/equip", post(handle_equip_skin))
@@ -1165,6 +1774,7 @@ async fn main() {
             "/internal/revenuecat/webhook/stripe",
             post(handle_revenuecat_webhook),
         )
+        .route("/internal/stripe/webhook", post(handle_stripe_webhook))
         .route("/profiles/search", get(handle_public_profile_search))
         .route("/profiles/{public_id}", get(handle_public_profile))
         .route(
@@ -2036,7 +2646,6 @@ async fn handle_playgames_exchange(
     let handoff_token = random_playgames_token();
     let handoff = PlayGamesHandoff {
         expires_at: Instant::now() + PLAYGAMES_HANDOFF_TTL,
-        account_id: account.id,
         external_id: player.player_id,
         display_name: player.display_name,
         avatar_url: player.avatar_url,
@@ -2215,7 +2824,7 @@ impl AppState {
         let first_victory = env_value("SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID");
         let battle_hardened = env_value("SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID");
         let victory_march = env_value("SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID");
-        let laurel_hoard = env_value("SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID");
+        let crown_hoard = env_value("SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID");
         let first_command = env_value("SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID");
         let commander_victorious = env_value("SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID");
         let veteran_commander = env_value("SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID");
@@ -2225,7 +2834,7 @@ impl AppState {
         if first_victory.is_empty()
             && battle_hardened.is_empty()
             && victory_march.is_empty()
-            && laurel_hoard.is_empty()
+            && crown_hoard.is_empty()
             && first_command.is_empty()
             && commander_victorious.is_empty()
             && veteran_commander.is_empty()
@@ -2285,9 +2894,9 @@ impl AppState {
         add_increment(&mut actions, &leader_path, 1, "Leader Path");
         add_increment(
             &mut actions,
-            &laurel_hoard,
-            outcome.laurels_earned,
-            "Laurel Hoard",
+            &crown_hoard,
+            outcome.crowns_earned,
+            "Crown Hoard",
         );
         if outcome.leader_matches_played >= 1 {
             add_unlock(&mut actions, &first_command, "First Command");

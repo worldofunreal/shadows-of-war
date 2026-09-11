@@ -86,7 +86,7 @@ pub enum UiAction {
     OpenStore,
     /// Open the RevenueCat web checkout for a gem bundle on desktop.
     BuyGems(String),
-    /// Spend authoritative laurels or gems on a leader.
+    /// Spend authoritative crowns or gems on a leader.
     UnlockLeader {
         leader_id: String,
         currency: String,

@@ -24,6 +24,10 @@
             android:name="com.google.android.gms.games.SUPPRESS_GAME_PROFILE_CREATION"
             android:value="true" />
 
+        <service
+            android:name="androidx.browser.customtabs.PostMessageService"
+            android:exported="true" />
+
         <activity
             android:name=".PurchaseActivity"
             android:exported="true"

@@ -5,6 +5,18 @@
 # The `[recipes.<map>]` tables below keep provenance and artifact hashes for the
 # generated map library even though the binary map folders remain ignored.
 
+# This license block applies only to the OpenFront-derived image recipes in
+# this file. OSM-generated maps use their own source and license declaration.
+[map_license]
+name = "CC-BY-SA-4.0"
+url = "https://creativecommons.org/licenses/by-sa/4.0/"
+license_doc = "docs/legal/LICENSE-ASSETS"
+source = "https://github.com/openfrontio/OpenFrontIO/tree/f51f165b947a92cc683ade3a72c3800300e86e61/map-generator/assets"
+source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
+attribution = "OpenFront Inc. and Contributors"
+applies_to = "All recipes below and their map.bin, map.bin.br, and thumbnail.webp artifacts"
+changes = "Cropped, corrected, classified, downscaled, filtered, packed, and rendered by Shadows of War."
+
 [world]
 source = "openfront_image"
 attribution = "Derived from a world-map heightmap image (OpenFront MapGenerator asset)."

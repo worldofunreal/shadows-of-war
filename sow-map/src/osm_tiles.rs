@@ -345,7 +345,7 @@ pub fn is_water_pixel(r: u8, g: u8, b: u8, a: u8) -> bool {
     false
 }
 
-/// Convert stitched OSM tiles to OpenFront MapGenerator pixel encoding.
+/// Convert stitched OSM tiles to the source-map pixel encoding.
 ///
 /// Water mask from OSM Standard tiles; land elevation blue channel from `heightmap`.
 pub fn classify_osm_to_rgba_with_heightmap(
@@ -378,7 +378,7 @@ pub fn classify_osm_to_rgba_with_heightmap(
             let px = if is_water_pixel(r, g, b, a) {
                 [0, 0, 106, 255]
             } else {
-                let hm_blue = heightmap.sample_openfront_blue(lon, lat);
+                let hm_blue = heightmap.sample_source_blue(lon, lat);
                 let blue = if hm_blue == 106 {
                     140
                 } else {

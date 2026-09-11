@@ -36,6 +36,11 @@ pub fn neon_gold_hover() -> Color32 {
 } // Brighter yellow
 
 #[inline]
+pub fn neon_crown() -> Color32 {
+    Color32::from_rgb(192, 132, 252)
+}
+
+#[inline]
 pub fn button_inactive() -> Color32 {
     Color32::from_rgba_unmultiplied(40, 40, 45, 100)
 }

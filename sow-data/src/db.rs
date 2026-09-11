@@ -80,7 +80,7 @@ pub struct PlayGamesMatchOutcome {
     pub won: bool,
     pub matches_played: u32,
     pub wins: u32,
-    pub laurels_earned: u64,
+    pub crowns_earned: u64,
     pub leader_matches_played: u32,
     pub leader_wins: u32,
     pub distinct_leaders: u32,
@@ -106,8 +106,8 @@ pub struct PlayerProfile {
     pub leader_xp: std::collections::BTreeMap<String, u32>,
     #[serde(default)]
     pub leader_stats: std::collections::BTreeMap<String, LeaderCareerStats>,
-    #[serde(default)]
-    pub laurels: u64,
+    #[serde(rename = "laurels", alias = "crowns", default)]
+    pub crowns: u64,
     #[serde(default)]
     pub gems: u64,
     #[serde(default)]
@@ -118,8 +118,27 @@ pub struct PlayerProfile {
     pub selected_skin: Option<String>,
     #[serde(default)]
     pub processed_revenuecat_events: std::collections::BTreeSet<String>,
+    #[serde(default, skip_serializing)]
+    pub purchased_leaders: std::collections::BTreeSet<String>,
+    #[serde(default, skip_serializing)]
+    pub purchased_skins: std::collections::BTreeSet<String>,
+    #[serde(default, skip_serializing)]
+    pub purchase_history: std::collections::BTreeMap<String, PurchaseRecord>,
     #[serde(default)]
     pub intro_completed: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct PurchaseRecord {
+    pub id: String,
+    pub provider: String,
+    pub environment: String,
+    pub product_id: String,
+    #[serde(default)]
+    pub transaction_id: Option<String>,
+    pub status: String,
+    pub acquired_at: u64,
+    pub updated_at: u64,
 }
 
 impl Default for PlayerProfile {
@@ -138,12 +157,15 @@ impl Default for PlayerProfile {
             assists: 0,
             leader_xp: std::collections::BTreeMap::new(),
             leader_stats: std::collections::BTreeMap::new(),
-            laurels: 0,
+            crowns: 0,
             gems: 0,
             owned_leaders: std::collections::BTreeSet::new(),
             owned_skins: std::collections::BTreeSet::new(),
             selected_skin: None,
             processed_revenuecat_events: std::collections::BTreeSet::new(),
+            purchased_leaders: std::collections::BTreeSet::new(),
+            purchased_skins: std::collections::BTreeSet::new(),
+            purchase_history: std::collections::BTreeMap::new(),
             intro_completed: false,
         }
     }
@@ -175,7 +197,7 @@ impl PlayerProfile {
         *entry = entry.saturating_add(reward.leader_xp);
         let stats = self.leader_stats.entry(leader.to_string()).or_default();
         stats.xp = stats.xp.saturating_add(reward.leader_xp);
-        self.laurels = self.laurels.saturating_add(reward.laurels);
+        self.crowns = self.crowns.saturating_add(reward.crowns);
     }
 
     pub fn record_match_with_kda(
@@ -725,7 +747,7 @@ impl PlayerDb {
         }
     }
 
-    /// Public profile DTO. Exact XP and laurels remain in the authenticated
+    /// Public profile DTO. Exact XP and crowns remain in the authenticated
     /// menu bridge; this endpoint exposes level and gameplay statistics only.
     pub async fn public_profile(
         &self,
@@ -1928,6 +1950,307 @@ impl PlayerDb {
             .map(|index| index.map(|index| index.account_id))
     }
 
+    /// Deliver one RevenueCat product exactly once. The event id is the
+    /// fallback id; when a store transaction id is available it is the
+    /// stronger deduplication key because provider retries can create more
+    /// than one webhook event for the same purchase.
+    pub async fn grant_revenuecat_product(
+        &self,
+        event_id: &str,
+        purchase_user_id: &str,
+        product_id: &str,
+        transaction_id: Option<&str>,
+        environment: &str,
+    ) -> Result<(PlayerAccount, bool), Box<dyn std::error::Error + Send + Sync>> {
+        let account_id = if is_valid_account_id(purchase_user_id) {
+            purchase_user_id.to_string()
+        } else {
+            self.account_id_for_public_id(purchase_user_id)?
+                .ok_or("app_user_id must be a known public profile ID")?
+        };
+        let event_id = event_id.trim();
+        if event_id.is_empty() || event_id.len() > 256 {
+            return Err("RevenueCat event id is invalid".into());
+        }
+        let product_id = product_id.trim();
+        if !crate::commerce::is_store_product(product_id) {
+            return Err("unknown RevenueCat product".into());
+        }
+        let delivery_key = transaction_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| format!("transaction:{value}"))
+            .unwrap_or_else(|| format!("event:{event_id}"));
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut granted = false;
+        let mut con = self.get_connection().await?;
+        let account =
+            Self::update_account_atomic(&mut con, &Self::account_key(&account_id), |account| {
+                if account
+                    .profile
+                    .processed_revenuecat_events
+                    .contains(&delivery_key)
+                    || account
+                        .profile
+                        .processed_revenuecat_events
+                        .contains(event_id)
+                {
+                    return;
+                }
+                account
+                    .profile
+                    .processed_revenuecat_events
+                    .insert(delivery_key.clone());
+                account
+                    .profile
+                    .processed_revenuecat_events
+                    .insert(event_id.to_string());
+                if let Some(gems) = crate::commerce::gem_amount_for_product(product_id) {
+                    account.profile.gems = account.profile.gems.saturating_add(gems);
+                } else if let Some(leader) = crate::commerce::direct_leader_for_product(product_id)
+                {
+                    let leader_id = crate::commerce::leader_id(leader).to_string();
+                    if !account.profile.owned_leaders.contains(&leader_id) {
+                        account.profile.owned_leaders.insert(leader_id.clone());
+                        account.profile.purchased_leaders.insert(leader_id);
+                    }
+                } else if let Some(skin) = crate::commerce::direct_skin_for_product(product_id) {
+                    if !account.profile.owned_skins.contains(&skin.id) {
+                        account.profile.owned_skins.insert(skin.id.clone());
+                        account.profile.purchased_skins.insert(skin.id);
+                    }
+                } else if product_id == "sow_offer_genghis_khan_royal_lattice" {
+                    let leader_id = crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan)
+                        .to_string();
+                    if !account.profile.owned_leaders.contains(&leader_id) {
+                        account.profile.owned_leaders.insert(leader_id.clone());
+                        account.profile.purchased_leaders.insert(leader_id);
+                    }
+                    if !account.profile.owned_skins.contains("royal_lattice") {
+                        account.profile.owned_skins.insert("royal_lattice".to_string());
+                        account.profile.purchased_skins.insert("royal_lattice".to_string());
+                    }
+                }
+                account.profile.purchase_history.insert(
+                    delivery_key.clone(),
+                    PurchaseRecord {
+                        id: delivery_key.clone(),
+                        provider: "revenuecat".to_string(),
+                        environment: environment.to_string(),
+                        product_id: product_id.to_string(),
+                        transaction_id: transaction_id
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_string),
+                        status: "granted".to_string(),
+                        acquired_at: now,
+                        updated_at: now,
+                    },
+                );
+                account.updated_at = now;
+                granted = true;
+            })
+            .await?;
+        if granted {
+            self.save_player_account_to_redb(&account);
+        }
+        Ok((account, granted))
+    }
+
+    pub async fn purchase_history_for_account(
+        &self,
+        account_id: &str,
+    ) -> Result<Vec<PurchaseRecord>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let account = Self::load_account(&mut con, account_id).await?;
+        let mut records = account.profile.purchase_history.into_values().collect::<Vec<_>>();
+        records.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+        Ok(records)
+    }
+
+    pub async fn purchase_record_for_account(
+        &self,
+        account_id: &str,
+        purchase_id: &str,
+    ) -> Result<Option<PurchaseRecord>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let account = Self::load_account(&mut con, account_id).await?;
+        Ok(account.profile.purchase_history.get(purchase_id).cloned())
+    }
+
+    pub async fn record_stripe_purchase(
+        &self,
+        purchase_user_id: &str,
+        session_id: &str,
+        product_id: &str,
+        status: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let account_id = self
+            .account_id_for_public_id(purchase_user_id)?
+            .ok_or("Stripe purchase user is unknown")?;
+        let session_id = session_id.trim();
+        if session_id.is_empty() || session_id.len() > 256 {
+            return Err("Stripe session id is invalid".into());
+        }
+        if !crate::commerce::is_store_product(product_id) {
+            return Err("unknown Stripe product".into());
+        }
+        let purchase_id = format!("stripe:{session_id}");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut con = self.get_connection().await?;
+        let account = Self::update_account_atomic(
+            &mut con,
+            &Self::account_key(&account_id),
+            |account| {
+                if let Some(existing) = account.profile.purchase_history.get_mut(&purchase_id) {
+                    if existing.status == "granted" || existing.status == "revoked" {
+                        return;
+                    }
+                    existing.status = status.to_string();
+                    existing.updated_at = now;
+                    return;
+                }
+                account.profile.purchase_history.insert(
+                    purchase_id.clone(),
+                    PurchaseRecord {
+                        id: purchase_id.clone(),
+                        provider: "stripe".to_string(),
+                        environment: "PRODUCTION".to_string(),
+                        product_id: product_id.to_string(),
+                        transaction_id: Some(session_id.to_string()),
+                        status: status.to_string(),
+                        acquired_at: now,
+                        updated_at: now,
+                    },
+                );
+                account.updated_at = now;
+            },
+        )
+        .await?;
+        self.save_player_account_to_redb(&account);
+        Ok(())
+    }
+
+    pub async fn revoke_revenuecat_product(
+        &self,
+        event_id: &str,
+        purchase_user_id: &str,
+        product_id: &str,
+        transaction_id: Option<&str>,
+        environment: &str,
+    ) -> Result<(PlayerAccount, bool), Box<dyn std::error::Error + Send + Sync>> {
+        let account_id = if is_valid_account_id(purchase_user_id) {
+            purchase_user_id.to_string()
+        } else {
+            self.account_id_for_public_id(purchase_user_id)?
+                .ok_or("app_user_id must be a known public profile ID")?
+        };
+        let event_id = event_id.trim();
+        if event_id.is_empty() || event_id.len() > 256 {
+            return Err("RevenueCat event id is invalid".into());
+        }
+        let product_id = product_id.trim();
+        if !crate::commerce::is_store_product(product_id) {
+            return Err("unknown RevenueCat product".into());
+        }
+        let delivery_key = transaction_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| format!("transaction:{value}"))
+            .unwrap_or_else(|| format!("event:{event_id}"));
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut revoked = false;
+        let mut con = self.get_connection().await?;
+        let account =
+            Self::update_account_atomic(&mut con, &Self::account_key(&account_id), |account| {
+                if account
+                    .profile
+                    .processed_revenuecat_events
+                    .contains(event_id)
+                {
+                    return;
+                }
+                account
+                    .profile
+                    .processed_revenuecat_events
+                    .insert(event_id.to_string());
+                if let Some(transaction_id) = transaction_id
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    account
+                        .profile
+                        .processed_revenuecat_events
+                        .insert(format!("transaction:{transaction_id}"));
+                }
+                if let Some(gems) = crate::commerce::gem_amount_for_product(product_id) {
+                    account.profile.gems = account.profile.gems.saturating_sub(gems);
+                } else if let Some(leader) = crate::commerce::direct_leader_for_product(product_id)
+                {
+                    let leader_id = crate::commerce::leader_id(leader).to_string();
+                    if account.profile.purchased_leaders.remove(&leader_id) {
+                        account.profile.owned_leaders.remove(&leader_id);
+                    }
+                } else if let Some(skin) = crate::commerce::direct_skin_for_product(product_id) {
+                    if account.profile.purchased_skins.remove(&skin.id) {
+                        account.profile.owned_skins.remove(&skin.id);
+                        if account.profile.selected_skin.as_deref() == Some(skin.id.as_str()) {
+                            account.profile.selected_skin = None;
+                        }
+                    }
+                } else if product_id == "sow_offer_genghis_khan_royal_lattice" {
+                    let leader_id = crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan)
+                        .to_string();
+                    if account.profile.purchased_leaders.remove(&leader_id) {
+                        account.profile.owned_leaders.remove(&leader_id);
+                    }
+                    if account.profile.purchased_skins.remove("royal_lattice") {
+                        account.profile.owned_skins.remove("royal_lattice");
+                        if account.profile.selected_skin.as_deref() == Some("royal_lattice") {
+                            account.profile.selected_skin = None;
+                        }
+                    }
+                }
+                account.profile.purchase_history.insert(
+                    delivery_key.clone(),
+                    PurchaseRecord {
+                        id: delivery_key.clone(),
+                        provider: "revenuecat".to_string(),
+                        environment: environment.to_string(),
+                        product_id: product_id.to_string(),
+                        transaction_id: transaction_id
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_string),
+                        status: "revoked".to_string(),
+                        acquired_at: account
+                            .profile
+                            .purchase_history
+                            .get(&delivery_key)
+                            .map(|record| record.acquired_at)
+                            .unwrap_or(now),
+                        updated_at: now,
+                    },
+                );
+                account.updated_at = now;
+                revoked = true;
+            })
+            .await?;
+        if revoked {
+            self.save_player_account_to_redb(&account);
+        }
+        Ok((account, revoked))
+    }
+
     pub async fn unlock_leader(
         &self,
         account_id: &str,
@@ -1938,7 +2261,7 @@ impl PlayerDb {
         let leader_id = crate::commerce::leader_id(leader).to_string();
         let (cost, use_gems) = match currency {
             "gems" => (crate::commerce::LEADER_UNLOCK_COST_GEMS, true),
-            "" | "laurels" => (crate::commerce::LEADER_UNLOCK_COST_LAURELS, false),
+            "" | "crowns" | "laurels" => (crate::commerce::LEADER_UNLOCK_COST_CROWNS, false),
             _ => return Err("invalid leader unlock currency".into()),
         };
         let period = crate::commerce::current_rotation_period();
@@ -1957,19 +2280,19 @@ impl PlayerDb {
                 } else if (if use_gems {
                     account.profile.gems
                 } else {
-                    account.profile.laurels
+                    account.profile.crowns
                 }) < cost
                 {
                     failure = Some(if use_gems {
                         "insufficient gems"
                     } else {
-                        "insufficient laurels"
+                        "insufficient crowns"
                     });
                 } else {
                     if use_gems {
                         account.profile.gems -= cost;
                     } else {
-                        account.profile.laurels -= cost;
+                        account.profile.crowns -= cost;
                     }
                     account.profile.owned_leaders.insert(leader_id.clone());
                     account.updated_at = std::time::SystemTime::now()
@@ -2628,7 +2951,7 @@ impl PlayerDb {
                 tribes_defeated: defeats.tribes,
                 xp: reward.xp,
                 leader_xp: reward.leader_xp,
-                laurels: reward.laurels,
+                crowns: reward.crowns,
                 rating_delta: None,
             });
 
@@ -2667,7 +2990,7 @@ impl PlayerDb {
                         won,
                         matches_played: account.profile.matches_played,
                         wins: account.profile.wins,
-                        laurels_earned: reward.laurels,
+                        crowns_earned: reward.crowns,
                         leader_matches_played: leader_stats
                             .map(|stats| stats.matches_played)
                             .unwrap_or_default(),
@@ -2801,8 +3124,23 @@ mod tests {
         let account: super::PlayerAccount = serde_json::from_str(json).unwrap();
         assert!(account.display_name.is_empty());
         assert!(account.profile.leader_xp.is_empty());
-        assert_eq!(account.profile.laurels, 0);
+        assert_eq!(account.profile.crowns, 0);
         assert!(!account.profile.intro_completed);
+    }
+
+    #[test]
+    fn crown_balance_preserves_legacy_profiles_and_accepts_new_key() {
+        let mut profile = super::PlayerProfile::default();
+        profile.crowns = 725;
+        let legacy = serde_json::to_value(&profile).unwrap();
+        assert_eq!(legacy["laurels"], 725);
+
+        let mut current = legacy.as_object().unwrap().clone();
+        let amount = current.remove("laurels").unwrap();
+        current.insert("crowns".to_string(), amount);
+        let decoded: super::PlayerProfile =
+            serde_json::from_value(serde_json::Value::Object(current)).unwrap();
+        assert_eq!(decoded.crowns, 725);
     }
 
     #[test]

@@ -35,8 +35,8 @@ pub struct PlayerProgress {
     pub assists: u32,
     #[serde(default)]
     pub leader_xp: std::collections::BTreeMap<String, u32>,
-    #[serde(default)]
-    pub laurels: u64,
+    #[serde(rename = "laurels", alias = "crowns", default)]
+    pub crowns: u64,
     #[serde(default)]
     pub gems: u64,
     #[serde(default)]
@@ -143,7 +143,7 @@ impl PlayerProgress {
         self.add_xp(reward.xp);
         let entry = self.leader_xp.entry(leader.name().to_string()).or_default();
         *entry = entry.saturating_add(reward.leader_xp);
-        self.laurels = self.laurels.saturating_add(reward.laurels);
+        self.crowns = self.crowns.saturating_add(reward.crowns);
     }
 
     pub fn complete_tutorial_with_reward(&mut self) -> bool {
@@ -167,7 +167,7 @@ impl PlayerProgress {
             || self.xp > 0
             || self.preferred_leader.is_some()
             || self.intro_completed.unwrap_or(false)
-            || self.laurels > 0
+            || self.crowns > 0
             || self.gems > 0
             || !self.owned_leaders.is_empty()
             || !self.owned_skins.is_empty()
@@ -234,8 +234,24 @@ mod tests {
         assert!(!progress.complete_tutorial_with_reward());
         assert_eq!(progress.intro_completed, Some(true));
         assert_eq!(progress.xp, 100);
-        assert_eq!(progress.laurels, 100);
+        assert_eq!(progress.crowns, 100);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&100));
+    }
+
+    #[test]
+    fn crown_balance_preserves_legacy_local_storage() {
+        let mut progress = PlayerProgress {
+            crowns: 725,
+            ..Default::default()
+        };
+        let legacy = serde_json::to_value(&progress).unwrap();
+        assert_eq!(legacy["laurels"], 725);
+
+        let mut current = legacy.as_object().unwrap().clone();
+        let amount = current.remove("laurels").unwrap();
+        current.insert("crowns".to_string(), amount);
+        progress = serde_json::from_value(serde_json::Value::Object(current)).unwrap();
+        assert_eq!(progress.crowns, 725);
     }
 
     #[test]
@@ -256,6 +272,6 @@ mod tests {
         );
         assert_eq!(progress.matches_played, 1);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&140));
-        assert_eq!(progress.laurels, 106);
+        assert_eq!(progress.crowns, 106);
     }
 }

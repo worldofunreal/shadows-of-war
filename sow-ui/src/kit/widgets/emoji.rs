@@ -495,6 +495,27 @@ impl Widget for ResourceLabel {
             ResourceKind::Troops => ("🛡️", crate::theme::palette::neon_cyan_hover()),
         };
         let color = self.color.unwrap_or(default_color);
+        if self.kind == ResourceKind::Gold
+            && let Some(texture) = crate::assets::currency_texture(
+                ui.ctx(),
+                crate::assets::CurrencyIcon::Gold,
+            )
+        {
+            let icon_size = (self.font_id.size * 1.35).max(16.0);
+            return ui
+                .horizontal(|ui| {
+                    ui.add(
+                        egui::Image::new(&texture)
+                            .fit_to_exact_size(egui::vec2(icon_size, icon_size)),
+                    );
+                    ui.label(
+                        egui::RichText::new(crate::utils::format_number(self.amount))
+                            .font(self.font_id.clone())
+                            .color(color),
+                    );
+                })
+                .response;
+        }
         let text = format!("{} {}", emoji, crate::utils::format_number(self.amount));
         if self.outlined {
             outlined_emoji_label(ui, &text, self.font_id, color)

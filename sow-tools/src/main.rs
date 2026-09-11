@@ -6,14 +6,14 @@ mod emoji_atlas;
 mod exporter;
 mod image_map;
 mod map_audit;
-mod openfront_import;
+mod map_source_import;
 use exporter::ExportMapCtx;
 use sow_map::osm_overpass as overpass;
 mod poi_extractor;
 mod rasterizer;
 mod stamp_geo;
 
-/// Shadows of War map tooling: OSM generation and OpenFront import.
+/// Shadows of War map tooling: OSM generation and map-source import.
 #[derive(Parser, Debug)]
 #[command(
     author,
@@ -33,9 +33,9 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Import an OpenFront map folder (image.png + info.json, or map.bin + manifest.json).
-    #[command(name = "import-openfront")]
-    ImportOpenfront(ImportOpenfrontArgs),
+    /// Import a map-source folder (image.png + info.json, or map.bin + manifest.json).
+    #[command(name = "import-map-source")]
+    ImportMapSource(ImportMapSourceArgs),
     /// Regenerate assets/maps/catalog.bin from map.bin headers in subfolders.
     #[command(name = "refresh-catalog")]
     RefreshCatalog(RefreshCatalogArgs),
@@ -95,7 +95,7 @@ struct PackEmojiAtlasArgs {
 /// Generate a map from a pre-rendered world-map image (no network calls).
 #[derive(Parser, Debug)]
 struct ImageMapArgs {
-    /// Source PNG whose pixel colors encode land/water (OpenFront-style).
+    /// Source PNG whose pixel colors encode categorical land/water data.
     #[arg(short, long)]
     input: PathBuf,
 
@@ -170,8 +170,8 @@ pub struct GenerateArgs {
 }
 
 #[derive(Parser, Debug)]
-struct ImportOpenfrontArgs {
-    /// OpenFront map folder (contains image.png + info.json or map.bin)
+struct ImportMapSourceArgs {
+    /// Map-source folder (contains image.png + info.json or map.bin)
     #[arg(short, long)]
     input: PathBuf,
 
@@ -189,14 +189,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
     let result: Result<(), Box<dyn Error>> = match cli.sub {
-        Some(Commands::ImportOpenfront(import)) => {
-            openfront_import::run_import(openfront_import::ImportArgs {
+        Some(Commands::ImportMapSource(import)) => {
+            map_source_import::run_import(map_source_import::ImportArgs {
                 input: import.input,
                 name: import.name,
                 maps_root: import.maps_root,
             })
         }
-        Some(Commands::RefreshCatalog(args)) => openfront_import::refresh_catalog(&args.maps_root)
+        Some(Commands::RefreshCatalog(args)) => map_source_import::refresh_catalog(&args.maps_root)
             .map(|_| {
                 println!("Wrote {}", args.maps_root.join("catalog.bin").display());
             }),

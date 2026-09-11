@@ -8,4 +8,13 @@ https://creativecommons.org/licenses/by-sa/4.0/
 
 Attribution: Shadows of War + link to this repository.
 
+Map assets
+----------
+OpenFront-derived map sources and generated map artifacts listed in
+assets/maps/SOURCES.toml are CC BY-SA 4.0, with attribution to OpenFront Inc.
+and Contributors and the source commit recorded there. The listed crops,
+corrections, classification, downscaling, filtering, packing, and thumbnail
+rendering are modifications by Shadows of War. OSM-derived maps keep their
+own source-specific terms.
+
 Game code remains AGPL-3.0-or-later (see LICENSE at repo root).

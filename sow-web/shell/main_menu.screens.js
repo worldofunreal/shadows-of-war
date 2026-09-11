@@ -42,6 +42,7 @@
         var androidAuthenticated = android && auth.authenticated;
         var androidAuthPending = android && auth.pending;
         var accountXp = Math.max(0, Number(state.xp) || 0);
+        var crowns = state.crowns == null ? state.laurels : state.crowns;
         return "" +
             "<header class='sow-menu__topbar'>" +
                 "<div class='sow-menu__identity'>" +
@@ -57,7 +58,7 @@
                     "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='Open profile' aria-label='Open profile'>" +
                         "<span class='sow-menu__progress-cell sow-menu__level'><small>LV</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " XP</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
-                        "<span class='sow-menu__progress-cell sow-menu__laurels'><svg class='sow-menu__laurel-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M8 20c-3-2-5-5-5-9 3 1 5 3 6 6M16 20c3-2 5-5 5-9-3 1-5 3-6 6M9 22h6'/></svg><strong data-progression-laurels-value>" + esc(state.laurels) + "</strong></span>" +
+                        "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
                     "</div>" +
                     (androidAuthenticated || androidAuthPending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + (android ? "SIGN IN" : signIn) + "</button>") +
                     "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='Settings'>⚙</button>" +
@@ -77,7 +78,7 @@
                         "<button type='submit'>JOIN</button>" +
                     "</form>" +
                     "<button class='sow-menu__secondary' type='button' data-command='open_create'>CREATE CUSTOM GAME <span>+</span></button>" +
-                    "<button class='sow-menu__secondary' type='button' data-command='main_nav' data-nav-screen='store'>STORE <span>↗</span></button>" +
+                    "<button class='sow-menu__secondary' type='button' data-command='main_nav' data-nav-screen='store'>SHOP <span>↗</span></button>" +
                     renderFeedback() +
                 "</div>" +
             "</section>";
@@ -253,7 +254,8 @@
     }
 
     function updateLobbyViews() {
-        root.querySelectorAll("[data-lobby-list]").forEach(function (container) {
+        var panel = activeScreenPanel() || root;
+        panel.querySelectorAll("[data-lobby-list]").forEach(function (container) {
             var browser = container.dataset.lobbyList === "browser";
             syncLobbyList(container, browser ? filteredBrowserLobbies() : publicLobbies(true), browser ?
                 "No public games match your search." : "No active public lobbies found.");
@@ -262,7 +264,7 @@
 
     function renderFooter(label) {
         var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
-        return "<footer class='sow-menu__footer'>" + (label ? "<span>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='Game links'>" +
+        return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='Game links'>" +
             "<a href='/how-to-play/'>HOW TO PLAY</a><a href='/support/'>SUPPORT</a><a href='/terms/'>TERMS</a><a href='/privacy/'>PRIVACY</a><a href='/cookies/'>COOKIES</a>" +
             "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">DISCORD</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">TELEGRAM</a><a href='https://github.com/worldofunreal/shadows-of-war'" + externalAttrs + ">GITHUB</a>" +
             "</nav><span>SHADOWSOFWAR.IO</span></footer>";
@@ -270,75 +272,52 @@
 
     function renderMainNav(active) {
         var items = [
-            ["store", "shell/mobile-nav/store.webp", "Store"],
+            ["store", "shell/mobile-nav/store.webp", "Shop"],
             ["heroes", "shell/mobile-nav/heroes.webp", "Heroes"],
             ["battle", "shell/mobile-nav/battle.webp", "Battle"],
             ["profile", "shell/mobile-nav/profile.webp", "Profile"]
         ];
-        var previousActive = mainNavActive;
-        var changed = previousActive !== null && previousActive !== active;
-        mainNavActive = active;
         return "<nav class='sow-menu__main-nav' aria-label='Main menu navigation'>" + items.map(function (item) {
             var selected = active === item[0];
-            var entering = changed && selected ? " is-entering" : "";
-            var leaving = changed && previousActive === item[0] ? " is-leaving" : "";
-            return "<button type='button' class='sow-menu__main-nav-item" + (selected ? " is-active" : "") + entering + leaving + "' data-command='main_nav' data-nav-screen='" + item[0] + "'" +
+            return "<button type='button' class='sow-menu__main-nav-item" + (selected ? " is-active" : "") + "' data-command='main_nav' data-nav-screen='" + item[0] + "'" +
                 (selected ? " aria-current='page'" : "") + " aria-label='" + esc(item[2]) + "'><span aria-hidden='true'><img src='" + esc(asset(item[1])) + "' alt='' width='128' height='128' decoding='async' draggable='false'></span><small>" + item[2] + "</small></button>";
         }).join("") + "</nav>";
     }
 
     function renderHome() {
         var leader = leaderById(state.selected_leader);
-        return "" +
-            "<div class='sow-menu__backdrop'></div>" +
-            "<div class='sow-menu__shell'>" +
-                renderTopbar() +
-                "<main class='sow-menu__main'>" +
-                    renderCommandPanel() +
-                    "<section class='sow-menu__battlefield'>" +
-                        "<div class='sow-menu__leader-copy'><small>" + esc(leader.civilization) + "</small><h2>" + esc(leader.name) +
-                            "</h2><p>" + esc(leader.perk) + "</p></div>" +
-                    "</section>" +
-                "</main>" +
-                renderMainNav("battle") + renderFooter("") +
-            "</div>" + renderPasswordModal();
+        return "<main class='sow-menu__main' data-screen-panel='home'>" +
+            renderCommandPanel() +
+            "<section class='sow-menu__battlefield'>" +
+                "<div class='sow-menu__leader-copy'><small>" + esc(leader.civilization) + "</small><h2>" + esc(leader.name) +
+                    "</h2><p>" + esc(leader.perk) + "</p></div>" +
+            "</section>" +
+        "</main>";
     }
 
     function renderBrowser() {
-        return "" +
-            "<div class='sow-menu__backdrop'></div>" +
-            "<div class='sow-menu__shell'>" +
-                renderTopbar() +
-                "<main class='sow-menu__main'>" +
-                    "<section class='sow-menu__command'>" +
-                        "<p class='sow-menu__eyebrow'>LOBBY BROWSER</p>" +
-                        "<h1>ACTIVE<br><em>MATCHES</em></h1>" +
-                        "<p class='sow-menu__tagline'>Browse and join active multiplayer matches across all map sectors, or enter a private code.</p>" +
-                        "<button class='sow-menu__secondary' type='button' data-command='close_overlay'>← BACK</button>" +
-                        "<form class='sow-menu__join' data-form='join'>" +
-                            "<input name='code' inputmode='numeric' autocomplete='off' placeholder='LOBBY CODE' aria-label='Lobby code'>" +
-                            "<button type='submit'>JOIN</button>" +
-                        "</form>" +
-                        "<button class='sow-menu__secondary' type='button' data-command='open_create'>CREATE CUSTOM GAME <span>+</span></button>" +
-                        renderFeedback() +
-                    "</section>" +
-                    "<section class='sow-menu__battlefield'>" +
-                        "<section class='sow-menu__public'>" +
-                            "<div class='sow-menu__browser-search'>" +
-                                "<input data-role='browser-search' type='search' placeholder='Search by map or host name...' value=\"" + esc(browserSearchQuery) + "\">" +
-                            "</div>" +
-                            "<div class='sow-menu__lobbies' data-lobby-list='browser'></div>" +
-                        "</section>" +
-                    "</section>" +
-                "</main>" +
-                renderMainNav("battle") + renderFooter("LOBBY BROWSER") +
-                "</div>" + renderPasswordModal();
-    }
-
-    function nativePurchaseHref(productId) {
-        if (!state || !state.purchase_user_id || !state.native_purchase_scheme) return "";
-        return state.native_purchase_scheme + "?product_id=" + encodeURIComponent(productId) +
-            "&app_user_id=" + encodeURIComponent(state.purchase_user_id);
+        return "<main class='sow-menu__main' data-screen-panel='browser'>" +
+            "<section class='sow-menu__command'>" +
+                "<p class='sow-menu__eyebrow'>LOBBY BROWSER</p>" +
+                "<h1>ACTIVE<br><em>MATCHES</em></h1>" +
+                "<p class='sow-menu__tagline'>Browse and join active multiplayer matches across all map sectors, or enter a private code.</p>" +
+                "<button class='sow-menu__secondary' type='button' data-command='close_overlay'>← BACK</button>" +
+                "<form class='sow-menu__join' data-form='join'>" +
+                    "<input name='code' inputmode='numeric' autocomplete='off' placeholder='LOBBY CODE' aria-label='Lobby code'>" +
+                    "<button type='submit'>JOIN</button>" +
+                "</form>" +
+                "<button class='sow-menu__secondary' type='button' data-command='open_create'>CREATE CUSTOM GAME <span>+</span></button>" +
+                renderFeedback() +
+            "</section>" +
+            "<section class='sow-menu__battlefield'>" +
+                "<section class='sow-menu__public'>" +
+                    "<div class='sow-menu__browser-search'>" +
+                        "<input data-role='browser-search' type='search' placeholder='Search by map or host name...' value=\"" + esc(browserSearchQuery) + "\">" +
+                    "</div>" +
+                    "<div class='sow-menu__lobbies' data-lobby-list='browser'></div>" +
+                "</section>" +
+            "</section>" +
+        "</main>";
     }
 
     function isAndroidTwa() {
@@ -352,83 +331,201 @@
         }
     }
 
-    function webPurchaseHref(packageId) {
-        if (!state || !state.purchase_user_id || !window.SOW_REVENUECAT_WEB_PURCHASE_LINK) return "";
-        var href = window.SOW_REVENUECAT_WEB_PURCHASE_LINK.replace(/\/+$/, "") +
-            "/" + encodeURIComponent(state.purchase_user_id);
-        return packageId ? href + "?package_id=" + encodeURIComponent(packageId) : href;
+    function renderCurrencyAmount(amount, kind) {
+        return esc(amount) + " <img class='sow-store__currency-icon' src='" + esc(currencyAsset(kind)) + "' alt='' aria-hidden='true'>";
     }
 
-    function renderWebPurchaseAction() {
-        if (isAndroidTwa()) return "";
-        var href = webPurchaseHref();
-        return href
-            ? "<a class='sow-store__buy sow-store__buy--primary' href='" + esc(href) + "' target='_blank' rel='noopener'>BUY ONLINE <span aria-hidden='true'>↗</span></a>"
-            : "";
+    function storeProductButton(productId, label) {
+        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='buy_product' data-product-id='" + esc(productId) + "'>" + esc(label || "BUY") + "</button>";
     }
 
-    function renderStoreLeader(leader) {
-        var leaderSlug = leader.slug || leader.id || "null";
-        var avatarUrl = asset("gameplay/avatars/" + leaderSlug + ".webp");
-        var desktopArt = asset("shell/leaders/" + leaderSlug + "_desktop.webp");
-        var mobileArt = asset("shell/leaders/" + leaderSlug + "_mobile.webp");
-        var status = leader.owned ? "OWNED" : (leader.free_rotation ? "FREE THIS WEEK" : "LOCKED");
-        var action = leader.owned || leader.free_rotation
-            ? "<span class='sow-store__offer-state'>" + status + "</span>"
-            : "<div class='sow-store__buy-row'>" +
-              "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='laurels' data-leader-id='" + esc(leader.id) + "'>" + esc(leader.cost_laurels) + " LAURELS</button>" +
-              "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='gems' data-leader-id='" + esc(leader.id) + "'>" + esc(leader.cost_gems) + " GEMS</button>" +
-              "</div>";
-        return "<article class='sow-store__leader-card " + (leader.owned ? "is-owned" : "") + "'>" +
-            "<div class='sow-store__leader-visual'><picture><source media='(max-width: 700px)' srcset='" + esc(mobileArt) + "'><img src='" + esc(desktopArt) + "' alt='" + esc(leader.name) + "' width='640' height='360' loading='lazy'></picture>" +
-                "<span class='sow-store__leader-avatar'><img src='" + esc(avatarUrl) + "' alt='' width='64' height='64' loading='lazy'></span>" +
-                "<span class='sow-store__leader-status'>" + esc(status) + "</span>" +
-            "</div><div class='sow-store__leader-body'><div class='sow-store__leader-title'><h3>" + esc(leader.name) + "</h3><span>" + esc(leader.civilization) + "</span></div>" +
-            "<p class='sow-store__leader-perk'>" + esc(leader.perk) + "</p><div class='sow-store__leader-action'>" + action + "</div></div></article>";
+    function canRenderDirectPurchase(productId) {
+        if (!productId) return false;
+        return !isAndroidTwa() || (typeof window.SOW_androidPurchaseSupports === "function" && window.SOW_androidPurchaseSupports(productId));
+    }
+
+    function canRenderProductPurchase(productId) {
+        if (!isAndroidTwa()) return !!(state.store && state.store.web_checkout_available);
+        return canRenderDirectPurchase(productId);
+    }
+
+    function storeLeaderById(id) {
+        var normalize = function (value) { return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase(); };
+        var target = normalize(id);
+        return (state.store && state.store.leaders || []).find(function (leader) { return normalize(leader.id) === target; }) || null;
+    }
+
+    function renderLeaderPurchase(leader) {
+        var offer = storeLeaderById(leader.id);
+        if (!offer || offer.owned) return "";
+        var crowns = offer.cost_crowns == null ? offer.cost_laurels : offer.cost_crowns;
+        return "<div class='sow-heroes__purchase-actions'><span>UNLOCK</span>" +
+            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='crowns' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(crowns, "crown") + "</button>" +
+            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='gems' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(offer.cost_gems, "gem") + "</button>" +
+            (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, "BUY") : "") +
+            "</div>";
     }
 
     function renderStoreBundle(bundle) {
-        var href = isAndroidTwa() ? nativePurchaseHref(bundle.product_id) : "";
-        var action = isAndroidTwa()
-            ? (href
-                ? "<a class='sow-store__buy sow-store__buy--primary' href='" + esc(href) + "'>BUY IN APP <span aria-hidden='true'>↗</span></a>"
-                : "<button class='sow-store__buy' type='button' disabled>ACCOUNT REQUIRED</button>")
-            : "";
-        return "<article class='sow-store__bundle'><span class='sow-store__bundle-icon' aria-hidden='true'>✦</span><div><strong>" + esc(bundle.gems) + " GEMS</strong><small>One-time gem bundle</small></div>" + action + "</article>";
+        var action = canRenderProductPurchase(bundle.product_id) ? storeProductButton(bundle.product_id, "BUY") : "";
+        var art = bundle.asset_path ? asset(bundle.asset_path) : asset("gameplay/store/gem_bundles/" + bundle.id + ".webp");
+        return "<article class='sow-store__bundle'><img class='sow-store__bundle-icon' src='" + esc(art) + "' alt='' aria-hidden='true' width='56' height='56' loading='lazy'><div><strong class='sow-store__bundle-price' aria-label='" + esc(bundle.gems) + " gems'>" + renderCurrencyAmount(bundle.gems, "gem") + "</strong></div>" + action + "</article>";
     }
 
-    function renderStoreSkin(skin) {
-        var equipped = state.selected_skin === skin.id;
+    function renderStoreSkinPromo(skin) {
         var action;
-        if (equipped) {
-            action = "<span class='sow-store__offer-state'>EQUIPPED</span>";
-        } else if (skin.owned) {
-            action = "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'>EQUIP</button>";
+        if (skin.owned) {
+            action = state.selected_skin === skin.id
+                ? "<span class='sow-store__offer-state'>EQUIPPED</span>"
+                : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'>EQUIP</button>";
         } else {
-            action = "<button class='sow-store__buy' type='button' data-command='unlock_skin' data-skin-id='" + esc(skin.id) + "'>UNLOCK " + esc(skin.cost_gems) + " GEMS</button>";
+            action = "<div class='sow-store__buy-row'><button class='sow-store__buy' type='button' data-command='unlock_skin' data-skin-id='" + esc(skin.id) + "'>" + renderCurrencyAmount(skin.cost_gems, "gem") + "</button>" +
+                (canRenderDirectPurchase(skin.direct_product_id) ? storeProductButton(skin.direct_product_id, "BUY") : "") + "</div>";
         }
-        return "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) + "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" + esc(skin.name) + "</h3><p>All leaders</p>" + action + "</div></article>";
+        return "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) + "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" + esc(skin.name) + "</h3><p>Territory pattern</p>" + action + "</div></article>";
     }
 
     function renderStore() {
         var store = state.store || {};
-        var leaders = Array.isArray(store.leaders) ? store.leaders : [];
-        var skins = Array.isArray(store.skins) ? store.skins : [];
         var bundles = Array.isArray(store.gem_bundles) ? store.gem_bundles : [];
-        return "" +
-            "<div class='sow-menu__backdrop sow-store__backdrop'></div>" +
-            "<div class='sow-menu__shell sow-menu__store'>" +
-                renderTopbar() +
-                "<main class='sow-menu__main sow-menu__main--store'><section class='sow-menu__store-slot' data-store-slot aria-label='Store'>" +
-                    "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>STORE</p><h1>Store</h1><p>Leaders, skins and gems.</p></div><div class='sow-store__balances'><span><b>✦</b> " + esc(store.gems || 0) + " <small>GEMS</small></span><span><b>◈</b> " + esc(store.laurels || 0) + " <small>LAURELS</small></span></div></header>" +
+        var skins = Array.isArray(store.skins) ? store.skins : [];
+        var crowns = store.crowns == null ? store.laurels : store.crowns;
+        var featured = bundles.find(function (bundle) { return bundle.product_id === "sow_gems_2600"; }) || bundles[bundles.length - 1];
+        var featuredAction = featured && canRenderProductPurchase(featured.product_id) ? storeProductButton(featured.product_id, "BUY") : "";
+        var checkout = storeCheckoutProduct
+            ? "<section class='sow-store__checkout' data-store-checkout><div class='sow-store__section-head'><h2>CHECKOUT</h2><button class='sow-store__close' type='button' data-command='close_store_checkout' aria-label='Close'>×</button></div><div class='sow-store__checkout-host' data-store-checkout-host><p>Loading checkout…</p></div></section>"
+            : "";
+        return "<main class='sow-menu__main sow-menu__main--store' data-screen-panel='store'><section class='sow-menu__store-slot' data-store-slot aria-label='Shop'>" +
+                    "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>SHOP</p><h1>Featured offers</h1></div><div class='sow-store__balances'><span class='sow-store__balance--gems' aria-label='Gems: " + esc(store.gems || 0) + "'>" + renderCurrencyAmount(store.gems || 0, "gem") + "</span><span class='sow-store__balance--crowns' aria-label='Crowns: " + esc(crowns || 0) + "'>" + renderCurrencyAmount(crowns || 0, "crown") + "</span></div></header>" +
                     renderFeedback() +
-                    "<section class='sow-store__section' aria-labelledby='sow-store-leaders'><div class='sow-store__section-head'><h2 id='sow-store-leaders'>Leaders</h2><span>Weekly rotation</span></div><div class='sow-store__leader-grid'>" + (leaders.map(renderStoreLeader).join("") || "<p class='sow-menu__empty'>No leaders available.</p>") + "</div><p class='sow-store__fineprint'>Unlocked leaders have distinct gameplay perks — they are not purely cosmetic. Gem unlocks are final sale, no refunds.</p></section>" +
-                    "<section class='sow-store__section' aria-labelledby='sow-store-skins'><div class='sow-store__section-head'><h2 id='sow-store-skins'>Skins</h2><span>Cosmetics</span></div><div class='sow-store__skin-grid'>" + (skins.map(renderStoreSkin).join("") || "<p class='sow-menu__empty'>No skins available.</p>") + "</div></section>" +
-                    "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>Gem bundles</h2>" + renderWebPurchaseAction() + "</div><div class='sow-store__bundle-grid'>" + (bundles.map(renderStoreBundle).join("") || "<p class='sow-menu__empty'>Products are not configured yet.</p>") + "</div>" +
-                    "<p class='sow-store__fineprint'>Digital items delivered instantly to your account. <strong>All sales are final — no refunds.</strong> Buying means you consent to immediate delivery and give up the statutory withdrawal right where applicable. See <a href='https://shadowsofwar.io/terms/'" + (isAndroidTwa() ? "" : " target='_blank' rel='noopener'") + ">Terms</a>.</p></section>" +
-                "</section></main>" +
-                renderMainNav("store") + renderFooter("STORE") +
-            "</div>";
+                    (featured ? "<article class='sow-store__featured'><div><p class='sow-store__eyebrow'>KINGDOM VAULT</p><h2>" + renderCurrencyAmount(featured.gems, "gem") + " gems</h2><p>Build your next army.</p></div>" + featuredAction + "</article>" : "") +
+                    "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>Gems</h2><button class='sow-store__link' type='button' data-command='main_nav' data-nav-screen='heroes'>VIEW HEROES</button></div><div class='sow-store__bundle-grid'>" + (bundles.map(renderStoreBundle).join("") || "<p class='sow-menu__empty'>Offers unavailable.</p>") + "</div></section>" +
+                    "<section class='sow-store__section' aria-labelledby='sow-store-skins'><div class='sow-store__section-head'><h2 id='sow-store-skins'>Skins</h2><span>Territory patterns</span></div><div class='sow-store__skin-grid'>" + (skins.map(renderStoreSkinPromo).join("") || "<p class='sow-menu__empty'>Offers unavailable.</p>") + "</div></section>" +
+                    "<section class='sow-store__promos'><button type='button' data-command='main_nav' data-nav-screen='heroes'><strong>LEADERS</strong><span>Choose your commander</span><b>VIEW →</b></button><button type='button' data-command='main_nav' data-nav-screen='heroes'><strong>SKINS</strong><span>Change your territory style</span><b>VIEW →</b></button></section>" +
+                    checkout +
+        "</section></main>";
+    }
+
+    function loadStripeJs() {
+        if (window.Stripe) return Promise.resolve(window.Stripe);
+        if (stripePromise) return stripePromise;
+        stripePromise = new Promise(function (resolve, reject) {
+            var script = document.createElement("script");
+            script.src = "https://js.stripe.com/v3/";
+            script.async = true;
+            script.onload = function () { window.Stripe ? resolve(window.Stripe) : reject(new Error("Stripe.js unavailable")); };
+            script.onerror = function () { reject(new Error("Stripe.js failed to load")); };
+            document.head.appendChild(script);
+        });
+        return stripePromise;
+    }
+
+    function beginStorePurchase(productId) {
+        if (!productId || storeCheckoutBusy) return;
+        if (isAndroidTwa()) {
+            if (!state.purchase_user_id || typeof window.SOW_requestAndroidPurchase !== "function") {
+                state.error = "Store account unavailable.";
+                render();
+                return;
+            }
+            storeCheckoutBusy = true;
+            var requestId = window.SOW_requestAndroidPurchase(productId, state.purchase_user_id);
+            if (!requestId) {
+                storeCheckoutBusy = false;
+                state.error = "Android checkout unavailable.";
+                render();
+            } else {
+                storeCheckoutRequestId = requestId;
+                render();
+            }
+            return;
+        }
+        var creds = selfCreds();
+        if (!creds || !state.purchase_user_id) {
+            state.error = "Store account unavailable.";
+            render();
+            return;
+        }
+        storeCheckoutProduct = productId;
+        storeCheckoutBusy = true;
+        render();
+        fetch(profileApi("/store/checkout"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ public_id: state.purchase_user_id, auth_secret: creds.auth_secret, product_id: productId })
+        }).then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (data) {
+                if (!response.ok) throw new Error(data.error || "Checkout unavailable");
+                return data;
+            });
+        }).then(function (data) {
+            return loadStripeJs().then(function (Stripe) {
+                if (!data.publishable_key || !data.client_secret) throw new Error("Checkout is not configured");
+                var stripe = Stripe(data.publishable_key);
+                return stripe.initEmbeddedCheckout({ clientSecret: data.client_secret });
+            });
+        }).then(function (checkout) {
+            if (!storeCheckoutProduct || storeCheckoutProduct !== productId) {
+                checkout.destroy();
+                return;
+            }
+            storeCheckoutInstance = checkout;
+            var host = root.querySelector("[data-store-checkout-host]");
+            if (host) {
+                host.textContent = "";
+                checkout.mount(host);
+            }
+        }).catch(function (error) {
+            state.error = error.message === "Checkout is not configured" ? "Checkout is not configured yet." : "Checkout unavailable.";
+            storeCheckoutProduct = null;
+            render();
+        }).finally(function () {
+            storeCheckoutBusy = false;
+        });
+    }
+
+    function closeStoreCheckout() {
+        if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") {
+            storeCheckoutInstance.destroy();
+        }
+        storeCheckoutInstance = null;
+        storeCheckoutProduct = null;
+        storeCheckoutRequestId = null;
+        storeCheckoutBusy = false;
+        render();
+    }
+
+    function loadStoreCatalog() {
+        if (storeCatalogLoading || storeCatalogLoaded) return;
+        storeCatalogLoading = true;
+        fetch(profileApi("/store/catalog"), { headers: { "Accept": "application/json" } })
+            .then(function (response) {
+                if (!response.ok) throw new Error("catalog unavailable");
+                return response.json();
+            })
+            .then(function (catalog) {
+                var current = state.store || {};
+                var localLeaders = current.leaders || [];
+                var localSkins = current.skins || [];
+                catalog.leaders = (catalog.leaders || []).map(function (leader) {
+                    var local = localLeaders.find(function (item) {
+                        return String(item.id).replace(/[^a-z0-9]/gi, "").toLowerCase() === String(leader.id).replace(/[^a-z0-9]/gi, "").toLowerCase();
+                    });
+                    return Object.assign({}, leader, local && { owned: local.owned, free_rotation: local.free_rotation });
+                });
+                catalog.skins = (catalog.skins || []).map(function (skin) {
+                    var local = localSkins.find(function (item) { return item.id === skin.id; });
+                    return Object.assign({}, skin, local && { owned: local.owned });
+                });
+                state.store = Object.assign({}, current, catalog, {
+                    gems: current.gems == null ? 0 : current.gems,
+                    crowns: current.crowns == null ? current.laurels : current.crowns
+                });
+                storeCatalogLoaded = true;
+                render();
+            })
+            .catch(function () { storeCatalogLoaded = true; })
+            .finally(function () { storeCatalogLoading = false; });
     }
 
     function renderHeroesCard(leader, activeId) {
@@ -497,20 +594,71 @@
     }
 
     function refreshHeroesRoster(resetScroll) {
-        var heroesRosterContainer = root.querySelector("[data-heroes-roster]");
+        var panel = activeScreenPanel() || root;
+        var heroesRosterContainer = panel.querySelector("[data-heroes-roster]");
         if (!heroesRosterContainer) return;
         var activeHeroesId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
         heroesRosterContainer.innerHTML = renderHeroesRoster(activeHeroesId);
         if (resetScroll) {
-            var heroesRosterPanel = root.querySelector(".sow-heroes__roster");
+            var heroesRosterPanel = panel.querySelector(".sow-heroes__roster");
             if (heroesRosterPanel) heroesRosterPanel.scrollTop = 0;
         }
     }
 
+    function updateHeroesPreview() {
+        if (currentScreen() !== "heroes") return false;
+        var activeLeader = leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
+        var panel = activeScreenPanel() || root;
+        var featured = panel.querySelector(".sow-heroes__featured");
+        if (!activeLeader || !featured) return false;
+        var picture = featured.querySelector("picture");
+        var source = picture && picture.querySelector("source");
+        var image = picture && picture.querySelector("img");
+        var title = featured.querySelector("#sow-heroes-selected");
+        var civilization = featured.querySelector(".sow-heroes__civilization");
+        var perk = featured.querySelector(".sow-heroes__perk");
+        var confirm = featured.querySelector("[data-command='confirm_leader']");
+        var selectedAsset = asset("shell/leaders/" + activeLeader.slug + "_mobile.webp");
+        var landscapeAsset = asset("shell/leaders/" + activeLeader.slug + "_desktop.webp");
+        if (source) source.srcset = landscapeAsset;
+        if (image) {
+            image.src = selectedAsset;
+            image.alt = activeLeader.name;
+        }
+        if (title) title.textContent = activeLeader.name;
+        if (civilization) civilization.textContent = activeLeader.civilization;
+        if (perk) perk.textContent = activeLeader.perk || "Enhanced military & empire bonuses.";
+        var purchase = featured.querySelector("[data-hero-purchase]");
+        if (purchase) purchase.innerHTML = renderLeaderPurchase(activeLeader);
+        if (confirm) {
+            confirm.dataset.leaderId = activeLeader.id;
+            confirm.firstChild.nodeValue = "CONFIRM " + activeLeader.name.toUpperCase() + " ";
+        }
+        var cards = panel.querySelectorAll("[data-command='preview_leader']");
+        for (var i = 0; i < cards.length; i++) {
+            var selected = cards[i].dataset.leaderId === activeLeader.id;
+            cards[i].classList.toggle("is-selected", selected);
+            cards[i].setAttribute("aria-pressed", selected ? "true" : "false");
+            var marker = cards[i].querySelector(".sow-heroes__card-state");
+            if (selected && !marker) {
+                cards[i].insertAdjacentHTML("beforeend", "<span class='sow-heroes__card-state'>SELECTED</span>");
+            } else if (!selected && marker) {
+                marker.remove();
+            }
+        }
+        return true;
+    }
+
     function syncDropdowns(focusTarget) {
-        var dropdowns = root.querySelectorAll("[data-control-dropdown]");
-        for (var i = 0; i < dropdowns.length; i++) {
-            var dropdown = dropdowns[i];
+        var scopes = [];
+        var panel = activeScreenPanel();
+        if (panel) scopes.push(panel);
+        root.querySelectorAll("[data-menu-overlay]").forEach(function (overlay) { scopes.push(overlay); });
+        if (!scopes.length) scopes.push(root);
+        for (var s = 0; s < scopes.length; s++) {
+            var dropdowns = scopes[s].querySelectorAll("[data-control-dropdown]");
+            for (var i = 0; i < dropdowns.length; i++) {
+                var dropdown = dropdowns[i];
             var key = dropdown.dataset.dropdownKey;
             var open = dropdownOpenKey === key;
             var trigger = dropdown.querySelector("[data-role='dropdown-trigger']");
@@ -527,6 +675,7 @@
                 options[j].setAttribute("aria-selected", selected ? "true" : "false");
                 if (label && selected) label.textContent = options[j].textContent;
             }
+            }
         }
         if (focusTarget) focusTarget.focus();
     }
@@ -537,7 +686,9 @@
     }
 
     function selectDropdown(key, value) {
-        var dropdown = root.querySelector("[data-control-dropdown][data-dropdown-key='" + key + "']");
+        var panel = activeScreenPanel();
+        var dropdown = panel && panel.querySelector("[data-control-dropdown][data-dropdown-key='" + key + "']");
+        if (!dropdown) dropdown = root.querySelector("[data-menu-overlay] [data-control-dropdown][data-dropdown-key='" + key + "']");
         if (!dropdown) return;
         var input = dropdown.querySelector("[data-dropdown-input]");
         if (!input) return;
@@ -558,18 +709,12 @@
         var activeLeader = leaderById(activeId);
         var portraitAsset = asset("shell/leaders/" + activeLeader.slug + "_mobile.webp");
         var landscapeAsset = asset("shell/leaders/" + activeLeader.slug + "_desktop.webp");
-        return "" +
-            "<div class='sow-menu__backdrop sow-heroes__backdrop'></div>" +
-            "<div class='sow-menu__shell sow-menu__heroes'>" +
-                renderTopbar() +
-                "<main class='sow-menu__main sow-menu__main--heroes'><section class='sow-menu__heroes-slot' aria-label='Heroes'>" +
+        return "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='Heroes'>" +
                     "<div class='sow-heroes__workspace'>" +
-                        "<section class='sow-heroes__featured' aria-labelledby='sow-heroes-selected'><picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(landscapeAsset) + "'><img src='" + esc(portraitAsset) + "' alt='" + esc(activeLeader.name) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__featured-label'>SELECTED</p><h2 id='sow-heroes-selected'>" + esc(activeLeader.name) + "</h2><p class='sow-heroes__civilization'>" + esc(activeLeader.civilization) + "</p><p class='sow-heroes__perk'>" + esc(activeLeader.perk || "Enhanced military & empire bonuses.") + "</p><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'>CONFIRM " + esc(activeLeader.name.toUpperCase()) + " <span>✓</span></button></div></section>" +
+                        "<section class='sow-heroes__featured' aria-labelledby='sow-heroes-selected'><picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(landscapeAsset) + "'><img src='" + esc(portraitAsset) + "' alt='" + esc(activeLeader.name) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__featured-label'>SELECTED</p><h2 id='sow-heroes-selected'>" + esc(activeLeader.name) + "</h2><p class='sow-heroes__civilization'>" + esc(activeLeader.civilization) + "</p><p class='sow-heroes__perk'>" + esc(activeLeader.perk || "Enhanced military & empire bonuses.") + "</p><div data-hero-purchase>" + renderLeaderPurchase(activeLeader) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'>CONFIRM " + esc(activeLeader.name.toUpperCase()) + " <span>✓</span></button></div></section>" +
                         "<section class='sow-heroes__roster' aria-label='Leader list'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>Search leaders</span><input data-role='heroes-search' type='search' placeholder='Search leader or civilization' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId) + "</div></section>" +
                     "</div>" +
-                "</section></main>" +
-                renderMainNav("heroes") + renderFooter("HEROES") +
-            "</div>";
+        "</section></main>";
     }
 
     function profileLeaderCard(leader) {
@@ -683,17 +828,16 @@
                 return "<button type='button' class='sow-profile__search-result' data-command='open_public_profile' data-profile-id='" + esc(summary.public_id) + "'><strong>" + esc(summary.display_name) + "</strong><span>" + esc(summary.handle) + " · LV " + esc(summary.level) + "</span></button>";
             }).join("") + "</div>"
             : "";
-        var detail = profileMatchDetail
-            ? "<div class='sow-profile__detail-backdrop'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='Close match details'>×</button><span class='sow-profile__kicker'>Match details</span><h2 id='sow-profile-detail-title'>" + esc(profileMatchDetail.mode || "MATCH") + "</h2><p>" + esc(profileMatchDetail.map_name || "WORLD") + " · " + esc(profileMatchDetail.queue || "MATCHMAKING") + "</p><div class='sow-profile__detail-players'>" + (profileMatchDetail.participants || []).map(function (participant) {
-                return "<div><strong>" + esc(participant.handle || participant.public_id) + "</strong><span>" + esc(participant.leader || "—") + " · " + esc(participant.kills || 0) + " / " + esc(participant.deaths || 0) + " / " + esc(participant.assists || 0) + "</span><b>" + (participant.won ? "WIN" : "LOSS") + "</b></div>";
-            }).join("") + "</div></section></div>"
-            : "";
-        return "<div class='sow-menu__backdrop'></div><div class='sow-menu__shell sow-profile'>" +
-            renderTopbar() +
-            "<main class='sow-menu__main sow-profile__main'><section class='sow-profile__page'>" + header +
+        return "<main class='sow-menu__main sow-profile__main' data-screen-panel='profile'><section class='sow-profile__page'>" + header +
             "<nav class='sow-profile__tabs' role='tablist' aria-label='Profile sections'>" + tabs + "</nav>" + playGamesActions + content + renderModeration(own) + search + searchResults +
-            "</section></main>" +
-            renderMainNav("profile") + renderFooter("PROFILE") + detail + "</div>";
+            "</section></main>";
+    }
+
+    function renderProfileDetail() {
+        if (!profileMatchDetail) return "";
+        return "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='Close match details'>×</button><span class='sow-profile__kicker'>Match details</span><h2 id='sow-profile-detail-title'>" + esc(profileMatchDetail.mode || "MATCH") + "</h2><p>" + esc(profileMatchDetail.map_name || "WORLD") + " · " + esc(profileMatchDetail.queue || "MATCHMAKING") + "</p><div class='sow-profile__detail-players'>" + (profileMatchDetail.participants || []).map(function (participant) {
+            return "<div><strong>" + esc(participant.handle || participant.public_id) + "</strong><span>" + esc(participant.leader || "—") + " · " + esc(participant.kills || 0) + " / " + esc(participant.deaths || 0) + " / " + esc(participant.assists || 0) + "</span><b>" + (participant.won ? "WIN" : "LOSS") + "</b></div>";
+        }).join("") + "</div></section></div>";
     }
 
     // Conduct + privacy controls on profiles. Own profile: self-service
@@ -766,7 +910,7 @@
         var lobby = findLobby(passwordLobbyId);
         var title = lobby ? (lobby.map_name || "PRIVATE LOBBY") : "PRIVATE LOBBY";
         var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(state.error) + "</div>" : "";
-        return "<div class='sow-menu__overlay'><form class='sow-menu__modal sow-menu__password-modal' data-form='password' novalidate>" +
+        return "<div class='sow-menu__overlay' data-menu-overlay='password'><form class='sow-menu__modal sow-menu__password-modal' data-form='password' novalidate>" +
             "<div class='sow-menu__modal-head'><div><p class='sow-menu__panel-label'>PASSWORD REQUIRED</p><h2>" + esc(title) + "</h2></div>" +
             "<button class='sow-menu__icon-button' type='button' data-command='close_password' aria-label='Close'>×</button></div>" +
             "<p class='sow-menu__tagline'>This lobby is private. Enter password to join.</p>" +
@@ -825,11 +969,7 @@
                     "</label>" : "") +
             "</div>";
 
-        return "" +
-            "<div class='sow-menu__backdrop'></div>" +
-            "<div class='sow-menu__shell'>" +
-                renderTopbar() +
-                "<main class='sow-menu__main sow-menu__main--custom sow-create'>" +
+        return "<main class='sow-menu__main sow-menu__main--custom sow-create' data-screen-panel='create'>" +
                     "<section class='sow-menu__command sow-create__rail'>" +
                         "<p class='sow-menu__eyebrow'>CUSTOM GAME</p>" +
                         "<h1>MATCH<br><em>SETTINGS</em></h1>" +
@@ -898,9 +1038,7 @@
                             "</div>" +
                         "</form>" +
                     "</section>" +
-                "</main>" +
-                renderMainNav("battle") + renderFooter("CREATE GAME") +
-            "</div>";
+        "</main>";
     }
 
     function joinedLobby() {
@@ -989,11 +1127,7 @@
             rosterHtml = "<div class='sow-menu__ffa-roster'>" + players.map(function (p) { return renderQueuePlayerRow(p, lobby); }).join("") + "</div>";
         }
 
-        return "" +
-            "<div class='sow-menu__backdrop'></div>" +
-            "<div class='sow-menu__shell'>" +
-                renderTopbar() +
-                "<main class='sow-menu__main sow-menu__main--queue'>" +
+        return "<main class='sow-menu__main sow-menu__main--queue' data-screen-panel='queue'>" +
                     "<section class='sow-menu__queue-summary-card'>" +
                         "<div class='sow-menu__queue-map-hero' style=\"background-image:url('" + esc(mapThumbUrl) + "')\">" +
                             "<div class='sow-menu__queue-map-overlay'>" +
@@ -1022,9 +1156,7 @@
                         "</div>" +
                         "<div class='sow-menu__queue-roster-wrap'>" + rosterHtml + "</div>" +
                     "</section>" +
-                "</main>" +
-                renderMainNav("battle") + renderFooter("LOBBY") +
-            "</div>";
+        "</main>";
     }
 
     function renderSettings() {
@@ -1039,7 +1171,7 @@
             ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + providerLabel + "</span><button class='sow-menu__danger' type='button' data-command='sign_out'>SIGN OUT</button></section>"
             : "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>ANONYMOUS ACCOUNT</span><button class='sow-menu__secondary' type='button' data-command='sign_in'>SIGN IN</button></section>";
         return "" +
-            "<div class='sow-menu__overlay'>" +
+            "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
                 "<section class='sow-menu__modal sow-menu__settings-modal'>" +
                     "<div class='sow-menu__modal-head'>" +
                         "<div>" +
@@ -1084,16 +1216,157 @@
                 [["google", "G", "GOOGLE"], ["discord", "◉", "DISCORD"], ["twitter", "𝕏", "X"], ["meta", "∞", "META"]].map(function (provider) {
                     return "<button class='sow-menu__secondary sow-menu__auth-provider' type='button' data-command='wou_provider' data-provider='" + provider[0] + "'><b aria-hidden='true'>" + provider[1] + "</b><span>" + provider[2] + "</span></button>";
                 }).join("") + "</div>";
-        return "<div class='sow-menu__overlay' data-auth-overlay><section class='sow-menu__modal sow-menu__auth-modal' role='dialog' aria-modal='true' aria-labelledby='sow-auth-title'>" +
+        return "<div class='sow-menu__overlay' data-menu-overlay='auth' data-auth-overlay><section class='sow-menu__modal sow-menu__auth-modal' role='dialog' aria-modal='true' aria-labelledby='sow-auth-title'>" +
             "<div class='sow-menu__modal-head'><div><p class='sow-menu__panel-label'>WOU-ID</p><h2 id='sow-auth-title'>SIGN IN</h2></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='Close'>×</button></div>" +
             account +
             "</section></div>";
     }
 
+    function renderScreenPanel(screen) {
+        if (screen === "home") return renderHome();
+        if (screen === "browser") return renderBrowser();
+        if (screen === "create") return renderCreate();
+        if (screen === "queue") return renderQueue();
+        if (screen === "profile") return renderProfile();
+        if (screen === "heroes") return renderHeroes();
+        if (screen === "store") return renderStore();
+        return "";
+    }
+
+    function screenNav(screen) {
+        return screen === "store" ? "store" : screen === "heroes" ? "heroes" : screen === "profile" ? "profile" : "battle";
+    }
+
+    function screenShellClass(screen) {
+        return "sow-menu__shell" + (screen === "store" ? " sow-menu__store" : screen === "heroes" ? " sow-menu__heroes" : screen === "profile" ? " sow-profile" : "");
+    }
+
+    function screenBackdropClass(screen) {
+        return "sow-menu__backdrop" + (screen === "store" ? " sow-store__backdrop" : screen === "heroes" ? " sow-heroes__backdrop" : "");
+    }
+
+    function screenFooterLabel(screen) {
+        return ({ browser: "LOBBY BROWSER", create: "CREATE GAME", queue: "LOBBY", store: "SHOP", heroes: "HEROES", profile: "PROFILE" })[screen] || "";
+    }
+
+    function renderFrame(screen) {
+        return "<div class='" + screenBackdropClass(screen) + "' data-menu-backdrop></div>" +
+            "<div class='" + screenShellClass(screen) + "'>" +
+                renderTopbar() +
+                "<div class='sow-menu__screen-stage' data-screen-stage>" + renderScreenPanel(screen) + "</div>" +
+                renderMainNav(screenNav(screen)) + renderFooter(screenFooterLabel(screen)) +
+            "</div>" + renderPasswordModal() + renderProfileDetail();
+    }
+
+    function panelFromMarkup(markup) {
+        var template = document.createElement("template");
+        template.innerHTML = String(markup || "").trim();
+        return template.content.firstElementChild;
+    }
+
+    function syncOverlay(key, markup) {
+        var selector = "[data-menu-overlay='" + key + "']";
+        var current = root.querySelector(selector);
+        if (!markup) {
+            if (current) current.remove();
+            return;
+        }
+        var next = panelFromMarkup(markup);
+        if (!next) return;
+        if (!current) root.appendChild(next);
+        else if (current.outerHTML !== next.outerHTML) current.replaceWith(next);
+    }
+
+    function updateTopbar() {
+        var topbar = root.querySelector(".sow-menu__topbar");
+        if (!topbar || !state) return;
+        var leader = leaderById(state.selected_leader);
+        var nameInput = topbar.querySelector("[data-role='display-name']");
+        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || "ANONYMOUS");
+        if (nameInput && document.activeElement !== nameInput) nameInput.value = name;
+        if (nameInput) nameInput.readOnly = !!state.name_locked;
+        var avatar = topbar.querySelector(".sow-menu__avatar");
+        var avatarUrl = avatarImage();
+        if (avatar && avatar.dataset.avatarUrl !== avatarUrl) {
+            avatar.style.backgroundImage = "url(" + JSON.stringify(avatarUrl) + ")";
+            avatar.dataset.avatarUrl = avatarUrl;
+        }
+        var leaderLink = topbar.querySelector(".sow-menu__profile-link");
+        if (leaderLink) leaderLink.textContent = leader.name + " · " + leader.civilization;
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
+        var android = isAndroidTwa();
+        var showSignIn = !(android && (auth.authenticated || auth.pending));
+        var actions = topbar.querySelector(".sow-menu__top-actions");
+        var settingsButton = actions && actions.querySelector("[data-command='toggle_settings']");
+        var signIn = actions && actions.querySelector(".sow-menu__signin");
+        if (showSignIn) {
+            if (!signIn && actions) {
+                signIn = document.createElement("button");
+                signIn.className = "sow-menu__signin";
+                signIn.type = "button";
+                signIn.dataset.command = "sign_in";
+                actions.insertBefore(signIn, settingsButton);
+            }
+            if (signIn) signIn.textContent = android ? "SIGN IN" : (auth.authenticated || state.name_locked ? "ACCOUNT" : "SIGN IN");
+        } else if (signIn) {
+            signIn.remove();
+        }
+    }
+
+    function updateFrameChrome(screen) {
+        var backdrop = root.querySelector("[data-menu-backdrop]");
+        var shell = root.querySelector(".sow-menu__shell");
+        var backdropClass = screenBackdropClass(screen);
+        var shellClass = screenShellClass(screen);
+        if (backdrop && backdrop.className !== backdropClass) backdrop.className = backdropClass;
+        if (shell && shell.className !== shellClass) shell.className = shellClass;
+        root.querySelectorAll("[data-nav-screen]").forEach(function (item) {
+            var active = item.dataset.navScreen === screenNav(screen);
+            item.classList.toggle("is-active", active);
+            if (active) item.setAttribute("aria-current", "page");
+            else item.removeAttribute("aria-current");
+        });
+        var footer = root.querySelector(".sow-menu__footer");
+        var label = footer && footer.querySelector("[data-menu-footer-label]");
+        var nextLabel = screenFooterLabel(screen);
+        if (footer && nextLabel && label) label.textContent = nextLabel;
+        else if (footer && nextLabel && !label) {
+            label = document.createElement("span");
+            label.dataset.menuFooterLabel = "";
+            label.textContent = nextLabel;
+            footer.insertBefore(label, footer.firstElementChild);
+        } else if (label && !nextLabel) label.remove();
+        updateTopbar();
+    }
+
+    function activeScreenPanel() {
+        var stage = root.querySelector("[data-screen-stage]");
+        return stage && (stage.querySelector("[data-screen-panel].is-active") || stage.lastElementChild);
+    }
+
+    function syncScreenPanel(screen, screenChanged) {
+        var stage = root.querySelector("[data-screen-stage]");
+        var next = panelFromMarkup(renderScreenPanel(screen));
+        if (!stage || !next) return;
+        if (screenChanged) {
+            var settings = state && state.settings || {};
+            sowScreenMotion.show(stage, next, !!settings.reduced_motion);
+            return;
+        }
+        var current = activeScreenPanel();
+        var entering = current && current.classList.contains("sow-screen-panel--entering");
+        if (current) current.replaceWith(next);
+        else stage.appendChild(next);
+        next.classList.add("is-active");
+        if (entering) next.classList.add("sow-screen-panel--entering");
+    }
+
     function render() {
         if (!state) return;
         var screen = currentScreen();
-        dropdownOpenKey = null;
+        var screenChanged = previousScreen !== screen;
+        var sameScreen = !screenChanged;
+        if (screenChanged) dropdownOpenKey = null;
         if (screen === "create" && previousScreen !== "create") {
             createDraft = cloneConfig();
             createOffline = !!state.custom_game_is_sp;
@@ -1106,9 +1379,12 @@
             createPrivate = false;
             createPassword = "";
         }
-        var sameScreen = previousScreen === screen;
         previousScreen = screen;
-        root.style.setProperty("--sow-hero", "url(\"" + heroImage() + "\")");
+        var nextHero = heroImage();
+        if (root.dataset.hero !== nextHero) {
+            root.style.setProperty("--sow-hero", "url(\"" + nextHero + "\")");
+            root.dataset.hero = nextHero;
+        }
         root.dataset.screen = screen;
         root.dataset.ready = typeof window.SOW_menu_command === "function" ? "true" : "false";
         root.hidden = state.phase !== "MainMenu";
@@ -1120,27 +1396,29 @@
         var activeVal = isTyping ? activeEl.value : null;
         var selStart = isTyping && typeof activeEl.selectionStart === "number" ? activeEl.selectionStart : null;
         var selEnd = isTyping && typeof activeEl.selectionEnd === "number" ? activeEl.selectionEnd : null;
+        var currentPanel = activeScreenPanel();
         var scrollTop = null;
         if (sameScreen) {
             var currentScrollOwner = screen === "create"
-                ? root.querySelector(".sow-create__scroll")
-                : root.querySelector(".sow-menu__main");
+                ? currentPanel && currentPanel.querySelector(".sow-create__scroll")
+                : currentPanel;
             if (currentScrollOwner) scrollTop = currentScrollOwner.scrollTop;
         }
 
-        if (screen === "home") root.innerHTML = renderHome();
-        else if (screen === "browser") root.innerHTML = renderBrowser();
-        else if (screen === "create") root.innerHTML = renderCreate();
-        else if (screen === "queue") root.innerHTML = renderQueue();
-        else if (screen === "profile") root.innerHTML = renderProfile();
-        else if (screen === "heroes") root.innerHTML = renderHeroes();
-        else if (screen === "store") root.innerHTML = renderStore();
-        else root.innerHTML = "";
+        if (!root.querySelector("[data-screen-stage]")) {
+            root.innerHTML = renderFrame(screen);
+            var initialPanel = activeScreenPanel();
+            if (initialPanel) initialPanel.classList.add("is-active");
+        } else {
+            updateFrameChrome(screen);
+            syncScreenPanel(screen, screenChanged);
+        }
+        syncOverlay("password", renderPasswordModal());
+        syncOverlay("settings", settingsOpen ? renderSettings() : "");
+        syncOverlay("auth", authModalOpen ? renderAuthModal() : "");
+        syncOverlay("profile-detail", profileOpen ? renderProfileDetail() : "");
 
-        if (settingsOpen) root.insertAdjacentHTML("beforeend", renderSettings());
-        if (authModalOpen) root.insertAdjacentHTML("beforeend", renderAuthModal());
-
-        if (isTyping) {
+        if (sameScreen && isTyping) {
             var restored = null;
             if (activeRole) {
                 restored = root.querySelector("[data-role='" + activeRole + "']");
@@ -1158,18 +1436,21 @@
             }
         }
         updateDynamic();
+        if (screen === "store") loadStoreCatalog();
         if (sameScreen && scrollTop !== null) {
             var nextScrollOwner = screen === "create"
-                ? root.querySelector(".sow-create__scroll")
-                : root.querySelector(".sow-menu__main");
+                ? activeScreenPanel() && activeScreenPanel().querySelector(".sow-create__scroll")
+                : activeScreenPanel();
             if (nextScrollOwner) nextScrollOwner.scrollTop = scrollTop;
         }
+        syncDropdowns();
         lastRenderKey = renderKey();
         updateLobbyViews();
     }
 
     function updateDynamic() {
         if (!state || root.hidden) return;
+        var panel = activeScreenPanel() || root;
         var progression = root.querySelector("[data-progression]");
         if (progression) {
             var progressionXp = Math.max(0, Number(state.xp) || 0);
@@ -1177,11 +1458,12 @@
             var levelValue = progression.querySelector("[data-progression-level-value]");
             var xpValue = progression.querySelector("[data-progression-xp-value]");
             var xpFill = progression.querySelector("[data-progression-xp-fill]");
-            var laurelsValue = progression.querySelector("[data-progression-laurels-value]");
+            var crownsValue = progression.querySelector("[data-progression-crowns-value]");
             if (levelValue) levelValue.textContent = progressionLevel;
             if (xpValue) xpValue.textContent = Math.floor(progressionXp) + " XP";
             if (xpFill) xpFill.style.width = (progressionXp % 100) + "%";
-            if (laurelsValue) laurelsValue.textContent = Math.max(0, Number(state.laurels) || 0);
+            var crowns = state.crowns == null ? state.laurels : state.crowns;
+            if (crownsValue) crownsValue.textContent = Math.max(0, Number(crowns) || 0);
         }
         var settings = state.settings || {};
         var muteInput = root.querySelector("[data-setting='mute']");
@@ -1192,15 +1474,15 @@
         if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
         var musicValBadge = root.querySelector("[data-val-for='music_vol']");
         if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
-        var timer = root.querySelector("[data-live-countdown]");
+        var timer = panel.querySelector("[data-live-countdown]");
         var lobby = joinedLobby();
         if (timer && lobby) timer.textContent = lobby.is_counting_down ? "STARTING IN " + Math.ceil(lobby.timer_secs) + "s" : "WAITING FOR PLAYERS";
-        var queueStatus = root.querySelector("[data-queue-status]");
+        var queueStatus = panel.querySelector("[data-queue-status]");
         if (queueStatus && lobby) {
             var strong = queueStatus.querySelector("strong");
             if (strong) strong.textContent = (lobby.num_players || 0) + "/" + (lobby.max_players || "?");
         }
-        var cardTimers = root.querySelectorAll("[data-timer-for]");
+        var cardTimers = panel.querySelectorAll("[data-timer-for]");
         for (var i = 0; i < cardTimers.length; i++) {
             var cardLobby = findLobby(Number(cardTimers[i].dataset.timerFor));
             cardTimers[i].textContent = cardLobby ? lobbyTimerText(cardLobby) : "";
@@ -1211,8 +1493,23 @@
         var target = event.target.closest("[data-command]");
         if (!target || !root.contains(target)) return;
         var command = target.dataset.command;
+        if (command === "buy_product") {
+            beginStorePurchase(target.dataset.productId);
+            return;
+        }
+        if (command === "close_store_checkout") {
+            closeStoreCheckout();
+            return;
+        }
         if (command === "main_nav") {
             var navScreen = target.dataset.navScreen || "battle";
+            if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") {
+                storeCheckoutInstance.destroy();
+            }
+            storeCheckoutInstance = null;
+            storeCheckoutProduct = null;
+            storeCheckoutRequestId = null;
+            storeCheckoutBusy = false;
             settingsOpen = false;
             passwordLobbyId = null;
             passwordDraft = "";
@@ -1409,7 +1706,7 @@
         }
         if (command === "preview_leader") {
             tempSelectedLeader = target.dataset.leaderId;
-            render();
+            if (!updateHeroesPreview()) render();
             return;
         }
         if (command === "confirm_leader") {
@@ -1426,7 +1723,7 @@
         }
         if (command === "unlock_leader") {
             var unlockLeaderId = target.dataset.leaderId;
-            var unlockCurrency = target.dataset.currency || "laurels";
+            var unlockCurrency = target.dataset.currency || "crowns";
             var unlockAccountId = state && state.purchase_user_id;
             var unlockSecret = null;
             try { unlockSecret = window.localStorage.getItem("sow_account_secret"); } catch (e) {}
@@ -1596,6 +1893,32 @@
         if (dropdownOpenKey && (!dropdown || dropdown.dataset.dropdownKey !== dropdownOpenKey)) {
             setDropdownOpen(dropdownOpenKey, false);
         }
+    });
+
+    window.addEventListener("wou:auth-state-change", function () {
+        if (state && !root.hidden) render();
+    });
+
+    window.addEventListener("sow:android-purchase-bridge-ready", function () {
+        if (state && !root.hidden && currentScreen() === "store") render();
+    });
+
+    window.addEventListener("sow:android-purchase-result", function (event) {
+        var result = event.detail || {};
+        if (result.request_id && storeCheckoutRequestId &&
+            result.request_id !== storeCheckoutRequestId) return;
+        storeCheckoutBusy = false;
+        if (!state) return;
+        storeCheckoutRequestId = null;
+        if (result.status === "success") {
+            state.error = null;
+            send("refresh_profile");
+        } else if (result.status === "cancelled") {
+            state.error = "Purchase cancelled.";
+        } else {
+            state.error = "Purchase failed.";
+        }
+        render();
     });
 
     root.addEventListener("keydown", function (event) {

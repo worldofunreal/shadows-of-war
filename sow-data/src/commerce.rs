@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 pub const FREE_ROTATION_SIZE: usize = 8;
 pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 // ponytail: one balancing constant until real retention data exists; move pricing to live config then.
-pub const LEADER_UNLOCK_COST_LAURELS: u64 = 500;
+pub const LEADER_UNLOCK_COST_CROWNS: u64 = 500;
 pub const LEADER_UNLOCK_COST_GEMS: u64 = 1_500;
 
 const GEM_BUNDLES: [(&str, u64); 3] = [
@@ -46,11 +46,14 @@ pub struct LeaderOffer {
     pub name: String,
     pub civilization: String,
     pub perk: String,
-    pub cost_laurels: u64,
+    #[serde(rename = "cost_laurels", alias = "cost_crowns")]
+    pub cost_crowns: u64,
     pub cost_gems: u64,
     pub free_rotation: bool,
     pub owned: bool,
     pub available: bool,
+    pub direct_product_id: String,
+    pub direct_price_label: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -62,6 +65,8 @@ pub struct SkinOffer {
     pub cost_gems: u64,
     pub owned: bool,
     pub style: u8,
+    pub direct_product_id: String,
+    pub direct_price_label: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -69,6 +74,7 @@ pub struct GemBundle {
     pub id: String,
     pub gems: u64,
     pub product_id: String,
+    pub asset_path: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -78,7 +84,10 @@ pub struct StoreCatalog {
     pub leaders: Vec<LeaderOffer>,
     pub skins: Vec<SkinOffer>,
     pub gem_bundles: Vec<GemBundle>,
-    pub laurels: u64,
+    #[serde(default)]
+    pub web_checkout_available: bool,
+    #[serde(rename = "laurels", alias = "crowns")]
+    pub crowns: u64,
     pub gems: u64,
 }
 
@@ -186,6 +195,7 @@ pub fn gem_bundles() -> Vec<GemBundle> {
             id: product_id.to_string(),
             gems,
             product_id: product_id.to_string(),
+            asset_path: format!("gameplay/store/gem_bundles/{product_id}.webp"),
         })
         .collect()
 }
@@ -195,6 +205,52 @@ pub fn gem_amount_for_product(product_id: &str) -> Option<u64> {
         "sow_gems_500" | "price_1UBIdc5GjRL6SWJS0cuGDATW" => Some(500),
         "sow_gems_1200" | "price_1UBIdn5GjRL6SWJSKdxrkoU2" => Some(1_200),
         "sow_gems_2600" | "price_1UBIdn5GjRL6SWJSMPiDU5pi" => Some(2_600),
+        _ => None,
+    }
+}
+
+pub fn direct_leader_product_id(leader: Leader) -> String {
+    format!("sow_offer_leader_{}", leader_id(leader))
+}
+
+pub fn direct_skin_product_id(skin_id: &str) -> Option<String> {
+    skin_by_id(skin_id).map(|_| format!("sow_offer_skin_{skin_id}"))
+}
+
+pub fn direct_leader_for_product(product_id: &str) -> Option<Leader> {
+    product_id
+        .strip_prefix("sow_offer_leader_")
+        .and_then(leader_from_id)
+}
+
+pub fn direct_skin_for_product(product_id: &str) -> Option<SkinOffer> {
+    product_id
+        .strip_prefix("sow_offer_skin_")
+        .and_then(direct_skin_product_id)
+        .filter(|expected| expected == product_id)
+        .and_then(|_| {
+            product_id
+                .strip_prefix("sow_offer_skin_")
+                .and_then(skin_by_id)
+        })
+}
+
+pub fn is_store_product(product_id: &str) -> bool {
+    gem_amount_for_product(product_id).is_some()
+        || direct_leader_for_product(product_id).is_some()
+        || direct_skin_for_product(product_id).is_some()
+        || product_id == "sow_offer_genghis_khan_royal_lattice"
+}
+
+pub fn direct_price_label_for_leader(_leader: Leader) -> &'static str {
+    "$5.99"
+}
+
+pub fn direct_price_label_for_skin(skin_id: &str) -> Option<&'static str> {
+    match skin_id {
+        "ember_vein" => Some("$1.99"),
+        "storm_grid" => Some("$3.99"),
+        "royal_lattice" => Some("$5.99"),
         _ => None,
     }
 }
@@ -210,6 +266,8 @@ pub fn skins() -> Vec<SkinOffer> {
             cost_gems,
             owned: false,
             style,
+            direct_product_id: format!("sow_offer_skin_{id}"),
+            direct_price_label: direct_price_label_for_skin(id).unwrap_or("").to_string(),
         })
         .collect()
 }
@@ -250,7 +308,7 @@ pub fn resolve_leader(
 pub fn catalog_for_profile(
     owned_leaders: &BTreeSet<String>,
     owned_skins: &BTreeSet<String>,
-    laurels: u64,
+    crowns: u64,
     gems: u64,
     period: u64,
 ) -> StoreCatalog {
@@ -265,11 +323,13 @@ pub fn catalog_for_profile(
                 name: leader.name().to_string(),
                 civilization: leader.civilization().name().to_string(),
                 perk: leader.perk_description().to_string(),
-                cost_laurels: LEADER_UNLOCK_COST_LAURELS,
+                cost_crowns: LEADER_UNLOCK_COST_CROWNS,
                 cost_gems: LEADER_UNLOCK_COST_GEMS,
                 free_rotation,
                 owned,
                 available: free_rotation || owned,
+                direct_product_id: direct_leader_product_id(leader),
+                direct_price_label: direct_price_label_for_leader(leader).to_string(),
             }
         })
         .collect();
@@ -290,7 +350,8 @@ pub fn catalog_for_profile(
         leaders,
         skins,
         gem_bundles: gem_bundles(),
-        laurels,
+        web_checkout_available: false,
+        crowns,
         gems,
     }
 }
@@ -349,8 +410,23 @@ mod tests {
 
     #[test]
     fn leader_has_dual_currency_price() {
-        assert_eq!(LEADER_UNLOCK_COST_LAURELS, 500);
+        assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
         assert_eq!(LEADER_UNLOCK_COST_GEMS, 1_500);
         assert!(skins().iter().map(|skin| skin.cost_gems).sum::<u64>() > GEM_BUNDLES[2].1);
+    }
+
+    #[test]
+    fn crown_catalog_reads_and_writes_the_legacy_balance_key() {
+        let owned = BTreeSet::new();
+        let catalog = catalog_for_profile(&owned, &owned, 725, 0, 0);
+        let legacy = serde_json::to_value(&catalog).unwrap();
+        assert_eq!(legacy["laurels"], 725);
+
+        let mut current = legacy.as_object().unwrap().clone();
+        let amount = current.remove("laurels").unwrap();
+        current.insert("crowns".to_string(), amount);
+        let decoded: StoreCatalog =
+            serde_json::from_value(serde_json::Value::Object(current)).unwrap();
+        assert_eq!(decoded.crowns, 725);
     }
 }

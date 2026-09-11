@@ -190,7 +190,7 @@ impl SowApp {
             self.ui.app.hud_state.is_tutorial = self.ui.tutorial_active;
             self.ui.app.main_menu_state.account_level = self.progress.level;
             self.ui.app.main_menu_state.account_xp = self.progress.xp;
-            self.ui.app.main_menu_state.laurels = self.progress.laurels;
+            self.ui.app.main_menu_state.crowns = self.progress.crowns;
             self.ui.app.main_menu_state.selected_skin = self.progress.selected_skin.clone();
             let rotation_period = web_time::SystemTime::now()
                 .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -200,7 +200,7 @@ impl SowApp {
             self.ui.app.main_menu_state.store_catalog = sow_data::commerce::catalog_for_profile(
                 &self.progress.owned_leaders,
                 &self.progress.owned_skins,
-                self.progress.laurels,
+                self.progress.crowns,
                 self.progress.gems,
                 rotation_period,
             );
@@ -487,7 +487,7 @@ impl SowApp {
                 sow_ui_kit::utils::format_number(player.troops),
                 sow_ui_kit::utils::format_number(player.max_troops)
             );
-            let gold_label = format!("🪙 {}", sow_ui_kit::utils::format_number(player.gold));
+            let gold_label = sow_ui_kit::utils::format_number(player.gold);
             let tiles_label = format!(
                 "🌽 {}",
                 sow_ui_kit::utils::format_number(player.tile_count as f64)
@@ -585,12 +585,29 @@ impl SowApp {
                                 egui::Color32::from_rgb(34, 211, 238),
                             );
                             ui.add_space(6.0);
-                            sow_ui_kit::widgets::emoji_label(
-                                ui,
-                                &info.gold_label,
-                                egui::FontId::proportional(12.0),
-                                egui::Color32::from_rgb(250, 204, 21),
-                            );
+                            ui.horizontal(|ui| {
+                                if let Some(texture) = sow_ui_kit::assets::currency_texture(
+                                    ui.ctx(),
+                                    sow_ui_kit::assets::CurrencyIcon::Gold,
+                                ) {
+                                    ui.add(
+                                        egui::Image::new(&texture)
+                                            .fit_to_exact_size(egui::vec2(16.0, 16.0)),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new(&info.gold_label)
+                                            .font(egui::FontId::proportional(12.0))
+                                            .color(egui::Color32::from_rgb(250, 204, 21)),
+                                    );
+                                } else {
+                                    sow_ui_kit::widgets::emoji_label(
+                                        ui,
+                                        &format!("🪙 {}", info.gold_label),
+                                        egui::FontId::proportional(12.0),
+                                        egui::Color32::from_rgb(250, 204, 21),
+                                    );
+                                }
+                            });
                             ui.add_space(6.0);
                             sow_ui_kit::widgets::emoji_label(
                                 ui,

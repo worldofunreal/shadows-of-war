@@ -42,6 +42,10 @@
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
     }
 
+    function currencyAsset(kind) {
+        return asset("gameplay/currency/" + kind + ".webp");
+    }
+
     function leaderById(id) {
         var leaders = hudState && Array.isArray(hudState.leaders) ? hudState.leaders : [];
         var found = leaders.find(function (leader) { return leader.id === id; });
@@ -70,7 +74,7 @@
             + '  <div class="sow-hud__hover-stats">'
             + '    <span><b id="sow-hud-hover-pct">0%</b> Land</span>'
             + '    <span><b id="sow-hud-hover-troops">0</b> ⚔</span>'
-            + '    <span><b id="sow-hud-hover-gold">0</b> 🪙</span>'
+            + '    <span><b id="sow-hud-hover-gold">0</b> <img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"></span>'
             + '  </div>'
             + '  <div class="sow-hud__hover-buildings" id="sow-hud-hover-blds"></div>'
             + '</div>'
@@ -154,7 +158,7 @@
             + '        <span class="sow-hud__res-bar-text" data-role="troops">0 / 0 ⚔</span>'
             + '      </div>'
             + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="Gold Treasury">'
-            + '        <span class="sow-hud__gold-text" data-role="gold">🪙 0</span>'
+            + '        <span class="sow-hud__gold-text"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b data-role="gold">0</b></span>'
             + '      </div>'
             + '    </div>'
             + '  </div>'
@@ -207,12 +211,12 @@
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">K / D / A</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 5.1L19 10l-4.9 1.9L12 17l-2.1-5.1L5 10l4.9-1.9z"/></svg></span><span class="sow-hud__endgame-stat-label">XP</span><b id="sow-hud-endgame-xp">+0</b></div>'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 4 4 4-6 4 6 4-4-2 10H6zM6 20h12"/></svg></span><span class="sow-hud__endgame-stat-label">LEADER XP</span><b id="sow-hud-endgame-leader-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20c-3-2-5-5-5-9 3 1 5 3 6 6M16 20c3-2 5-5 5-9-3 1-5 3-6 6M9 22h6"/></svg></span><span class="sow-hud__endgame-stat-label">LAURELS</span><b id="sow-hud-endgame-laurels">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">CROWNS</span><b id="sow-hud-endgame-crowns">+0</b></div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="Featured skin offer">'
             + '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>'
             + '      <span class="sow-hud__endgame-store-copy"><b id="sow-hud-endgame-store-name">FEATURED SKIN</b><small id="sow-hud-endgame-store-copy">ORIGINAL SOW COSMETIC</small></span>'
-            + '      <button class="sow-hud__endgame-store-state" type="button" data-command="open_store" id="sow-hud-endgame-store-action">VIEW STORE</button>'
+            + '      <button class="sow-hud__endgame-store-state" type="button" data-command="open_store" id="sow-hud-endgame-store-action">VIEW SHOP</button>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-actions">'
             + '      <button class="sow-hud__endgame-secondary hidden" type="button" data-command="continue_observing" id="sow-hud-endgame-observe"><span aria-hidden="true">◉</span> CONTINUE AS OBSERVER</button>'
@@ -292,7 +296,7 @@
             endgameKda: document.getElementById("sow-hud-endgame-kda"),
             endgameXp: document.getElementById("sow-hud-endgame-xp"),
             endgameLeaderXp: document.getElementById("sow-hud-endgame-leader-xp"),
-            endgameLaurels: document.getElementById("sow-hud-endgame-laurels"),
+            endgameCrowns: document.getElementById("sow-hud-endgame-crowns"),
             endgameStore: document.getElementById("sow-hud-endgame-store"),
             endgameStoreName: document.getElementById("sow-hud-endgame-store-name"),
             endgameStoreCopy: document.getElementById("sow-hud-endgame-store-copy"),
@@ -501,7 +505,7 @@
         var isDeploying = spawnSecs != null && spawnSecs > 0;
 
         if (hudRefs.gold && hudRefs.gold.dataset.val !== String(gold)) {
-            hudRefs.gold.textContent = '🪙 ' + gold.toLocaleString();
+            hudRefs.gold.textContent = gold.toLocaleString();
             hudRefs.gold.dataset.val = String(gold);
         }
 
@@ -541,7 +545,7 @@
                 if (hudRefs.hoverName) hudRefs.hoverName.textContent = hov.name || "Territory";
                 if (hudRefs.hoverPct) hudRefs.hoverPct.textContent = Math.round((hov.territory_pct || 0) * 100) + "%";
                 if (hudRefs.hoverTroops) hudRefs.hoverTroops.textContent = (hov.troops > 1000 ? (hov.troops / 1000).toFixed(1) + "k" : Math.floor(hov.troops || 0)) + " ⚔";
-                if (hudRefs.hoverGold) hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0) + " 🪙";
+                if (hudRefs.hoverGold) hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
                 if (hudRefs.hoverBlds) {
                     var bldText = [];
                     if (hov.cities > 0) bldText.push("🏛️ x" + hov.cities);
@@ -677,7 +681,7 @@
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
                 if (hudRefs.endgameLeaderXp) hudRefs.endgameLeaderXp.textContent = "+" + (rewards.leader_xp || 0);
-                if (hudRefs.endgameLaurels) hudRefs.endgameLaurels.textContent = "+" + (rewards.laurels || 0);
+                if (hudRefs.endgameCrowns) hudRefs.endgameCrowns.textContent = "+" + (rewards.crowns == null ? (rewards.laurels || 0) : rewards.crowns);
                 var featuredSkin = hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {

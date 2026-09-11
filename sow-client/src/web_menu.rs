@@ -67,6 +67,7 @@ enum WebMenuCommand {
         lobby_id: u64,
         target_player_id: u16,
     },
+    RefreshProfile,
     SignIn,
     SignOut,
     SetMute {
@@ -497,6 +498,9 @@ impl SowApp {
                             target_player_id,
                         }),
                     );
+                }
+                WebMenuCommand::RefreshProfile => {
+                    self.fetch_cloud_progress();
                 }
                 WebMenuCommand::SignIn => {
                     crate::store_portals::show_auth_prompt();
@@ -1135,7 +1139,7 @@ fn build_hud_payload(app: &SowApp) -> serde_json::Value {
         sow_data::commerce::catalog_for_profile(
             &app.progress.owned_leaders,
             &app.progress.owned_skins,
-            app.progress.laurels,
+            app.progress.crowns,
             app.progress.gems,
             rotation_period,
         )
@@ -1264,7 +1268,8 @@ fn build_hud_payload(app: &SowApp) -> serde_json::Value {
             payload["rewards"] = serde_json::json!({
                 "xp": reward.xp,
                 "leader_xp": reward.leader_xp,
-                "laurels": reward.laurels,
+                "crowns": reward.crowns,
+                "laurels": reward.crowns,
             });
         }
     }
@@ -1341,13 +1346,24 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         app.ui.leaderboard_rankings.clear();
         let rotation_period = ((js_sys::Date::now().max(0.0) / 1000.0) as u64)
             / sow_data::commerce::ROTATION_PERIOD_SECS;
-        let store_catalog = sow_data::commerce::catalog_for_profile(
+        let mut store_catalog = sow_data::commerce::catalog_for_profile(
             &progress.owned_leaders,
             &progress.owned_skins,
-            progress.laurels,
+            progress.crowns,
             progress.gems,
             rotation_period,
         );
+        // Direct products are enabled only by the authenticated store catalog
+        // endpoint after provider mappings have been verified. Do not render
+        // placeholder purchase buttons during the initial frame.
+        for leader in &mut store_catalog.leaders {
+            leader.direct_product_id.clear();
+            leader.direct_price_label.clear();
+        }
+        for skin in &mut store_catalog.skins {
+            skin.direct_product_id.clear();
+            skin.direct_price_label.clear();
+        }
         let leaders: Vec<serde_json::Value> = sow_core::player::Leader::ALL
             .into_iter()
             .map(|leader| {
@@ -1363,7 +1379,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                     "free_rotation": free_rotation,
                     "owned": owned,
                     "available": free_rotation || owned,
-                    "cost_laurels": sow_data::commerce::LEADER_UNLOCK_COST_LAURELS,
+                    "cost_crowns": sow_data::commerce::LEADER_UNLOCK_COST_CROWNS,
+                    "cost_laurels": sow_data::commerce::LEADER_UNLOCK_COST_CROWNS,
                     "cost_gems": sow_data::commerce::LEADER_UNLOCK_COST_GEMS,
                 })
             })
@@ -1429,7 +1446,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "notice": notice_name(state.notice),
             "level": progress.level,
             "xp": progress.xp,
-            "laurels": progress.laurels,
+            "crowns": progress.crowns,
+            "laurels": progress.crowns,
             "gems": progress.gems,
             "selected_skin": progress.selected_skin,
             "store": store_catalog,

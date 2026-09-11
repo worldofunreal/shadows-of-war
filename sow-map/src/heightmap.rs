@@ -1,4 +1,4 @@
-//! OpenFront-style world heightmap sampling for OSM hybrid classify.
+//! Source-encoded world heightmap sampling for OSM hybrid classification.
 //!
 //! Reads `giantworldmap`-style `image.png` where the blue channel encodes elevation
 //! (MapGenerator rules: water `blue == 106` or `alpha < 20`; land `blue` 140–200).
@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 
 static WORLD_HEIGHTMAP: OnceLock<Result<WorldHeightmap, String>> = OnceLock::new();
 
-/// Equirectangular world heightmap (OpenFront `giantworldmap` asset).
+/// Equirectangular world heightmap (`giantworldmap` source asset).
 #[derive(Clone)]
 pub struct WorldHeightmap {
     img: RgbaImage,
@@ -62,18 +62,18 @@ impl WorldHeightmap {
         self.img.height()
     }
 
-    /// Sample MapGenerator blue value at WGS84 lon/lat (equirectangular projection).
-    pub fn sample_openfront_blue(&self, lon: f64, lat: f64) -> u8 {
+    /// Sample the source blue value at WGS84 lon/lat (equirectangular projection).
+    pub fn sample_source_blue(&self, lon: f64, lat: f64) -> u8 {
         let w = self.img.width().max(1) as f64;
         let h = self.img.height().max(1) as f64;
         let x = ((lon + 180.0) / 360.0 * w).clamp(0.0, w - 1.0) as u32;
         let y = ((90.0 - lat.clamp(-90.0, 90.0)) / 180.0 * h).clamp(0.0, h - 1.0) as u32;
-        openfront_blue_from_rgba(self.img.get_pixel(x, y).0)
+        source_blue_from_rgba(self.img.get_pixel(x, y).0)
     }
 }
 
-/// MapGenerator pixel → encoded blue channel.
-pub fn openfront_blue_from_rgba(px: [u8; 4]) -> u8 {
+/// Source-map pixel → encoded blue channel.
+pub fn source_blue_from_rgba(px: [u8; 4]) -> u8 {
     let [_r, _g, b, a] = px;
     if a < 20 || b == 106 { 106 } else { b }
 }
@@ -155,10 +155,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn openfront_blue_water_and_land() {
-        assert_eq!(openfront_blue_from_rgba([0, 0, 106, 255]), 106);
-        assert_eq!(openfront_blue_from_rgba([0, 0, 106, 0]), 106);
-        assert_eq!(openfront_blue_from_rgba([0, 0, 180, 255]), 180);
+    fn source_blue_water_and_land() {
+        assert_eq!(source_blue_from_rgba([0, 0, 106, 255]), 106);
+        assert_eq!(source_blue_from_rgba([0, 0, 106, 0]), 106);
+        assert_eq!(source_blue_from_rgba([0, 0, 180, 255]), 180);
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod tests {
             return;
         }
         let hm = WorldHeightmap::load().expect("heightmap");
-        let blue = hm.sample_openfront_blue(-110.0, 45.0);
+        let blue = hm.sample_source_blue(-110.0, 45.0);
         assert_ne!(blue, 106, "Rockies should not be water");
         let mag = (blue.clamp(140, 200) as i32 - 140) / 2;
         assert!((0..=30).contains(&mag), "magnitude {mag} from blue {blue}");

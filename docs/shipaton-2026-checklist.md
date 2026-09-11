@@ -62,7 +62,7 @@ Required end-to-end behavior:
 6. Restore/reconciliation recovers a valid purchase.
 
 Consumable gem bundles are not entitlements. The server owns the balance and validates every grant.
-Leaders use the rotation/laurel system; original SOW skins use gems.
+Leaders use the rotation/crown system; original SOW skins use gems.
 
 The web checkout is a separate Stripe-backed RevenueCat flow. Do not create a second Stripe account,
 second RevenueCat project, duplicate products, or a second checkout architecture.

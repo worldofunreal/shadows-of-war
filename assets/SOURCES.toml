@@ -41,6 +41,13 @@ source = "original"
 license = "AGPL-3.0-or-later"
 files = ["sow.svg", "tower.svg", "sow-long.svg", "app-icon.png"]
 
+[shell_shop_icon]
+path = "assets/shell/mobile-nav/"
+source = "user_supplied"
+license = "Project-owner supplied; cleared for distribution"
+files = ["store.webp"]
+notes = "Shared SHOP navigation icon for web and native clients."
+
 [site_media]
 path = "assets/site/media/"
 source = "original_and_ai_generated"
@@ -67,6 +74,20 @@ source = "placeholder_and_original"
 license = "AGPL-3.0-or-later"
 notes = "In-match HUD/audio/UI assets only."
 
+[gameplay_currency]
+path = "assets/gameplay/currency/"
+source = "user_supplied"
+license = "Project-owner supplied; cleared for distribution"
+files = ["crown.webp", "gem.webp", "gold.webp"]
+notes = "Optimized transparent currency icons shared by the shop and gameplay HUD."
+
+[gameplay_store]
+path = "assets/gameplay/store/gem_bundles/"
+source = "user_supplied"
+license = "Project-owner supplied; cleared for distribution"
+files = ["sow_gems_500.webp", "sow_gems_1200.webp", "sow_gems_2600.webp"]
+notes = "Optimized transparent gem-bundle artwork for the three configured products."
+
 [gameplay_fonts]
 path = "assets/gameplay/fonts/"
 source = "google_fonts"
@@ -86,7 +107,7 @@ notes = "Curated glyphs packed by sow-tools pack-emoji-atlas."
 [maps]
 path = "assets/maps/"
 source = "image_and_osm"
-notes = "Single canonical map library for the online service and the WASM world-map embed. No static mirror."
+notes = "Single canonical map library for the online service and the WASM world-map embed. OpenFront-derived image recipes and their license are documented in assets/maps/SOURCES.toml; OSM maps retain their own source terms. No static mirror."
 
 [campaign]
 path = "assets/campaign/"

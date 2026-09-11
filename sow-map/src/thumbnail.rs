@@ -58,9 +58,9 @@ pub fn write_source_thumbnail(
     write_rendered_source_thumbnail(&rendered, frame, path)
 }
 
-/// Render an OpenFront authoring image once so multiple map frames can reuse it.
+/// Render a categorical authoring image once so multiple map frames can reuse it.
 pub fn render_source_image(source: &DynamicImage) -> Result<RgbaImage, String> {
-    render_openfront_source(source)
+    render_source_image_impl(source)
 }
 
 pub fn render_source_file(source_path: &Path) -> Result<RgbaImage, String> {
@@ -154,7 +154,7 @@ fn center_crop_square(img: &DynamicImage) -> DynamicImage {
     img.crop_imm(x, y, side, side)
 }
 
-fn render_openfront_source(source: &DynamicImage) -> Result<RgbaImage, String> {
+fn render_source_image_impl(source: &DynamicImage) -> Result<RgbaImage, String> {
     let source = source.to_rgba8();
     let (width, height) = source.dimensions();
     let count = usize::try_from(u64::from(width) * u64::from(height))

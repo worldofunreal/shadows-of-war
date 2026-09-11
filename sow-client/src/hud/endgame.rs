@@ -297,8 +297,18 @@ impl SowApp {
                                         ),
                                     );
                                     ui.separator();
+                                    if let Some(texture) = sow_ui_kit::assets::currency_texture(
+                                        ui.ctx(),
+                                        sow_ui_kit::assets::CurrencyIcon::Crown,
+                                    ) {
+                                        let size = if is_mobile { 16.0 } else { 19.0 };
+                                        ui.add(
+                                            egui::Image::new(&texture)
+                                                .fit_to_exact_size(egui::vec2(size, size)),
+                                        );
+                                    }
                                     ui.label(
-                                        RichText::new(format!("+{} Laurels", reward.laurels))
+                                        RichText::new(format!("+{} Crowns", reward.crowns))
                                             .color(
                                                 Color32::from_rgb(220, 180, 90)
                                                     .linear_multiply(alpha),

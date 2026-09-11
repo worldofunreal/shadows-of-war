@@ -112,7 +112,7 @@ pub struct MainMenuState {
     /// Compact account progression shown beside the identity header.
     pub account_level: u32,
     pub account_xp: u32,
-    pub laurels: u64,
+    pub crowns: u64,
     /// Authoritative commerce snapshot copied from the client profile.
     pub store_catalog: sow_data::commerce::StoreCatalog,
     pub selected_skin: Option<String>,
@@ -189,7 +189,7 @@ impl Default for MainMenuState {
             safe_area_bottom: 0.0,
             account_level: 1,
             account_xp: 0,
-            laurels: 0,
+            crowns: 0,
             store_catalog: sow_data::commerce::catalog_for_profile(
                 &empty_leaders,
                 &empty_skins,
@@ -534,7 +534,7 @@ fn draw_command_panel(
 }
 
 fn draw_store_home_button(ui: &mut egui::Ui, height: f32, action: &mut Option<UiAction>) {
-    let store = crate::widgets::ThemeButton::new("STORE  ↗")
+    let store = crate::widgets::ThemeButton::new("SHOP  ↗")
         .style(crate::widgets::ThemeButtonStyle::Tertiary)
         .min_size(egui::vec2(ui.available_width(), height))
         .text_size(15.0);

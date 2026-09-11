@@ -293,12 +293,26 @@ fn draw_progression(ui: &mut Ui, state: &MainMenuState) -> egui::Response {
     );
     ui.painter()
         .rect_filled(fill, 2.0, crate::kit::theme::palette::neon_cyan());
+    let crown_rect = Rect::from_min_size(
+        egui::pos2(xp_right + 8.0, rect.center().y - 9.0),
+        egui::vec2(18.0, 18.0),
+    );
+    if let Some(texture) =
+        crate::kit::assets::currency_texture(ui.ctx(), crate::kit::assets::CurrencyIcon::Crown)
+    {
+        ui.painter().image(
+            texture.id(),
+            crown_rect,
+            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+    }
     ui.painter().text(
-        egui::pos2(xp_right + 10.0, rect.center().y),
+        egui::pos2(xp_right + 30.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        format!("{} L", state.laurels),
+        format!("{}", state.crowns),
         egui::FontId::proportional(12.0),
-        crate::kit::theme::palette::neon_gold(),
+        crate::kit::theme::palette::neon_crown(),
     );
     response
 }

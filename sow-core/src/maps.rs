@@ -11,7 +11,7 @@ pub const SERVER_MAPS_ROOT: &str = "assets/maps";
 /// Repo path for the canonical map library. The client embeds `world/` from this same tree.
 pub const BUNDLED_MAPS_ROOT: &str = "assets/maps";
 
-/// Mobile-safe upper bound (~OpenFront Pangaea: 1000×1000).
+/// Mobile-safe upper bound (1000×1000 baseline).
 pub const MAX_MAP_PIXELS: u32 = 1_000_000;
 /// Max width or height when targeting [`MAX_MAP_PIXELS`].
 pub const MAX_MAP_AXIS: u32 = 1_000;

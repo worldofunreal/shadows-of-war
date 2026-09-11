@@ -53,7 +53,7 @@ pub(super) struct Step {
 // objectives here as we build them out.
 // Guide: 9 trials — start with expansion (tap to claim), learn combat (drag to attack),
 // unite the east, then burn Rome's cities and ambush a legion. Final modal releases to
-// the main menu with 100 Laurels; Stay keeps you fighting for honor.
+// the main menu with 100 Crowns; Stay keeps you fighting for honor.
 pub(super) const CHAPTER_1: &[Step] = &[
     Step {
         title: "Rise of the Iceni",
@@ -106,10 +106,10 @@ pub(super) const CHAPTER_1: &[Step] = &[
     // Terminal step: reaching it pops the Final Battle modal (Continue / Stay and fight) in `mod.rs`.
     // Its trigger never gates progression (it's last), but targeting Paulinus keeps the objective row
     // honest if the player stays and actually beats him. Continue releases to the main menu with
-    // 100 Laurels earned; Stay keeps you on the map for honor.
+    // 100 Crowns earned; Stay keeps you on the map for honor.
     Step {
         title: "The Final Battle",
-        body: "Tutorial complete. You have mastered expansion, combat, and siege. Suetonius Paulinus approaches with the main imperial force. Continue to return to the main menu (100 Laurels earned) or Stay to finish the engagement.",
+        body: "Tutorial complete. You have mastered expansion, combat, and siege. Suetonius Paulinus approaches with the main imperial force. Continue to return to the main menu (100 Crowns earned) or Stay to finish the engagement.",
         hint: "Continue to menu or defeat Paulinus",
         advance: Trigger::DefeatedPlayer("Legio XIV Gemina"),
     },

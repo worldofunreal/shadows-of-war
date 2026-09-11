@@ -1,4 +1,4 @@
-//! Import OpenFront-style map folders (PNG + info.json, or legacy map.bin + manifest.json).
+//! Import map-source folders (PNG + info.json, or legacy map.bin + manifest.json).
 
 use serde_json::Value;
 use sow_core::map_file::{self, MapFile, MapSpawn};
@@ -24,7 +24,7 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| input.file_name().unwrap().to_string_lossy().to_string());
     let slug = sow_core::maps::map_key(&slug);
 
-    // Display name from OpenFront info.json ("Africa", "Europe", ...); fall back to slug.
+    // Display name from the source info.json ("Africa", "Europe", ...); fall back to slug.
     let display_name = read_info_json_name(&input).unwrap_or_else(|| slug.clone());
 
     let map_file = if input.join("image.png").exists() {
@@ -54,12 +54,12 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
         write_placeholder_thumbnail(&map_file, &thumb_path)?;
     }
 
-    // Persist the OpenFront `multiplayer_frequency` as info.toml so the server's
+    // Persist the source `multiplayer_frequency` as info.toml so the server's
     // catalog scan can build weighted playlists (0 = out of rotation).
     let frequency = read_info_json_frequency(&input);
     fs::write(
         out_dir.join("info.toml"),
-        format!("# Written by sow-tools import-openfront\nfrequency = {frequency}\n"),
+        format!("# Written by sow-tools import-map-source\nfrequency = {frequency}\n"),
     )?;
 
     refresh_catalog(&args.maps_root)?;
@@ -77,8 +77,8 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// `multiplayer_frequency` from an OpenFront `info.json` (absent → 0, matching
-/// OpenFront: omitted/0 keeps the map out of the regular rotation).
+/// `multiplayer_frequency` from a source `info.json` (absent → 0, matching
+/// the source schema: omitted/0 keeps the map out of the regular rotation).
 fn read_info_json_frequency(dir: &Path) -> u32 {
     let Ok(blob) = fs::read_to_string(dir.join("info.json")) else {
         return 0;
@@ -91,7 +91,7 @@ fn read_info_json_frequency(dir: &Path) -> u32 {
         .unwrap_or(0) as u32
 }
 
-/// `name` from an OpenFront `info.json` (used as the catalog display name).
+/// `name` from a source `info.json` (used as the catalog display name).
 fn read_info_json_name(dir: &Path) -> Option<String> {
     let blob = fs::read_to_string(dir.join("info.json")).ok()?;
     let info: Value = serde_json::from_str(&blob).ok()?;
@@ -104,31 +104,23 @@ fn import_from_png(dir: &Path, display_name: &str) -> Result<MapFile, Box<dyn st
     let png_path = dir.join("image.png");
     let original = image::open(&png_path)?;
     let (src_w, src_h) = (original.width(), original.height());
-    // OpenFront source PNGs are huge (up to ~5M tiles). Clamp to the project's
-    // MAX_MAP_PIXELS, preserving aspect, before generating the map.
-    let (target_w, target_h) =
-        clamp_map_dimensions_proportional(src_w, src_h, sow_core::maps::MAX_MAP_PIXELS);
-    let img = if target_w != src_w || target_h != src_h {
-        // Source colors are categorical terrain labels; interpolation would invent land/water colors.
-        original.resize(target_w, target_h, image::imageops::FilterType::Nearest)
-    } else {
-        original
-    };
-    let rgba = img.to_rgba8();
-    let width = rgba.width();
-    let height = rgba.height();
-    let result = sow_map::generate_from_rgba(&rgba, Some((width, height)))
+    // Keep the full categorical source intact until the image pipeline's
+    // water-aware downscale. The target uses the same mobile-safe dimensions
+    // as the canonical image-map path, including the axis cap.
+    let (target_w, target_h) = sow_map::image_pipeline::mobile_safe_dims(src_w, src_h);
+    let rgba = original.to_rgba8();
+    let result = sow_map::generate_from_rgba(&rgba, Some((target_w, target_h)))
         .map_err(|e| format!("image pipeline: {e}"))?;
 
     let mut spawns = load_info_json_spawns(dir)?;
     // Spawn coordinates come from the native-resolution info.json — scale them
     // down with the image so they stay on land after clamping.
-    if src_w != width || src_h != height {
+    if src_w != target_w || src_h != target_h {
         for s in &mut spawns {
-            let rx = (s.x as f64 * (width as f64 / src_w as f64)).round() as u32;
-            let ry = (s.y as f64 * (height as f64 / src_h as f64)).round() as u32;
-            s.x = rx.min(width.saturating_sub(1));
-            s.y = ry.min(height.saturating_sub(1));
+            let rx = (s.x as f64 * (target_w as f64 / src_w as f64)).round() as u32;
+            let ry = (s.y as f64 * (target_h as f64 / src_h as f64)).round() as u32;
+            s.x = rx.min(target_w.saturating_sub(1));
+            s.y = ry.min(target_h.saturating_sub(1));
         }
     }
 

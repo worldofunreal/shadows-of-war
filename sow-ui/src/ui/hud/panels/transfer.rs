@@ -236,11 +236,19 @@ pub(in crate::ui::hud) fn draw_transfer_panel(
                         ui.group(|ui| {
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
-                                    crate::widgets::emoji_label(
-                                        ui,
-                                        "🪙 Gold",
-                                        egui::FontId::proportional(15.0),
-                                        Color32::WHITE,
+                                    if let Some(texture) = crate::kit::assets::currency_texture(
+                                        ui.ctx(),
+                                        crate::kit::assets::CurrencyIcon::Gold,
+                                    ) {
+                                        ui.add(
+                                            egui::Image::new(&texture)
+                                                .fit_to_exact_size(egui::vec2(20.0, 20.0)),
+                                        );
+                                    }
+                                    ui.label(
+                                        RichText::new("Gold")
+                                            .font(egui::FontId::proportional(15.0))
+                                            .color(Color32::WHITE),
                                     );
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),

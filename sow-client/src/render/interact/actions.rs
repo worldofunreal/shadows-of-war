@@ -402,7 +402,7 @@ impl SowApp {
             .filter(|value| !value.trim().is_empty())
         else {
             self.ui.app.main_menu_state.error_message =
-                Some("Online purchases are not configured for this desktop build.".into());
+                Some("Store purchases are not configured for this desktop build.".into());
             return;
         };
         let encoded_user =
@@ -418,7 +418,7 @@ impl SowApp {
         if let Err(error) = open::that(&url) {
             log::error!("[store] failed to open RevenueCat checkout: {error}");
             self.ui.app.main_menu_state.error_message =
-                Some("Could not open the online checkout.".into());
+                Some("Could not open the store checkout.".into());
         } else {
             log::info!("[store] opened RevenueCat checkout for gem bundle");
             self.ui.app.main_menu_state.error_message = None;

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Signing in… | Shadows of War</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0a0a0e; color: #e4e4e7; padding: 1.5rem;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .card {
+      max-width: 26rem; width: 100%; padding: 2rem; border-radius: 1.25rem;
+      background: rgba(9, 9, 11, .92); border: 1px solid rgba(255, 255, 255, .12);
+      text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, .8);
+    }
+    .spin {
+      width: 2.5rem; height: 2.5rem; margin: 0 auto 1rem;
+      border: 4px solid rgba(255, 255, 255, .15); border-top-color: #22d3ee;
+      border-radius: 50%; animation: sp 0.8s linear infinite;
+    }
+    @keyframes sp { to { transform: rotate(360deg); } }
+    h1 { font-size: 1.2rem; letter-spacing: -0.01em; margin-bottom: .5rem; }
+    p { font-size: .8rem; color: #a1a1aa; font-family: ui-monospace, monospace; }
+    .hidden { display: none !important; }
+    .err-icon {
+      width: 3rem; height: 3rem; margin: 0 auto 1rem; border-radius: 50%;
+      background: rgba(239, 68, 68, .15); color: #f87171;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; font-weight: bold;
+    }
+    #cb-error-msg { color: #f87171; margin-bottom: 1rem; word-break: break-word; }
+    a.btn {
+      display: inline-block; padding: .8rem 1.6rem; border-radius: .8rem;
+      background: #fff; color: #09090b; font-weight: bold; font-size: .8rem;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="cb-loading">
+      <div class="spin"></div>
+      <h1>Signing you in…</h1>
+      <p>Finishing secure sign-in with Shadows of War</p>
+    </div>
+    <div id="cb-error" class="hidden">
+      <div class="err-icon">✕</div>
+      <h1>Sign-in failed</h1>
+      <p id="cb-error-msg"></p>
+      <a class="btn" href="/">Back to Shadows of War</a>
+    </div>
+  </div>
+
+  <script type="module" src="/wou-auth.js"></script>
+  <script type="module">
+    const loadingEl = document.getElementById('cb-loading');
+    const errorEl = document.getElementById('cb-error');
+    const errorMsgEl = document.getElementById('cb-error-msg');
+
+    function fail(msg) {
+      loadingEl?.classList.add('hidden');
+      errorEl?.classList.remove('hidden');
+      if (errorMsgEl) errorMsgEl.textContent = msg;
+    }
+
+    // SDK arrives async from CDN — wait for it, with a fail-safe timeout.
+    function sdkReady() {
+      return new Promise((resolve) => {
+        if (typeof window.wouAuth !== 'undefined') return resolve(window.wouAuth);
+        window.addEventListener('wou:auth-sdk-ready', () => resolve(window.wouAuth), { once: true });
+        setTimeout(() => resolve(window.wouAuth), 10000);
+      });
+    }
+
+    // State was written by loginWithOAuth: { returnTo, accountId, provider }.
+    function decodeState(raw) {
+      if (!raw) return {};
+      try {
+        let b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+        while (b64.length % 4 !== 0) b64 += '=';
+        const obj = JSON.parse(decodeURIComponent(escape(atob(b64))));
+        if (obj && typeof obj === 'object') return obj;
+      } catch {}
+      try {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object') return obj;
+      } catch {}
+      return {};
+    }
+
+    // Open-redirect guard: same-origin paths only, never absolute URLs.
+    function safeReturnTo(raw) {
+      try {
+        const target = new URL(raw || '/', window.location.origin);
+        if (target.origin !== window.location.origin) return '/';
+        return `${target.pathname}${target.search}${target.hash}` || '/';
+      } catch {
+        return '/';
+      }
+    }
+
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code') || '';
+      const stateObj = decodeState(params.get('state'));
+
+      let provider = stateObj.provider || '';
+      if (!provider) {
+        try { provider = sessionStorage.getItem('wou_oauth_provider') || ''; } catch {}
+      }
+      if (!provider) provider = params.get('provider') || '';
+
+      if (!code) return fail('No authorization code received from provider.');
+      if (!provider) return fail('Could not determine provider. Please sign in again.');
+
+      const auth = await sdkReady();
+      if (!auth) return fail('Identity service failed to load. Check your connection and retry.');
+
+      try {
+        // Same origin: the session lands in this origin's localStorage,
+        // so we just go back — no token ever touches the URL.
+        await auth.handleOAuthCallback(provider, code, {
+          redirectUri: `${window.location.origin}/auth/callback`,
+        });
+        window.location.replace(safeReturnTo(stateObj.returnTo));
+      } catch (err) {
+        fail((err && err.message) || 'Failed to exchange authorization code.');
+      }
+    })();
+  </script>
+</body>
+</html>

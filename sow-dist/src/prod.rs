@@ -140,6 +140,10 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         println!("  runtime env drift: Play Games Services configuration");
         plan.database = true;
     }
+    if stripe_config_drift(&config)? {
+        println!("  runtime env drift: Stripe/RevenueCat checkout configuration");
+        plan.database = true;
+    }
     println!("  plan: {plan:?}");
 
     if !plan.any() {
@@ -666,14 +670,18 @@ fn validate_android_release_inputs(paths: &Paths) -> Result<()> {
         .context("assetlinks.json must contain an array")?;
     for package in ["com.shadowsofwar", "com.shadowsofwar.debug"] {
         let found = statements.iter().any(|statement| {
-            statement
-                .get("relation")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|relations| {
-                    relations.iter().any(|relation| {
-                        relation.as_str() == Some("delegate_permission/common.handle_all_urls")
+                statement
+                    .get("relation")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|relations| {
+                        relations.iter().any(|relation| {
+                            relation.as_str()
+                                == Some("delegate_permission/common.handle_all_urls")
+                        }) && relations.iter().any(|relation| {
+                            relation.as_str()
+                                == Some("delegate_permission/common.use_as_origin")
+                        })
                     })
-                })
                 && statement
                     .get("target")
                     .and_then(|target| target.get("namespace"))
@@ -1941,6 +1949,75 @@ fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {
     })
 }
 
+fn stripe_config_drift(config: &Config) -> Result<bool> {
+    const KEYS: [&str; 4] = [
+        "SOW_STRIPE_SECRET_KEY",
+        "SOW_STRIPE_PUBLISHABLE_KEY",
+        "SOW_STRIPE_WEBHOOK_SECRET",
+        "SOW_REVENUECAT_STRIPE_API_KEY",
+    ];
+    let values = KEYS
+        .iter()
+        .map(|key| {
+            env::var(key)
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| (*key, value))
+        })
+        .collect::<Vec<_>>();
+    let configured = values.iter().filter(|value| value.is_some()).count();
+    if configured == 0 {
+        return Ok(false);
+    }
+    if configured != KEYS.len() {
+        bail!(
+            "SOW_STRIPE_SECRET_KEY, SOW_STRIPE_PUBLISHABLE_KEY, SOW_STRIPE_WEBHOOK_SECRET, and SOW_REVENUECAT_STRIPE_API_KEY must be configured together"
+        );
+    }
+
+    let expected = values
+        .into_iter()
+        .flatten()
+        .map(|(key, value)| format!("{key}={:x}", Sha256::digest(value.as_bytes())))
+        .collect::<Vec<_>>();
+    let command = r#"set -eu
+for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do
+    if sudo test -f "$f"; then
+        printf 'FILE=%s\n' "$f"
+        for key in SOW_STRIPE_SECRET_KEY SOW_STRIPE_PUBLISHABLE_KEY SOW_STRIPE_WEBHOOK_SECRET SOW_REVENUECAT_STRIPE_API_KEY; do
+            value=$(sudo awk -F= -v k="$key" '$1 == k { sub(/^[^=]*=/, ""); print; exit }' "$f")
+            if [ -n "$value" ]; then
+                printf '%s=' "$key"
+                printf %s "$value" | sha256 -q
+            else
+                printf '%s=missing\n' "$key"
+            fi
+        done
+    else
+        printf 'FILE=%s\nmissing\n' "$f"
+    fi
+done"#;
+    let remote = output("ssh", &[&config.control_host, command])?;
+    let mut matched_files = 0usize;
+    let mut file_hasher = false;
+    for line in remote.lines() {
+        if line.starts_with("FILE=") {
+            if file_hasher {
+                matched_files += 1;
+            }
+            file_hasher = true;
+            continue;
+        }
+        if !expected.iter().any(|entry| entry == line) {
+            file_hasher = false;
+        }
+    }
+    if file_hasher {
+        matched_files += 1;
+    }
+    Ok(matched_files != 3)
+}
+
 fn maps_catalog_path_drift(config: &Config) -> Result<bool> {
     let expected = env_or("SOW_MAPS_CATALOG_PATH", "/var/db/sow/server/catalog.bin");
     let remote = output(
@@ -2076,6 +2153,55 @@ fn activate_control_host(
     } else {
         None
     };
+    let stripe_secret = env::var("SOW_STRIPE_SECRET_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let stripe_publishable = env::var("SOW_STRIPE_PUBLISHABLE_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let stripe_webhook_secret = env::var("SOW_STRIPE_WEBHOOK_SECRET")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let revenuecat_stripe_key = env::var("SOW_REVENUECAT_STRIPE_API_KEY")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let stripe_values_present = stripe_secret.is_some()
+        || stripe_publishable.is_some()
+        || stripe_webhook_secret.is_some()
+        || revenuecat_stripe_key.is_some();
+    let stripe_values_complete = stripe_secret.is_some()
+        && stripe_publishable.is_some()
+        && stripe_webhook_secret.is_some()
+        && revenuecat_stripe_key.is_some();
+    if stripe_values_present && !stripe_values_complete {
+        bail!(
+            "SOW_STRIPE_SECRET_KEY, SOW_STRIPE_PUBLISHABLE_KEY, SOW_STRIPE_WEBHOOK_SECRET, and SOW_REVENUECAT_STRIPE_API_KEY must be configured together"
+        );
+    }
+    let stripe_secret_file = if stripe_values_complete {
+        let value = stripe_secret.as_deref().unwrap();
+        let path = format!("/tmp/sow-stripe-secret-{}", std::process::id());
+        stage_secret(&config.control_host, value, &path)?;
+        Some(path)
+    } else {
+        None
+    };
+    let stripe_webhook_file = if stripe_values_complete {
+        let value = stripe_webhook_secret.as_deref().unwrap();
+        let path = format!("/tmp/sow-stripe-webhook-{}", std::process::id());
+        stage_secret(&config.control_host, value, &path)?;
+        Some(path)
+    } else {
+        None
+    };
+    let revenuecat_stripe_file = if stripe_values_complete {
+        let value = revenuecat_stripe_key.as_deref().unwrap();
+        let path = format!("/tmp/sow-revenuecat-stripe-{}", std::process::id());
+        stage_secret(&config.control_host, value, &path)?;
+        Some(path)
+    } else {
+        None
+    };
     let play_games_web_client_secret_file = if runtime_env {
         let secret = env::var("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
         let path = format!("/tmp/sow-play-games-client-secret-{}", std::process::id());
@@ -2153,10 +2279,29 @@ fn activate_control_host(
     } else {
         ":".to_string()
     };
+    let stripe_update = if let (Some(secret_file), Some(webhook_file), Some(rc_file)) = (
+        stripe_secret_file.as_deref(),
+        stripe_webhook_file.as_deref(),
+        revenuecat_stripe_file.as_deref(),
+    ) {
+        let publishable = shell_quote(stripe_publishable.as_deref().unwrap());
+        format!(
+            "for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_STRIPE_SECRET_KEY|SOW_STRIPE_PUBLISHABLE_KEY|SOW_STRIPE_WEBHOOK_SECRET|SOW_REVENUECAT_STRIPE_API_KEY)=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'SOW_STRIPE_SECRET_KEY=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s\\n' 'SOW_STRIPE_PUBLISHABLE_KEY={publishable}' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_STRIPE_WEBHOOK_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {webhook_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_REVENUECAT_STRIPE_API_KEY=' | sudo tee -a \"$t\" >/dev/null; sudo cat {rc_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -f {secret_file} {webhook_file} {rc_file}",
+            secret_file = shell_quote(secret_file),
+            publishable = publishable,
+            webhook_file = shell_quote(webhook_file),
+            rc_file = shell_quote(rc_file),
+        )
+    } else {
+        ":".to_string()
+    };
     let secret_files = [
         db_secret_file.as_deref(),
         control_secret_file.as_deref(),
         revenuecat_webhook_file.as_deref(),
+        stripe_secret_file.as_deref(),
+        stripe_webhook_file.as_deref(),
+        revenuecat_stripe_file.as_deref(),
         play_games_web_client_secret_file.as_deref(),
     ]
     .into_iter()
@@ -2243,6 +2388,7 @@ fi
 __ENV_BACKUPS__
 __ENV_UPDATE__
 __REVENUECAT_UPDATE__
+__STRIPE_UPDATE__
 __DATABASE_SECRET_SCRUB__
 __RESOLVER_UPDATE__
 if __DB_RESTART__; then
@@ -2292,6 +2438,7 @@ __SECRET_CLEANUP__
         ("__ENV_UPDATE__", env_update),
         ("__ENV_BACKUPS__", env_backups),
         ("__REVENUECAT_UPDATE__", revenuecat_update),
+        ("__STRIPE_UPDATE__", stripe_update),
         ("__DATABASE_SECRET_SCRUB__", database_secret_scrub),
         ("__RESOLVER_UPDATE__", resolver_update),
         (

@@ -1304,24 +1304,6 @@
     }
 }
 
-@media (max-width: 599px) {
-    #sow-menu .sow-menu__profile {
-        min-width: 0;
-        max-width: 100%;
-    }
-
-    #sow-menu .sow-menu__profile input {
-        font-size: 15px;
-    }
-
-    #sow-menu .sow-menu__profile-link {
-        width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-}
-
 /* Store: leader art carries the visual weight; cards carry the commerce state. */
 #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store {
     width: min(1240px, calc(100% - 48px));
@@ -1387,7 +1369,7 @@
 
 .sow-store__balances span {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
     gap: 7px;
     min-height: 38px;
     padding: 8px 12px;
@@ -1402,6 +1384,25 @@
 .sow-store__balances b {
     color: var(--sow-gold);
     font-size: 16px;
+}
+
+.sow-store__balances strong {
+    color: inherit;
+    font-size: 16px;
+}
+
+.sow-store__currency-icon,
+.sow-store__button-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    object-fit: contain;
+}
+
+.sow-store__balance--crowns {
+    border-color: rgba(192, 132, 252, .42) !important;
+    color: var(--sow-crown-bright) !important;
 }
 
 .sow-store__balances small {
@@ -1601,7 +1602,7 @@
 
 .sow-store__buy {
     display: inline-flex;
-    min-height: 36px;
+    min-height: 44px;
     align-items: center;
     justify-content: center;
     gap: 5px;
@@ -1617,6 +1618,16 @@
     text-decoration: none;
     cursor: pointer;
     transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.sow-store__button-icon {
+    width: 17px;
+    height: 17px;
+}
+
+.sow-store__buy .sow-store__currency-icon {
+    width: 18px;
+    height: 18px;
 }
 
 .sow-store__buy:hover:not(:disabled),
@@ -1686,6 +1697,19 @@
     white-space: nowrap;
 }
 
+.sow-store__bundle-price {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    overflow: visible !important;
+    white-space: nowrap !important;
+}
+
+.sow-store__bundle-price .sow-store__currency-icon {
+    width: 20px;
+    height: 20px;
+}
+
 .sow-store__skin p,
 .sow-store__bundle small {
     margin: 0;
@@ -1700,20 +1724,120 @@
 
 .sow-store__bundle-icon {
     display: grid;
-    width: 38px;
-    height: 38px;
+    width: 58px;
+    height: 58px;
     flex: 0 0 auto;
     place-items: center;
-    border: 1px solid rgba(243, 177, 43, .45);
-    border-radius: 50%;
-    color: var(--sow-gold);
-    font-size: 18px;
+    border: 1px solid rgba(56, 189, 248, .35);
+    border-radius: 7px;
+    object-fit: contain;
 }
 
 #sow-menu[data-screen="store"] button:focus-visible,
 #sow-menu[data-screen="store"] a:focus-visible {
     outline: 2px solid var(--sow-gold-bright);
     outline-offset: 2px;
+}
+
+/* The shop is a focused offer surface. Inventory discovery lives in Heroes. */
+.sow-store__featured {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 150px;
+    margin-top: 18px;
+    padding: 24px;
+    border: 1px solid rgba(243, 177, 43, .58);
+    border-radius: 10px;
+    background: linear-gradient(105deg, rgba(92, 55, 10, .86), rgba(18, 20, 25, .92) 68%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 18px 38px rgba(0, 0, 0, .22);
+}
+
+.sow-store__featured h2 {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #fff;
+    font-size: clamp(24px, 4vw, 36px);
+}
+
+.sow-store__featured h2 .sow-store__currency-icon { width: 30px; height: 30px; }
+.sow-store__featured p:last-child { margin: 8px 0 0; color: rgba(255,255,255,.72); }
+
+.sow-store__link,
+.sow-store__close {
+    border: 0;
+    background: transparent;
+    color: var(--sow-gold-bright);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .1em;
+}
+
+.sow-store__close { padding: 4px 8px; font-size: 20px; line-height: 1; }
+
+.sow-store__promos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.sow-store__promos button {
+    display: grid;
+    gap: 4px;
+    min-height: 92px;
+    padding: 16px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 8px;
+    background: rgba(10, 13, 18, .78);
+    color: #fff;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.sow-store__promos button:hover { border-color: var(--sow-gold); transform: translateY(-2px); }
+.sow-store__promos strong { font-size: 13px; letter-spacing: .12em; }
+.sow-store__promos span { color: var(--sow-muted); font-size: 11px; }
+.sow-store__promos b { color: var(--sow-gold-bright); font-size: 10px; letter-spacing: .1em; }
+
+.sow-store__checkout {
+    margin-top: 18px;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 8px;
+    background: rgba(5, 7, 10, .92);
+}
+
+.sow-store__checkout-host { min-height: 120px; margin-top: 10px; color: var(--sow-muted); }
+.sow-store__checkout-host iframe { width: 100%; min-height: 480px; border: 0; }
+
+.sow-heroes__purchase-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 12px 0;
+}
+
+.sow-heroes__purchase-actions > span {
+    flex-basis: 100%;
+    color: var(--sow-muted);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .12em;
+}
+
+.sow-heroes__purchase-actions .sow-store__buy { min-width: 54px; }
+
+@media (max-width: 520px) {
+    .sow-store__featured { align-items: start; flex-direction: column; padding: 18px; }
+    .sow-store__promos { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {

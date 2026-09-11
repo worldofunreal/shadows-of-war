@@ -550,6 +550,25 @@
     box-shadow: 0 0 10px rgba(234, 179, 8, 0.15);
 }
 
+.sow-hud__gold-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sow-hud__currency-icon {
+    display: inline-block;
+    width: 17px;
+    height: 17px;
+    object-fit: contain;
+    vertical-align: middle;
+}
+
+.sow-hud__currency-icon--gold {
+    width: 16px;
+    height: 16px;
+}
+
 .sow-hud__dev-sidebar,
 .sow-hud__settings {
     position: absolute;
@@ -962,6 +981,13 @@
     display: block;
     width: 22px;
     height: 22px;
+}
+
+.sow-hud__endgame-stat-icon img {
+    display: block;
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
 }
 
 .sow-hud__endgame-stat-label {

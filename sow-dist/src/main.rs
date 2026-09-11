@@ -446,15 +446,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
-    let web_purchase_link = if cg {
-        String::new()
-    } else {
-        env::var("SOW_REVENUECAT_WEB_PURCHASE_LINK")
-            .unwrap_or_default()
-            .trim_end_matches('/')
-            .to_string()
-    };
-    let web_purchase_link_js = serde_json::to_string(&web_purchase_link)?;
     let store_portals_template = format!("src=\"./sdk/store_portals.js?v={ts}\"");
     let store_portals_src = if cg {
         format!("src=\"sdk/store_portals.js?v={ts}\"")
@@ -485,10 +476,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         .replace("__MAPS_CACHE_BUST__", maps_cache_bust)
         .replace("__SOW_SPLASH_DESKTOP_DATA__", &splash_desktop)
         .replace("__SOW_SPLASH_MOBILE_DATA__", &splash_mobile)
-        .replace(
-            "__REVENUECAT_WEB_PURCHASE_LINK__",
-            &web_purchase_link_js,
-        )
         .replace(
             "__ASSETS_UI_BASE__",
             if cg {
@@ -573,6 +560,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         "main_menu.js",
         &[
             "main_menu.core.js",
+            "main_menu.motion.js",
             "main_menu.screens.js",
             "main_menu.hud.js",
         ],
@@ -818,6 +806,14 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
     copy_dir(
         &paths.assets_gameplay.join("skins"),
         &assets.join("gameplay/skins"),
+    )?;
+    copy_dir(
+        &paths.assets_gameplay.join("currency"),
+        &assets.join("gameplay/currency"),
+    )?;
+    copy_dir(
+        &paths.assets_gameplay.join("store"),
+        &assets.join("gameplay/store"),
     )?;
     copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
     let maps = out.join("maps");
@@ -1290,6 +1286,7 @@ mod tests {
             "main_menu.hud.css",
             "main_menu.profile.css",
             "main_menu.core.js",
+            "main_menu.motion.js",
             "main_menu.screens.js",
             "main_menu.hud.js",
         ] {
@@ -1326,7 +1323,6 @@ mod tests {
         assert!(html.contains("#sow-menu"));
         assert!(html.contains("SOW_menu_command"));
         assert!(html.contains("SOW_onStateUpdate"));
-        assert!(html.contains("SOW_REVENUECAT_WEB_PURCHASE_LINK = \"\""));
         assert!(html.contains("sow-hud__dock"));
         Ok(())
     }

@@ -200,7 +200,7 @@ pub(crate) fn paint_gold_preview_indicator(
     }
     .round();
     let font_id = egui::FontId::proportional(font_size);
-    let emoji_size = font_size * 1.4;
+    let icon_size = font_size * 1.4;
     let prepared_amount = sow_ui::widgets::prepare_name(painter, amount_text, &font_id);
     let amount_size = prepared_amount.size;
     let gap = 4.0_f32 * final_scale;
@@ -208,8 +208,8 @@ pub(crate) fn paint_gold_preview_indicator(
     let padding_x = 8.0_f32 * final_scale;
     let padding_y = 4.0_f32 * final_scale;
 
-    let badge_h = emoji_size.max(amount_size.y) + padding_y * 2.0;
-    let badge_w = emoji_size + gap + amount_size.x + padding_x * 2.0;
+    let badge_h = icon_size.max(amount_size.y) + padding_y * 2.0;
+    let badge_w = icon_size + gap + amount_size.x + padding_x * 2.0;
 
     let indicator_y = center.y + base_size * 0.85;
 
@@ -235,23 +235,33 @@ pub(crate) fn paint_gold_preview_indicator(
         egui::StrokeKind::Inside,
     );
 
-    // Left column: 🪙 emoji centered vertically/horizontally in its slot
-    let emoji_center_x = badge_rect.left() + padding_x + emoji_size * 0.5;
-    let emoji_center_y = badge_rect.center().y;
-
-    sow_ui::widgets::paint_emoji_centered(
-        painter,
-        "🪙",
-        egui::pos2(emoji_center_x, emoji_center_y),
-        emoji_size,
-        egui::Color32::WHITE,
+    // Left column: gold asset centered vertically/horizontally in its slot.
+    let icon_center_x = badge_rect.left() + padding_x + icon_size * 0.5;
+    let icon_center_y = badge_rect.center().y;
+    let icon_rect = egui::Rect::from_center_size(
+        egui::pos2(icon_center_x, icon_center_y),
+        egui::vec2(icon_size, icon_size),
     );
+    if !sow_ui::assets::paint_currency_icon(
+        painter,
+        sow_ui::assets::CurrencyIcon::Gold,
+        icon_rect,
+        egui::Color32::WHITE,
+    ) {
+        sow_ui::widgets::paint_emoji_centered(
+            painter,
+            "🪙",
+            egui::pos2(icon_center_x, icon_center_y),
+            icon_size,
+            egui::Color32::WHITE,
+        );
+    }
 
     // Right column: amount text
-    let text_start_x = badge_rect.left() + padding_x + emoji_size + gap;
+    let text_start_x = badge_rect.left() + padding_x + icon_size + gap;
     sow_ui::widgets::paint_prepared_name(
         painter,
-        egui::pos2(text_start_x, emoji_center_y),
+        egui::pos2(text_start_x, icon_center_y),
         egui::Align2::LEFT_CENTER,
         &prepared_amount,
         text_color,

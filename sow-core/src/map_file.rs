@@ -13,11 +13,11 @@ const GEO_TAG_NONE: u8 = 0;
 const GEO_TAG_EQUIRECT: u8 = 1;
 
 pub const CATALOG_MAGIC: &[u8; 4] = b"SOWC";
-/// v2 adds `num_land_tiles` + `multiplayer_frequency` per entry (OpenFront-style
+/// v2 adds `num_land_tiles` + `multiplayer_frequency` per entry (source-map
 /// weighted rotation and per-map lobby capacity). v1 entries are still parsed
 /// (fields default to 0 / 1) so stale caches never brick a boot.
 pub const CATALOG_VERSION: u16 = 2;
-/// Maximum players a lobby can hold, mirroring OpenFront's MAX_PLAYER_COUNT.
+/// Maximum players a lobby can hold, mirroring the source-map player limit.
 pub const MAX_PLAYER_CAP: u32 = 125;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -127,9 +127,9 @@ pub struct MapCatalogEntry {
     pub display_name: String,
     pub width: u32,
     pub height: u32,
-    /// Number of land tiles — drives per-lobby capacity (OpenFront formula).
+    /// Number of land tiles — drives per-lobby capacity (source-map formula).
     pub num_land_tiles: u32,
-    /// Weighted-rotation tickets (OpenFront `multiplayer_frequency`); 0 = out of rotation.
+    /// Weighted-rotation tickets (`multiplayer_frequency`); 0 = out of rotation.
     pub multiplayer_frequency: u32,
 }
 
@@ -449,7 +449,7 @@ pub fn catalog_from_headers(
     MapCatalog { entries }
 }
 
-/// Parse `frequency` from an `info.toml` blob (OpenFront `multiplayer_frequency`
+/// Parse `frequency` from an `info.toml` blob (`multiplayer_frequency`
 /// ticket count for the weighted rotation; 0 = out of rotation). Pure, no I/O —
 /// callers read the file. Missing/unparsable → default 1.
 pub fn parse_frequency_toml(blob: &str) -> u32 {

@@ -27,12 +27,15 @@ import java.util.Set;
 /** Native Google Play checkout bridge for the web game shell. */
 public final class PurchaseActivity extends Activity {
     private static final String TAG = "SOW Purchases";
-    private static final String RETURN_URL = "https://shadowsofwar.io/play/?sow_platform=android";
-    private static final Set<String> GEM_PRODUCTS = new HashSet<>(Arrays.asList(
+    private static final Set<String> STORE_PRODUCTS = new HashSet<>(Arrays.asList(
             "sow_gems_500",
             "sow_gems_1200",
             "sow_gems_2600"
     ));
+    static String[] storeProductIds() {
+        return STORE_PRODUCTS.toArray(new String[0]);
+    }
+    private String requestId = "";
 
     @Override
     protected void onCreate(Bundle state) {
@@ -49,6 +52,8 @@ public final class PurchaseActivity extends Activity {
 
     private void handleIntent(Intent intent) {
         Uri uri = intent == null ? null : intent.getData();
+        requestId = uri == null ? "" : uri.getQueryParameter("request_id");
+        if (requestId == null) requestId = "";
         if (uri == null || !"sow".equals(uri.getScheme())) {
             fail("Invalid purchase request");
             return;
@@ -63,7 +68,7 @@ public final class PurchaseActivity extends Activity {
             return;
         }
         String productId = uri.getQueryParameter("product_id");
-        if (!"purchase".equals(uri.getHost()) || !GEM_PRODUCTS.contains(productId)) {
+        if (!"purchase".equals(uri.getHost()) || !isStoreProduct(productId)) {
             fail("Invalid store product");
             return;
         }
@@ -171,17 +176,15 @@ public final class PurchaseActivity extends Activity {
     }
 
     private void returnToGame(String status, String productId) {
-        Uri.Builder uri = Uri.parse(RETURN_URL).buildUpon()
-                .appendQueryParameter("purchase", status);
-        if (productId != null) {
-            uri.appendQueryParameter("product_id", productId);
-        }
-        startActivity(new Intent(Intent.ACTION_VIEW, uri.build())
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP));
+        TwaLauncherActivity.postPurchaseResult(requestId, status, productId);
         finish();
     }
 
-    private static boolean isPurchaseUserId(String value) {
+    static boolean isStoreProduct(String value) {
+        return value != null && STORE_PRODUCTS.contains(value);
+    }
+
+    static boolean isPurchaseUserId(String value) {
         if (value == null || !value.matches("p_[0-9a-f]{24}")) {
             return false;
         }

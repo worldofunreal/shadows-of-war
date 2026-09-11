@@ -575,20 +575,45 @@ impl SowApp {
                                     } else {
                                         Color32::from_rgb(251, 191, 36)
                                     };
-                                    let cost_label = if cost_text == "N/A" {
-                                        cost_text.clone()
+                                    let cost_center = rect.min + egui::vec2(44.0, card_h / 2.0 + 8.0);
+                                    if cost_text == "N/A" {
+                                        sow_ui::widgets::paint_emoji_text_at(
+                                            ui.painter(),
+                                            cost_center,
+                                            egui::Align2::LEFT_CENTER,
+                                            &cost_text,
+                                            egui::FontId::proportional(10.5),
+                                            cost_color,
+                                            false,
+                                        );
                                     } else {
-                                        format!("🪙 {cost_text}")
-                                    };
-                                    sow_ui::widgets::paint_emoji_text_at(
-                                        ui.painter(),
-                                        rect.min + egui::vec2(44.0, card_h / 2.0 + 8.0),
-                                        egui::Align2::LEFT_CENTER,
-                                        &cost_label,
-                                        egui::FontId::proportional(10.5),
-                                        cost_color,
-                                        false,
-                                    );
+                                        let icon_size = 14.0;
+                                        let icon_rect = egui::Rect::from_center_size(
+                                            egui::pos2(cost_center.x + icon_size * 0.5, cost_center.y),
+                                            egui::vec2(icon_size, icon_size),
+                                        );
+                                        if !sow_ui::assets::paint_currency_icon(
+                                            ui.painter(),
+                                            sow_ui::assets::CurrencyIcon::Gold,
+                                            icon_rect,
+                                            cost_color,
+                                        ) {
+                                            sow_ui::widgets::paint_emoji_centered(
+                                                ui.painter(),
+                                                "🪙",
+                                                icon_rect.center(),
+                                                icon_size,
+                                                cost_color,
+                                            );
+                                        }
+                                        ui.painter().text(
+                                            egui::pos2(icon_rect.right() + 3.0, cost_center.y),
+                                            egui::Align2::LEFT_CENTER,
+                                            &cost_text,
+                                            egui::FontId::proportional(10.5),
+                                            cost_color,
+                                        );
+                                    }
 
                                     resp = resp.on_hover_ui(|ui| {
                                         sow_ui::widgets::outlined_emoji_label(ui, label, egui::FontId::proportional(14.0), theme_color);
@@ -596,12 +621,31 @@ impl SowApp {
                                         sow_ui::widgets::emoji_label(ui, desc, egui::FontId::proportional(12.0), egui::Color32::LIGHT_GRAY);
                                         ui.add_space(6.0);
                                         let cost_color = if !is_disabled { egui::Color32::from_rgb(74, 222, 128) } else { egui::Color32::from_rgb(239, 68, 68) };
-                                        sow_ui::widgets::emoji_label(
-                                            ui,
-                                            &format!("Cost: 🪙 {cost_text} Gold"),
-                                            egui::FontId::proportional(13.0),
-                                            cost_color,
-                                        );
+                                        ui.horizontal(|ui| {
+                                            if let Some(texture) = sow_ui::assets::currency_texture(
+                                                ui.ctx(),
+                                                sow_ui::assets::CurrencyIcon::Gold,
+                                            ) {
+                                                ui.add(
+                                                    egui::Image::new(&texture)
+                                                        .fit_to_exact_size(egui::vec2(18.0, 18.0)),
+                                                );
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "Cost: {cost_text} Gold"
+                                                    ))
+                                                    .font(egui::FontId::proportional(13.0))
+                                                    .color(cost_color),
+                                                );
+                                            } else {
+                                                sow_ui::widgets::emoji_label(
+                                                    ui,
+                                                    &format!("Cost: 🪙 {cost_text} Gold"),
+                                                    egui::FontId::proportional(13.0),
+                                                    cost_color,
+                                                );
+                                            }
+                                        });
                                     });
 
                                     if !is_disabled && resp.clicked() {

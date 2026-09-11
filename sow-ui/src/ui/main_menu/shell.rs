@@ -208,7 +208,7 @@ fn draw_rail(ui: &mut Ui, state: &mut MainMenuState) {
         for (section, icon, label) in [
             (MainMenuSection::Battle, NavIcon::Battle, "BATTLE"),
             (MainMenuSection::Heroes, NavIcon::Heroes, "HEROES"),
-            (MainMenuSection::Store, NavIcon::Store, "STORE"),
+            (MainMenuSection::Store, NavIcon::Store, "SHOP"),
             (MainMenuSection::Profile, NavIcon::Profile, "PROFILE"),
         ] {
             draw_nav_item(
@@ -232,7 +232,7 @@ fn draw_bottom_nav(ui: &mut Ui, state: &mut MainMenuState) {
         for (section, icon, label) in [
             (MainMenuSection::Battle, NavIcon::Battle, "BATTLE"),
             (MainMenuSection::Heroes, NavIcon::Heroes, "HEROES"),
-            (MainMenuSection::Store, NavIcon::Store, "STORE"),
+            (MainMenuSection::Store, NavIcon::Store, "SHOP"),
             (MainMenuSection::Profile, NavIcon::Profile, "PROFILE"),
         ] {
             draw_nav_item(ui, state, section, icon, label, Vec2::new(width, 62.0));
@@ -302,6 +302,17 @@ fn draw_nav_item(
 }
 
 fn paint_nav_icon(ui: &Ui, rect: Rect, icon: NavIcon, color: Color32) {
+    if icon == NavIcon::Store
+        && let Some(texture) = crate::kit::assets::shop_texture(ui.ctx())
+    {
+        ui.painter().image(
+            texture.id(),
+            rect,
+            Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        return;
+    }
     let painter = ui.painter();
     let stroke = Stroke::new(1.8_f32, color);
     let c = rect.center();

@@ -189,8 +189,10 @@
     }));
   }
 
+  let wouAuthWired = false;
   function initWouAuth() {
-    if (typeof window.wouAuth === 'undefined') return;
+    if (wouAuthWired || typeof window.wouAuth === 'undefined') return;
+    wouAuthWired = true;
 
     const triggers = $$('[data-wou-auth-trigger]');
     const labels = $$('[data-wou-auth-label]');
@@ -252,21 +254,24 @@
       window.wouAuth.logout();
     });
 
-    // SSO buttons
+    // SSO buttons — one-click OAuth: the provider bounces straight back to
+    // this origin (/auth/callback), no hub hop. That URI must be allowlisted
+    // server-side and registered in the provider consoles.
+    const oauthOpts = { redirectUri: `${window.location.origin}/auth/callback` };
     $('#wou-login-google')?.addEventListener('click', () => {
-      window.wouAuth.loginWithOAuth('google');
+      window.wouAuth.loginWithOAuth('google', oauthOpts);
     });
 
     $('#wou-login-discord')?.addEventListener('click', () => {
-      window.wouAuth.loginWithOAuth('discord');
+      window.wouAuth.loginWithOAuth('discord', oauthOpts);
     });
 
     $('#wou-login-twitter')?.addEventListener('click', () => {
-      window.wouAuth.loginWithOAuth('twitter');
+      window.wouAuth.loginWithOAuth('twitter', oauthOpts);
     });
 
     $('#wou-login-meta')?.addEventListener('click', () => {
-      window.wouAuth.loginWithOAuth('meta');
+      window.wouAuth.loginWithOAuth('meta', oauthOpts);
     });
 
     $('#wou-login-eth')?.addEventListener('click', async () => {
@@ -342,5 +347,8 @@
   }
   initMenu();
   initWouAuth();
+  // The identity SDK loads async (CDN module) after this classic script —
+  // wire up when it lands. initWouAuth is idempotent.
+  window.addEventListener('wou:auth-sdk-ready', initWouAuth, { once: true });
   bindSiteAnalytics();
 })();

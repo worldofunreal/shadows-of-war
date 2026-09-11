@@ -85,6 +85,14 @@ palette and shoreline/depth water once at build time, samples the frame, and
 writes exactly one lossless **512×288 WebP** at
 `maps/<name>/thumbnail.webp`. It never writes a second square thumbnail.
 
+### Map asset license
+
+The OpenFront-derived image recipes and their generated `map.bin`, `map.bin.br`,
+and `thumbnail.webp` artifacts are CC BY-SA 4.0. The pinned source commit,
+attribution, and Shadows of War modifications are recorded in
+`assets/maps/SOURCES.toml`; the full notice is in `docs/legal/NOTICE` and
+`docs/legal/LICENSE-ASSETS`. OSM-derived maps retain their own source terms.
+
 ## Current generation and packaging code
 
 | Responsibility | Existing implementation |
@@ -92,7 +100,7 @@ writes exactly one lossless **512×288 WebP** at
 | Limits and dimension helpers | `sow-core/src/maps.rs` |
 | PNG classification/downsampling | `sow-map/src/image_pipeline.rs` |
 | `image-map` authoring | `sow-tools/src/image_map.rs`, `sow-tools/src/main.rs` |
-| OpenFront import | `sow-tools/src/openfront_import.rs` |
+| Map-source import | `sow-tools/src/map_source_import.rs` |
 | Grid export, compression, catalog refresh | `sow-tools/src/exporter.rs` |
 | Palette, terrain preview, source framing, WebP output | `sow-map/src/thumbnail.rs` |
 | Staged thumbnail regeneration | `sow-dist/src/main.rs::refresh_map_thumbnails` |
@@ -104,7 +112,7 @@ staged map.bin + thumbnail_frames.json -> source frame -> thumbnail.webp
 ```
 
 When a map is absent from the frame manifest, the pipeline falls back to its
-complete terrain preview fitted into 16:9 without cropping. OpenFront imports
+complete terrain preview fitted into 16:9 without cropping. Map-source imports
 and exporters also write the same 16:9 shape. The main-menu lobby card uses
 the same 16:9 aspect ratio and the existing single thumbnail URL.
 
@@ -154,7 +162,7 @@ Current code is not a uniform hard gate:
 - `MAX_MAP_PIXELS = 1_000_000` in `sow-core/src/maps.rs` is the total-cell cap.
 - `MAX_MAP_AXIS = 1_000` is additionally used by the `image-map` path's
   `mobile_safe_dims`. That path downsizes proportionally and aligns to four.
-- `import-openfront` uses a proportional total-cell cap, without the same
+- `import-map-source` uses a proportional total-cell cap, without the same
   per-axis limit. This helps explain why existing grids can have a side above
   1,000 while staying within the total budget.
 - The editor rejects a grid over the total budget. `image_pipeline::generate_from_rgba`

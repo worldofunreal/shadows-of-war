@@ -1,6 +1,6 @@
 //! Image-based map generation.
 //!
-//! Ports the proven OpenFront `MapGenerator` technique: a source world-map PNG
+//! Generates a map from a categorical source world-map PNG
 //! encodes land/water by pixel color, so no network/API calls are needed.
 //! Core pipeline lives in `sow_map::image_pipeline`.
 

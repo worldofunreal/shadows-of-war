@@ -85,7 +85,8 @@ android {
 }
 
 dependencies {
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.3'
+    implementation 'androidx.browser:browser:1.10.0'
     implementation 'com.google.android.gms:play-services-games-v2:22.0.0'
     implementation 'com.revenuecat.purchases:purchases:10.19.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'

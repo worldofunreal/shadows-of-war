@@ -174,7 +174,7 @@ function clampView(){
   ox = (w <= cv.width)  ? (cv.width  - w)/2 : Math.min(m, Math.max(cv.width  - w - m, ox));
   oy = (h <= cv.height) ? (cv.height - h)/2 : Math.min(m, Math.max(cv.height - h - m, oy));
 }
-// Zoom toward a screen point, keeping the world point under it fixed (OpenFront's pattern).
+// Zoom toward a screen point, keeping the world point under it fixed.
 function zoomAt(sx, sy, factor){
   const [wx,wy] = s2m(sx,sy);
   scale = Math.max(minScale, Math.min(maxScale, scale*factor));

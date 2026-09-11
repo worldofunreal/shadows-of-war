@@ -239,6 +239,67 @@
   var ANDROID_MODE_KEY = "sow_playgames_mode";
   var ANDROID_ANONYMOUS_MODE = "anonymous";
   var ANDROID_PENDING_KEY = "sow_playgames_pending";
+  var androidPurchasePort = null;
+  var androidPurchaseProducts = null;
+
+  function androidBridgeMessage(message) {
+    if (!message || message.type !== "purchase_result") return;
+    window.dispatchEvent(new CustomEvent("sow:android-purchase-result", { detail: message }));
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!isAndroidTwa() || event.origin !== "https://shadowsofwar.io") return;
+    var ready;
+    try {
+      ready = JSON.parse(String(event.data || ""));
+      if (ready.type !== "sow_bridge_ready") return;
+    } catch (e) {
+      return;
+    }
+    var port = event.ports && event.ports[0];
+    if (!port) return;
+    androidPurchasePort = port;
+    androidPurchaseProducts = Array.isArray(ready.products) ? ready.products : null;
+    window.dispatchEvent(new CustomEvent("sow:android-purchase-bridge-ready"));
+    port.onmessage = function (messageEvent) {
+      try {
+        androidBridgeMessage(JSON.parse(String(messageEvent.data || "")));
+      } catch (e) {}
+    };
+    if (typeof port.start === "function") port.start();
+    port.postMessage(JSON.stringify({ type: "sow_bridge_ack" }));
+  });
+
+  window.SOW_isAndroidPurchaseBridgeReady = function () {
+    return isAndroidTwa() && !!androidPurchasePort;
+  };
+
+  window.SOW_androidPurchaseSupports = function (productId) {
+    return window.SOW_isAndroidPurchaseBridgeReady() &&
+      Array.isArray(androidPurchaseProducts) && androidPurchaseProducts.indexOf(productId) !== -1;
+  };
+
+  window.SOW_requestAndroidPurchase = function (productId, appUserId) {
+    if (!window.SOW_isAndroidPurchaseBridgeReady() || !productId || !appUserId ||
+        (androidPurchaseProducts && androidPurchaseProducts.indexOf(productId) === -1)) {
+      return null;
+    }
+    var requestId;
+    try {
+      requestId = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : "purchase-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    } catch (e) {
+      requestId = "purchase-" + Date.now();
+    }
+    androidPurchasePort.postMessage(JSON.stringify({
+      type: "purchase",
+      request_id: requestId,
+      product_id: productId,
+      app_user_id: appUserId,
+    }));
+    return requestId;
+  };
 
   function androidStorage(mode) {
     try {
@@ -434,11 +495,11 @@
           window.SOW_PLATFORM_IDENTITY = identity;
           try { sessionStorage.setItem("sow_playgames_identity", JSON.stringify(identity)); } catch (e) {}
           androidStorage("");
-          window.SOW_AUTH_CHANGED = true;
+          emitAuthStateChange();
           console.info("Play Games interactive authentication complete");
         } else {
           if (pending.indexOf("auto:") === 0) androidStorage(ANDROID_ANONYMOUS_MODE);
-          window.SOW_AUTH_CHANGED = true;
+          emitAuthStateChange();
           console.info("Play Games sign-in cancelled or unavailable; continuing anonymously");
         }
       } else if (pending === "signout") {
@@ -478,7 +539,7 @@
     androidStorage(ANDROID_ANONYMOUS_MODE);
     try { sessionStorage.removeItem("sow_playgames_identity"); } catch (e) {}
     window.SOW_PLATFORM_IDENTITY = null;
-    window.SOW_AUTH_CHANGED = true;
+    emitAuthStateChange();
     androidPending("signout");
     window.location.href = "sow://playgames/signout";
     return true;
@@ -614,6 +675,15 @@
   };
 
   window.SOW_AUTH_CHANGED = false;
+  function emitAuthStateChange() {
+    window.SOW_AUTH_CHANGED = true;
+    try {
+      window.dispatchEvent(new CustomEvent("wou:auth-state-change", {
+        detail: typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : null,
+      }));
+    } catch (e) {}
+  }
+
   window.SOW_portalClearAuthChanged = function () {
     window.SOW_AUTH_CHANGED = false;
   };
@@ -677,7 +747,7 @@
         var identity = await crazyGamesIdentityFromUser(user);
         if (identity) {
           window.SOW_PLATFORM_IDENTITY = identity;
-          window.SOW_AUTH_CHANGED = true;
+          emitAuthStateChange();
           console.log("Auth prompt successful login:", user.username);
         }
       } catch (e) {
@@ -697,7 +767,7 @@
     if (window.SOW_PLATFORM_IDENTITY && window.SOW_PLATFORM_IDENTITY.provider === "wou") {
       window.SOW_PLATFORM_IDENTITY = null;
     }
-    window.SOW_AUTH_CHANGED = true;
+    emitAuthStateChange();
     window.location.reload();
     return true;
   };
@@ -721,7 +791,7 @@
       var account = JSON.parse(decodeURIComponent(acc));
       window.localStorage.setItem("wou_session_token", token);
       window.localStorage.setItem("wou_user_data", JSON.stringify(account));
-      window.SOW_AUTH_CHANGED = true;
+      emitAuthStateChange();
       params.delete("session_token");
       params.delete("account");
       var clean = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
@@ -842,7 +912,7 @@
             var identity = await crazyGamesIdentityFromUser(user);
             if (identity) {
               window.SOW_PLATFORM_IDENTITY = identity;
-              window.SOW_AUTH_CHANGED = true;
+              emitAuthStateChange();
               console.log("CrazyGames user:", user.username);
             }
           }
@@ -851,7 +921,7 @@
               var identity = await crazyGamesIdentityFromUser(u);
               if (identity) {
                 window.SOW_PLATFORM_IDENTITY = identity;
-                window.SOW_AUTH_CHANGED = true;
+                emitAuthStateChange();
                 console.log("CrazyGames user changed via AuthListener:", u.username);
               }
             });

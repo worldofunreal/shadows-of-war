@@ -260,8 +260,16 @@ pub(in crate::ui::hud) fn draw_persistent_header(
 
         // Measure gold frame width for bar allocation
         let gold_font = egui::FontId::proportional(if compact { 11.0 } else { 12.0 });
-        let gold_text = format!("🪙 {}", crate::utils::format_number(state.gold));
-        let gold_size = crate::widgets::measure_emoji_text(ui.painter(), &gold_text, &gold_font);
+        let gold_text = crate::utils::format_number(state.gold);
+        let gold_text_size = ui
+            .painter()
+            .layout_no_wrap(gold_text, gold_font.clone(), egui::Color32::WHITE)
+            .size();
+        let gold_icon_size = (gold_font.size * 1.35).max(16.0);
+        let gold_size = egui::vec2(
+            gold_icon_size + ui.spacing().item_spacing.x + gold_text_size.x,
+            gold_icon_size.max(gold_text_size.y),
+        );
         let gold_margin = if compact {
             sow_ui_kit::theme::margin::TIGHT
         } else {
