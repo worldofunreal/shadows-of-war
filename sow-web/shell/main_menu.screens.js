@@ -1177,14 +1177,83 @@
                     statusBadge +
                     controls +
                 "</div>" +
-            "</div>";
+                "</div>";
+    }
+
+    function queueRosterKey(lobby) {
+        if (!lobby) return "";
+        return JSON.stringify({
+            id: lobby.id,
+            mode: lobby.game_mode,
+            kind: lobby.kind,
+            host: lobby.host_name,
+            owner: state.is_lobby_host,
+            me: state.my_player_id,
+            players: (lobby.players || []).map(function (player) {
+                return [
+                    player.player_id,
+                    player.name,
+                    player.leader,
+                    player.team,
+                    player.is_ready,
+                    player.download_progress
+                ];
+            })
+        });
+    }
+
+    function renderQueueRoster(lobby) {
+        var players = (lobby && lobby.players) || [];
+        if (!players.length) {
+            return "<div class='sow-menu__empty'>Connecting to tactical server...</div>";
+        }
+
+        if (lobby && lobby.game_mode === "Teams") {
+            var redPlayers = players.filter(function (player) { return player.team === "Red"; });
+            var bluePlayers = players.filter(function (player) { return player.team !== "Red"; });
+            return "" +
+                "<div class='sow-menu__teams-roster'>" +
+                    "<div class='sow-menu__team-col sow-menu__team-col--red'>" +
+                        "<div class='sow-menu__team-header'>🔴 RED TEAM (" + redPlayers.length + ")</div>" +
+                        "<div class='sow-menu__team-list'>" + redPlayers.map(function (player) { return renderQueuePlayerRow(player, lobby); }).join("") + "</div>" +
+                    "</div>" +
+                    "<div class='sow-menu__team-col sow-menu__team-col--blue'>" +
+                        "<div class='sow-menu__team-header'>🔵 BLUE TEAM (" + bluePlayers.length + ")</div>" +
+                        "<div class='sow-menu__team-list'>" + bluePlayers.map(function (player) { return renderQueuePlayerRow(player, lobby); }).join("") + "</div>" +
+                    "</div>" +
+                "</div>";
+        }
+
+        return "<div class='sow-menu__ffa-roster'>" + players.map(function (player) {
+            return renderQueuePlayerRow(player, lobby);
+        }).join("") + "</div>";
+    }
+
+    function updateQueueRoster(lobby) {
+        var panel = activeScreenPanel();
+        if (!panel || panel.dataset.screenPanel !== "queue") return;
+
+        var roster = panel.querySelector("[data-queue-roster]");
+        if (roster) {
+            var key = queueRosterKey(lobby);
+            if (roster.dataset.rosterKey !== key) {
+                var scrollTop = roster.scrollTop;
+                roster.innerHTML = renderQueueRoster(lobby);
+                roster.dataset.rosterKey = key;
+                roster.scrollTop = scrollTop;
+            }
+        }
+
+        var count = panel.querySelector("[data-queue-player-count]");
+        if (count) {
+            count.textContent = lobby ? (lobby.num_players || 0) + " / " + (lobby.max_players || 8) + " PLAYERS" : "—";
+        }
     }
 
     function renderQueue() {
         var lobby = joinedLobby();
         var title = lobby ? formatMapName(lobby).toUpperCase() : "MATCHMAKING";
         var mapThumbUrl = lobbyThumb(lobby || { map_name: "world" });
-        var isTeams = lobby && lobby.game_mode === "Teams";
         var isCustom = lobby && lobby.kind === "Custom";
         var isHost = state && state.is_lobby_host && isCustom;
 
@@ -1203,28 +1272,8 @@
             feedback = "<div class='sow-menu__queue-feedback sow-menu__queue-feedback--error'>" + esc(state.error) + "</div>";
         }
 
-        var rosterHtml = "";
-        var players = (lobby && lobby.players) || [];
-        if (!players.length) {
-            rosterHtml = "<div class='sow-menu__empty'>Connecting to tactical server...</div>";
-        } else if (isTeams) {
-            var redPlayers = players.filter(function (p) { return p.team === "Red"; });
-            var bluePlayers = players.filter(function (p) { return p.team !== "Red"; });
-
-            rosterHtml = "" +
-                "<div class='sow-menu__teams-roster'>" +
-                    "<div class='sow-menu__team-col sow-menu__team-col--red'>" +
-                        "<div class='sow-menu__team-header'>🔴 RED TEAM (" + redPlayers.length + ")</div>" +
-                        "<div class='sow-menu__team-list'>" + redPlayers.map(function (p) { return renderQueuePlayerRow(p, lobby); }).join("") + "</div>" +
-                    "</div>" +
-                    "<div class='sow-menu__team-col sow-menu__team-col--blue'>" +
-                        "<div class='sow-menu__team-header'>🔵 BLUE TEAM (" + bluePlayers.length + ")</div>" +
-                        "<div class='sow-menu__team-list'>" + bluePlayers.map(function (p) { return renderQueuePlayerRow(p, lobby); }).join("") + "</div>" +
-                    "</div>" +
-                "</div>";
-        } else {
-            rosterHtml = "<div class='sow-menu__ffa-roster'>" + players.map(function (p) { return renderQueuePlayerRow(p, lobby); }).join("") + "</div>";
-        }
+        var rosterKey = queueRosterKey(lobby);
+        var rosterHtml = renderQueueRoster(lobby);
 
         return "<main class='sow-menu__main sow-menu__main--queue' data-screen-panel='queue'>" +
                     "<section class='sow-menu__queue-summary-card'>" +
@@ -1251,9 +1300,9 @@
                     "<section class='sow-menu__queue-players-card'>" +
                         "<div class='sow-menu__queue-players-head'>" +
                             "<p class='sow-menu__panel-label'>PLAYERS</p>" +
-                            "<span class='sow-menu__player-count-badge'>" + (lobby ? (lobby.num_players || 0) + " / " + (lobby.max_players || 8) + " PLAYERS" : "—") + "</span>" +
+                            "<span class='sow-menu__player-count-badge' data-queue-player-count>" + (lobby ? (lobby.num_players || 0) + " / " + (lobby.max_players || 8) + " PLAYERS" : "—") + "</span>" +
                         "</div>" +
-                        "<div class='sow-menu__queue-roster-wrap'>" + rosterHtml + "</div>" +
+                        "<div class='sow-menu__queue-roster-wrap' data-queue-roster data-roster-key='" + esc(rosterKey) + "'>" + rosterHtml + "</div>" +
                     "</section>" +
         "</main>";
     }
@@ -1574,11 +1623,7 @@
         var timer = panel.querySelector("[data-live-countdown]");
         var lobby = joinedLobby();
         if (timer && lobby) timer.textContent = lobby.is_counting_down ? "STARTING IN " + Math.ceil(lobby.timer_secs) + "s" : "WAITING FOR PLAYERS";
-        var queueStatus = panel.querySelector("[data-queue-status]");
-        if (queueStatus && lobby) {
-            var strong = queueStatus.querySelector("strong");
-            if (strong) strong.textContent = (lobby.num_players || 0) + "/" + (lobby.max_players || "?");
-        }
+        updateQueueRoster(lobby);
         var cardTimers = panel.querySelectorAll("[data-timer-for]");
         for (var i = 0; i < cardTimers.length; i++) {
             var cardLobby = findLobby(Number(cardTimers[i].dataset.timerFor));
