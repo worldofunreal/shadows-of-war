@@ -21,6 +21,22 @@ pub fn emoji_uv_opt(emoji: &str) -> Option<[f32; 4]> {
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
 
+/// Layout bounds returned by the same atlas-aware measurement used by the GPU text path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextMeasure {
+    pub width: f32,
+    pub height: f32,
+}
+
+#[inline]
+fn text_measure_height(font_size: f32, emoji_scale: f32, has_emoji: bool) -> f32 {
+    if has_emoji {
+        font_size.max(font_size * emoji_scale)
+    } else {
+        font_size
+    }
+}
+
 fn emoji_geometry(
     screen_pos: [f32; 2],
     half_size: f32,
@@ -347,22 +363,25 @@ impl TextRenderer {
         }
     }
 
-    /// Measure the rendered width of `text` in the same units as `font_size`, using the exact
-    /// advance math `push_string` emits (glyph xadvance + kerning; emoji = `font_size * emoji_scale`;
-    /// everything scaled by `char_spacing`). Lets callers size text boxes from the real GPU layout
-    /// instead of an egui galley. Keep this loop in lockstep with `push_string`'s advance path.
+    /// Measure `text` in the same units as `font_size`, using the exact advance math
+    /// `push_string` emits. The height expands for an emoji only when the string actually
+    /// contains an atlas emoji, so ASCII names do not reserve emoji-sized vertical space.
     pub fn measure_string(
         &self,
         text: &str,
         font_size: f32,
         char_spacing: f32,
         emoji_scale: f32,
-    ) -> f32 {
+    ) -> TextMeasure {
         if text.is_empty() {
-            return 0.0;
+            return TextMeasure {
+                width: 0.0,
+                height: 0.0,
+            };
         }
         let scale = font_size / 48.0;
         let mut x_advance = 0.0f32;
+        let mut has_emoji = false;
         let mut prev_char = Option::<char>::None;
         let mut chars = text.char_indices().peekable();
 
@@ -382,6 +401,7 @@ impl TextRenderer {
             let char_len = ch.len_utf8();
             let stripped = &text[byte_idx..byte_idx + char_len];
             if emoji_uv_opt(stripped).is_some() {
+                has_emoji = true;
                 x_advance += font_size * emoji_scale * char_spacing;
                 prev_char = None;
                 if has_selector {
@@ -392,7 +412,10 @@ impl TextRenderer {
             prev_char = None;
         }
 
-        x_advance
+        TextMeasure {
+            width: x_advance,
+            height: text_measure_height(font_size, emoji_scale, has_emoji),
+        }
     }
 
     /// Push a screen-space emoji with alpha-dilated outline + drop shadow.
@@ -695,5 +718,12 @@ mod tests {
         assert_eq!(instance.outline_thickness, outline.thickness);
         assert_eq!(instance.underlay_offset_y, outline.shadow_y);
         assert_eq!(instance.underlay_softness, 0.25);
+    }
+
+    #[test]
+    fn text_measure_height_only_expands_for_real_emoji() {
+        assert_eq!(text_measure_height(48.0, 1.4, false), 48.0);
+        assert_eq!(text_measure_height(48.0, 1.4, true), 67.2);
+        assert_eq!(text_measure_height(48.0, 0.8, true), 48.0);
     }
 }

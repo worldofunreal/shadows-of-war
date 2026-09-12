@@ -257,24 +257,6 @@ fn promote_countdown(games: &mut [ServerLobby]) {
     crate::bot_fill::inject_internal_bots(games);
 }
 
-pub fn primary_lobby_id(games: &[ServerLobby], game_mode: &str) -> Option<u64> {
-    let mut joinable_lobbies: Vec<u64> = games
-        .iter()
-        .filter(|g| {
-            g.joinable()
-                && g.kind == LobbyKind::Matchmaking
-                && g.game_mode == game_mode
-                && g.players.len() < g.config.max_players as usize
-        })
-        .map(|g| g.id)
-        .collect();
-    if joinable_lobbies.is_empty() {
-        return None;
-    }
-    joinable_lobbies.sort_unstable();
-    Some(joinable_lobbies[0])
-}
-
 /// Returns the active server-spawned queue lobby regardless of its rotating mode.
 /// Quick Match must follow the queue rotation instead of forcing every player into FFA.
 fn primary_matchmaking_lobby_id(games: &[ServerLobby]) -> Option<u64> {
@@ -300,6 +282,27 @@ fn resolve_join_target(requested: Option<u64>, games: &[ServerLobby]) -> Option<
         return None;
     }
     primary_matchmaking_lobby_id(games)
+}
+
+fn resolve_or_spawn_matchmaking_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64) -> u64 {
+    if let Some(id) = resolve_join_target(None, games) {
+        return id;
+    }
+
+    log::info!("[JOIN] No Matchmaking lobby available, spawning one");
+    spawn_waiting_lobby(
+        games,
+        next_id,
+        SpawnLobbyOpts {
+            game_mode: "FFA".to_string(),
+            kind: LobbyKind::Matchmaking,
+            is_private: false,
+            config_override: None,
+            password: None,
+            host_name: String::new(),
+        },
+    );
+    games.last().unwrap().id
 }
 
 pub struct JoinPlayerOpts {
@@ -392,151 +395,54 @@ pub fn join_player(
     } else if let Some(req) = target_lobby_id {
         match resolve_join_target(Some(req), games) {
             Some(id) => id,
-            None => {
-                if req >= 100000000 {
-                    // Rematch room doesn't exist yet, we must be the first to arrive! Create it.
-                    log::info!("[JOIN] Creating rematch Custom lobby id={}", req);
-                    spawn_waiting_lobby(
-                        games,
-                        next_id,
-                        SpawnLobbyOpts {
-                            game_mode: "FFA".to_string(),
-                            kind: LobbyKind::Custom,
-                            is_private: true,
-                            config_override: None,
-                            password: None,
-                            host_name: String::new(),
-                        },
-                    );
-                    let new_lobby = games.last_mut().unwrap();
-                    new_lobby.id = req; // Override the ID to match the rematch ID
-                    req
-                } else {
-                    // Explicit target (invite link / room join / browser click) that no
-                    // longer resolves must NOT be silently rerouted into a fresh
-                    // Matchmaking lobby — that fills the "new game" with ghosts while
-                    // the player thinks they joined their friend's private room.
-                    // Reject instead; the client shows a notice and stays in the menu.
-                    log::warn!(
-                        "[JOIN] Requested lobby {} unavailable — rejecting join from {} (target no longer joinable)",
-                        req,
-                        name
-                    );
-                    return Err("Lobby is not accepting joins".to_string());
-                }
-            }
-        }
-    } else {
-        match resolve_join_target(None, games) {
-            Some(id) => id,
-            None => {
-                log::info!(
-                    "[JOIN] No Matchmaking lobby available for {}, spawning one",
-                    name
-                );
+            None if req >= 100000000 => {
+                // Rematch room doesn't exist yet, we must be the first to arrive! Create it.
+                log::info!("[JOIN] Creating rematch Custom lobby id={}", req);
                 spawn_waiting_lobby(
                     games,
                     next_id,
                     SpawnLobbyOpts {
                         game_mode: "FFA".to_string(),
-                        kind: LobbyKind::Matchmaking,
-                        is_private: false,
+                        kind: LobbyKind::Custom,
+                        is_private: true,
                         config_override: None,
                         password: None,
                         host_name: String::new(),
                     },
                 );
-                games.last().unwrap().id
+                let new_lobby = games.last_mut().unwrap();
+                new_lobby.id = req; // Override the ID to match the rematch ID
+                req
+            }
+            None
+                if games
+                    .iter()
+                    .any(|g| g.id == req && g.kind == LobbyKind::Matchmaking) =>
+            {
+                log::info!(
+                    "[JOIN] Requested Matchmaking lobby {} is no longer joinable for {}; falling back",
+                    req,
+                    name
+                );
+                resolve_or_spawn_matchmaking_lobby(games, next_id)
+            }
+            None => {
+                log::warn!(
+                    "[JOIN] Requested lobby {} unavailable — rejecting join from {}",
+                    req,
+                    name
+                );
+                return Err("Lobby is not accepting joins".to_string());
             }
         }
+    } else {
+        resolve_or_spawn_matchmaking_lobby(games, next_id)
     };
 
-    let (is_joinable, is_full, is_matchmaking, game_mode) =
-        match games.iter().find(|g| g.id == lobby_id) {
-            Some(g) => (
-                g.joinable(),
-                g.players.len() >= g.config.max_players as usize,
-                g.kind == LobbyKind::Matchmaking,
-                g.game_mode.clone(),
-            ),
-            None => return Err("Lobby not found".to_string()),
-        };
-
-    if is_matchmaking && (!is_joinable || is_full) {
-        log::info!(
-            "[JOIN] Target lobby {} unavailable (joinable={}, full={}), directing {} to open lobby",
-            lobby_id,
-            is_joinable,
-            is_full,
-            name
-        );
-        let target_id = match primary_lobby_id(games, &game_mode) {
-            Some(id) if id != lobby_id => id,
-            _ => {
-                spawn_waiting_lobby(
-                    games,
-                    next_id,
-                    SpawnLobbyOpts {
-                        game_mode: game_mode.clone(),
-                        kind: LobbyKind::Matchmaking,
-                        is_private: false,
-                        config_override: None,
-                        password: None,
-                        host_name: String::new(),
-                    },
-                );
-                games.last().unwrap().id
-            }
-        };
-        let fallback_lobby = games.iter_mut().find(|g| g.id == target_id).unwrap();
-        let player_id = fallback_lobby
-            .players
-            .iter()
-            .map(|p| p.player_id)
-            .max()
-            .unwrap_or(0)
-            .saturating_add(1);
-        let team = if fallback_lobby.game_mode == "HumansVsNations" {
-            // PvE: every human is on the Red team against AI nations (Blue).
-            Some(Team::Red)
-        } else if fallback_lobby.game_mode == "Teams" {
-            let reds = fallback_lobby
-                .players
-                .iter()
-                .filter(|p| p.team == Some(Team::Red))
-                .count();
-            let blues = fallback_lobby
-                .players
-                .iter()
-                .filter(|p| p.team == Some(Team::Blue))
-                .count();
-            Some(if blues < reds { Team::Blue } else { Team::Red })
-        } else {
-            None
-        };
-        fallback_lobby.players.push(PlayerConnection {
-            name,
-            clan_tag,
-            player_id,
-            tx: client_tx,
-            download_progress: 0,
-            civilization,
-            leader,
-            database_account_id,
-            team,
-            ip,
-            session_id,
-            is_internal_bot: false,
-        });
-        return Ok((
-            target_id,
-            player_id,
-            fallback_lobby.config.map_name.clone(),
-            fallback_lobby.is_private,
-        ));
-    }
-
-    let lobby = games.iter_mut().find(|g| g.id == lobby_id).unwrap();
+    let lobby = games
+        .iter_mut()
+        .find(|g| g.id == lobby_id)
+        .ok_or_else(|| "Lobby not found".to_string())?;
 
     if !lobby.joinable() {
         log::warn!(
@@ -1180,6 +1086,32 @@ mod name_tests {
         }
     }
 
+    fn join_options(
+        target_lobby_id: Option<u64>,
+        client_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+    ) -> JoinPlayerOpts {
+        JoinPlayerOpts {
+            name: "Commander".to_string(),
+            clan_tag: String::new(),
+            civilization: Civilization::Rome,
+            leader: Leader::Caesar,
+            client_tx,
+            target_lobby_id,
+            host_private: false,
+            database_account_id: None,
+            host_config: None,
+            password: None,
+            ip: "127.0.0.1".to_string(),
+            session_id: Some(1),
+        }
+    }
+
+    fn channel_sender() -> tokio::sync::mpsc::Sender<Vec<u8>> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        drop(receiver);
+        sender
+    }
+
     #[test]
     fn names_are_bounded_and_control_free() {
         assert_eq!(normalize_player_name("  A\nB  "), "AB");
@@ -1200,6 +1132,98 @@ mod name_tests {
     fn quick_match_does_not_select_custom_lobbies() {
         let games = vec![queue_lobby(10, LobbyKind::Custom, "FFA")];
         assert_eq!(resolve_join_target(None, &games), None);
+    }
+
+    #[test]
+    fn late_matchmaking_join_uses_next_open_lobby() {
+        let mut stale = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        stale.phase = LobbyPhase::Loading;
+        let next = queue_lobby(20, LobbyKind::Matchmaking, "Teams");
+        let mut games = vec![stale, next];
+
+        let result = join_player(
+            &mut games,
+            &mut 30,
+            join_options(Some(10), channel_sender()),
+        )
+        .expect("late matchmaking join should be rerouted");
+
+        assert_eq!(result.0, 20);
+        assert_eq!(games[0].players.len(), 0);
+        assert_eq!(games[1].players.len(), 1);
+        assert_eq!(games[1].players[0].team, Some(Team::Red));
+    }
+
+    #[test]
+    fn full_matchmaking_join_uses_next_open_lobby() {
+        let mut full = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        full.phase = LobbyPhase::CountingDown;
+        let roster_sender = channel_sender();
+        full.players = (1..=8)
+            .map(|player_id| lobby_player(player_id, roster_sender.clone(), None))
+            .collect();
+        let next = queue_lobby(20, LobbyKind::Matchmaking, "FFA");
+        let mut games = vec![full, next];
+
+        let result = join_player(
+            &mut games,
+            &mut 30,
+            join_options(Some(10), channel_sender()),
+        )
+        .expect("full matchmaking join should be rerouted");
+
+        assert_eq!(result.0, 20);
+        assert_eq!(games[0].players.len(), 8);
+        assert_eq!(games[1].players.len(), 1);
+    }
+
+    #[test]
+    fn late_matchmaking_join_spawns_a_lobby_when_queue_is_empty() {
+        let mut stale = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        stale.phase = LobbyPhase::Loading;
+        let mut games = vec![stale];
+
+        let result = join_player(
+            &mut games,
+            &mut 20,
+            join_options(Some(10), channel_sender()),
+        )
+        .expect("late matchmaking join should create a fallback");
+
+        assert_eq!(result.0, 20);
+        assert_eq!(games.len(), 2);
+        assert_eq!(games[1].kind, LobbyKind::Matchmaking);
+        assert_eq!(games[1].players.len(), 1);
+    }
+
+    #[test]
+    fn stale_custom_lobby_is_not_rerouted() {
+        let mut stale = queue_lobby(10, LobbyKind::Custom, "FFA");
+        stale.phase = LobbyPhase::Loading;
+        let mut games = vec![stale];
+
+        let result = join_player(
+            &mut games,
+            &mut 20,
+            join_options(Some(10), channel_sender()),
+        );
+
+        assert_eq!(result.unwrap_err(), "Lobby is not accepting joins");
+        assert!(games[0].players.is_empty());
+    }
+
+    #[test]
+    fn unknown_lobby_is_not_rerouted() {
+        let mut games = vec![queue_lobby(20, LobbyKind::Matchmaking, "FFA")];
+
+        let result = join_player(
+            &mut games,
+            &mut 30,
+            join_options(Some(10), channel_sender()),
+        );
+
+        assert_eq!(result.unwrap_err(), "Lobby is not accepting joins");
+        assert!(games[0].players.is_empty());
     }
 
     #[test]

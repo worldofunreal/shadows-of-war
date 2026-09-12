@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-/// Paper-map label ink (off-white, not pure white).
-pub const NAMEPLATE_FILL: egui::Color32 = egui::Color32::BLACK;
+pub(crate) const TROOPS_ICON_SCALE: f32 = 1.15;
 
 pub fn nameplate_matte_player_rgb(rgb: [f32; 3]) -> egui::Color32 {
     let y = 0.299_f64 * rgb[0] as f64 + 0.587 * rgb[1] as f64 + 0.114 * rgb[2] as f64;
@@ -35,13 +34,6 @@ pub fn ensure_readable_nameplate_color(rgb: [f32; 3]) -> egui::Color32 {
     )
 }
 
-/// Draw the text galley directly with high performance (no outline).
-pub fn paint_nameplate_galley(painter: &egui::Painter, pos: egui::Pos2, galley: Arc<egui::Galley>) {
-    if !galley.is_empty() {
-        painter.galley(pos, galley, NAMEPLATE_FILL);
-    }
-}
-
 pub fn paint_glow_nameplate_galley(
     painter: &egui::Painter,
     pos: egui::Pos2,
@@ -72,48 +64,12 @@ pub fn paint_glow_nameplate_galley_with_ref(
     );
 }
 
-pub fn name_label_size(painter: &egui::Painter, name: &str, font_id: &egui::FontId) -> egui::Vec2 {
-    sow_ui_kit::widgets::measure_emoji_text(painter, name, font_id)
-}
-
-pub fn paint_flat_name_label(
-    painter: &egui::Painter,
-    pos: egui::Pos2,
-    name: &str,
-    font_id: egui::FontId,
-    color: egui::Color32,
-) {
-    sow_ui_kit::widgets::paint_emoji_text_at(
-        painter,
-        pos,
-        egui::Align2::LEFT_TOP,
-        name,
-        font_id,
-        color,
-        false,
-    );
-}
-
-pub fn paint_glow_name_label(
-    painter: &egui::Painter,
-    pos: egui::Pos2,
-    name: &str,
-    font_id: egui::FontId,
-    color: egui::Color32,
-) {
-    sow_ui_kit::widgets::paint_emoji_text_at(
-        painter,
-        pos,
-        egui::Align2::LEFT_TOP,
-        name,
-        font_id,
-        color,
-        true,
-    );
-}
-
 pub fn troops_icon_size(font_id: &egui::FontId) -> f32 {
-    font_id.size * 1.15
+    troops_icon_size_from_text(font_id.size)
+}
+
+pub(crate) fn troops_icon_size_from_text(text_size: f32) -> f32 {
+    text_size * TROOPS_ICON_SCALE
 }
 
 pub fn troops_row_width(troops_galley: &egui::Galley, font_id: &egui::FontId) -> f32 {
@@ -162,4 +118,15 @@ pub fn paint_glow_troops_row_with_style(
         style,
         reference_height,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::troops_icon_size_from_text;
+
+    #[test]
+    fn troops_icon_tracks_rendered_text_size() {
+        let icon = troops_icon_size_from_text(80.0);
+        assert!((icon - 92.0).abs() < f32::EPSILON);
+    }
 }

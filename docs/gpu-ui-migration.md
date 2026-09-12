@@ -61,9 +61,19 @@ reserve transparent quad padding for the configured outline/shadow; the shader
 maps atlas UVs only through that inner content rectangle. `NameplateStyle` is
 the client adapter from `DevConfig` to GPU and egui profiles.
 
+`layout.rs` is the only owner of nameplate geometry proportions. `NameplateStyle`
+derives the rendered name/troop sizes and the sword size from the same troop-text
+size. `NameplateLayout` consumes those measured bounds; callers must not add a
+second `zoom * scale` or icon-size formula.
+
+The current defaults are human avatar `3.6x`, bot/nation avatar `2.2x`, avatar-to-text
+gap `0.16x`, troop sword `1.15x` the rendered troop text, and category emoji at `70%`
+of the avatar diameter.
+
 On the GPU branch, `NameplatePainter::paint` measures with
-`TextRenderer::measure_string` and emits instances directly; it creates egui
-galleys only when the GPU renderer is unavailable. The fallback uses
+`TextRenderer::measure_string` (`TextMeasure { width, height }`) and emits
+instances directly; it creates egui galleys only when the GPU renderer is
+unavailable. The fallback uses
 `prepare_name`, `paint_prepared_name_with_glow`, and
 `paint_glow_troops_row_with_style` with the same `NAMEPLATE` emoji profile.
 

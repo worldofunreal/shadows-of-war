@@ -1,6 +1,8 @@
 /// Paints a circular avatar with a decorative ring frame.
 /// For textured avatars, clips to a circle via a triangle-fan mesh.
 /// For solid-color avatars (nations), fills a circle.
+const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
+
 pub fn paint_circular_avatar(
     painter: &egui::Painter,
     center: egui::Pos2,
@@ -90,7 +92,7 @@ pub fn draw_player_avatar(
                 vibrant_color,
             );
             let animal = sow_core::player::tribe_animal(opts.player_id, opts.player_name);
-            let emoji_size = opts.radius * 2.0 * 0.7;
+            let emoji_size = opts.radius * 2.0 * CATEGORY_EMOJI_DIAMETER_SCALE;
             let emoji_rect =
                 egui::Rect::from_center_size(opts.center, egui::vec2(emoji_size, emoji_size));
             if !sow_ui_kit::widgets::try_paint_emoji_with_style(
@@ -213,8 +215,8 @@ pub fn draw_player_avatar_gpu(tr: &mut crate::render::gpu::TextRenderer, opts: &
         sow_core::player::PlayerType::Human => None,
     };
     if let Some(glyph) = glyph {
-        // ~75% of the circle; the shared emoji style keeps the logical content size intact.
-        let half = opts.radius * 0.65;
+        // Same 70% diameter contract as the egui fallback; outline room is added by push_emoji.
+        let half = opts.radius * CATEGORY_EMOJI_DIAMETER_SCALE;
         tr.push_emoji(
             glyph,
             opts.center,

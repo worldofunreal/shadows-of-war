@@ -1,11 +1,12 @@
 use crate::config::ClientVisualConfig;
 
 /// Scaling factors relative to base territory font render size.
-const HUMAN_AVATAR_SCALE: f32 = 3.2;
-const BOT_AVATAR_SCALE: f32 = 1.8;
-const NATION_AVATAR_SCALE: f32 = 1.8;
+const HUMAN_AVATAR_SCALE: f32 = 3.6;
+const BOT_AVATAR_SCALE: f32 = 2.2;
+const NATION_AVATAR_SCALE: f32 = 2.2;
 const BADGE_SCALE: f32 = 1.8;
 const TROOPS_SCALE: f32 = 1.30;
+const AVATAR_TEXT_GAP_SCALE: f32 = 0.16;
 
 /// Computed dimensions for a single nameplate instance (Poka-Yoke architecture).
 /// Decouples font size calculations from font layout and avatar/badge geometry so future
@@ -147,7 +148,7 @@ impl NameplateLayout {
         };
         let right_h = name_size.y + item_spacing_y + troops_size.y;
         let spacing_y = if metrics.avatar_diameter > 0.0 && right_h > 0.0 {
-            metrics.render_size * 0.333
+            metrics.render_size * AVATAR_TEXT_GAP_SCALE
         } else {
             0.0
         };
@@ -281,6 +282,8 @@ mod tests {
             bot_metrics.avatar_diameter
         );
         assert_eq!(bot_metrics.avatar_diameter, nation_metrics.avatar_diameter);
+        assert!((human_metrics.avatar_diameter / scaled_size - HUMAN_AVATAR_SCALE).abs() < 1e-5);
+        assert!((bot_metrics.avatar_diameter / scaled_size - BOT_AVATAR_SCALE).abs() < 1e-5);
 
         // Bot avatars can be disabled via dev settings, human avatars stay visible
         let bot_hidden_metrics =
@@ -331,6 +334,22 @@ mod tests {
             layout.avatar_radius + border * 0.8,
             "clearance must include the full outer avatar stroke"
         );
+    }
+
+    #[test]
+    fn avatar_text_gap_uses_the_shared_compact_scale() {
+        let metrics = metrics(14.0);
+        let layout = NameplateLayout::compute(
+            egui::pos2(100.0, 100.0),
+            metrics,
+            egui::vec2(60.0, 14.0),
+            egui::vec2(50.0, 12.0),
+            true,
+            true,
+            0.0,
+        );
+        let gap = layout.text_top - (layout.avatar_center.y + layout.avatar_radius);
+        assert!((gap - metrics.render_size * AVATAR_TEXT_GAP_SCALE).abs() < 1e-5);
     }
 
     #[test]

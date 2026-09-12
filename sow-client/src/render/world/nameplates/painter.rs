@@ -39,6 +39,21 @@ impl NameplateStyle {
             .max(self.egui_emoji.shadow_dy(logical_badge_size));
         gpu_padding.max(egui_padding)
     }
+
+    #[inline]
+    fn name_render_size(&self, metrics: NameplateMetrics) -> f32 {
+        metrics.render_size * self.font_size_scale
+    }
+
+    #[inline]
+    fn troops_render_size(&self, metrics: NameplateMetrics) -> f32 {
+        metrics.troops_render_size * self.font_size_scale
+    }
+
+    #[inline]
+    fn troops_icon_size(&self, metrics: NameplateMetrics) -> f32 {
+        crate::hud::nameplate::troops_icon_size_from_text(self.troops_render_size(metrics))
+    }
 }
 
 pub(crate) struct NameplateInput<'a> {
@@ -157,35 +172,31 @@ impl<'a> NameplatePainter<'a> {
         let (prepared_name, troops_galley, name_size, troops_size) =
             if let Some(tr) = self.text_renderer.as_deref() {
                 let sf = self.sf.max(0.001);
-                let name_font_size = input.metrics.render_size * self.style.font_size_scale * sf;
+                let name_font_size = self.style.name_render_size(input.metrics) * sf;
                 let name_size = if input.show_names {
-                    egui::vec2(
-                        tr.measure_string(
-                            input.display_name,
-                            name_font_size,
-                            self.style.char_spacing,
-                            self.style.emoji_size_scale,
-                        ) / sf,
-                        name_font_size.max(name_font_size * self.style.emoji_size_scale) / sf,
-                    )
+                    let measure = tr.measure_string(
+                        input.display_name,
+                        name_font_size,
+                        self.style.char_spacing,
+                        self.style.emoji_size_scale,
+                    );
+                    egui::vec2(measure.width / sf, measure.height / sf)
                 } else {
                     egui::Vec2::ZERO
                 };
 
                 let troops_size = if input.show_troops {
-                    let icon_size = input.metrics.troops_render_size * 1.15;
-                    let troops_font_size =
-                        input.metrics.troops_render_size * self.style.font_size_scale * sf;
+                    let icon_size = self.style.troops_icon_size(input.metrics);
+                    let troops_font_size = self.style.troops_render_size(input.metrics) * sf;
+                    let measure = tr.measure_string(
+                        input.troops,
+                        troops_font_size,
+                        self.style.char_spacing,
+                        self.style.emoji_size_scale,
+                    );
                     egui::vec2(
-                        icon_size
-                            + 3.0
-                            + tr.measure_string(
-                                input.troops,
-                                troops_font_size,
-                                self.style.char_spacing,
-                                self.style.emoji_size_scale,
-                            ) / sf,
-                        icon_size.max(troops_font_size / sf),
+                        icon_size + 3.0 + measure.width / sf,
+                        icon_size.max(measure.height / sf),
                     )
                 } else {
                     egui::Vec2::ZERO
@@ -466,7 +477,7 @@ impl<'a> NameplatePainter<'a> {
                         input.center.x * self.sf,
                         (layout.text_top + layout.name_size.y * 0.85) * self.sf,
                     ],
-                    input.metrics.render_size * self.style.font_size_scale * self.sf,
+                    self.style.name_render_size(input.metrics) * self.sf,
                     color_arr,
                     self.style.gpu_text,
                     (0.5, self.style.char_spacing, self.style.emoji_size_scale),
@@ -478,7 +489,7 @@ impl<'a> NameplatePainter<'a> {
                 } else {
                     layout.text_top
                 };
-                let icon_size = input.metrics.troops_render_size * 1.15;
+                let icon_size = self.style.troops_icon_size(input.metrics);
                 let troops_left_x = input.center.x - layout.troops_size.x / 2.0;
                 tr.push_emoji(
                     "⚔",
@@ -496,7 +507,7 @@ impl<'a> NameplatePainter<'a> {
                         (troops_left_x + icon_size + 3.0) * self.sf,
                         (troops_row_y + layout.troops_size.y * 0.85) * self.sf,
                     ],
-                    input.metrics.troops_render_size * self.style.font_size_scale * self.sf,
+                    self.style.troops_render_size(input.metrics) * self.sf,
                     color_arr,
                     self.style.gpu_text,
                     (0.0, self.style.char_spacing, self.style.emoji_size_scale),
