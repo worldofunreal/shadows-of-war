@@ -9,6 +9,8 @@ Operational checklist for eligibility, Google Play, RevenueCat, monetization, an
 
 This is an evidence log, not a place for passwords, service-account JSON, API secrets, or tokens.
 Update status from Play Console, RevenueCat, and Devpost; do not preserve assumptions as facts.
+Android runtime evidence must follow `docs/android-runtime-contract.md`; catalog
+state and a successful build do not satisfy the purchase/runtime checkboxes.
 
 ## Current state
 
@@ -35,7 +37,8 @@ the semantic `versionName` and the Play `versionCode`; never reuse an uploaded A
 
 ## Android catalog
 
-Google Play and RevenueCat are separate states. The current Play products are active:
+`PLAY_API` (last recorded; re-read before relying on it): Google Play and
+RevenueCat are separate states. The current Play products are active:
 
 | Product | Product ID | Price | Type |
 |---|---|---:|---|

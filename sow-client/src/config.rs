@@ -2,9 +2,6 @@
 // Tweak these values and `cargo run --bin sow-client` to see changes without recompiling the server.
 
 pub struct ClientVisualConfig {
-    /// Below this `camera_zoom / sf`, world overlays use far LOD (dots, simplified buildings).
-    pub far_zoom_lod_threshold: f32,
-
     pub ui_lod_dot_radius: f32,
 
     // Master volume for nameplate text sizes.
@@ -31,7 +28,6 @@ pub struct ClientVisualConfig {
 impl Default for ClientVisualConfig {
     fn default() -> Self {
         Self {
-            far_zoom_lod_threshold: 2.5,
             ui_lod_dot_radius: 2.0,
 
             // Nameplates

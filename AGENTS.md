@@ -58,8 +58,11 @@ hostnames, paths and compatibility behavior are not production instructions.
 6. Restart only the affected jail service and verify jail-aware health.
 7. Retain the five newest releases and perform public verification.
 
-The relay is deliberately not restarted by this pipeline until a real drain
-contract exists. A relay change must not silently destroy active games.
+When `plan.relay`, the pipeline restarts the affected relay workers last via
+per-worker stop/start (`sow-dist/src/prod.rs:activate_relay_host`). The registered
+drain mode is force-kill (user-authorized 2026-08-21; non-destructive drain
+pending), which ends active games on restarted workers — a relay change must
+never ship without that drain report in the manifest.
 There is no production backfill subcommand. `./sow p` is the production
 deployment path for web/backend (WASM + FreeBSD + Azure); `./sow l` / `./sow local` is a local-only web/WASM preview;
 `./sow` without a subcommand runs the native client.
@@ -172,6 +175,18 @@ an unauthenticated HTTP `/internal/lobbies` request as a health probe.
 
 ## Audit guidance
 
+### Android evidence gate
+
+- `/home/bizkit/Github/shadows-of-war/docs/android-runtime-contract.md` is the
+  authoritative Android startup, bridge, commerce, and evidence contract.
+- Every Android claim must be labeled `SOURCE`, `DEVICE`, `PLAY_API`,
+  `TRANSACTION`, or `HISTORICAL`, and must identify the artifact SHA, source
+  SHA, package, versionCode, device, and timestamp when runtime is involved.
+- Source order, a successful build, a Play catalog response, or an old log is
+  not runtime or transaction proof. Use `scripts/android-local-test.sh` for
+  the executable startup gate; it must fail on missing artifact identity or
+  order violations.
+
 ### Investigation Protocol (Zero Trust)
 
 - Audit code and live state before proposing a cause; theories are not evidence.
@@ -195,3 +210,10 @@ an unauthenticated HTTP `/internal/lobbies` request as a health probe.
 - On a new VM, verify `sudo id`/root access before any other operation.
 - Every infrastructure mutation must be reproducible from this repository and
   the pipeline.
+
+## Commands
+
+- `cargo build --workspace` — build the project
+- `cargo test --workspace` — run the full test suite
+- `cargo fmt --all` — run the format task
+- `cargo clippy --workspace -- -D warnings` — run the lint task

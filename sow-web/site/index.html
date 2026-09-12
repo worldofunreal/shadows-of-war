@@ -56,41 +56,26 @@
         <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="36">
       </a>
       <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="#game">The game</a>
         <a href="/leaders/">Leaders</a>
-        <a href="#media">Gameplay</a>
         <a href="/how-to-play/">How to play</a>
-        <a href="#faq">FAQ</a>
       </nav>
       <div class="nav-actions">
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
           <span class="theme-icon" aria-hidden="true">☼</span>
           <span class="theme-label">Light mode</span>
         </button>
-        <button class="button button-small button-outline wou-auth-btn" type="button" id="wou-auth-trigger"
-          data-wou-auth-trigger aria-label="World of Unreal Universal Identity">
-          <span class="wou-icon">⬡</span>
-          <span id="wou-auth-label" data-wou-auth-label>Sign in</span>
-        </button>
-        <a class="button button-small button-orange" href="/play/">Play</a>
+        <a class="button button-small button-orange" href="/play/">Play now</a>
         <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu"
           aria-label="Open navigation">☰</button>
       </div>
     </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation">
-      <a href="#game">The game</a>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" aria-hidden="true">
       <a href="/leaders/">Leaders</a>
-      <a href="#media">Gameplay</a>
       <a href="/how-to-play/">How to play</a>
-      <a href="#faq">FAQ</a>
       <div class="mobile-menu-actions">
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
           <span class="theme-icon" aria-hidden="true">☼</span>
           <span class="theme-label">Light mode</span>
-        </button>
-        <button class="button button-outline wou-auth-btn" type="button" data-wou-auth-trigger
-          aria-label="World of Unreal Universal Identity">
-          <span class="wou-icon">⬡</span><span data-wou-auth-label>Sign in</span>
         </button>
       </div>
     </nav>
@@ -106,32 +91,24 @@
           <p class="hero-lede">Lead one of twelve historical commanders across a living world map. Build cities,
             factories, ports, and bunkers; negotiate with rivals; and turn a frontier into an empire.</p>
           <div class="hero-actions">
-            <a class="button button-orange" href="/play/"><span class="sheen" aria-hidden="true"></span>Play <span
-                aria-hidden="true">↗</span></a>
+            <a class="button button-orange" href="/play/"><span class="sheen" aria-hidden="true"></span>Play</a>
             <a class="button button-outline" href="#media"><span class="sheen" aria-hidden="true"></span>Watch gameplay
               <span aria-hidden="true">▶</span></a>
           </div>
         </div>
         <div class="hero-stage">
-          <div class="hero-frame hud-frame">
+          <div class="hero-frame">
             <div class="hologram-scanlines" aria-hidden="true"></div>
             <div class="hologram-glitch" aria-hidden="true"></div>
-            <div class="hero-frame-top"><span>LEADER SELECT</span><span data-hero-code>ROM / 01</span></div>
-            <picture>
-              <source media="(max-width: 700px)" data-hero-mobile srcset="/assets/shell/leaders/caesar_mobile.webp">
-              <img data-hero-image src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar leader artwork"
-                fetchpriority="high" decoding="async">
-            </picture>
+            <img data-hero-image src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar leader artwork"
+              fetchpriority="high" decoding="async">
             <div class="hero-frame-gradient"></div>
             <div class="hero-leader-caption">
-              <p class="mono-label">CURRENTLY COMMANDING</p>
               <h2 data-hero-name>Julius Caesar</h2>
               <p data-hero-civ>Roman Empire</p>
             </div>
-            <div class="hero-frame-index">01 <span>/</span> 12</div>
           </div>
           <div class="leader-rail" data-leader-rail aria-label="Choose a leader"></div>
-          <p class="rail-hint">Select a leader to inspect their empire</p>
         </div>
       </div>
     </section>
@@ -328,8 +305,7 @@
           </aside>
         </div>
         <div class="leaders-foot"><a class="inline-link" href="/leaders/"
-            style="color: var(--orange); font: 700 11px/1 var(--font-mono); text-transform: uppercase;">View all leaders
-            →</a></div>
+            style="color: var(--orange); font: 700 11px/1 var(--font-mono); text-transform: uppercase;">View all leaders</a></div>
       </div>
     </section>
 
@@ -407,13 +383,11 @@
         </div>
         <div class="platform-stack">
           <a class="platform-card platform-live" href="/play/"><span class="platform-icon">◎</span><span><b>Open
-                game</b><small>shadowsofwar.io</small></span><span class="platform-arrow">↗</span></a>
+                game</b><small>shadowsofwar.io</small></span></a>
           <a class="platform-card" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener"><span
-              class="platform-icon">◌</span><span><b>Discord</b><small>Community</small></span><span
-              class="platform-arrow">↗</span></a>
+              class="platform-icon">◌</span><span><b>Discord</b><small>Community</small></span></a>
           <a class="platform-card" href="https://t.me/shadowsofwario" target="_blank" rel="noopener"><span
-              class="platform-icon">✈</span><span><b>Telegram</b><small>Official Group</small></span><span
-              class="platform-arrow">↗</span></a>
+              class="platform-icon">✈</span><span><b>Telegram</b><small>Official Group</small></span></a>
         </div>
       </div>
     </section>
@@ -445,83 +419,7 @@
     </div>
     <div class="container footer-bottom"><span>© 2026 World of Unreal</span></div>
   </footer>
-  <!-- WOU-ID Tactical Universal Auth Modal -->
-  <div id="wou-auth-modal" class="wou-modal-backdrop hidden" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="wou-modal-card hud-frame">
-      <div class="wou-modal-header">
-        <div class="wou-modal-title">
-          <span class="wou-modal-brand">⬡ WORLD OF UNREAL ID</span>
-          <h3 id="wou-modal-header-title">Account Profile</h3>
-        </div>
-        <button type="button" class="wou-modal-close" id="wou-modal-close-btn" aria-label="Close modal">✕</button>
-      </div>
-
-      <div id="wou-auth-logged-view" class="wou-modal-body hidden">
-        <div class="wou-profile-badge">
-          <div class="wou-avatar" id="wou-user-avatar">⚔️</div>
-          <div class="wou-user-meta">
-            <h4 id="wou-user-name">Player</h4>
-            <p id="wou-user-clan">No Clan</p>
-            <p id="wou-user-id" class="wou-user-sub"></p>
-          </div>
-        </div>
-        <div class="wou-modal-actions">
-          <button type="button" class="button button-outline button-full button-danger" id="wou-logout-btn">Sign
-            Out</button>
-        </div>
-      </div>
-
-      <div id="wou-auth-unlogged-view" class="wou-modal-body">
-        <p class="wou-modal-desc">Sign in to sync your progression, clans, and match records across World of Unreal
-          titles.</p>
-
-        <div class="wou-sso-grid wou-sso-grid-4">
-          <button type="button" class="wou-sso-btn wou-sso-google" id="wou-login-google">
-            <span class="sso-icon">G</span> Google
-          </button>
-          <button type="button" class="wou-sso-btn wou-sso-discord" id="wou-login-discord">
-            <span class="sso-icon">🎮</span> Discord
-          </button>
-          <button type="button" class="wou-sso-btn" id="wou-login-twitter">
-            <span class="sso-icon">𝕏</span> X
-          </button>
-          <button type="button" class="wou-sso-btn" id="wou-login-meta">
-            <span class="sso-icon">∞</span> Meta
-          </button>
-        </div>
-
-        <div class="wou-divider"><span>OR WALLET / PASSKEY</span></div>
-
-        <div class="wou-sso-grid wou-sso-grid-3">
-          <button type="button" class="wou-sso-btn" id="wou-login-eth">
-            <span class="sso-icon">🦊</span> MetaMask
-          </button>
-          <button type="button" class="wou-sso-btn" id="wou-login-sol">
-            <span class="sso-icon">🟣</span> Phantom
-          </button>
-          <button type="button" class="wou-sso-btn" id="wou-login-passkey">
-            <span class="sso-icon">🔑</span> Passkey
-          </button>
-        </div>
-
-        <div class="wou-divider"><span>EMAIL OTP</span></div>
-
-        <form id="wou-email-form" class="wou-email-form">
-          <div class="wou-input-group" id="wou-email-step-1">
-            <input type="email" id="wou-email-input" aria-label="Email address" placeholder="name@example.com" required class="wou-input">
-            <button type="submit" class="button button-orange button-small">Send Code</button>
-          </div>
-          <div class="wou-input-group hidden" id="wou-email-step-2">
-            <input type="text" id="wou-otp-input" aria-label="Verification code" placeholder="6-digit code" maxlength="8" class="wou-input">
-            <button type="button" id="wou-verify-otp-btn" class="button button-orange button-small">Verify</button>
-          </div>
-          <p id="wou-auth-msg" class="wou-msg hidden"></p>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <script type="module" src="./wou-auth.js"></script>
+  <script src="./site-chrome.js"></script>
   <script src="./app.js"></script>
 </body>
 

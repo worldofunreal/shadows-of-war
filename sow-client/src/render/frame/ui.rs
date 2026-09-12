@@ -564,6 +564,7 @@ impl SowApp {
                                     player_type: info.player_type,
                                     player_color: info.player_color_raw,
                                     leader: &info.leader,
+                                    emoji_style: sow_ui_kit::widgets::DEFAULT_EMOJI_STYLE,
                                 },
                                 &self.ui.app.asset_loader,
                             );

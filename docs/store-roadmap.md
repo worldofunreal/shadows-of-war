@@ -31,9 +31,10 @@
 
 ## Current release state
 
-- Android gem bundles are registered in Google Play and attached to the same
-  RevenueCat offering as the three Stripe web products. The production AAB
-  currently contains the native RevenueCat purchase bridge.
+- `PLAY_API`: Android gem bundles are registered in Google Play and attached to
+  the same RevenueCat offering as the three Stripe web products.
+- `HISTORICAL`: the prior production AAB contained a native RevenueCat purchase
+  bridge; that artifact is not proof of the current source or runtime.
 - Web uses an in-game Stripe Embedded Checkout session. The client sends the
   authenticated public profile ID and product ID to `/store/checkout`; the
   private account secret never leaves the game. Stripe completion is imported
@@ -62,7 +63,9 @@
   `SOW_REVENUECAT_STRIPE_API_KEY`.
 - The Android TWA bridge uses the existing Custom Tabs session, the
   `common.use_as_origin` Digital Asset Links relation, and a correlated
-  `purchase_result` message. It must not navigate the TWA back to `/play/`.
+  `purchase_result` message. Silent Play Games authentication is requested only
+  after `sow:loader-ready`; restore uses the same native bridge. It must not
+  navigate the TWA back to `/play/` or open a web checkout on Android.
 
 ## Remaining release work
 

@@ -1,13 +1,12 @@
 use super::bunker::{BunkerPaintOpts, paint_bunker_effects};
 use super::cluster;
+use super::metrics::{self, BuildingLod, BuildingVisualMetrics};
 use super::overlays::{BuildingOverlayOpts, paint_building_overlays};
-use super::plates::*;
+use super::plates::building_kind_emoji;
 use super::preview::{PlacementPreviewOpts, paint_building_placement_preview};
 use crate::render::world::RenderContext;
 
-use crate::config::ClientVisualConfig;
 use crate::render::world::movers::world_to_tile;
-use crate::render::world::utils::*;
 
 pub(crate) fn render(
     ui: &mut crate::app::UiState,
@@ -17,7 +16,8 @@ pub(crate) fn render(
     gfx: &mut crate::app::GraphicsState,
     ctx: &RenderContext,
 ) {
-    if !sow_ui_kit::theme::dev_config::DevConfig::get().vfx_world_buildings {
+    let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
+    if !dev.vfx_world_buildings {
         return;
     }
 
@@ -28,7 +28,8 @@ pub(crate) fn render(
         default_config = sow_core::game_config::GameConfig::default();
         &default_config
     };
-    if ctx.zoom_scaled < super::super::BUILDINGS_HIDE_FLOOR {
+    let zoom_scaled = ctx.zoom_scaled;
+    if zoom_scaled < metrics::BUILDING_CULL_FLOOR {
         return;
     }
 
@@ -41,15 +42,9 @@ pub(crate) fn render(
         egui::Id::new("world_buildings"),
     ));
     let sf = ctx.sf;
-    let zoom_scaled = ctx.zoom_scaled;
     let player_colors = ctx.player_colors;
-    let building_scale = sow_ui_kit::theme::dev_config::DevConfig::get().building_scale;
-    let far_zoom_threshold = ClientVisualConfig::default().far_zoom_lod_threshold;
-    let zoom_factor = ((zoom_scaled - super::super::BUILDINGS_HIDE_FLOOR) / 9.0).clamp(0.0, 1.0);
-    let min_lod_scale = 0.5; // Scale when fully zoomed out
-    let max_lod_scale = 1.0; // Scale when fully zoomed in
-    let lod_scale = min_lod_scale + (max_lod_scale - min_lod_scale) * zoom_factor;
-    let final_scale = building_scale * lod_scale;
+    let building_lod = BuildingLod::for_zoom(zoom_scaled, dev.building_scale, dev.clamp_emoji_zoom);
+    let final_scale = building_lod.final_scale;
 
     if let Some(snap) = &sim.current_snapshot {
         let mx = input.last_mouse_x as f32;
@@ -65,9 +60,7 @@ pub(crate) fn render(
             };
 
         let mut rendered_buildings =
-            cluster::collect_rendered_buildings(snap, sim.map_w, zoom_scaled, far_zoom_threshold);
-
-        let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
+            cluster::collect_rendered_buildings(snap, sim.map_w, building_lod);
         if dev.fog_of_war {
             let my_id = sim.my_player_id.unwrap_or(0);
             rendered_buildings.retain(|b| {
@@ -96,42 +89,7 @@ pub(crate) fn render(
                 .then_with(|| a.count.cmp(&b.count))
         });
 
-        let mut gpu_rendered = false;
-        if let Some(ref mut tr) = gfx.text_renderer {
-            gpu_rendered = true;
-            // SDF outline — font dev settings control all emoji outlines globally.
-            let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
-            let outline_px = dev.font_outline_thickness * sf;
-            let shadow_px = dev.font_shadow_y * sf;
-            for b in &rendered_buildings {
-                // Render the building as a full emoji + alpha outline, sized to `base_size`
-                // (same as the egui path), positioned in screen space like all other text.
-                let icon_size = {
-                    let raw = get_building_icon_size(zoom_scaled);
-                    if dev.clamp_emoji_zoom {
-                        raw.clamp(8.0, 50.0)
-                    } else {
-                        raw
-                    }
-                };
-                let base_size = if b.count > 1 {
-                    28.0_f32.max(icon_size * 1.2)
-                } else {
-                    icon_size
-                } * final_scale;
-                let screen_x = input.camera_x + b.bx * input.camera_zoom;
-                let screen_y = input.camera_y + b.by * input.camera_zoom;
-                let a = if b.under_construction { 0.5f32 } else { 1.0f32 };
-                tr.push_emoji(
-                    building_kind_emoji(b.kind),
-                    [screen_x, screen_y],
-                    base_size * sf / 2.0,
-                    [1.0, 1.0, 1.0, a],
-                    ([0.0, 0.0, 0.0, a], outline_px, shadow_px),
-                );
-            }
-        }
-
+        let gpu_rendered = gfx.text_renderer.is_some();
         for b in rendered_buildings {
             let screen_x = (input.camera_x + b.bx * input.camera_zoom) / sf;
             let screen_y = (input.camera_y + b.by * input.camera_zoom) / sf;
@@ -147,25 +105,26 @@ pub(crate) fn render(
             }
 
             let center = egui::pos2(screen_x, screen_y);
-
-            let icon_size = {
-                let raw = get_building_icon_size(zoom_scaled);
-                if dev.clamp_emoji_zoom {
-                    raw.clamp(8.0, 50.0)
-                } else {
-                    raw
-                }
-            };
-            let base_size = if b.count > 1 {
-                28.0_f32.max(icon_size * 1.2)
-            } else {
-                icon_size
-            } * final_scale;
+            let visual =
+                BuildingVisualMetrics::for_building(building_lod, zoom_scaled, b.count, &dev);
+            let base_size = visual.marker_size;
             let rect = egui::Rect::from_center_size(center, egui::vec2(base_size, base_size));
 
-            // Icon sprite rendering
-
-            if !gpu_rendered {
+            if gpu_rendered {
+                let tr = gfx
+                    .text_renderer
+                    .as_mut()
+                    .expect("text renderer state changed during building render");
+                let a = if b.under_construction { 0.5f32 } else { 1.0f32 };
+                tr.push_emoji(
+                    building_kind_emoji(b.kind),
+                    [screen_x * sf, screen_y * sf],
+                    base_size * sf / 2.0,
+                    [1.0, 1.0, 1.0, a],
+                    crate::render::dev_emoji_outline(&dev, sf, [0.0, 0.0, 0.0, a]),
+                );
+            } else {
+                // Icon sprite rendering
                 let player_color = if b.owner_id != 0 {
                     player_colors
                         .get(b.owner_id as usize)
@@ -309,9 +268,8 @@ pub(crate) fn render(
                     config,
                     b: &b,
                     center,
-                    base_size,
+                    metrics: visual,
                     zoom_scaled,
-                    final_scale,
                     sf,
                     hovered_tile_idx,
                     player_colors,

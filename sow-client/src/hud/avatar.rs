@@ -59,6 +59,7 @@ pub struct AvatarRenderOpts<'a> {
     pub player_type: sow_core::player::PlayerType,
     pub player_color: [f32; 3],
     pub leader: &'a sow_core::player::Leader,
+    pub emoji_style: sow_ui_kit::theme::TextGlowStyle,
 }
 
 pub fn draw_player_avatar(
@@ -92,11 +93,12 @@ pub fn draw_player_avatar(
             let emoji_size = opts.radius * 2.0 * 0.7;
             let emoji_rect =
                 egui::Rect::from_center_size(opts.center, egui::vec2(emoji_size, emoji_size));
-            if !sow_ui_kit::widgets::try_paint_emoji(
+            if !sow_ui_kit::widgets::try_paint_emoji_with_style(
                 painter,
                 animal,
                 emoji_rect,
                 egui::Color32::WHITE,
+                opts.emoji_style,
             ) {
                 let emoji_galley = painter.layout_no_wrap(
                     animal.to_owned(),
@@ -107,7 +109,7 @@ pub fn draw_player_avatar(
                     opts.center.x - emoji_galley.size().x / 2.0,
                     opts.center.y - emoji_galley.size().y / 2.0,
                 );
-                painter.galley(emoji_pos, emoji_galley, egui::Color32::WHITE);
+                painter.galley(emoji_pos, emoji_galley, egui::Color32::WHITE); // emoji-ok: atlas miss
             }
         }
         sow_core::player::PlayerType::Human => {
@@ -155,6 +157,7 @@ pub struct GpuAvatarOpts<'a> {
     pub player_type: sow_core::player::PlayerType,
     pub player_color: [f32; 3],
     pub leader: sow_core::player::Leader,
+    pub emoji_outline: crate::render::gpu::OutlineStyle,
 }
 
 pub fn draw_player_avatar_gpu(tr: &mut crate::render::gpu::TextRenderer, opts: &GpuAvatarOpts) {
@@ -210,15 +213,14 @@ pub fn draw_player_avatar_gpu(tr: &mut crate::render::gpu::TextRenderer, opts: &
         sow_core::player::PlayerType::Human => None,
     };
     if let Some(glyph) = glyph {
-        // ~75% of the circle (push_emoji quad = half * 2.5 diameter). No custom outline —
-        // the SDF outline per dev font settings applies globally if enabled.
+        // ~75% of the circle; the shared emoji style keeps the logical content size intact.
         let half = opts.radius * 0.65;
         tr.push_emoji(
             glyph,
             opts.center,
             half,
             [1.0, 1.0, 1.0, 1.0],
-            ([0.0, 0.0, 0.0, 1.0], 0.0, 0.0),
+            opts.emoji_outline,
         );
     }
 }

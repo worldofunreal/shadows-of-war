@@ -125,26 +125,17 @@ pub(crate) fn render(
                         let outline_color_arr = [0.0f32, 0.0, 0.0, 1.0];
 
                         let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
-                        let face_dilate = dev.font_face_dilate * sf;
-                        let outline_thickness = dev.font_outline_thickness * sf;
-                        let shadow_y = dev.font_shadow_y * sf;
-                        let underlay_softness = dev.font_underlay_softness * sf;
                         let char_spacing = dev.font_char_spacing;
                         let font_size_scale = dev.font_size_scale;
                         let emoji_scale = dev.emoji_size_scale;
 
-                        let settings = crate::render::gpu::TmpFontSettings {
-                            face_dilate,
-                            outline_thickness,
-                            underlay_offset_y: shadow_y,
-                            underlay_softness,
-                        };
+                        let settings = crate::render::dev_text_style(&dev, sf, outline_color_arr);
 
                         tr.push_string(
                             "[X]",
                             [center.x * sf, (center.y + 5.0) * sf],
                             20.0 * font_size_scale * sf,
-                            (color_arr, outline_color_arr),
+                            color_arr,
                             settings,
                             (0.5, char_spacing, emoji_scale),
                         );
@@ -248,20 +239,11 @@ pub(crate) fn render(
                         let outline_color_arr = [0.0f32, 0.0, 0.0, 1.0];
 
                         let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
-                        let face_dilate = dev.font_face_dilate * sf;
-                        let outline_thickness = dev.font_outline_thickness * sf;
-                        let shadow_y = dev.font_shadow_y * sf;
-                        let underlay_softness = dev.font_underlay_softness * sf;
                         let char_spacing = dev.font_char_spacing;
                         let font_size_scale = dev.font_size_scale;
                         let emoji_scale = dev.emoji_size_scale;
 
-                        let settings = crate::render::gpu::TmpFontSettings {
-                            face_dilate,
-                            outline_thickness,
-                            underlay_offset_y: shadow_y,
-                            underlay_softness,
-                        };
+                        let settings = crate::render::dev_text_style(&dev, sf, outline_color_arr);
 
                         let font_size = 13.0;
                         let icon_size = font_size * 1.15;
@@ -279,7 +261,7 @@ pub(crate) fn render(
                             ],
                             icon_half * sf,
                             color_arr,
-                            (outline_color_arr, outline_thickness, shadow_y),
+                            crate::render::dev_emoji_outline(&dev, sf, outline_color_arr),
                         );
 
                         // Number text left-aligned after sword
@@ -289,7 +271,7 @@ pub(crate) fn render(
                             &entry.1,
                             [text_left, troops_baseline_y],
                             font_size * font_size_scale * sf,
-                            (color_arr, outline_color_arr),
+                            color_arr,
                             settings,
                             (0.0, char_spacing, emoji_scale),
                         );

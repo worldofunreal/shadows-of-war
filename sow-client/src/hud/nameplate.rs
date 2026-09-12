@@ -140,3 +140,26 @@ pub fn paint_glow_troops_row(
         reference_height,
     );
 }
+
+pub fn paint_glow_troops_row_with_style(
+    painter: &egui::Painter,
+    pos: egui::Pos2,
+    troops_galley: Arc<egui::Galley>,
+    font_id: &egui::FontId,
+    base_color: egui::Color32,
+    style: sow_ui_kit::theme::TextGlowStyle,
+    reference_height: Option<f32>,
+) {
+    let icon_size = troops_icon_size(font_id);
+    let icon_rect = egui::Rect::from_min_size(pos, egui::vec2(icon_size, icon_size));
+    sow_ui_kit::widgets::try_paint_emoji_with_style(painter, "⚔", icon_rect, base_color, style);
+    let text_pos = pos + egui::vec2(icon_size + 3.0, 0.0);
+    sow_ui_kit::theme::text_glow::paint_glow_galley(
+        painter,
+        text_pos,
+        troops_galley,
+        base_color,
+        style,
+        reference_height,
+    );
+}

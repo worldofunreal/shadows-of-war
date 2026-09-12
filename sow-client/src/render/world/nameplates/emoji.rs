@@ -11,7 +11,14 @@ pub(crate) struct SideBadgeOpts<'a> {
 }
 
 /// Status badge drawn at an absolute screen position (beside avatar). Spring entrance + glow.
-pub(crate) fn draw_side_status_badge(painter: &egui::Painter, opts: &SideBadgeOpts) {
+pub(crate) fn draw_side_status_badge(
+    painter: &egui::Painter,
+    text_renderer: Option<&mut crate::render::gpu::TextRenderer>,
+    sf: f32,
+    opts: &SideBadgeOpts,
+    gpu_outline: crate::render::gpu::OutlineStyle,
+    style: sow_ui_kit::theme::TextGlowStyle,
+) {
     let pos = opts.pos;
     let size = opts.size;
     let player_id = opts.player_id;
@@ -70,21 +77,18 @@ pub(crate) fn draw_side_status_badge(painter: &egui::Painter, opts: &SideBadgeOp
     }
 
     let tint = egui::Color32::WHITE.linear_multiply(anim * flash_alpha);
-    let painted = if let Some(uv) = sow_ui_kit::atlas_uv(emoji) {
-        if let Some(texture) = sow_ui_kit::atlas_texture(painter.ctx()) {
-            painter.image(
-                texture.id(),
-                rect,
-                uv,
-                egui::Color32::from_white_alpha(tint.a()),
-            );
-            true
-        } else {
-            false
-        }
-    } else {
-        false
-    };
+    let tint_arr = [1.0, 1.0, 1.0, tint.a() as f32 / 255.0];
+    let gpu_painted = text_renderer.is_some_and(|tr| {
+        tr.push_emoji(
+            emoji,
+            [pos.x * sf, pos.y * sf],
+            final_size * 0.5 * sf,
+            tint_arr,
+            gpu_outline,
+        )
+    });
+    let painted = gpu_painted
+        || sow_ui_kit::widgets::try_paint_emoji_with_style(painter, emoji, rect, tint, style);
     if !painted {
         painter.text(
             rect.center(),
@@ -92,20 +96,24 @@ pub(crate) fn draw_side_status_badge(painter: &egui::Painter, opts: &SideBadgeOp
             emoji,
             egui::FontId::proportional(final_size * 0.7),
             tint,
-        );
+        ); // emoji-ok: atlas miss is the documented last-resort fallback
     }
 }
 
 /// Express emoji drawn at an absolute screen position (beside avatar). Spring entrance + hold.
 pub(crate) fn draw_side_express_emoji(
     painter: &egui::Painter,
+    text_renderer: Option<&mut crate::render::gpu::TextRenderer>,
+    sf: f32,
     pos: egui::Pos2,
     size: f32,
     player_id: u16,
-    active_emoji: Option<&String>,
+    active_emoji: Option<&str>,
+    gpu_outline: crate::render::gpu::OutlineStyle,
+    style: sow_ui_kit::theme::TextGlowStyle,
 ) {
     let last_emoji_id = egui::Id::new(("last_active_emoji", player_id));
-    let mut current_emoji = active_emoji.cloned();
+    let mut current_emoji = active_emoji.map(str::to_owned);
     let is_active = current_emoji.is_some() && current_emoji.as_deref() != Some("🗡️");
     let active_anim_id = egui::Id::new(("emoji_anim_progress", player_id));
     let anim_progress = painter
@@ -136,16 +144,23 @@ pub(crate) fn draw_side_express_emoji(
         let final_size = (size * anim_scale).round();
         if final_size > 1.0 {
             let rect = egui::Rect::from_center_size(pos, egui::vec2(final_size, final_size));
-            let painted = if let Some(uv) = sow_ui_kit::atlas_uv(emoji_str) {
-                if let Some(texture) = sow_ui_kit::atlas_texture(painter.ctx()) {
-                    painter.image(texture.id(), rect, uv, egui::Color32::WHITE);
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
+            let gpu_painted = text_renderer.is_some_and(|tr| {
+                tr.push_emoji(
+                    emoji_str,
+                    [pos.x * sf, pos.y * sf],
+                    final_size * 0.5 * sf,
+                    [1.0; 4],
+                    gpu_outline,
+                )
+            });
+            let painted = gpu_painted
+                || sow_ui_kit::widgets::try_paint_emoji_with_style(
+                    painter,
+                    emoji_str,
+                    rect,
+                    egui::Color32::WHITE,
+                    style,
+                );
             if !painted {
                 painter.text(
                     rect.center(),
@@ -153,7 +168,7 @@ pub(crate) fn draw_side_express_emoji(
                     emoji_str,
                     egui::FontId::proportional(final_size),
                     egui::Color32::WHITE,
-                );
+                ); // emoji-ok: atlas miss is the documented last-resort fallback
             }
         }
     }

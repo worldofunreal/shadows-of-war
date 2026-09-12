@@ -4,8 +4,9 @@
 //!   1. Connect to orchestrator WS
 //!   2. Send Join, receive JoinAck
 //!   3. Send MapDownloadProgress(100) + Ready
-//!   4. Wait for ServerMessage::Start with relay_port
-//!   5. Connect to relay WS (via NGINX proxy path)
+//!   4. Wait for ServerMessage::Start with relay_port + relay_host
+//!   5. Connect to the relay directly (wss://relay_host:relay_port/ws/,
+//!      or --relay-base-url for the legacy NGINX proxy shape)
 //!   6. Send Ready to relay
 //!   7. Receive at least one Turn
 //!   8. Send Leave, disconnect
@@ -50,6 +51,20 @@ fn relay_url(orchestrator_url: &Url, relay_base_url: Option<&Url>, relay_port: u
     url.set_query(None);
     url.set_fragment(None);
     url
+}
+
+/// Direct relay URL from a `Start{relay_host, relay_port}` handoff.
+/// Keeps the orchestrator URL's scheme; production always supplies both fields.
+fn direct_relay_url(orchestrator_url: &Url, relay_host: &str, relay_port: u16) -> Option<Url> {
+    let mut url = orchestrator_url.clone();
+    if url.set_host(Some(relay_host)).is_err() {
+        return None;
+    }
+    let _ = url.set_port(Some(relay_port));
+    url.set_path("/ws/");
+    url.set_query(None);
+    url.set_fragment(None);
+    Some(url)
 }
 
 fn step(n: u8, label: &str) {
@@ -124,7 +139,7 @@ struct Args {
     )]
     url: Url,
 
-    /// Optional origin to use for the NGINX relay proxy path
+    /// Optional origin forcing the legacy NGINX relay-proxy URL shape (/relay/{port}/ws/)
     #[arg(long, value_parser = parse_websocket_url)]
     relay_base_url: Option<Url>,
 
@@ -229,6 +244,7 @@ async fn main() {
         "Waiting for ServerMessage::Start (up to 30s for countdown)...",
     );
     let relay_port: u16;
+    let relay_host: Option<String>;
     let start_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
 
     loop {
@@ -256,8 +272,10 @@ async fn main() {
         match msg {
             Ok(ServerMessage::Start(start)) => {
                 relay_port = start.relay_port.unwrap_or(0);
+                relay_host = start.relay_host.clone();
                 pass(&format!(
-                    "Start received! relay_port={}, my_id={:?}, players={}, seed={}",
+                    "Start received! relay_host={:?}, relay_port={}, my_id={:?}, players={}, seed={}",
+                    relay_host,
                     relay_port,
                     start.my_player_id,
                     start.players.len(),
@@ -292,7 +310,12 @@ async fn main() {
     // ── Step 5: Connect to relay ────────────────────────────────────────────
     step(5, &format!("Connecting to relay on port {relay_port}..."));
 
-    let relay_url = relay_url(&url, relay_base_url.as_ref(), relay_port);
+    let relay_url = match (&relay_base_url, &relay_host) {
+        (Some(base), _) => relay_url(&url, Some(base), relay_port),
+        (None, Some(host)) => direct_relay_url(&url, host, relay_port)
+            .unwrap_or_else(|| fail(&format!("Invalid relay_host in Start: {host}"))),
+        (None, None) => relay_url(&url, None, relay_port),
+    };
     eprintln!("  Relay URL: {relay_url}");
 
     // Retry connection for up to 5 seconds (relay may still be booting)
@@ -380,7 +403,7 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Args, parse_websocket_url, relay_url};
+    use super::{Args, direct_relay_url, parse_websocket_url, relay_url};
     use clap::Parser;
 
     #[test]
@@ -425,6 +448,25 @@ mod tests {
         assert!(parse_websocket_url("https://example.test/ws/").is_err());
         assert!(parse_websocket_url("ws:///ws/").is_err());
         assert!(parse_websocket_url("not a url").is_err());
+    }
+
+    #[test]
+    fn direct_relay_url_uses_start_host_and_port() {
+        let orchestrator = parse_websocket_url("wss://shadowsofwar.io/ws/").unwrap();
+
+        assert_eq!(
+            direct_relay_url(&orchestrator, "relay.shadowsofwar.io", 25_592)
+                .unwrap()
+                .as_str(),
+            "wss://relay.shadowsofwar.io:25592/ws/"
+        );
+    }
+
+    #[test]
+    fn direct_relay_url_rejects_invalid_host() {
+        let orchestrator = parse_websocket_url("wss://shadowsofwar.io/ws/").unwrap();
+
+        assert!(direct_relay_url(&orchestrator, "not a host!", 25_592).is_none());
     }
 
     #[test]

@@ -3,8 +3,8 @@ use crate::text::msdf::FontAtlas;
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_DISC, KIND_EMOJI, KIND_GLYPH,
-    KIND_RECT, KIND_RING, KIND_SPRITE, TextGlobals, TextInstanceGpu, TextShaderData,
-    TmpFontSettings, avatar_slot_uv,
+    KIND_RECT, KIND_RING, KIND_SPRITE, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
+    TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -20,6 +20,56 @@ pub fn emoji_uv_opt(emoji: &str) -> Option<[f32; 4]> {
 }
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
+
+fn emoji_geometry(
+    screen_pos: [f32; 2],
+    half_size: f32,
+    outline: OutlineStyle,
+) -> ([f32; 2], [f32; 2], [f32; 4]) {
+    let content_half = half_size.max(0.0);
+    let padding = outline.effect_padding();
+    let quad_half = content_half + padding;
+    let diameter = quad_half * 2.0;
+    let content_min = if diameter > 0.0 {
+        padding / diameter
+    } else {
+        0.0
+    };
+    (
+        [screen_pos[0] - quad_half, screen_pos[1] - quad_half],
+        [diameter; 2],
+        [
+            content_min,
+            content_min,
+            1.0 - content_min,
+            1.0 - content_min,
+        ],
+    )
+}
+
+fn emoji_instance(
+    uv_rect: [f32; 4],
+    screen_pos: [f32; 2],
+    half_size: f32,
+    tint: [f32; 4],
+    outline: OutlineStyle,
+    underlay_softness: f32,
+) -> TextInstanceGpu {
+    let (screen_pos, size, content_rect) = emoji_geometry(screen_pos, half_size, outline);
+    TextInstanceGpu {
+        screen_pos,
+        size,
+        uv_rect,
+        content_rect,
+        color: tint,
+        outline_color: outline.color,
+        face_dilate: 0.0,
+        outline_thickness: outline.thickness,
+        underlay_offset_y: outline.shadow_y,
+        underlay_softness,
+        kind: KIND_EMOJI,
+    }
+}
 
 pub struct TextRenderer {
     pub font_atlas_desc: FontAtlas,
@@ -183,11 +233,11 @@ impl TextRenderer {
         text: &str,
         pos: [f32; 2],
         font_size: f32,
-        colors: ([f32; 4], [f32; 4]),
-        settings: TmpFontSettings,
+        color: [f32; 4],
+        settings: TextPaintStyle,
         layout: (f32, f32, f32),
     ) {
-        let (color, outline_color) = colors;
+        let outline_color = settings.outline.color;
         let (align_x, char_spacing, emoji_scale) = layout;
         if text.is_empty() {
             return;
@@ -233,11 +283,12 @@ impl TextRenderer {
                             (glyph.x + glyph.width) as f32 / aw,
                             (glyph.y + glyph.height) as f32 / ah,
                         ],
+                        content_rect: [0.0, 0.0, 1.0, 1.0],
                         color,
                         outline_color,
                         face_dilate: settings.face_dilate,
-                        outline_thickness: settings.outline_thickness,
-                        underlay_offset_y: settings.underlay_offset_y,
+                        outline_thickness: settings.outline.thickness,
+                        underlay_offset_y: settings.outline.shadow_y,
                         underlay_softness: settings.underlay_softness,
                         kind: KIND_GLYPH,
                     });
@@ -265,18 +316,18 @@ impl TextRenderer {
                 x_advance += emoji_size * char_spacing;
                 prev_char = None;
                 if self.upload_instances.len() < MAX_TEXT_GLYPHS {
-                    self.upload_instances.push(TextInstanceGpu {
-                        screen_pos: [pos[0] + advance, pos[1] - emoji_size],
-                        size: [emoji_size, emoji_size],
-                        uv_rect: uv,
+                    let center = [
+                        pos[0] + advance + emoji_size * 0.5,
+                        pos[1] - emoji_size * 0.5,
+                    ];
+                    self.upload_instances.push(emoji_instance(
+                        uv,
+                        center,
+                        emoji_size * 0.5,
                         color,
-                        outline_color,
-                        face_dilate: 0.0,
-                        outline_thickness: 0.0,
-                        underlay_offset_y: 0.0,
-                        underlay_softness: 0.0,
-                        kind: KIND_EMOJI,
-                    });
+                        settings.outline,
+                        settings.underlay_softness,
+                    ));
                 }
                 if has_selector {
                     chars.next();
@@ -345,7 +396,8 @@ impl TextRenderer {
     }
 
     /// Push a screen-space emoji with alpha-dilated outline + drop shadow.
-    /// `screen_pos` is the center in physical pixels, `half_size` the half-extent.
+    /// `screen_pos` is the center in physical pixels, `half_size` the logical content half-extent;
+    /// the submitted quad grows only by the effect padding.
     /// Returns `false` if the emoji isn't in the atlas.
     pub fn push_emoji(
         &mut self,
@@ -353,28 +405,14 @@ impl TextRenderer {
         screen_pos: [f32; 2],
         half_size: f32,
         tint: [f32; 4],
-        outline: ([f32; 4], f32, f32),
+        outline: OutlineStyle,
     ) -> bool {
-        let (outline_color, outline_thickness, shadow_offset_y) = outline;
         let Some(emoji_uv) = emoji_uv_opt(emoji) else {
             return false;
         };
-        // Expand quad 25% so outline taps have room outside the sprite.
-        let expand = 1.25;
-        let expanded = half_size * expand;
-        let top_left = [screen_pos[0] - expanded, screen_pos[1] - expanded];
-        self.push_inst(TextInstanceGpu {
-            screen_pos: top_left,
-            size: [expanded * 2.0; 2],
-            uv_rect: emoji_uv,
-            color: tint,
-            outline_color,
-            face_dilate: 0.0,
-            outline_thickness,
-            underlay_offset_y: shadow_offset_y,
-            underlay_softness: 0.0,
-            kind: KIND_EMOJI,
-        });
+        self.push_inst(emoji_instance(
+            emoji_uv, screen_pos, half_size, tint, outline, 0.0,
+        ));
         true
     }
 
@@ -390,7 +428,7 @@ impl TextRenderer {
             screen_pos,
             half_size,
             [1.0, 1.0, 1.0, 1.0],
-            ([0.0, 0.0, 0.0, 0.9], 1.5, 1.5),
+            OutlineStyle::TACTICAL,
         )
     }
 
@@ -400,6 +438,7 @@ impl TextRenderer {
             screen_pos: [center[0] - radius, center[1] - radius],
             size: [radius * 2.0, radius * 2.0],
             uv_rect: [0.0, 0.0, 1.0, 1.0],
+            content_rect: [0.0, 0.0, 1.0, 1.0],
             color,
             outline_color: [0.0; 4],
             face_dilate: 0.0,
@@ -417,6 +456,7 @@ impl TextRenderer {
             screen_pos: [center[0] - radius, center[1] - radius],
             size: [radius * 2.0, radius * 2.0],
             uv_rect: [0.0, 0.0, 1.0, 1.0],
+            content_rect: [0.0, 0.0, 1.0, 1.0],
             color,
             outline_color: [0.0; 4],
             face_dilate: 0.0,
@@ -440,6 +480,7 @@ impl TextRenderer {
             screen_pos: [center[0] - radius, center[1] - radius],
             size: [radius * 2.0, radius * 2.0],
             uv_rect,
+            content_rect: [0.0, 0.0, 1.0, 1.0],
             color: tint,
             outline_color: [0.0; 4],
             face_dilate: 0.0,
@@ -456,6 +497,7 @@ impl TextRenderer {
             screen_pos,
             size,
             uv_rect: [0.0; 4],
+            content_rect: [0.0, 0.0, 1.0, 1.0],
             color,
             outline_color: [0.0; 4],
             face_dilate: 0.0,
@@ -597,5 +639,61 @@ impl TextRenderer {
         render_ctx
             .context
             .destroy_buffer(self.avatar_atlas_tex.buffer);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn emoji_geometry_keeps_logical_size_and_reserves_effect_room() {
+        let outline = OutlineStyle {
+            color: [0.0, 0.0, 0.0, 1.0],
+            thickness: 3.0,
+            shadow_y: 5.0,
+        };
+        let (screen_pos, size, content_rect) = emoji_geometry([100.0, 50.0], 12.0, outline);
+        let content_size = [
+            size[0] * (content_rect[2] - content_rect[0]),
+            size[1] * (content_rect[3] - content_rect[1]),
+        ];
+
+        assert_eq!(screen_pos, [83.0, 33.0]);
+        assert_eq!(size, [34.0, 34.0]);
+        assert!((content_size[0] - 24.0).abs() < 1e-5);
+        assert!((content_size[1] - 24.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn emoji_geometry_does_not_expand_without_effects() {
+        let (screen_pos, size, content_rect) =
+            emoji_geometry([10.0, 20.0], 7.0, OutlineStyle::NONE);
+
+        assert_eq!(screen_pos, [3.0, 13.0]);
+        assert_eq!(size, [14.0, 14.0]);
+        assert_eq!(content_rect, [0.0, 0.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn inline_emoji_inherits_the_configured_outline() {
+        let outline = OutlineStyle {
+            color: [0.0, 0.0, 0.0, 0.8],
+            thickness: 2.25,
+            shadow_y: 3.5,
+        };
+        let instance = emoji_instance(
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0],
+            4.0,
+            [1.0; 4],
+            outline,
+            0.25,
+        );
+
+        assert_eq!(instance.outline_color, outline.color);
+        assert_eq!(instance.outline_thickness, outline.thickness);
+        assert_eq!(instance.underlay_offset_y, outline.shadow_y);
+        assert_eq!(instance.underlay_softness, 0.25);
     }
 }

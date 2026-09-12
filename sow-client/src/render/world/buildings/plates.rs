@@ -155,14 +155,12 @@ pub(crate) fn paint_new_build_ghost(
         let phys_y = center.y * sf;
         let half = base_size * sf * 0.5;
         let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
-        let outline_px = dev.font_outline_thickness * sf;
-        let shadow_px = dev.font_shadow_y * sf;
         if tr.push_emoji(
             emoji,
             [phys_x, phys_y],
             half,
             [1.0, 1.0, 1.0, 0.75], // ghost: 75% opacity
-            ([0.0, 0.0, 0.0, 0.75], outline_px, shadow_px),
+            crate::render::dev_emoji_outline(&dev, sf, [0.0, 0.0, 0.0, 0.75]),
         ) {
             return;
         }

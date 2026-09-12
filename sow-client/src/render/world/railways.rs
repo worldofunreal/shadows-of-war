@@ -448,7 +448,7 @@ pub(crate) fn render(
     if !sow_ui_kit::theme::dev_config::DevConfig::get().vfx_railways {
         return;
     }
-    if zoom_scaled < super::BUILDINGS_HIDE_FLOOR {
+    if zoom_scaled < super::RAILWAYS_HIDE_FLOOR {
         return;
     }
 
@@ -484,7 +484,7 @@ pub(crate) fn render(
     let sw = input.screen_w;
     let sh = input.screen_h;
 
-    let alpha_t = ((zoom_scaled - super::BUILDINGS_HIDE_FLOOR) / 0.4).clamp(0.0, 1.0);
+    let alpha_t = ((zoom_scaled - super::RAILWAYS_HIDE_FLOOR) / 0.4).clamp(0.0, 1.0);
     let fog_enabled = sow_ui_kit::theme::dev_config::DevConfig::get().fog_of_war;
 
     for seg in &ui.rail_state.segments {

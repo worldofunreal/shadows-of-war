@@ -75,6 +75,17 @@ fn emoji_icon_size(font: &FontId) -> f32 {
     font.size * 1.4
 }
 
+pub const DEFAULT_EMOJI_STYLE: crate::theme::TextGlowStyle = crate::theme::TextGlowStyle {
+    outline_width_ratio: 0.04,
+    outline_width_min: 0.4,
+    outline_width_max: 1.5,
+    shadow_dy_ratio: 0.08,
+    shadow_dy_min: 0.8,
+    shadow_dy_max: 3.0,
+    outline_alpha: 102,
+    shadow_alpha: 102,
+};
+
 /// Parse and layout a mixed emoji/text string once for reuse across frames.
 pub fn prepare_name(painter: &egui::Painter, text: &str, font_id: &FontId) -> PreparedName {
     let runs = split_runs(text);
@@ -155,7 +166,7 @@ fn paint_prepared_runs_with_glow(
             } => {
                 let r =
                     Rect::from_center_size(Pos2::new(x + height / 2.0, cy), Vec2::splat(*height));
-                try_paint_emoji(painter, emoji, r, color);
+                try_paint_emoji_with_style(painter, emoji, r, color, style);
                 x += width;
             }
         }
@@ -248,6 +259,17 @@ pub fn paint_prepared_name_with_glow(
 
 /// Draw a pixel emoji from the embedded atlas. Returns false if the glyph is not in the atlas.
 pub fn try_paint_emoji(painter: &egui::Painter, emoji: &str, rect: Rect, tint: Color32) -> bool {
+    try_paint_emoji_with_style(painter, emoji, rect, tint, DEFAULT_EMOJI_STYLE)
+}
+
+/// Draw a pixel emoji from the atlas with the caller's text-glow profile.
+pub fn try_paint_emoji_with_style(
+    painter: &egui::Painter,
+    emoji: &str,
+    rect: Rect,
+    tint: Color32,
+    style: crate::theme::TextGlowStyle,
+) -> bool {
     let Some(uv) = crate::atlas_uv(emoji) else {
         return false;
     };
@@ -255,27 +277,34 @@ pub fn try_paint_emoji(painter: &egui::Painter, emoji: &str, rect: Rect, tint: C
         return false;
     };
 
-    let alpha = (tint.a() as f32 * 0.40) as u8;
-    if alpha > 0 {
-        let shadow_tint = Color32::from_black_alpha(alpha);
-        let h = rect.height();
-        let outline_width = (h * 0.04).clamp(0.4, 1.5);
-        let shadow_dy = (h * 0.08).clamp(0.8, 3.0);
-        let offsets = [
+    let tint_alpha = tint.a() as u16;
+    let outline_alpha = (tint_alpha * style.outline_alpha as u16 / 255) as u8;
+    let shadow_alpha = (tint_alpha * style.shadow_alpha as u16 / 255) as u8;
+    let outline_width = style.outline_width(rect.height());
+    let shadow_dy = style.shadow_dy(rect.height());
+    if outline_alpha > 0 {
+        let outline_tint = Color32::from_black_alpha(outline_alpha);
+        for (dx, dy) in [
             (-outline_width, -outline_width),
             (outline_width, -outline_width),
             (-outline_width, outline_width),
             (outline_width, outline_width),
-            (0.0, shadow_dy),
-        ];
-        for (dx, dy) in offsets {
+        ] {
             painter.image(
                 texture.id(),
                 rect.translate(egui::vec2(dx, dy)),
                 uv,
-                shadow_tint,
+                outline_tint,
             );
         }
+    }
+    if shadow_alpha > 0 {
+        painter.image(
+            texture.id(),
+            rect.translate(egui::vec2(0.0, shadow_dy)),
+            uv,
+            Color32::from_black_alpha(shadow_alpha),
+        );
     }
 
     // Only use the alpha component of tint to preserve original emoji colors while allowing transparency
@@ -496,10 +525,8 @@ impl Widget for ResourceLabel {
         };
         let color = self.color.unwrap_or(default_color);
         if self.kind == ResourceKind::Gold
-            && let Some(texture) = crate::assets::currency_texture(
-                ui.ctx(),
-                crate::assets::CurrencyIcon::Gold,
-            )
+            && let Some(texture) =
+                crate::assets::currency_texture(ui.ctx(), crate::assets::CurrencyIcon::Gold)
         {
             let icon_size = (self.font_id.size * 1.35).max(16.0);
             return ui

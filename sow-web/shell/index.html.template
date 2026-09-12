@@ -154,6 +154,30 @@
             pointer-events: none;
         }
 
+        #web-loader .sow-graphics-error {
+            box-sizing: border-box;
+            align-self: center;
+            justify-self: center;
+            width: min(560px, calc(100% - 40px));
+            padding: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 12px;
+            background: rgba(10, 10, 15, 0.92);
+            color: #fff;
+            font: 16px/1.5 system-ui, sans-serif;
+            text-align: center;
+        }
+
+        #web-loader .sow-graphics-error h1 {
+            margin: 0 0 12px;
+            font-size: 24px;
+        }
+
+        #web-loader .sow-graphics-error p {
+            margin: 8px 0 0;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
         /* Fallback sizes before JS layout(); JS sets data-layout + inline font-size. */
         @media (max-width: 599px) and (orientation: portrait) {
             #web-loader .loader-bar-wrap {
@@ -223,6 +247,41 @@
 
     </script>
     <script type="text/javascript">
+        window.SOW_show_graphics_error = function () {
+            var loader = document.getElementById('web-loader');
+            if (!loader) return;
+            loader.innerHTML = '';
+            loader.style.display = 'grid';
+            loader.style.pointerEvents = 'auto';
+            loader.setAttribute('aria-busy', 'false');
+
+            var card = document.createElement('div');
+            card.className = 'sow-graphics-error';
+            var title = document.createElement('h1');
+            title.textContent = 'Graphics unavailable';
+            var message = document.createElement('p');
+            message.textContent = 'This browser or device did not provide a working WebGL2 context.';
+            var action = document.createElement('p');
+            action.textContent = 'Enable hardware acceleration or use an updated browser, then reload.';
+            card.append(title, message, action);
+            loader.appendChild(card);
+        };
+
+        window.SOW_has_webgl2 = function () {
+            var canvas = document.getElementById('blade');
+            if (!canvas || typeof window.WebGL2RenderingContext !== 'function') return false;
+            try {
+                var context = canvas.getContext('webgl2', { antialias: false });
+                return !!context
+                    && context instanceof window.WebGL2RenderingContext
+                    && (!context.isContextLost || !context.isContextLost());
+            } catch (error) {
+                console.warn('[SOW graphics] WebGL2 preflight failed:', error);
+                return false;
+            }
+        };
+    </script>
+    <script type="text/javascript">
         /* Crash watchdog: a wasm panic (panic=abort) traps every frame and the
            rAF loop keeps re-entering the poisoned state, freezing the game
            forever while the relay stays healthy. Detect the error storm, keep
@@ -274,6 +333,8 @@
     <script>/* __INLINE_MAIN_MENU_JS__ */</script>
     <script>
         window.addEventListener('sow:loader-ready', function () {
+            // The native launcher is already visible. This is the only point
+            // at which the silent Play Games request may cross the bridge.
             if (typeof window.SOW_startAndroidPlayGamesAutoAuth === 'function') {
                 window.SOW_startAndroidPlayGamesAutoAuth();
             }
@@ -284,9 +345,16 @@
             var isPortal = window.SOW_RUNTIME && window.SOW_RUNTIME.portal_embed === true
                 || window.SOW_isPortalEmbed === true;
 
-            if (typeof window.SOW_initAndroidAuth === "function") {
+            if (!window.SOW_has_webgl2()) {
+                window.SOW_show_graphics_error();
+                return;
+            }
+
+            // This only restores cached identity state. It never
+            // starts native Play Games authentication before loader-ready.
+            if (typeof window.SOW_prepareAndroidAuthState === "function") {
                 try {
-                    await window.SOW_initAndroidAuth();
+                    window.SOW_prepareAndroidAuthState();
                 } catch (error) {
                     console.error("Play Games authentication failed:", error);
                     // Authentication is best-effort on Android. A failed

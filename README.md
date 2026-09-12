@@ -74,7 +74,7 @@ kept as historical reference; developer and iOS workflows no longer freeze
 ### Simulation & Networking
 *   **Deterministic Engine (`sow-core`):** `wasm32-unknown-unknown`, integer math + custom RNG for lockstep.
 *   **Relay (`sow-relay` + `fstack-bridge`):** DPDK/F-Stack userspace TCP, `rustls` TLS, WebSocket intent broadcast — no heavy server physics.
-*   **Backend (`sow-database`):** `axum` + **Valkey/Redis** for profiles, matchmaking, leaderboards. Relay tickets required in prod (`SOW_RELAY_TICKETS_REQUIRED=1`).
+*   **Backend (`sow-data` bin `sow-database`, `server` feature):** `axum` + **Valkey/Redis** for profiles, matchmaking, leaderboards. Relay tickets required in prod (`SOW_RELAY_TICKETS_REQUIRED=1`).
 
 ### Procedural Audio (`sow-audio`)
 Custom harmonic synthesizer — layered sine harmonics, key derived from match seed, constant-power panning + zoom attenuation via `rodio`.
@@ -91,7 +91,7 @@ Custom harmonic synthesizer — layered sine harmonics, key derived from match s
 | `fstack-bridge` | DPDK/F-Stack bridge (FFI + `FF_ZC_RECV` zero-copy). |
 | `sow-relay` | F-Stack/DPDK WebSocket relay (4 workers). |
 | `sow-server` | Lobbies, matchmaking orchestration, map playlists. |
-| `sow-database` | Player data, profiles and API services. |
+| `sow-data` (`sow-database` bin, `server` feature) | Player data, profiles and API services. |
 | `sow-client` | Thin native/WASM entry (`main`, cdylib). |
 | `sow-render` | `blade` WGSL GPU pipeline. |
 | `sow-ui` | Menus, HUD, `ClientApp`. |
@@ -132,12 +132,14 @@ Generic `winit` + `blade` — standard toolchains:
 rustup target add aarch64-apple-ios x86_64-apple-ios
 # open sow-dist/deploy/ios/ wrapper in Xcode → Run
 ```
+Validate archives/exports with `scripts/ios-testflight.sh`; upload only on request.
 
 **Android:** Android Studio / NDK + `cargo-apk`
 ```bash
 rustup target add aarch64-linux-android armv7-linux-androideabi
 cargo apk run -p sow-client
 ```
+Validate locally with `scripts/android-local-test.sh`. `./sow a` builds the AAB and publishes to Play alpha (restarts review).
 </details>
 
 **Production (`./sow p`):** builds WASM locally + FreeBSD binaries on builder + relay on Azure (`make -C lib FF_ZC_RECV=1` + `cargo build -p sow-relay`), assembles checksummed release, `remote_plan` diff vs `/srv/sow/current/COMPONENTS`, stages `~/.sow-deploy/release`, activates only changed services, verifies `systemctl is-active sow-relay@0..3` + `healthz` + `HMAC /internal/metrics`, retains 5 releases. See `docs/relay-architecture.md`.
@@ -146,7 +148,7 @@ Arch hosts need `binaryen` + `rust-wasm`.
 
 **Guards:**
 ```bash
-./sow-tools/check.sh   # cargo check + 600-line monolith guard
+./sow-tools/check.sh   # file-size checks + workspace check + emoji pipeline guard
 ```
 
 ---

@@ -241,10 +241,77 @@
   var ANDROID_PENDING_KEY = "sow_playgames_pending";
   var androidPurchasePort = null;
   var androidPurchaseProducts = null;
+  var androidAuthAttempt = 0;
+  var androidLoaderReady = false;
+  var androidSilentAuthTimer = 0;
 
   function androidBridgeMessage(message) {
-    if (!message || message.type !== "purchase_result") return;
-    window.dispatchEvent(new CustomEvent("sow:android-purchase-result", { detail: message }));
+    if (!message) return;
+    if (message.type === "playgames_auth_result") {
+      if (message.status === "unavailable" || message.status === "error") {
+        var pending = androidPending();
+        if (pending && pending.indexOf("auto:") === 0) {
+          continueAnonymouslyAfterSilentAuth();
+        }
+      }
+      window.dispatchEvent(new CustomEvent("sow:android-playgames-auth-result", { detail: message }));
+      return;
+    }
+    if (message.type === "purchase_result") {
+      window.dispatchEvent(new CustomEvent("sow:android-purchase-result", { detail: message }));
+    }
+  }
+
+  function continueAnonymouslyAfterSilentAuth() {
+    var pending = androidPending();
+    if (!pending || pending.indexOf("auto:") !== 0) return;
+    if (androidSilentAuthTimer) {
+      clearTimeout(androidSilentAuthTimer);
+      androidSilentAuthTimer = 0;
+    }
+    androidAuthAttempt += 1;
+    androidPending(null);
+    androidStorage(ANDROID_ANONYMOUS_MODE);
+    try { sessionStorage.removeItem("sow_playgames_identity"); } catch (e) {}
+    var params = new URLSearchParams(window.location.search);
+    clearAndroidAuthParam(params, "sow_playgames_rendezvous");
+    window.SOW_PLATFORM_IDENTITY = null;
+    emitAuthStateChange();
+    console.info("Play Games silent authentication unavailable; continuing anonymously");
+  }
+
+  function postAndroidBridgeMessage(message) {
+    if (!androidPurchasePort) return false;
+    try {
+      androidPurchasePort.postMessage(JSON.stringify(message));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function requestAndroidSilentAuth() {
+    var pending = androidPending();
+    if (!androidLoaderReady || !pending || pending.indexOf("auto:") !== 0) return false;
+    var rendezvousId = pending.slice("auto:".length);
+    if (!postAndroidBridgeMessage({
+      type: "playgames_silent_auth",
+      rendezvous_id: rendezvousId,
+    })) {
+      if (!androidSilentAuthTimer) {
+        androidSilentAuthTimer = setTimeout(function () {
+          androidSilentAuthTimer = 0;
+          continueAnonymouslyAfterSilentAuth();
+        }, 5000);
+      }
+      return false;
+    }
+    if (androidSilentAuthTimer) {
+      clearTimeout(androidSilentAuthTimer);
+      androidSilentAuthTimer = 0;
+    }
+    resumeAndroidAuth();
+    return true;
   }
 
   window.addEventListener("message", function (event) {
@@ -261,6 +328,7 @@
     androidPurchasePort = port;
     androidPurchaseProducts = Array.isArray(ready.products) ? ready.products : null;
     window.dispatchEvent(new CustomEvent("sow:android-purchase-bridge-ready"));
+    requestAndroidSilentAuth();
     port.onmessage = function (messageEvent) {
       try {
         androidBridgeMessage(JSON.parse(String(messageEvent.data || "")));
@@ -292,12 +360,30 @@
     } catch (e) {
       requestId = "purchase-" + Date.now();
     }
-    androidPurchasePort.postMessage(JSON.stringify({
+    if (!postAndroidBridgeMessage({
       type: "purchase",
       request_id: requestId,
       product_id: productId,
       app_user_id: appUserId,
-    }));
+    })) return null;
+    return requestId;
+  };
+
+  window.SOW_requestAndroidRestore = function (appUserId) {
+    if (!window.SOW_isAndroidPurchaseBridgeReady() || !appUserId) return null;
+    var requestId;
+    try {
+      requestId = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : "restore-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+    } catch (e) {
+      requestId = "restore-" + Date.now();
+    }
+    if (!postAndroidBridgeMessage({
+      type: "restore",
+      request_id: requestId,
+      app_user_id: appUserId,
+    })) return null;
     return requestId;
   };
 
@@ -408,13 +494,12 @@
     return null;
   }
 
-  window.SOW_initAndroidAuth = async function () {
+  window.SOW_prepareAndroidAuthState = function () {
     if (!isAndroidTwa()) {
       return;
     }
 
     var params = new URLSearchParams(window.location.search);
-    var handoff = params.get("sow_playgames_handoff");
     var rendezvousId = params.get("sow_playgames_rendezvous");
     var anonymousMode = params.get("sow_playgames_mode") === ANDROID_ANONYMOUS_MODE ||
       androidStorage() === ANDROID_ANONYMOUS_MODE;
@@ -431,41 +516,19 @@
       return;
     }
 
-    if (handoff) {
-      var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
-      var response = await fetch(base + "/auth/playgames/consume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ handoff_token: handoff }),
-      });
-      if (!response.ok) {
-        throw new Error("Play Games handoff rejected");
-      }
-      var identity = androidIdentityFromResponse(await response.json());
-      window.SOW_PLATFORM_IDENTITY = identity;
-      try { sessionStorage.setItem("sow_playgames_identity", JSON.stringify(identity)); } catch (e) {}
-      androidStorage("");
-      clearAndroidAuthParam(params, "sow_playgames_handoff");
-      console.info("Play Games authentication complete");
-      return;
-    }
-
     if (saved) {
       try {
         var cachedIdentity = JSON.parse(saved);
         if (cachedIdentity && cachedIdentity.provider === "playgames" &&
             cachedIdentity.externalId && cachedIdentity.token) {
           window.SOW_PLATFORM_IDENTITY = cachedIdentity;
-          if (rendezvousId) {
-            clearAndroidAuthParam(params, "sow_playgames_rendezvous");
-          }
           return;
         }
       } catch (e) {}
     }
 
-    // Native Android authentication runs in parallel with the TWA. Keep the
-    // rendezvous in the URL until the loader-ready hook starts polling it.
+    // The native side waits for the loader-ready bridge message before it
+    // checks Play Games. Keep the rendezvous until that handoff completes.
     if (rendezvousId) {
       window.SOW_PLATFORM_IDENTITY = null;
       return;
@@ -480,12 +543,14 @@
     if (!isAndroidTwa() || androidAuthResumeBusy) return;
     var pending = androidPending();
     if (!pending) return;
+    var attempt = ++androidAuthAttempt;
     androidAuthResumeBusy = true;
     try {
       if (pending.indexOf("signin:") === 0 || pending.indexOf("auto:") === 0) {
         var rendezvousId = pending.slice(pending.indexOf(":") + 1);
         var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
-        var identity = await pollAndroidPlayGames(base, rendezvousId, 30000);
+        var identity = await pollAndroidPlayGames(base, rendezvousId, pending.indexOf("auto:") === 0 ? 5000 : 30000);
+        if (attempt !== androidAuthAttempt) return;
         androidPending(null);
         if (pending.indexOf("auto:") === 0) {
           var params = new URLSearchParams(window.location.search);
@@ -496,11 +561,15 @@
           try { sessionStorage.setItem("sow_playgames_identity", JSON.stringify(identity)); } catch (e) {}
           androidStorage("");
           emitAuthStateChange();
-          console.info("Play Games interactive authentication complete");
+          console.info(pending.indexOf("auto:") === 0
+            ? "Play Games silent authentication complete"
+            : "Play Games interactive authentication complete");
         } else {
           if (pending.indexOf("auto:") === 0) androidStorage(ANDROID_ANONYMOUS_MODE);
           emitAuthStateChange();
-          console.info("Play Games sign-in cancelled or unavailable; continuing anonymously");
+          console.info(pending.indexOf("auto:") === 0
+            ? "Play Games silent authentication unavailable; continuing anonymously"
+            : "Play Games sign-in cancelled or unavailable; continuing anonymously");
         }
       } else if (pending === "signout") {
         androidPending(null);
@@ -526,11 +595,21 @@
   };
 
   window.SOW_startAndroidPlayGamesAutoAuth = function () {
-    if (!isAndroidTwa() || androidStorage() === ANDROID_ANONYMOUS_MODE || window.SOW_isAndroidPlayGamesAuthenticated()) return false;
+    if (!isAndroidTwa() || androidStorage() === ANDROID_ANONYMOUS_MODE) return false;
+    androidLoaderReady = true;
     var rendezvousId = new URLSearchParams(window.location.search).get("sow_playgames_rendezvous");
-    if (!rendezvousId || androidPending()) return false;
+    if (!rendezvousId) return false;
+    var pending = androidPending();
+    if (pending) {
+      if (pending.indexOf("auto:") === 0 && pending.slice("auto:".length) === rendezvousId) {
+        requestAndroidSilentAuth();
+        return true;
+      }
+      if (pending.indexOf("auto:") === 0) androidPending(null);
+      else return false;
+    }
     androidPending("auto:" + rendezvousId);
-    resumeAndroidAuth();
+    requestAndroidSilentAuth();
     return true;
   };
 

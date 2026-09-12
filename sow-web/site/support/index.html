@@ -24,29 +24,21 @@
         <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="28">
       </a>
       <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="/#game">The game</a>
         <a href="/leaders/">Leaders</a>
-        <a href="/#media">Gameplay</a>
         <a href="/how-to-play/">How to play</a>
-        <a href="/#faq">FAQ</a>
-        <a href="/#play">Play</a>
       </nav>
       <div class="nav-actions">
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
           <span class="theme-icon" aria-hidden="true">☼</span>
           <span class="theme-label">Light mode</span>
         </button>
-        <a class="button button-small button-orange" href="/play/">Play</a>
+        <a class="button button-small button-orange" href="/play/">Play now</a>
         <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation">☰</button>
       </div>
     </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation">
-      <a href="/#game">The game</a>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" aria-hidden="true">
       <a href="/leaders/">Leaders</a>
-      <a href="/#media">Gameplay</a>
       <a href="/how-to-play/">How to play</a>
-      <a href="/#faq">FAQ</a>
-      <a href="/#play">Play</a>
       <div class="mobile-menu-actions">
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme"><span class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
       </div>
@@ -61,7 +53,7 @@
         <p class="guide-lede">Need help with a match, account questions, connection troubleshooting, or security disclosures? Reach out through our official channels below.</p>
         <div class="hero-actions" style="display: flex; gap: 12px; flex-wrap: wrap;">
           <a class="button button-orange" href="mailto:hello@shadowsofwar.io">Email Support <span aria-hidden="true">✉</span></a>
-          <a class="button button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Join Discord <span aria-hidden="true">↗</span></a>
+          <a class="button button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Join Discord</a>
         </div>
       </div>
     </section>
@@ -86,7 +78,7 @@
             <div>
               <h3>Discord Community &amp; Live Chat</h3>
               <p>Join our active Discord community for real-time discussion, strategy sharing, live matchmaking coordination, and instant developer interaction.</p>
-              <p><a class="button button-small button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" style="margin-top: 8px;">Open Discord Community ↗</a></p>
+              <p><a class="button button-small button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" style="margin-top: 8px;">Open Discord Community</a></p>
             </div>
           </article>
 
@@ -95,7 +87,7 @@
             <div>
               <h3>Official Telegram Group</h3>
               <p>Follow official announcements, game updates, patch releases, and community discussions on our Telegram group.</p>
-              <p><a class="button button-small button-outline" href="https://t.me/shadowsofwario" target="_blank" rel="noopener" style="margin-top: 8px;">Join Telegram Group ↗</a></p>
+              <p><a class="button button-small button-outline" href="https://t.me/shadowsofwario" target="_blank" rel="noopener" style="margin-top: 8px;">Join Telegram Group</a></p>
             </div>
           </article>
 
@@ -104,7 +96,7 @@
             <div>
               <h3>GitHub &amp; Open-Source Issues</h3>
               <p>Shadows of War is built with an open-source engine. Track development, read the source code, or submit formal technical issue reports on our GitHub repository.</p>
-              <p><a class="button button-small button-outline" href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" style="margin-top: 8px;">View GitHub Repository ↗</a></p>
+              <p><a class="button button-small button-outline" href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" style="margin-top: 8px;">View GitHub Repository</a></p>
             </div>
           </article>
 
@@ -145,7 +137,7 @@
       <div class="container guide-callout">
         <h2>Need game rules?</h2>
         <p>Learn territory expansion, structures, economy, and win conditions.</p>
-        <a class="button button-orange" href="/how-to-play/">Read How to Play <span aria-hidden="true">→</span></a>
+        <a class="button button-orange" href="/how-to-play/">Read How to Play</a>
       </div>
     </section>
   </main>
@@ -158,38 +150,6 @@
     <div class="container footer-bottom"><span>© 2026 World of Unreal</span></div>
   </footer>
 
-  <script>
-    (() => {
-      const root = document.documentElement;
-      const toggles = [...document.querySelectorAll('[data-theme-toggle]')];
-      const menu = document.querySelector('#mobile-menu');
-      const menuToggle = document.querySelector('[data-menu-toggle]');
-      menu.setAttribute('aria-hidden', 'true');
-      const applyTheme = theme => {
-        root.dataset.theme = theme;
-        localStorage.setItem('sow-theme', theme);
-        const light = theme === 'light';
-        toggles.forEach(toggle => {
-          toggle.querySelector('.theme-icon').textContent = light ? '☾' : '☼';
-          toggle.querySelector('.theme-label').textContent = light ? 'Dark mode' : 'Light mode';
-          toggle.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
-        });
-      };
-      applyTheme(localStorage.getItem('sow-theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-      toggles.forEach(toggle => toggle.addEventListener('click', () => applyTheme(root.dataset.theme === 'light' ? 'dark' : 'light')));
-      menuToggle.addEventListener('click', () => {
-        const open = menu.classList.toggle('is-open');
-        menuToggle.setAttribute('aria-expanded', String(open));
-        menuToggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
-        menu.setAttribute('aria-hidden', String(!open));
-      });
-      menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
-        menu.classList.remove('is-open');
-        menuToggle.setAttribute('aria-expanded', 'false');
-        menuToggle.setAttribute('aria-label', 'Open navigation');
-        menu.setAttribute('aria-hidden', 'true');
-      }));
-    })();
-  </script>
+  <script src="../site-chrome.js"></script>
 </body>
 </html>

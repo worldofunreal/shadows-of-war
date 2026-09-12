@@ -704,6 +704,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "robots.txt",
         "sitemap.xml",
         "app.js",
+        "site-chrome.js",
         "styles.css",
         "legal.css",
         "fonts/fonts.css",
@@ -852,6 +853,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
     for name in [
         "index.html",
         "app.js",
+        "site-chrome.js",
         "styles.css",
         "legal.css",
         "wou-auth.js",
@@ -884,11 +886,12 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
         }
         copy_dir(&src, &out.join(path))?;
     }
-    // Fingerprint site assets (styles/app/legal/wou-auth) with a content hash so edge and
+    // Fingerprint site assets (styles/app/site-chrome/legal/wou-auth) with a content hash so edge and
     // browser caches never serve a stale version after a redeploy.
     for name in [
         "styles.css",
         "app.js",
+        "site-chrome.js",
         "legal.css",
         "wou-auth.js",
         "grid-bg.js",
@@ -1258,6 +1261,7 @@ mod tests {
         for required in [
             "index.html",
             "app.js",
+            "site-chrome.js",
             "styles.css",
             "legal.css",
             "fonts/fonts.css",

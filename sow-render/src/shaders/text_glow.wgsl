@@ -7,6 +7,7 @@ struct TextInstance {
     screen_pos: vec2<f32>,
     size: vec2<f32>,
     uv_rect: vec4<f32>,
+    content_rect: vec4<f32>,
     color: vec4<f32>,
     outline_color: vec4<f32>,
     face_dilate: f32,
@@ -35,6 +36,8 @@ struct VertexOutput {
     @location(6) underlay_softness: f32,
     @location(7) uv_rect: vec4<f32>,
     @location(8) kind: f32,
+    @location(9) local_uv: vec2<f32>,
+    @location(10) content_rect: vec4<f32>,
 }
 
 @vertex
@@ -66,6 +69,8 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: TextInstance) -> VertexOutput {
     out.underlay_softness = inst.underlay_softness;
     out.uv_rect = inst.uv_rect;
     out.kind = inst.kind;
+    out.local_uv = local;
+    out.content_rect = inst.content_rect;
     return out;
 }
 
@@ -150,8 +155,11 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
         let lo = in.uv_rect.xy;
         let hi = in.uv_rect.zw;
         let span = hi - lo;
+        let content_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-6));
+        let content_local = (in.local_uv - in.content_rect.xy) / content_span;
+        let emoji_uv = mix(lo, hi, content_local);
 
-        let fw = fwidth(in.uv);
+        let fw = fwidth(emoji_uv);
         var ow = vec2<f32>(0.0);
         if (in.outline_thickness > 0.0) {
             ow = max(fw * in.outline_thickness, span * 0.01);
@@ -161,18 +169,18 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
             so = max(fw.y * in.underlay_offset_y, span.y * 0.01);
         }
 
-        let center = sample_emoji(in.uv, lo, hi);
+        let center = sample_emoji(emoji_uv, lo, hi);
 
-        var ring = sample_emoji(in.uv + vec2<f32>( ow.x, 0.0), lo, hi).a;
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>(-ow.x, 0.0), lo, hi).a);
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>(0.0,  ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>(0.0, -ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>( ow.x,  ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>( ow.x, -ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>(-ow.x,  ow.y), lo, hi).a);
-        ring = max(ring, sample_emoji(in.uv + vec2<f32>(-ow.x, -ow.y), lo, hi).a);
+        var ring = sample_emoji(emoji_uv + vec2<f32>( ow.x, 0.0), lo, hi).a;
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x, 0.0), lo, hi).a);
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(0.0,  ow.y), lo, hi).a);
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(0.0, -ow.y), lo, hi).a);
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>( ow.x,  ow.y), lo, hi).a);
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>( ow.x, -ow.y), lo, hi).a);
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x,  ow.y), lo, hi).a);
+        ring = max(ring, sample_emoji(emoji_uv + vec2<f32>(-ow.x, -ow.y), lo, hi).a);
 
-        let shadow_a = sample_emoji(in.uv - vec2<f32>(0.0, so), lo, hi).a;
+        let shadow_a = sample_emoji(emoji_uv - vec2<f32>(0.0, so), lo, hi).a;
 
         let fill_a = center.a * in.color.a;
         let dark_a = max(ring, shadow_a) * in.outline_color.a;

@@ -8,6 +8,10 @@
 This guide lets another agent continue Play Console and release work without repeating the audit.
 Never store passwords, private keys, service-account JSON, or tokens here.
 
+Android source/runtime claims must also satisfy
+`docs/android-runtime-contract.md`; the version and track values below are
+historical until re-read from Play and bound to an installed artifact.
+
 ## Operating rules
 
 - Use an API or CLI whenever Google supports the operation.
@@ -56,7 +60,8 @@ until Play Console or the API confirms it.
 
 ## Current Android release evidence
 
-Re-read these values before every release; do not copy them from an old screenshot:
+`HISTORICAL`: re-read these values before every release; do not copy them from
+an old screenshot or use them as current runtime evidence:
 
 - Alpha: `0.1.2`, versionCode `38`.
 - Internal: versionCode `3`.
@@ -78,8 +83,10 @@ offering:
 | War Chest | `sow_gems_1200` | $4.99 | 1,200 gems |
 | Kingdom Vault | `sow_gems_2600` | $9.99 | 2,600 gems |
 
-The authoritative check is a successful Google Play Publisher API `GET` for each product under
-`com.shadowsofwar`. RevenueCat cannot create a missing Play product.
+The authoritative current check is the Google Play Developer Monetization API
+one-time-product read for each product under `com.shadowsofwar`. The retired
+legacy in-app-products endpoint returns a migration error and is not evidence.
+RevenueCat cannot create a missing Play product.
 
 ## RevenueCat state
 

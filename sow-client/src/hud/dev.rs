@@ -436,8 +436,8 @@ impl SowApp {
                 &stats,
                 [x, y],
                 font_size,
-                ([1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]),
-                sow_render::TmpFontSettings::default(),
+                [1.0, 1.0, 1.0, 1.0],
+                sow_render::TextPaintStyle::default(),
                 (1.0, 1.0, 1.0),
             );
         }

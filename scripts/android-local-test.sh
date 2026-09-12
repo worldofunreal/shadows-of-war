@@ -1,144 +1,179 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Local Android smoke test. ./sow a calls this before publishing the AAB.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT="$ROOT/sow-dist/deploy/android"
-
-# Load the Play Games app/client IDs without coupling this identity test to
-# store billing, achievements, or the Play publication step.
-if [[ -f "$ROOT/sow-dist/.env" ]]; then
-    set -a
-    # shellcheck disable=SC1091
-    source "$ROOT/sow-dist/.env"
-    set +a
-fi
+[[ -f "$ROOT/sow-dist/.env" ]] && { set -a; source "$ROOT/sow-dist/.env"; set +a; }
 
 VARIANT="${SOW_ANDROID_TEST_VARIANT:-debug}"
+PACKAGE="com.shadowsofwar.debug"
+TASK=":app:assembleDebug"
+APK="$PROJECT/app/build/outputs/apk/debug/app-debug.apk"
+if [[ "$VARIANT" == release ]]; then
+    PACKAGE="com.shadowsofwar"
+    TASK=":app:assembleRelease"
+    APK="$PROJECT/app/build/outputs/apk/release/app-release.apk"
+elif [[ "$VARIANT" != debug ]]; then
+    echo "SOW_ANDROID_TEST_VARIANT must be release or debug" >&2
+    exit 1
+fi
+
 ACTIVITY="com.shadowsofwar.TwaLauncherActivity"
 OUT="$ROOT/dist/android/local-test"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG="$OUT/logcat-$STAMP.txt"
 START="$OUT/start-$STAMP.txt"
+TRACE="$OUT/trace-$STAMP.ndjson"
+EVIDENCE="$OUT/evidence-$STAMP.txt"
+PACKAGE_DUMP="$OUT/package-$STAMP.txt"
 VERSION_NAME="${SOW_ANDROID_TEST_VERSION_NAME:-$(tr -d '[:space:]' <"$ROOT/.version")}"
 VERSION_CODE="${SOW_ANDROID_TEST_VERSION_CODE:-$(tr -d '[:space:]' <"$ROOT/.android-version-code")}"
+SOURCE_SHA="${SOW_ANDROID_TEST_SOURCE_SHA:-$(git -C "$ROOT" rev-parse HEAD)}"
 SKIP_BUILD="${SOW_ANDROID_SKIP_BUILD:-0}"
 WEB_CACHE_BUST="${SOW_ANDROID_TEST_CACHE_BUST:-local-$STAMP}"
+PLAY_TRACK="${SOW_ANDROID_TEST_TRACK:-local}"
 TEST_ROTATION="${SOW_ANDROID_TEST_ROTATION:-}"
-
 ROTATION_LOCKED=0
-restore_test_rotation() {
+LOGGER_PID=0
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+event() { printf '{"event":"%s","epoch_ms":%s}\n' "$1" "$(date +%s%3N)" >>"$TRACE"; }
+restore_rotation() {
     if ((ROTATION_LOCKED)); then
         adb shell cmd window set-user-rotation free >/dev/null 2>&1 || true
         ROTATION_LOCKED=0
     fi
 }
-
-die() {
-    echo "ERROR: $*" >&2
-    exit 1
+stop_logger() {
+    if ((LOGGER_PID)); then
+        kill "$LOGGER_PID" 2>/dev/null || true
+        wait "$LOGGER_PID" 2>/dev/null || true
+        LOGGER_PID=0
+    fi
 }
+trap 'stop_logger; restore_rotation' EXIT
 
 case "$TEST_ROTATION" in
     ""|portrait|landscape) ;;
     *) die "SOW_ANDROID_TEST_ROTATION must be portrait or landscape" ;;
 esac
+command -v adb >/dev/null || die "adb is required"
+command -v rg >/dev/null || die "rg is required"
+mkdir -p "$OUT"
+: >"$TRACE"
 
 missing_play_games=()
-for key in \
-    SOW_PLAY_GAMES_APP_ID \
-    SOW_PLAY_GAMES_WEB_CLIENT_ID; do
+for key in SOW_PLAY_GAMES_APP_ID SOW_PLAY_GAMES_WEB_CLIENT_ID; do
     [[ -n "${!key:-}" ]] || missing_play_games+=("$key")
 done
-if ((${#missing_play_games[@]} > 0)); then
-    die "missing Play Games configuration in sow-dist/.env: ${missing_play_games[*]}"
-fi
+(( ${#missing_play_games[@]} == 0 )) || die "missing Play Games config: ${missing_play_games[*]}"
 PLAY_GAMES_APP_ID_ARG="-PsowPlayGamesAppId=$SOW_PLAY_GAMES_APP_ID"
 PLAY_GAMES_CLIENT_ID_ARG="-PsowPlayGamesWebClientId=$SOW_PLAY_GAMES_WEB_CLIENT_ID"
 PLAY_GAMES_AUTH_URL_ARG="-PsowPlayGamesAuthUrl=${SOW_PLAY_GAMES_AUTH_URL:-https://shadowsofwar.io/api}"
+SOURCE_SHA_ARG="-PsowSourceSha=$SOURCE_SHA"
 
-case "$VARIANT" in
-    release)
-        PACKAGE="com.shadowsofwar"
-        TASK=":app:assembleRelease"
-        APK="$PROJECT/app/build/outputs/apk/release/app-release.apk"
-        ;;
-    debug)
-        PACKAGE="com.shadowsofwar.debug"
-        TASK=":app:assembleDebug"
-        APK="$PROJECT/app/build/outputs/apk/debug/app-debug.apk"
-        ;;
-    *)
-        echo "SOW_ANDROID_TEST_VARIANT must be release or debug" >&2
-        exit 1
-        ;;
-esac
+if [[ "$SKIP_BUILD" != 1 ]]; then
+    ( cd "$PROJECT" && ./gradlew --warning-mode fail --no-daemon --no-configuration-cache "$TASK" \
+        "-PsowVersionName=$VERSION_NAME" "-PsowVersionCode=$VERSION_CODE" \
+        "-PsowWebCacheBust=$WEB_CACHE_BUST" "$SOURCE_SHA_ARG" \
+        "$PLAY_GAMES_APP_ID_ARG" "$PLAY_GAMES_CLIENT_ID_ARG" "$PLAY_GAMES_AUTH_URL_ARG" )
+fi
+[[ -s "$APK" ]] || die "Android test APK missing: $APK"
 
-mkdir -p "$OUT"
-
-command -v adb >/dev/null || die "adb is required; install android-tools first"
+MANIFEST="$PROJECT/app/build/intermediates/merged_manifests/$VARIANT/process${VARIANT^}Manifest/AndroidManifest.xml"
+BUILD_CONFIG="$PROJECT/app/build/generated/source/buildConfig/$VARIANT/com/shadowsofwar/BuildConfig.java"
+rg -q "SOW_SOURCE_SHA = \"$SOURCE_SHA\"" "$BUILD_CONFIG" ||
+    die "assembled artifact source SHA is not bound to $SOURCE_SHA"
+rg -q "VERSION_CODE = $VERSION_CODE;" "$BUILD_CONFIG" ||
+    die "assembled artifact versionCode is not bound to $VERSION_CODE"
+rg -q "package=\"$PACKAGE\"" "$MANIFEST" ||
+    die "assembled artifact package is not bound to $PACKAGE"
+rg -q "android:versionCode=\"$VERSION_CODE\"" "$MANIFEST" ||
+    die "assembled manifest versionCode is not bound to $VERSION_CODE"
+rg -q 'com\.google\.android\.gms\.games\.SUPPRESS_GAME_PROFILE_CREATION' "$MANIFEST" ||
+    die "Play Games profile suppression missing"
+! rg -q 'SPLASH_IMAGE_DRAWABLE|FILE_PROVIDER_AUTHORITY|sow_splash' "$MANIFEST" ||
+    die "native TWA splash is still configured"
+rg -q 'android:name="[^"]*\.TwaLauncherActivity"' "$MANIFEST" ||
+    die "TWA launcher activity missing from manifest"
+rg -q 'android:name="[^"]*\.PurchaseActivity"' "$MANIFEST" ||
+    die "native purchase activity missing from manifest"
+rg -q 'android:host="restore"' "$MANIFEST" ||
+    die "native restore route missing from manifest"
+LAUNCHER_SOURCE="$PROJECT/app/src/main/kotlin/com/shadowsofwar/TwaLauncherActivity.kt"
+ON_CREATE_SOURCE="$(sed -n '/override fun onCreate/,/^    }$/p' "$LAUNCHER_SOURCE")"
+! rg -q '\.signIn\(|PlayGamesSdk|checkAuthentication' <<<"$ON_CREATE_SOURCE" ||
+    die "launcher authenticates before the loader"
+! rg -q 'checkAuthentication' "$LAUNCHER_SOURCE" ||
+    die "legacy launcher authentication route remains"
+! rg -q 'auto_signin' "$PROJECT/app/src/main/kotlin/com/shadowsofwar" ||
+    die "duplicate automatic Play Games route remains"
+rg -q 'PlayGamesSdk\.initialize|loader-ready Play Games silent auth requested' "$LAUNCHER_SOURCE" ||
+    die "post-loader Play Games auth path is missing"
+if rg --files "$PROJECT/app/src/main/java" 2>/dev/null | rg -q '\.java$'; then
+    die "Android application still contains Java source"
+fi
+rg -q 'playgames_silent_auth|"restore"' \
+    "$PROJECT/app/src/main/kotlin/com/shadowsofwar/TwaLauncherActivity.kt" ||
+    die "native bridge is missing silent auth or restore"
+rg -q 'if \(isAndroidTwa\(\)\).*SOW_requestAndroidPurchase|SOW_requestAndroidPurchase' \
+    "$ROOT/sow-web/shell/main_menu.screens.js" ||
+    die "Android purchase path is not native"
+rg -q 'SOW_requestAndroidRestore|restore_purchases' \
+    "$ROOT/sow-web/shell/main_menu.screens.js" ||
+    die "Android restore caller is missing"
+rg -q 'data-command=.sign_in.|SOW_signInAndroidPlayGames' \
+    "$ROOT/sow-web/shell/main_menu.screens.js" "$ROOT/sow-web/shell/sdk/store_portals.js" ||
+    die "explicit Play Games sign-in button path is missing"
+LOADER_HOOK_LINE="$(rg -n "sow:loader-ready" "$ROOT/sow-web/shell/index.html.template" | head -1 | cut -d: -f1 || true)"
+AUTO_AUTH_LINE="$(rg -n "SOW_startAndroidPlayGamesAutoAuth" "$ROOT/sow-web/shell/index.html.template" | head -1 | cut -d: -f1 || true)"
+[[ -n "$LOADER_HOOK_LINE" && -n "$AUTO_AUTH_LINE" && $AUTO_AUTH_LINE -gt $LOADER_HOOK_LINE ]] ||
+    die "native silent auth is not gated by loader-ready"
+PREP_SOURCE="$(sed -n '/window\.SOW_prepareAndroidAuthState/,/^  };$/p' \
+    "$ROOT/sow-web/shell/sdk/store_portals.js")"
+! rg -q 'fetch|playgames/consume|playgames_silent_auth|\.signIn\(|PlayGamesSdk' <<<"$PREP_SOURCE" ||
+    die "pre-WASM Android preparation still starts authentication"
+PURCHASE_ANDROID_BLOCK="$(sed -n '/function beginStorePurchase/,/var creds = selfCreds()/p' \
+    "$ROOT/sow-web/shell/main_menu.screens.js")"
+rg -q 'SOW_requestAndroidPurchase' <<<"$PURCHASE_ANDROID_BLOCK" ||
+    die "Android purchase branch does not call the native bridge"
+! rg -q 'loadStripeJs|/store/checkout|REVENUECAT|Stripe|stripe' <<<"$PURCHASE_ANDROID_BLOCK" ||
+    die "Android purchase branch contains an external checkout"
 
 if ! adb get-state 2>/dev/null | grep -qx device; then
-    echo "No Android device is connected or USB debugging is unavailable." >&2
     adb devices -l >&2 || true
-    exit 1
+    die "no Android device is connected"
 fi
 
-ensure_device_awake() {
-    POWER_STATE="$(adb shell dumpsys power 2>/dev/null | tr -d '\r' || true)"
-    if grep -Eq 'mWakefulness=(Asleep|Dozing)|Display Power: state=OFF' <<<"$POWER_STATE"; then
-        adb shell input keyevent KEYCODE_WAKEUP
-        sleep 1
-        POWER_STATE="$(adb shell dumpsys power 2>/dev/null | tr -d '\r' || true)"
-        if grep -Eq 'mWakefulness=(Asleep|Dozing)|Display Power: state=OFF' <<<"$POWER_STATE"; then
-            die "Android device screen could not be awakened over USB"
-        fi
-    fi
-    WINDOW_STATE="$(adb shell dumpsys window 2>/dev/null | tr -d '\r' || true)"
-    if grep -q 'mDreamingLockscreen=true' <<<"$WINDOW_STATE"; then
-        die "Android device is locked; unlock it before the local test"
-    fi
-}
-
-if [[ "$SKIP_BUILD" != "1" ]]; then
-    (
-        cd "$PROJECT"
-        ./gradlew --warning-mode fail --no-daemon --no-configuration-cache "$TASK" \
-            "-PsowVersionName=$VERSION_NAME" "-PsowVersionCode=$VERSION_CODE" \
-            "-PsowWebCacheBust=$WEB_CACHE_BUST" \
-            "$PLAY_GAMES_APP_ID_ARG" "$PLAY_GAMES_CLIENT_ID_ARG" "$PLAY_GAMES_AUTH_URL_ARG"
-    )
+POWER="$(adb shell dumpsys power 2>/dev/null | tr -d '\r' || true)"
+if grep -Eq 'mWakefulness=(Asleep|Dozing)|Display Power: state=OFF' <<<"$POWER"; then
+    adb shell input keyevent KEYCODE_WAKEUP
+    sleep 1
+    POWER="$(adb shell dumpsys power 2>/dev/null | tr -d '\r' || true)"
 fi
+grep -Eq 'mWakefulness=(Asleep|Dozing)|Display Power: state=OFF' <<<"$POWER" &&
+    die "Android screen could not be awakened"
+WINDOW="$(adb shell dumpsys window 2>/dev/null | tr -d '\r' || true)"
+grep -q 'mDreamingLockscreen=true' <<<"$WINDOW" && die "Android device is locked"
 
-[[ -s "$APK" ]] || {
-    echo "Android test APK missing: $APK" >&2
-    exit 1
-}
+SERIAL="$(adb get-serialno | tr -d '\r')"
+MODEL="$(adb shell getprop ro.product.model | tr -d '\r')"
+ANDROID_VERSION="$(adb shell getprop ro.build.version.release | tr -d '\r')"
+DIRTY=0
+[[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=all)" ]] && DIRTY=1
 
-MERGED_MANIFEST="$PROJECT/app/build/intermediates/merged_manifests/$VARIANT/process${VARIANT^}Manifest/AndroidManifest.xml"
-if ! rg -q 'com\.google\.android\.gms\.games\.SUPPRESS_GAME_PROFILE_CREATION' "$MERGED_MANIFEST"; then
-    die "Play Games profile-creation suppression is missing from $MERGED_MANIFEST"
-fi
-if rg -q 'SPLASH_IMAGE_DRAWABLE|FILE_PROVIDER_AUTHORITY|sow_splash' "$MERGED_MANIFEST"; then
-    die "native TWA splash is still configured in $MERGED_MANIFEST"
-fi
-if rg -q '\.signIn\(' "$PROJECT/app/src/main/java/com/shadowsofwar/TwaLauncherActivity.java"; then
-    die "Play Games launcher must not invoke an interactive sign-in"
-fi
-
-ensure_device_awake
 adb install -r "$APK" >"$OUT/install-$STAMP.txt"
-WINDOW_STATE="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
-if rg -q 'mResumedActivity:.*CustomTabActivity' <<<"$WINDOW_STATE" \
-    && rg -q "TaskRecord.*A=$PACKAGE" <<<"$WINDOW_STATE"; then
-    adb shell am force-stop com.android.chrome
-fi
+adb shell dumpsys package "$PACKAGE" >"$PACKAGE_DUMP"
+INSTALLED_CODE="$(rg -o -m1 'versionCode=[0-9]+' "$PACKAGE_DUMP" | cut -d= -f2 || true)"
+[[ "$INSTALLED_CODE" == "$VERSION_CODE" ]] ||
+    die "installed versionCode=$INSTALLED_CODE, expected $VERSION_CODE; see $PACKAGE_DUMP"
 adb shell am force-stop "$PACKAGE"
+adb shell am force-stop com.android.chrome
 adb logcat -c
-if [[ "$TEST_ROTATION" == "portrait" ]]; then
+if [[ "$TEST_ROTATION" == portrait ]]; then
     adb shell cmd window set-user-rotation lock 0 >/dev/null
     ROTATION_LOCKED=1
-elif [[ "$TEST_ROTATION" == "landscape" ]]; then
+elif [[ "$TEST_ROTATION" == landscape ]]; then
     adb shell cmd window set-user-rotation lock 1 >/dev/null
     ROTATION_LOCKED=1
 fi
@@ -146,116 +181,89 @@ fi
 stdbuf -oL adb logcat -v threadtime -b main -b system -b crash \
     SOW_PGS:I AndroidRuntime:E chromium:I '*:S' >"$LOG" &
 LOGGER_PID=$!
-stop_logger() {
-    kill "$LOGGER_PID" 2>/dev/null || true
-    wait "$LOGGER_PID" 2>/dev/null || true
-}
-cleanup_local_test() {
-    stop_logger
-    restore_test_rotation
-}
-trap cleanup_local_test EXIT
+event TEST_START
+adb shell am start -n "$PACKAGE/$ACTIVITY" >"$START" || die "activity failed to start; see $START"
+grep -q '^Starting:' "$START" || die "activity did not start; see $START"
+event LAUNCH_REQUESTED
 
-# The TWA launcher is already foreground while Play Games identity work runs
-# asynchronously, with a handoff only when a Play Games session is available.
-if ! adb shell am start -n "$PACKAGE/$ACTIVITY" >"$START"; then
-    die "Android activity failed to start; see $START"
-fi
-if ! grep -q '^Starting:' "$START"; then
-    cat "$START" >&2
-    die "Android activity did not start; see $START"
-fi
-
-echo "Waiting up to 45s for automatic Play Games authentication and TWA launch..."
-LAUNCH_MARKER='SOW_PGS.*(TWA launched|launching TWA|automatic login suppressed by anonymous mode)'
-AUTH_MARKER='SOW_PGS.*(rendezvous success=true HTTP 2|automatic Play Games authentication unavailable|automatic Play Games login suppressed by anonymous mode)'
-twa_foreground() {
-    local window_state
-    window_state="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
-    rg -q 'TwaLauncherActivity|com\.google\.androidbrowserhelper\.trusted\.LauncherActivity' <<<"$window_state" \
-        && rg -q 'mResumedActivity:.*CustomTabActivity' <<<"$window_state"
-}
-LAUNCH_CONFIRMED=0
-deadline=$((SECONDS + 45))
-while (( SECONDS < deadline )); do
-    if rg -q "$LAUNCH_MARKER" "$LOG" || twa_foreground; then
-        LAUNCH_CONFIRMED=1
+TWA=0
+LAUNCHER=0
+LOADER=0
+AUTH=0
+PGS_EARLY=0
+deadline=$((SECONDS + 60))
+while ((SECONDS < deadline)); do
+    WINDOW="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
+    if rg -q 'GamesResolutionActivity|SignInActivity' <<<"$WINDOW"; then
+        ((TWA)) || { event PLAY_GAMES_UI_BEFORE_TWA; PGS_EARLY=1; break; }
+        event PLAY_GAMES_UI_WITHOUT_EXPLICIT_TAP
         break
     fi
+    if ((!LAUNCHER)) && rg -q 'SOW_PGS.*TWA launcher ready; Play Games waits for loader-ready' "$LOG"; then
+        event LAUNCHER_READY
+        LAUNCHER=1
+    fi
+    if ((!TWA)) && rg -q 'mResumedActivity:.*CustomTabActivity' <<<"$WINDOW" &&
+        rg -q 'TwaLauncherActivity|com\.google\.androidbrowserhelper\.trusted\.LauncherActivity' <<<"$WINDOW"; then
+        event TWA_VISIBLE
+        TWA=1
+    fi
+    if ((!LOADER)) && rg -q 'SOW_PGS.*loader-ready Play Games silent auth requested' "$LOG"; then
+        event LOADER_READY
+        LOADER=1
+    fi
+    if ((!AUTH)) && rg -q 'SOW_PGS.*(rendezvous success=true HTTP 2|loader-ready isAuthenticated|Play Games auth result posted status=(ready|unavailable|error))' "$LOG"; then
+        event AUTH_OUTCOME
+        AUTH=1
+    fi
+    ((TWA && LOADER && AUTH)) && break
     sleep 1
 done
 
-if (( LAUNCH_CONFIRMED )); then
-    deadline=$((SECONDS + 45))
-    while (( SECONDS < deadline )); do
-        if rg -q "$AUTH_MARKER" "$LOG"; then
-            break
-        fi
-        sleep 1
-    done
-fi
-
 stop_logger
+restore_rotation
 trap - EXIT
-restore_test_rotation
-
-if rg -n -F "AndroidRuntime: Process: $PACKAGE, PID:" "$LOG"; then
-    echo "FAIL: Android startup crash detected. Log: $LOG" >&2
-    exit 1
-fi
 APP_LOG="$OUT/app-$STAMP.txt"
 rg 'SOW_PGS' "$LOG" >"$APP_LOG" || true
+APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+{
+    printf 'evidence_version=2\n'
+    printf 'SOURCE source_sha=%s worktree_dirty=%s version_name=%s expected_version_code=%s package=%s\n' \
+        "$SOURCE_SHA" "$DIRTY" "$VERSION_NAME" "$VERSION_CODE" "$PACKAGE"
+    printf 'PLAY_API track=%s\n' "$PLAY_TRACK"
+    printf 'DEVICE artifact=%s artifact_sha256=%s installed_package=%s installed_version_code=%s\n' \
+        "$APK" "$APK_SHA256" "$PACKAGE" "$INSTALLED_CODE"
+    printf 'DEVICE device_serial=%s device_model=%s device_android=%s timestamp=%s\n' \
+        "$SERIAL" "$MODEL" "$ANDROID_VERSION" "$(date --iso-8601=seconds)"
+    printf 'DEVICE trace=%s logcat=%s\n' "$TRACE" "$LOG"
+} >"$EVIDENCE"
 
-if ! rg -q 'SOW_PGS' "$APP_LOG"; then
-    echo "FAIL: Play Games startup produced no SOW_PGS diagnostic lines. Log: $APP_LOG" >&2
-    exit 1
+if rg -q 'AndroidRuntime: Process: '"$PACKAGE"', PID:' "$LOG"; then
+    die "Android startup crash detected; evidence=$EVIDENCE"
 fi
-
-if (( ! LAUNCH_CONFIRMED )); then
-    WINDOW_STATE="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
-    if rg -q 'GamesResolutionActivity|SignInActivity' <<<"$WINDOW_STATE"; then
-        echo "FAIL: Google Play Games displayed interactive account UI despite profile-creation suppression. Log: $APP_LOG" >&2
-    else
-        echo "FAIL: Android did not reach the TWA launch. Log: $APP_LOG" >&2
-    fi
-    exit 1
-fi
-if ! rg -q "$AUTH_MARKER" "$LOG"; then
-    echo "FAIL: Play Games authentication did not resolve to identity or anonymous fallback. Log: $APP_LOG" >&2
-    exit 1
-fi
-
-WINDOW_STATE="$(adb shell dumpsys activity activities 2>/dev/null | tr -d '\r' || true)"
-if rg -q 'GamesResolutionActivity|SignInActivity' <<<"$WINDOW_STATE"; then
-    echo "FAIL: unexpected interactive Play Games UI remained after handoff. Log: $APP_LOG" >&2
-    exit 1
-fi
-if ! rg -q 'TwaLauncherActivity|com\.google\.androidbrowserhelper\.trusted\.LauncherActivity' <<<"$WINDOW_STATE" \
-    || ! rg -q 'mResumedActivity:.*CustomTabActivity' <<<"$WINDOW_STATE"; then
-    echo "FAIL: TWA was not foreground after launch. Log: $APP_LOG" >&2
-    exit 1
-fi
-if rg -q ' [WE] SOW_PGS :' "$LOG"; then
-    rg ' [WE] SOW_PGS :' "$LOG" >&2
-    echo "FAIL: Play Games launcher emitted an app warning/error. Log: $APP_LOG" >&2
-    exit 1
-fi
+((PGS_EARLY == 0)) || die "Play Games UI appeared before TWA; evidence=$EVIDENCE"
+((LAUNCHER)) || die "launcher-ready marker missing; evidence=$EVIDENCE"
+((TWA)) || die "TWA was not observed as foreground; evidence=$EVIDENCE"
+((LOADER)) || die "loader-ready auth request missing; web/native artifacts are not aligned; evidence=$EVIDENCE"
+((AUTH)) || die "post-loader Play Games auth outcome missing; evidence=$EVIDENCE"
+! rg -q 'PLAY_GAMES_UI_WITHOUT_EXPLICIT_TAP' "$TRACE" ||
+    die "interactive Play Games UI appeared without a tap; evidence=$EVIDENCE"
+LAUNCHER_LINE="$(rg -n '"event":"LAUNCHER_READY"' "$TRACE" | head -1 | cut -d: -f1 || true)"
+TWA_LINE="$(rg -n '"event":"TWA_VISIBLE"' "$TRACE" | head -1 | cut -d: -f1 || true)"
+LOADER_LINE="$(rg -n '"event":"LOADER_READY"' "$TRACE" | head -1 | cut -d: -f1 || true)"
+AUTH_LINE="$(rg -n '"event":"AUTH_OUTCOME"' "$TRACE" | head -1 | cut -d: -f1 || true)"
+[[ -n "$LAUNCHER_LINE" && -n "$TWA_LINE" && -n "$LOADER_LINE" && -n "$AUTH_LINE" ]] ||
+    die "runtime event trace is incomplete; evidence=$EVIDENCE"
+(( LAUNCHER_LINE < TWA_LINE && TWA_LINE < LOADER_LINE && LOADER_LINE <= AUTH_LINE )) ||
+    die "runtime event order is invalid; evidence=$EVIDENCE"
+rg -q "artifact source_sha=$SOURCE_SHA version_code=$VERSION_CODE package=$PACKAGE" "$APP_LOG" ||
+    die "runtime artifact identity is not bound to source/version; evidence=$EVIDENCE"
+! rg -q ' [WE] SOW_PGS :' "$LOG" || die "Play Games bridge emitted warning/error; evidence=$EVIDENCE"
 
 SCREENSHOT="$OUT/screenshot-$STAMP.png"
-if ! adb exec-out screencap -p >"$SCREENSHOT"; then
-    die "failed to capture the Android screen; reconnect the device and rerun the local test"
-fi
-if [[ ! -s "$SCREENSHOT" ]]; then
-    die "Android screenshot is empty; reconnect the device and rerun the local test"
-fi
-
-if rg -q 'SOW_PGS.*rendezvous success=true HTTP 2' "$LOG"; then
-    echo "PASS: Play Games handoff launched the TWA"
-else
-    echo "PASS: anonymous fallback launched the TWA without interactive Play Games UI"
-fi
-echo "Package: $PACKAGE"
-echo "Launch result: $START"
-echo "Logcat: $LOG"
-echo "App log: $APP_LOG"
+adb exec-out screencap -p >"$SCREENSHOT"
+[[ -s "$SCREENSHOT" ]] || die "Android screenshot is empty"
+echo "PASS: TWA visible before post-loader Play Games auth; no interactive Play Games UI without a tap."
+echo "Evidence: $EVIDENCE"
+echo "Trace: $TRACE"
 echo "Screenshot: $SCREENSHOT"

@@ -1,8 +1,7 @@
-# GPU UI Migration — Audit & Plan
+# GPU UI Pipeline — Audit & Current Contract
 
-Status: planning. Goal is to move text + emoji rendering off egui's CPU
-immediate-mode path onto the GPU instanced pipeline, with **minimum CPU work per
-frame for HUD/world rendering**.
+Status: the world nameplate pipeline uses the shared GPU renderer and keeps egui
+as a visual fallback. Full UI migration remains planning.
 
 ## North star (the principle)
 
@@ -27,21 +26,60 @@ tessellation, and multi-pass glow redraws). So:
 | Nameplate names + troop counts | `TextRenderer` (SDF font atlas) | ✅ GPU |
 | Building level badges | `TextRenderer` | ✅ GPU |
 | Projectile troop numbers | `TextRenderer` | ✅ GPU |
-| Building shape + emoji | `StructureRenderer` (color emoji atlas) | ✅ GPU (over-constrained — see Phase 1) |
-| Nameplate star ⭐ / disconnect 🔌 | `StructureRenderer` bare-emoji + alpha outline | ✅ GPU |
-| ~25 standalone emoji icons (express, ☢️, badges, leaderboard, context menu, avatar, build popover) | egui `try_paint_emoji` (6× redraw) | ❌ egui |
+| Building shape + emoji | `TextRenderer` (`KIND_EMOJI`) | ✅ GPU |
+| Nameplate crown/medals, star ⭐ / disconnect 🔌 | `TextRenderer` (`KIND_EMOJI`) | ✅ GPU |
+| Nameplate avatar/category + side badges/express | `TextRenderer` (`KIND_SPRITE`/`KIND_EMOJI`) | ✅ GPU primary, egui fallback |
+| Remaining standalone emoji icons outside nameplate (☢️, leaderboard, context menu, avatar, build popover) | egui `try_paint_emoji` (6× redraw) | ❌ egui |
 | Inline emoji in text (toasts, HUD counters: `🪙 {}`, `🛡️ {}/{}`, `⚔️ +{}`) | egui text (font/emoji fallback) | ❌ egui |
 | Leaderboard / panels / plates / tooltips display text | egui galley | ❌ egui |
 | Interactive widgets (buttons, sliders, combos, text edit, scroll, selectable) | egui | ❌ egui |
 
-Two GPU renderers exist and share an instancing pattern (screen+world space quads,
-one draw call, outline in-shader):
-- **SDF font atlas** → monochrome, tintable, outlined glyphs (text + mono icons).
-- **Color emoji atlas** (twemoji, 832×768, 153 keys) → full-color emoji + alpha-dilate outline.
+`TextRenderer` is the single GPU submission pipeline. Its shader keeps separate
+branches for the MSDF font atlas, RGBA emoji atlas, sprites, discs, rings, and
+rectangles; all branches share the same instanced draw list.
+
+## Nameplate contract
+
+The nameplate orchestrator owns selection and semantic state. Geometry and
+painting are owned by the reusable component:
+
+```text
+sow-client/src/render/frame/ui.rs::SowApp::render_frame_ui_and_present
+    ↓ TextRenderer::begin_frame
+sow-client/src/render/world/mod.rs::SowApp::render_world_overlays
+    ↓ sow-client/src/render/world/nameplates/render.rs::render
+sow-client/src/render/world/nameplates/painter.rs::NameplatePainter
+    ├─ NameplateLayout (layout.rs)
+    ├─ TextRenderer::push_string / push_emoji (GPU primary)
+    └─ sow_ui_kit::widgets::try_paint_emoji_with_style (egui fallback)
+    ↓ TextRenderer::draw (frame/ui.rs)
+```
+
+`sow-render/src/text/types.rs` defines the shared `TextPaintStyle` and
+`OutlineStyle` contract. Emoji quads preserve their logical content bounds and
+reserve transparent quad padding for the configured outline/shadow; the shader
+maps atlas UVs only through that inner content rectangle. `NameplateStyle` is
+the client adapter from `DevConfig` to GPU and egui profiles.
+
+On the GPU branch, `NameplatePainter::paint` measures with
+`TextRenderer::measure_string` and emits instances directly; it creates egui
+galleys only when the GPU renderer is unavailable. The fallback uses
+`prepare_name`, `paint_prepared_name_with_glow`, and
+`paint_glow_troops_row_with_style` with the same `NAMEPLATE` emoji profile.
+
+## Verification contract
+
+- `sow-tools/check.sh` is the code guard: workspace check, source-size guard, and
+  emoji-pipeline guard.
+- `./sow l` is the local Web/WASM visual preview for nameplate iteration.
+- `./sow p` is the official Web/WASM/backend production acceptance pipeline; it
+  must reach its healthcheck and public-verification stages.
+- `./sow a` is Android/Google Play and is outside this pipeline; the owner runs
+  it manually.
 
 ## Audit findings
 
-Call-site counts (sow-client-world/src):
+Call-site counts (sow-client/src):
 
 - Emoji helpers: `try_paint_emoji` ×22, `paint_emoji_centered` ×3, `emoji_label`
   ×9, `paint_emoji_text_at` ×4, `measure_emoji_text` ×1.
@@ -95,8 +133,8 @@ the framework-level interaction work is deliberately last.
 
 | Phase | Scope | Migrates | Risk | Notes |
 |---|---|---|---|---|
-| 0 | **Done** | nameplates, troop #s, building badges/shapes, status emoji | — | shipped |
-| 1 | **Building polish** | building emoji: remove shape-clip, give it its own alpha outline (match egui look); sync placed vs build-mode size to one formula | low | the current visible pain |
+| 0 | **Done** | nameplates, troop #s, building badges/shapes, status emoji | — | current checkout |
+| 1 | **Done** | shared nameplate outline/spacing + building emoji alpha outline | low | one `TextRenderer` emoji geometry contract |
 | 2 | **Standalone emoji icons** | remaining `try_paint_emoji` / `paint_emoji_centered` → `push_emoji` (world first, then HUD) | low | kills the 6× redraw |
 | 3 | **Display text + inline emoji** | static labels / toasts / counters → GPU; build the **text+emoji shaper** for inline emoji | med | the inline-emoji shaper is the new capability |
 | 4 | **Layout helper** | minimal measure/align/row/col/clip for HUD panels | med | enables panels without egui |

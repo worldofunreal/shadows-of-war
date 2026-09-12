@@ -8,20 +8,71 @@ pub struct TextGlobals {
     pub _pad: [f32; 2],
 }
 
-#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
-pub struct TmpFontSettings {
+/// One outline/shadow contract shared by glyph and RGBA-emoji instances.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct OutlineStyle {
+    pub color: [f32; 4],
+    pub thickness: f32,
+    pub shadow_y: f32,
+}
+
+impl OutlineStyle {
+    pub const NONE: Self = Self {
+        color: [0.0; 4],
+        thickness: 0.0,
+        shadow_y: 0.0,
+    };
+
+    pub const TACTICAL: Self = Self {
+        color: [0.0, 0.0, 0.0, 0.9],
+        thickness: 1.5,
+        shadow_y: 1.5,
+    };
+
+    /// Screen-space room required outside the logical emoji bounds.
+    #[inline]
+    pub const fn effect_padding(self) -> f32 {
+        let thickness = if self.thickness > 0.0 {
+            self.thickness
+        } else {
+            0.0
+        };
+        let shadow_y = if self.shadow_y > 0.0 {
+            self.shadow_y
+        } else {
+            0.0
+        };
+        if thickness > shadow_y {
+            thickness
+        } else {
+            shadow_y
+        }
+    }
+}
+
+/// MSDF text settings plus the outline inherited by inline emojis.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct TextPaintStyle {
     pub face_dilate: f32,
-    pub outline_thickness: f32,
-    pub underlay_offset_y: f32,
+    pub outline: OutlineStyle,
     pub underlay_softness: f32,
 }
 
-impl Default for TmpFontSettings {
+impl Default for OutlineStyle {
+    fn default() -> Self {
+        Self {
+            color: [0.0, 0.0, 0.0, 1.0],
+            thickness: 0.8,
+            shadow_y: 1.5,
+        }
+    }
+}
+
+impl Default for TextPaintStyle {
     fn default() -> Self {
         Self {
             face_dilate: 0.0,
-            outline_thickness: 0.8,
-            underlay_offset_y: 1.5,
+            outline: OutlineStyle::default(),
             underlay_softness: 0.0,
         }
     }
@@ -61,6 +112,9 @@ pub struct TextInstanceGpu {
     pub screen_pos: [f32; 2],
     pub size: [f32; 2],
     pub uv_rect: [f32; 4],
+    /// Normalized quad area containing the logical texture content. Emoji use this to reserve
+    /// transparent room for the outline/shadow; all other primitives use the full quad.
+    pub content_rect: [f32; 4],
     pub color: [f32; 4],
     pub outline_color: [f32; 4],
     pub face_dilate: f32,

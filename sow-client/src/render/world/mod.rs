@@ -20,9 +20,8 @@ pub(crate) struct VisPlayer<'a> {
     pub nameplate_size: f32,
 }
 
-/// Below this `zoom_scaled` value, buildings and railways hard-return — no collection,
-/// no draws, no rail graph rebuild. Single source of truth for the world-layer cull floor.
-pub(crate) const BUILDINGS_HIDE_FLOOR: f32 = 1.0;
+/// Below this `zoom_scaled` value, railways hard-return and skip rebuilding their graph.
+pub(crate) const RAILWAYS_HIDE_FLOOR: f32 = 1.0;
 
 pub(crate) struct RenderContext<'a> {
     pub painter: &'a egui::Painter,
@@ -361,10 +360,6 @@ impl SowApp {
                         let outline_color_arr = [0.0f32, 0.0, 0.0, alpha as f32 / 255.0];
 
                         let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
-                        let face_dilate = dev.font_face_dilate * sf;
-                        let outline_thickness = dev.font_outline_thickness * sf;
-                        let shadow_y = dev.font_shadow_y * sf;
-                        let underlay_softness = dev.font_underlay_softness * sf;
                         let char_spacing = dev.font_char_spacing;
                         let font_size_scale = dev.font_size_scale;
                         let raw_emoji_scale = dev.emoji_size_scale;
@@ -374,12 +369,7 @@ impl SowApp {
                             raw_emoji_scale
                         };
 
-                        let settings = crate::render::gpu::TmpFontSettings {
-                            face_dilate,
-                            outline_thickness,
-                            underlay_offset_y: shadow_y,
-                            underlay_softness,
-                        };
+                        let settings = crate::render::dev_text_style(&dev, sf, outline_color_arr);
 
                         tr.push_string(
                             &notice.text,
@@ -388,7 +378,7 @@ impl SowApp {
                                 * bounce_scale
                                 * font_size_scale
                                 * sf,
-                            (color_arr, outline_color_arr),
+                            color_arr,
                             settings,
                             (0.5, char_spacing, emoji_scale),
                         );

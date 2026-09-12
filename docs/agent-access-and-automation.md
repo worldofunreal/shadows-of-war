@@ -24,13 +24,17 @@ without the owner's device credential.
 
 ## Google Play and Play Games capability matrix
 
+Android behavior and audit evidence are governed by
+`docs/android-runtime-contract.md`; this matrix describes access boundaries,
+not proof of runtime behavior.
+
 | Area | Official interface | Automation available here | Boundary |
 |---|---|---|---|
 | Android releases, tracks, listings, testers, IAP | Google Play Android Publisher API v3 | `fastlane`/`gpc` for read-only inspection; owner-only `./sow a` for release | Codex never uploads Android; local validation uses `scripts/android-local-test.sh` |
 | Play Games configuration | Play Games Services Publishing API v1configuration | `gpc games` can manage achievement and leaderboard configurations | The API does not cover the complete Play Console bootstrap; event setup remains a Console operation |
 | Play Games runtime data | Play Games Services API v1 | `gpc games runtime` is read-only and requires the `games` OAuth scope | It is not the same API as configuration/publishing |
 | Play Games management | Play Games Services Management API v1management | Direct REST/client-library access is possible when the correct user OAuth scope exists | It is not exposed by an installed MCP in this session |
-| Play Games Android authentication | Play Games Services v2 SDK | Implemented in the Android launcher and server handoff | Requires the Play Console game configuration and server OAuth web client |
+| Play Games Android authentication | Play Games Services v2 SDK | Native bridge requested after TWA `loader-ready` and server handoff | Requires the Play Console game configuration and server OAuth web client |
 
 ## Verified local tools
 
@@ -84,10 +88,11 @@ Verified configuration:
 - `./sow p` propagates the event, achievement, and leaderboard IDs to all
   production service environments and verifies configuration drift.
 
-The Play Games v2 Android launcher checks for an existing authenticated session
-before starting the TWA, exchanges a one-use server auth code with the backend
-when available, and falls back to the normal anonymous TWA session when Play
-Games is unavailable. The authoritative server submits match events, achievement
+The Android launcher hands off directly to the TWA. After the web loader emits
+`loader-ready`, the native bridge checks for an existing Play Games session,
+exchanges a one-use server auth code with the backend when available, and falls
+back to the normal anonymous TWA session when Play Games is unavailable. The
+authoritative server submits match events, achievement
 increments/unlocks for matches, victories, crowns, and leader milestones, plus
 cumulative victory scores, only for verified Play Games sessions. No parallel
 achievement counters are stored; all thresholds are derived from the existing

@@ -201,12 +201,13 @@ pub(super) fn execute_android(paths: &Paths) -> Result<()> {
     let version = version(paths, true)?;
     println!("==> Android {version}");
     let android_code = android_version_code(paths, &version, false)?;
+    let source_sha = android_source_sha(paths)?;
 
     println!("==> 2/3 Build Android AAB");
-    build_android(paths, &version, android_code)?;
+    build_android(paths, &version, android_code, &source_sha)?;
 
     println!("==> 3/3 Test and publish");
-    test_android(paths, &version, android_code)?;
+    test_android(paths, &version, android_code, &source_sha)?;
     publish_android(paths, android_code)?;
     println!("✅ Android {version} (code {android_code}) published");
     Ok(())
@@ -379,7 +380,12 @@ fn android_version_code(paths: &Paths, _version: &str, _bump: bool) -> Result<u3
     Ok(next)
 }
 
-fn build_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> {
+fn android_source_sha(paths: &Paths) -> Result<String> {
+    let root = paths.root.to_str().context("workspace path is not UTF-8")?;
+    output("git", &["-C", root, "rev-parse", "HEAD"])
+}
+
+fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &str) -> Result<()> {
     let project = paths.root.join(ANDROID_PROJECT);
     let gradlew = project.join("gradlew");
     let key_properties = project.join("key.properties");
@@ -392,6 +398,7 @@ fn build_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> 
     let fingerprint = android_fingerprint(paths, version, version_code)?;
     let version_name_arg = format!("-PsowVersionName={version}");
     let version_code_arg = format!("-PsowVersionCode={version_code}");
+    let source_sha_arg = format!("-PsowSourceSha={source_sha}");
     let revenuecat_key = env::var("SOW_REVENUECAT_ANDROID_PUBLIC_KEY")
         .context("SOW_REVENUECAT_ANDROID_PUBLIC_KEY must be provided via sow-dist/.env")?;
     if !revenuecat_key.starts_with("goog_") {
@@ -415,6 +422,7 @@ fn build_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> 
             ":app:assembleDebug",
             &version_name_arg,
             &version_code_arg,
+            &source_sha_arg,
             &revenuecat_key_arg,
             &play_games_app_id_arg,
             &play_games_client_id_arg,
@@ -433,6 +441,27 @@ fn build_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> 
     .find(|path| path.is_file())
     .context("Android output metadata not found after release build")?;
     require_file(&metadata_path, "Android output metadata")?;
+    let release_build_config = project.join(
+        "app/build/generated/source/buildConfig/release/com/shadowsofwar/BuildConfig.java",
+    );
+    let build_config = fs::read_to_string(&release_build_config)
+        .with_context(|| format!("read {}", release_build_config.display()))?;
+    if !build_config.contains(&format!("SOW_SOURCE_SHA = \"{source_sha}\""))
+        || !build_config.contains(&format!("VERSION_CODE = {version_code};"))
+    {
+        bail!("Android release artifact identity is not bound to source SHA/versionCode");
+    }
+    let release_manifest = project.join(
+        "app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml",
+    );
+    let merged_manifest = fs::read_to_string(&release_manifest)
+        .with_context(|| format!("read {}", release_manifest.display()))?;
+    if !merged_manifest.contains("package=\"com.shadowsofwar\"")
+        || !merged_manifest.contains(&format!("android:versionCode=\"{version_code}\""))
+        || !merged_manifest.contains(&format!("sow_source_sha={source_sha}"))
+    {
+        bail!("Android release manifest identity is not bound to source SHA/versionCode");
+    }
     let metadata: serde_json::Value = serde_json::from_slice(&fs::read(&metadata_path)?)
         .context("parse Android output metadata")?;
     let application_id = metadata
@@ -467,13 +496,14 @@ fn build_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> 
     fs::create_dir_all(cache.parent().context("Android cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     println!(
-        "  Android AAB ready: {} (version {version}, code {version_code})",
-        output.display()
+        "  Android AAB ready: {} (version {version}, code {version_code}, sha256 {})",
+        output.display(),
+        file_sha256(&bundle)?
     );
     Ok(())
 }
 
-fn test_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> {
+fn test_android(paths: &Paths, version: &str, version_code: u32, source_sha: &str) -> Result<()> {
     let adb_state = Command::new("adb").args(["get-state"]).output();
     let has_adb_device = adb_state
         .as_ref()
@@ -484,6 +514,7 @@ fn test_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> {
     }
     let test_script = paths.root.join("scripts/android-local-test.sh");
     require_file(&test_script, "Android local test script")?;
+    let play_track = env_or("SOW_ANDROID_PLAY_TRACK", "alpha");
     println!(
         "==> Android local smoke test (captured logcat): {}",
         test_script.display()
@@ -493,6 +524,8 @@ fn test_android(paths: &Paths, version: &str, version_code: u32) -> Result<()> {
         .env("SOW_ANDROID_TEST_VARIANT", "debug")
         .env("SOW_ANDROID_TEST_VERSION_NAME", version)
         .env("SOW_ANDROID_TEST_VERSION_CODE", version_code.to_string())
+        .env("SOW_ANDROID_TEST_SOURCE_SHA", source_sha)
+        .env("SOW_ANDROID_TEST_TRACK", play_track)
         .status()?;
     if !test_status.success() {
         bail!("Android local device test failed");

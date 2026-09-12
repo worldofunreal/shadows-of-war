@@ -136,26 +136,46 @@
         return lobbyThumbnailCache[url];
     }
 
-    function lobbyMapName(lobby) {
-        var key = String(lobby.map_name || "world").toLowerCase();
-        var knownNames = {
-            eastanglia: "East Anglia",
-            bajacalifornia: "Baja California",
-            eastasia: "East Asia",
-            indiansubcontinent: "Indian Subcontinent",
-            middleeast: "Middle East",
-            northamerica: "North America",
-            southamerica: "South America",
-            southeastasia: "Southeast Asia"
-        };
+    var MAP_DISPLAY_NAMES = {
+        africa: "Africa",
+        asia: "Asia",
+        bajacalifornia: "Baja California",
+        eastanglia: "East Anglia",
+        eastasia: "East Asia",
+        europe: "Europe",
+        indiansubcontinent: "Indian Subcontinent",
+        mena: "MENA",
+        middleeast: "Middle East",
+        northamerica: "North America",
+        oceania: "Oceania",
+        pangaea: "Pangaea",
+        southamerica: "South America",
+        southeastasia: "Southeast Asia",
+        world: "World"
+    };
+
+    function formatMapName(value) {
+        var key = "";
+        var displayName = "";
+        if (value && typeof value === "object") {
+            key = value.map_name || value.key || "";
+            displayName = value.display_name || "";
+        } else {
+            key = value || "";
+        }
+        key = String(key || "world").trim().toLowerCase();
+        if (MAP_DISPLAY_NAMES[key]) return MAP_DISPLAY_NAMES[key];
+
         var info = mapInfo(key);
-        var label = String(info.display_name || knownNames[key] || key);
-        if (label.toLowerCase() === key) label = knownNames[key] || label;
-        return label;
+        var label = String(displayName || info.display_name || "").trim();
+        if (label && label.toLowerCase() !== key) return label;
+        return key
+            .replace(/[-_]+/g, " ")
+            .replace(/\b[a-z]/g, function (letter) { return letter.toUpperCase(); }) || "World";
     }
 
     function lobbyLabel(lobby) {
-        return (lobby.game_mode || "FFA") + " " + lobbyMapName(lobby);
+        return (lobby.game_mode || "FFA") + " " + formatMapName(lobby);
     }
 
     function renderLobbyCard(lobby) {
@@ -167,7 +187,7 @@
                 "'>" +
                 "<img class='sow-menu__lobby-art' src='" + esc(lobbyThumb(lobby)) + "' alt='' loading='eager' decoding='async'>" +
                 "<div class='sow-menu__lobby-top'><span class='sow-menu__lobby-chip' data-lobby-mode>" + esc(lobby.game_mode || "FFA") + "</span><span class='sow-menu__lobby-chip sow-menu__lobby-chip--status' data-timer-for='" + lobby.id + "'>" + esc(lobbyTimerText(lobby)) + "</span>" + lock + "</div>" +
-                "<div class='sow-menu__lobby-bottom'><h3 data-lobby-map>" + esc(lobbyMapName(lobby)) + "</h3><span class='sow-menu__lobby-join'>JOIN ↗</span></div>" +
+                "<div class='sow-menu__lobby-bottom'><h3 data-lobby-map>" + esc(formatMapName(lobby)) + "</h3><span class='sow-menu__lobby-join'>JOIN ↗</span></div>" +
             "</article>";
     }
 
@@ -200,7 +220,7 @@
         card.dataset.mapName = nextMap;
         card.setAttribute("aria-label", lobbyLabel(lobby));
         if (mode) mode.textContent = lobby.game_mode || "FFA";
-        if (map) map.textContent = lobbyMapName(lobby);
+        if (map) map.textContent = formatMapName(lobby);
         if (timer) timer.textContent = lobbyTimerText(lobby);
         if (lobby.has_password && !lock) {
             card.querySelector(".sow-menu__lobby-top").insertAdjacentHTML("beforeend", "<span class='sow-menu__lobby-lock' aria-label='Password protected'>🔒</span>");
@@ -392,11 +412,18 @@
         var crowns = store.crowns == null ? store.laurels : store.crowns;
         var featured = bundles.find(function (bundle) { return bundle.product_id === "sow_gems_2600"; }) || bundles[bundles.length - 1];
         var featuredAction = featured && canRenderProductPurchase(featured.product_id) ? storeProductButton(featured.product_id, "BUY") : "";
+        var restoreAction = isAndroidTwa() && state.purchase_user_id &&
+            typeof window.SOW_requestAndroidRestore === "function" &&
+            typeof window.SOW_isAndroidPurchaseBridgeReady === "function" &&
+            window.SOW_isAndroidPurchaseBridgeReady()
+            ? "<button class='sow-store__link' type='button' data-command='restore_purchases'>RESTORE PURCHASES</button>"
+            : "";
         var checkout = storeCheckoutProduct
             ? "<section class='sow-store__checkout' data-store-checkout><div class='sow-store__section-head'><h2>CHECKOUT</h2><button class='sow-store__close' type='button' data-command='close_store_checkout' aria-label='Close'>×</button></div><div class='sow-store__checkout-host' data-store-checkout-host><p>Loading checkout…</p></div></section>"
             : "";
         return "<main class='sow-menu__main sow-menu__main--store' data-screen-panel='store'><section class='sow-menu__store-slot' data-store-slot aria-label='Shop'>" +
                     "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>SHOP</p><h1>Featured offers</h1></div><div class='sow-store__balances'><span class='sow-store__balance--gems' aria-label='Gems: " + esc(store.gems || 0) + "'>" + renderCurrencyAmount(store.gems || 0, "gem") + "</span><span class='sow-store__balance--crowns' aria-label='Crowns: " + esc(crowns || 0) + "'>" + renderCurrencyAmount(crowns || 0, "crown") + "</span></div></header>" +
+                    restoreAction +
                     renderFeedback() +
                     (featured ? "<article class='sow-store__featured'><div><p class='sow-store__eyebrow'>KINGDOM VAULT</p><h2>" + renderCurrencyAmount(featured.gems, "gem") + " gems</h2><p>Build your next army.</p></div>" + featuredAction + "</article>" : "") +
                     "<section class='sow-store__section' aria-labelledby='sow-store-gems'><div class='sow-store__section-head'><h2 id='sow-store-gems'>Gems</h2><button class='sow-store__link' type='button' data-command='main_nav' data-nav-screen='heroes'>VIEW HEROES</button></div><div class='sow-store__bundle-grid'>" + (bundles.map(renderStoreBundle).join("") || "<p class='sow-menu__empty'>Offers unavailable.</p>") + "</div></section>" +
@@ -482,6 +509,20 @@
         }).finally(function () {
             storeCheckoutBusy = false;
         });
+    }
+
+    function beginStoreRestore() {
+        if (!isAndroidTwa() || storeCheckoutBusy || !state.purchase_user_id ||
+            typeof window.SOW_requestAndroidRestore !== "function") return;
+        storeCheckoutBusy = true;
+        var requestId = window.SOW_requestAndroidRestore(state.purchase_user_id);
+        if (!requestId) {
+            storeCheckoutBusy = false;
+            state.error = "Android restore unavailable.";
+        } else {
+            storeCheckoutRequestId = requestId;
+        }
+        render();
     }
 
     function closeStoreCheckout() {
@@ -748,7 +789,7 @@
         }).slice(0, 3);
     }
 
-    function profileRecentLeadersPanel(matches) {
+    function profileRecentLeadersPanel(matches, loading) {
         var recent = Array.isArray(matches) ? matches.slice(0, 10) : [];
         var favorites = profileRecentLeaders(recent);
         var cards = favorites.map(function (entry) {
@@ -757,15 +798,15 @@
             var unit = entry.matches === 1 ? "game" : "games";
             return "<article class='sow-profile__favorite'><img src='" + esc(asset("gameplay/avatars/" + leader.slug + ".webp")) + "' alt='" + esc(leader.name) + " avatar' width='64' height='64' loading='lazy'><div class='sow-profile__favorite-copy'><strong>" + esc(leader.name) + "</strong><span>" + esc(entry.matches) + " " + unit + " · " + esc(share) + "%</span></div></article>";
         }).join("");
-        return "<section class='sow-profile__favorites' aria-labelledby='sow-profile-favorites-title'><div class='sow-profile__favorites-head'><h2 id='sow-profile-favorites-title'>Most played leaders</h2><span>Last " + esc(recent.length) + " matches</span></div>" +
-            (cards ? "<div class='sow-profile__favorites-track' data-count='" + esc(favorites.length) + "'>" + cards + "</div>" : "<p class='sow-profile__favorites-empty'>No leader data yet.</p>") +
+        return "<section class='sow-profile__favorites' data-profile-favorites aria-labelledby='sow-profile-favorites-title'><div class='sow-profile__favorites-head'><h2 id='sow-profile-favorites-title'>Most played leaders</h2><span>Last " + esc(recent.length) + " matches</span></div>" +
+            (cards ? "<div class='sow-profile__favorites-track' data-count='" + esc(favorites.length) + "'>" + cards + "</div>" : "<div class='sow-profile__favorites-track' data-count='0'><p class='sow-profile__favorites-empty'>" + (loading ? "Loading leader data…" : "No leader data yet.") + "</p></div>") +
             "</section>";
     }
 
     function profileMatchRow(match) {
         var result = match.won ? "WIN" : "LOSS";
         var mode = match.mode || "FFA";
-        var map = match.map_name || "WORLD MAP";
+        var map = formatMapName(match);
         var kda = (match.kills || 0) + " / " + (match.deaths || 0) + " / " + (match.assists || 0);
         return "<button type='button' class='sow-profile__match' data-command='open_match' data-match-id='" + esc(match.match_id) + "'>" +
             "<span class='sow-profile__match-result " + (match.won ? "is-win" : "is-loss") + "'>" + result + "</span>" +
@@ -775,13 +816,69 @@
             "</button>";
     }
 
+    function profileHeaderMarkup(data, own) {
+        var title = own ? "Your profile" : "Player profile";
+        var entry = activeProfileEntry();
+        var snapshotError = profileSnapshotError();
+        var displayName = data && data.display_name ? data.display_name : (profileSnapshotLoading ? "Loading profile…" : "Profile unavailable");
+        var handle = data && data.handle ? data.handle : (profileSnapshotLoading ? "Fetching player data…" : "");
+        var level = data && data.level != null ? data.level : "—";
+        var status = data && snapshotError
+            ? "<div class='sow-profile__status' data-profile-status aria-live='polite'>" + esc(snapshotError) + " <button type='button' class='sow-profile__status-action' data-command='retry_profile'>Try again</button></div>"
+            : "<div class='sow-profile__status' data-profile-status aria-live='polite' hidden></div>";
+        return "<section class='sow-profile__heading' data-profile-heading aria-labelledby='sow-profile-title'><div class='sow-profile__identity-card'><div class='sow-profile__heading-top'><span class='sow-profile__kicker'>" + esc(title) + "</span><button type='button' class='sow-profile__back' data-command='close_profile'>← Back</button></div><div class='sow-profile__identity-main'><div class='sow-profile__identity-copy'><h1 id='sow-profile-title' data-profile-display-name>" + esc(displayName) + "</h1><p class='sow-profile__handle' data-profile-handle>" + esc(handle) + "</p>" + status + "</div><div class='sow-profile__level'><small>LEVEL</small><strong data-profile-level>" + esc(level) + "</strong></div></div></div>" + profileRecentLeadersPanel(profileHistory, !!(entry && !entry.complete && profileSnapshotLoading)) + "</section>";
+    }
+
+    function profileContentMarkup(data) {
+        var entry = activeProfileEntry();
+        var complete = profileDataComplete();
+        var content = "";
+        if (data && profileTab === "overview") {
+            var recent = complete
+                ? (profileHistory.slice(0, 10).map(profileMatchRow).join("") || "<p class='sow-profile__empty'>No completed matches.</p>")
+                : "<p class='sow-profile__empty'>" + esc(profileSnapshotError() || "Loading profile…") + "</p>";
+            var leaders = complete
+                ? ((data.leaders || []).slice(0, 4).map(profileLeaderCard).join("") || "<p class='sow-profile__empty'>No leader history.</p>")
+                : "<p class='sow-profile__empty'>" + esc(profileSnapshotError() || "Loading profile…") + "</p>";
+            content = "<div id='sow-profile-panel-overview' class='sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-overview'><div class='sow-profile__stats'>" +
+                "<div><strong>" + esc(data.matches_played) + "</strong><span>Matches</span></div>" +
+                "<div><strong>" + esc(data.wins) + "</strong><span>Wins</span></div>" +
+                "<div><strong>" + esc(Math.round((data.win_rate || 0) * 100)) + "%</strong><span>Win rate</span></div>" +
+                "<div class='sow-profile__stat-kda'><strong><i>" + esc(data.kills) + "</i><i>" + esc(data.deaths) + "</i><i>" + esc(data.assists) + "</i></strong><span>K / D / A</span></div>" +
+                "</div><div class='sow-profile__columns'><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>Recent matches</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>View all</button></div>" + recent +
+                "</section><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>Leaders</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>View all</button></div>" + leaders +
+                "</section></div></div>";
+        } else if (data && profileTab === "leaders") {
+            var leaderList = complete
+                ? ((data.leaders || []).map(profileLeaderCard).join("") || "<p class='sow-profile__empty'>No leader history.</p>")
+                : "<p class='sow-profile__empty'>" + esc(profileSnapshotError() || "Loading profile…") + "</p>";
+            content = "<section id='sow-profile-panel-leaders' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-leaders'><div class='sow-profile__section-head'><h2>Leader mastery</h2><span class='sow-profile__section-note'>" + esc(complete ? (data.leaders || []).length : "—") + " leaders</span></div><div class='sow-profile__leaders'>" + leaderList + "</div></section>";
+        } else if (profileTab === "history") {
+            var historyList = !complete
+                ? "<p class='sow-profile__empty'>" + esc(profileSnapshotError() || "Loading profile…") + "</p>"
+                : (profileHistory.map(profileMatchRow).join("") || "<p class='sow-profile__empty'>No completed matches.</p>");
+            var canLoadMore = !!(entry && complete && (entry.historyHasMore || entry.historyError));
+            var historyAction = profilePublicId && (canLoadMore || !complete)
+                ? "<button type='button' class='sow-profile__load-more' data-command='load_profile_more'" + (profileHistoryLoading ? " disabled" : "") + ">" + (profileHistoryLoading ? "Loading…" : (entry && entry.historyError ? "Try again" : "Load more matches")) + "</button>"
+                : "";
+            content = "<section id='sow-profile-panel-history' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-history'><div class='sow-profile__section-head'><h2>Match history</h2><span class='sow-profile__section-note'>" + esc(data ? data.matches_played : 0) + " matches</span></div><div class='sow-profile__history'>" + historyList + "</div>" + historyAction + "</section>";
+        } else if (data && profileTab === "ranked") {
+            var ratings = profileRatings === null
+                ? "<p class='sow-profile__empty'>" + esc(profileRatingsLoading || !complete ? "Loading ranked records…" : (entry && entry.ratingsError ? entry.ratingsError : "No ranked records.")) + "</p>"
+                : (profileRatings.map(function (rating) {
+                    return "<article class='sow-profile__rating'><div><strong>" + esc(rating.season_name) + "</strong><span>" + esc(rating.queue) + " · " + esc(rating.mode) + "</span></div><b>" + esc(rating.tier) + (rating.division ? " " + esc(rating.division) : "") + "</b><strong>" + esc(rating.score) + " SR</strong><small>" + esc(rating.games_played) + " games · " + esc(rating.wins) + " wins · peak " + esc(rating.peak_score) + "</small></article>";
+                }).join("") || "<p class='sow-profile__empty'>No ranked records.</p>");
+            content = "<section id='sow-profile-panel-ranked' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-ranked'><div class='sow-profile__section-head'><h2>Ranked</h2><span class='sow-profile__section-note'>Season records</span></div><div class='sow-profile__ratings'>" + ratings + "</div></section>";
+        } else if (!data) {
+            content = "<section class='sow-profile__state' aria-live='polite'><strong>" + esc(profileSnapshotLoading ? "Loading profile…" : "Profile unavailable") + "</strong><span>" + esc(profileSnapshotError() || "Try again or return to the menu.") + "</span>" + (profileSnapshotLoading ? "" : "<button type='button' class='sow-profile__load-more' data-command='retry_profile'>Try again</button>") + "</section>";
+        }
+        return content;
+    }
+
     function renderProfile() {
         var data = profileData;
         var own = state && state.public_profile_id === profilePublicId;
-        var title = own ? "Your profile" : "Player profile";
-        var header = data
-            ? "<section class='sow-profile__heading' aria-labelledby='sow-profile-title'><div class='sow-profile__identity-card'><div class='sow-profile__heading-top'><span class='sow-profile__kicker'>" + esc(title) + "</span><button type='button' class='sow-profile__back' data-command='close_profile'>← Back</button></div><div class='sow-profile__identity-main'><div class='sow-profile__identity-copy'><h1 id='sow-profile-title'>" + esc(data.display_name) + "</h1><p class='sow-profile__handle'>" + esc(data.handle) + "</p></div><div class='sow-profile__level'><small>LEVEL</small><strong>" + esc(data.level) + "</strong></div></div></div>" + profileRecentLeadersPanel(profileHistory) + "</section>"
-            : "<section class='sow-profile__heading sow-profile__heading--loading' aria-live='polite'><div class='sow-profile__identity-card'><div class='sow-profile__heading-top'><span class='sow-profile__kicker'>Player profile</span><button type='button' class='sow-profile__back' data-command='close_profile'>← Back</button></div><h1 id='sow-profile-title'>" + (profileLoading ? "Loading…" : "Profile unavailable") + "</h1><p class='sow-profile__handle'>" + esc(profileError || "Try again or return to the menu.") + "</p></div></section>";
+        var header = profileHeaderMarkup(data, own);
         var tabs = ["overview", "leaders", "history", "ranked"].map(function (tab) {
             var active = profileTab === tab;
             return "<button type='button' role='tab' id='sow-profile-tab-" + tab + "' class='sow-profile__tab" + (active ? " is-active" : "") + "' aria-selected='" + active + "' aria-controls='sow-profile-panel-" + tab + "' data-command='profile_tab' data-profile-tab='" + tab + "'>" + tab.charAt(0).toUpperCase() + tab.slice(1) + "</button>";
@@ -790,38 +887,6 @@
         if (typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa()) {
             playGamesActions = "<section class='sow-profile__section' aria-label='Google Play Games'><div class='sow-profile__section-head'><h2>Google Play Games</h2><span class='sow-profile__section-note'>Android</span></div><div class='sow-profile__actions'><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='achievements'>Achievements</button><button type='button' class='sow-menu__ghost-button' data-command='open_play_games' data-play-games-section='leaderboards'>Leaderboards</button></div></section>";
         }
-        var content = "";
-        if (data && profileTab === "overview") {
-            content = "<div id='sow-profile-panel-overview' class='sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-overview'><div class='sow-profile__stats'>" +
-                "<div><strong>" + esc(data.matches_played) + "</strong><span>Matches</span></div>" +
-                "<div><strong>" + esc(data.wins) + "</strong><span>Wins</span></div>" +
-                "<div><strong>" + esc(Math.round((data.win_rate || 0) * 100)) + "%</strong><span>Win rate</span></div>" +
-                "<div class='sow-profile__stat-kda'><strong><i>" + esc(data.kills) + "</i><i>" + esc(data.deaths) + "</i><i>" + esc(data.assists) + "</i></strong><span>K / D / A</span></div>" +
-                "</div><div class='sow-profile__columns'><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>Recent matches</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>View all</button></div>" +
-                (profileHistory.slice(0, 10).map(profileMatchRow).join("") || "<p class='sow-profile__empty'>No completed matches.</p>") +
-                "</section><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>Leaders</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>View all</button></div>" +
-                ((data.leaders || []).slice(0, 4).map(profileLeaderCard).join("") || "<p class='sow-profile__empty'>No leader history.</p>") +
-                "</section></div></div>";
-        } else if (data && profileTab === "leaders") {
-            content = "<section id='sow-profile-panel-leaders' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-leaders'><div class='sow-profile__section-head'><h2>Leader mastery</h2><span class='sow-profile__section-note'>" + esc((data.leaders || []).length) + " leaders</span></div><div class='sow-profile__leaders'>" +
-                ((data.leaders || []).map(profileLeaderCard).join("") || "<p class='sow-profile__empty'>No leader history.</p>") +
-                "</div></section>";
-        } else if (profileTab === "history") {
-            content = "<section id='sow-profile-panel-history' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-history'><div class='sow-profile__section-head'><h2>Match history</h2><span class='sow-profile__section-note'>" + esc(data ? data.matches_played : 0) + " matches</span></div><div class='sow-profile__history'>" +
-                (profileHistory.map(profileMatchRow).join("") || "<p class='sow-profile__empty'>No completed matches.</p>") +
-                "</div>" +
-                (profilePublicId ? "<button type='button' class='sow-profile__load-more' data-command='load_profile_more'" + (profileLoading ? " disabled" : "") + ">" + (profileLoading ? "Loading…" : "Load more matches") + "</button>" : "") +
-                "</section>";
-        } else if (data && profileTab === "ranked") {
-            var ratings = profileRatings === null
-                ? "<p class='sow-profile__empty'>" + (profileLoading ? "Loading ranked records…" : "No ranked records.") + "</p>"
-                : (profileRatings.map(function (rating) {
-                    return "<article class='sow-profile__rating'><div><strong>" + esc(rating.season_name) + "</strong><span>" + esc(rating.queue) + " · " + esc(rating.mode) + "</span></div><b>" + esc(rating.tier) + (rating.division ? " " + esc(rating.division) : "") + "</b><strong>" + esc(rating.score) + " SR</strong><small>" + esc(rating.games_played) + " games · " + esc(rating.wins) + " wins · peak " + esc(rating.peak_score) + "</small></article>";
-                }).join("") || "<p class='sow-profile__empty'>No ranked records.</p>");
-            content = "<section id='sow-profile-panel-ranked' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-ranked'><div class='sow-profile__section-head'><h2>Ranked</h2><span class='sow-profile__section-note'>Season records</span></div><div class='sow-profile__ratings'>" + ratings + "</div></section>";
-        } else if (!data) {
-            content = "<section class='sow-profile__state' aria-live='polite'><strong>" + esc(profileLoading ? "Loading profile…" : "Profile unavailable") + "</strong><span>" + esc(profileError || "Try again or return to the menu.") + "</span>" + (profileLoading ? "" : "<button type='button' class='sow-profile__load-more' data-command='retry_profile'>Try again</button>") + "</section>";
-        }
         var search = "<section class='sow-profile__directory'><div><h2>Find a player</h2><p>Search public player profiles by name or handle.</p></div><form class='sow-profile__search' data-form='profile-search'><label class='sow-profile__sr-only' for='sow-profile-search-input'>Player name or handle</label><input id='sow-profile-search-input' name='q' type='search' autocomplete='off' placeholder='Name or handle…' aria-label='Player name or handle'><button type='submit'>Search</button></form></section>";
         var searchResults = profileSearchResults.length
             ? "<div class='sow-profile__search-results' aria-live='polite'>" + profileSearchResults.map(function (summary) {
@@ -829,13 +894,47 @@
             }).join("") + "</div>"
             : "";
         return "<main class='sow-menu__main sow-profile__main' data-screen-panel='profile'><section class='sow-profile__page'>" + header +
-            "<nav class='sow-profile__tabs' role='tablist' aria-label='Profile sections'>" + tabs + "</nav>" + playGamesActions + content + renderModeration(own) + search + searchResults +
+            "<nav class='sow-profile__tabs' role='tablist' aria-label='Profile sections'>" + tabs + "</nav>" + playGamesActions + "<div data-profile-content class='sow-profile__content'>" + profileContentMarkup(data) + "</div>" + renderModeration(own) + search + searchResults +
             "</section></main>";
     }
 
+    function syncProfileDom() {
+        if (!profileOpen || currentScreen() !== "profile") return;
+        var panel = activeScreenPanel();
+        if (!panel) return;
+        var data = profileData;
+        var displayName = panel.querySelector("[data-profile-display-name]");
+        var handle = panel.querySelector("[data-profile-handle]");
+        var level = panel.querySelector("[data-profile-level]");
+        if (displayName) displayName.textContent = data && data.display_name ? data.display_name : (profileSnapshotLoading ? "Loading profile…" : "Profile unavailable");
+        if (handle) handle.textContent = data && data.handle ? data.handle : (profileSnapshotLoading ? "Fetching player data…" : "");
+        if (level) level.textContent = data && data.level != null ? data.level : "—";
+        var status = panel.querySelector("[data-profile-status]");
+        var snapshotError = data && profileSnapshotError();
+        if (status) {
+            status.hidden = !snapshotError;
+            status.textContent = snapshotError ? snapshotError + " " : "";
+            if (snapshotError) {
+                var retry = document.createElement("button");
+                retry.type = "button";
+                retry.className = "sow-profile__status-action";
+                retry.dataset.command = "retry_profile";
+                retry.textContent = "Try again";
+                status.appendChild(retry);
+            }
+        }
+        var favorites = panel.querySelector("[data-profile-favorites]");
+        if (favorites) favorites.outerHTML = profileRecentLeadersPanel(profileHistory, !!(activeProfileEntry() && !profileDataComplete() && profileSnapshotLoading));
+        var content = panel.querySelector("[data-profile-content]");
+        if (content) content.innerHTML = profileContentMarkup(data);
+    }
+
     function renderProfileDetail() {
-        if (!profileMatchDetail) return "";
-        return "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='Close match details'>×</button><span class='sow-profile__kicker'>Match details</span><h2 id='sow-profile-detail-title'>" + esc(profileMatchDetail.mode || "MATCH") + "</h2><p>" + esc(profileMatchDetail.map_name || "WORLD") + " · " + esc(profileMatchDetail.queue || "MATCHMAKING") + "</p><div class='sow-profile__detail-players'>" + (profileMatchDetail.participants || []).map(function (participant) {
+        if (!profileMatchDetail) {
+            if (!profileDetailError) return "";
+            return "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='Close match details'>×</button><span class='sow-profile__kicker'>Match details</span><h2 id='sow-profile-detail-title'>Unavailable</h2><p class='sow-profile__empty' aria-live='polite'>" + esc(profileDetailError) + "</p><button type='button' class='sow-profile__load-more' data-command='open_match' data-match-id='" + esc(profileDetailId) + "'>Try again</button></section></div>";
+        }
+        return "<div class='sow-profile__detail-backdrop' data-menu-overlay='profile-detail'><section class='sow-profile__detail' role='dialog' aria-modal='true' aria-labelledby='sow-profile-detail-title' tabindex='-1'><button type='button' class='sow-profile__detail-close' data-command='close_match' aria-label='Close match details'>×</button><span class='sow-profile__kicker'>Match details</span><h2 id='sow-profile-detail-title'>" + esc(profileMatchDetail.mode || "MATCH") + "</h2><p>" + esc(formatMapName(profileMatchDetail)) + " · " + esc(profileMatchDetail.queue || "MATCHMAKING") + "</p><div class='sow-profile__detail-players'>" + (profileMatchDetail.participants || []).map(function (participant) {
             return "<div><strong>" + esc(participant.handle || participant.public_id) + "</strong><span>" + esc(participant.leader || "—") + " · " + esc(participant.kills || 0) + " / " + esc(participant.deaths || 0) + " / " + esc(participant.assists || 0) + "</span><b>" + (participant.won ? "WIN" : "LOSS") + "</b></div>";
         }).join("") + "</div></section></div>";
     }
@@ -908,7 +1007,7 @@
     function renderPasswordModal() {
         if (passwordLobbyId == null) return "";
         var lobby = findLobby(passwordLobbyId);
-        var title = lobby ? (lobby.map_name || "PRIVATE LOBBY") : "PRIVATE LOBBY";
+        var title = lobby ? formatMapName(lobby) : "PRIVATE LOBBY";
         var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(state.error) + "</div>" : "";
         return "<div class='sow-menu__overlay' data-menu-overlay='password'><form class='sow-menu__modal sow-menu__password-modal' data-form='password' novalidate>" +
             "<div class='sow-menu__modal-head'><div><p class='sow-menu__panel-label'>PASSWORD REQUIRED</p><h2>" + esc(title) + "</h2></div>" +
@@ -948,7 +1047,7 @@
         }).join("");
 
         var mapCatalogOptions = (state && state.map_catalog || []).map(function (m) {
-            return { value: m.key, label: m.display_name + " (" + m.width + "×" + m.height + ")" };
+            return { value: m.key, label: formatMapName(m) + " (" + m.width + "×" + m.height + ")" };
         });
 
         var spControls = isSp ?
@@ -987,7 +1086,7 @@
                                         "<section class='sow-menu__custom-card sow-create__map-panel'>" +
                                             "<div class='sow-menu__map-preview-wrap' style=\"background-image:url('" + esc(mapThumbUrl) + "')\">" +
                                                 "<div class='sow-menu__map-preview-meta'>" +
-                                                    "<strong>" + esc(selectedMap.display_name) + "</strong>" +
+                                                    "<strong>" + esc(formatMapName(selectedMap)) + "</strong>" +
                                                     "<small>" + selectedMap.width + " × " + selectedMap.height + " TILES</small>" +
                                                 "</div>" +
                                             "</div>" +
@@ -1083,7 +1182,7 @@
 
     function renderQueue() {
         var lobby = joinedLobby();
-        var title = lobby ? (lobby.map_name || "WORLD MAP").toUpperCase() : "MATCHMAKING";
+        var title = lobby ? formatMapName(lobby).toUpperCase() : "MATCHMAKING";
         var mapThumbUrl = lobbyThumb(lobby || { map_name: "world" });
         var isTeams = lobby && lobby.game_mode === "Teams";
         var isCustom = lobby && lobby.kind === "Custom";
@@ -1097,7 +1196,7 @@
             var pct = state.map_download_progress || 0;
             feedback = "" +
                 "<div class='sow-menu__map-download-wrap'>" +
-                    "<div class='sow-menu__map-download-text'>DOWNLOADING MAP: " + esc(state.downloading_map_name || title) + " · " + pct + "%</div>" +
+                    "<div class='sow-menu__map-download-text'>DOWNLOADING MAP: " + esc(formatMapName(state.downloading_map_name || title)) + " · " + pct + "%</div>" +
                     "<div class='sow-menu__map-download-bar'><div class='sow-menu__map-download-fill' style='width:" + pct + "%'></div></div>" +
                 "</div>";
         } else if (state.error) {
@@ -1354,11 +1453,9 @@
             return;
         }
         var current = activeScreenPanel();
-        var entering = current && current.classList.contains("sow-screen-panel--entering");
         if (current) current.replaceWith(next);
         else stage.appendChild(next);
         next.classList.add("is-active");
-        if (entering) next.classList.add("sow-screen-panel--entering");
     }
 
     function render() {
@@ -1497,6 +1594,10 @@
             beginStorePurchase(target.dataset.productId);
             return;
         }
+        if (command === "restore_purchases") {
+            beginStoreRestore();
+            return;
+        }
         if (command === "close_store_checkout") {
             closeStoreCheckout();
             return;
@@ -1518,6 +1619,8 @@
                 profileOpen = false;
                 profilePublicId = null;
                 profileMatchDetail = null;
+                profileDetailLoading = false;
+                profileDetailRequestKey = null;
                 storeOpen = false;
                 heroesOpen = true;
                 heroesSearchQuery = "";
@@ -1546,6 +1649,8 @@
             profileOpen = false;
             profilePublicId = null;
             profileMatchDetail = null;
+            profileDetailLoading = false;
+            profileDetailRequestKey = null;
             heroesOpen = false;
             storeOpen = false;
             if (state.show_browser || state.show_create) {
@@ -1570,17 +1675,19 @@
             profileSearchResults = [];
             profileRatings = null;
             profileMatchDetail = null;
+            profileDetailLoading = false;
+            profileDetailRequestKey = null;
             render();
             return;
         }
         if (command === "profile_tab") {
             profileTab = target.dataset.profileTab || "overview";
-            if (profileTab === "history" && profileHistory.length === 0) {
-                loadMoreProfileHistory();
+            render();
+            if (profileTab === "history") {
+                var historyEntry = activeProfileEntry();
+                if (historyEntry && (historyEntry.historyHasMore || historyEntry.historyError || !historyEntry.historyLoaded || historyEntry.stale)) loadMoreProfileHistory();
             } else if (profileTab === "ranked") {
                 loadProfileRatings();
-            } else {
-                render();
             }
             return;
         }
@@ -1595,36 +1702,69 @@
             return;
         }
         if (command === "retry_profile") {
-            profileData = null;
-            profileHistory = [];
-            profileHistoryCursor = 0;
-            profileRatings = null;
-            profileError = "";
-            render();
+            invalidateProfileCache(profilePublicId);
+            profileSnapshotLoading = false;
+            profileHistoryLoading = false;
+            profileRatingsLoading = false;
             loadProfile(profilePublicId);
+            syncProfileDom();
             return;
         }
         if (command === "open_match") {
             var matchId = target.dataset.matchId;
-            if (!matchId || profileLoading) return;
-            profileLoading = true;
-            fetch(profileApi("/matches/" + encodeURIComponent(matchId)), {
+            var detailEntry = activeProfileEntry();
+            if (!matchId || !detailEntry || profileDetailLoading) return;
+            if (detailEntry.details[matchId]) {
+                profileDetailId = matchId;
+                profileDetailError = "";
+                profileDetailRequestKey = null;
+                profileMatchDetail = detailEntry.details[matchId];
+                render();
+                return;
+            }
+            var detailProfileId = profilePublicId;
+            var detailRequestKey = detailProfileId + ":" + matchId;
+            if (detailEntry.detailRequests[matchId]) {
+                profileDetailId = matchId;
+                profileDetailError = "";
+                profileDetailLoading = true;
+                profileDetailRequestKey = detailRequestKey;
+                return;
+            }
+            profileDetailId = matchId;
+            profileDetailError = "";
+            profileMatchDetail = null;
+            profileDetailLoading = true;
+            profileDetailRequestKey = detailRequestKey;
+            detailEntry.detailRequests[matchId] = fetch(profileApi("/matches/" + encodeURIComponent(matchId)), {
                 headers: { "Accept": "application/json" }
             }).then(function (response) {
                 if (!response.ok) throw new Error("match detail failed");
                 return response.json();
             }).then(function (detail) {
-                profileMatchDetail = detail;
+                detailEntry.details[matchId] = detail;
+                if (profileOpen && profilePublicId === detailProfileId) {
+                    profileDetailError = "";
+                    profileMatchDetail = detail;
+                }
             }).catch(function () {
-                profileError = "Match details unavailable.";
+                if (profileOpen && profilePublicId === detailProfileId) profileDetailError = "Match details unavailable.";
             }).finally(function () {
-                profileLoading = false;
-                render();
+                delete detailEntry.detailRequests[matchId];
+                if (profileDetailRequestKey === detailRequestKey) {
+                    profileDetailLoading = false;
+                    profileDetailRequestKey = null;
+                }
+                if (profileOpen && profilePublicId === detailProfileId && profileDetailId === matchId) render();
             });
             return;
         }
         if (command === "close_match") {
             profileMatchDetail = null;
+            profileDetailError = "";
+            profileDetailId = null;
+            profileDetailLoading = false;
+            profileDetailRequestKey = null;
             render();
             return;
         }
@@ -1896,7 +2036,16 @@
     });
 
     window.addEventListener("wou:auth-state-change", function () {
-        if (state && !root.hidden) render();
+        if (!state || root.hidden) return;
+        if (!root.querySelector("[data-screen-stage]")) {
+            render();
+            return;
+        }
+        updateFrameChrome(currentScreen());
+        updateDynamic();
+        if (settingsOpen) syncOverlay("settings", renderSettings());
+        if (authModalOpen) syncOverlay("auth", renderAuthModal());
+        syncProfileDom();
     });
 
     window.addEventListener("sow:android-purchase-bridge-ready", function () {
@@ -1910,7 +2059,7 @@
         storeCheckoutBusy = false;
         if (!state) return;
         storeCheckoutRequestId = null;
-        if (result.status === "success") {
+        if (result.status === "success" || result.status === "restored") {
             state.error = null;
             send("refresh_profile");
         } else if (result.status === "cancelled") {
@@ -1995,10 +2144,11 @@
                 profileSearchResults = profileSearchResults.filter(function (s) {
                     return !isBlockedPublicId(s && s.public_id);
                 });
-                profileError = "";
+                profileSearchResults.forEach(function (summary) {
+                    cacheProfileSeed(summary.public_id, profileSeedFromSummary(summary));
+                });
             }).catch(function () {
                 profileSearchResults = [];
-                profileError = "Profile search unavailable.";
             }).finally(function () {
                 render();
             });
@@ -2016,7 +2166,6 @@
                 return;
             }
             if (reason === "other" && !details) {
-                profileError = "Details are required for reason Other.";
                 render();
                 return;
             }
@@ -2044,7 +2193,6 @@
                     window.SOW_BLOCKED_IDS = list;
                 } catch (e) {}
             }).catch(function () {
-                profileError = "Report unavailable. Try again or email hello@shadowsofwar.io.";
             }).finally(function () {
                 reportBusy = false;
                 render();
@@ -2140,6 +2288,7 @@
             console.warn("[WEB MENU] invalid state:", error);
             return;
         }
+        syncProfilePreload(state);
         if (state.phase === "MainMenu" && window.SOW_open_store_after_match) {
             window.SOW_open_store_after_match = false;
             storeOpen = true;

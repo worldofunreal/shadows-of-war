@@ -1,3 +1,4 @@
+use super::metrics::BuildingLod;
 use crate::render::world::movers::tile_to_world;
 use sow_core::game::BuildingKind;
 
@@ -19,18 +20,9 @@ pub(super) struct RenderedBuilding {
 pub(super) fn collect_rendered_buildings(
     snap: &sow_core::protocol::SimSnapshot,
     map_w: u32,
-    zoom_scaled: f32,
-    far_zoom_threshold: f32,
+    lod: BuildingLod,
 ) -> Vec<RenderedBuilding> {
-    let cell_size = if zoom_scaled < 1.5 {
-        128.0 // LOD 3: Aggressive far-zoom grouping
-    } else if zoom_scaled < 2.5 {
-        64.0 // LOD 2: Intermediate grid grouping
-    } else if zoom_scaled < far_zoom_threshold {
-        24.0 // LOD 1: Close clustering
-    } else {
-        1.0 // No clustering
-    };
+    let cell_size = lod.cluster_cell_size;
 
     let building_count = snap.buildings.len();
     let mut rendered_buildings = Vec::with_capacity(building_count);
@@ -41,13 +33,11 @@ pub(super) fn collect_rendered_buildings(
             grid_x: i32,
             grid_y: i32,
             owner_id: u16,
-            kind: Option<sow_core::game::BuildingKind>,
-            level: Option<u8>,
+            kind: BuildingKind,
+            level: u8,
         }
-        let mut clusters: std::collections::HashMap<
-            ClusterKey,
-            (f32, f32, usize, u32, Option<sow_core::game::BuildingKind>),
-        > = std::collections::HashMap::with_capacity(building_count / 4);
+        let mut clusters: std::collections::HashMap<ClusterKey, (f32, f32, usize)> =
+            std::collections::HashMap::with_capacity(building_count / 4);
 
         for b in &snap.buildings {
             let (bx, by) = tile_to_world(b.tile_idx, map_w);
@@ -56,48 +46,29 @@ pub(super) fn collect_rendered_buildings(
 
             let grid_x = (tile_x / cell_size) as i32;
             let grid_y = (tile_y / cell_size) as i32;
-
-            let (kind_key, level_key) = if zoom_scaled < 2.5 {
-                (Some(b.kind), None)
-            } else {
-                (Some(b.kind), Some(b.level))
-            };
+            let display_level = b.active_level();
 
             let key = ClusterKey {
                 grid_x,
                 grid_y,
                 owner_id: b.owner_id,
-                kind: kind_key,
-                level: level_key,
+                kind: b.kind,
+                level: display_level,
             };
 
-            let b_level = if b.under_construction {
-                b.active_level() as u32
-            } else {
-                b.level as u32
-            };
-
-            let entry = clusters
-                .entry(key)
-                .or_insert((0.0, 0.0, 0, 0, Some(b.kind)));
+            let entry = clusters.entry(key).or_insert((0.0, 0.0, 0));
             entry.0 += bx;
             entry.1 += by;
             entry.2 += 1;
-            entry.3 += b_level;
         }
 
-        for (key, (sum_bx, sum_by, count, sum_level, cluster_kind)) in clusters {
-            let final_kind = key
-                .kind
-                .or(cluster_kind)
-                .unwrap_or(sow_core::game::BuildingKind::City);
-            let avg_level = (sum_level / count as u32) as u8;
+        for (key, (sum_bx, sum_by, count)) in clusters {
             rendered_buildings.push(RenderedBuilding {
                 bx: sum_bx / count as f32,
                 by: sum_by / count as f32,
-                kind: final_kind,
-                active_level: avg_level,
-                target_level: avg_level,
+                kind: key.kind,
+                active_level: key.level,
+                target_level: key.level,
                 under_construction: false,
                 ticks_until_complete: 0,
                 count,

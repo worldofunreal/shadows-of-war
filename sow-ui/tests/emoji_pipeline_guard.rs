@@ -8,7 +8,8 @@
 //!
 //! The right way:
 //!   * egui : sow_ui_kit::widgets::emoji::{emoji_label, outlined_emoji_label,
-//!     try_paint_emoji, paint_emoji_centered, paint_emoji_text_at, HudEmojiButton}
+//!     try_paint_emoji, try_paint_emoji_with_style, paint_emoji_centered,
+//!     paint_emoji_text_at, HudEmojiButton}
 //!   * GPU  : sow_render::TextRenderer::{push_emoji, push_string}
 //!   * new glyph: add it to the atlas (sow-data/src/emoji/manifest.rs, regen via sow-tools).
 //!
@@ -54,6 +55,7 @@ const EMOJI_APIS: &[&str] = &[
     "push_emoji(",
     "push_string(",
     "try_paint_emoji(",
+    "try_paint_emoji_with_style(",
     "paint_emoji_centered(",
     "paint_emoji_text_at(",
     "outlined_emoji_text(",
@@ -65,6 +67,21 @@ const EMOJI_APIS: &[&str] = &[
 
 /// Append this to a line to mark an intentional, reviewed font fallback.
 const ALLOW_MARKER: &str = "emoji-ok";
+
+const NAMEPLATE_ORCHESTRATOR: &str = "sow-client/src/render/world/nameplates/render.rs";
+const NAMEPLATE_ORCHESTRATOR_SINKS: &[&str] = &[
+    "push_emoji(",
+    "push_string(",
+    "push_disc(",
+    "push_ring(",
+    "try_paint_emoji(",
+    "try_paint_emoji_with_style(",
+    "draw_player_avatar(",
+    "draw_player_avatar_gpu(",
+    "TmpFontSettings",
+    "TextPaintStyle",
+    "OutlineStyle {",
+];
 
 /// Color/pictographic emoji codepoints (deliberately excludes plain arrows like `←`/`→`
 /// and letterlike symbols that the UI font renders fine).
@@ -167,12 +184,11 @@ fn rel(p: &Path, base: &Path) -> String {
 
 #[test]
 fn emoji_goes_through_the_pipeline() {
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR")); // .../sow-ui-kit
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR")); // .../sow-ui
     let workspace = manifest.parent().expect("workspace root");
     let roots = [
-        workspace.join("sow-client-world/src"),
+        workspace.join("sow-client/src"),
         workspace.join("sow-ui/src"),
-        workspace.join("sow-ui-kit/src"),
     ];
 
     let mut files = Vec::new();
@@ -200,6 +216,25 @@ fn emoji_goes_through_the_pipeline() {
             }
             let lineno = i + 1;
             let approved = EMOJI_APIS.iter().any(|s| contains_token(line, s));
+
+            if rel(file, workspace) == NAMEPLATE_ORCHESTRATOR
+                && NAMEPLATE_ORCHESTRATOR_SINKS
+                    .iter()
+                    .any(|token| contains_token(line, token))
+            {
+                violations.push(format!(
+                    "{}:{}: nameplate orchestrator calls {} directly; use NameplatePainter\n      {}",
+                    rel(file, workspace),
+                    lineno,
+                    NAMEPLATE_ORCHESTRATOR_SINKS
+                        .iter()
+                        .find(|token| contains_token(line, token))
+                        .copied()
+                        .unwrap_or("a render sink"),
+                    line.trim()
+                ));
+                continue;
+            }
 
             // (A) Raw emoji dumped into an egui font widget (skip lines that already
             // route through an approved atlas entry point).
@@ -238,6 +273,7 @@ fn emoji_goes_through_the_pipeline() {
         "\n\nSOW emoji pipeline guard tripped — {} violation(s):\n\n{}\n\n\
          Emoji must NOT render raw through egui's font. Route them through the pipeline:\n\
          \x20 egui : sow_ui_kit::widgets::emoji::{{emoji_label, outlined_emoji_label, try_paint_emoji,\n\
+         \x20         try_paint_emoji_with_style,\n\
          \x20         paint_emoji_centered, paint_emoji_text_at, HudEmojiButton}}\n\
          \x20 GPU  : sow_render::TextRenderer::{{push_emoji, push_string}}\n\
          \x20 new glyph? add it to the atlas: sow-data/src/emoji/manifest.rs (regen via sow-tools).\n\

@@ -1,6 +1,6 @@
 use super::cluster::RenderedBuilding;
+use super::metrics::{BuildingVisualMetrics, building_level_label};
 use super::plates::*;
-use crate::render::world::utils::get_level_str;
 
 pub(super) struct BuildingOverlayOpts<'a> {
     pub painter: &'a egui::Painter,
@@ -8,9 +8,8 @@ pub(super) struct BuildingOverlayOpts<'a> {
     pub config: &'a sow_core::game_config::GameConfig,
     pub b: &'a RenderedBuilding,
     pub center: egui::Pos2,
-    pub base_size: f32,
+    pub metrics: BuildingVisualMetrics,
     pub zoom_scaled: f32,
-    pub final_scale: f32,
     pub sf: f32,
     pub hovered_tile_idx: Option<u32>,
     pub player_colors: &'a [egui::Color32],
@@ -28,9 +27,9 @@ pub(super) fn paint_building_overlays(
     let config = opts.config;
     let b = opts.b;
     let center = opts.center;
-    let base_size = opts.base_size;
+    let base_size = opts.metrics.marker_size;
     let zoom_scaled = opts.zoom_scaled;
-    let final_scale = opts.final_scale;
+    let final_scale = opts.metrics.final_scale;
     let sf = opts.sf;
     let hovered_tile_idx = opts.hovered_tile_idx;
     let player_colors = opts.player_colors;
@@ -111,21 +110,10 @@ pub(super) fn paint_building_overlays(
     }
 
     // Level badge (no white plate background, no frame, larger text in black)
-    if b.active_level != 1
-        && b.active_level != 0
-        && zoom_scaled >= super::super::BUILDINGS_HIDE_FLOOR
-    {
-        let text_val = get_level_str(b.active_level);
-        let font_size = {
-            let raw = zoom_scaled * 0.65 * final_scale;
-            if dev.clamp_text_zoom {
-                raw.clamp(8.0, 18.0)
-            } else {
-                raw
-            }
-        }
-        .round();
-        let bg_center = egui::pos2(center.x + base_size * 0.45, center.y - base_size * 0.45);
+    if b.active_level != 0 && (b.active_level != 1 || b.count > 1) {
+        let text_val = building_level_label(b.active_level, b.count);
+        let font_size = opts.metrics.level_font_size;
+        let bg_center = center + opts.metrics.level_offset;
 
         let mut gpu_text_rendered = false;
         if let Some(ref mut tr) = gfx.text_renderer {
@@ -134,26 +122,17 @@ pub(super) fn paint_building_overlays(
             let outline_color_arr = [0.0f32, 0.0, 0.0, 1.0];
             let baseline_y = (bg_center.y + font_size * 0.25) * sf;
 
-            let face_dilate = dev.font_face_dilate * sf;
-            let outline_thickness = dev.font_outline_thickness * sf;
-            let shadow_y = dev.font_shadow_y * sf;
-            let underlay_softness = dev.font_underlay_softness * sf;
             let char_spacing = dev.font_char_spacing;
             let font_size_scale = dev.font_size_scale;
             let emoji_scale = dev.emoji_size_scale;
 
-            let settings = crate::render::gpu::TmpFontSettings {
-                face_dilate,
-                outline_thickness,
-                underlay_offset_y: shadow_y,
-                underlay_softness,
-            };
+            let settings = crate::render::dev_text_style(&dev, sf, outline_color_arr);
 
             tr.push_string(
-                text_val,
+                &text_val,
                 [bg_center.x * sf, baseline_y],
                 font_size * font_size_scale * sf,
-                (color_arr, outline_color_arr),
+                color_arr,
                 settings,
                 (0.5, char_spacing, emoji_scale),
             );
@@ -161,12 +140,12 @@ pub(super) fn paint_building_overlays(
 
         if !gpu_text_rendered {
             let font_id = egui::FontId::proportional(font_size);
-            let key = (text_val.to_string(), font_size as u32);
+            let key = (text_val.clone(), font_size as u32);
             let galley = ui
                 .cached_galleys
                 .entry(key)
                 .or_insert_with(|| {
-                    painter.layout_no_wrap(text_val.to_owned(), font_id, egui::Color32::WHITE)
+                    painter.layout_no_wrap(text_val.clone(), font_id, egui::Color32::WHITE)
                 })
                 .clone();
             let pos = bg_center - galley.rect.size() / 2.0;
