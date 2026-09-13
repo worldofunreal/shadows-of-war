@@ -357,6 +357,29 @@ fn stripe_price_id(product_id: &str) -> Option<String> {
     }
 }
 
+fn canonical_store_product_id(product_id: &str) -> Option<String> {
+    if sow_data::commerce::is_store_product(product_id) {
+        return Some(product_id.to_string());
+    }
+
+    let catalog = sow_data::commerce::catalog_for_profile(&Default::default(), &Default::default(), 0, 0, 0);
+    catalog
+        .gem_bundles
+        .into_iter()
+        .map(|bundle| bundle.product_id)
+        .chain(
+            catalog
+                .leaders
+                .into_iter()
+                .map(|leader| leader.direct_product_id),
+        )
+        .chain(catalog.skins.into_iter().map(|skin| skin.direct_product_id))
+        .chain(std::iter::once(
+            "sow_offer_genghis_khan_royal_lattice".to_string(),
+        ))
+        .find(|candidate| stripe_price_id(candidate).as_deref() == Some(product_id))
+}
+
 async fn handle_store_checkout(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<StoreCheckoutRequest>,
@@ -660,7 +683,6 @@ fn valid_stripe_signature(payload: &[u8], signature: &str, secret: &str) -> bool
 async fn import_stripe_session_to_revenuecat(
     api_key: &str,
     app_user_id: &str,
-    product_id: &str,
     session_id: &str,
 ) -> Result<(), String> {
     let response = reqwest::Client::new()
@@ -670,7 +692,6 @@ async fn import_stripe_session_to_revenuecat(
         .json(&serde_json::json!({
             "app_user_id": app_user_id,
             "fetch_token": session_id,
-            "product_id": product_id,
         }))
         .send()
         .await
@@ -757,14 +778,20 @@ async fn handle_stripe_webhook(
     let app_user_id = session["metadata"]["app_user_id"]
         .as_str()
         .unwrap_or_default();
-    let product_id = session["metadata"]["product_id"]
+    let raw_product_id = session["metadata"]["product_id"]
         .as_str()
         .unwrap_or_default();
-    if session_id.is_empty()
-        || app_user_id.is_empty()
-        || product_id.is_empty()
-        || !sow_data::commerce::is_store_product(product_id)
-    {
+    let Some(product_id) = canonical_store_product_id(raw_product_id) else {
+        warn!("Stripe checkout session metadata has an unknown product");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "unknown store product".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    if session_id.is_empty() || app_user_id.is_empty() || raw_product_id.is_empty() {
         warn!("Stripe checkout session metadata is incomplete");
         return (
             StatusCode::BAD_REQUEST,
@@ -778,13 +805,16 @@ async fn handle_stripe_webhook(
         "checkout.session.async_payment_failed" => "failed",
         "checkout.session.expired" => "expired",
         _ if session["payment_status"].as_str() == Some("paid")
-            || event_type == "checkout.session.async_payment_succeeded" => "paid",
+            || event_type == "checkout.session.async_payment_succeeded" =>
+        {
+            "paid"
+        }
         _ => "pending",
     };
     if session_status != "paid" {
         return match state
             .db
-            .record_stripe_purchase(app_user_id, session_id, product_id, session_status)
+            .record_stripe_purchase(app_user_id, session_id, &product_id, session_status)
             .await
         {
             Ok(()) => (
@@ -818,11 +848,11 @@ async fn handle_stripe_webhook(
         )
             .into_response();
     };
-    match import_stripe_session_to_revenuecat(api_key, app_user_id, product_id, session_id).await {
+    match import_stripe_session_to_revenuecat(api_key, app_user_id, session_id).await {
         Ok(()) => {
             if let Err(error) = state
                 .db
-                .record_stripe_purchase(app_user_id, session_id, product_id, "submitted")
+                .record_stripe_purchase(app_user_id, session_id, &product_id, "submitted")
                 .await
             {
                 warn!("could not mark Stripe purchase submitted: {error}");
@@ -1044,12 +1074,22 @@ async fn handle_revenuecat_webhook(
         )
             .into_response();
     }
-    let Some(product_id) = event.product_id.as_deref() else {
+    let Some(raw_product_id) = event.product_id.as_deref() else {
         warn!("RevenueCat purchase event {} has no product_id", event.id);
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
                 error: "RevenueCat event missing product_id".to_string(),
+            }),
+        )
+            .into_response();
+    };
+    let Some(product_id) = canonical_store_product_id(raw_product_id) else {
+        warn!("RevenueCat event {} has an unknown product_id", event.id);
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "unknown store product".to_string(),
             }),
         )
             .into_response();
@@ -1060,7 +1100,7 @@ async fn handle_revenuecat_webhook(
             .revoke_revenuecat_product(
                 &event.id,
                 &event.app_user_id,
-                product_id,
+                &product_id,
                 event.transaction_id.as_deref(),
                 &event.environment,
             )
@@ -1102,7 +1142,7 @@ async fn handle_revenuecat_webhook(
         .grant_revenuecat_product(
             &event.id,
             &event.app_user_id,
-            product_id,
+            &product_id,
             event.transaction_id.as_deref(),
             &event.environment,
         )

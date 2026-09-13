@@ -75,6 +75,7 @@ impl ComponentPlan {
 
 pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     let config = Config::load();
+    require_stripe_config()?;
     require_secret("SOW_DB_SECRET")?;
     require_secret("SOW_RELAY_CONTROL_SECRET")?;
     require_secret("SOW_REVENUECAT_WEBHOOK_SECRET")?;
@@ -218,6 +219,26 @@ fn require_secret(key: &str) -> Result<()> {
         env::var(key).with_context(|| format!("{key} must be provided via sow-dist/.env"))?;
     if value.trim().is_empty() {
         bail!("{key} must not be empty");
+    }
+    Ok(())
+}
+
+fn require_stripe_config() -> Result<()> {
+    const KEYS: [(&str, &str); 4] = [
+        ("SOW_STRIPE_SECRET_KEY", "sk_live_"),
+        ("SOW_STRIPE_PUBLISHABLE_KEY", "pk_live_"),
+        ("SOW_STRIPE_WEBHOOK_SECRET", "whsec_"),
+        ("SOW_REVENUECAT_STRIPE_API_KEY", "strp_"),
+    ];
+    for (key, prefix) in KEYS {
+        let value = env::var(key)
+            .with_context(|| format!("production checkout requires {key} in sow-dist/.env"))?;
+        if value.trim().is_empty() {
+            bail!("production checkout requires {key} to be non-empty");
+        }
+        if !value.starts_with(prefix) {
+            bail!("{key} must use the live {prefix} format");
+        }
     }
     Ok(())
 }

@@ -22,6 +22,11 @@
 - Stripe Checkout sessions are recorded as `pending` before payment and move
   through `paid`/`submitted`, `failed`, or `expired` from signed webhook events;
   a restart does not erase an unresolved purchase.
+- The live Stripe catalog now contains one-time products for the three gem
+  bundles, twelve leaders, three skins, and the Genghis Khan + Royal Lattice
+  bundle. RevenueCat Stripe products use the corresponding Stripe Price ID as
+  `store_identifier`; the server maps those IDs back to the stable SOW product
+  IDs before granting or revoking ownership.
 
 ## Implemented in the first Android slice
 
@@ -55,12 +60,21 @@
   `sow_offer_leader_<leader_id>` and `sow_offer_skin_<skin_id>`. Their Stripe
   and Play price mappings are runtime configuration, never guessed in source.
 - Direct leader and skin buttons remain hidden until the corresponding Stripe
-  price and Google Play/App Store products exist and are linked in RevenueCat.
-  The current live catalog contains only the three gem products, so exposing
-  those placeholder IDs would create checkout buttons that cannot complete.
+  price and platform products exist and are linked in RevenueCat. The live
+  Stripe/RevenueCat catalog now contains the direct leader, skin, and bundle
+  products; the web client still exposes them only when the server confirms
+  the runtime price mapping.
 - Production checkout requires `SOW_STRIPE_SECRET_KEY`,
   `SOW_STRIPE_PUBLISHABLE_KEY`, `SOW_STRIPE_WEBHOOK_SECRET`, and
   `SOW_REVENUECAT_STRIPE_API_KEY`.
+- The production pipeline treats those four values as one atomic credential
+  bundle: `./sow p` stops before building if any value is missing, empty, or
+  has the wrong live-mode prefix. The ignored `sow-dist/.env` is the local
+  source of truth; remote copies are backed up before runtime synchronization.
+- Stripe external purchase import sends the Checkout Session ID as
+  `fetch_token` with the authenticated App User ID. It does not send an
+  internal SOW product ID to RevenueCat; the subsequent RevenueCat webhook is
+  normalized through the configured Stripe Price ID mapping.
 - The Android TWA bridge uses the existing Custom Tabs session, the
   `common.use_as_origin` Digital Asset Links relation, and a correlated
   `purchase_result` message. Silent Play Games authentication is requested only
