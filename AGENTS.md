@@ -63,6 +63,22 @@ per-worker stop/start (`sow-dist/src/prod.rs:activate_relay_host`). The register
 drain mode is force-kill (user-authorized 2026-08-21; non-destructive drain
 pending), which ends active games on restarted workers — a relay change must
 never ship without that drain report in the manifest.
+
+### Production credential continuity
+
+- Treat `sow-dist/.env` as existing operational state. Inspect it before asking
+  the user for credentials or reauthorization.
+- Never delete, blank, rotate, recreate, or replace an existing credential as a
+  cleanup step, context-recovery step, or workaround.
+- If the four Stripe/RevenueCat values are present, use them; do not ask the
+  user to enter them again. Never print or echo their values.
+- Credential rotation is a separate, explicit security operation. A user
+  deferring rotation is not a deployment blocker and must not cause checkout to
+  be disabled or work to stop.
+- If a value is genuinely missing, report only the exact missing variable after
+  checking the local env file, configured credential files, authenticated MCPs,
+  and CLIs. Do not infer missing access from conversational memory.
+
 There is no production backfill subcommand. `./sow p` is the production
 deployment path for web/backend (WASM + FreeBSD + Azure); `./sow l` / `./sow local` is a local-only web/WASM preview;
 `./sow` without a subcommand runs the native client.

@@ -55,5 +55,22 @@ the MCP and source repository cannot reconstruct it. After rotating a Stripe
 secret or webhook signing secret, update all four values together and run
 `./sow p` so the runtime copies stay synchronized.
 
-If a credential is pasted into chat or another untrusted location, treat it as
-exposed and rotate it after the immediate validation is complete.
+Rotation is an explicit security operation, not a normal deployment step. If
+rotation is deferred, keep the current working credentials, do not disable
+checkout, and do not stop the deployment. If rotation is requested, update the
+credential bundle once and run `./sow p`.
+
+If a credential is pasted into chat or another untrusted location, record that
+as a security recommendation for later rotation; it is not a reason to delete
+the working value or block unrelated work.
+
+## Agent continuity contract
+
+When context is compacted or a new agent takes over:
+
+1. Inspect `sow-dist/.env` and its mode before asking for any credential.
+2. Check the configured MCPs and CLIs before claiming access is missing.
+3. Preserve every existing value; never clear configuration to make a partial
+   setup look clean.
+4. Ask the user only for a variable that remains genuinely absent after those
+   checks.
