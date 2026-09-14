@@ -58,6 +58,7 @@
                 "<div class='sow-menu__home-public'>" + renderPublicPanel("home") + "</div>" +
                 "<div class='sow-menu__home-actions'>" +
                     "<button class='sow-menu__primary' type='button' data-command='quick_match'>QUICK MATCH <span>↗</span></button>" +
+                    "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>CAMPAIGN <span>⚔</span></button>" +
                     "<button class='sow-menu__secondary' type='button' data-command='open_browser'>LOBBY BROWSER <span>→</span></button>" +
                     "<form class='sow-menu__join' data-form='join'>" +
                         "<input name='code' inputmode='numeric' autocomplete='off' placeholder='LOBBY CODE' aria-label='Lobby code'>" +
@@ -332,6 +333,7 @@
     /* POKI_RENDER_REPLACEMENT_END */
     function renderScreenPanel(screen) {
         if (screen === "home") return renderHome();
+        if (screen === "campaign") return renderCampaign();
         if (screen === "browser") return renderBrowser();
         if (screen === "create") return renderCreate();
         if (screen === "queue") return renderQueue();
@@ -354,7 +356,7 @@
     }
 
     function screenFooterLabel(screen) {
-        return ({ browser: "LOBBY BROWSER", create: "CREATE GAME", queue: "LOBBY", store: "SHOP", heroes: "HEROES", profile: "PROFILE" })[screen] || "";
+        return ({ campaign: "CAMPAIGN", browser: "LOBBY BROWSER", create: "CREATE GAME", queue: "LOBBY", store: "SHOP", heroes: "HEROES", profile: "PROFILE" })[screen] || "";
     }
 
     function renderFrame(screen) {
@@ -595,6 +597,29 @@
         var target = event.target.closest("[data-command]");
         if (!target || !root.contains(target)) return;
         var command = target.dataset.command;
+        if (command === "open_campaign") {
+            profileOpen = false;
+            profileAccountId = null;
+            profileMatchDetail = null;
+            heroesOpen = false;
+            storeOpen = false;
+            campaignOpen = true;
+            render();
+            return;
+        }
+        if (command === "close_campaign") {
+            campaignOpen = false;
+            render();
+            return;
+        }
+        if (command === "start_campaign_episode") {
+            var episodeId = target.dataset.episodeId;
+            if (!episodeId) return;
+            campaignOpen = false;
+            send("start_campaign_episode", { episode_id: episodeId });
+            render();
+            return;
+        }
         if (command === "buy_product") {
             beginStorePurchase(target.dataset.productId);
             return;
@@ -617,6 +642,7 @@
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
             settingsOpen = false;
+            campaignOpen = false;
             passwordLobbyId = null;
             passwordDraft = "";
             tempSelectedLeader = null;
@@ -668,6 +694,7 @@
         if (command === "open_profile" || command === "open_public_profile") {
             storeOpen = false;
             heroesOpen = false;
+            campaignOpen = false;
             openProfile(target.dataset.accountId || null);
             return;
         }
@@ -831,6 +858,7 @@
             profileMatchDetail = null;
             profileSearchResults = [];
             storeOpen = false;
+            campaignOpen = false;
             heroesOpen = true;
             heroesSearchQuery = "";
             heroesRegionFilter = "all";

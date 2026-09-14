@@ -16,6 +16,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 use crate::app::SowApp;
+use crate::campaign::CampaignId;
 use sow_ui::UiAction;
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +35,9 @@ enum WebMenuCommand {
     },
     StartSinglePlayer {
         config: serde_json::Value,
+    },
+    StartCampaignEpisode {
+        episode_id: String,
     },
     CreateGame {
         config: serde_json::Value,
@@ -412,6 +416,23 @@ impl SowApp {
                                 Some("Invalid game configuration".to_string());
                         }
                     }
+                }
+                WebMenuCommand::StartCampaignEpisode { episode_id } => {
+                    let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
+                        self.ui.app.main_menu_state.error_message =
+                            Some("Unknown campaign episode.".into());
+                        continue;
+                    };
+                    if !campaign.is_unlocked(&self.progress) {
+                        self.ui.app.main_menu_state.error_message =
+                            Some("Campaign episode is locked.".into());
+                        continue;
+                    }
+                    crate::analytics::track_with(
+                        "menu_campaign_start",
+                        serde_json::json!({ "episode": campaign.episode_id() }),
+                    );
+                    self.start_campaign_episode(campaign);
                 }
                 WebMenuCommand::SetLeader { leader_id } => {
                     let value = serde_json::Value::String(leader_id);
@@ -1301,6 +1322,32 @@ fn notice_name(notice: Option<sow_ui::LobbyNotice>) -> Option<&'static str> {
     }
 }
 
+fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_json::Value {
+    let episodes: Vec<serde_json::Value> = CampaignId::ALL
+        .into_iter()
+        .map(|episode| {
+            let completed = episode.is_completed(progress);
+            let unlocked = episode.is_unlocked(progress);
+            serde_json::json!({
+                "id": episode.episode_id(),
+                "title": episode.menu_title(),
+                "subtitle": episode.menu_subtitle(),
+                "completed": completed,
+                "unlocked": unlocked,
+                "replayable": unlocked,
+            })
+        })
+        .collect();
+    let continue_episode = CampaignId::ALL
+        .into_iter()
+        .find(|episode| episode.is_unlocked(progress) && !episode.is_completed(progress));
+    serde_json::json!({
+        "tutorial_completed": CampaignId::Boudica.is_completed(progress),
+        "episodes": episodes,
+        "continue_episode": continue_episode.map(CampaignId::episode_id),
+    })
+}
+
 /// Publish a browser-safe snapshot. It is intentionally separate from MainMenuState so the
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
 pub(crate) fn publish_state(app: &mut SowApp) {
@@ -1449,6 +1496,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "crowns": progress.crowns,
             "laurels": progress.crowns,
             "gems": progress.gems,
+            "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,
             "store": store_catalog,
             "native_purchase_scheme": "sow://purchase",

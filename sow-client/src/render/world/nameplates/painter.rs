@@ -32,7 +32,11 @@ impl NameplateStyle {
     }
 
     pub fn emoji_effect_padding(&self, logical_badge_size: f32) -> f32 {
-        let gpu_padding = self.gpu_emoji.effect_padding() / self.scale_factor.max(0.001);
+        let gpu_padding = self
+            .gpu_emoji
+            .scaled_for_emoji(logical_badge_size * self.scale_factor)
+            .effect_padding()
+            / self.scale_factor.max(0.001);
         let egui_padding = self
             .egui_emoji
             .outline_width(logical_badge_size)

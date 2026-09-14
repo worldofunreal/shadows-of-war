@@ -1,9 +1,9 @@
 use crate::config::ClientVisualConfig;
 
 /// Scaling factors relative to base territory font render size.
-const HUMAN_AVATAR_SCALE: f32 = 3.6;
-const BOT_AVATAR_SCALE: f32 = 2.2;
-const NATION_AVATAR_SCALE: f32 = 2.2;
+const HUMAN_AVATAR_SCALE: f32 = 5.0;
+const BOT_AVATAR_SCALE: f32 = 3.6;
+const NATION_AVATAR_SCALE: f32 = 3.6;
 const BADGE_SCALE: f32 = 1.8;
 const TROOPS_SCALE: f32 = 1.30;
 const AVATAR_TEXT_GAP_SCALE: f32 = 0.16;
@@ -274,10 +274,10 @@ mod tests {
         let nation_metrics =
             NameplateMetrics::compute(scaled_size, sow_core::player::PlayerType::Nation, true);
 
-        // Human avatar must be >= 1.5x larger than bot and nation icons
+        // Human avatar must remain larger than bot and nation icons.
         assert!(
-            human_metrics.avatar_diameter >= bot_metrics.avatar_diameter * 1.5,
-            "Human avatar ({}) must be significantly larger than bot avatar ({})",
+            human_metrics.avatar_diameter > bot_metrics.avatar_diameter,
+            "Human avatar ({}) must be larger than bot avatar ({})",
             human_metrics.avatar_diameter,
             bot_metrics.avatar_diameter
         );

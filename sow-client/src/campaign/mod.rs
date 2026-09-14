@@ -25,6 +25,13 @@ pub enum CampaignId {
 }
 
 impl CampaignId {
+    pub const ALL: [CampaignId; 4] = [
+        CampaignId::Boudica,
+        CampaignId::SixSkyEp1,
+        CampaignId::SixSkyEp2,
+        CampaignId::SixSkyEp3,
+    ];
+
     /// Stable id for progress tracking + Poki `measure()` events.
     pub fn episode_id(self) -> &'static str {
         match self {
@@ -32,6 +39,50 @@ impl CampaignId {
             CampaignId::SixSkyEp1 => "six_sky_ep1",
             CampaignId::SixSkyEp2 => "six_sky_ep2",
             CampaignId::SixSkyEp3 => "six_sky_ep3",
+        }
+    }
+
+    pub fn from_episode_id(id: &str) -> Option<Self> {
+        match id {
+            "boudica" => Some(CampaignId::Boudica),
+            "six_sky_ep1" => Some(CampaignId::SixSkyEp1),
+            "six_sky_ep2" => Some(CampaignId::SixSkyEp2),
+            "six_sky_ep3" => Some(CampaignId::SixSkyEp3),
+            _ => None,
+        }
+    }
+
+    pub fn menu_title(self) -> &'static str {
+        match self {
+            CampaignId::Boudica => "Rise of the Iceni",
+            CampaignId::SixSkyEp1 => "Arrival",
+            CampaignId::SixSkyEp2 => "Regent's Fire",
+            CampaignId::SixSkyEp3 => "Moon Goddess",
+        }
+    }
+
+    pub fn menu_subtitle(self) -> &'static str {
+        match self {
+            CampaignId::Boudica => "Tutorial · Boudica",
+            CampaignId::SixSkyEp1 => "Lady Six Sky · 682 CE",
+            CampaignId::SixSkyEp2 => "Lady Six Sky · 693 CE",
+            CampaignId::SixSkyEp3 => "Lady Six Sky · 726–741 CE",
+        }
+    }
+
+    pub fn is_completed(self, progress: &crate::player_progress::PlayerProgress) -> bool {
+        match self {
+            CampaignId::Boudica => progress.intro_completed.unwrap_or(false),
+            _ => progress.completed_episodes.contains(self.episode_id()),
+        }
+    }
+
+    pub fn is_unlocked(self, progress: &crate::player_progress::PlayerProgress) -> bool {
+        match self {
+            CampaignId::Boudica => true,
+            CampaignId::SixSkyEp1 => CampaignId::Boudica.is_completed(progress),
+            CampaignId::SixSkyEp2 => CampaignId::SixSkyEp1.is_completed(progress),
+            CampaignId::SixSkyEp3 => CampaignId::SixSkyEp2.is_completed(progress),
         }
     }
 

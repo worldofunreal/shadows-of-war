@@ -41,6 +41,7 @@
     var profileLastPhase = null;
     var storeOpen = false;
     var heroesOpen = false;
+    var campaignOpen = false;
     var createDraft = null;
     var createOffline = false;
     var createPrivate = false;
@@ -154,6 +155,7 @@
         if (profileOpen) return "profile";
         if (heroesOpen) return "heroes";
         if (storeOpen) return "store";
+        if (campaignOpen) return "campaign";
         if (state.waiting) return "queue";
         if (state.show_create) return "create";
         if (state.show_browser) return "browser";
@@ -200,6 +202,7 @@
             waiting: state.waiting,
             browser: state.show_browser,
             create: state.show_create,
+            campaign: state.campaign,
             name: state.player_name,
             locked: state.name_locked,
             leader: state.selected_leader,

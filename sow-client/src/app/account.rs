@@ -478,9 +478,6 @@ impl SowApp {
 
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn should_portal_auto_intro(&self) -> bool {
-        if !crate::store_portals::is_portal_embed() {
-            return false;
-        }
         let mm = &self.ui.app.main_menu_state;
         if self.progress.is_first_game() {
             // A real invite link should still bypass the intro, but instant-MP host intent should not.

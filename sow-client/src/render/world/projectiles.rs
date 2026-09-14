@@ -246,11 +246,19 @@ pub(crate) fn render(
                         let settings = crate::render::dev_text_style(&dev, sf, outline_color_arr);
 
                         let font_size = 13.0;
-                        let icon_size = font_size * 1.15;
+                        let troops_text_size = font_size * font_size_scale;
+                        let measure = tr.measure_string(
+                            &entry.1,
+                            troops_text_size,
+                            char_spacing,
+                            emoji_scale,
+                        );
+                        let icon_size =
+                            crate::hud::nameplate::troops_icon_size_from_text(troops_text_size);
                         let icon_half = icon_size * 0.5;
-                        let row_w = icon_size + 3.0 + galley.rect.width();
+                        let row_w = icon_size + 3.0 + measure.width;
                         let row_left_x = screen_x - row_w / 2.0;
-                        let troops_row_y = screen_y - galley.rect.height() / 2.0;
+                        let troops_row_y = screen_y - measure.height / 2.0;
 
                         // Sword emoji
                         tr.push_emoji(
@@ -266,11 +274,11 @@ pub(crate) fn render(
 
                         // Number text left-aligned after sword
                         let text_left = (row_left_x + icon_size + 3.0) * sf;
-                        let troops_baseline_y = (troops_row_y + galley.rect.height() * 0.85) * sf;
+                        let troops_baseline_y = (troops_row_y + measure.height * 0.85) * sf;
                         tr.push_string(
                             &entry.1,
                             [text_left, troops_baseline_y],
-                            font_size * font_size_scale * sf,
+                            troops_text_size * sf,
                             color_arr,
                             settings,
                             (0.0, char_spacing, emoji_scale),

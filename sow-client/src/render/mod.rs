@@ -16,6 +16,7 @@ pub(crate) fn dev_text_style(
             color: outline_color,
             thickness: dev.font_outline_thickness * sf,
             shadow_y: dev.font_shadow_y * sf,
+            reference_diameter: gpu::OutlineStyle::EMOJI_REFERENCE_DIAMETER * sf,
         },
         underlay_softness: dev.font_underlay_softness * sf,
     }
@@ -30,5 +31,6 @@ pub(crate) fn dev_emoji_outline(
         color,
         thickness: dev.font_outline_thickness * sf,
         shadow_y: dev.font_shadow_y * sf,
+        reference_diameter: gpu::OutlineStyle::EMOJI_REFERENCE_DIAMETER * sf,
     }
 }

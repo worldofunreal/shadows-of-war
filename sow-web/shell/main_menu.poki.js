@@ -80,6 +80,7 @@ function renderCommandPanel() {
             "<div class='sow-menu__home-public'>" + renderPublicPanel("home") + "</div>" +
             "<div class='sow-menu__home-actions'>" +
                 "<button class='sow-menu__primary' type='button' data-command='quick_match'>QUICK MATCH <span>↗</span></button>" +
+                "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>CAMPAIGN <span>⚔</span></button>" +
                 "<button class='sow-menu__secondary' type='button' data-command='open_browser'>LOBBY BROWSER <span>→</span></button>" +
                 "<form class='sow-menu__join' data-form='join'>" +
                     "<input name='code' inputmode='numeric' autocomplete='off' placeholder='LOBBY CODE' aria-label='Lobby code'>" +
@@ -154,7 +155,7 @@ document.addEventListener("click", function (event) {
     var commandTarget = event.target && event.target.closest ? event.target.closest("[data-command]") : null;
     if (commandTarget && typeof window.SOW_pokiMeasure === "function") {
         var command = String(commandTarget.dataset.command || "");
-        if (command === "quick_match" || command === "open_browser" || command === "open_create" || command === "join_lobby" || command === "confirm_leader") {
+        if (command === "quick_match" || command === "open_campaign" || command === "open_browser" || command === "open_create" || command === "join_lobby" || command === "confirm_leader") {
             window.SOW_pokiMeasure("menu", command, "interact");
         }
     }

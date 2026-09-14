@@ -1,6 +1,13 @@
 use blade_graphics as gpu;
 use bytemuck::{Pod, Zeroable};
 
+const DEFAULT_EMOJI_REFERENCE_DIAMETER: f32 = 32.0;
+const MIN_EMOJI_OUTLINE_SCALE: f32 = 0.4;
+
+fn default_emoji_reference_diameter() -> f32 {
+    DEFAULT_EMOJI_REFERENCE_DIAMETER
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub struct TextGlobals {
@@ -14,20 +21,42 @@ pub struct OutlineStyle {
     pub color: [f32; 4],
     pub thickness: f32,
     pub shadow_y: f32,
+    /// Content diameter at which the configured outline keeps its full size.
+    #[serde(default = "default_emoji_reference_diameter")]
+    pub reference_diameter: f32,
 }
 
 impl OutlineStyle {
+    pub const EMOJI_REFERENCE_DIAMETER: f32 = DEFAULT_EMOJI_REFERENCE_DIAMETER;
+
     pub const NONE: Self = Self {
         color: [0.0; 4],
         thickness: 0.0,
         shadow_y: 0.0,
+        reference_diameter: 0.0,
     };
 
     pub const TACTICAL: Self = Self {
         color: [0.0, 0.0, 0.0, 0.9],
         thickness: 1.5,
         shadow_y: 1.5,
+        reference_diameter: Self::EMOJI_REFERENCE_DIAMETER,
     };
+
+    /// Reduce emoji effects with the content while preserving a readable minimum.
+    #[inline]
+    pub fn scaled_for_emoji(self, content_diameter: f32) -> Self {
+        if self.reference_diameter <= 0.0 {
+            return self;
+        }
+        let scale = (content_diameter.max(0.0) / self.reference_diameter)
+            .clamp(MIN_EMOJI_OUTLINE_SCALE, 1.0);
+        Self {
+            thickness: self.thickness * scale,
+            shadow_y: self.shadow_y * scale,
+            ..self
+        }
+    }
 
     /// Screen-space room required outside the logical emoji bounds.
     #[inline]
@@ -64,6 +93,7 @@ impl Default for OutlineStyle {
             color: [0.0, 0.0, 0.0, 1.0],
             thickness: 0.8,
             shadow_y: 1.5,
+            reference_diameter: Self::EMOJI_REFERENCE_DIAMETER,
         }
     }
 }

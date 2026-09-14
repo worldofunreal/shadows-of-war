@@ -71,6 +71,7 @@ fn emoji_instance(
     outline: OutlineStyle,
     underlay_softness: f32,
 ) -> TextInstanceGpu {
+    let outline = outline.scaled_for_emoji(half_size.max(0.0) * 2.0);
     let (screen_pos, size, content_rect) = emoji_geometry(screen_pos, half_size, outline);
     TextInstanceGpu {
         screen_pos,
@@ -420,7 +421,7 @@ impl TextRenderer {
 
     /// Push a screen-space emoji with alpha-dilated outline + drop shadow.
     /// `screen_pos` is the center in physical pixels, `half_size` the logical content half-extent;
-    /// the submitted quad grows only by the effect padding.
+    /// the submitted quad grows only by the size-adjusted effect padding.
     /// Returns `false` if the emoji isn't in the atlas.
     pub fn push_emoji(
         &mut self,
@@ -675,6 +676,7 @@ mod tests {
             color: [0.0, 0.0, 0.0, 1.0],
             thickness: 3.0,
             shadow_y: 5.0,
+            reference_diameter: 0.0,
         };
         let (screen_pos, size, content_rect) = emoji_geometry([100.0, 50.0], 12.0, outline);
         let content_size = [
@@ -699,11 +701,12 @@ mod tests {
     }
 
     #[test]
-    fn inline_emoji_inherits_the_configured_outline() {
+    fn inline_emoji_uses_the_size_adjusted_outline() {
         let outline = OutlineStyle {
             color: [0.0, 0.0, 0.0, 0.8],
             thickness: 2.25,
             shadow_y: 3.5,
+            reference_diameter: OutlineStyle::EMOJI_REFERENCE_DIAMETER,
         };
         let instance = emoji_instance(
             [0.0, 0.0, 1.0, 1.0],
@@ -715,9 +718,29 @@ mod tests {
         );
 
         assert_eq!(instance.outline_color, outline.color);
-        assert_eq!(instance.outline_thickness, outline.thickness);
-        assert_eq!(instance.underlay_offset_y, outline.shadow_y);
+        assert!((instance.outline_thickness - 0.9).abs() < 1e-5);
+        assert!((instance.underlay_offset_y - 1.4).abs() < 1e-5);
         assert_eq!(instance.underlay_softness, 0.25);
+    }
+
+    #[test]
+    fn emoji_outline_scales_down_only_for_small_content() {
+        let outline = OutlineStyle {
+            color: [0.0, 0.0, 0.0, 1.0],
+            thickness: 1.4,
+            shadow_y: 2.0,
+            reference_diameter: OutlineStyle::EMOJI_REFERENCE_DIAMETER,
+        };
+        let close = outline.scaled_for_emoji(32.0);
+        let far = outline.scaled_for_emoji(16.0);
+        let tiny = outline.scaled_for_emoji(12.0);
+
+        assert_eq!(close.thickness, 1.4);
+        assert_eq!(close.shadow_y, 2.0);
+        assert!((far.thickness - 0.7).abs() < 1e-5);
+        assert!((far.shadow_y - 1.0).abs() < 1e-5);
+        assert!((tiny.thickness - 0.56).abs() < 1e-5);
+        assert!((tiny.shadow_y - 0.8).abs() < 1e-5);
     }
 
     #[test]

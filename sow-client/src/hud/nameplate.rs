@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-pub(crate) const TROOPS_ICON_SCALE: f32 = 1.15;
+pub(crate) const TROOPS_ICON_SCALE: f32 = 1.0;
 
 pub fn nameplate_matte_player_rgb(rgb: [f32; 3]) -> egui::Color32 {
     let y = 0.299_f64 * rgb[0] as f64 + 0.587 * rgb[1] as f64 + 0.114 * rgb[2] as f64;
@@ -127,6 +127,6 @@ mod tests {
     #[test]
     fn troops_icon_tracks_rendered_text_size() {
         let icon = troops_icon_size_from_text(80.0);
-        assert!((icon - 92.0).abs() < f32::EPSILON);
+        assert!((icon - 80.0).abs() < f32::EPSILON);
     }
 }

@@ -150,6 +150,46 @@
         "</main>";
     }
 
+    function renderCampaignEpisode(episode, continueId) {
+        var completed = !!episode.completed;
+        var unlocked = !!episode.unlocked;
+        var isNext = unlocked && !completed && episode.id === continueId;
+        var status = completed ? "COMPLETED" : unlocked ? (isNext ? "NEXT" : "AVAILABLE") : "LOCKED";
+        var label = completed ? "REPLAY" : isNext ? "CONTINUE" : "PLAY";
+        var action = unlocked
+            ? "<button class='sow-menu__secondary sow-campaign__play' type='button' data-command='start_campaign_episode' data-episode-id='" + esc(episode.id) + "'>" + label + " <span>↗</span></button>"
+            : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>LOCKED</button>";
+        return "<article class='sow-campaign__episode" + (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") + "'>" +
+            "<div class='sow-campaign__episode-status'>" + esc(status) + "</div>" +
+            "<h2>" + esc(episode.title) + "</h2>" +
+            "<p>" + esc(episode.subtitle) + "</p>" +
+            action +
+        "</article>";
+    }
+
+    function renderCampaign() {
+        var campaign = state && state.campaign || {};
+        var episodes = Array.isArray(campaign.episodes) ? campaign.episodes : [];
+        var continueId = campaign.continue_episode || "";
+        var continueButton = continueId
+            ? "<button class='sow-menu__primary' type='button' data-command='start_campaign_episode' data-episode-id='" + esc(continueId) + "'>CONTINUE CAMPAIGN <span>↗</span></button>"
+            : "<div class='sow-campaign__complete'>SAGA COMPLETE</div>";
+        return "<main class='sow-menu__main sow-campaign' data-screen-panel='campaign'>" +
+            "<section class='sow-menu__command sow-campaign__intro'>" +
+                "<p class='sow-menu__eyebrow'>SINGLE PLAYER</p>" +
+                "<h1>CAMPAIGN<br><em>CHRONICLES</em></h1>" +
+                "<p class='sow-menu__tagline'>Follow the saga, master each battlefield, and return here whenever you are ready for multiplayer.</p>" +
+                "<button class='sow-menu__secondary' type='button' data-command='close_campaign'>← BACK</button>" +
+            "</section>" +
+            "<section class='sow-menu__battlefield sow-campaign__battlefield'>" +
+                "<div class='sow-campaign__heading'><div><p class='sow-menu__eyebrow'>THE SAGA</p><h2>EPISODES</h2></div>" + continueButton + "</div>" +
+                "<div class='sow-campaign__episodes'>" +
+                    (episodes.length ? episodes.map(function (episode) { return renderCampaignEpisode(episode, continueId); }).join("") : "<p class='sow-menu__empty'>Campaign unavailable.</p>") +
+                "</div>" +
+            "</section>" +
+        "</main>";
+    }
+
     function renderBrowser() {
         return "<main class='sow-menu__main' data-screen-panel='browser'>" +
             "<section class='sow-menu__command'>" +

@@ -30,8 +30,8 @@ use sow_ui::widgets::{BottomDialog, DialogButton, SpeakerVisual, ThemeButtonStyl
 use steps::{CHAPTER_1, SIX_SKY_EP1, SIX_SKY_EP2, SIX_SKY_EP3, objective_progress};
 
 /// How long a non-destructive dialog holds the bottom panel before auto-advancing (the takeover is
-/// "for a limited time"; a tap on the panel or a click on the map skips it sooner). Destructive or
-/// branching dialogs (the last-step Continue/Stay choice) pass `None` and wait for the player.
+/// "for a limited time"; a tap on the panel or a click on the map skips it sooner). The final
+/// completion dialog passes `None` and waits for the player.
 const DIALOG_AUTODISMISS_SECS: f32 = 10.0;
 
 /// "Quest Complete" flash is a brief celebration — shorter hold than a read-me brief.
@@ -332,41 +332,16 @@ impl SowApp {
             // Skip the very frame the step changed to avoid a flash.
             let is_last_step = idx == steps.len() - 1;
 
-            // Final step chains the saga: Boudica -> Six Sky EP1 (unless done,
-            // then menu); Six Sky EP1/EP2 -> next episode; EP3 -> menu. Every
-            // hop completes an episode (reward + Poki measure) and is a natural
-            // ad-break boundary for portals.
-            let chain_target = if is_last_step {
-                match campaign.next() {
-                    Some(next)
-                        if !self
-                            .progress
-                            .completed_episodes
-                            .contains(next.episode_id()) =>
-                    {
-                        Some(next)
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let continue_label = match campaign {
-                CampaignId::Boudica => "Continue the saga",
-                CampaignId::SixSkyEp3 => "Finish the saga",
-                CampaignId::SixSkyEp1 | CampaignId::SixSkyEp2 => "Next episode",
-            };
-
             let buttons = if is_last_step {
-                vec![
-                    DialogButton::new(continue_label, ThemeButtonStyle::Primary),
-                    DialogButton::new("Stay and fight", ThemeButtonStyle::Secondary),
-                ]
+                vec![DialogButton::new(
+                    "Return to main menu",
+                    ThemeButtonStyle::Primary,
+                )]
             } else {
                 vec![DialogButton::new("Got it", ThemeButtonStyle::Primary)]
             };
 
-            // The branching last step waits for the player; informational steps auto-advance.
+            // The final step waits for the player; informational steps auto-advance.
             let auto_dismiss = if is_last_step {
                 None
             } else {
@@ -389,50 +364,35 @@ impl SowApp {
                 .unwrap_or(0.0);
             let clicked_anywhere =
                 !is_last_step && elapsed > 0.5 && ctx.input(|i| i.pointer.any_click());
-            if let Some(btn_idx) = clicked {
+            if clicked.is_some() {
                 if is_last_step {
                     crate::analytics::track_with(
                         "tutorial_dialog_choice",
                         serde_json::json!({
-                            "choice": if btn_idx == 0 { "continue" } else { "stay_fight" },
+                            "choice": "return_to_menu",
                             "step": idx,
                             "campaign": campaign.episode_id(),
                         }),
                     );
-                    if btn_idx == 0 {
-                        if campaign == CampaignId::Boudica {
-                            let completed_now =
-                                self.progress.complete_tutorial_with_reward();
-                            if completed_now {
-                                self.save_local_progress();
-                                self.persist_tutorial_completion();
-                                log::info!(
-                                    "tutorial: intro completed from final modal interaction"
-                                );
-                            }
-                        } else {
-                            // Episode finale: local medal + reward + Poki event.
-                            // No server persist: the server never tracks episodes,
-                            // and the union merge keeps them across cloud syncs.
-                            let ep = campaign.episode_id();
-                            if self.progress.complete_episode(ep, advisor) {
-                                self.save_local_progress();
-                                crate::store_portals::measure("campaign", ep, "complete");
-                                log::info!("campaign: episode {ep} completed");
-                            }
-                        }
-                        match chain_target {
-                            Some(CampaignId::SixSkyEp1) => self.start_six_sky_episode(1),
-                            Some(CampaignId::SixSkyEp2) => self.start_six_sky_episode(2),
-                            Some(CampaignId::SixSkyEp3) => self.start_six_sky_episode(3),
-                            // Boudica replay (saga already done) and the EP3
-                            // finale land back in the main menu.
-                            _ => self.begin_exit_to_main_menu(true),
+                    if campaign == CampaignId::Boudica {
+                        let completed_now = self.progress.complete_tutorial_with_reward();
+                        if completed_now {
+                            self.save_local_progress();
+                            self.persist_tutorial_completion();
+                            log::info!("tutorial: intro completed from final modal interaction");
                         }
                     } else {
-                        // Stay and fight
-                        self.ui.tutorial_modal_dismissed = true;
+                        // Episode finale: local medal + reward + Poki event.
+                        // No server persist: the server never tracks episodes,
+                        // and the union merge keeps them across cloud syncs.
+                        let ep = campaign.episode_id();
+                        if self.progress.complete_episode(ep, advisor) {
+                            self.save_local_progress();
+                            crate::store_portals::measure("campaign", ep, "complete");
+                            log::info!("campaign: episode {ep} completed");
+                        }
                     }
+                    self.begin_exit_to_main_menu(true);
                 } else {
                     self.ui.tutorial_modal_dismissed = true;
                     crate::store_portals::gameplay_start();

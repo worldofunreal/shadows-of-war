@@ -64,6 +64,19 @@ impl SowApp {
         }
     }
 
+    pub(crate) fn start_campaign_episode(&mut self, campaign: crate::campaign::CampaignId) {
+        if !campaign.is_unlocked(&self.progress) {
+            self.ui.app.main_menu_state.error_message = Some("Campaign episode is locked.".into());
+            return;
+        }
+        match campaign {
+            crate::campaign::CampaignId::Boudica => self.start_portal_intro_match(),
+            crate::campaign::CampaignId::SixSkyEp1 => self.start_six_sky_episode(1),
+            crate::campaign::CampaignId::SixSkyEp2 => self.start_six_sky_episode(2),
+            crate::campaign::CampaignId::SixSkyEp3 => self.start_six_sky_episode(3),
+        }
+    }
+
     /// Launch the scripted first-run intro (Boudica campaign) as an offline match. Used by both the
     /// web portal boot route and the native first-run gate; body is platform-agnostic.
     pub(crate) fn start_portal_intro_match(&mut self) {

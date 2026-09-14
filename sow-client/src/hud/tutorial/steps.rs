@@ -47,8 +47,8 @@ pub(super) struct Step {
 // script settles. Each entry is one objective; the tutorial NEVER ends — just append more
 // objectives here as we build them out.
 // Guide: 9 trials — start with expansion (tap to claim), learn combat (drag to attack),
-// unite the east, then burn Rome's cities and ambush a legion. Final modal releases to
-// the main menu with 100 Crowns; Stay keeps you fighting for honor.
+// unite the east, then burn Rome's cities and ambush a legion. The final modal returns
+// to the main menu with 100 Crowns, where the next episode awaits.
 pub(super) const CHAPTER_1: &[Step] = &[
     Step {
         title: "Rise of the Iceni",
@@ -98,13 +98,11 @@ pub(super) const CHAPTER_1: &[Step] = &[
         hint: "Intercept Legio IX Hispana",
         advance: Trigger::DefeatedPlayer("Legio IX Hispana"),
     },
-    // Terminal step: reaching it pops the Final Battle modal (Continue the saga / Stay and fight).
-    // Continue chains into Lady Six Sky episode 1 with the 100-Crown intro
-    // reward; Stay keeps you on the map for honor.
+    // Terminal step: completing it pops the Final Battle modal and returns to the main menu.
     Step {
         title: "The Final Battle",
-        body: "Tutorial complete. You have mastered expansion, combat, and siege. Suetonius Paulinus approaches with the main imperial force. Continue the saga of Lady Six Sky, queen of Naranjo (100 Crowns earned) or Stay to finish the engagement.",
-        hint: "Continue the saga or defeat Paulinus",
+        body: "Tutorial complete. You have mastered expansion, combat, and siege. Defeat Suetonius Paulinus, then return to the main menu to choose the next campaign episode or multiplayer. (100 Crowns earned)",
+        hint: "Defeat Paulinus, then return to menu",
         advance: Trigger::DefeatedPlayer("Legio XIV Gemina"),
     },
 ];
@@ -154,7 +152,7 @@ pub(super) const SIX_SKY_EP1: &[Step] = &[
         hint: "Defeat the Tikal Vanguard",
         advance: Trigger::DefeatedPlayer("Tikal Vanguard"),
     },
-    // Terminal step: Continue chains into episode 2 (a son is foretold, 688).
+    // Terminal step: completion returns to the campaign menu, where episode 2 unlocks.
     Step {
         title: "Queen of Naranjo",
         body: "Naranjo is yours, though the scribes never grant you its holy title. Tikal itself camps nearby — break it, and your line is secure. A son is foretold.",
@@ -216,7 +214,7 @@ pub(super) const SIX_SKY_EP2: &[Step] = &[
         hint: "Defeat 8 enemies in total",
         advance: Trigger::TribesEaten(8),
     },
-    // Terminal step: Continue chains into episode 3.
+    // Terminal step: completion returns to the campaign menu, where episode 3 unlocks.
     Step {
         title: "The Coalition Breaks",
         body: "Tikal gathered your enemies into one coalition. Break it and no city will doubt the regency. The moon goddess watches — 726 approaches.",
@@ -277,7 +275,7 @@ pub(super) const SIX_SKY_EP3: &[Step] = &[
         hint: "Defeat 6 enemies in total",
         advance: Trigger::TribesEaten(6),
     },
-    // Terminal step: Continue returns to the main menu with the saga complete.
+    // Terminal step: completion returns to the main menu with the saga complete.
     Step {
         title: "Legacy in Stone",
         body: "Tikal itself. Win, and your son's line holds the city until 741 and beyond — your stelae still stand today. This is the last battle of the saga.",
