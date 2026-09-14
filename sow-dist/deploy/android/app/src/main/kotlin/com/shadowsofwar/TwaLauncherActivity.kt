@@ -177,7 +177,7 @@ class TwaLauncherActivity : LauncherActivity() {
         val appUserId = request.optString("app_user_id", "")
         val requestId = request.optString("request_id", "")
         if (!PurchaseActivity.isStoreProduct(productId) ||
-            !PurchaseActivity.isPurchaseUserId(appUserId) ||
+            !PurchaseActivity.isCanonicalAccountId(appUserId) ||
             !validRequestId(requestId)
         ) {
             Log.w(TAG, "rejected invalid purchase bridge request")
@@ -195,7 +195,7 @@ class TwaLauncherActivity : LauncherActivity() {
     private fun handleRestoreRequest(request: JSONObject) {
         val appUserId = request.optString("app_user_id", "")
         val requestId = request.optString("request_id", "")
-        if (!PurchaseActivity.isPurchaseUserId(appUserId) || !validRequestId(requestId)) {
+        if (!PurchaseActivity.isCanonicalAccountId(appUserId) || !validRequestId(requestId)) {
             Log.w(TAG, "rejected invalid restore bridge request")
             postPurchaseResult(requestId, "error", null)
             return

@@ -102,6 +102,7 @@ impl SowApp {
             return;
         };
         self.progress_match_recorded = true;
+        crate::store_portals::measure("match", "round", "complete");
 
         let won = if let Some(team) = winning_team {
             my_team == Some(team)

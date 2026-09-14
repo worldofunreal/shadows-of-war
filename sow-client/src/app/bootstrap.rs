@@ -265,6 +265,7 @@ impl SowApp {
                 label_sizes: std::collections::HashMap::new(),
                 tutorial_active: false,
                 tutorial_step: crate::hud::tutorial::TutorialStep::Welcome,
+                tutorial_campaign: crate::campaign::CampaignId::Boudica,
                 tutorial_step_idx: 0,
                 tutorial_baseline_tiles: 0,
                 tutorial_baseline_set: false,
@@ -349,7 +350,7 @@ impl SowApp {
             gpu_init_failed: false,
             progress: crate::player_progress::PlayerProgress::default(),
             progress_account_id: stored_account_id,
-            profile_public_id: None,
+            profile_account_id: None,
             progress_provider: if has_stored_account {
                 String::from("anonymous")
             } else {

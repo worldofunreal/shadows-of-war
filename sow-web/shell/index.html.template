@@ -207,7 +207,7 @@
     </style>
 </head>
 <body>
-    <div id="web-loader" aria-live="polite" aria-busy="true">
+    <div id="web-loader" aria-live="polite" aria-busy="true" aria-hidden="false">
         <picture class="splash-picture">
             <source media="(max-width: 599px)" srcset="__SOW_SPLASH_MOBILE_DATA__">
             <img id="splash-bg" class="splash-bg" alt="" decoding="sync" fetchpriority="high"
@@ -367,17 +367,23 @@
             if (typeof window.SOW_initPortalSdk === "function") {
                 await window.SOW_initPortalSdk();
             }
+            if (typeof window.SOW_isSowProductionHost === "function" &&
+                window.SOW_isSowProductionHost() &&
+                typeof window.SOW_ensureWouAnonymousSession === "function") {
+                try {
+                    await window.SOW_ensureWouAnonymousSession();
+                } catch (error) {
+                    // WOU-ID is the canonical web identity when available;
+                    // keep the game playable with its existing anonymous
+                    // fallback if the identity service is temporarily down.
+                    console.warn("WOU anonymous identity unavailable; using local fallback:", error);
+                }
+            }
             if (typeof window.SOW_portalLoadStart === "function") {
                 window.SOW_portalLoadStart();
             }
 
-            if ('serviceWorker' in navigator
-                && window.location.hostname !== "appassets.androidplatform.net"
-                && !isPortal) {
-                navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) {
-                    console.warn('Service worker registration failed:', err);
-                });
-            }
+            <!-- __SOW_SERVICE_WORKER_SLOT__ -->
 
             try {
                 const wasm = await import('./__JS_FILE__');
@@ -393,6 +399,9 @@
                 if (e.message !== "Using exceptions for control flow, don't mind me. This isn't actually an error!") {
                     throw e;
                 }
+            }
+            if (typeof window.SOW_portalGameLoadingFinished === "function") {
+                window.SOW_portalGameLoadingFinished();
             }
         }
 

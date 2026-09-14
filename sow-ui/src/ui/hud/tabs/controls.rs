@@ -60,7 +60,7 @@ pub(in crate::ui::hud) fn draw_buildings_strip(
                 StripItem::Nuke(kind) => {
                     let sel = state.selected_nuke_kind == Some(*kind);
                     let red = egui::Color32::from_rgb(239, 68, 68);
-                    (true, sel, true, if sel { red } else { egui::Color32::WHITE }, "☢️".to_owned(), "Nuke".to_owned(), red, "8".to_owned())
+                    (true, sel, true, if sel { red } else { egui::Color32::WHITE }, "⚡".to_owned(), "Strategic Strike".to_owned(), red, "8".to_owned())
                 }
             };
 
@@ -71,9 +71,9 @@ pub(in crate::ui::hud) fn draw_buildings_strip(
 
             resp = resp.on_hover_ui(|ui| {
                 if is_nuke {
-                    crate::widgets::outlined_emoji_label(ui, "Nuke", egui::FontId::proportional(14.0), accent);
+                    crate::widgets::outlined_emoji_label(ui, "Strategic Strike", egui::FontId::proportional(14.0), accent);
                     ui.add_space(4.0);
-                    crate::widgets::emoji_label(ui, "Nuclear Strike: Devastating warhead. Obliterates troops, structures, and converts territory into neutral fallout.", egui::FontId::proportional(12.0), egui::Color32::LIGHT_GRAY);
+                    crate::widgets::emoji_label(ui, "Long-range impact: damages troops and structures in a targeted zone.", egui::FontId::proportional(12.0), egui::Color32::LIGHT_GRAY);
                     ui.add_space(6.0);
                     crate::widgets::emoji_label(ui, "Target: Click any tile on the map", egui::FontId::proportional(13.0), egui::Color32::from_rgb(250, 204, 21));
                 } else if let StripItem::Building(kind) = item {

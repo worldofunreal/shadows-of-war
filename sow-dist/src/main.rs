@@ -64,6 +64,7 @@ struct Paths {
     map_sources: PathBuf,
     dist_web: PathBuf,
     dist_cg: PathBuf,
+    dist_poki: PathBuf,
     wasm_input: PathBuf,
     wasm_cache: PathBuf,
 }
@@ -88,6 +89,7 @@ impl Paths {
             map_sources: root.join("assets/map_sources"),
             dist_web: root.join("dist/web"),
             dist_cg: root.join("dist/crazygames"),
+            dist_poki: root.join("dist/poki"),
             root,
         })
     }
@@ -117,6 +119,92 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
         } else {
             fs::copy(e.path(), &to)
                 .with_context(|| format!("copy {} to {}", e.path().display(), to.display()))?;
+        }
+    }
+    Ok(())
+}
+
+fn optimize_poki_webp(src: &Path, dst: &Path, geometry: &str) -> Result<()> {
+    let status = Command::new("magick")
+        .arg(src)
+        .args(["-resize", geometry, "-strip", "-quality", "70"])
+        .args(["-define", "webp:method=6"])
+        .arg(dst)
+        .status()
+        .with_context(|| "Poki packaging requires ImageMagick (magick)")?;
+    if !status.success() {
+        bail!("Poki image optimization failed for {}", src.display());
+    }
+    Ok(())
+}
+
+fn optimize_poki_thumbnail(src: &Path, dst: &Path) -> Result<()> {
+    let status = Command::new("magick")
+        .arg(src)
+        .args([
+            "-resize",
+            "628x628^",
+            "-gravity",
+            "center",
+            "-extent",
+            "628x628",
+            "-strip",
+            "-define",
+            "png:compression-level=9",
+        ])
+        .arg(dst)
+        .status()
+        .with_context(|| "Poki packaging requires ImageMagick (magick)")?;
+    if !status.success() {
+        bail!("Poki thumbnail optimization failed for {}", src.display());
+    }
+    Ok(())
+}
+
+fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
+    copy_dir(&src.join("shell/loader"), &dst.join("shell/loader"))?;
+    fs::create_dir_all(dst.join("shell/leaders"))?;
+    for entry in fs::read_dir(src.join("shell/leaders"))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let geometry = if name.ends_with("_mobile.webp") {
+            "540x960"
+        } else {
+            "960x540"
+        };
+        optimize_poki_webp(
+            &entry.path(),
+            &dst.join("shell/leaders").join(entry.file_name()),
+            geometry,
+        )?;
+    }
+    copy_dir(&src.join("gameplay/avatars"), &dst.join("gameplay/avatars"))?;
+    copy_dir(&src.join("gameplay/currency"), &dst.join("gameplay/currency"))?;
+    let mobile_nav = dst.join("shell/mobile-nav");
+    fs::create_dir_all(&mobile_nav)?;
+    for file in ["heroes.webp", "battle.webp", "profile.webp"] {
+        fs::copy(src.join("shell/mobile-nav").join(file), mobile_nav.join(file))?;
+    }
+    Ok(())
+}
+
+fn copy_poki_maps(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    fs::copy(src.join("catalog.bin"), dst.join("catalog.bin"))?;
+    for entry in fs::read_dir(src).with_context(|| format!("read directory {}", src.display()))? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let out_dir = dst.join(entry.file_name());
+        fs::create_dir_all(&out_dir)?;
+        let map = entry.path().join("map.bin.br");
+        if map.is_file() {
+            fs::copy(&map, out_dir.join("map.bin.br"))?;
+        }
+        let thumbnail = entry.path().join("thumbnail.webp");
+        if thumbnail.is_file() {
+            optimize_poki_webp(&thumbnail, &out_dir.join("thumbnail.webp"), "256x144")?;
         }
     }
     Ok(())
@@ -425,13 +513,35 @@ fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<Str
     Ok(bundle)
 }
 
+fn strip_marked_section(source: &str, begin: &str, end: &str) -> Result<String> {
+    let start = source
+        .find(begin)
+        .with_context(|| format!("missing bundle marker {begin}"))?;
+    let end_start = source[start..]
+        .find(end)
+        .map(|offset| start + offset)
+        .with_context(|| format!("missing bundle marker {end}"))?;
+    let end_after = end_start + end.len();
+    let mut output = String::with_capacity(source.len());
+    output.push_str(&source[..start]);
+    output.push_str(&source[end_after..]);
+    Ok(output)
+}
+
 struct IndexBuild<'a> {
     version: &'a str,
     js: &'a str,
     wasm: &'a str,
     ts: &'a str,
     maps_cache_bust: &'a str,
-    cg: bool,
+    target: WebTarget,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WebTarget {
+    SelfHosted,
+    CrazyGames,
+    Poki,
 }
 
 fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
@@ -441,13 +551,16 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         wasm,
         ts,
         maps_cache_bust,
-        cg,
+        target,
     } = build;
+    let cg = target == WebTarget::CrazyGames;
+    let poki = target == WebTarget::Poki;
+    let portal = cg || poki;
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
     let store_portals_template = format!("src=\"./sdk/store_portals.js?v={ts}\"");
-    let store_portals_src = if cg {
+    let store_portals_src = if portal {
         format!("src=\"sdk/store_portals.js?v={ts}\"")
     } else {
         format!("src=\"../sdk/store_portals.js?v={ts}\"")
@@ -456,7 +569,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         .replace("__VERSION__", version)
         .replace(
             "./__JS_FILE__",
-            &if cg {
+            &if portal {
                 format!("./{js}")
             } else {
                 "../__JS_FILE__".to_string()
@@ -464,7 +577,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )
         .replace(
             "./__WASM_FILE__",
-            &if cg {
+            &if portal {
                 format!("./{wasm}")
             } else {
                 "../__WASM_FILE__".to_string()
@@ -483,13 +596,15 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 // but the whitelist bundle ships no assets — point straight at
                 // the production CDN (served with ACAO for cross-origin reads).
                 "https://shadowsofwar.io/assets/shell/loader/"
+            } else if poki {
+                "./assets/shell/loader/"
             } else {
                 "/assets/shell/loader/"
             },
         )
         .replace(
             "href=\"./sow.svg\"",
-            if cg {
+            if portal {
                 "href=\"sow.svg\""
             } else {
                 "href=\"../sow.svg\""
@@ -497,7 +612,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )
         .replace(
             "href=\"./favicon.ico\"",
-            if cg {
+            if portal {
                 "href=\"favicon.ico\""
             } else {
                 "href=\"../favicon.ico\""
@@ -505,7 +620,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )
         .replace(
             "src=\"./loader.js\"",
-            if cg {
+            if portal {
                 "src=\"loader.js\""
             } else {
                 "src=\"../loader.js\""
@@ -513,16 +628,20 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )
         .replace(&store_portals_template, &store_portals_src)
         .replace(
-            "register('./sw.js', { scope: './' })",
-            if cg {
-                "register('sw.js', { scope: '/' })"
-            } else {
-                "register('../sw.js', { scope: '../' })"
+            "<!-- __SOW_SERVICE_WORKER_SLOT__ -->",
+            match target {
+                WebTarget::SelfHosted => {
+                    "if ('serviceWorker' in navigator && window.location.hostname !== \"appassets.androidplatform.net\" && !isPortal) { navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
+                }
+                WebTarget::CrazyGames => {
+                    "if ('serviceWorker' in navigator && !isPortal) { navigator.serviceWorker.register('sw.js', { scope: '/' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
+                }
+                WebTarget::Poki => "",
             },
         )
         .replace(
             "/* PORTAL_BOOT_SLOT: SOW_PORTAL / SOW_WS_URL overrides injected by sow-dist crazygames. */",
-            &if cg {
+            &if portal {
                 // CG keeps the marker: package_cg injects the portal boot line.
                 "/* PORTAL_BOOT_SLOT */".to_string()
             } else {
@@ -537,15 +656,22 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 .to_string()
             },
         );
-    let index = if cg {
+    let index = if portal {
         out.join("index.html")
     } else {
         out.join("play/index.html")
     };
     fs::create_dir_all(index.parent().unwrap())?;
     fs::write(&index, &html)?;
-    let loader =
-        fs::read_to_string(paths.shell.join("loader.js"))?.replace("</script>", "<\\/script>");
+    let mut loader = fs::read_to_string(paths.shell.join("loader.js"))?;
+    if poki {
+        loader = strip_marked_section(
+            &loader,
+            "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
+            "/* SOW_FIRST_PARTY_ANALYTICS_END */",
+        )?;
+    }
+    let loader = loader.replace("</script>", "<\\/script>");
     let menu_css = read_shell_bundle(
         &paths.shell,
         "main_menu.css",
@@ -555,17 +681,56 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.profile.css",
         ],
     )?;
-    let menu_js = read_shell_bundle(
-        &paths.shell,
-        "main_menu.js",
-        &[
+    let menu_parts: Vec<&str> = if poki {
+        vec![
             "main_menu.core.js",
             "main_menu.motion.js",
-            "main_menu.screens.js",
+            "main_menu.lobbies.js",
+            "main_menu.heroes.js",
+            "main_menu.profile.js",
+            "main_menu.shell.js",
+            "main_menu.poki.js",
             "main_menu.hud.js",
-        ],
+        ]
+    } else {
+        vec![
+            "main_menu.core.js",
+            "main_menu.motion.js",
+            "main_menu.lobbies.js",
+            "main_menu.store.js",
+            "main_menu.heroes.js",
+            "main_menu.profile.js",
+            "main_menu.shell.js",
+            "main_menu.hud.js",
+        ]
+    };
+    let mut menu_js = read_shell_bundle(
+        &paths.shell,
+        "main_menu.js",
+        &menu_parts,
     )?
     .replace("</script>", "<\\/script>");
+    if poki {
+        menu_js = strip_marked_section(
+            &menu_js,
+            "/* POKI_RENDER_REPLACEMENT_BEGIN */",
+            "/* POKI_RENDER_REPLACEMENT_END */",
+        )?;
+        menu_js = strip_marked_section(
+            &menu_js,
+            "/* POKI_STRIPE_STATE_BEGIN */",
+            "/* POKI_STRIPE_STATE_END */",
+        )?;
+        for forbidden in [
+            "https://id.worldofunreal.com",
+            "https://discord.gg/d6ZDeChSE",
+            "https://t.me/shadowsofwario",
+            "https://github.com/worldofunreal/shadows-of-war",
+            "https://worldofunreal.com/wouid.svg",
+        ] {
+            menu_js = menu_js.replace(forbidden, "about:blank");
+        }
+    }
     let mut fh = fs::read_to_string(&index)?;
     let marker = "/* __INLINE_LOADER_JS__ */";
     if fh.contains(marker) {
@@ -595,6 +760,22 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         bail!("index.html: no main menu JS injection point");
     }
     fh = fh.replacen(menu_js_marker, &menu_js, 1);
+    if poki {
+        fh = fh
+            .replace("href=\"/fonts/fonts.css\"", "href=\"fonts/fonts.css\"")
+            .replace("href=\"/manifest.webmanifest\"", "href=\"manifest.webmanifest\"")
+            .replace(
+                "<meta property=\"og:url\" content=\"https://shadowsofwar.io/play/\">",
+                "",
+            )
+            .replace(
+                "<meta property=\"twitter:url\" content=\"https://shadowsofwar.io/play/\">",
+                "",
+            )
+            .replace("<meta property=\"og:image\" content=\"https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp\">", "")
+            .replace("<meta property=\"twitter:image\" content=\"https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp\">", "")
+            .replace("<link rel=\"canonical\" href=\"https://shadowsofwar.io/play/\">", "");
+    }
     fs::write(&index, fh)?;
     Ok(())
 }
@@ -671,6 +852,8 @@ fn export_locales(out: &Path) -> Result<()> {
         (&sow_i18n::Language::Spanish, "es"),
         (&sow_i18n::Language::French, "fr"),
         (&sow_i18n::Language::German, "de"),
+        (&sow_i18n::Language::Italian, "it"),
+        (&sow_i18n::Language::Turkish, "tr"),
     ] {
         fs::write(d.join(c), serde_json::to_string_pretty(sow_i18n::get(*l))?)?;
     }
@@ -779,6 +962,109 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn verify_poki_layout(dir: &Path) -> Result<()> {
+    for required in [
+        "index.html",
+        "sow_client.js",
+        "sow_client_bg.wasm",
+        "sow.svg",
+        "loader.js",
+        "game-manifest.json",
+        "manifest.webmanifest",
+        "sdk/store_portals.js",
+        "locales/en",
+        "locales/es",
+        "locales/fr",
+        "locales/de",
+        "locales/it",
+        "locales/tr",
+        "fonts/fonts.css",
+        "fonts/work-sans-latin.woff2",
+        "assets/shell/loader/loader_empty.webp",
+        "assets/shell/loader/loader_full.webp",
+        "maps/catalog.bin",
+        "maps/world/map.bin.br",
+    ] {
+        if !dir.join(required).is_file() {
+            bail!("poki bundle missing {required}");
+        }
+    }
+    for forbidden in [
+        "admin",
+        "play",
+        "site",
+        ".well-known",
+        "sw.js",
+        "assets/gameplay/store",
+        "assets/gameplay/skins",
+        "assets/shell/mobile-nav/store.webp",
+    ] {
+        if dir.join(forbidden).exists() {
+            bail!("poki bundle must not contain {forbidden}");
+        }
+    }
+    let html = fs::read_to_string(dir.join("index.html"))?;
+    let loader = fs::read_to_string(dir.join("loader.js"))?;
+    let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
+    for needle in [
+        "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+        "window.SOW_PORTAL = \"poki\"",
+        "window.SOW_MAPS_URL = \"./maps\"",
+        "window.SOW_ASSETS_URL = \"./assets\"",
+        "window.SOW_DISABLE_CHAT = true",
+        "sdk.init",
+        "sdk.gameLoadingFinished",
+        "sdk.gameplayStart",
+        "sdk.gameplayStop",
+        "sdk.commercialBreak",
+        "sdk.measure",
+        "sdk.openExternalLink",
+    ] {
+        if !html.contains(needle) && !sdk.contains(needle) {
+            bail!("poki bundle missing {needle}");
+        }
+    }
+    for forbidden in [
+        "sdk.crazygames.com",
+        "js.stripe.com",
+        "id.worldofunreal.com",
+        "discord.gg",
+        "t.me/shadowsofwar",
+        "github.com/worldofunreal",
+        "SOW_MAPS_URL = \"https://",
+        "SOW_ASSETS_URL = \"https://",
+        "main_menu.store.js",
+        "register('/sw.js'",
+    ] {
+        if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
+            bail!("poki bundle contains forbidden content {forbidden}");
+        }
+    }
+    if loader.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || loader.contains("/event") {
+        bail!("Poki loader contains first-party analytics");
+    }
+    if html.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || html.contains("/event") {
+        bail!("Poki index.html contains first-party analytics");
+    }
+    if html.matches("window.SOW_ENABLE_PORTAL_ADS = true;").count() != 1 {
+        bail!("Poki index.html must contain exactly one portal boot block");
+    }
+    if html.contains("/* PORTAL_BOOT_SLOT */") {
+        bail!("Poki index.html still contains the portal boot marker");
+    }
+    for entry in fs::read_dir(dir.join("maps"))? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() && entry.path().join("map.bin").exists() {
+            bail!("Poki bundle contains an uncompressed map: {}", entry.path().display());
+        }
+    }
+    if dir.join("sdk/poki_portals.js").exists() {
+        bail!("Poki bundle contains the source-only Poki bridge");
+    }
+    println!("✅ Poki layout OK ({})", dir.display());
+    Ok(())
+}
+
 fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
     if out.exists() {
         for e in fs::read_dir(out)? {
@@ -836,7 +1122,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
             wasm: &wasm,
             ts: &ts,
             maps_cache_bust: &maps_cache_bust,
-            cg: false,
+            target: WebTarget::SelfHosted,
         },
     )?;
     export_locales(out)?;
@@ -877,6 +1163,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
         "support",
         "how-to-play",
         "leaders",
+        "auth",
         "fonts",
         ".well-known",
     ] {
@@ -997,7 +1284,7 @@ fn package_cg(
             wasm: &format!("sow_client_{wh}_bg.wasm"),
             ts: &jh,
             maps_cache_bust,
-            cg: true,
+            target: WebTarget::CrazyGames,
         },
     )?;
 
@@ -1012,7 +1299,7 @@ fn package_cg(
             *line = "    <script src=\"https://sdk.crazygames.com/crazygames-sdk-v3.js\"></script>"
                 .to_string();
             sdk = true;
-        } else if line.contains("PORTAL_BOOT_SLOT") {
+        } else if line.contains("/* PORTAL_BOOT_SLOT */") {
             *line = "        window.SOW_ENABLE_PORTAL_ADS = true; window.SOW_PORTAL = \"crazygames\"; window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; window.SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"; window.SOW_ASSETS_URL = \"https://shadowsofwar.io/assets\"; window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\";".to_string();
             boot = true;
         }
@@ -1028,6 +1315,144 @@ fn package_cg(
 
     verify_cg_layout(out)?;
     println!("✅ CrazyGames bundle ready (whitelist): {}", out.display());
+    Ok(())
+}
+
+fn package_poki(
+    play_dir: &Path,
+    out: &Path,
+    paths: &Paths,
+    version: &str,
+    maps_cache_bust: &str,
+) -> Result<()> {
+    let (mut jh, mut wh) = (String::new(), String::new());
+    for e in fs::read_dir(play_dir)? {
+        let n = e?.file_name().to_string_lossy().into_owned();
+        if n.starts_with("sow_client_") && n.ends_with(".js") && !n.ends_with(".br") {
+            jh = n
+                .trim_start_matches("sow_client_")
+                .trim_end_matches(".js")
+                .to_string();
+        }
+        if n.ends_with("_bg.wasm") && !n.ends_with(".br") {
+            wh = n
+                .trim_end_matches("_bg.wasm")
+                .trim_start_matches("sow_client_")
+                .to_string();
+        }
+    }
+    if jh.is_empty() || wh.is_empty() {
+        bail!("Poki package is missing hashed client artifacts");
+    }
+
+    if out.exists() {
+        fs::remove_dir_all(out)?;
+    }
+    fs::create_dir_all(out)?;
+    fs::copy(
+        play_dir.join(format!("sow_client_{jh}.js")),
+        out.join("sow_client.js"),
+    )?;
+    fs::copy(
+        play_dir.join(format!("sow_client_{wh}_bg.wasm")),
+        out.join("sow_client_bg.wasm"),
+    )?;
+
+    copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
+    copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
+    copy_dir(
+        &paths.root.join("sow-web/site/fonts"),
+        &out.join("fonts"),
+    )?;
+    copy_shell(paths, out)?;
+    optimize_poki_thumbnail(
+        &paths.assets_shell.join("brand/app-icon.png"),
+        &out
+            .parent()
+            .context("Poki output directory has no parent")?
+            .join("poki-thumbnail.png"),
+    )?;
+    fs::write(
+        out.join("manifest.webmanifest"),
+        r##"{
+  "name": "Shadows of War",
+  "short_name": "Shadows of War",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": [{"src": "sow.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}
+"##,
+    )?;
+    let loader_path = out.join("loader.js");
+    let loader = fs::read_to_string(&loader_path)?;
+    fs::write(
+        &loader_path,
+        strip_marked_section(
+            &loader,
+            "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
+            "/* SOW_FIRST_PARTY_ANALYTICS_END */",
+        )?,
+    )?;
+    fs::copy(
+        paths.shell.join("sdk/poki_portals.js"),
+        out.join("sdk/store_portals.js"),
+    )?;
+    let poki_source = out.join("sdk/poki_portals.js");
+    if poki_source.is_file() {
+        fs::remove_file(poki_source)?;
+    }
+    export_locales(out)?;
+    write_manifest(out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    build_index(
+        paths,
+        out,
+        IndexBuild {
+            version,
+            js: "sow_client.js",
+            wasm: "sow_client_bg.wasm",
+            ts: &jh,
+            maps_cache_bust,
+            target: WebTarget::Poki,
+        },
+    )?;
+
+    let index = out.join("index.html");
+    let html = fs::read_to_string(&index)?;
+    let mut lines = Vec::new();
+    let mut sdk = false;
+    let mut boot = false;
+    for line in html.lines() {
+        if line.contains("PORTAL_SDK_SLOT") {
+            lines.push(
+                "    <script src=\"https://game-cdn.poki.com/scripts/v2/poki-sdk.js\"></script>"
+                    .to_string(),
+            );
+            sdk = true;
+        } else if line.trim() == "/* PORTAL_BOOT_SLOT */" {
+            lines.push(concat!(
+                "        window.SOW_ENABLE_PORTAL_ADS = true; ",
+                "window.SOW_PORTAL = \"poki\"; ",
+                "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
+                "window.SOW_MAPS_URL = \"./maps\"; ",
+                "window.SOW_ASSETS_URL = \"./assets\"; ",
+                "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\"; ",
+                "window.SOW_DISABLE_CHAT = true;"
+            ).to_string());
+            boot = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    if !sdk || !boot {
+        bail!("Poki index.html is missing portal slots (sdk={sdk} boot={boot})");
+    }
+    fs::write(&index, lines.join("\n") + "\n")?;
+    verify_poki_layout(out)?;
+    println!("✅ Poki bundle ready (self-contained): {}", out.display());
     Ok(())
 }
 
@@ -1063,6 +1488,14 @@ fn cmd_local(paths: &Paths) -> Result<()> {
     // wasm artifact makes UI/WASM work appear successful while the browser is running old code.
     compile_wasm(paths, false)?;
     package_self(paths, &paths.dist_web, &version)?;
+    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
+    package_poki(
+        &paths.dist_web,
+        &paths.dist_poki,
+        paths,
+        &version,
+        &maps_cache_bust,
+    )?;
 
     let port = env::var("SOW_LOCAL_PORT").unwrap_or_else(|_| "4173".to_string());
     let port_number = port
@@ -1142,6 +1575,66 @@ fn ensure_generated_secret(root: &Path, key: &str) -> Result<()> {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     unsafe { env::set_var(key, value) };
     println!("✅ generated and persisted {key} in ignored sow-dist/.env");
+    Ok(())
+}
+
+fn shared_identity_secret_path() -> Result<PathBuf> {
+    env::var_os("WOU_SOW_IDENTITY_SECRET_FILE")
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("HOME")
+                .map(|home| PathBuf::from(home).join(".config/shadows-of-war/wou_sow_identity_secret"))
+        })
+        .ok_or_else(|| anyhow::anyhow!("cannot determine the shared WOU-ID secret path"))
+}
+
+fn ensure_shared_identity_secret() -> Result<()> {
+    let path = shared_identity_secret_path()?;
+    let configured = env::var("WOU_SOW_IDENTITY_SECRET")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    let stored = if path.is_file() {
+        Some(
+            fs::read_to_string(&path)
+                .with_context(|| format!("read {}", path.display()))?
+                .trim()
+                .to_string(),
+        )
+    } else {
+        None
+    };
+    if let (Some(configured), Some(stored)) = (&configured, &stored)
+        && configured != stored
+    {
+        bail!(
+            "WOU_SOW_IDENTITY_SECRET differs from {}",
+            path.display()
+        );
+    }
+    let value = stored.or(configured).unwrap_or_else(|| {
+        let mut bytes = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut bytes);
+        hex::encode(bytes)
+    });
+    if value.len() < 32 || value.len() > 256 || value.chars().any(char::is_whitespace) {
+        bail!("WOU_SOW_IDENTITY_SECRET must be 32-256 non-whitespace characters");
+    }
+    if !path.is_file() {
+        let parent = path
+            .parent()
+            .context("shared WOU-ID secret path has no parent")?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create {}", parent.display()))?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .with_context(|| format!("create {}", path.display()))?;
+        file.write_all(value.as_bytes())?;
+        file.sync_all()?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+    }
+    unsafe { env::set_var("WOU_SOW_IDENTITY_SECRET", value) };
     Ok(())
 }
 
@@ -1271,8 +1764,9 @@ mod tests {
             "fonts/work-sans-italic-latin-ext.woff2",
             "wou-auth.js",
             "how-to-play/index.html",
-            "leaders/index.html",
-            "8d227b8f9e6140d39e3381a1829e1db3.txt",
+        "leaders/index.html",
+        "auth/callback/index.html",
+        "8d227b8f9e6140d39e3381a1829e1db3.txt",
             "privacy/index.html",
             "terms/index.html",
             "support/index.html",
@@ -1291,7 +1785,12 @@ mod tests {
             "main_menu.profile.css",
             "main_menu.core.js",
             "main_menu.motion.js",
-            "main_menu.screens.js",
+            "main_menu.lobbies.js",
+            "main_menu.store.js",
+            "main_menu.poki.js",
+            "main_menu.heroes.js",
+            "main_menu.profile.js",
+            "main_menu.shell.js",
             "main_menu.hud.js",
         ] {
             assert!(
@@ -1315,7 +1814,7 @@ mod tests {
                 wasm: "sow_client_test_bg.wasm",
                 ts: "test",
                 maps_cache_bust: "test-maps",
-                cg: false,
+                target: WebTarget::SelfHosted,
             },
         )?;
         let html = fs::read_to_string(out.path().join("play/index.html"))?;
@@ -1328,6 +1827,32 @@ mod tests {
         assert!(html.contains("SOW_menu_command"));
         assert!(html.contains("SOW_onStateUpdate"));
         assert!(html.contains("sow-hud__dock"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_index_inlines_poki_shell_without_store_or_service_worker() -> Result<()> {
+        let paths = Paths::discover()?;
+        let out = tempfile::tempdir()?;
+        build_index(
+            &paths,
+            out.path(),
+            IndexBuild {
+                version: "test",
+                js: "sow_client.js",
+                wasm: "sow_client_bg.wasm",
+                ts: "test",
+                maps_cache_bust: "test-maps",
+                target: WebTarget::Poki,
+            },
+        )?;
+        let html = fs::read_to_string(out.path().join("index.html"))?;
+        assert!(html.contains("href=\"fonts/fonts.css\""));
+        assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
+        assert!(html.contains("main_menu.poki.js"));
+        assert!(!html.contains("main_menu.store.js"));
+        assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
+        assert!(!html.contains("register('/sw.js'"));
         Ok(())
     }
 

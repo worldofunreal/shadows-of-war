@@ -33,7 +33,9 @@ class PurchaseActivity : Activity() {
         fun isStoreProduct(value: String?): Boolean = value != null && STORE_PRODUCTS.contains(value)
 
         @JvmStatic
-        fun isPurchaseUserId(value: String?): Boolean = value?.matches(Regex("p_[0-9a-f]{24}")) == true
+        fun isCanonicalAccountId(value: String?): Boolean = value?.matches(
+            Regex("(?i)([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+        ) == true
     }
 
     private var requestId = ""
@@ -57,7 +59,7 @@ class PurchaseActivity : Activity() {
             return
         }
         val appUserId = uri.getQueryParameter("app_user_id")
-        if (!isPurchaseUserId(appUserId)) {
+        if (!isCanonicalAccountId(appUserId)) {
             fail("Invalid player account")
             return
         }

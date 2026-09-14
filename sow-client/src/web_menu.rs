@@ -1453,8 +1453,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "store": store_catalog,
             "native_purchase_scheme": "sow://purchase",
             "native_restore_scheme": "sow://restore",
-            "purchase_user_id": app.profile_public_id,
-            "public_profile_id": app.profile_public_id,
+            "account_id": app.progress_account_id,
             "profile_stats": {
                 "wins": progress.wins,
                 "matches_played": progress.matches_played,

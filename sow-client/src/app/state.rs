@@ -233,6 +233,8 @@ pub struct UiState {
     /// True while the portal intro or manual offline tutorial overlay is active.
     pub tutorial_active: bool,
     pub tutorial_step: crate::hud::tutorial::TutorialStep,
+    /// Which scripted campaign the running tutorial match belongs to.
+    pub tutorial_campaign: crate::campaign::CampaignId,
     pub tutorial_step_idx: usize,
     pub tutorial_baseline_tiles: u32,
     pub tutorial_baseline_set: bool,
@@ -452,7 +454,7 @@ pub struct SowApp {
     pub gpu_init_failed: bool,
     pub progress: crate::player_progress::PlayerProgress,
     pub progress_account_id: Option<String>,
-    pub profile_public_id: Option<String>,
+    pub profile_account_id: Option<String>,
     pub progress_provider: String,
     /// Anonymous rename entered before the first profile response arrives.
     /// It is flushed once the canonical account ID is available.

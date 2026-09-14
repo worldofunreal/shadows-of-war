@@ -63,7 +63,7 @@ impl SpriteAtlas {
             .to_rgba8();
 
         // Look up mover sprite coordinates dynamically from the generated emoji manifest.
-        let emoji_labels = ["🚢", "⛵", "⚔️", "💣", "🚀"];
+        let emoji_labels = ["🚢", "⛵", "⚔️", "⚡", "🚀"];
         let coords: Vec<(u32, u32)> = emoji_labels
             .iter()
             .map(|e| {

@@ -363,7 +363,7 @@ impl SowApp {
                             ui.checkbox(&mut cfg.vfx_heartbeat, "Territory heartbeat");
                             ui.checkbox(&mut cfg.vfx_war_fog, "War fog / Frontier");
                             ui.checkbox(&mut cfg.fog_of_war, "Fog of War");
-                            ui.checkbox(&mut cfg.vfx_fallout, "Nuclear fallout");
+                            ui.checkbox(&mut cfg.vfx_fallout, "Impact zone");
                             ui.checkbox(&mut cfg.vfx_ambient_grade, "Ambient grading");
                             ui.checkbox(&mut cfg.vfx_holo_grid, "Holographic grid");
 
@@ -377,7 +377,7 @@ impl SowApp {
                             ui.separator();
                             ui.small("World & UI VFX");
                             ui.checkbox(&mut cfg.vfx_click_markers, "Click markers");
-                            ui.checkbox(&mut cfg.vfx_nuke_preview, "Nuke preview");
+                            ui.checkbox(&mut cfg.vfx_nuke_preview, "Strike preview");
                             ui.checkbox(&mut cfg.vfx_floating_notices, "Floating notices");
                             ui.checkbox(&mut cfg.vfx_status_emojis, "Status emojis");
                             ui.checkbox(&mut cfg.vfx_upgrade_plate, "Upgrade plate");

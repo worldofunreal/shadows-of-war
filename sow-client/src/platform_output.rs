@@ -87,6 +87,26 @@ fn open_url(url: &str, new_tab: bool) {
         use wasm_bindgen::JsCast;
 
         if let Some(window) = web_sys::window() {
+            let is_poki = js_sys::Reflect::get(
+                &window,
+                &wasm_bindgen::JsValue::from_str("SOW_PORTAL"),
+            )
+            .ok()
+            .and_then(|value| value.as_string())
+            .is_some_and(|portal| portal == "poki");
+            if is_poki
+                && let Ok(hook) = js_sys::Reflect::get(
+                    &window,
+                    &wasm_bindgen::JsValue::from_str("SOW_pokiOpenExternalLink"),
+                )
+                && let Ok(function) = hook.dyn_into::<js_sys::Function>()
+            {
+                let _ = function.call1(
+                    &wasm_bindgen::JsValue::NULL,
+                    &wasm_bindgen::JsValue::from_str(url),
+                );
+                return;
+            }
             let is_twa = js_sys::Reflect::get(
                 &window,
                 &wasm_bindgen::JsValue::from_str("SOW_isAndroidTwa"),

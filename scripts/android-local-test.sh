@@ -133,9 +133,17 @@ PREP_SOURCE="$(sed -n '/window\.SOW_prepareAndroidAuthState/,/^  };$/p' \
     "$ROOT/sow-web/shell/sdk/store_portals.js")"
 ! rg -q 'fetch|playgames/consume|playgames_silent_auth|\.signIn\(|PlayGamesSdk' <<<"$PREP_SOURCE" ||
     die "pre-WASM Android preparation still starts authentication"
-PURCHASE_ANDROID_BLOCK="$(sed -n '/function beginStorePurchase/,/var creds = selfCreds()/p' \
-    "$ROOT/sow-web/shell/main_menu.screens.js")"
-rg -q 'SOW_requestAndroidPurchase' <<<"$PURCHASE_ANDROID_BLOCK" ||
+PURCHASE_ANDROID_BLOCK="$(awk '
+    !capturing && /if \(isAndroidTwa\(\)\) \{/ { capturing=1 }
+    capturing {
+        print
+        opens=gsub(/\{/, "")
+        closes=gsub(/\}/, "")
+        depth += opens - closes
+        if (depth == 0) exit
+    }
+' "$ROOT/sow-web/shell/main_menu.screens.js")"
+rg -q 'SOW_requestAndroidPurchase\(' <<<"$PURCHASE_ANDROID_BLOCK" ||
     die "Android purchase branch does not call the native bridge"
 ! rg -q 'loadStripeJs|/store/checkout|REVENUECAT|Stripe|stripe' <<<"$PURCHASE_ANDROID_BLOCK" ||
     die "Android purchase branch contains an external checkout"

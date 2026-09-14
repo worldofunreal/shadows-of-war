@@ -14,9 +14,15 @@
     var heroesRegionFilter = "all";
     var dropdownOpenKey = null;
     var authModalOpen = false;
+    var authEmail = "";
+    var authCode = "";
+    var authOtpSent = false;
+    var authBusy = false;
+    var authError = "";
+    var authNotice = "";
     var settingsOpen = false;
     var profileOpen = false;
-    var profilePublicId = null;
+    var profileAccountId = null;
     var profileTab = "overview";
     var profileData = null;
     var profileHistory = [];
@@ -45,7 +51,9 @@
     var storeCheckoutRequestId = null;
     var storeCheckoutBusy = false;
     var storeCheckoutInstance = null;
+    /* POKI_STRIPE_STATE_BEGIN */
     var stripePromise = null;
+    /* POKI_STRIPE_STATE_END */
     var storeCatalogLoading = false;
     var storeCatalogLoaded = false;
     var pendingCommands = [];
@@ -99,6 +107,44 @@
         return { key: key || "world", display_name: (key || "WORLD MAP").toUpperCase(), width: 2048, height: 1024 };
     }
 
+    var MAP_DISPLAY_NAMES = {
+        africa: "Africa",
+        asia: "Asia",
+        bajacalifornia: "Baja California",
+        eastanglia: "East Anglia",
+        eastasia: "East Asia",
+        europe: "Europe",
+        indiansubcontinent: "Indian Subcontinent",
+        mena: "MENA",
+        middleeast: "Middle East",
+        northamerica: "North America",
+        oceania: "Oceania",
+        pangaea: "Pangaea",
+        southamerica: "South America",
+        southeastasia: "Southeast Asia",
+        world: "World"
+    };
+
+    function formatMapName(value) {
+        var key = "";
+        var displayName = "";
+        if (value && typeof value === "object") {
+            key = value.map_name || value.key || "";
+            displayName = value.display_name || "";
+        } else {
+            key = value || "";
+        }
+        key = String(key || "world").trim().toLowerCase();
+        if (MAP_DISPLAY_NAMES[key]) return MAP_DISPLAY_NAMES[key];
+
+        var info = mapInfo(key);
+        var label = String(displayName || info.display_name || "").trim();
+        if (label && label.toLowerCase() !== key) return label;
+        return key
+            .replace(/[-_]+/g, " ")
+            .replace(/\b[a-z]/g, function (letter) { return letter.toUpperCase(); }) || "World";
+    }
+
     function findLobby(id) {
         return (state && state.lobbies || []).find(function (lobby) { return lobby.id === id; }) || null;
     }
@@ -112,344 +158,6 @@
         if (state.show_create) return "create";
         if (state.show_browser) return "browser";
         return "home";
-    }
-
-    function profileApi(path) {
-        var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
-        return base + path;
-    }
-
-    function profileCacheEntry(id) {
-        if (!id) return null;
-        if (!profileCache[id]) {
-            profileCache[id] = {
-                data: null,
-                complete: false,
-                stale: false,
-                error: "",
-                request: null,
-                history: [],
-                historyCursor: 0,
-                historyLoaded: false,
-                historyHasMore: false,
-                historyError: "",
-                historyRequest: null,
-                ratings: null,
-                ratingsError: "",
-                ratingsRequest: null,
-                details: Object.create(null),
-                detailRequests: Object.create(null)
-            };
-        }
-        return profileCache[id];
-    }
-
-    function profileStat(value) {
-        var number = Number(value);
-        return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
-    }
-
-    function profileSeedFromState(id) {
-        if (!state || state.public_profile_id !== id) return null;
-        var stats = state.profile_stats || {};
-        var matches = profileStat(stats.matches_played);
-        var wins = profileStat(stats.wins);
-        return {
-            public_id: id,
-            handle: state.player_name || "",
-            display_name: state.player_name || "ANONYMOUS",
-            level: profileStat(state.level) || 1,
-            matches_played: matches,
-            wins: wins,
-            win_rate: matches ? wins / matches : 0,
-            kills: profileStat(stats.kills),
-            deaths: profileStat(stats.deaths),
-            assists: profileStat(stats.assists),
-            players_defeated: profileStat(stats.players_defeated),
-            empires_defeated: profileStat(stats.empires_defeated),
-            tribes_defeated: profileStat(stats.tribes_defeated),
-            preferred_leader: state.selected_leader || null,
-            leaders: [],
-            recent_matches: []
-        };
-    }
-
-    function profileSeedFromSummary(summary) {
-        if (!summary || !summary.public_id) return null;
-        return {
-            public_id: summary.public_id,
-            handle: summary.handle || "",
-            display_name: summary.display_name || "PLAYER",
-            level: profileStat(summary.level) || 1,
-            matches_played: profileStat(summary.matches_played),
-            wins: profileStat(summary.wins),
-            win_rate: Number(summary.win_rate) || 0,
-            kills: profileStat(summary.kills),
-            deaths: profileStat(summary.deaths),
-            assists: profileStat(summary.assists),
-            players_defeated: 0,
-            empires_defeated: 0,
-            tribes_defeated: 0,
-            preferred_leader: null,
-            leaders: [],
-            recent_matches: []
-        };
-    }
-
-    function cacheProfileSeed(id, seed) {
-        var entry = profileCacheEntry(id);
-        if (!entry || !seed || entry.complete) return entry;
-        entry.data = Object.assign({}, entry.data || {}, seed);
-        return entry;
-    }
-
-    function activateProfileEntry(id) {
-        var entry = profileCacheEntry(id);
-        if (!entry) return null;
-        profileData = entry.data;
-        profileHistory = entry.history;
-        profileRatings = entry.ratings;
-        return entry;
-    }
-
-    function activeProfileEntry() {
-        return profileCacheEntry(profilePublicId);
-    }
-
-    function profileDataComplete() {
-        var entry = activeProfileEntry();
-        return !!(entry && entry.complete);
-    }
-
-    function profileSnapshotError() {
-        var entry = activeProfileEntry();
-        return entry ? entry.error : "";
-    }
-
-    function applyProfileSnapshot(id, data) {
-        var entry = profileCacheEntry(id);
-        if (!entry) return;
-        var recent = Array.isArray(data.recent_matches) ? data.recent_matches.slice() : [];
-        entry.data = data;
-        entry.complete = true;
-        entry.stale = false;
-        entry.error = "";
-        entry.history = recent;
-        entry.historyCursor = recent.length;
-        entry.historyLoaded = true;
-        entry.historyHasMore = profileStat(data.matches_played) > recent.length;
-        entry.historyError = "";
-        if (profilePublicId === id) activateProfileEntry(id);
-    }
-
-    function loadProfile(id) {
-        var entry = profileCacheEntry(id);
-        if (!entry) return Promise.resolve(null);
-        if (entry.complete && !entry.stale) {
-            if (profilePublicId === id) activateProfileEntry(id);
-            return Promise.resolve(entry.data);
-        }
-        if (entry.request) {
-            if (profilePublicId === id) profileSnapshotLoading = true;
-            return entry.request;
-        }
-        if (profilePublicId === id) {
-            profileSnapshotLoading = true;
-        }
-        entry.request = fetch(profileApi("/profiles/" + encodeURIComponent(id)), {
-            headers: { "Accept": "application/json" }
-        }).then(function (response) {
-            if (!response.ok) throw new Error("profile request failed");
-            return response.json();
-        }).then(function (data) {
-            if (!data || typeof data !== "object") throw new Error("invalid profile response");
-            applyProfileSnapshot(id, data);
-            return data;
-        }).catch(function () {
-            entry.error = "Profile unavailable.";
-            return null;
-        }).finally(function () {
-            entry.request = null;
-            if (profileOpen && profilePublicId === id) {
-                profileSnapshotLoading = false;
-                activateProfileEntry(id);
-                syncProfileDom();
-            }
-        });
-        return entry.request;
-    }
-
-    function loadMoreProfileHistory() {
-        var id = profilePublicId;
-        var entry = activeProfileEntry();
-        if (!id || !entry || profileHistoryLoading || entry.historyRequest) return;
-        if (!entry.complete || entry.stale) {
-            profileHistoryLoading = true;
-            loadProfile(id).then(function (data) {
-                if (profileOpen && profilePublicId === id) {
-                    profileHistoryLoading = false;
-                    if (data) loadMoreProfileHistory();
-                    else syncProfileDom();
-                }
-            });
-            return;
-        }
-        if (!entry.historyHasMore) return;
-        profileHistoryLoading = true;
-        entry.historyError = "";
-        entry.historyRequest = fetch(profileApi("/profiles/" + encodeURIComponent(id) + "/matches?cursor=" + entry.historyCursor + "&limit=20"), {
-            headers: { "Accept": "application/json" }
-        }).then(function (response) {
-            if (!response.ok) throw new Error("history request failed");
-            return response.json();
-        }).then(function (data) {
-            var items = Array.isArray(data.items) ? data.items : [];
-            entry.history = entry.history.concat(items);
-            entry.historyCursor = data.next_cursor == null ? entry.historyCursor + items.length : Number(data.next_cursor);
-            entry.historyLoaded = true;
-            entry.historyHasMore = data.next_cursor != null && items.length > 0;
-            if (profilePublicId === id) activateProfileEntry(id);
-        }).catch(function () {
-            entry.historyError = "Match history unavailable.";
-        }).finally(function () {
-            entry.historyRequest = null;
-            if (profileOpen && profilePublicId === id) {
-                profileHistoryLoading = false;
-                syncProfileDom();
-            }
-        });
-    }
-
-    function loadProfileRatings() {
-        var id = profilePublicId;
-        var entry = activeProfileEntry();
-        if (!id || !entry || profileRatingsLoading || entry.ratingsRequest || entry.ratings !== null) return;
-        if (!entry.complete || entry.stale) {
-            profileRatingsLoading = true;
-            loadProfile(id).then(function (data) {
-                if (profileOpen && profilePublicId === id) {
-                    profileRatingsLoading = false;
-                    if (data) loadProfileRatings();
-                    else syncProfileDom();
-                }
-            });
-            return;
-        }
-        profileRatingsLoading = true;
-        entry.ratingsError = "";
-        entry.ratingsRequest = fetch(profileApi("/profiles/" + encodeURIComponent(id) + "/seasons"), {
-            headers: { "Accept": "application/json" }
-        }).then(function (response) {
-            if (!response.ok) throw new Error("profile ratings failed");
-            return response.json();
-        }).then(function (data) {
-            entry.ratings = Array.isArray(data.items) ? data.items : [];
-            entry.ratingsError = "";
-            if (profilePublicId === id) activateProfileEntry(id);
-        }).catch(function () {
-            entry.ratingsError = "Ranked records unavailable.";
-        }).finally(function () {
-            entry.ratingsRequest = null;
-            if (profileOpen && profilePublicId === id) {
-                profileRatingsLoading = false;
-                syncProfileDom();
-            }
-        });
-    }
-
-    function invalidateProfileCache(id) {
-        var entry = profileCacheEntry(id);
-        if (!entry) return;
-        entry.stale = true;
-        entry.error = "";
-        entry.historyLoaded = false;
-        entry.historyError = "";
-        entry.ratings = null;
-        entry.ratingsError = "";
-    }
-
-    function syncProfilePreload(nextState) {
-        var nextId = nextState && nextState.public_profile_id ? nextState.public_profile_id : null;
-        var previousId = profileOwnId;
-        var returnedToMenu = profileLastPhase && profileLastPhase !== "MainMenu" && nextState.phase === "MainMenu";
-        if (previousId && previousId !== nextId && profileOpen && profilePublicId === previousId) {
-            profileOpen = false;
-            profilePublicId = null;
-            profileData = null;
-            profileHistory = [];
-            profileRatings = null;
-            profileMatchDetail = null;
-            profileDetailError = "";
-            profileDetailId = null;
-            profileDetailLoading = false;
-            profileDetailRequestKey = null;
-        }
-        if (previousId && previousId !== nextId) invalidateProfileCache(previousId);
-        profileOwnId = nextId;
-        profileLastPhase = nextState.phase;
-        if (!nextId) return;
-        var entry = cacheProfileSeed(nextId, profileSeedFromState(nextId));
-        if (returnedToMenu) invalidateProfileCache(nextId);
-        if (entry && !entry.complete) {
-            if (profilePublicId === nextId) activateProfileEntry(nextId);
-        }
-        if (previousId !== nextId || returnedToMenu || (entry && !entry.complete && !entry.request && !entry.error)) {
-            loadProfile(nextId);
-        }
-    }
-
-    function openProfile(id) {
-        var targetId = id || (state && state.public_profile_id);
-        if (!targetId) return;
-        reportOpen = false;
-        reportTarget = null;
-        reportSent = false;
-        deleteArmed = false;
-        try {
-            if (typeof window.SOW_isBlockedId === "function" && window.SOW_isBlockedId(targetId)) {
-                profileOpen = true;
-                profilePublicId = targetId;
-                profileTab = "overview";
-                var blockedEntry = profileCacheEntry(targetId);
-                blockedEntry.data = null;
-                blockedEntry.complete = false;
-                blockedEntry.stale = false;
-                blockedEntry.error = "You blocked this player.";
-                profileData = null;
-                profileHistory = blockedEntry.history = [];
-                blockedEntry.historyCursor = 0;
-                blockedEntry.historyLoaded = true;
-                blockedEntry.historyHasMore = false;
-                profileRatings = blockedEntry.ratings = null;
-                profileMatchDetail = null;
-                profileDetailError = "";
-                profileDetailId = null;
-                profileSnapshotLoading = false;
-                profileHistoryLoading = false;
-                profileRatingsLoading = false;
-                profileDetailLoading = false;
-                profileDetailRequestKey = null;
-                profileSearchResults = [];
-                render();
-                return;
-            }
-        } catch (e) {}
-        profileOpen = true;
-        profilePublicId = targetId;
-        profileTab = "overview";
-        profileSnapshotLoading = false;
-        profileHistoryLoading = false;
-        profileRatingsLoading = false;
-        profileDetailLoading = false;
-        profileMatchDetail = null;
-        profileDetailError = "";
-        profileDetailId = null;
-        profileDetailRequestKey = null;
-        profileSearchResults = [];
-        cacheProfileSeed(targetId, profileSeedFromState(targetId));
-        activateProfileEntry(targetId);
-        loadProfile(targetId);
-        render();
     }
 
     function send(type, extra) {
@@ -520,7 +228,7 @@
                     return [skin.id, skin.direct_product_id, skin.direct_price_label];
                 })
             },
-            public_profile_id: state.public_profile_id,
+            account_id: state.account_id,
             joined: state.joined_lobby_id,
             pending: state.pending_lobby_id,
             host: state.is_lobby_host,

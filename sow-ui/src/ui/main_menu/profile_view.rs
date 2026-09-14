@@ -338,7 +338,7 @@ fn draw_search(
                             && action.is_none()
                         {
                             *action = Some(crate::UiAction::OpenPublicProfilePage(
-                                result.public_id.clone(),
+                                result.account_id.clone(),
                             ));
                         }
                     });
@@ -868,7 +868,7 @@ pub fn draw_native(
             });
             ui.add_space(8.0);
             let view = state.profile.view.clone();
-            let profile_id = state.profile.public_id.clone();
+            let profile_id = state.profile.account_id.clone();
 
             // Identity, stats, search, and tabs are the fixed profile chrome.
             // Only the selected tab's data scrolls, so changing tabs never

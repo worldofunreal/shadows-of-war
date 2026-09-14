@@ -160,6 +160,9 @@ impl SowApp {
             crate::analytics::track("tutorial_exit_early");
         }
         if was_playing {
+            if !self.progress_match_recorded {
+                crate::store_portals::measure("match", "round", "abandon");
+            }
             crate::store_portals::gameplay_stop();
         }
         crate::store_portals::left_room();

@@ -55,8 +55,9 @@ initialize Play Games before the loader bridge request.
 
 - Android purchase and restore use the native RevenueCat/Google Play path.
 - Android never opens the web RevenueCat/Stripe checkout link.
-- The native bridge accepts only the fixed product IDs and validated public
-  profile IDs.
+- The native bridge accepts only the fixed product IDs and validated canonical
+  account IDs: a 32-character anonymous ID or a WOU-ID UUID. Public profile
+  aliases are never sent to billing.
 - Purchase/restore results return with a request ID.
 - Catalog state is PLAY_API; transaction, webhook, idempotent grant, restart,
   and restore are separate TRANSACTION checks.

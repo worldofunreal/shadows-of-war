@@ -73,6 +73,7 @@ impl SowApp {
             .as_millis() as u64;
         self.ui.app.main_menu_state.selected_leader = sow_core::player::Leader::Boudica;
         self.ui.app.main_menu_state.selected_civilization = sow_core::player::Civilization::Iceni;
+        self.ui.tutorial_campaign = crate::campaign::CampaignId::Boudica;
         // Roster + spawn come from the data-driven loader: a JSON override on native (authored by
         // tools/campaign-editor) or the hardcoded roster. Editing positions never needs a recompile.
         let (factions, player_spawn) = crate::campaign::boudica::roster();
@@ -92,6 +93,58 @@ impl SowApp {
             buildings_enabled: false,
             ..Default::default()
         };
+        self.start_offline_match(config, true);
+    }
+
+    /// Launch a Lady Six Sky saga episode (1–3) as an offline tutorial match.
+    /// Same isolation contract as the Boudica intro: scripted roster in,
+    /// snapshots out, never touches multiplayer.
+    pub(crate) fn start_six_sky_episode(&mut self, episode: u8) {
+        use crate::campaign::CampaignId;
+        let campaign = match episode {
+            2 => CampaignId::SixSkyEp2,
+            3 => CampaignId::SixSkyEp3,
+            _ => CampaignId::SixSkyEp1,
+        };
+        let ep_number = match campaign {
+            CampaignId::SixSkyEp2 => 2,
+            CampaignId::SixSkyEp3 => 3,
+            _ => 1,
+        };
+        let seed = web_time::SystemTime::now()
+            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        self.ui.app.main_menu_state.selected_leader = sow_core::player::Leader::LadySixSky;
+        self.ui.app.main_menu_state.selected_civilization = sow_core::player::Civilization::Maya;
+        self.ui.tutorial_campaign = campaign;
+        let (factions, player_spawn) = crate::campaign::lady_six_sky::roster(ep_number);
+        crate::campaign::log_plan_for(
+            "Lady Six Sky",
+            "Lady Six Sky/Maya, 1000",
+            player_spawn,
+            &factions,
+        );
+        let config = GameConfig {
+            map_name: "northamerica".to_string(),
+            bot_count: 0,
+            nation_count: 0,
+            seed,
+            random_spawn: true,
+            player_leader: sow_core::player::Leader::LadySixSky,
+            player_civilization: sow_core::player::Civilization::Maya,
+            scripted_spawns: crate::campaign::to_scripted(&factions),
+            player_spawn: Some(player_spawn),
+            player_team: Some(crate::campaign::PLAYER_TEAM),
+            starting_troops: 1000.0,
+            buildings_enabled: false,
+            ..Default::default()
+        };
+        crate::store_portals::measure("campaign", campaign.episode_id(), "start");
+        crate::analytics::track_with(
+            "campaign_start",
+            serde_json::json!({ "episode": campaign.episode_id() }),
+        );
         self.start_offline_match(config, true);
     }
 
@@ -121,7 +174,11 @@ impl SowApp {
         self.ui.tutorial_pending_completion = None;
         self.ui.tutorial_spawn_time = Some(web_time::Instant::now());
         if tutorial {
-            log::info!("tutorial: chapter 1 started (map={})", config.map_name);
+            log::info!(
+                "tutorial: {} started (map={})",
+                self.ui.tutorial_campaign.episode_id(),
+                config.map_name
+            );
             crate::analytics::track("tutorial_start");
         }
 

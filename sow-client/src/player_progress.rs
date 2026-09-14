@@ -45,6 +45,10 @@ pub struct PlayerProgress {
     pub owned_skins: std::collections::BTreeSet<String>,
     #[serde(default)]
     pub selected_skin: Option<String>,
+    /// Campaign episodes finished (stable ids, e.g. `"six_sky_ep1"`).
+    /// Local-first: merged (union) with any cloud profile, never overwritten.
+    #[serde(default)]
+    pub completed_episodes: std::collections::BTreeSet<String>,
 }
 
 fn deserialize_leader<'de, D>(deserializer: D) -> Result<Option<Leader>, D::Error>
@@ -66,7 +70,6 @@ pub enum DbEvent {
     ProfileLoaded {
         progress: PlayerProgress,
         account_id: String,
-        public_id: Option<String>,
         display_name: String,
         provider: String,
         request_id: u64,
@@ -89,20 +92,20 @@ pub enum DbEvent {
         status: Option<u16>,
     },
     NativeProfileLoaded {
-        public_id: String,
+        account_id: String,
         view: sow_data::profile::PublicProfileView,
     },
     NativeProfileLoadFailed {
-        public_id: String,
+        account_id: String,
         status: Option<u16>,
     },
     NativeProfileHistoryLoaded {
-        public_id: String,
+        account_id: String,
         items: Vec<sow_data::profile::PublicMatchSummary>,
         next_cursor: Option<usize>,
     },
     NativeProfileRatingsLoaded {
-        public_id: String,
+        account_id: String,
         items: Vec<sow_data::profile::PublicRatingView>,
     },
     NativeProfileSearchLoaded {
@@ -114,7 +117,7 @@ pub enum DbEvent {
         detail: sow_data::profile::PublicMatchDetail,
     },
     NativeProfileOperationFailed {
-        public_id: Option<String>,
+        account_id: Option<String>,
         operation: String,
         message: String,
     },
@@ -161,6 +164,24 @@ impl PlayerProgress {
         true
     }
 
+    /// Mark a campaign episode complete with the same reward weight as the
+    /// teaching intro (100 crowns): finishing an episode is the retention
+    /// backbone, and a full saga lands near one free leader unlock.
+    /// Idempotent per episode id.
+    pub fn complete_episode(&mut self, episode_id: &str, leader: Leader) -> bool {
+        if !self.completed_episodes.insert(episode_id.to_string()) {
+            return false;
+        }
+        self.apply_reward(
+            leader,
+            sow_data::rewards::calculate(sow_data::rewards::RewardInput {
+                tutorial: true,
+                ..Default::default()
+            }),
+        );
+        true
+    }
+
     pub fn has_history(&self) -> bool {
         self.matches_played > 0
             || self.wins > 0
@@ -172,13 +193,18 @@ impl PlayerProgress {
             || !self.owned_leaders.is_empty()
             || !self.owned_skins.is_empty()
             || !self.leader_xp.is_empty()
+            || !self.completed_episodes.is_empty()
     }
 
     /// Prefer cloud profile when it has history; otherwise keep local/CG portal data.
+    /// Episode completions always merge by union: the server never tracks them,
+    /// so a cloud overwrite must not erase local saga progress.
     pub fn merge_boot_profile(&mut self, cloud: PlayerProgress) {
+        let local_episodes = std::mem::take(&mut self.completed_episodes);
         if cloud.has_history() || !self.has_history() {
             *self = cloud;
         }
+        self.completed_episodes.extend(local_episodes);
     }
 
     pub fn sync_level(&mut self) {

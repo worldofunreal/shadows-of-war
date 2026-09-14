@@ -6,10 +6,54 @@
 
 pub mod boudica;
 pub mod dialog;
+pub mod lady_six_sky;
 
 use sow_core::game_config::ScriptedSpawn;
 use sow_core::player::{Civilization, Leader};
 use sow_core::protocol::Team;
+
+/// Which scripted campaign the running tutorial match belongs to. Boudica is
+/// the first-run teaching intro; the Six Sky episodes are the retention chain
+/// that follows it.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub enum CampaignId {
+    #[default]
+    Boudica,
+    SixSkyEp1,
+    SixSkyEp2,
+    SixSkyEp3,
+}
+
+impl CampaignId {
+    /// Stable id for progress tracking + Poki `measure()` events.
+    pub fn episode_id(self) -> &'static str {
+        match self {
+            CampaignId::Boudica => "boudica",
+            CampaignId::SixSkyEp1 => "six_sky_ep1",
+            CampaignId::SixSkyEp2 => "six_sky_ep2",
+            CampaignId::SixSkyEp3 => "six_sky_ep3",
+        }
+    }
+
+    /// Next episode in the chain, if any.
+    pub fn next(self) -> Option<CampaignId> {
+        match self {
+            CampaignId::Boudica => Some(CampaignId::SixSkyEp1),
+            CampaignId::SixSkyEp1 => Some(CampaignId::SixSkyEp2),
+            CampaignId::SixSkyEp2 => Some(CampaignId::SixSkyEp3),
+            CampaignId::SixSkyEp3 => None,
+        }
+    }
+
+    pub fn advisor(self) -> Leader {
+        match self {
+            CampaignId::Boudica => Leader::Boudica,
+            CampaignId::SixSkyEp1 | CampaignId::SixSkyEp2 | CampaignId::SixSkyEp3 => {
+                Leader::LadySixSky
+            }
+        }
+    }
+}
 
 /// A faction's role fixes its team, color, AI, and troop tier. The difficulty ladder runs
 /// Independent (500) → Vassal (1 000) → Boss (2 500) → BigBoss (5 000); the player (Boudica)
@@ -89,6 +133,9 @@ pub struct Faction {
     pub civ: Civilization,
     /// Bot intelligence override; `None` = engine default. Only the JSON loader sets it.
     pub iq: Option<u32>,
+    /// Portrait/perk identity override; `None` = the role default (bosses Caesar,
+    /// kin the episode advisor). Only the JSON loader sets it.
+    pub leader: Option<Leader>,
 }
 
 impl Faction {
@@ -102,6 +149,7 @@ impl Faction {
             role,
             civ: role.civ(),
             iq: None,
+            leader: None,
         }
     }
 }
@@ -132,6 +180,16 @@ pub const PLAYER_TEAM: Team = Team::Red;
 /// Log the episode roster grouped by allegiance, so the console shows at a glance who is on
 /// which side before the engine places them. (The engine then logs each actual placement.)
 pub fn log_plan(episode: &str, player_spawn: (u32, u32), factions: &[Faction]) {
+    log_plan_for(episode, "Boudica/Iceni, 1000", player_spawn, factions);
+}
+
+/// Same as [`log_plan`] with an explicit player label for non-Boudica episodes.
+pub fn log_plan_for(
+    episode: &str,
+    player_desc: &str,
+    player_spawn: (u32, u32),
+    factions: &[Faction],
+) {
     let join = |roles: &[Role]| -> String {
         let v: Vec<&str> = factions
             .iter()
@@ -145,18 +203,19 @@ pub fn log_plan(episode: &str, player_spawn: (u32, u32), factions: &[Faction]) {
         }
     };
     log::info!(
-        "campaign: {} — player (Boudica/Iceni, 1000) spawns at Norfolk ({},{}); {} scripted bots",
+        "campaign: {} — player ({}) spawns at ({},{}); {} scripted bots",
         episode,
+        player_desc,
         player_spawn.0,
         player_spawn.1,
         factions.len()
     );
     log::info!(
-        "campaign:   TEAM RED (us): [player] Boudica + kin {}",
+        "campaign:   TEAM RED (us): [player] + kin {}",
         join(&[Role::Kin])
     );
     log::info!(
-        "campaign:   TEAM BLUE (Rome): big-boss {} | bosses {} | vassals {}",
+        "campaign:   TEAM BLUE (foes): big-boss {} | bosses {} | vassals {}",
         join(&[Role::BigBoss]),
         join(&[Role::Boss]),
         join(&[Role::Vassal])
@@ -193,6 +252,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 Role::Kin => Leader::Boudica,
                 _ => Leader::default(),
             };
+            let leader = f.leader.unwrap_or(leader);
             ScriptedSpawn {
                 name: f.name.clone(),
                 x: f.x,
@@ -223,6 +283,12 @@ struct RosterEntry {
     role: String,
     #[serde(default)]
     iq: Option<u32>,
+    /// Civilization override (`"maya"`, …); absent = the role default.
+    #[serde(default)]
+    civ: Option<String>,
+    /// Leader override (`"lady_six_sky"`, …); absent = the role default.
+    #[serde(default)]
+    leader: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -231,6 +297,28 @@ struct RosterFile {
     player_spawn: Option<(u32, u32)>,
     #[serde(default)]
     factions: Vec<RosterEntry>,
+}
+
+/// Resolve a civilization id from roster JSON (`"maya"`, `"Maya"`,
+/// `"Maya Civilization"`, …). `None` = unknown, keep the role default.
+fn civ_from_id(value: &str) -> Option<Civilization> {
+    let normalized: String = value
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    Civilization::ALL.into_iter().find(|civ| {
+        [civ.name()]
+            .into_iter()
+            .map(|candidate| {
+                candidate
+                    .chars()
+                    .filter(|c| c.is_ascii_alphanumeric())
+                    .map(|c| c.to_ascii_lowercase())
+                    .collect::<String>()
+            })
+            .any(|candidate| candidate == normalized)
+    })
 }
 
 /// Parse an episode roster from JSON text. `None` on any problem (bad JSON, unknown role, empty
@@ -245,6 +333,16 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
             Role::from_name(&e.role).map(|role| {
                 let mut f = Faction::new(e.name.clone(), e.x, e.y, role);
                 f.iq = e.iq;
+                if let Some(civ) = e.civ.as_deref().and_then(civ_from_id) {
+                    f.civ = civ;
+                }
+                if let Some(leader) = e
+                    .leader
+                    .as_deref()
+                    .and_then(sow_data::commerce::leader_from_id)
+                {
+                    f.leader = Some(leader);
+                }
                 f
             })
         })

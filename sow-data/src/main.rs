@@ -165,6 +165,8 @@ struct VerifiedIdentityRequest {
     environment: String,
     external_subject: String,
     #[serde(default)]
+    account_id: Option<String>,
+    #[serde(default)]
     display_name: Option<String>,
     #[serde(default)]
     avatar_url: Option<String>,
@@ -227,9 +229,21 @@ struct ProfileDeleteResponse {
 }
 
 #[derive(Deserialize)]
+struct ResetHumanAccountsRequest {
+    confirmation: String,
+    #[serde(default = "default_dry_run")]
+    dry_run: bool,
+}
+
+fn default_dry_run() -> bool {
+    true
+}
+
+#[derive(Deserialize)]
 struct UnlockLeaderRequest {
-    public_id: String,
-    auth_secret: String,
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
     leader_id: String,
     #[serde(default)]
     currency: String,
@@ -237,15 +251,17 @@ struct UnlockLeaderRequest {
 
 #[derive(Deserialize)]
 struct UnlockSkinRequest {
-    public_id: String,
-    auth_secret: String,
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
     skin_id: String,
 }
 
 #[derive(Deserialize)]
 struct EquipSkinRequest {
-    public_id: String,
-    auth_secret: String,
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
     #[serde(default)]
     skin_id: Option<String>,
 }
@@ -275,8 +291,9 @@ fn default_purchase_environment() -> String {
 
 #[derive(Deserialize)]
 struct StoreCheckoutRequest {
-    public_id: String,
-    auth_secret: String,
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
     product_id: String,
 }
 
@@ -288,8 +305,9 @@ struct StoreCheckoutResponse {
 
 #[derive(Deserialize)]
 struct StorePurchasesRequest {
-    public_id: String,
-    auth_secret: String,
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -382,6 +400,7 @@ fn canonical_store_product_id(product_id: &str) -> Option<String> {
 
 async fn handle_store_checkout(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<StoreCheckoutRequest>,
 ) -> impl IntoResponse {
     let product_id = payload.product_id.trim();
@@ -394,35 +413,17 @@ async fn handle_store_checkout(
         )
             .into_response();
     }
-    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
-        Ok(Some(account_id)) => account_id,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "profile not found".to_string(),
-                }),
-            )
-                .into_response();
-        }
-        Err(error) => {
-            error!("checkout profile lookup failed: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "profile unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-    if let Err(error) = state
-        .db
-        .verify_anonymous_secret(&account_id, &payload.auth_secret)
-        .await
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
     {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
-    }
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
     let Some(secret_key) = state
         .stripe_secret_key
         .as_deref()
@@ -467,8 +468,8 @@ async fn handle_store_checkout(
             ("redirect_on_completion", "never"),
             ("line_items[0][price]", price_id.as_str()),
             ("line_items[0][quantity]", "1"),
-            ("client_reference_id", payload.public_id.as_str()),
-            ("metadata[app_user_id]", payload.public_id.as_str()),
+            ("client_reference_id", account_id.as_str()),
+            ("metadata[app_user_id]", account_id.as_str()),
             ("metadata[product_id]", product_id),
         ])
         .send()
@@ -531,7 +532,7 @@ async fn handle_store_checkout(
     };
     if let Err(error) = state
         .db
-        .record_stripe_purchase(&payload.public_id, &session_id, product_id, "pending")
+        .record_stripe_purchase(&account_id, &session_id, product_id, "pending")
         .await
     {
         error!("could not persist Stripe pending purchase: {error}");
@@ -555,31 +556,146 @@ async fn handle_store_checkout(
 
 async fn store_account_for_request(
     state: &AppState,
-    payload: &StorePurchasesRequest,
+    headers: &HeaderMap,
+    account_reference: &str,
+    auth_secret: Option<&str>,
 ) -> Result<String, (StatusCode, Json<ErrorResponse>)> {
-    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
-        Ok(Some(account_id)) => account_id,
-        Ok(None) => {
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "profile not found".to_string(),
-                }),
-            ));
-        }
-        Err(error) => {
-            error!("purchase history profile lookup failed: {error}");
-            return Err((
+    let platform_provider = headers
+        .get("x-platform-provider")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .unwrap_or_default();
+    let token = platform_auth_token(headers);
+    let requested_account_id = state
+        .db
+        .account_id_from_reference(account_reference)
+        .await
+        .map_err(|error| {
+            error!("store account lookup failed: {error}");
+            (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
-                    error: "profile unavailable".to_string(),
+                    error: "store identity unavailable".to_string(),
+                }),
+            )
+        })?;
+
+    if let Some(token) = token {
+        let account_id = match platform_provider {
+            "" | "wou" | "wou_id" | "world_of_unreal" => {
+                let account_id = resolve_external_id("wou", account_reference, Some(&token))
+                    .await
+                    .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?;
+                state
+                    .db
+                    .get_or_create_for_account_id(
+                        &account_id,
+                        "wou".to_string(),
+                        "production".to_string(),
+                        account_id.clone(),
+                    )
+                    .await
+                    .map_err(|error| {
+                        error!("WOU identity mapping for store failed: {error}");
+                        (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(ErrorResponse {
+                                error: "store identity unavailable".to_string(),
+                            }),
+                        )
+                    })?
+                    .id
+            }
+            "playgames" => {
+                let external_id = state
+                    .verify_playgames_session(None, &token)
+                    .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?
+                    .external_id;
+                let account = state
+                    .db
+                    .get_existing_identity("playgames".to_string(), external_id.clone())
+                    .await
+                    .map_err(|error| {
+                        error!("Play Games store identity lookup failed: {error}");
+                        (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(ErrorResponse {
+                                error: "store identity unavailable".to_string(),
+                            }),
+                        )
+                    })?;
+                let account = account.ok_or_else(|| {
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(ErrorResponse {
+                            error: "Play Games account is not linked".to_string(),
+                        }),
+                    )
+                })?;
+                account.id
+            }
+            "crazygames" => {
+                let external_id = resolve_external_id(
+                    "crazygames",
+                    account_reference,
+                    Some(&token),
+                )
+                .await
+                .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?;
+                state
+                    .db
+                    .get_existing_identity("crazygames".to_string(), external_id)
+                    .await
+                    .map_err(|error| {
+                        error!("CrazyGames store identity lookup failed: {error}");
+                        (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            Json(ErrorResponse {
+                                error: "store identity unavailable".to_string(),
+                            }),
+                        )
+                    })?
+                    .ok_or_else(|| {
+                        (
+                            StatusCode::NOT_FOUND,
+                            Json(ErrorResponse {
+                                error: "portal account is not linked".to_string(),
+                            }),
+                        )
+                    })?
+                    .id
+            }
+            _ => {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    Json(ErrorResponse {
+                        error: "unsupported platform identity".to_string(),
+                    }),
+                ));
+            }
+        };
+        if requested_account_id.as_deref().is_some_and(|id| id != account_id) {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    error: "store account mismatch".to_string(),
                 }),
             ));
         }
+        return Ok(account_id);
+    }
+
+    let Some(account_id) = requested_account_id else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "account not found".to_string(),
+            }),
+        ));
     };
     if let Err(error) = state
         .db
-        .verify_anonymous_secret(&account_id, &payload.auth_secret)
+        .verify_anonymous_secret(&account_id, auth_secret.unwrap_or_default())
         .await
     {
         return Err((StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })));
@@ -589,9 +705,17 @@ async fn store_account_for_request(
 
 async fn handle_store_purchases(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<StorePurchasesRequest>,
 ) -> impl IntoResponse {
-    let account_id = match store_account_for_request(&state, &payload).await {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
     };
@@ -612,10 +736,18 @@ async fn handle_store_purchases(
 
 async fn handle_store_purchase(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(purchase_id): Path<String>,
     Json(payload): Json<StorePurchasesRequest>,
 ) -> impl IntoResponse {
-    let account_id = match store_account_for_request(&state, &payload).await {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
     };
@@ -879,37 +1011,20 @@ async fn handle_stripe_webhook(
 /// POST /store/leaders/unlock — spend authoritative crowns on a leader.
 async fn handle_unlock_leader(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<UnlockLeaderRequest>,
 ) -> impl IntoResponse {
-    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
-        Ok(Some(account_id)) => account_id,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "profile not found".to_string(),
-                }),
-            )
-                .into_response();
-        }
-        Err(error) => {
-            error!("leader unlock profile lookup failed: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "profile unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-    if let Err(error) = state
-        .db
-        .verify_anonymous_secret(&account_id, &payload.auth_secret)
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
         .await
     {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
-    }
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
     match state
         .db
         .unlock_leader(&account_id, &payload.leader_id, &payload.currency)
@@ -928,37 +1043,20 @@ async fn handle_unlock_leader(
 
 async fn handle_unlock_skin(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<UnlockSkinRequest>,
 ) -> impl IntoResponse {
-    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
-        Ok(Some(account_id)) => account_id,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "profile not found".to_string(),
-                }),
-            )
-                .into_response();
-        }
-        Err(error) => {
-            error!("skin unlock profile lookup failed: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "profile unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-    if let Err(error) = state
-        .db
-        .verify_anonymous_secret(&account_id, &payload.auth_secret)
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
         .await
     {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
-    }
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
     match state
         .db
         .unlock_skin_with_gems(&account_id, &payload.skin_id)
@@ -977,37 +1075,20 @@ async fn handle_unlock_skin(
 
 async fn handle_equip_skin(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<EquipSkinRequest>,
 ) -> impl IntoResponse {
-    let account_id = match state.db.account_id_for_public_id(&payload.public_id) {
-        Ok(Some(account_id)) => account_id,
-        Ok(None) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "profile not found".to_string(),
-                }),
-            )
-                .into_response();
-        }
-        Err(error) => {
-            error!("skin equip profile lookup failed: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    error: "profile unavailable".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-    if let Err(error) = state
-        .db
-        .verify_anonymous_secret(&account_id, &payload.auth_secret)
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
         .await
     {
-        return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
-    }
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
     match state
         .db
         .equip_skin(&account_id, payload.skin_id.as_deref())
@@ -1200,7 +1281,7 @@ async fn verify_self_service(
 struct ReportPlayerRequest {
     account_id: String,
     auth_secret: String,
-    reported_public_id: String,
+    reported_account_id: String,
     #[serde(default)]
     match_id: Option<String>,
     reason: String,
@@ -1229,8 +1310,8 @@ async fn handle_report_player(
         )
             .into_response();
     }
-    let reported_public_id = payload.reported_public_id.trim().to_string();
-    let reported_account_id = match state.db.account_id_for_public_id(&reported_public_id) {
+    let reported_account_id = payload.reported_account_id.trim().to_string();
+    let reported_account_id = match state.db.account_id_from_reference(&reported_account_id).await {
         Ok(Some(id)) => id,
         Ok(None) => {
             return (
@@ -1257,7 +1338,6 @@ async fn handle_report_player(
         sow_data::moderation::ReportInput {
             reporter_account_id: account_id.to_string(),
             reported_account_id,
-            reported_public_id,
             match_id: payload.match_id,
             reason: payload.reason.trim().to_string(),
             details: payload.details,
@@ -1518,15 +1598,31 @@ async fn handle_internal_identity_resolve(
         )
             .into_response();
     }
-    let account = match state
-        .db
-        .get_or_create_with_environment(
-            payload.provider.trim().to_string(),
-            payload.environment.trim().to_string(),
-            payload.external_subject.trim().to_string(),
-        )
-        .await
-    {
+    let provider = payload.provider.trim();
+    let environment = payload.environment.trim();
+    let external_subject = payload.external_subject.trim();
+        let account_result = if provider == "bot" {
+            state
+                .db
+                .get_or_create_bot_account(
+                    environment.to_string(),
+                    external_subject.to_string(),
+                )
+            .await
+    } else if let Some(account_id) = payload.account_id.as_deref() {
+        state
+            .db
+            .get_or_create_for_account_id(
+                account_id,
+                provider.to_string(),
+                environment.to_string(),
+                external_subject.to_string(),
+            )
+            .await
+    } else {
+        Err("canonical account_id is required".into())
+    };
+    let account = match account_result {
         Ok(account) => account,
         Err(error) => {
             error!("verified identity persistence failed: {error}");
@@ -1624,6 +1720,51 @@ async fn handle_internal_profile_delete(
                 status,
                 Json(ErrorResponse {
                     error: "account erasure unavailable".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn handle_internal_profile_reset_test_data(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<ResetHumanAccountsRequest>,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        warn!("Unauthorized access attempt to /internal/profile/reset-test-data");
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    if payload.confirmation != "RESET_HUMAN_TEST_DATA" {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "exact confirmation is required".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    match state.db.reset_human_accounts(payload.dry_run).await {
+        Ok(report) => {
+            info!(
+                "[reset] human_accounts={} purchases={} dry_run={}",
+                report.human_accounts, report.purchase_records, report.dry_run
+            );
+            (StatusCode::OK, Json(report)).into_response()
+        }
+        Err(error) => {
+            warn!("[reset] human test data reset refused: {error}");
+            (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    error: error.to_string(),
                 }),
             )
                 .into_response()
@@ -1749,7 +1890,7 @@ async fn main() {
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");
-    match player_db.backfill_public_profiles().await {
+    match player_db.rebuild_profile_index().await {
         Ok(migrated) => info!("Public profile index ready; migrated {migrated} legacy accounts"),
         Err(error) => panic!("Failed to backfill public profile index: {error}"),
     }
@@ -1788,6 +1929,7 @@ async fn main() {
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
             header::HeaderName::from_static("x-platform-auth"),
+            header::HeaderName::from_static("x-platform-provider"),
             header::HeaderName::from_static("x-sow-identity-request"),
         ]);
 
@@ -1816,13 +1958,13 @@ async fn main() {
         )
         .route("/internal/stripe/webhook", post(handle_stripe_webhook))
         .route("/profiles/search", get(handle_public_profile_search))
-        .route("/profiles/{public_id}", get(handle_public_profile))
+        .route("/profiles/{account_id}", get(handle_public_profile))
         .route(
-            "/profiles/{public_id}/matches",
+            "/profiles/{account_id}/matches",
             get(handle_public_match_history),
         )
         .route(
-            "/profiles/{public_id}/seasons",
+            "/profiles/{account_id}/seasons",
             get(handle_public_profile_seasons),
         )
         .route("/matches/{match_id}", get(handle_public_match_detail))
@@ -1855,6 +1997,10 @@ async fn main() {
         .route(
             "/internal/profile/delete",
             post(handle_internal_profile_delete),
+        )
+        .route(
+            "/internal/profile/reset-test-data",
+            post(handle_internal_profile_reset_test_data),
         )
         .route("/internal/bot-pool/seed", post(handle_bot_pool_seed))
         .layer(DefaultBodyLimit::max(MAX_REPLAY_REQUEST_BYTES))
@@ -1918,9 +2064,9 @@ async fn handle_public_profile_search(
 
 async fn handle_public_profile(
     State(state): State<Arc<AppState>>,
-    Path(public_id): Path<String>,
+    Path(account_id): Path<String>,
 ) -> impl IntoResponse {
-    match state.db.public_profile(&public_id).await {
+    match state.db.public_profile(&account_id).await {
         Ok(Some(profile)) => (StatusCode::OK, Json(profile)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
@@ -1944,7 +2090,7 @@ async fn handle_public_profile(
 
 async fn handle_public_match_history(
     State(state): State<Arc<AppState>>,
-    Path(public_id): Path<String>,
+    Path(account_id): Path<String>,
     Query(query): Query<PublicHistoryQuery>,
 ) -> impl IntoResponse {
     let limit = query.limit.unwrap_or(20).clamp(1, 50);
@@ -1953,7 +2099,7 @@ async fn handle_public_match_history(
     let mode = query.mode.as_deref();
     match state
         .db
-        .public_match_history(&public_id, cursor, limit, queue, mode)
+        .public_match_history(&account_id, cursor, limit, queue, mode)
         .await
     {
         Ok(Some(history)) => {
@@ -2021,9 +2167,9 @@ async fn handle_public_match_detail(
 
 async fn handle_public_profile_seasons(
     State(state): State<Arc<AppState>>,
-    Path(public_id): Path<String>,
+    Path(account_id): Path<String>,
 ) -> impl IntoResponse {
-    match state.db.public_ratings(&public_id).await {
+    match state.db.public_ratings(&account_id).await {
         Ok(Some(ratings)) => (
             StatusCode::OK,
             Json(serde_json::json!({ "items": ratings })),
@@ -2644,14 +2790,23 @@ async fn handle_playgames_exchange(
 
     let account = match state
         .db
-        .get_or_create("playgames_android".to_string(), player.player_id.clone())
+        .get_existing_identity("playgames".to_string(), player.player_id.clone())
         .await
     {
-        Ok(account) => account,
+        Ok(Some(account)) => account,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "Play Games account is not linked".to_string(),
+                }),
+            )
+                .into_response();
+        }
         Err(error) => {
             error!("Play Games account lookup failed: {error}");
             return (
-                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
                     error: "Play Games account lookup failed".to_string(),
                 }),
@@ -3150,16 +3305,28 @@ async fn handle_get_profile(
         }
     };
 
-    let account_provider = if provider == "playgames" {
-        "playgames_android"
+    let account = if provider == "wou" || provider == "wou_id" || provider == "world_of_unreal" {
+        state
+            .db
+            .get_or_create_for_account_id(
+                &resolved_external_id,
+                "wou".to_string(),
+                "production".to_string(),
+                resolved_external_id.clone(),
+            )
+            .await
     } else {
-        provider
+        let account = state
+            .db
+            .get_existing_identity(provider.to_string(), resolved_external_id.clone())
+            .await;
+        match account {
+            Ok(Some(account)) => Ok(account),
+            Ok(None) => Err("canonical WOU-ID identity is required".into()),
+            Err(error) => Err(error),
+        }
     };
-    match state
-        .db
-        .get_or_create(account_provider.to_string(), resolved_external_id)
-        .await
-    {
+    match account {
         Ok(account) => {
             info!(
                 "[identity] platform profile ack id={request_id} account={} name_len={}",

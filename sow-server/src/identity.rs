@@ -26,6 +26,7 @@ pub(crate) struct IdentityState {
 struct IdentityInner {
     db_url: String,
     db_secret: String,
+    wou_sow_identity_secret: Option<String>,
     handoffs: Mutex<HashMap<String, PlayGamesHandoff>>,
     rendezvous: Mutex<HashMap<String, PlayGamesRendezvous>>,
     sessions: Mutex<HashMap<String, PlayGamesSession>>,
@@ -152,9 +153,23 @@ struct VerifiedIdentityRequest<'a> {
     provider: &'a str,
     environment: &'a str,
     external_subject: &'a str,
+    account_id: Option<&'a str>,
     display_name: Option<&'a str>,
     avatar_url: Option<&'a str>,
     requested_leader: Option<&'a str>,
+}
+
+struct VerifiedExternalIdentity {
+    provider_subject: String,
+    environment: String,
+    display_name: Option<String>,
+    avatar_url: Option<String>,
+    account_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct WouIdentityResponse {
+    account_id: String,
 }
 
 impl IdentityState {
@@ -163,6 +178,9 @@ impl IdentityState {
             inner: Arc::new(IdentityInner {
                 db_url,
                 db_secret,
+                wou_sow_identity_secret: std::env::var("WOU_SOW_IDENTITY_SECRET")
+                    .ok()
+                    .filter(|value| !value.trim().is_empty()),
                 handoffs: Mutex::new(HashMap::new()),
                 rendezvous: Mutex::new(HashMap::new()),
                 sessions: Mutex::new(HashMap::new()),
@@ -178,6 +196,7 @@ impl IdentityState {
         display_name: Option<&str>,
         avatar_url: Option<&str>,
         requested_leader: Option<&str>,
+        account_id: Option<&str>,
     ) -> Result<DbIdentityResponse, String> {
         if provider.trim().is_empty()
             || environment.trim().is_empty()
@@ -196,6 +215,7 @@ impl IdentityState {
                 provider,
                 environment,
                 external_subject,
+                account_id,
                 display_name,
                 avatar_url,
                 requested_leader,
@@ -221,39 +241,28 @@ impl IdentityState {
         provider: &str,
         external_id: Option<&str>,
         token: &str,
-    ) -> Result<(String, String, Option<String>, Option<String>), String> {
+    ) -> Result<VerifiedExternalIdentity, String> {
         match provider {
             "playgames" => {
                 let identity = self.verify_playgames_session(external_id, token)?;
-                Ok((
-                    identity.external_id,
-                    identity.environment,
-                    Some(identity.display_name),
-                    identity.avatar_url,
-                ))
+                let account_id = self
+                    .resolve_wou_identity(
+                        "playgames",
+                        &identity.external_id,
+                        Some(&identity.display_name),
+                    )
+                    .await?;
+                Ok(VerifiedExternalIdentity {
+                    provider_subject: identity.external_id,
+                    environment: identity.environment,
+                    display_name: Some(identity.display_name),
+                    avatar_url: identity.avatar_url,
+                    account_id,
+                })
             }
             "wou" | "wou_id" | "world_of_unreal" => {
-                let wou_url = std::env::var("WOU_ID_URL")
-                    .unwrap_or_else(|_| "https://id.worldofunreal.com".to_string());
-                let mut builder = reqwest::Client::builder();
-                if let Ok(raw_ip) = std::env::var("WOU_ID_RESOLVE_IP") {
-                    let host = reqwest::Url::parse(&wou_url)
-                        .ok()
-                        .and_then(|url| url.host_str().map(str::to_owned))
-                        .ok_or_else(|| "WOU_ID_URL has no valid hostname".to_string())?;
-                    let port = reqwest::Url::parse(&wou_url)
-                        .ok()
-                        .and_then(|url| url.port_or_known_default())
-                        .unwrap_or(443);
-                    let ip = raw_ip
-                        .parse()
-                        .map_err(|_| "WOU_ID_RESOLVE_IP is not a valid IP address".to_string())?;
-                    builder = builder.resolve(&host, std::net::SocketAddr::new(ip, port));
-                }
-                let response = builder
-                    .build()
-                    .map_err(|error| format!("WOU-ID client build failed: {error}"))?
-                    .get(format!(
+                let (client, wou_url) = wou_client()?;
+                let response = client.get(format!(
                         "{}/api/v1/inventory/me",
                         wou_url.trim_end_matches('/')
                     ))
@@ -273,7 +282,13 @@ impl IdentityState {
                     .get("account_id")
                     .and_then(serde_json::Value::as_str)
                     .ok_or_else(|| "WOU-ID response missing account_id".to_string())?;
-                Ok((subject.to_string(), "production".to_string(), None, None))
+                Ok(VerifiedExternalIdentity {
+                    provider_subject: subject.to_string(),
+                    environment: "production".to_string(),
+                    display_name: None,
+                    avatar_url: None,
+                    account_id: Some(subject.to_string()),
+                })
             }
             "crazygames" => {
                 let response = reqwest::get("https://sdk.crazygames.com/publicKey.json")
@@ -296,10 +311,61 @@ impl IdentityState {
                 if external_id.is_some_and(|value| !value.is_empty() && value != claims.user_id) {
                     return Err("CrazyGames player mismatch".to_string());
                 }
-                Ok((claims.user_id, "production".to_string(), None, None))
+                let account_id = self
+                    .resolve_wou_identity("crazygames", &claims.user_id, None)
+                    .await?;
+                Ok(VerifiedExternalIdentity {
+                    provider_subject: claims.user_id,
+                    environment: "production".to_string(),
+                    display_name: None,
+                    avatar_url: None,
+                    account_id,
+                })
             }
             _ => Err(format!("unsupported provider: {provider}")),
         }
+    }
+
+    async fn resolve_wou_identity(
+        &self,
+        provider: &str,
+        external_id: &str,
+        display_name: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        let Some(secret) = self.inner.wou_sow_identity_secret.as_deref() else {
+            return Ok(None);
+        };
+        let (client, wou_url) = wou_client()?;
+        let response = client
+            .post(format!(
+                "{}/api/v1/internal/identity/resolve",
+                wou_url.trim_end_matches('/')
+            ))
+            .header("Authorization", format!("Bearer {secret}"))
+            .json(&serde_json::json!({
+                "provider": provider,
+                "external_id": external_id,
+                "display_name": display_name,
+                "context": "shadows_of_war",
+            }))
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+            .map_err(|error| format!("WOU-ID identity bridge failed: {error}"))?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "WOU-ID identity bridge returned HTTP {}",
+                response.status()
+            ));
+        }
+        let body = response
+            .json::<WouIdentityResponse>()
+            .await
+            .map_err(|error| format!("WOU-ID identity bridge response unreadable: {error}"))?;
+        if body.account_id.trim().is_empty() {
+            return Err("WOU-ID identity bridge returned an empty account id".to_string());
+        }
+        Ok(Some(body.account_id))
     }
 
     pub(crate) async fn verify_auth_proof(
@@ -346,7 +412,7 @@ impl IdentityState {
                 leader,
             });
         }
-        let (subject, environment, display_name, avatar_url) = self
+        let identity = self
             .verify_external(
                 auth.provider.trim(),
                 auth.account_id.as_deref(),
@@ -356,11 +422,12 @@ impl IdentityState {
         let body = self
             .db_resolve(
                 auth.provider.trim(),
-                &environment,
-                &subject,
-                display_name.as_deref(),
-                avatar_url.as_deref(),
+                &identity.environment,
+                &identity.provider_subject,
+                identity.display_name.as_deref(),
+                identity.avatar_url.as_deref(),
                 Some(&requested),
+                identity.account_id.as_deref(),
             )
             .await?;
         let leader = body
@@ -380,17 +447,18 @@ impl IdentityState {
         external_id: &str,
         token: &str,
     ) -> Result<serde_json::Value, String> {
-        let (subject, environment, display_name, avatar_url) = self
+        let identity = self
             .verify_external(provider, Some(external_id), token)
             .await?;
         Ok(self
             .db_resolve(
                 provider,
-                &environment,
-                &subject,
-                display_name.as_deref(),
-                avatar_url.as_deref(),
+                &identity.environment,
+                &identity.provider_subject,
+                identity.display_name.as_deref(),
+                identity.avatar_url.as_deref(),
                 None,
+                identity.account_id.as_deref(),
             )
             .await?
             .account)
@@ -460,6 +528,9 @@ impl IdentityState {
         } else {
             "production"
         };
+        let account_id = self
+            .resolve_wou_identity("playgames", &player.player_id, Some(&player.display_name))
+            .await?;
         let account = self
             .db_resolve(
                 "playgames",
@@ -468,6 +539,7 @@ impl IdentityState {
                 Some(&player.display_name),
                 player.avatar_url.as_deref(),
                 None,
+                account_id.as_deref(),
             )
             .await?;
         let handoff_token = random_token();
@@ -637,6 +709,30 @@ impl IdentityState {
             avatar_url: session.avatar_url.clone(),
         })
     }
+}
+
+fn wou_client() -> Result<(reqwest::Client, String), String> {
+    let wou_url =
+        std::env::var("WOU_ID_URL").unwrap_or_else(|_| "https://id.worldofunreal.com".to_string());
+    let mut builder = reqwest::Client::builder();
+    if let Ok(raw_ip) = std::env::var("WOU_ID_RESOLVE_IP") {
+        let parsed_url = reqwest::Url::parse(&wou_url)
+            .map_err(|error| format!("WOU_ID_URL is invalid: {error}"))?;
+        let host = parsed_url
+            .host_str()
+            .ok_or_else(|| "WOU_ID_URL has no valid hostname".to_string())?;
+        let ip = raw_ip
+            .parse()
+            .map_err(|_| "WOU_ID_RESOLVE_IP is not a valid IP address".to_string())?;
+        builder = builder.resolve(
+            host,
+            std::net::SocketAddr::new(ip, parsed_url.port_or_known_default().unwrap_or(443)),
+        );
+    }
+    let client = builder
+        .build()
+        .map_err(|error| format!("WOU-ID client build failed: {error}"))?;
+    Ok((client, wou_url))
 }
 
 fn random_token() -> String {

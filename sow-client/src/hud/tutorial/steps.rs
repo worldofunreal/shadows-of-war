@@ -2,11 +2,6 @@
 //! table of objectives the tutorial walks through. Append objectives here — the runner in
 //! [`super`] interprets them generically, so growing the campaign is data, not new code.
 
-use sow_core::player::Leader;
-
-/// Portrait + narrator for the campaign dialog.
-pub(super) const ADVISOR: Leader = Leader::Boudica;
-
 /// What completes a step's objective. (Add variants as new mechanics need them — each must
 /// map to a field that already exists on a `PlayerSnapshot`; see `objective_progress`.)
 #[derive(Clone, Copy)]
@@ -103,15 +98,191 @@ pub(super) const CHAPTER_1: &[Step] = &[
         hint: "Intercept Legio IX Hispana",
         advance: Trigger::DefeatedPlayer("Legio IX Hispana"),
     },
-    // Terminal step: reaching it pops the Final Battle modal (Continue / Stay and fight) in `mod.rs`.
-    // Its trigger never gates progression (it's last), but targeting Paulinus keeps the objective row
-    // honest if the player stays and actually beats him. Continue releases to the main menu with
-    // 100 Crowns earned; Stay keeps you on the map for honor.
+    // Terminal step: reaching it pops the Final Battle modal (Continue the saga / Stay and fight).
+    // Continue chains into Lady Six Sky episode 1 with the 100-Crown intro
+    // reward; Stay keeps you on the map for honor.
     Step {
         title: "The Final Battle",
-        body: "Tutorial complete. You have mastered expansion, combat, and siege. Suetonius Paulinus approaches with the main imperial force. Continue to return to the main menu (100 Crowns earned) or Stay to finish the engagement.",
-        hint: "Continue to menu or defeat Paulinus",
+        body: "Tutorial complete. You have mastered expansion, combat, and siege. Suetonius Paulinus approaches with the main imperial force. Continue the saga of Lady Six Sky, queen of Naranjo (100 Crowns earned) or Stay to finish the engagement.",
+        hint: "Continue the saga or defeat Paulinus",
         advance: Trigger::DefeatedPlayer("Legio XIV Gemina"),
+    },
+];
+
+// Six Sky episode 1 — "Arrival" (682 CE). The queen lands at Naranjo with her
+// father's guard to found a new dynasty. Fast early wins, then the old blood.
+pub(super) const SIX_SKY_EP1: &[Step] = &[
+    Step {
+        title: "Landfall",
+        body: "682 CE. You are Wak Chanil Ajaw, daughter of Dos Pilas, come to rule Naranjo. Tap unclaimed land beyond your border to claim it.",
+        hint: "Tap unclaimed land to expand",
+        advance: Trigger::TilesGained(128),
+    },
+    Step {
+        title: "Sacred Fire",
+        body: "Three days after your arrival the stelae record a burning ritual. Grow your ground — every tile feeds your troops and gold.",
+        hint: "Expand to reach 512 tiles held",
+        advance: Trigger::TilesGained(512),
+    },
+    Step {
+        title: "First Blood",
+        body: "Small villages hold the shore. Drag into an enemy border to attack and take your first rival.",
+        hint: "Drag to attack — defeat 1 enemy",
+        advance: Trigger::TribesEaten(1),
+    },
+    Step {
+        title: "The Villages Kneel",
+        body: "The lakeside villages must learn the new dynasty's name. Subdue them all.",
+        hint: "Defeat 4 villages",
+        advance: Trigger::TribesEaten(4),
+    },
+    Step {
+        title: "The Old Blood",
+        body: "A claimant of Naranjo's old line denies your right. The record names K'ahk' Xiiw Chan Chaahk before you — end his heir.",
+        hint: "Defeat the Rival Claimant",
+        advance: Trigger::DefeatedPlayer("Rival Claimant"),
+    },
+    Step {
+        title: "Break the Breaker",
+        body: "Caracol left Naranjo kingless once before. Its garrison must fall so the city believes you can protect it.",
+        hint: "Defeat Caracol",
+        advance: Trigger::DefeatedPlayer("Caracol"),
+    },
+    Step {
+        title: "Tikal's Eyes",
+        body: "Tikal watches through its vanguard. Blind the great city — take its forward post.",
+        hint: "Defeat the Tikal Vanguard",
+        advance: Trigger::DefeatedPlayer("Tikal Vanguard"),
+    },
+    // Terminal step: Continue chains into episode 2 (a son is foretold, 688).
+    Step {
+        title: "Queen of Naranjo",
+        body: "Naranjo is yours, though the scribes never grant you its holy title. Tikal itself camps nearby — break it, and your line is secure. A son is foretold.",
+        hint: "Defeat Tikal",
+        advance: Trigger::DefeatedPlayer("Tikal"),
+    },
+];
+
+// Six Sky episode 2 — "The Regent's Fire". Your son K'ak' Tiliw, born 688, is
+// five years old and king; you rule as regent. The monuments claim five cities
+// burned in five years — ritual, real fire, or royal boasting, the record does
+// not say. You decide what burns.
+pub(super) const SIX_SKY_EP2: &[Step] = &[
+    Step {
+        title: "Regent",
+        body: "693 CE. Your five-year-old son is king of Naranjo, and you rule in his name. The provinces smell weakness. Expand and show strength.",
+        hint: "Tap unclaimed land to expand",
+        advance: Trigger::TilesGained(256),
+    },
+    Step {
+        title: "The Provinces Stir",
+        body: "Rebellion ferments in the villages. Strike first — take two rivals before they unite.",
+        hint: "Defeat 2 enemies",
+        advance: Trigger::TribesEaten(2),
+    },
+    Step {
+        title: "First Fire: Uaxactun",
+        body: "Uaxactun rebels. Whether the burning was rite or ruin, the stelae remember fire. Burn Uaxactun's defiance out.",
+        hint: "Defeat Uaxactun Rebels",
+        advance: Trigger::DefeatedPlayer("Uaxactun Rebels"),
+    },
+    Step {
+        title: "Second Fire: Yaxha",
+        body: "Yaxha on the lake rises next. Force it to reaffirm its allegiance — by kneeling or by ashes.",
+        hint: "Defeat Yaxha Rebels",
+        advance: Trigger::DefeatedPlayer("Yaxha Rebels"),
+    },
+    Step {
+        title: "Third Fire: Tayasal",
+        body: "Tayasal tests you. A regent who cannot hold Tayasal cannot hold Naranjo.",
+        hint: "Defeat Tayasal Rebels",
+        advance: Trigger::DefeatedPlayer("Tayasal Rebels"),
+    },
+    Step {
+        title: "Fourth Fire: Seibal",
+        body: "Seibal's canoes carry rebellion downriver. Sink its defiance.",
+        hint: "Defeat Seibal Rebels",
+        advance: Trigger::DefeatedPlayer("Seibal Rebels"),
+    },
+    Step {
+        title: "The Breaker Returns",
+        body: "Caracol, the old breaker of Naranjo, backs the rebels. Settle the oldest debt of your reign.",
+        hint: "Defeat Caracol",
+        advance: Trigger::DefeatedPlayer("Caracol"),
+    },
+    Step {
+        title: "Reaffirm or Burn",
+        body: "Every neighbor must choose: reaffirm allegiance to the regent, or share the rebels' fate. Keep winning.",
+        hint: "Defeat 8 enemies in total",
+        advance: Trigger::TribesEaten(8),
+    },
+    // Terminal step: Continue chains into episode 3.
+    Step {
+        title: "The Coalition Breaks",
+        body: "Tikal gathered your enemies into one coalition. Break it and no city will doubt the regency. The moon goddess watches — 726 approaches.",
+        hint: "Defeat the Tikal Coalition",
+        advance: Trigger::DefeatedPlayer("Tikal Coalition"),
+    },
+];
+
+// Six Sky episode 3 — "Moon Goddess" (726–741 CE). You impersonate the moon
+// goddess on the Maya new year of 726, wage the last wars, and die in 741 with
+// your monuments standing. The final episode: sharpest enemies, lasting legacy.
+pub(super) const SIX_SKY_EP3: &[Step] = &[
+    Step {
+        title: "The Long Count",
+        body: "The years have made you legend and target both. Expand once more — Naranjo must look strong when the goddess arrives.",
+        hint: "Tap unclaimed land to expand",
+        advance: Trigger::TilesGained(256),
+    },
+    Step {
+        title: "Offerings",
+        body: "Gods and soldiers both demand tribute. Take two rivals to feed the altars and the guard.",
+        hint: "Defeat 2 enemies",
+        advance: Trigger::TribesEaten(2),
+    },
+    Step {
+        title: "The Unknown Enemy",
+        body: "K'inichil Kab — the scribes still argue over where it rules from. Stela 24 will show its captive under your feet regardless.",
+        hint: "Defeat K'inichil Kab",
+        advance: Trigger::DefeatedPlayer("K'inichil Kab"),
+    },
+    Step {
+        title: "War Host",
+        body: "Caracol sends a full war host, its last throw against your line. Destroy it.",
+        hint: "Defeat the Caracol War Host",
+        advance: Trigger::DefeatedPlayer("Caracol War Host"),
+    },
+    Step {
+        title: "The Hill",
+        body: "Xunantunich on its hill bows to no regent. Make the hill bow.",
+        hint: "Defeat Xunantunich Rebels",
+        advance: Trigger::DefeatedPlayer("Xunantunich Rebels"),
+    },
+    Step {
+        title: "Moon Goddess",
+        body: "February 9, 726 — the new year. You don the moon goddess regalia before the city. Hold a great domain worthy of her: grow vast.",
+        hint: "Expand to reach 1,024 tiles held",
+        advance: Trigger::TilesGained(1024),
+    },
+    Step {
+        title: "Vanguard at Dusk",
+        body: "Tikal's vanguard comes at dusk, hoping age has softened you. Show them the Stela 24 queen.",
+        hint: "Defeat the Tikal Vanguard",
+        advance: Trigger::DefeatedPlayer("Tikal Vanguard"),
+    },
+    Step {
+        title: "Tribute Denied",
+        body: "Tikal demands tribute from Naranjo one final time. Answer with war — keep defeating all who stand with them.",
+        hint: "Defeat 6 enemies in total",
+        advance: Trigger::TribesEaten(6),
+    },
+    // Terminal step: Continue returns to the main menu with the saga complete.
+    Step {
+        title: "Legacy in Stone",
+        body: "Tikal itself. Win, and your son's line holds the city until 741 and beyond — your stelae still stand today. This is the last battle of the saga.",
+        hint: "Defeat Tikal",
+        advance: Trigger::DefeatedPlayer("Tikal"),
     },
 ];
 
@@ -135,6 +306,31 @@ mod tests {
                     step.title,
                     target
                 );
+            }
+        }
+    }
+
+    /// Same poka-yoke for the Six Sky episodes: every `DefeatedPlayer` target
+    /// must exist in its episode roster.
+    #[test]
+    fn six_sky_objective_targets_exist_in_rosters() {
+        for (ep, steps) in [
+            (1u8, super::SIX_SKY_EP1),
+            (2u8, super::SIX_SKY_EP2),
+            (3u8, super::SIX_SKY_EP3),
+        ] {
+            let (factions, _) = crate::campaign::lady_six_sky::roster(ep);
+            let names: std::collections::HashSet<&str> =
+                factions.iter().map(|f| f.name.as_str()).collect();
+            for step in steps {
+                if let Trigger::DefeatedPlayer(target) = step.advance {
+                    assert!(
+                        names.contains(target),
+                        "ep{ep} objective '{}' targets '{}', which is not in the roster",
+                        step.title,
+                        target
+                    );
+                }
             }
         }
     }

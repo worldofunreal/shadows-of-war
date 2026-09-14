@@ -49,7 +49,7 @@ impl SowApp {
                         ui.vertical(|ui| {
                             ui.vertical_centered(|ui| {
                                 ui.label(
-                                    egui::RichText::new("NUCLEAR STRIKE")
+                                    egui::RichText::new("STRATEGIC STRIKE")
                                         .strong()
                                         .color(theme_color)
                                         .size(13.0),
@@ -61,7 +61,7 @@ impl SowApp {
                             let card_h = 50.0;
 
                             let nukes =
-                                [(sow_core::game::NukeKind::AtomBomb, "Missile Strike", "☢️")];
+                                [(sow_core::game::NukeKind::AtomBomb, "Strategic Strike", "⚡")];
 
                             for &(kind, label, icon) in &nukes {
                                 let cost = kind.gold_cost(0);

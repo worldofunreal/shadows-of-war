@@ -1,0 +1,133 @@
+{
+  "_comment": "Six Sky episode 3 'Moon Goddess' (726-741 CE) — edited via tools/campaign-editor.",
+  "map": "northamerica",
+  "player_spawn": [
+    529,
+    416
+  ],
+  "factions": [
+    {
+      "name": "Moon Priestesses",
+      "x": 532,
+      "y": 419,
+      "role": "kin",
+      "iq": 120,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "K'ak' Tiliw Guard",
+      "x": 524,
+      "y": 417,
+      "role": "kin",
+      "iq": 120,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Sa'aal Veterans",
+      "x": 534,
+      "y": 415,
+      "role": "kin",
+      "iq": 115,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Lamanai Fishers",
+      "x": 538,
+      "y": 417,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Altun Ha Traders",
+      "x": 542,
+      "y": 415,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Calakmul Honor Guard",
+      "x": 527,
+      "y": 420,
+      "role": "vassal",
+      "iq": 110,
+      "civ": "maya"
+    },
+    {
+      "name": "Yaxchilan Allies",
+      "x": 522,
+      "y": 421,
+      "role": "vassal",
+      "iq": 110,
+      "civ": "maya"
+    },
+    {
+      "name": "Copan Delegation",
+      "x": 529,
+      "y": 429,
+      "role": "vassal",
+      "iq": 110,
+      "civ": "maya"
+    },
+    {
+      "name": "K'inichil Kab",
+      "x": 536,
+      "y": 421,
+      "role": "boss",
+      "iq": 120,
+      "civ": "maya"
+    },
+    {
+      "name": "Caracol War Host",
+      "x": 530,
+      "y": 423,
+      "role": "boss",
+      "iq": 120,
+      "civ": "maya"
+    },
+    {
+      "name": "Xunantunich Rebels",
+      "x": 525,
+      "y": 424,
+      "role": "boss",
+      "iq": 115,
+      "civ": "maya"
+    },
+    {
+      "name": "Tikal",
+      "x": 534,
+      "y": 425,
+      "role": "big_boss",
+      "iq": 130,
+      "civ": "maya"
+    },
+    {
+      "name": "Tikal Vanguard",
+      "x": 539,
+      "y": 424,
+      "role": "boss",
+      "iq": 125,
+      "civ": "maya"
+    },
+    {
+      "name": "Quirigua",
+      "x": 535,
+      "y": 430,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Topoxte",
+      "x": 520,
+      "y": 426,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    }
+  ]
+}

@@ -85,7 +85,7 @@ pub fn normalize_player_name(input: &str) -> String {
         .filter(|character| !character.is_control())
         .take(16)
         .collect();
-    if name.is_empty() {
+    if name.is_empty() || !sow_data::name_policy::is_allowed(&name) {
         let suffix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -1120,6 +1120,7 @@ mod name_tests {
             "0123456789abcdef"
         );
         assert!(normalize_player_name("\n\t").starts_with("ANON"));
+        assert!(normalize_player_name("Caes\u{200B}ar").starts_with("ANON"));
     }
 
     #[test]

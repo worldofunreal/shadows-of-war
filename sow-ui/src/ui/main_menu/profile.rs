@@ -4,7 +4,7 @@ use egui::Rect;
 /// Native profile data is a presentation snapshot. Network requests stay in sow-client.
 #[derive(Default)]
 pub struct NativeProfileState {
-    pub public_id: Option<String>,
+    pub account_id: Option<String>,
     pub view: Option<sow_data::profile::PublicProfileView>,
     pub history: Vec<sow_data::profile::PublicMatchSummary>,
     pub ratings: Vec<sow_data::profile::PublicRatingView>,

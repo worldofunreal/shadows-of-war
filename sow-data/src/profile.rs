@@ -21,10 +21,8 @@ pub struct LeaderCareerStats {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct MatchParticipantRecord {
-    /// Internal account ID. Never serialize this record directly to a public
-    /// response; the public DTOs below deliberately omit it.
+    /// The single canonical account identifier.
     pub account_id: String,
-    pub public_id: String,
     pub display_name: String,
     pub is_bot: bool,
     pub leader: Option<String>,
@@ -93,7 +91,6 @@ pub struct SeasonRecord {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct PublicProfileIndex {
     pub account_id: String,
-    pub public_id: String,
     pub display_name: String,
     pub kind: String,
     pub updated_at: u64,
@@ -101,7 +98,7 @@ pub struct PublicProfileIndex {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PublicProfileSummary {
-    pub public_id: String,
+    pub account_id: String,
     pub handle: String,
     pub display_name: String,
     pub level: u32,
@@ -146,7 +143,7 @@ pub struct PublicMatchSummary {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PublicMatchParticipant {
-    pub public_id: String,
+    pub account_id: String,
     pub handle: String,
     pub is_bot: bool,
     pub leader: Option<String>,
@@ -169,7 +166,7 @@ pub struct PublicMatchDetail {
     pub mode: String,
     pub map_name: String,
     pub duration_seconds: u32,
-    pub winner_public_id: Option<String>,
+    pub winner_account_id: Option<String>,
     pub winning_team: Option<String>,
     pub verified: bool,
     pub rating_eligible: bool,
@@ -178,7 +175,7 @@ pub struct PublicMatchDetail {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PublicProfileView {
-    pub public_id: String,
+    pub account_id: String,
     pub handle: String,
     pub display_name: String,
     pub level: u32,
@@ -214,7 +211,7 @@ pub struct PublicRatingView {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PublicLeaderboardEntry {
     pub rank: u32,
-    pub public_id: String,
+    pub account_id: String,
     pub handle: String,
     pub queue: String,
     pub mode: String,
@@ -225,14 +222,8 @@ pub struct PublicLeaderboardEntry {
     pub wins: u32,
 }
 
-pub fn public_profile_id(account_id: &str) -> String {
-    let digest = blake3::hash(account_id.as_bytes()).to_hex().to_string();
-    format!("p_{}", &digest[..24])
-}
-
-pub fn public_handle(display_name: &str, public_id: &str) -> String {
-    let suffix = public_id
-        .trim_start_matches("p_")
+pub fn public_handle(display_name: &str, account_id: &str) -> String {
+    let suffix = account_id
         .chars()
         .take(4)
         .collect::<String>()

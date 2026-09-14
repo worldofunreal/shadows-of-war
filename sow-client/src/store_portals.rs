@@ -77,12 +77,21 @@ fn take_window_bool(_name: &str) -> bool {
 
 pub fn gameplay_start() {
     crate::analytics::gameplay_start();
+    measure("gameplay", "match", "ready");
     call_window_hook("SOW_portalGameplayStart");
 }
 
 pub fn gameplay_stop() {
     crate::analytics::gameplay_stop();
+    measure("gameplay", "match", "stop");
     call_window_hook("SOW_portalGameplayStop");
+}
+
+/// Send one stable game event to Poki when the bridge is present. Other
+/// platforms simply ignore this hook.
+pub fn measure(category: &str, what: &str, action: &str) {
+    let event = format!("{category}|{what}|{action}");
+    call_window_hook_str("SOW_pokiMeasure", &event);
 }
 
 pub fn load_stop() {
@@ -255,7 +264,8 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                 if let Ok(Some(user_raw)) = storage.get_item("wou_user_data") {
                     if let Ok(user_val) = serde_json::from_str::<serde_json::Value>(&user_raw) {
                         let id = user_val
-                            .get("id")
+                            .get("account_id")
+                            .or_else(|| user_val.get("id"))
                             .and_then(|v| v.as_str())
                             .map(ToString::to_string);
                         let name = user_val

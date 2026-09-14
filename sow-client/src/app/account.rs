@@ -52,9 +52,7 @@ fn fetch_anonymous_profile_request(
         Ok(res) if res.ok => {
             #[derive(serde::Deserialize)]
             struct DbAccount {
-                id: String,
-                #[serde(default)]
-                public_id: Option<String>,
+                account_id: String,
                 #[serde(default)]
                 display_name: String,
                 profile: crate::player_progress::PlayerProgress,
@@ -64,25 +62,24 @@ fn fetch_anonymous_profile_request(
             }
             match serde_json::from_slice::<DbAccount>(&res.bytes) {
                 Ok(account) => {
-                    crate::anonymous_identity::save_account_id(&account.id);
+                    crate::anonymous_identity::save_account_id(&account.account_id);
                     if let Some(secret) = account.auth_secret.as_deref()
                         && !secret.is_empty()
                     {
                         crate::anonymous_identity::save_account_secret(secret);
                         log::info!(
                             "[identity] account secret minted and stored account={}",
-                            account_hint(Some(&account.id))
+                            account_hint(Some(&account.account_id))
                         );
                     }
                     log::info!(
                         "[identity] profile request id={request_id} ack account={} name_len={}",
-                        account_hint(Some(&account.id)),
+                        account_hint(Some(&account.account_id)),
                         account.display_name.chars().count()
                     );
                     let _ = tx.send(crate::player_progress::DbEvent::ProfileLoaded {
                         progress: account.profile,
-                        account_id: account.id,
-                        public_id: account.public_id,
+                        account_id: account.account_id,
                         display_name: account.display_name,
                         provider: "anonymous".to_string(),
                         request_id,
@@ -146,11 +143,14 @@ impl SowApp {
     }
 
     fn apply_platform_auth(request: &mut ehttp::Request) {
-        if let Some(token) = crate::store_portals::load_identity("Player")
-            .auth_token
-            .filter(|t| !t.is_empty())
-        {
+        let identity = crate::store_portals::load_identity("Player");
+        if let Some(token) = identity.auth_token.filter(|t| !t.is_empty()) {
             request.headers.insert("X-Platform-Auth", token);
+            if identity.provider != "self" {
+                request
+                    .headers
+                    .insert("X-Platform-Provider", identity.provider);
+            }
         }
     }
 
@@ -217,9 +217,7 @@ impl SowApp {
                     if res.ok {
                         #[derive(serde::Deserialize)]
                         struct DbAccount {
-                            id: String,
-                            #[serde(default)]
-                            public_id: Option<String>,
+                            account_id: String,
                             #[serde(default)]
                             display_name: String,
                             profile: crate::player_progress::PlayerProgress,
@@ -228,8 +226,7 @@ impl SowApp {
                             Ok(account) => {
                                 let _ = tx.send(crate::player_progress::DbEvent::ProfileLoaded {
                                     progress: account.profile,
-                                    account_id: account.id,
-                                    public_id: account.public_id,
+                                    account_id: account.account_id,
                                     display_name: account.display_name,
                                     provider: profile_provider,
                                     request_id,
@@ -337,7 +334,7 @@ impl SowApp {
         }
         #[derive(serde::Deserialize)]
         struct DbAccount {
-            id: String,
+            account_id: String,
             #[serde(default)]
             display_name: String,
         }
@@ -389,14 +386,14 @@ impl SowApp {
             Ok(response) if response.ok => {
                 match serde_json::from_slice::<DbAccount>(&response.bytes) {
                     Ok(account) => {
-                        crate::anonymous_identity::save_account_id(&account.id);
+                        crate::anonymous_identity::save_account_id(&account.account_id);
                         log::info!(
                             "[identity] rename request id={request_id} ack account={} name_len={}",
-                            account_hint(Some(&account.id)),
+                            account_hint(Some(&account.account_id)),
                             account.display_name.chars().count()
                         );
                         let _ = tx.send(crate::player_progress::DbEvent::DisplayNameSaved {
-                            account_id: account.id,
+                            account_id: account.account_id,
                             display_name: account.display_name,
                             request_id,
                         });
@@ -443,7 +440,6 @@ impl SowApp {
         &mut self,
         cloud: crate::player_progress::PlayerProgress,
         account_id: String,
-        public_id: Option<String>,
         display_name: String,
         provider: String,
     ) {
@@ -453,7 +449,6 @@ impl SowApp {
         let portal = self.progress.clone();
         self.progress.merge_boot_profile(cloud);
         self.progress_account_id = Some(account_id);
-        self.profile_public_id = public_id;
         self.progress_provider = provider;
         if self.progress_provider == "anonymous" {
             let pending_display_name = self
@@ -508,21 +503,23 @@ impl SowApp {
         if self.ui.app.main_menu_state.store_busy {
             return;
         }
-        let Some(public_id) = self.profile_public_id.clone() else {
+        let Some(account_id) = self.progress_account_id.clone() else {
             self.ui.app.main_menu_state.error_message =
                 Some("Your player profile is still loading.".into());
             return;
         };
-        let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
-            self.ui.app.main_menu_state.error_message =
-                Some("Account setup is required for store actions.".into());
-            return;
-        };
         fields.insert(
-            "public_id".into(),
-            serde_json::Value::String(public_id.clone()),
+            "account_id".into(),
+            serde_json::Value::String(account_id),
         );
-        fields.insert("auth_secret".into(), serde_json::Value::String(auth_secret));
+        if self.progress_provider == "anonymous" {
+            let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
+                self.ui.app.main_menu_state.error_message =
+                    Some("Account setup is required for store actions.".into());
+                return;
+            };
+            fields.insert("auth_secret".into(), serde_json::Value::String(auth_secret));
+        }
         let Ok(body) = serde_json::to_vec(&serde_json::Value::Object(fields)) else {
             self.ui.app.main_menu_state.error_message =
                 Some("Could not prepare the store request.".into());
@@ -539,17 +536,18 @@ impl SowApp {
         let tx = self.tasks.db_tx.clone();
         let mut request = ehttp::Request::post(&url, body);
         request.headers.insert("Content-Type", "application/json");
+        Self::apply_platform_auth(&mut request);
         ehttp::fetch(request, move |result| match result {
             Ok(response) if response.ok => {
                 #[derive(serde::Deserialize)]
                 struct StoreAccount {
-                    id: String,
+                    account_id: String,
                     profile: crate::player_progress::PlayerProgress,
                 }
                 match serde_json::from_slice::<StoreAccount>(&response.bytes) {
                     Ok(account) => {
                         let _ = tx.send(crate::player_progress::DbEvent::StoreProfileLoaded {
-                            account_id: account.id,
+                            account_id: account.account_id,
                             progress: account.profile,
                             operation: operation.clone(),
                         });
@@ -610,14 +608,14 @@ impl SowApp {
     }
 
     pub(crate) fn load_native_profile(&mut self) {
-        let Some(public_id) = self
+        let Some(account_id) = self
             .ui
             .app
             .main_menu_state
             .profile
-            .public_id
+            .account_id
             .clone()
-            .or_else(|| self.profile_public_id.clone())
+            .or_else(|| self.profile_account_id.clone())
         else {
             self.ui.app.main_menu_state.profile.loading = false;
             self.ui.app.main_menu_state.profile.error =
@@ -626,11 +624,11 @@ impl SowApp {
         };
         self.ui.app.main_menu_state.profile.loading = true;
         self.ui.app.main_menu_state.profile.error = None;
-        self.ui.app.main_menu_state.profile.public_id = Some(public_id.clone());
+        self.ui.app.main_menu_state.profile.account_id = Some(account_id.clone());
         let url = format!(
             "{}/profiles/{}",
             self.asset_config.database_base.trim_end_matches('/'),
-            url::form_urlencoded::byte_serialize(public_id.as_bytes()).collect::<String>()
+            url::form_urlencoded::byte_serialize(account_id.as_bytes()).collect::<String>()
         );
         let tx = self.tasks.db_tx.clone();
         ehttp::fetch(ehttp::Request::get(&url), move |result| match result {
@@ -640,14 +638,14 @@ impl SowApp {
                 ) {
                     Ok(view) => {
                         let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoaded {
-                            public_id,
+                            account_id,
                             view,
                         });
                     }
                     Err(error) => {
                         log::error!("[profile] native profile parse failed: {error}");
                         let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoadFailed {
-                            public_id,
+                            account_id,
                             status: Some(response.status),
                         });
                     }
@@ -659,14 +657,14 @@ impl SowApp {
                     response.status
                 );
                 let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoadFailed {
-                    public_id,
+                    account_id,
                     status: Some(response.status),
                 });
             }
             Err(error) => {
                 log::error!("[profile] native profile request failed: {error}");
                 let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoadFailed {
-                    public_id,
+                    account_id,
                     status: None,
                 });
             }
@@ -677,14 +675,14 @@ impl SowApp {
         if self.ui.app.main_menu_state.profile.loading {
             return;
         }
-        let Some(public_id) = self
+        let Some(account_id) = self
             .ui
             .app
             .main_menu_state
             .profile
-            .public_id
+            .account_id
             .clone()
-            .or_else(|| self.profile_public_id.clone())
+            .or_else(|| self.profile_account_id.clone())
         else {
             self.ui.app.main_menu_state.profile.error =
                 Some("Your player profile is still loading.".into());
@@ -694,7 +692,7 @@ impl SowApp {
         self.ui.app.main_menu_state.profile.loading = true;
         self.ui.app.main_menu_state.profile.error = None;
         let encoded_id =
-            url::form_urlencoded::byte_serialize(public_id.as_bytes()).collect::<String>();
+            url::form_urlencoded::byte_serialize(account_id.as_bytes()).collect::<String>();
         let url = format!(
             "{}/profiles/{}/matches?cursor={cursor}&limit=20",
             self.asset_config.database_base.trim_end_matches('/'),
@@ -712,7 +710,7 @@ impl SowApp {
                     Ok(page) => {
                         let _ = tx.send(
                             crate::player_progress::DbEvent::NativeProfileHistoryLoaded {
-                                public_id,
+                                account_id,
                                 items: page.items,
                                 next_cursor: page.next_cursor,
                             },
@@ -722,7 +720,7 @@ impl SowApp {
                         log::error!("[profile] history response parse failed: {error}");
                         let _ = tx.send(
                             crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                                public_id: Some(public_id),
+                                account_id: Some(account_id),
                                 operation: "match history".into(),
                                 message: "Match history is unavailable.".into(),
                             },
@@ -737,7 +735,7 @@ impl SowApp {
                 );
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: Some(public_id),
+                        account_id: Some(account_id),
                         operation: "match history".into(),
                         message: format!(
                             "Match history is unavailable (HTTP {}).",
@@ -750,7 +748,7 @@ impl SowApp {
                 log::error!("[profile] history request failed: {error}");
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: Some(public_id),
+                        account_id: Some(account_id),
                         operation: "match history".into(),
                         message: "Match history could not reach the server.".into(),
                     },
@@ -763,14 +761,14 @@ impl SowApp {
         if self.ui.app.main_menu_state.profile.loading {
             return;
         }
-        let Some(public_id) = self
+        let Some(account_id) = self
             .ui
             .app
             .main_menu_state
             .profile
-            .public_id
+            .account_id
             .clone()
-            .or_else(|| self.profile_public_id.clone())
+            .or_else(|| self.profile_account_id.clone())
         else {
             self.ui.app.main_menu_state.profile.error =
                 Some("Your player profile is still loading.".into());
@@ -779,7 +777,7 @@ impl SowApp {
         self.ui.app.main_menu_state.profile.loading = true;
         self.ui.app.main_menu_state.profile.error = None;
         let encoded_id =
-            url::form_urlencoded::byte_serialize(public_id.as_bytes()).collect::<String>();
+            url::form_urlencoded::byte_serialize(account_id.as_bytes()).collect::<String>();
         let url = format!(
             "{}/profiles/{}/seasons",
             self.asset_config.database_base.trim_end_matches('/'),
@@ -796,7 +794,7 @@ impl SowApp {
                     Ok(payload) => {
                         let _ = tx.send(
                             crate::player_progress::DbEvent::NativeProfileRatingsLoaded {
-                                public_id,
+                                account_id,
                                 items: payload.items,
                             },
                         );
@@ -805,7 +803,7 @@ impl SowApp {
                         log::error!("[profile] ratings response parse failed: {error}");
                         let _ = tx.send(
                             crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                                public_id: Some(public_id),
+                                account_id: Some(account_id),
                                 operation: "ranked records".into(),
                                 message: "Ranked records are unavailable.".into(),
                             },
@@ -820,7 +818,7 @@ impl SowApp {
                 );
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: Some(public_id),
+                        account_id: Some(account_id),
                         operation: "ranked records".into(),
                         message: format!(
                             "Ranked records are unavailable (HTTP {}).",
@@ -833,7 +831,7 @@ impl SowApp {
                 log::error!("[profile] ratings request failed: {error}");
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: Some(public_id),
+                        account_id: Some(account_id),
                         operation: "ranked records".into(),
                         message: "Ranked records could not reach the server.".into(),
                     },
@@ -875,7 +873,7 @@ impl SowApp {
                         log::error!("[profile] search response parse failed: {error}");
                         let _ = tx.send(
                             crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                                public_id: None,
+                                account_id: None,
                                 operation: "profile search".into(),
                                 message: "Player search is unavailable.".into(),
                             },
@@ -887,7 +885,7 @@ impl SowApp {
                 log::error!("[profile] search request failed status={}", response.status);
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: None,
+                        account_id: None,
                         operation: "profile search".into(),
                         message: format!(
                             "Player search is unavailable (HTTP {}).",
@@ -900,7 +898,7 @@ impl SowApp {
                 log::error!("[profile] search request failed: {error}");
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: None,
+                        account_id: None,
                         operation: "profile search".into(),
                         message: "Player search could not reach the server.".into(),
                     },
@@ -937,7 +935,7 @@ impl SowApp {
                         log::error!("[profile] match detail response parse failed: {error}");
                         let _ = tx.send(
                             crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                                public_id: None,
+                                account_id: None,
                                 operation: "match detail".into(),
                                 message: "Match details are unavailable.".into(),
                             },
@@ -952,7 +950,7 @@ impl SowApp {
                 );
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: None,
+                        account_id: None,
                         operation: "match detail".into(),
                         message: format!(
                             "Match details are unavailable (HTTP {}).",
@@ -965,7 +963,7 @@ impl SowApp {
                 log::error!("[profile] match detail request failed: {error}");
                 let _ = tx.send(
                     crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                        public_id: None,
+                        account_id: None,
                         operation: "match detail".into(),
                         message: "Match details could not reach the server.".into(),
                     },
@@ -1014,11 +1012,9 @@ impl SowApp {
             .insert("X-SOW-Identity-Request", request_id.to_string());
         ehttp::fetch(request, move |result| match result {
             Ok(response) if response.ok => {
-                #[derive(serde::Deserialize)]
-                struct DbAccount {
-                    id: String,
-                    #[serde(default)]
-                    public_id: Option<String>,
+            #[derive(serde::Deserialize)]
+            struct DbAccount {
+                account_id: String,
                     #[serde(default)]
                     display_name: String,
                     profile: crate::player_progress::PlayerProgress,
@@ -1027,8 +1023,7 @@ impl SowApp {
                     Ok(account) => {
                         let _ = tx.send(crate::player_progress::DbEvent::ProfileLoaded {
                             progress: account.profile,
-                            account_id: account.id,
-                            public_id: account.public_id,
+                            account_id: account.account_id,
                             display_name: account.display_name,
                             provider: "anonymous".to_string(),
                             request_id,

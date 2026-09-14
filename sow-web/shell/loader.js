@@ -92,8 +92,11 @@
     let finishing = false;
     let rafId = 0;
     let finishTimer = 0;
-    let teardownTimer = 0;
     let reportedProgress = null;
+    let initialized = false;
+    let listenersBound = false;
+    let loaderVisible = false;
+    let loaderReadyDispatched = false;
 
     function isMobile() {
         return window.innerWidth < MOBILE_BREAKPOINT;
@@ -201,10 +204,6 @@
             clearTimeout(finishTimer);
             finishTimer = 0;
         }
-        if (teardownTimer) {
-            clearTimeout(teardownTimer);
-            teardownTimer = 0;
-        }
     }
 
     function buildDom() {
@@ -238,55 +237,40 @@
             setImgSrc(document.getElementById('loader-bar-full'), assetUrl(assetPathVariants('loader_full.webp')[0]));
         }
 
-        const splashBg = document.getElementById('splash-bg');
         barFill = document.getElementById('loader-bar-fill');
         barFull = document.getElementById('loader-bar-full');
         loaderText = document.getElementById('loader-text');
 
-        for (const img of root.querySelectorAll('img[src]')) {
-            const src = img.getAttribute('src');
-            if (src && !src.startsWith('data:')) {
-                setImgSrc(img, src);
+        if (!initialized) {
+            for (const [id, file] of [
+                ['splash-bg', isMobile() ? 'sow-splash-mobile.webp' : 'sow-splash-desktop.webp'],
+                ['loader-bar-empty', 'loader_empty.webp'],
+                ['loader-bar-full', 'loader_full.webp'],
+            ]) {
+                const img = document.getElementById(id);
+                if (img) wireAssetFallback(img, file);
             }
-        }
-        for (const [id, file] of [
-            ['splash-bg', isMobile() ? 'sow-splash-mobile.webp' : 'sow-splash-desktop.webp'],
-            ['loader-bar-empty', 'loader_empty.webp'],
-            ['loader-bar-full', 'loader_full.webp'],
-        ]) {
-            const img = document.getElementById(id);
-            if (img) wireAssetFallback(img, file);
         }
 
         layout();
-        window.addEventListener('resize', layout);
-        window.addEventListener('orientationchange', layout);
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', layout);
-            window.visualViewport.addEventListener('scroll', layout);
+        if (!listenersBound) {
+            window.addEventListener('resize', layout);
+            window.addEventListener('orientationchange', layout);
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', layout);
+                window.visualViewport.addEventListener('scroll', layout);
+            }
+            listenersBound = true;
         }
-        startProgress();
-    }
-
-    function teardown(expectedRoot) {
-        if (expectedRoot && root !== expectedRoot) return;
-        cancelFinishTimers();
-        stopProgress();
-        window.removeEventListener('resize', layout);
-        window.removeEventListener('orientationchange', layout);
-        if (window.visualViewport) {
-            window.visualViewport.removeEventListener('resize', layout);
-            window.visualViewport.removeEventListener('scroll', layout);
+        if (!initialized) {
+            initialized = true;
+            loaderVisible = true;
+            root.style.visibility = 'visible';
+            root.style.opacity = '1';
+            root.style.pointerEvents = 'auto';
+            root.setAttribute('aria-hidden', 'false');
+            startProgress();
         }
-        if (root && root.parentNode) {
-            root.parentNode.removeChild(root);
-        }
-        window.dispatchEvent(new Event('sow:loader-ready'));
-        root = null;
-        barFill = null;
-        barFull = null;
-        loaderText = null;
-        finishing = false;
     }
 
     function sowAnalyticsEnvelope(name) {
@@ -313,6 +297,13 @@
     }
 
     function sowTrack(name) {
+        if (window.SOW_PORTAL === 'poki') {
+            if (typeof window.SOW_pokiMeasure === 'function') {
+                window.SOW_pokiMeasure('loading', name, 'complete');
+            }
+            return;
+        }
+        /* SOW_FIRST_PARTY_ANALYTICS_BEGIN */
         try {
             const base = String(window.SOW_DATABASE_URL || '/api').replace(/\/$/, '');
             fetch(base + '/event', {
@@ -322,10 +313,11 @@
                 body: JSON.stringify({ events: [sowAnalyticsEnvelope(name)] }),
             }).catch(() => {});
         } catch (_) {}
+        /* SOW_FIRST_PARTY_ANALYTICS_END */
     }
 
     function finish() {
-        if (!root || finishing) return;
+        if (!root || finishing || !loaderVisible) return;
         const closingRoot = root;
         finishing = true;
         cancelFinishTimers();
@@ -343,10 +335,16 @@
             finishTimer = 0;
             if (root !== closingRoot) return;
             root.style.opacity = '0';
-            teardownTimer = setTimeout(() => {
-                teardownTimer = 0;
-                teardown(closingRoot);
-            }, FADEOUT_MS + 30);
+            root.style.visibility = 'hidden';
+            root.style.pointerEvents = 'none';
+            root.setAttribute('aria-hidden', 'true');
+            root.setAttribute('aria-busy', 'false');
+            loaderVisible = false;
+            finishing = false;
+            if (!loaderReadyDispatched) {
+                loaderReadyDispatched = true;
+                window.dispatchEvent(new Event('sow:loader-ready'));
+            }
         }, 160);
     }
 
@@ -361,12 +359,15 @@
         if (!root) {
             finishing = false;
             buildDom();
-        } else if (finishing) {
+        } else if (finishing || !loaderVisible) {
             cancelFinishTimers();
             finishing = false;
             root.style.transition = 'none';
             root.style.opacity = '1';
+            root.style.visibility = 'visible';
             root.style.pointerEvents = 'auto';
+            root.setAttribute('aria-hidden', 'false');
+            loaderVisible = true;
             startProgress();
         }
         const progress = Number(state.loader_progress);

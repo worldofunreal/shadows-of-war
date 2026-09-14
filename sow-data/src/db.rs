@@ -6,7 +6,7 @@ use crate::profile::{
     LeaderCareerStats, MatchRecord, PublicLeaderSummary, PublicLeaderboardEntry, PublicMatchDetail,
     PublicMatchParticipant, PublicMatchSummary, PublicProfileIndex, PublicProfileSummary,
     PublicProfileView, PublicRatingView, SeasonRating, SeasonRecord, public_handle,
-    public_profile_id, win_rate,
+    win_rate,
 };
 use log::{error, info};
 use redb::ReadableTable;
@@ -28,7 +28,7 @@ const ANALYTICS_RETENTION_TTL_SECS: i64 = 90 * 24 * 3600;
 const BOT_POOL_KEY: &str = "sow:bot:pool";
 
 const ACCOUNT_ID_HEX_LEN: usize = 32;
-pub const DISPLAY_NAME_MAX_CHARS: usize = 16;
+pub const DISPLAY_NAME_MAX_CHARS: usize = crate::name_policy::MAX_CHARS;
 
 /// Generate the initial presentation name only when the client did not send one.
 /// The account ID remains the sole stable identity key.
@@ -54,6 +54,9 @@ pub fn normalize_display_name(value: &str) -> Result<String, &'static str> {
         .collect();
     if normalized.is_empty() {
         return Err("display_name cannot be empty");
+    }
+    if !crate::name_policy::is_allowed(&normalized) {
+        return Err("display_name contains blocked language");
     }
     Ok(normalized)
 }
@@ -118,11 +121,11 @@ pub struct PlayerProfile {
     pub selected_skin: Option<String>,
     #[serde(default)]
     pub processed_revenuecat_events: std::collections::BTreeSet<String>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub purchased_leaders: std::collections::BTreeSet<String>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub purchased_skins: std::collections::BTreeSet<String>,
-    #[serde(default, skip_serializing)]
+    #[serde(default)]
     pub purchase_history: std::collections::BTreeMap<String, PurchaseRecord>,
     #[serde(default)]
     pub intro_completed: bool,
@@ -262,10 +265,10 @@ impl PlayerProfile {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PlayerAccount {
-    pub id: String, // Stable canonical internal account ID
-    /// Stable public profile identifier safe to expose in URLs.
-    #[serde(default)]
-    pub public_id: String,
+    /// The sole stable account identifier. WOU-ID linked accounts use the same
+    /// UUID; anonymous accounts use their existing local identifier.
+    #[serde(rename = "account_id", alias = "id")]
+    pub id: String,
     /// Mutable player-facing name. Never used as an identity key.
     // Investigation Protocol: a missing field is not the literal name "ANON".
     // Migrate only from observed data at the anonymous-account boundary.
@@ -332,6 +335,36 @@ pub struct DeleteAccountReport {
     pub analytics_sets_scrubbed: u64,
 }
 
+/// Operator-only reset report for disposable human test accounts. Bots and
+/// static game data are deliberately outside this operation.
+#[derive(Serialize, Debug)]
+pub struct ResetHumanAccountsReport {
+    pub dry_run: bool,
+    pub human_accounts: u64,
+    pub bots_preserved: u64,
+    pub purchase_records: u64,
+    pub redis_keys_removed: u64,
+    pub redis_members_removed: u64,
+    pub redb_rows_removed: u64,
+    pub match_rows_removed: u64,
+    pub rating_rows_removed: u64,
+}
+
+fn collect_purchase_markers(
+    account: &PlayerAccount,
+    markers: &mut std::collections::BTreeSet<String>,
+) {
+    for purchase_id in account.profile.purchase_history.keys() {
+        markers.insert(format!("{}:history:{purchase_id}", account.id));
+    }
+    for leader_id in &account.profile.purchased_leaders {
+        markers.insert(format!("{}:leader:{leader_id}", account.id));
+    }
+    for skin_id in &account.profile.purchased_skins {
+        markers.insert(format!("{}:skin:{skin_id}", account.id));
+    }
+}
+
 #[derive(Clone)]
 pub struct PlayerDb {
     client: Client,
@@ -381,20 +414,14 @@ impl PlayerDb {
                 error!("Failed to persist account {} to REDB: {error}", account.id);
             }
             if let Ok(mut table) = write_txn.open_table(PUBLIC_PROFILES_TABLE) {
-                let public_id = if account.public_id.is_empty() {
-                    public_profile_id(&account.id)
-                } else {
-                    account.public_id.clone()
-                };
                 let index = PublicProfileIndex {
                     account_id: account.id.clone(),
-                    public_id,
                     display_name: account.display_name.clone(),
                     kind: format!("{:?}", account.kind),
                     updated_at: account.updated_at,
                 };
                 if let Ok(json) = serde_json::to_vec(&index)
-                    && let Err(error) = table.insert(index.public_id.as_str(), json.as_slice())
+                    && let Err(error) = table.insert(index.account_id.as_str(), json.as_slice())
                 {
                     error!(
                         "Failed to persist public profile index {}: {error}",
@@ -629,14 +656,14 @@ impl PlayerDb {
 
     fn public_index(
         &self,
-        public_id: &str,
+        account_id: &str,
     ) -> Result<Option<PublicProfileIndex>, Box<dyn std::error::Error + Send + Sync>> {
         let Some(db) = &self.metadata_db else {
             return Ok(None);
         };
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(PUBLIC_PROFILES_TABLE)?;
-        let Some(value) = table.get(public_id)? else {
+        let Some(value) = table.get(account_id)? else {
             return Ok(None);
         };
         Ok(Some(serde_json::from_slice(value.value())?))
@@ -728,14 +755,9 @@ impl PlayerDb {
     }
 
     fn public_summary(account: &PlayerAccount) -> PublicProfileSummary {
-        let public_id = if account.public_id.is_empty() {
-            public_profile_id(&account.id)
-        } else {
-            account.public_id.clone()
-        };
         PublicProfileSummary {
-            public_id: public_id.clone(),
-            handle: public_handle(&account.display_name, &public_id),
+            account_id: account.id.clone(),
+            handle: public_handle(&account.display_name, &account.id),
             display_name: account.display_name.clone(),
             level: account.profile.level,
             matches_played: account.profile.matches_played,
@@ -751,16 +773,14 @@ impl PlayerDb {
     /// menu bridge; this endpoint exposes level and gameplay statistics only.
     pub async fn public_profile(
         &self,
-        public_id: &str,
+        account_id: &str,
     ) -> Result<Option<PublicProfileView>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(index) = self.public_index(public_id)? else {
+        let Some(index) = self.public_index(account_id)? else {
             return Ok(None);
         };
         let mut con = self.get_connection().await?;
         let account = Self::load_account(&mut con, &index.account_id).await?;
-        if account.kind == AccountKind::Bot
-            || (account.public_id != public_id && !account.public_id.is_empty())
-        {
+        if account.kind == AccountKind::Bot {
             return Ok(None);
         }
         let mut leader_stats = account.profile.leader_stats.clone();
@@ -791,14 +811,9 @@ impl PlayerDb {
             .iter()
             .filter_map(|record| Self::public_match_summary(&account.id, record))
             .collect();
-        let public_id = if account.public_id.is_empty() {
-            public_profile_id(&account.id)
-        } else {
-            account.public_id.clone()
-        };
         Ok(Some(PublicProfileView {
-            public_id: public_id.clone(),
-            handle: public_handle(&account.display_name, &public_id),
+            account_id: account.id.clone(),
+            handle: public_handle(&account.display_name, &account.id),
             display_name: account.display_name,
             level: account.profile.level,
             matches_played: account.profile.matches_played,
@@ -836,7 +851,7 @@ impl PlayerDb {
             }
             if needle.is_empty()
                 || index.display_name.to_lowercase().contains(&needle)
-                || index.public_id.to_lowercase().contains(&needle)
+                || index.account_id.to_lowercase().contains(&needle)
             {
                 indexes.push(index);
             }
@@ -860,20 +875,18 @@ impl PlayerDb {
 
     pub async fn public_match_history(
         &self,
-        public_id: &str,
+        account_id: &str,
         offset: usize,
         limit: usize,
         queue: Option<&str>,
         mode: Option<&str>,
     ) -> Result<Option<Vec<PublicMatchSummary>>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(index) = self.public_index(public_id)? else {
+        let Some(index) = self.public_index(account_id)? else {
             return Ok(None);
         };
         let mut con = self.get_connection().await?;
         let account = Self::load_account(&mut con, &index.account_id).await?;
-        if account.kind == AccountKind::Bot
-            || (account.public_id != public_id && !account.public_id.is_empty())
-        {
+        if account.kind == AccountKind::Bot {
             return Ok(None);
         }
         Ok(Some(
@@ -897,19 +910,13 @@ impl PlayerDb {
         let Some(record) = self.load_match_record(match_id)? else {
             return Ok(None);
         };
-        let winner_public_id = record.winner_account_id.as_ref().and_then(|account_id| {
-            record
-                .participants
-                .iter()
-                .find(|participant| &participant.account_id == account_id)
-                .map(|participant| participant.public_id.clone())
-        });
+        let winner_account_id = record.winner_account_id.clone();
         let participants = record
             .participants
             .iter()
             .map(|participant| PublicMatchParticipant {
-                public_id: participant.public_id.clone(),
-                handle: public_handle(&participant.display_name, &participant.public_id),
+                account_id: participant.account_id.clone(),
+                handle: public_handle(&participant.display_name, &participant.account_id),
                 is_bot: participant.is_bot,
                 leader: participant.leader.clone(),
                 team: participant.team.clone(),
@@ -930,7 +937,7 @@ impl PlayerDb {
             mode: record.mode,
             map_name: record.map_name,
             duration_seconds: record.duration_seconds,
-            winner_public_id,
+            winner_account_id,
             winning_team: record.winning_team,
             verified: record.verified,
             rating_eligible: record.rating_eligible,
@@ -981,16 +988,14 @@ impl PlayerDb {
 
     pub async fn public_ratings(
         &self,
-        public_id: &str,
+        account_id: &str,
     ) -> Result<Option<Vec<PublicRatingView>>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(index) = self.public_index(public_id)? else {
+        let Some(index) = self.public_index(account_id)? else {
             return Ok(None);
         };
         let mut con = self.get_connection().await?;
         let account = Self::load_account(&mut con, &index.account_id).await?;
-        if account.kind == AccountKind::Bot
-            || (account.public_id != public_id && !account.public_id.is_empty())
-        {
+        if account.kind == AccountKind::Bot {
             return Ok(None);
         }
         let Some(db) = &self.metadata_db else {
@@ -1070,12 +1075,7 @@ impl PlayerDb {
             if account.kind == AccountKind::Bot {
                 continue;
             }
-            let public_id = if account.public_id.is_empty() {
-                public_profile_id(&account.id)
-            } else {
-                account.public_id.clone()
-            };
-            entries.push((rating, public_id, account.display_name));
+            entries.push((rating, account.id, account.display_name));
         }
         entries.sort_by_key(|left| std::cmp::Reverse(left.0.score));
         Ok(entries
@@ -1083,10 +1083,10 @@ impl PlayerDb {
             .take(limit)
             .enumerate()
             .map(
-                |(index, (rating, public_id, display_name))| PublicLeaderboardEntry {
+                |(index, (rating, account_id, display_name))| PublicLeaderboardEntry {
                     rank: index as u32 + 1,
-                    public_id: public_id.clone(),
-                    handle: public_handle(&display_name, &public_id),
+                    account_id: account_id.clone(),
+                    handle: public_handle(&display_name, &account_id),
                     queue: rating.queue,
                     mode: rating.mode,
                     score: rating.score,
@@ -1126,30 +1126,6 @@ impl PlayerDb {
             return Err("Account not found".into());
         };
         Ok(serde_json::from_str(&acc_json)?)
-    }
-
-    async fn ensure_public_id(
-        &self,
-        account: PlayerAccount,
-    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        if !account.public_id.is_empty() {
-            return Ok(account);
-        }
-        let public_id = public_profile_id(&account.id);
-        let mut con = self.get_connection().await?;
-        let updated =
-            Self::update_account_atomic(&mut con, &Self::account_key(&account.id), |account| {
-                if account.public_id.is_empty() {
-                    account.public_id = public_id.clone();
-                    account.updated_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                }
-            })
-            .await?;
-        self.save_player_account_to_redb(&updated);
-        Ok(updated)
     }
 
     async fn ensure_starting_leader(
@@ -1385,21 +1361,11 @@ impl PlayerDb {
                 }
             }
             if let Ok(mut table) = write_txn.open_table(PUBLIC_PROFILES_TABLE) {
-                let public_id = account.as_ref().map_or_else(
-                    || public_profile_id(account_id),
-                    |account| {
-                        if account.public_id.is_empty() {
-                            public_profile_id(account_id)
-                        } else {
-                            account.public_id.clone()
-                        }
-                    },
-                );
-                match table.remove(public_id.as_str()) {
+                match table.remove(account_id) {
                     Ok(Some(_)) => redb_rows_removed += 1,
                     Ok(None) => {}
                     Err(error) => {
-                        error!("Failed to erase public profile {public_id} from REDB: {error}");
+                        error!("Failed to erase public profile {account_id} from REDB: {error}");
                     }
                 }
             }
@@ -1445,6 +1411,313 @@ impl PlayerDb {
             keys_removed,
             redb_rows_removed,
             analytics_sets_scrubbed,
+        })
+    }
+
+    /// Preview or remove every human test account while preserving the bot
+    /// pool, static catalogues, and any account that already has purchase
+    /// state. The caller must run the preview first and provide the exact
+    /// confirmation through the operator-only HTTP route.
+    pub async fn reset_human_accounts(
+        &self,
+        dry_run: bool,
+    ) -> Result<ResetHumanAccountsReport, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let mut human_ids = std::collections::BTreeSet::new();
+        let mut purchase_markers = std::collections::BTreeSet::new();
+        let mut cursor = 0_u64;
+        loop {
+            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg("sow:player:account:*")
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut con)
+                .await?;
+            for key in keys {
+                let Some(raw): Option<String> = con.get(&key).await? else {
+                    continue;
+                };
+                let Ok(account) = serde_json::from_str::<PlayerAccount>(&raw) else {
+                    error!("Skipping malformed account during test reset: {key}");
+                    continue;
+                };
+                if account.kind == AccountKind::Human {
+                    human_ids.insert(account.id.clone());
+                    collect_purchase_markers(&account, &mut purchase_markers);
+                }
+            }
+            cursor = next;
+            if cursor == 0 {
+                break;
+            }
+        }
+
+        let bots_preserved: u64 = con.scard(BOT_POOL_KEY).await?;
+        let mut player_rows = Vec::new();
+        let mut public_profile_rows = Vec::new();
+        let mut match_rows = Vec::new();
+        let mut rating_rows = Vec::new();
+        let mut match_index_rows = Vec::new();
+        if let Some(db) = &self.metadata_db {
+            let read_txn = db.begin_read()?;
+            {
+                let table = read_txn.open_table(PLAYERS_TABLE)?;
+                for item in table.iter()? {
+                    let (key, value) = item?;
+                    let account_id = key.value().to_string();
+                    if let Ok(account) = serde_json::from_slice::<PlayerAccount>(value.value()) {
+                        if account.kind == AccountKind::Human {
+                            human_ids.insert(account_id.clone());
+                            collect_purchase_markers(&account, &mut purchase_markers);
+                        }
+                    }
+                    if human_ids.contains(&account_id) {
+                        player_rows.push(account_id);
+                    }
+                }
+            }
+            {
+                let table = read_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+                for item in table.iter()? {
+                    let (key, _) = item?;
+                    if human_ids.contains(key.value()) {
+                        public_profile_rows.push(key.value().to_string());
+                    }
+                }
+            }
+            {
+                let table = read_txn.open_table(MATCHES_TABLE)?;
+                for item in table.iter()? {
+                    let (key, value) = item?;
+                    let Ok(record) = serde_json::from_slice::<MatchRecord>(value.value()) else {
+                        continue;
+                    };
+                    let includes_human = record
+                        .winner_account_id
+                        .as_deref()
+                        .is_some_and(|id| human_ids.contains(id))
+                        || record
+                            .participants
+                            .iter()
+                            .any(|participant| human_ids.contains(&participant.account_id));
+                    if includes_human {
+                        match_rows.push(key.value().to_string());
+                    }
+                }
+            }
+            {
+                let table = read_txn.open_table(SEASON_RATINGS_TABLE)?;
+                for item in table.iter()? {
+                    let (key, value) = item?;
+                    let account_id = serde_json::from_slice::<SeasonRating>(value.value())
+                        .ok()
+                        .map(|rating| rating.account_id);
+                    let key_matches = human_ids.iter().any(|id| {
+                        key.value().starts_with(&format!("rating:{id}:"))
+                    });
+                    if account_id
+                        .as_deref()
+                        .is_some_and(|id| human_ids.contains(id))
+                        || key_matches
+                    {
+                        rating_rows.push(key.value().to_string());
+                    }
+                }
+            }
+            {
+                let table = read_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
+                for item in table.iter()? {
+                    let (key, value) = item?;
+                    let key_matches = human_ids.iter().any(|id| {
+                        key.value().starts_with(&format!("player:{id}:"))
+                    });
+                    let value_matches = std::str::from_utf8(value.value())
+                        .ok()
+                        .is_some_and(|match_id| match_rows.iter().any(|id| id == match_id));
+                    if key_matches || value_matches {
+                        match_index_rows.push(key.value().to_string());
+                    }
+                }
+            }
+        }
+
+        let purchase_records = purchase_markers.len() as u64;
+        if purchase_records > 0 && !dry_run {
+            return Err("human test data includes purchase records; reset refused".into());
+        }
+
+        let mut redis_delete_keys = std::collections::BTreeSet::new();
+        for account_id in &human_ids {
+            redis_delete_keys.insert(Self::account_key(account_id));
+            redis_delete_keys.insert(format!("sow:blocks:{account_id}"));
+            redis_delete_keys.insert(format!("sow:analytics:activated:{account_id}"));
+            redis_delete_keys.insert(format!("sow:profile:{account_id}"));
+        }
+
+        for pattern in [
+            "sow:player:identity:*",
+            "sow:player:wou:*",
+            "sow:profile:*",
+            "sow:analytics:activated:*",
+        ] {
+            let mut scan_cursor = 0_u64;
+            loop {
+                let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                    .arg(scan_cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(256)
+                    .query_async(&mut con)
+                    .await?;
+                for key in keys {
+                    let remove = if key.starts_with("sow:analytics:activated:")
+                        || key.starts_with("sow:profile:")
+                    {
+                        key.rsplit(':')
+                            .next()
+                            .is_some_and(|id| human_ids.contains(id))
+                    } else {
+                        con.get::<_, Option<String>>(&key)
+                            .await?
+                            .is_some_and(|id| human_ids.contains(&id))
+                    };
+                    if remove {
+                        redis_delete_keys.insert(key);
+                    }
+                }
+                scan_cursor = next;
+                if scan_cursor == 0 {
+                    break;
+                }
+            }
+        }
+
+        // These keys are legacy aggregate metrics (HyperLogLog strings), not
+        // account records. They cannot remove individual members, so a full
+        // test-data reset removes the aggregate through the Redis API.
+        let mut scan_cursor = 0_u64;
+        loop {
+            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(scan_cursor)
+                .arg("MATCH")
+                .arg("sow:analytics:active:*")
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut con)
+                .await?;
+            redis_delete_keys.extend(keys);
+            scan_cursor = next;
+            if scan_cursor == 0 {
+                break;
+            }
+        }
+
+        let set_patterns = [
+            "sow:blocks:*",
+            "sow:analytics:event_users:*",
+            "sow:analytics:cohort:*",
+            "sow:active:*",
+        ];
+        let mut redis_members_removed = 0_u64;
+        for pattern in set_patterns {
+            let mut scan_cursor = 0_u64;
+            loop {
+                let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                    .arg(scan_cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(256)
+                    .query_async(&mut con)
+                    .await?;
+                for key in keys {
+                    let members: Vec<String> = con.smembers(&key).await?;
+                    let remove_owner_key = key
+                        .strip_prefix("sow:blocks:")
+                        .is_some_and(|id| human_ids.contains(id));
+                    if remove_owner_key {
+                        redis_delete_keys.insert(key);
+                        continue;
+                    }
+                    redis_members_removed = redis_members_removed.saturating_add(
+                        members
+                            .iter()
+                            .filter(|member| human_ids.contains(*member))
+                            .count() as u64,
+                    );
+                    if !dry_run {
+                        for member in members {
+                            if human_ids.contains(&member) {
+                                let _: u32 = con.srem(&key, &member).await?;
+                            }
+                        }
+                    }
+                }
+                scan_cursor = next;
+                if scan_cursor == 0 {
+                    break;
+                }
+            }
+        }
+
+        let redb_rows_removed = (player_rows.len()
+            + public_profile_rows.len()
+            + match_rows.len()
+            + rating_rows.len()
+            + match_index_rows.len()) as u64;
+        if !dry_run {
+            for key in &redis_delete_keys {
+                let _: u64 = con.del(key).await?;
+            }
+            if let Some(db) = &self.metadata_db {
+                let write_txn = db.begin_write()?;
+                {
+                    let mut table = write_txn.open_table(PLAYERS_TABLE)?;
+                    for key in &player_rows {
+                        table.remove(key.as_str())?;
+                    }
+                }
+                {
+                    let mut table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+                    for key in &public_profile_rows {
+                        table.remove(key.as_str())?;
+                    }
+                }
+                {
+                    let mut table = write_txn.open_table(MATCHES_TABLE)?;
+                    for key in &match_rows {
+                        table.remove(key.as_str())?;
+                    }
+                }
+                {
+                    let mut table = write_txn.open_table(SEASON_RATINGS_TABLE)?;
+                    for key in &rating_rows {
+                        table.remove(key.as_str())?;
+                    }
+                }
+                {
+                    let mut table = write_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
+                    for key in &match_index_rows {
+                        table.remove(key.as_str())?;
+                    }
+                }
+                write_txn.commit()?;
+            }
+        }
+
+        Ok(ResetHumanAccountsReport {
+            dry_run,
+            human_accounts: human_ids.len() as u64,
+            bots_preserved,
+            purchase_records,
+            redis_keys_removed: redis_delete_keys.len() as u64,
+            redis_members_removed,
+            redb_rows_removed,
+            match_rows_removed: match_rows.len() as u64,
+            rating_rows_removed: rating_rows.len() as u64,
         })
     }
 
@@ -1611,25 +1884,240 @@ impl PlayerDb {
             .await;
     }
 
-    /// Get or create player account by platform identity
-    pub async fn get_or_create(
-        &self,
-        provider: String,
-        external_id: String,
-    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
-        self.get_or_create_with_environment(provider, "production".to_string(), external_id)
-            .await
-    }
-
-    /// Get or create an account for a verified provider identity. The legacy
-    /// production key is read as a compatibility fallback so existing
-    /// accounts are not duplicated during the namespace migration.
-    pub async fn get_or_create_with_environment(
+    /// Load an existing provider account without creating a new one. This is
+    /// scoped to an environment. New human accounts must arrive through the
+    /// canonical WOU-ID account_id bridge.
+    pub async fn get_existing_with_environment(
         &self,
         provider: String,
         environment: String,
         external_id: String,
+    ) -> Result<Option<PlayerAccount>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let id_key = Self::environment_identity_key(&environment, &provider, &external_id);
+        let Some(account_id) = con.get::<_, Option<String>>(&id_key).await? else {
+            return Ok(None);
+        };
+        let Ok(account) = Self::load_account(&mut con, &account_id).await else {
+            return Ok(None);
+        };
+        let _: () = Self::record_analytics(&mut con, &account.id, false).await?;
+        Ok(Some(self.ensure_starting_leader(account).await?))
+    }
+
+    /// Read an existing provider mapping without creating a provider-owned
+    /// account. Production and debug are the only identity environments used
+    /// by the shipped clients.
+    pub async fn get_existing_identity(
+        &self,
+        provider: String,
+        external_id: String,
+    ) -> Result<Option<PlayerAccount>, Box<dyn std::error::Error + Send + Sync>> {
+        for environment in ["production", "debug"] {
+            if let Some(account) = self
+                .get_existing_with_environment(
+                    provider.clone(),
+                    environment.to_string(),
+                    external_id.clone(),
+                )
+                .await?
+            {
+                return Ok(Some(account));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Resolve a verified identity through the single canonical account ID.
+    /// Existing SOW progress is retained; conflicting mappings fail instead of
+    /// silently merging or creating a second account.
+    pub async fn get_or_create_for_account_id(
+        &self,
+        account_id: &str,
+        provider: String,
+        environment: String,
+        external_id: String,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let account_id = account_id.trim();
+        if !is_valid_account_id(account_id) {
+            return Err("invalid canonical account_id".into());
+        }
+        if provider.trim().is_empty() || environment.trim().is_empty() || external_id.trim().is_empty() {
+            return Err("canonical identity fields are incomplete".into());
+        }
+
+        let mut con = self.get_connection().await?;
+        let id_key = Self::environment_identity_key(&environment, &provider, &external_id);
+
+        let mapped_identity = con
+            .get::<_, Option<String>>(&id_key)
+            .await?;
+        if let Some(mapped_id) = &mapped_identity
+            && mapped_id != account_id
+        {
+            return Err("provider identity is already linked to another account_id".into());
+        }
+
+        if mapped_identity.is_some() {
+            let account = Self::load_account(&mut con, account_id).await?;
+            let account = self
+                .bind_provider_identity(
+                    &mut con,
+                    account,
+                    &provider,
+                    &environment,
+                    &external_id,
+                )
+                .await?;
+            return self.ensure_starting_leader(account).await;
+        }
+
+        // A canonical account may already have a SOW anonymous record. Keep
+        // that progress and attach the verified provider instead of creating
+        // a second game account.
+        if let Some(raw) = con
+            .get::<_, Option<String>>(Self::account_key(account_id))
+            .await?
+        {
+            let account: PlayerAccount = serde_json::from_str(&raw)?;
+            if account.kind == AccountKind::Bot {
+                return Err("canonical account_id belongs to a bot".into());
+            }
+            let account = self
+                .bind_provider_identity(
+                    &mut con,
+                    account,
+                    &provider,
+                    &environment,
+                    &external_id,
+                )
+                .await?;
+            let _: () = con.set(&id_key, account_id).await?;
+            return self.ensure_starting_leader(account).await;
+        }
+
+        let identity = LinkedIdentity {
+            provider: provider.clone(),
+            external_id: external_id.clone(),
+            environment: environment.clone(),
+        };
+        let kind = if provider == "bot" {
+            AccountKind::Bot
+        } else {
+            AccountKind::Human
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let new_account = PlayerAccount {
+            id: account_id.to_string(),
+            display_name: generated_display_name(),
+            profile: PlayerProfile::for_account(account_id),
+            linked_identities: vec![identity.clone()],
+            kind,
+            auth_secret_hash: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let account_json = serde_json::to_string(&new_account)?;
+        let claim = redis::Script::new(
+            r#"if redis.call('EXISTS', KEYS[1]) == 1 then
+                        local existing = redis.call('GET', KEYS[2])
+                        if existing then return 'existing:' .. existing end
+                        return 'collision'
+                    end
+                    local existing = redis.call('GET', KEYS[2])
+                    if existing then return 'existing:' .. existing end
+                    redis.call('SET', KEYS[1], ARGV[1])
+                    redis.call('SET', KEYS[2], ARGV[2])
+                    return 'created:' .. ARGV[2]"#,
+        );
+        let result: String = claim
+            .key(Self::account_key(account_id))
+            .key(&id_key)
+            .arg(account_json)
+            .arg(account_id)
+            .invoke_async(&mut con)
+            .await?;
+        if result == "collision" {
+            return Err("account_id already exists without this provider mapping".into());
+        }
+        let Some(claimed_id) = result.strip_prefix("created:").or_else(|| result.strip_prefix("existing:")) else {
+            return Err("canonical identity claim returned an invalid result".into());
+        };
+        if result.starts_with("existing:") {
+            if claimed_id != account_id {
+                return Err("provider identity is already linked to another account_id".into());
+            }
+            let account = Self::load_account(&mut con, claimed_id).await?;
+            let account = self
+                .bind_provider_identity(
+                    &mut con,
+                    account,
+                    &provider,
+                    &environment,
+                    &external_id,
+                )
+                .await?;
+            return self.ensure_starting_leader(account).await;
+        }
+        let _: () = Self::record_analytics(&mut con, account_id, true).await?;
+        self.save_player_account_to_redb(&new_account);
+        info!(
+            "Created SOW account {} for canonical account_id",
+            new_account.id
+        );
+        Ok(new_account)
+    }
+
+    async fn bind_provider_identity(
+        &self,
+        con: &mut redis::aio::MultiplexedConnection,
+        account: PlayerAccount,
+        provider: &str,
+        environment: &str,
+        external_id: &str,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        if account.linked_identities.iter().any(|identity| {
+                identity.provider == provider
+                    && identity.external_id == external_id
+                    && identity.environment == environment
+            }) {
+            return Ok(account);
+        }
+        let updated = Self::update_account_atomic(con, &Self::account_key(&account.id), |account| {
+            if !account.linked_identities.iter().any(|identity| {
+                identity.provider == provider
+                    && identity.external_id == external_id
+                    && identity.environment == environment
+            }) {
+                account.linked_identities.push(LinkedIdentity {
+                    provider: provider.to_string(),
+                    external_id: external_id.to_string(),
+                    environment: environment.to_string(),
+                });
+            }
+            account.updated_at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+        })
+        .await?;
+        self.save_player_account_to_redb(&updated);
+        Ok(updated)
+    }
+
+    /// Get or create the technical bot account for a verified bot identity.
+    /// Human identities never use this path; they require a canonical WOU-ID
+    /// account_id through `get_or_create_for_account_id`.
+    pub async fn get_or_create_bot_account(
+        &self,
+        environment: String,
+        external_id: String,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let provider = "bot".to_string();
         let mut con = self.get_connection().await?;
         let id_key = Self::environment_identity_key(&environment, &provider, &external_id);
         let legacy_key = Self::identity_key(&provider, &external_id);
@@ -1648,7 +2136,6 @@ impl PlayerDb {
                 let _: () = con.set(&id_key, &account.id).await?;
             }
             let _: () = Self::record_analytics(&mut con, &account.id, false).await?;
-            let account = self.ensure_public_id(account).await?;
             return self.ensure_starting_leader(account).await;
         }
 
@@ -1675,7 +2162,6 @@ impl PlayerDb {
 
         let new_account = PlayerAccount {
             id: random_id.clone(),
-            public_id: public_profile_id(&random_id),
             display_name: generated_display_name(),
             profile: PlayerProfile::for_account(&random_id),
             linked_identities: vec![identity.clone()],
@@ -1705,15 +2191,15 @@ impl PlayerDb {
         Ok(new_account)
     }
 
-    /// Migrate legacy accounts once at database boot. The scan is bounded by
-    /// Valkey's cursor API and only writes accounts missing their public ID;
-    /// existing profile aggregates are never rewritten.
-    pub async fn backfill_public_profiles(
+    /// Rebuild the durable account/profile mirror from the live account store.
+    /// This removes the old derived public-profile key without touching match
+    /// history or ratings.
+    pub async fn rebuild_profile_index(
         &self,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut con = self.get_connection().await?;
         let mut cursor = 0_u64;
-        let mut migrated = 0_usize;
+        let mut accounts = Vec::new();
         loop {
             let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
                 .arg(cursor)
@@ -1736,46 +2222,65 @@ impl PlayerDb {
                         continue;
                     }
                 };
-                if account.public_id.is_empty()
-                    || account.display_name.trim().is_empty()
-                    || account.display_name == "ANON"
-                {
-                    let public_id = public_profile_id(&account.id);
-                    let migrated_name = if account.display_name.trim().is_empty()
-                        || account.display_name == "ANON"
-                    {
-                        Some(generated_display_name())
-                    } else {
-                        None
-                    };
-                    let updated = Self::update_account_atomic(&mut con, &key, |account| {
-                        if account.public_id.is_empty() {
-                            account.public_id = public_id.clone();
-                        }
-                        if let Some(name) = migrated_name.as_deref()
-                            && (account.display_name.trim().is_empty()
-                                || account.display_name == "ANON")
-                        {
-                            account.display_name = name.to_string();
-                        }
-                        account.updated_at = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs();
-                    })
-                    .await?;
-                    self.save_player_account_to_redb(&updated);
-                    migrated += 1;
-                } else {
-                    self.save_player_account_to_redb(&account);
-                }
+                accounts.push(account);
             }
             cursor = next;
             if cursor == 0 {
                 break;
             }
         }
-        Ok(migrated)
+        let Some(db) = &self.metadata_db else {
+            return Ok(accounts.len());
+        };
+        let write_txn = db.begin_write()?;
+        let old_player_keys = {
+            let table = write_txn.open_table(PLAYERS_TABLE)?;
+            table
+                .iter()?
+                .filter_map(|row| row.ok().map(|(key, _)| key.value().to_string()))
+                .collect::<Vec<_>>()
+        };
+        let old_profile_keys = {
+            let table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+            table
+                .iter()?
+                .filter_map(|row| row.ok().map(|(key, _)| key.value().to_string()))
+                .collect::<Vec<_>>()
+        };
+        {
+            let mut table = write_txn.open_table(PLAYERS_TABLE)?;
+            for key in old_player_keys {
+                table.remove(key.as_str())?;
+            }
+        }
+        {
+            let mut table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+            for key in old_profile_keys {
+                table.remove(key.as_str())?;
+            }
+        }
+        {
+            let mut table = write_txn.open_table(PLAYERS_TABLE)?;
+            for account in &accounts {
+                let json = serde_json::to_vec(account)?;
+                table.insert(account.id.as_str(), json.as_slice())?;
+            }
+        }
+        {
+            let mut table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+            for account in &accounts {
+                let index = PublicProfileIndex {
+                    account_id: account.id.clone(),
+                    display_name: account.display_name.clone(),
+                    kind: format!("{:?}", account.kind),
+                    updated_at: account.updated_at,
+                };
+                let json = serde_json::to_vec(&index)?;
+                table.insert(account.id.as_str(), json.as_slice())?;
+            }
+        }
+        write_txn.commit()?;
+        Ok(accounts.len())
     }
 
     /// Load or create an anonymous account using the canonical account ID.
@@ -1790,7 +2295,7 @@ impl PlayerDb {
 
         if let Some(account_id) = account_id.map(str::trim).filter(|id| !id.is_empty()) {
             if !is_valid_account_id(account_id) {
-                return Err("account_id must be exactly 32 hexadecimal characters".into());
+                return Err("account_id is invalid".into());
             }
             let account = Self::load_account(&mut con, account_id).await?;
             if !account.linked_identities.is_empty() {
@@ -1803,9 +2308,7 @@ impl PlayerDb {
             {
                 return Err("invalid secret".into());
             }
-            let account = self
-                .ensure_starting_leader(self.ensure_public_id(account).await?)
-                .await?;
+            let account = self.ensure_starting_leader(account).await?;
             if account.display_name.trim().is_empty() || account.display_name == "ANON" {
                 let migrated_name = requested_display_name
                     .map(normalize_display_name)
@@ -1844,7 +2347,6 @@ impl PlayerDb {
             let random_id = format!("{:032x}", rand::random::<u128>());
             let account = PlayerAccount {
                 id: random_id.clone(),
-                public_id: public_profile_id(&random_id),
                 display_name: display_name.clone(),
                 profile: PlayerProfile::for_account(&random_id),
                 linked_identities: Vec::new(),
@@ -1942,12 +2444,21 @@ impl PlayerDb {
         ))
     }
 
-    pub fn account_id_for_public_id(
+    /// Resolve a canonical account ID. Display handles and legacy identity
+    /// namespaces are not accepted for authenticated operations.
+    pub async fn account_id_from_reference(
         &self,
-        public_id: &str,
+        reference: &str,
     ) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
-        self.public_index(public_id)
-            .map(|index| index.map(|index| index.account_id))
+        let reference = reference.trim();
+        if !is_valid_account_id(reference) {
+            return Ok(None);
+        }
+        let mut con = self.get_connection().await?;
+        if con.exists::<_, bool>(Self::account_key(reference)).await? {
+            return Ok(Some(reference.to_string()));
+        }
+        Ok(None)
     }
 
     /// Deliver one RevenueCat product exactly once. The event id is the
@@ -1962,12 +2473,10 @@ impl PlayerDb {
         transaction_id: Option<&str>,
         environment: &str,
     ) -> Result<(PlayerAccount, bool), Box<dyn std::error::Error + Send + Sync>> {
-        let account_id = if is_valid_account_id(purchase_user_id) {
-            purchase_user_id.to_string()
-        } else {
-            self.account_id_for_public_id(purchase_user_id)?
-                .ok_or("app_user_id must be a known public profile ID")?
-        };
+        let account_id = self
+            .account_id_from_reference(purchase_user_id)
+            .await?
+            .ok_or("app_user_id must be a known account_id")?;
         let event_id = event_id.trim();
         if event_id.is_empty() || event_id.len() > 256 {
             return Err("RevenueCat event id is invalid".into());
@@ -2089,7 +2598,8 @@ impl PlayerDb {
         status: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let account_id = self
-            .account_id_for_public_id(purchase_user_id)?
+            .account_id_from_reference(purchase_user_id)
+            .await?
             .ok_or("Stripe purchase user is unknown")?;
         let session_id = session_id.trim();
         if session_id.is_empty() || session_id.len() > 256 {
@@ -2145,12 +2655,10 @@ impl PlayerDb {
         transaction_id: Option<&str>,
         environment: &str,
     ) -> Result<(PlayerAccount, bool), Box<dyn std::error::Error + Send + Sync>> {
-        let account_id = if is_valid_account_id(purchase_user_id) {
-            purchase_user_id.to_string()
-        } else {
-            self.account_id_for_public_id(purchase_user_id)?
-                .ok_or("app_user_id must be a known public profile ID")?
-        };
+        let account_id = self
+            .account_id_from_reference(purchase_user_id)
+            .await?
+            .ok_or("app_user_id must be a known account_id")?;
         let event_id = event_id.trim();
         if event_id.is_empty() || event_id.len() > 256 {
             return Err("RevenueCat event id is invalid".into());
@@ -2383,12 +2891,10 @@ impl PlayerDb {
         purchase_user_id: &str,
         product_id: &str,
     ) -> Result<(PlayerAccount, bool), Box<dyn std::error::Error + Send + Sync>> {
-        let account_id = if is_valid_account_id(purchase_user_id) {
-            purchase_user_id.to_string()
-        } else {
-            self.account_id_for_public_id(purchase_user_id)?
-                .ok_or("app_user_id must be a known public profile ID")?
-        };
+        let account_id = self
+            .account_id_from_reference(purchase_user_id)
+            .await?
+            .ok_or("app_user_id must be a known account_id")?;
         let event_id = event_id.trim();
         if event_id.is_empty() || event_id.len() > 256 {
             return Err("RevenueCat event id is invalid".into());
@@ -2438,12 +2944,10 @@ impl PlayerDb {
         purchase_user_id: &str,
         product_id: &str,
     ) -> Result<(PlayerAccount, bool), Box<dyn std::error::Error + Send + Sync>> {
-        let account_id = if is_valid_account_id(purchase_user_id) {
-            purchase_user_id.to_string()
-        } else {
-            self.account_id_for_public_id(purchase_user_id)?
-                .ok_or("app_user_id must be a known public profile ID")?
-        };
+        let account_id = self
+            .account_id_from_reference(purchase_user_id)
+            .await?
+            .ok_or("app_user_id must be a known account_id")?;
         let event_id = event_id.trim();
         if event_id.is_empty() || event_id.len() > 256 {
             return Err("RevenueCat event id is invalid".into());
@@ -2518,7 +3022,6 @@ impl PlayerDb {
             };
             let account = PlayerAccount {
                 id: random_id.clone(),
-                public_id: public_profile_id(&random_id),
                 display_name: generated_display_name(),
                 profile: PlayerProfile::for_account(&random_id),
                 linked_identities: vec![identity.clone()],
@@ -2920,11 +3423,6 @@ impl PlayerDb {
                 .map(|position| (exits.len().saturating_sub(position)) as u16)
                 .unwrap_or(1);
             let account = Self::load_account(&mut con, account_id).await?;
-            let public_id = if account.public_id.is_empty() {
-                public_profile_id(account_id)
-            } else {
-                account.public_id.clone()
-            };
             let reward = crate::rewards::calculate(crate::rewards::RewardInput {
                 won,
                 players_defeated: defeats.players,
@@ -2936,7 +3434,6 @@ impl PlayerDb {
             });
             participant_records.push(crate::profile::MatchParticipantRecord {
                 account_id: account_id.clone(),
-                public_id,
                 display_name: account.display_name,
                 is_bot: account.kind == AccountKind::Bot,
                 leader: leader.clone(),
@@ -3078,7 +3575,13 @@ impl PlayerDb {
 }
 
 fn is_valid_account_id(value: &str) -> bool {
-    value.len() == ACCOUNT_ID_HEX_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    let value = value.trim();
+    (value.len() == ACCOUNT_ID_HEX_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        || (value.len() == 36
+            && value.bytes().enumerate().all(|(index, byte)| {
+                matches!(index, 8 | 13 | 18 | 23) && byte == b'-'
+                    || !matches!(index, 8 | 13 | 18 | 23) && byte.is_ascii_hexdigit()
+            }))
 }
 
 #[cfg(test)]
@@ -3090,6 +3593,7 @@ mod tests {
     #[test]
     fn validates_canonical_account_ids() {
         assert!(is_valid_account_id("0123456789abcdef0123456789abcdef"));
+        assert!(is_valid_account_id("52948534-1c9f-4def-bc8e-80390d3287a6"));
         // The removed guest_<hex> format is intentionally rejected; only the
         // 32-hex canonical account ID is accepted by the live API.
         assert!(!is_valid_account_id(

@@ -156,15 +156,15 @@ impl SowApp {
             };
 
             let (message, color) = if victim_id == my_id && my_id != 0 {
-                // You got nuked
+                // Your territory was hit
                 (
-                    format!("Incoming nuke from {}", attacker_name),
+                    format!("Incoming strike from {}", attacker_name),
                     egui::Color32::from_rgb(239, 68, 68),
                 )
             } else if alert.owner_id == my_id {
-                // You nuked someone
+                // You hit another player
                 (
-                    format!("Nuke detonated on {}", victim_name),
+                    format!("Strategic strike hit {}", victim_name),
                     egui::Color32::from_rgb(74, 222, 128),
                 )
             } else if my_id != 0
@@ -176,15 +176,15 @@ impl SowApp {
                     .unwrap_or(false)
                 && victim_id != 0
             {
-                // Ally got nuked
+                // Ally got hit
                 (
-                    format!("{} nuked ally {}", attacker_name, victim_name),
+                    format!("{} struck ally {}", attacker_name, victim_name),
                     egui::Color32::from_rgb(251, 191, 36),
                 )
             } else {
                 // Enemy vs enemy / neutral
                 (
-                    format!("{} nuked {}", attacker_name, victim_name),
+                    format!("{} struck {}", attacker_name, victim_name),
                     egui::Color32::from_rgb(180, 180, 200),
                 )
             };

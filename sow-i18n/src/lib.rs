@@ -7,6 +7,8 @@ pub enum Language {
     Spanish,
     French,
     German,
+    Italian,
+    Turkish,
 }
 
 impl Language {
@@ -18,6 +20,10 @@ impl Language {
             Language::French
         } else if normalized.starts_with("de") {
             Language::German
+        } else if normalized.starts_with("it") {
+            Language::Italian
+        } else if normalized.starts_with("tr") {
+            Language::Turkish
         } else {
             Language::English
         }
@@ -375,6 +381,10 @@ pub struct LanguageStrings {
 
 static EN_STRINGS: OnceLock<LanguageStrings> = OnceLock::new();
 static ES_STRINGS: OnceLock<LanguageStrings> = OnceLock::new();
+static FR_STRINGS: OnceLock<LanguageStrings> = OnceLock::new();
+static DE_STRINGS: OnceLock<LanguageStrings> = OnceLock::new();
+static IT_STRINGS: OnceLock<LanguageStrings> = OnceLock::new();
+static TR_STRINGS: OnceLock<LanguageStrings> = OnceLock::new();
 static PRIVACY_EN: OnceLock<LegalDocument> = OnceLock::new();
 static TERMS_EN: OnceLock<LegalDocument> = OnceLock::new();
 
@@ -405,6 +415,46 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/es/credits.toml"),
             )
         }),
+        Language::French => FR_STRINGS.get_or_init(|| {
+            load_language(
+                include_str!("../strings/fr/main_menu.toml"),
+                include_str!("../strings/fr/settings.toml"),
+                include_str!("../strings/fr/loading_screen.toml"),
+                include_str!("../strings/fr/endgame.toml"),
+                include_str!("../strings/fr/hud.toml"),
+                include_str!("../strings/fr/credits.toml"),
+            )
+        }),
+        Language::German => DE_STRINGS.get_or_init(|| {
+            load_language(
+                include_str!("../strings/de/main_menu.toml"),
+                include_str!("../strings/de/settings.toml"),
+                include_str!("../strings/de/loading_screen.toml"),
+                include_str!("../strings/de/endgame.toml"),
+                include_str!("../strings/de/hud.toml"),
+                include_str!("../strings/de/credits.toml"),
+            )
+        }),
+        Language::Italian => IT_STRINGS.get_or_init(|| {
+            load_language(
+                include_str!("../strings/it/main_menu.toml"),
+                include_str!("../strings/it/settings.toml"),
+                include_str!("../strings/it/loading_screen.toml"),
+                include_str!("../strings/it/endgame.toml"),
+                include_str!("../strings/it/hud.toml"),
+                include_str!("../strings/it/credits.toml"),
+            )
+        }),
+        Language::Turkish => TR_STRINGS.get_or_init(|| {
+            load_language(
+                include_str!("../strings/tr/main_menu.toml"),
+                include_str!("../strings/tr/settings.toml"),
+                include_str!("../strings/tr/loading_screen.toml"),
+                include_str!("../strings/tr/endgame.toml"),
+                include_str!("../strings/tr/hud.toml"),
+                include_str!("../strings/tr/credits.toml"),
+            )
+        }),
         _ => EN_STRINGS.get_or_init(|| {
             load_language(
                 include_str!("../strings/en/main_menu.toml"),
@@ -430,6 +480,50 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 hud_toml: include_str!("../strings/es/hud.toml"),
                 map_editor_toml: include_str!("../strings/es/map_editor.toml"),
                 credits_toml: include_str!("../strings/es/credits.toml"),
+            })
+        }),
+        Language::French => FR_STRINGS.get_or_init(|| {
+            load_language_with_map_editor(I18nLoadCtx {
+                main_menu_toml: include_str!("../strings/fr/main_menu.toml"),
+                settings_toml: include_str!("../strings/fr/settings.toml"),
+                loading_screen_toml: include_str!("../strings/fr/loading_screen.toml"),
+                endgame_toml: include_str!("../strings/fr/endgame.toml"),
+                hud_toml: include_str!("../strings/fr/hud.toml"),
+                map_editor_toml: include_str!("../strings/en/map_editor.toml"),
+                credits_toml: include_str!("../strings/fr/credits.toml"),
+            })
+        }),
+        Language::German => DE_STRINGS.get_or_init(|| {
+            load_language_with_map_editor(I18nLoadCtx {
+                main_menu_toml: include_str!("../strings/de/main_menu.toml"),
+                settings_toml: include_str!("../strings/de/settings.toml"),
+                loading_screen_toml: include_str!("../strings/de/loading_screen.toml"),
+                endgame_toml: include_str!("../strings/de/endgame.toml"),
+                hud_toml: include_str!("../strings/de/hud.toml"),
+                map_editor_toml: include_str!("../strings/en/map_editor.toml"),
+                credits_toml: include_str!("../strings/de/credits.toml"),
+            })
+        }),
+        Language::Italian => IT_STRINGS.get_or_init(|| {
+            load_language_with_map_editor(I18nLoadCtx {
+                main_menu_toml: include_str!("../strings/it/main_menu.toml"),
+                settings_toml: include_str!("../strings/it/settings.toml"),
+                loading_screen_toml: include_str!("../strings/it/loading_screen.toml"),
+                endgame_toml: include_str!("../strings/it/endgame.toml"),
+                hud_toml: include_str!("../strings/it/hud.toml"),
+                map_editor_toml: include_str!("../strings/en/map_editor.toml"),
+                credits_toml: include_str!("../strings/it/credits.toml"),
+            })
+        }),
+        Language::Turkish => TR_STRINGS.get_or_init(|| {
+            load_language_with_map_editor(I18nLoadCtx {
+                main_menu_toml: include_str!("../strings/tr/main_menu.toml"),
+                settings_toml: include_str!("../strings/tr/settings.toml"),
+                loading_screen_toml: include_str!("../strings/tr/loading_screen.toml"),
+                endgame_toml: include_str!("../strings/tr/endgame.toml"),
+                hud_toml: include_str!("../strings/tr/hud.toml"),
+                map_editor_toml: include_str!("../strings/en/map_editor.toml"),
+                credits_toml: include_str!("../strings/tr/credits.toml"),
             })
         }),
         _ => EN_STRINGS.get_or_init(|| {

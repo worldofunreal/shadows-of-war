@@ -1,0 +1,157 @@
+{
+  "_comment": "Six Sky episode 1 'Arrival' (682 CE) — edited via tools/campaign-editor.",
+  "map": "northamerica",
+  "player_spawn": [
+    529,
+    416
+  ],
+  "factions": [
+    {
+      "name": "Sa'aal Court",
+      "x": 533,
+      "y": 418,
+      "role": "kin",
+      "iq": 100,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Dos Pilas Honor Guard",
+      "x": 522,
+      "y": 420,
+      "role": "kin",
+      "iq": 100,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Naranjo Loyalists",
+      "x": 527,
+      "y": 421,
+      "role": "kin",
+      "iq": 100,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Uaxactun Villagers",
+      "x": 536,
+      "y": 415,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Yaxha Fishers",
+      "x": 535,
+      "y": 422,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Tayasal Farmers",
+      "x": 524,
+      "y": 424,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Seibal Traders",
+      "x": 529,
+      "y": 425,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Caracol Outpost",
+      "x": 538,
+      "y": 419,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Tikal Tribute Post",
+      "x": 537,
+      "y": 426,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Piedras Negras Garrison",
+      "x": 520,
+      "y": 426,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Copan Delegation",
+      "x": 528,
+      "y": 430,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Rival Claimant",
+      "x": 541,
+      "y": 416,
+      "role": "boss",
+      "iq": 90,
+      "civ": "maya"
+    },
+    {
+      "name": "Caracol",
+      "x": 532,
+      "y": 428,
+      "role": "boss",
+      "iq": 90,
+      "civ": "maya"
+    },
+    {
+      "name": "Tikal Vanguard",
+      "x": 523,
+      "y": 429,
+      "role": "boss",
+      "iq": 90,
+      "civ": "maya"
+    },
+    {
+      "name": "Tikal",
+      "x": 540,
+      "y": 423,
+      "role": "big_boss",
+      "iq": 90,
+      "civ": "maya"
+    },
+    {
+      "name": "Topoxte",
+      "x": 518,
+      "y": 430,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Quirigua",
+      "x": 535,
+      "y": 431,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Xunantunich",
+      "x": 521,
+      "y": 433,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    }
+  ]
+}

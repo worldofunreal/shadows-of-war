@@ -44,7 +44,6 @@ const MATCH_ID_MAX_LEN: usize = 64;
 pub struct ReportInput {
     pub reporter_account_id: String,
     pub reported_account_id: String,
-    pub reported_public_id: String,
     pub match_id: Option<String>,
     pub reason: String,
     pub details: Option<String>,
@@ -55,7 +54,6 @@ struct StoredReport {
     id: String,
     reporter_account_id: String,
     reported_account_id: String,
-    reported_public_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     match_id: Option<String>,
     reason: String,
@@ -125,7 +123,6 @@ pub async fn submit_report(
         id: report_id.clone(),
         reporter_account_id: input.reporter_account_id.clone(),
         reported_account_id: input.reported_account_id.clone(),
-        reported_public_id: input.reported_public_id.clone(),
         match_id,
         reason: input.reason.clone(),
         details: details.clone(),
@@ -142,18 +139,7 @@ pub async fn submit_report(
         .await?;
 
     let block_key = format!("{BLOCK_PREFIX}{}", input.reporter_account_id);
-    // Store both id kinds: clients identify other players by public profile
-    // id, while reports resolve to canonical account ids. Stale members are
-    // harmless (they match nothing) and vanish with the reporter's account.
-    let _: () = con
-        .sadd(
-            &block_key,
-            vec![
-                input.reported_account_id.clone(),
-                input.reported_public_id.clone(),
-            ],
-        )
-        .await?;
+    let _: () = con.sadd(&block_key, &input.reported_account_id).await?;
 
     let email_sent = send_moderation_email(&report).await;
 
@@ -164,9 +150,8 @@ pub async fn submit_report(
     })
 }
 
-/// Blocked ids for this account (owner-only read; the handler verifies
-/// ownership before calling). Contains both canonical account ids and public
-/// profile ids so clients can match whatever identifier they render.
+/// Blocked account IDs for this account (owner-only read; the handler verifies
+/// ownership before calling).
 pub async fn blocked_ids(
     db: &PlayerDb,
     account_id: &str,
@@ -222,7 +207,6 @@ async fn send_moderation_email(report: &StoredReport) -> bool {
          \n\
          report_id: {id}\n\
          reason: {reason}\n\
-         reported_public_id: {public_id}\n\
          reported_account_id: {account_id}\n\
          reporter_account_id: {reporter}\n\
          match_id: {match_id}\n\
@@ -233,7 +217,6 @@ async fn send_moderation_email(report: &StoredReport) -> bool {
          index (sow:reports:index) and take action per the Terms of Service.\n",
         id = report.id,
         reason = report.reason,
-        public_id = report.reported_public_id,
         account_id = report.reported_account_id,
         reporter = report.reporter_account_id,
         match_id = report.match_id.as_deref().unwrap_or("-"),
@@ -256,7 +239,7 @@ async fn send_moderation_email(report: &StoredReport) -> bool {
         })
         .subject(format!(
             "[SOW report] {} against {}",
-            report.reason, report.reported_public_id
+            report.reason, report.reported_account_id
         ))
         .body(body)
     {

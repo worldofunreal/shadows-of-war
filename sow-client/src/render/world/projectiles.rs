@@ -492,18 +492,18 @@ pub(crate) fn render(
                         ),
                     );
 
-                    // ── 4. Ghost nuke icon at target ─────────────────────
+                    // ── 4. Ghost strategic-strike icon at target ─────────
                     let ghost_size = (18.0 + level as f32 * 4.0).max(MIN_PREVIEW_ICON_PX);
                     let rect = egui::Rect::from_center_size(
                         tgt_center,
                         egui::vec2(ghost_size, ghost_size),
                     );
                     let tint = egui::Color32::from_rgba_unmultiplied(255, 255, 255, 140);
-                    if !sow_ui_kit::widgets::try_paint_emoji(painter, "☢️", rect, tint) {
+                    if !sow_ui_kit::widgets::try_paint_emoji(painter, "⚡", rect, tint) {
                         painter.text(
                             tgt_center,
                             egui::Align2::CENTER_CENTER,
-                            "☢️",
+                            "⚡",
                             egui::FontId::proportional(ghost_size * 0.7),
                             tint,
                         );

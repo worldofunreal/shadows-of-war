@@ -1,0 +1,149 @@
+{
+  "_comment": "Six Sky episode 2 'The Regent's Fire' — edited via tools/campaign-editor.",
+  "map": "northamerica",
+  "player_spawn": [
+    529,
+    416
+  ],
+  "factions": [
+    {
+      "name": "K'ak' Tiliw Guard",
+      "x": 533,
+      "y": 418,
+      "role": "kin",
+      "iq": 110,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Sa'aal Court",
+      "x": 526,
+      "y": 419,
+      "role": "kin",
+      "iq": 110,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Dos Pilas Veterans",
+      "x": 522,
+      "y": 421,
+      "role": "kin",
+      "iq": 110,
+      "civ": "maya",
+      "leader": "lady_six_sky"
+    },
+    {
+      "name": "Yaxha Lookouts",
+      "x": 530,
+      "y": 421,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Topoxte Fishers",
+      "x": 535,
+      "y": 422,
+      "role": "independent",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Calakmul Emissaries",
+      "x": 536,
+      "y": 415,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Copan Delegation",
+      "x": 529,
+      "y": 429,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Palenque Envoys",
+      "x": 524,
+      "y": 425,
+      "role": "vassal",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Uaxactun Rebels",
+      "x": 532,
+      "y": 425,
+      "role": "boss",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Yaxha Rebels",
+      "x": 520,
+      "y": 427,
+      "role": "boss",
+      "iq": 105,
+      "civ": "maya"
+    },
+    {
+      "name": "Tayasal Rebels",
+      "x": 536,
+      "y": 427,
+      "role": "boss",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Seibal Rebels",
+      "x": 523,
+      "y": 430,
+      "role": "boss",
+      "iq": 105,
+      "civ": "maya"
+    },
+    {
+      "name": "Caracol",
+      "x": 538,
+      "y": 419,
+      "role": "boss",
+      "iq": 110,
+      "civ": "maya"
+    },
+    {
+      "name": "Tikal Coalition",
+      "x": 539,
+      "y": 424,
+      "role": "big_boss",
+      "iq": 115,
+      "civ": "maya"
+    },
+    {
+      "name": "Quirigua",
+      "x": 533,
+      "y": 431,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Lamanai",
+      "x": 541,
+      "y": 416,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    },
+    {
+      "name": "Altun Ha",
+      "x": 539,
+      "y": 430,
+      "role": "neutral",
+      "iq": 100,
+      "civ": "maya"
+    }
+  ]
+}

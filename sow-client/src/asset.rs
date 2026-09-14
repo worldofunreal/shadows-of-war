@@ -481,7 +481,6 @@ impl SowApp {
                 crate::player_progress::DbEvent::ProfileLoaded {
                     progress,
                     account_id,
-                    public_id,
                     display_name,
                     provider,
                     request_id,
@@ -504,7 +503,6 @@ impl SowApp {
                     self.apply_cloud_profile(
                         progress,
                         account_id,
-                        public_id,
                         display_name,
                         provider,
                     );
@@ -614,9 +612,9 @@ impl SowApp {
                         self.fetch_cloud_progress();
                     }
                 }
-                crate::player_progress::DbEvent::NativeProfileLoaded { public_id, view } => {
-                    if self.ui.app.main_menu_state.profile.public_id.as_deref()
-                        != Some(public_id.as_str())
+                crate::player_progress::DbEvent::NativeProfileLoaded { account_id, view } => {
+                    if self.ui.app.main_menu_state.profile.account_id.as_deref()
+                        != Some(account_id.as_str())
                     {
                         continue;
                     }
@@ -630,9 +628,9 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.ratings_loaded = false;
                     self.ui.app.main_menu_state.profile.view = Some(view);
                 }
-                crate::player_progress::DbEvent::NativeProfileLoadFailed { public_id, status } => {
-                    if self.ui.app.main_menu_state.profile.public_id.as_deref()
-                        != Some(public_id.as_str())
+                crate::player_progress::DbEvent::NativeProfileLoadFailed { account_id, status } => {
+                    if self.ui.app.main_menu_state.profile.account_id.as_deref()
+                        != Some(account_id.as_str())
                     {
                         continue;
                     }
@@ -645,12 +643,12 @@ impl SowApp {
                     ));
                 }
                 crate::player_progress::DbEvent::NativeProfileHistoryLoaded {
-                    public_id,
+                    account_id,
                     items,
                     next_cursor,
                 } => {
-                    if self.ui.app.main_menu_state.profile.public_id.as_deref()
-                        != Some(public_id.as_str())
+                    if self.ui.app.main_menu_state.profile.account_id.as_deref()
+                        != Some(account_id.as_str())
                     {
                         continue;
                     }
@@ -662,11 +660,11 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.history_has_next = next_cursor.is_some();
                 }
                 crate::player_progress::DbEvent::NativeProfileRatingsLoaded {
-                    public_id,
+                    account_id,
                     items,
                 } => {
-                    if self.ui.app.main_menu_state.profile.public_id.as_deref()
-                        != Some(public_id.as_str())
+                    if self.ui.app.main_menu_state.profile.account_id.as_deref()
+                        != Some(account_id.as_str())
                     {
                         continue;
                     }
@@ -690,13 +688,13 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.match_detail = Some(detail);
                 }
                 crate::player_progress::DbEvent::NativeProfileOperationFailed {
-                    public_id,
+                    account_id,
                     operation,
                     message,
                 } => {
-                    if let Some(public_id) = public_id.as_deref()
-                        && self.ui.app.main_menu_state.profile.public_id.as_deref()
-                            != Some(public_id)
+                    if let Some(account_id) = account_id.as_deref()
+                        && self.ui.app.main_menu_state.profile.account_id.as_deref()
+                            != Some(account_id)
                     {
                         continue;
                     }

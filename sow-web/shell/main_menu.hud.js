@@ -682,7 +682,7 @@
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
                 if (hudRefs.endgameLeaderXp) hudRefs.endgameLeaderXp.textContent = "+" + (rewards.leader_xp || 0);
                 if (hudRefs.endgameCrowns) hudRefs.endgameCrowns.textContent = "+" + (rewards.crowns == null ? (rewards.laurels || 0) : rewards.crowns);
-                var featuredSkin = hud.featured_skin;
+                var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {
                     if (hudRefs.endgameStoreName) hudRefs.endgameStoreName.textContent = featuredSkin.name || "FEATURED SKIN";
@@ -801,6 +801,7 @@
             } else if (cmd === "confirm_endgame_leave") {
                 send("leave_lobby");
             } else if (cmd === "open_store") {
+                if (window.SOW_PORTAL === "poki") return;
                 window.SOW_open_store_after_match = true;
                 send("leave_lobby");
             } else if (cmd === "continue_observing") {

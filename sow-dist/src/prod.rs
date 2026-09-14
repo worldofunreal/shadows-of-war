@@ -75,6 +75,7 @@ impl ComponentPlan {
 
 pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     let config = Config::load();
+    ensure_shared_identity_secret()?;
     require_stripe_config()?;
     require_secret("SOW_DB_SECRET")?;
     require_secret("SOW_RELAY_CONTROL_SECRET")?;
@@ -93,6 +94,7 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     require_config("SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID")?;
     require_config("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
     require_secret("SOW_PLAY_GAMES_WEB_CLIENT_SECRET")?;
+    require_secret("WOU_SOW_IDENTITY_SECRET")?;
     println!("==> 1/8 Preflight (read-only)");
     preflight(paths, &config)?;
     let version = version(paths, bump)?;
@@ -135,6 +137,10 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     }
     if wou_id_config_drift(&config)? {
         println!("  runtime env drift: WOU_ID_URL/WOU_ID_RESOLVE_IP");
+        plan.database = true;
+    }
+    if wou_identity_config_drift(&config)? {
+        println!("  runtime env drift: WOU_SOW_IDENTITY_SECRET");
         plan.database = true;
     }
     if play_games_config_drift(&config)? {
@@ -1261,8 +1267,10 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
     let cached = fs::read_to_string(&cache).is_ok_and(|value| value.trim() == fingerprint)
         && paths.dist_web.join("play/index.html").is_file()
         && paths.dist_cg.join("index.html").is_file()
+        && paths.dist_poki.join("index.html").is_file()
         && verify_layout(&paths.dist_web).is_ok()
-        && verify_cg_layout(&paths.dist_cg).is_ok();
+        && verify_cg_layout(&paths.dist_cg).is_ok()
+        && verify_poki_layout(&paths.dist_poki).is_ok();
     if cached {
         println!("==> Web package unchanged — reusing dist");
         return Ok(());
@@ -1276,6 +1284,13 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
         version,
         &maps_cache_bust,
     )?;
+    package_poki(
+        &paths.dist_web,
+        &paths.dist_poki,
+        paths,
+        version,
+        &maps_cache_bust,
+    )?;
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     Ok(())
@@ -1283,7 +1298,7 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
 
 pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     input_fingerprint(
-        "web-v7",
+        "web-v8-poki",
         version,
         &[
             &paths.wasm_input,
@@ -2107,6 +2122,17 @@ fn wou_id_config_drift(config: &Config) -> Result<bool> {
     Ok(actual != expected)
 }
 
+fn wou_identity_config_drift(config: &Config) -> Result<bool> {
+    let remote = output(
+        "ssh",
+        &[
+            &config.control_host,
+            r#"for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f "$f"; then sudo awk -F= '$1=="WOU_SOW_IDENTITY_SECRET" && length($2)>0 {print "set"}' "$f"; fi; done"#,
+        ],
+    )?;
+    Ok(remote.lines().map(str::trim).collect::<Vec<_>>() != vec!["set"; 3])
+}
+
 fn play_games_config_drift(config: &Config) -> Result<bool> {
     let expected_app_id = env::var("SOW_PLAY_GAMES_APP_ID")?;
     let expected_client_id = env::var("SOW_PLAY_GAMES_WEB_CLIENT_ID")?;
@@ -2264,6 +2290,14 @@ fn activate_control_host(
     } else {
         None
     };
+    let wou_identity_secret_file = if runtime_env {
+        let secret = env::var("WOU_SOW_IDENTITY_SECRET")?;
+        let path = format!("/tmp/sow-wou-identity-secret-{}", std::process::id());
+        stage_secret(&config.control_host, &secret, &path)?;
+        Some(path)
+    } else {
+        None
+    };
     let relay_host = env_or("SOW_RELAY_HOST", "relay.shadowsofwar.io");
     let relay_workers = env::var("SOW_RELAY_WORKERS").unwrap_or_default();
     let relay_worker_count = env_or("SOW_RELAY_WORKER_COUNT", "4");
@@ -2291,7 +2325,7 @@ fn activate_control_host(
         env::var("SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID")?;
     let play_games_leader_path_id = env::var("SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID")?;
     let play_games_leaderboard_id = env::var("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
-    let env_update = if runtime_env {
+    let env_update_base = if runtime_env {
         format!(
             "mkdir -p /tmp/sow-env-update; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|SOW_RELAY_TICKETS_REQUIRED|WOU_ID_URL|WOU_ID_RESOLVE_IP|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} SOW_RELAY_TICKETS_REQUIRED={relay_tickets_required} WOU_ID_URL={wou_id_url} WOU_ID_RESOLVE_IP={wou_id_resolve_ip} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
             maps_root = shell_quote(&maps_root),
@@ -2325,6 +2359,14 @@ fn activate_control_host(
     } else {
         ":".to_string()
     };
+    let env_update = if runtime_env {
+        format!(
+            "{env_update_base}; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow-wou-env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v '^WOU_SOW_IDENTITY_SECRET=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'WOU_SOW_IDENTITY_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done",
+            secret_file = shell_quote(wou_identity_secret_file.as_deref().unwrap()),
+        )
+    } else {
+        env_update_base
+    };
     let revenuecat_update = if let Some(secret_file) = revenuecat_webhook_file.as_deref() {
         format!(
             "for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do if sudo test -f \"$f\"; then sudo cp -p \"$f\" \"$f.bak_$(date +%s)\"; fi; t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v '^SOW_REVENUECAT_WEBHOOK_SECRET=' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s' 'SOW_REVENUECAT_WEBHOOK_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {secret_file} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -f {secret_file}",
@@ -2357,6 +2399,7 @@ fn activate_control_host(
         stripe_webhook_file.as_deref(),
         revenuecat_stripe_file.as_deref(),
         play_games_web_client_secret_file.as_deref(),
+        wou_identity_secret_file.as_deref(),
     ]
     .into_iter()
     .flatten()

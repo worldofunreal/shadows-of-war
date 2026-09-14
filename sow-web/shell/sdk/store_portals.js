@@ -347,8 +347,8 @@
       Array.isArray(androidPurchaseProducts) && androidPurchaseProducts.indexOf(productId) !== -1;
   };
 
-  window.SOW_requestAndroidPurchase = function (productId, appUserId) {
-    if (!window.SOW_isAndroidPurchaseBridgeReady() || !productId || !appUserId ||
+  window.SOW_requestAndroidPurchase = function (productId, accountId) {
+    if (!window.SOW_isAndroidPurchaseBridgeReady() || !productId || !accountId ||
         (androidPurchaseProducts && androidPurchaseProducts.indexOf(productId) === -1)) {
       return null;
     }
@@ -364,13 +364,13 @@
       type: "purchase",
       request_id: requestId,
       product_id: productId,
-      app_user_id: appUserId,
+      app_user_id: accountId,
     })) return null;
     return requestId;
   };
 
-  window.SOW_requestAndroidRestore = function (appUserId) {
-    if (!window.SOW_isAndroidPurchaseBridgeReady() || !appUserId) return null;
+  window.SOW_requestAndroidRestore = function (accountId) {
+    if (!window.SOW_isAndroidPurchaseBridgeReady() || !accountId) return null;
     var requestId;
     try {
       requestId = window.crypto && typeof window.crypto.randomUUID === "function"
@@ -382,7 +382,7 @@
     if (!postAndroidBridgeMessage({
       type: "restore",
       request_id: requestId,
-      app_user_id: appUserId,
+      app_user_id: accountId,
     })) return null;
     return requestId;
   };
@@ -445,6 +445,24 @@
       return false;
     }
   }
+
+  function readWouSession() {
+    try {
+      var token = window.localStorage.getItem("wou_session_token") || "";
+      var raw = window.localStorage.getItem("wou_user_data") || "";
+      var user = raw ? JSON.parse(raw) : null;
+      var accountId = user && (user.account_id || user.id);
+      if (!accountId && window.SOW_PLATFORM_IDENTITY && window.SOW_PLATFORM_IDENTITY.provider === "wou") {
+        accountId = window.SOW_PLATFORM_IDENTITY.externalId || "";
+        token = window.SOW_PLATFORM_IDENTITY.token || token;
+      }
+      return { token: token, accountId: accountId || "", user: user };
+    } catch (e) {
+      return { token: "", accountId: "", user: null };
+    }
+  }
+
+  window.SOW_getWouSession = readWouSession;
 
   window.SOW_getAuthState = function () {
     var identity = window.SOW_PLATFORM_IDENTITY;
@@ -754,6 +772,56 @@
   };
 
   window.SOW_AUTH_CHANGED = false;
+  var wouAnonymousPromise = null;
+
+  function isSowIdentityHost() {
+    var host = String(window.location.hostname || "").toLowerCase();
+    return host === "shadowsofwar.io" || host === "www.shadowsofwar.io" ||
+      host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  }
+
+  window.SOW_isSowProductionHost = function () {
+    return window.location.protocol === "https:" &&
+      String(window.location.hostname || "").toLowerCase() === "shadowsofwar.io" &&
+      !isPortalEmbed();
+  };
+
+  function saveWouSession(data) {
+    if (!data || !data.session_token || !data.account) {
+      throw new Error("Identity service returned an incomplete anonymous session.");
+    }
+    try {
+      window.localStorage.setItem("wou_session_token", data.session_token);
+      window.localStorage.setItem("wou_user_data", JSON.stringify(data.account));
+    } catch (e) {
+      throw new Error("Could not save the account on this device.");
+    }
+    emitAuthStateChange();
+    return readWouSession();
+  }
+
+  window.SOW_ensureWouAnonymousSession = function () {
+    var existing = readWouSession();
+    if (existing.token && existing.accountId) return Promise.resolve(existing);
+    if (!isSowIdentityHost() || isAndroidTwa() || isPortalEmbed()) {
+      return Promise.resolve(existing);
+    }
+    if (wouAnonymousPromise) return wouAnonymousPromise;
+    wouAnonymousPromise = fetch("https://id.worldofunreal.com/api/v1/auth/anonymous", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ context: "shadows_of_war" }),
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (data) {
+        if (!response.ok) throw new Error(data.error || "Anonymous identity is unavailable right now.");
+        return saveWouSession(data);
+      });
+    }).finally(function () {
+      wouAnonymousPromise = null;
+    });
+    return wouAnonymousPromise;
+  };
+
   function emitAuthStateChange() {
     window.SOW_AUTH_CHANGED = true;
     try {
@@ -789,28 +857,95 @@
     };
   }
 
-  window.SOW_startWouOAuth = function (provider) {
+  function oauthBase64Url(bytes) {
+    var binary = "";
+    for (var i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function oauthStatePayload(value) {
+    return oauthBase64Url(new TextEncoder().encode(JSON.stringify(value)));
+  }
+
+  function oauthNonce() {
+    var bytes = new Uint8Array(24);
+    window.crypto.getRandomValues(bytes);
+    return oauthBase64Url(bytes);
+  }
+
+  async function oauthPkcePair() {
+    var verifierBytes = new Uint8Array(32);
+    window.crypto.getRandomValues(verifierBytes);
+    var verifier = oauthBase64Url(verifierBytes);
+    var digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    return { verifier: verifier, challenge: oauthBase64Url(new Uint8Array(digest)) };
+  }
+
+  var wouOAuthConfigPromise = null;
+
+  function loadWouOAuthConfig() {
+    if (wouOAuthConfigPromise) return wouOAuthConfigPromise;
+    wouOAuthConfigPromise = fetch("https://id.worldofunreal.com/api/v1/auth/oauth/config", {
+      headers: { "Accept": "application/json" },
+    }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (data) {
+        if (!response.ok || !data.hub_callback || !Array.isArray(data.game_callbacks)) {
+          throw new Error("OAuth callback configuration is unavailable.");
+        }
+        return data;
+      });
+    });
+    return wouOAuthConfigPromise;
+  }
+
+  async function sowOAuthRedirectUri() {
+    var host = String(window.location.hostname || "").toLowerCase();
+    var direct = window.location.origin + "/auth/callback";
+    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
+      return direct;
+    }
+    var config = await loadWouOAuthConfig();
+    if (config.game_callbacks.indexOf(direct) === -1) {
+      throw new Error("SOW OAuth callback is not registered for this production host.");
+    }
+    return direct;
+  }
+
+  window.SOW_startWouOAuth = async function (provider) {
     var allowed = { google: true, discord: true, twitter: true, meta: true };
     provider = allowed[provider] ? provider : "google";
     try {
       var returnTo = window.location.href.split("#")[0];
-      var stateObj = { returnTo: returnTo, accountId: "", provider: provider };
-      var statePayload = "";
-      try {
-        statePayload = btoa(unescape(encodeURIComponent(JSON.stringify(stateObj))))
-          .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      } catch (e) {
-        statePayload = encodeURIComponent(JSON.stringify(stateObj));
-      }
+      var callbackUri = await sowOAuthRedirectUri();
+      var session = await window.SOW_ensureWouAnonymousSession();
+      var nonce = oauthNonce();
+      var pkce = provider === "twitter" ? await oauthPkcePair() : null;
+      var stateObj = { returnTo: returnTo, accountId: session.accountId || "", provider: provider, nonce: nonce };
+      var statePayload = oauthStatePayload(stateObj);
       try { sessionStorage.setItem("wou_oauth_provider", provider); } catch (e) {}
-      var targetUrl = "https://id.worldofunreal.com/api/v1/auth/oauth/login/" +
-        encodeURIComponent(provider) +
-        "?redirect_uri=" + encodeURIComponent("https://worldofunreal.com/auth/callback") +
-        "&state=" + encodeURIComponent(statePayload);
+      try {
+        sessionStorage.setItem("wou_oauth_transaction", JSON.stringify({
+          nonce: nonce,
+          provider: provider,
+          redirectUri: callbackUri,
+          codeVerifier: pkce ? pkce.verifier : null,
+        }));
+      } catch (e) {}
+      var params = new URLSearchParams({ redirect_uri: callbackUri, state: statePayload });
+      if (pkce) {
+        params.set("code_challenge", pkce.challenge);
+        params.set("code_challenge_method", "S256");
+      }
+      var targetUrl = "https://id.worldofunreal.com/api/v1/auth/oauth/login/" + encodeURIComponent(provider) + "?" + params.toString();
       window.location.href = targetUrl;
       return true;
     } catch (e) {
       console.warn("WOU login redirect failed:", e);
+      try {
+        window.dispatchEvent(new CustomEvent("wou:auth-error", {
+          detail: { message: e && e.message ? e.message : "Sign-in is unavailable right now." },
+        }));
+      } catch (ignored) {}
       return false;
     }
   };
@@ -875,7 +1010,7 @@
       params.delete("account");
       var clean = window.location.pathname + (params.toString() ? "?" + params.toString() : "") + window.location.hash;
       window.history.replaceState({}, document.title, clean);
-      console.log("WOU login captured for:", account.display_name || account.id);
+      console.log("WOU login captured for:", account.display_name || account.account_id || account.id);
     } catch (e) {
       console.warn("WOU login capture failed:", e);
     }

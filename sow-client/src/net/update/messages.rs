@@ -76,6 +76,7 @@ impl SowApp {
                         }
                     }
                     ServerMessage::Start(start_msg) => {
+                        crate::store_portals::measure("match", "loading", "start");
                         log::info!(
                             "[CLIENT NET] 🎮 Received ServerStartMessage! lobby_id={:?}, player_id={:?}, relay_port={:?}, relay_host={:?}",
                             start_msg.lobby_id,
@@ -318,6 +319,7 @@ impl SowApp {
                         }
                     }
                     ServerMessage::JoinFailed(fail) => {
+                        crate::store_portals::measure("lobby", "join", "fail");
                         log::warn!("[JOIN] Failed: {}", fail.reason);
                         crate::store_portals::left_room();
                         if fail.reason == "VERSION_MISMATCH" {
@@ -343,6 +345,7 @@ impl SowApp {
                         }
                     }
                     ServerMessage::JoinAck(ack) => {
+                        crate::store_portals::measure("lobby", "join", "complete");
                         log::info!(
                             "[LOBBY] Joined lobby {} as player {} (map: {})",
                             ack.lobby_id,

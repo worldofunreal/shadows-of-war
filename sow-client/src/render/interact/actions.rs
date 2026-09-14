@@ -202,7 +202,7 @@ impl SowApp {
                         .app
                         .main_menu_state
                         .open_route(sow_ui::ui::main_menu::MainMenuRoute::Profile);
-                    self.ui.app.main_menu_state.profile.public_id = self.profile_public_id.clone();
+                    self.ui.app.main_menu_state.profile.account_id = self.profile_account_id.clone();
                     self.ui.app.main_menu_state.profile.error = None;
                     self.ui.app.main_menu_state.profile.view = None;
                     self.ui.app.main_menu_state.profile.history.clear();
@@ -223,12 +223,12 @@ impl SowApp {
                 UiAction::LoadOwnProfile => {
                     self.load_native_profile();
                 }
-                UiAction::OpenPublicProfilePage(public_id) => {
+                UiAction::OpenPublicProfilePage(account_id) => {
                     self.ui
                         .app
                         .main_menu_state
                         .open_route(sow_ui::ui::main_menu::MainMenuRoute::Profile);
-                    self.ui.app.main_menu_state.profile.public_id = Some(public_id);
+                    self.ui.app.main_menu_state.profile.account_id = Some(account_id);
                     self.ui.app.main_menu_state.profile.view = None;
                     self.ui.app.main_menu_state.profile.history.clear();
                     self.ui.app.main_menu_state.profile.ratings.clear();
@@ -355,7 +355,7 @@ impl SowApp {
     fn open_ios_store(&mut self) {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-        let Some(app_user_id) = self.profile_public_id.clone() else {
+        let Some(app_user_id) = self.progress_account_id.clone() else {
             self.ui.app.main_menu_state.error_message =
                 Some("Your player profile is still loading. Try Store again in a moment.".into());
             return;
@@ -392,7 +392,7 @@ impl SowApp {
 
     #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
     fn open_desktop_purchase(&mut self, product_id: &str) {
-        let Some(public_id) = self.profile_public_id.as_deref() else {
+        let Some(account_id) = self.progress_account_id.as_deref() else {
             self.ui.app.main_menu_state.error_message =
                 Some("Your player profile is still loading. Try again in a moment.".into());
             return;
@@ -406,7 +406,7 @@ impl SowApp {
             return;
         };
         let encoded_user =
-            url::form_urlencoded::byte_serialize(public_id.as_bytes()).collect::<String>();
+            url::form_urlencoded::byte_serialize(account_id.as_bytes()).collect::<String>();
         let encoded_product =
             url::form_urlencoded::byte_serialize(product_id.as_bytes()).collect::<String>();
         let url = format!(
@@ -435,6 +435,13 @@ impl SowApp {
         self.ui.app.main_menu_state.error_message = None;
         self.ui.app.main_menu_state.notice = None;
         let matchmaking_join = lobby_id.is_none() && !is_private && config.is_none();
+        if matchmaking_join {
+            crate::store_portals::measure("matchmaking", "queue", "interact");
+        } else if lobby_id.is_some() {
+            crate::store_portals::measure("lobby", "join", "interact");
+        } else {
+            crate::store_portals::measure("lobby", "create", "interact");
+        }
         self.join_matchmaking = matchmaking_join;
         if let Some(cfg) = config {
             self.ui.app.main_menu_state.custom_game_config = cfg;

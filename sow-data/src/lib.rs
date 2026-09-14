@@ -15,6 +15,7 @@ pub mod leaders;
 pub mod metadata_db;
 #[cfg(feature = "server")]
 pub mod moderation;
+pub mod name_policy;
 pub mod profile;
 pub mod rewards;
 #[cfg(feature = "server")]

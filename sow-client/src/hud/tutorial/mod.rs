@@ -23,10 +23,11 @@ mod pointer;
 mod steps;
 
 use crate::app::SowApp;
+use crate::campaign::CampaignId;
 use objectives::{ObjRow, ObjState, draw_objectives_panel};
 use pointer::draw_tutorial_pointer;
 use sow_ui::widgets::{BottomDialog, DialogButton, SpeakerVisual, ThemeButtonStyle};
-use steps::{ADVISOR, CHAPTER_1, objective_progress};
+use steps::{CHAPTER_1, SIX_SKY_EP1, SIX_SKY_EP2, SIX_SKY_EP3, objective_progress};
 
 /// How long a non-destructive dialog holds the bottom panel before auto-advancing (the takeover is
 /// "for a limited time"; a tap on the panel or a click on the map skips it sooner). Destructive or
@@ -75,7 +76,14 @@ impl SowApp {
         // The advisor portrait persists from the main menu, but guarantee it offline too.
         self.ui.app.asset_loader.ensure_avatars_loaded(ctx);
 
-        let steps = CHAPTER_1;
+        let campaign: CampaignId = self.ui.tutorial_campaign;
+        let steps = match campaign {
+            CampaignId::Boudica => CHAPTER_1,
+            CampaignId::SixSkyEp1 => SIX_SKY_EP1,
+            CampaignId::SixSkyEp2 => SIX_SKY_EP2,
+            CampaignId::SixSkyEp3 => SIX_SKY_EP3,
+        };
+        let advisor = campaign.advisor();
 
         // Snapshot facts about the local player.
         let my_id = self.sim.my_player_id.unwrap_or(1);
@@ -150,6 +158,7 @@ impl SowApp {
             // use; it shows first, then the next quest's brief.
             let completed_title = steps[self.ui.tutorial_step_idx].title;
             self.ui.tutorial_pending_completion = Some(completed_title);
+            crate::store_portals::gameplay_stop();
 
             self.ui.tutorial_step_idx = idx;
             self.ui.tutorial_modal_dismissed = false; // open the new step's modal
@@ -249,6 +258,9 @@ impl SowApp {
         // queue it. It takes over the modal until dismissed, then play continues.
         if self.ui.tutorial_pending_intro.is_none() {
             self.ui.tutorial_pending_intro = self.tutorial_detect_first_contact();
+            if self.ui.tutorial_pending_intro.is_some() {
+                crate::store_portals::gameplay_stop();
+            }
         }
 
         // A pending intro takes over the panel; otherwise the objective modal shows. Both reuse
@@ -275,11 +287,12 @@ impl SowApp {
                 .unwrap_or(0.0);
             if clicked.is_some() || (elapsed > 0.5 && ctx.input(|i| i.pointer.any_click())) {
                 self.ui.tutorial_pending_completion = None;
+                crate::store_portals::gameplay_start();
             }
         } else if let Some(name) = self.ui.tutorial_pending_intro.clone() {
             // The NPC presents itself, with its real portrait: tribe → spirit-animal emoji on a
             // colored disc, empire → colored disc, all from the live snapshot.
-            let line = crate::campaign::dialog::first_contact(&name);
+            let line = crate::campaign::dialog::first_contact_for(campaign, &name);
             let visual = self
                 .sim
                 .current_snapshot
@@ -293,7 +306,7 @@ impl SowApp {
                     sow_core::player::PlayerType::Nation => {
                         SpeakerVisual::Empire { color: p.color }
                     }
-                    sow_core::player::PlayerType::Human => SpeakerVisual::Avatar(ADVISOR),
+                    sow_core::player::PlayerType::Human => SpeakerVisual::Avatar(advisor),
                 });
             let clicked = self.present_dialog(DialogPayload {
                 id: &format!("tutorial_intro_{}_{}", self.sim.config.seed, name),
@@ -312,16 +325,42 @@ impl SowApp {
                 .unwrap_or(0.0);
             if clicked.is_some() || (elapsed > 0.5 && ctx.input(|i| i.pointer.any_click())) {
                 self.ui.tutorial_pending_intro = None;
+                crate::store_portals::gameplay_start();
             }
         } else if !self.ui.tutorial_modal_dismissed {
             // The objective modal. ANY click closes it (tapping the map to grow dismisses too).
             // Skip the very frame the step changed to avoid a flash.
             let is_last_step = idx == steps.len() - 1;
 
+            // Final step chains the saga: Boudica -> Six Sky EP1 (unless done,
+            // then menu); Six Sky EP1/EP2 -> next episode; EP3 -> menu. Every
+            // hop completes an episode (reward + Poki measure) and is a natural
+            // ad-break boundary for portals.
+            let chain_target = if is_last_step {
+                match campaign.next() {
+                    Some(next)
+                        if !self
+                            .progress
+                            .completed_episodes
+                            .contains(next.episode_id()) =>
+                    {
+                        Some(next)
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            let continue_label = match campaign {
+                CampaignId::Boudica => "Continue the saga",
+                CampaignId::SixSkyEp3 => "Finish the saga",
+                CampaignId::SixSkyEp1 | CampaignId::SixSkyEp2 => "Next episode",
+            };
+
             let buttons = if is_last_step {
                 vec![
-                    DialogButton::new("Continue to War Room", ThemeButtonStyle::Secondary),
-                    DialogButton::new("Stay and fight", ThemeButtonStyle::Primary),
+                    DialogButton::new(continue_label, ThemeButtonStyle::Primary),
+                    DialogButton::new("Stay and fight", ThemeButtonStyle::Secondary),
                 ]
             } else {
                 vec![DialogButton::new("Got it", ThemeButtonStyle::Primary)]
@@ -335,8 +374,8 @@ impl SowApp {
             };
             let clicked = self.present_dialog(DialogPayload {
                 id: &format!("tutorial_dialog_{}_{}", self.sim.config.seed, idx),
-                visual: Some(SpeakerVisual::Avatar(ADVISOR)),
-                name: Some("Boudica".to_string()),
+                visual: Some(SpeakerVisual::Avatar(advisor)),
+                name: Some(advisor.name().to_string()),
                 title: step.title.to_string(),
                 body: step.body.to_string(),
                 buttons,
@@ -357,26 +396,50 @@ impl SowApp {
                         serde_json::json!({
                             "choice": if btn_idx == 0 { "continue" } else { "stay_fight" },
                             "step": idx,
+                            "campaign": campaign.episode_id(),
                         }),
                     );
-                    let completed_now = self.progress.complete_tutorial_with_reward();
-                    if completed_now {
-                        self.save_local_progress();
-                        self.persist_tutorial_completion();
-                        log::info!("tutorial: intro completed from final modal interaction");
-                    }
                     if btn_idx == 0 {
-                        // Continue -> exit to main menu
-                        self.begin_exit_to_main_menu(true);
+                        if campaign == CampaignId::Boudica {
+                            let completed_now =
+                                self.progress.complete_tutorial_with_reward();
+                            if completed_now {
+                                self.save_local_progress();
+                                self.persist_tutorial_completion();
+                                log::info!(
+                                    "tutorial: intro completed from final modal interaction"
+                                );
+                            }
+                        } else {
+                            // Episode finale: local medal + reward + Poki event.
+                            // No server persist: the server never tracks episodes,
+                            // and the union merge keeps them across cloud syncs.
+                            let ep = campaign.episode_id();
+                            if self.progress.complete_episode(ep, advisor) {
+                                self.save_local_progress();
+                                crate::store_portals::measure("campaign", ep, "complete");
+                                log::info!("campaign: episode {ep} completed");
+                            }
+                        }
+                        match chain_target {
+                            Some(CampaignId::SixSkyEp1) => self.start_six_sky_episode(1),
+                            Some(CampaignId::SixSkyEp2) => self.start_six_sky_episode(2),
+                            Some(CampaignId::SixSkyEp3) => self.start_six_sky_episode(3),
+                            // Boudica replay (saga already done) and the EP3
+                            // finale land back in the main menu.
+                            _ => self.begin_exit_to_main_menu(true),
+                        }
                     } else {
                         // Stay and fight
                         self.ui.tutorial_modal_dismissed = true;
                     }
                 } else {
                     self.ui.tutorial_modal_dismissed = true;
+                    crate::store_portals::gameplay_start();
                 }
             } else if clicked_anywhere && !step_changed {
                 self.ui.tutorial_modal_dismissed = true;
+                crate::store_portals::gameplay_start();
                 log::info!("tutorial: modal closed on step {} '{}'", idx, step.title);
             }
         }

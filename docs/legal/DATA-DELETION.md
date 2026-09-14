@@ -27,7 +27,7 @@ Players no longer need email for the common cases:
    ```sh
    ssh ionos 'valkey-cli -h 127.0.0.1 GET "sow:player:account:<account_id>"'
    ```
-   Save the `public_id` from the JSON — you need it for step 3 verification.
+   Keep the same `account_id` for step 3 verification.
    If the requester gave only a display name, resolve it via
    `GET /profiles/search` on the database host first and confirm ownership
    (creation date, linked platform, recent matches) before proceeding.
@@ -72,7 +72,7 @@ Deliberately retained (and disclosed in the Privacy Policy):
 ```sh
 ssh ionos 'valkey-cli -h 127.0.0.1 GET "sow:player:account:<account_id>"'
 # expect: (nil)
-ssh ionos 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:25585/profiles/<public_id>'
+ssh ionos 'curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:25585/profiles/<account_id>'
 # expect: 404
 ```
 

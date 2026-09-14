@@ -2620,3 +2620,237 @@
         grid-row: 2;
     }
 }
+
+/* Account access: compact, native SOW surface; no embedded provider UI. */
+.sow-auth {
+    position: relative;
+    isolation: isolate;
+    width: min(100%, 430px);
+    padding: 28px;
+    overflow: hidden;
+    border-color: rgba(56, 189, 248, 0.34);
+    background: linear-gradient(145deg, rgba(18, 23, 31, 0.98), rgba(8, 10, 14, 0.98));
+}
+
+.sow-auth__glow {
+    position: absolute;
+    z-index: -1;
+    width: 180px;
+    height: 180px;
+    top: -110px;
+    right: -70px;
+    border-radius: 50%;
+    filter: blur(8px);
+    opacity: 0.24;
+    pointer-events: none;
+}
+
+.sow-auth__glow--cyan { background: var(--sow-cyan); }
+.sow-auth__glow--gold { background: var(--sow-gold); }
+
+.sow-auth__head,
+.sow-auth__logos,
+.sow-auth__account,
+.sow-auth__form-links {
+    display: flex;
+    align-items: center;
+}
+
+.sow-auth__head {
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.sow-auth__logos {
+    min-width: 0;
+    gap: 11px;
+}
+
+.sow-auth__game-logo {
+    width: auto;
+    max-width: min(190px, 62vw);
+    height: 30px;
+    object-fit: contain;
+}
+
+.sow-auth__wou-logo {
+    width: auto;
+    max-width: 78px;
+    height: 24px;
+    object-fit: contain;
+    opacity: 0.9;
+}
+
+.sow-auth__logo-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.sow-auth__form-links button {
+    border: 0;
+    cursor: pointer;
+    color: var(--sow-muted);
+    background: transparent;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.13em;
+}
+
+.sow-auth__form,
+.sow-auth__social-list {
+    display: grid;
+    gap: 11px;
+}
+
+.sow-auth__form label {
+    color: rgba(245, 241, 232, 0.62);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+}
+
+.sow-auth__form label strong { color: var(--sow-cyan); font-weight: 900; }
+.sow-auth__input,
+.sow-auth__code {
+    width: 100%;
+    min-height: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    outline: none;
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+}
+
+.sow-auth__input { padding: 0 14px; font-size: 14px; }
+.sow-auth__code {
+    padding: 0 14px;
+    color: var(--sow-gold-bright);
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 0.28em;
+    text-align: center;
+}
+
+.sow-auth__input:focus,
+.sow-auth__code:focus {
+    border-color: var(--sow-cyan);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.sow-auth__submit,
+.sow-auth__signout {
+    min-height: 50px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.13em;
+}
+
+.sow-auth__submit {
+    background: var(--sow-gold);
+    color: #17120a;
+}
+
+.sow-auth__submit--cyan {
+    background: var(--sow-cyan);
+    color: #07131b;
+}
+
+.sow-auth__submit:hover,
+.sow-auth__signout:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.sow-auth__submit:disabled { cursor: wait; opacity: 0.6; transform: none; }
+
+.sow-auth__body {
+    display: grid;
+    gap: 18px;
+    margin-top: 24px;
+}
+
+.sow-auth__form-links {
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sow-auth__form-links button:hover { color: #fff; }
+.sow-auth__social-list { margin-top: 2px; }
+
+.sow-auth__provider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 8px;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.045);
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: left;
+    transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.sow-auth__provider:hover {
+    border-color: rgba(56, 189, 248, 0.7);
+    background: rgba(56, 189, 248, 0.09);
+    transform: translateX(2px);
+}
+
+.sow-auth__provider > span:nth-child(2) { flex: 1; }
+.sow-auth__provider > i { color: var(--sow-muted); font-size: 16px; font-style: normal; }
+.sow-auth__provider-icon { display: grid; width: 23px; height: 23px; place-items: center; flex: 0 0 23px; }
+.sow-auth__provider-icon svg { display: block; width: 21px; height: 21px; }
+.sow-auth__provider-icon--discord { color: #5865f2; }
+.sow-auth__provider-icon--twitter { color: #fff; }
+.sow-auth__provider-icon--meta { color: #5aa7ff; }
+
+.sow-auth__message {
+    margin: -5px 0 12px;
+    padding: 10px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.sow-auth__message--error { border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.09); color: #fca5a5; }
+.sow-auth__message--notice { border: 1px solid rgba(56, 189, 248, 0.3); background: rgba(56, 189, 248, 0.08); color: #a5f3fc; }
+
+.sow-auth__account {
+    gap: 9px;
+    margin-top: 28px;
+    min-width: 0;
+    color: #f8fafc;
+    font-size: 14px;
+}
+
+.sow-auth__account strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sow-auth__status-dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 12px #34d399; }
+.sow-auth__signout { width: 100%; margin-top: 26px; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.09); color: #fca5a5; }
+
+.sow-auth__terms {
+    display: block;
+    margin: 18px auto 0;
+    color: rgba(245, 241, 232, 0.5);
+    font-size: 10px;
+    text-align: center;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.sow-auth__terms:hover { color: #fff; }
+
+@media (max-width: 520px) {
+    .sow-auth { padding: 22px; }
+    .sow-auth__game-logo { max-width: min(160px, 54vw); height: 26px; }
+    .sow-auth__wou-logo { max-width: 66px; height: 21px; }
+}

@@ -9,7 +9,7 @@
 - Leader unlocks offer either currency; the server owns both balances and validates the selected spend.
 - The server resolves the selected leader before a match, so a client cannot use a locked leader by editing local state.
 - The purchase surface is universal: in-game store → platform checkout/RevenueCat → server grant. It is not tied to CrazyGames or Poki.
-- Android gem bundles use Google Play Billing through the native RevenueCat bridge. Product IDs are `sow_gems_500`, `sow_gems_1200`, and `sow_gems_2600`; RevenueCat receives the public profile ID, never the private account ID.
+- Android gem bundles use Google Play Billing through the native RevenueCat bridge. Product IDs are `sow_gems_500`, `sow_gems_1200`, and `sow_gems_2600`; RevenueCat receives the canonical `account_id`.
 - Android release is intentionally separate: `./sow a` builds, device-tests, validates, and uploads the AAB to Play Alpha; `./sow p` never uploads Android.
 - RevenueCat purchase events are granted by the server and deduplicated by the
   provider transaction ID when available, with the event ID as fallback.
@@ -41,10 +41,9 @@
 - `HISTORICAL`: the prior production AAB contained a native RevenueCat purchase
   bridge; that artifact is not proof of the current source or runtime.
 - Web uses an in-game Stripe Embedded Checkout session. The client sends the
-  authenticated public profile ID and product ID to `/store/checkout`; the
-  private account secret never leaves the game. Stripe completion is imported
-  into the same RevenueCat project, whose webhook performs the authoritative
-  grant.
+  canonical `account_id` and product ID to `/store/checkout`; the anonymous
+  ownership secret never leaves the game. Stripe completion is imported into
+  the same RevenueCat project, whose webhook performs the authoritative grant.
 - The Apple App Store app uses the same RevenueCat project with bundle ID
   `games.shadowsofwar.app`; the three consumables are configured and the
   native bridge is in the Xcode target. A Mac/TestFlight build is still

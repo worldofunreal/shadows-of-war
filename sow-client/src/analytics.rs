@@ -35,6 +35,10 @@ static GAMEPLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Capture the ingest endpoint and envelope fields once at boot.
 pub fn configure(database_base: &str) {
+    if js_global("SOW_PORTAL").as_deref() == Some("poki") {
+        // Poki's player data must stay inside Poki's approved SDK events.
+        return;
+    }
     let cfg = Config {
         endpoint: format!("{}/event", database_base.trim_end_matches('/')),
         portal: js_global("SOW_PORTAL").unwrap_or_else(|| "site".to_string()),
@@ -68,6 +72,11 @@ pub fn track(name: &'static str) {
 }
 
 pub fn track_with(name: &'static str, props: serde_json::Value) {
+    if js_global("SOW_PORTAL").as_deref() == Some("poki") {
+        // Poki builds report only through PokiSDK.measure(). Do not retain a
+        // second first-party event queue in the browser.
+        return;
+    }
     let Ok(mut queue) = QUEUE.lock() else { return };
     if queue.len() >= MAX_QUEUED {
         queue.remove(0);
