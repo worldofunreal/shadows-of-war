@@ -1,8 +1,8 @@
 use crate::config::ClientVisualConfig;
 
 /// Scaling factors relative to base territory font render size.
-const HUMAN_AVATAR_SCALE: f32 = 5.0;
-const BOT_AVATAR_SCALE: f32 = 3.6;
+const HUMAN_AVATAR_SCALE: f32 = 4.0;
+const BOT_AVATAR_SCALE: f32 = 3.0;
 const NATION_AVATAR_SCALE: f32 = 3.6;
 const BADGE_SCALE: f32 = 1.8;
 const TROOPS_SCALE: f32 = 1.30;
@@ -281,9 +281,10 @@ mod tests {
             human_metrics.avatar_diameter,
             bot_metrics.avatar_diameter
         );
-        assert_eq!(bot_metrics.avatar_diameter, nation_metrics.avatar_diameter);
+        assert!(nation_metrics.avatar_diameter > bot_metrics.avatar_diameter);
         assert!((human_metrics.avatar_diameter / scaled_size - HUMAN_AVATAR_SCALE).abs() < 1e-5);
         assert!((bot_metrics.avatar_diameter / scaled_size - BOT_AVATAR_SCALE).abs() < 1e-5);
+        assert!((nation_metrics.avatar_diameter / scaled_size - NATION_AVATAR_SCALE).abs() < 1e-5);
 
         // Bot avatars can be disabled via dev settings, human avatars stay visible
         let bot_hidden_metrics =

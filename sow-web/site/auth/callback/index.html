@@ -33,11 +33,14 @@
       font-size: 1.4rem; font-weight: bold;
     }
     #cb-error-msg { color: #f87171; margin-bottom: 1rem; word-break: break-word; }
-    a.btn {
+    a.btn, button.btn, button.btn-secondary {
       display: inline-block; padding: .8rem 1.6rem; border-radius: .8rem;
-      background: #fff; color: #09090b; font-weight: bold; font-size: .8rem;
-      text-decoration: none;
+      font: inherit; font-weight: bold; font-size: .8rem; text-decoration: none; cursor: pointer;
     }
+    a.btn, button.btn { background: #f4b21b; border: 1px solid #f4b21b; color: #09090b; }
+    button.btn-secondary { background: transparent; border: 1px solid rgba(255, 255, 255, .2); color: #e4e4e7; }
+    .switch-actions { display: grid; gap: .6rem; margin-top: 1rem; }
+    .switch-copy { margin: .8rem 0; line-height: 1.55; }
   </style>
 </head>
 <body>
@@ -53,15 +56,27 @@
       <p id="cb-error-msg"></p>
       <a class="btn" href="/">Back to Shadows of War</a>
     </div>
+    <div id="cb-account-switch" class="hidden">
+      <h1>Different account</h1>
+      <p id="cb-account-switch-message" class="switch-copy"></p>
+      <div class="switch-actions">
+        <button id="cb-account-switch-confirm" class="btn" type="button">CONTINUE WITH THIS ACCOUNT</button>
+        <button id="cb-account-switch-cancel" class="btn-secondary" type="button">KEEP GUEST ACCOUNT</button>
+      </div>
+    </div>
   </div>
 
   <script type="module">
     const loadingEl = document.getElementById('cb-loading');
     const errorEl = document.getElementById('cb-error');
     const errorMsgEl = document.getElementById('cb-error-msg');
+    const accountSwitchEl = document.getElementById('cb-account-switch');
+    const accountSwitchMessageEl = document.getElementById('cb-account-switch-message');
+    let pendingAccountSwitch = null;
 
     function fail(msg) {
       loadingEl?.classList.add('hidden');
+      accountSwitchEl?.classList.add('hidden');
       errorEl?.classList.remove('hidden');
       if (errorMsgEl) errorMsgEl.textContent = msg;
     }
@@ -92,6 +107,55 @@
         return '/';
       }
     }
+
+    function clearOAuthTransaction() {
+      try {
+        sessionStorage.removeItem('wou_oauth_transaction');
+        sessionStorage.removeItem('wou_oauth_provider');
+      } catch (err) {}
+    }
+
+    function finishSignIn(data, returnTo) {
+      const oldToken = localStorage.getItem('wou_session_token');
+      const oldUser = localStorage.getItem('wou_user_data');
+      try {
+        localStorage.setItem('wou_session_token', data.session_token);
+        localStorage.setItem('wou_user_data', JSON.stringify(data.account));
+      } catch (err) {
+        try {
+          if (oldToken === null) localStorage.removeItem('wou_session_token');
+          else localStorage.setItem('wou_session_token', oldToken);
+          if (oldUser === null) localStorage.removeItem('wou_user_data');
+          else localStorage.setItem('wou_user_data', oldUser);
+        } catch (restoreError) {}
+        throw err;
+      }
+      clearOAuthTransaction();
+      window.dispatchEvent(new CustomEvent('wou:auth-state-change', {
+        detail: { authenticated: true, isAuthenticated: true, user: data.account, token: data.session_token },
+      }));
+      window.location.replace(safeReturnTo(returnTo));
+    }
+
+    document.getElementById('cb-account-switch-confirm').addEventListener('click', () => {
+      if (!pendingAccountSwitch) return;
+      const pending = pendingAccountSwitch;
+      pendingAccountSwitch = null;
+      try {
+        finishSignIn(pending.data, pending.returnTo);
+      } catch (err) {
+        pendingAccountSwitch = pending;
+        fail((err && err.message) || 'Could not save the selected account.');
+      }
+    });
+
+    document.getElementById('cb-account-switch-cancel').addEventListener('click', () => {
+      if (!pendingAccountSwitch) return;
+      const pending = pendingAccountSwitch;
+      pendingAccountSwitch = null;
+      clearOAuthTransaction();
+      window.location.replace(safeReturnTo(pending.returnTo));
+    });
 
     (async () => {
       const params = new URLSearchParams(window.location.search);
@@ -145,13 +209,30 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'OAuth authentication exchange failed.');
         if (!data.session_token || !data.account) throw new Error('Identity service returned an incomplete session.');
-        localStorage.setItem('wou_session_token', data.session_token);
-        localStorage.setItem('wou_user_data', JSON.stringify(data.account));
-        sessionStorage.removeItem('wou_oauth_transaction');
-        window.dispatchEvent(new CustomEvent('wou:auth-state-change', {
-          detail: { authenticated: true, isAuthenticated: true, user: data.account, token: data.session_token },
-        }));
-        window.location.replace(safeReturnTo(stateObj.returnTo));
+        const signedInAccountId = String(data.account.account_id || data.account.id || '');
+        if (!signedInAccountId) throw new Error('Identity service returned an account without an ID.');
+        let currentAccountId = String(stateObj.accountId || '');
+        if (!currentAccountId) {
+          try {
+            const currentUser = JSON.parse(localStorage.getItem('wou_user_data') || 'null');
+            currentAccountId = String(currentUser && (currentUser.account_id || currentUser.id) || '');
+          } catch {}
+        }
+        if (currentAccountId && signedInAccountId && currentAccountId !== signedInAccountId) {
+          let currentName = 'your guest account';
+          try {
+            const currentUser = JSON.parse(localStorage.getItem('wou_user_data') || 'null');
+            currentName = currentUser && (currentUser.display_name || currentUser.username) || currentName;
+          } catch {}
+          const targetName = data.account.display_name || data.account.username || 'this account';
+          accountSwitchMessageEl.textContent =
+            `${targetName} is a different account. Switching will not merge ${currentName}'s progress. Continue?`;
+          pendingAccountSwitch = { data, returnTo: stateObj.returnTo };
+          loadingEl.classList.add('hidden');
+          accountSwitchEl.classList.remove('hidden');
+          return;
+        }
+        finishSignIn(data, stateObj.returnTo);
       } catch (err) {
         fail((err && err.message) || 'Failed to exchange authorization code.');
       }

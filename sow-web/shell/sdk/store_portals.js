@@ -434,17 +434,9 @@
 
   window.SOW_isAndroidPlayGamesAuthenticated = function () {
     var identity = window.SOW_PLATFORM_IDENTITY;
-    return isAndroidTwa() && identity && identity.provider === "playgames" &&
-      !!identity.externalId && !!identity.token;
+    return !!(isAndroidTwa() && identity && identity.provider === "playgames" &&
+      identity.externalId && identity.token);
   };
-
-  function hasWouSession() {
-    try {
-      return !!window.localStorage.getItem("wou_session_token") && !!window.localStorage.getItem("wou_user_data");
-    } catch (e) {
-      return false;
-    }
-  }
 
   function readWouSession() {
     try {
@@ -467,17 +459,36 @@
   window.SOW_getAuthState = function () {
     var identity = window.SOW_PLATFORM_IDENTITY;
     if (isAndroidTwa()) {
+      var playGamesLinked = window.SOW_isAndroidPlayGamesAuthenticated();
       return {
         platform: "twa",
-        provider: identity && identity.provider === "playgames" ? "playgames" : null,
-        authenticated: !!(identity && identity.provider === "playgames" && identity.externalId && identity.token),
+        provider: playGamesLinked ? "playgames" : null,
+        authenticated: playGamesLinked,
+        linked: playGamesLinked,
+        linkedProviders: playGamesLinked ? ["playgames"] : [],
+        canSignOut: playGamesLinked,
         pending: !!androidPending(),
       };
     }
+    var session = readWouSession();
+    var linkedProviders = session.user && Array.isArray(session.user.linked_identities)
+      ? session.user.linked_identities.map(function (entry) {
+          return entry && entry.external_id && entry.provider
+            ? String(entry.provider).toLowerCase()
+            : "";
+        }).filter(Boolean)
+      : [];
+    var platformLinked = !!(identity && identity.provider && identity.provider !== "wou" &&
+      identity.provider !== "anonymous" && identity.externalId && identity.token);
+    var linked = linkedProviders.length > 0 || platformLinked;
     return {
       platform: "web",
-      provider: identity && identity.provider ? identity.provider : (hasWouSession() ? "wou" : null),
-      authenticated: !!(identity && identity.externalId && identity.token) || hasWouSession(),
+      provider: platformLinked ? identity.provider : linkedProviders.length ? "wou" :
+        (session.token && session.accountId ? "anonymous" : null),
+      authenticated: !!(session.token && session.accountId) || platformLinked,
+      linked: linked,
+      linkedProviders: linkedProviders,
+      canSignOut: linkedProviders.length > 0 && !platformLinked,
       pending: false,
     };
   };

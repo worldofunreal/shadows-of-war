@@ -8,15 +8,12 @@
 //! drives the speaker dialog, and feeds the panel + pointer. Adding a chapter is mostly
 //! data in [`steps`]; adding a mechanic is one `Trigger` variant + its arm.
 //!
-//! ## Isolation contract (the poka-yoke)
-//! This module and [`crate::campaign`] are the **only** files tutorial work may touch. They talk to
-//! the engine in exactly two ways — produce a `GameConfig` at match start (data IN) and read
-//! snapshots at render (data OUT) — and never add a branch to a sim / income / render hot loop.
-//! Tutorial-ness is *derived* from the running match at one chokepoint (`loader/engine.rs`), and the
-//! render gate ([`tutorial_renders`]) also requires `is_offline`, so nothing here can execute during
-//! a normal solo or multiplayer match. Keep it that way: if a chapter needs a new rule, add a
-//! `GameConfig` knob — do not reach into the engine. That is what keeps a bad day on the tutorial
-//! from ever becoming a bad day on gameplay.
+//! ## Isolation contract
+//! This module and [`crate::campaign`] own tutorial presentation and scenario content. Shared match
+//! launch, exit, and progress persistence stay on the client's existing lifecycle paths. Tutorial
+//! behavior is derived from `GameConfig.tutorial`, and [`tutorial_renders`] also requires an offline
+//! match, so it cannot render over normal solo or multiplayer gameplay. New scenario rules belong
+//! in `GameConfig`, not in simulation hot loops.
 
 mod objectives;
 mod pointer;
@@ -36,16 +33,6 @@ const DIALOG_AUTODISMISS_SECS: f32 = 10.0;
 
 /// "Quest Complete" flash is a brief celebration — shorter hold than a read-me brief.
 const QUEST_COMPLETE_SECS: f32 = 3.0;
-
-/// Kept for the `UiState.tutorial_step` field + `start_offline_match`; the campaign
-/// interpreter below drives flow via `tutorial_step_idx`.
-#[derive(Debug, Clone, PartialEq)]
-pub enum TutorialStep {
-    Welcome,
-    Expansion,
-    Combat,
-    Complete,
-}
 
 /// The render gate as a pure predicate, so the isolation invariant is unit-testable: the tutorial
 /// shows **only** when this match was started as a tutorial *and* it is offline. Online matches fail
@@ -141,9 +128,9 @@ impl SowApp {
             self.tutorial_react_to_conquest();
         }
 
-        // Completing the current objective opens the NEXT modal — that's the only thing that
-        // advances a step. The tutorial NEVER ends here; the last step just stays satisfied
-        // until more objectives are appended. (Camera follows progress; nothing blocks play.)
+        // Completing an objective opens the next modal. The final objective opens the terminal
+        // dialog; the player exits only after choosing Return to main menu. (Camera follows progress;
+        // nothing blocks play.)
         let mut idx = self.ui.tutorial_step_idx.min(steps.len() - 1);
         while idx + 1 < steps.len() {
             let (cur, tgt) = objective_progress(steps[idx].advance, gained, my_kills, &is_defeated);

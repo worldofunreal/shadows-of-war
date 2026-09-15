@@ -22,11 +22,7 @@
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);
         var name = displayNameDraft != null ? displayNameDraft : (state.player_name || "ANONYMOUS");
-        var android = typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa();
-        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { authenticated: false };
-        var signIn = auth.authenticated || state.name_locked ? "ACCOUNT" : "SIGN IN";
-        var androidAuthenticated = android && auth.authenticated;
-        var androidAuthPending = android && auth.pending;
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { linked: false, pending: false };
         var accountXp = Math.max(0, Number(state.xp) || 0);
         var crowns = state.crowns == null ? state.laurels : state.crowns;
         return "" +
@@ -46,7 +42,7 @@
                         "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " XP</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
                     "</div>" +
-                    (androidAuthenticated || androidAuthPending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + (android ? "SIGN IN" : signIn) + "</button>") +
+                    (auth.linked || auth.pending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>SIGN IN</button>") +
                     "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='Settings'>⚙</button>" +
                 "</div>" +
             "</header>";
@@ -118,13 +114,18 @@
         var settings = state.settings || {};
         var vol = settings.music_volume == null ? 0.8 : settings.music_volume;
         var volPct = Math.round(vol * 100);
-        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { platform: isAndroidTwa() ? "twa" : "web", authenticated: false };
-        var providerLabel = auth.platform === "twa" ? "GOOGLE PLAY GAMES" : "WOU-ID ACCOUNT";
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { platform: isAndroidTwa() ? "twa" : "web", linked: false, pending: false };
+        var providers = (auth.linkedProviders || []).map(function (provider) {
+            return String(provider).replace(/_/g, " ").toUpperCase();
+        });
+        var providerLabel = auth.platform === "twa" ? "GOOGLE PLAY GAMES" :
+            auth.provider === "crazygames" ? "CRAZYGAMES" :
+            providers.length ? "WOU-ID · " + providers[0] + (providers.length > 1 ? " +" + (providers.length - 1) : "") : "WOU-ID ACCOUNT";
         var accountControl = auth.pending
             ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>GOOGLE PLAY GAMES</span><strong class='sow-menu__account-pending'>CONNECTING…</strong></section>"
-            : auth.authenticated
-            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + providerLabel + "</span><button class='sow-menu__danger' type='button' data-command='sign_out'>SIGN OUT</button></section>"
-            : "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>ANONYMOUS ACCOUNT</span><button class='sow-menu__secondary' type='button' data-command='sign_in'>SIGN IN</button></section>";
+            : auth.linked
+            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>ACCOUNT · " + providerLabel + "</span>" + (auth.canSignOut ? "<button class='sow-menu__danger' type='button' data-command='sign_out'>SIGN OUT</button>" : "") + "</section>"
+            : "";
         return "" +
             "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
                 "<section class='sow-menu__modal sow-menu__settings-modal'>" +
@@ -309,16 +310,6 @@
     }
 
     function renderAuthModal() {
-        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { authenticated: false };
-        var session = authSession();
-        if (auth.authenticated) {
-            var connectedName = session.user && (session.user.display_name || session.user.username || session.user.account_id) || "ACCOUNT";
-            return "<div class='sow-menu__overlay' data-menu-overlay='auth' data-auth-overlay><section class='sow-menu__modal sow-menu__auth-modal sow-auth' role='dialog' aria-modal='true' aria-label='Account'>" +
-                "<div class='sow-auth__glow sow-auth__glow--gold'></div><div class='sow-auth__head'><div class='sow-auth__logos'><img class='sow-auth__game-logo' src='/sow-long.svg' alt='Shadows of War'><span class='sow-auth__logo-divider' aria-hidden='true'></span><img class='sow-auth__wou-logo' src='https://worldofunreal.com/wouid.svg' alt='WouID'></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='Close'>×</button></div>" +
-                "<div class='sow-auth__account'><span class='sow-auth__status-dot' aria-hidden='true'></span><strong>" + esc(connectedName) + "</strong></div>" +
-                "<button class='sow-auth__signout' type='button' data-command='sign_out'>SIGN OUT</button>" +
-                "</section></div>";
-        }
         var emailPanel = authOtpSent
             ? "<form class='sow-auth__form' data-auth-form='verify'><label>CODE SENT TO <strong>" + esc(authEmail) + "</strong></label><input class='sow-auth__code' data-auth-field='code' inputmode='numeric' autocomplete='one-time-code' maxlength='6' value='" + esc(authCode) + "' placeholder='000000' aria-label='Verification code' required><button class='sow-auth__submit sow-auth__submit--cyan' type='submit'" + (authBusy ? " disabled" : "") + ">" + (authBusy ? "CHECKING…" : "VERIFY CODE") + "</button><div class='sow-auth__form-links'><button type='button' data-command='auth_change_email'>CHANGE EMAIL</button><button type='button' data-command='auth_resend'" + (authBusy ? " disabled" : "") + ">RESEND</button></div></form>"
             : "<form class='sow-auth__form' data-auth-form='request'><label for='sow-auth-email'>EMAIL ADDRESS</label><input id='sow-auth-email' class='sow-auth__input' data-auth-field='email' type='email' autocomplete='email' value='" + esc(authEmail) + "' placeholder='you@example.com' required><button class='sow-auth__submit' type='submit'" + (authBusy ? " disabled" : "") + ">" + (authBusy ? "SENDING…" : "SEND CODE") + "</button></form>";
@@ -404,8 +395,7 @@
         var leaderLink = topbar.querySelector(".sow-menu__profile-link");
         if (leaderLink) leaderLink.textContent = leader.name + " · " + leader.civilization;
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
-        var android = isAndroidTwa();
-        var showSignIn = !(android && (auth.authenticated || auth.pending));
+        var showSignIn = !(auth.linked || auth.pending);
         var actions = topbar.querySelector(".sow-menu__top-actions");
         var settingsButton = actions && actions.querySelector("[data-command='toggle_settings']");
         var signIn = actions && actions.querySelector(".sow-menu__signin");
@@ -417,7 +407,7 @@
                 signIn.dataset.command = "sign_in";
                 actions.insertBefore(signIn, settingsButton);
             }
-            if (signIn) signIn.textContent = android ? "SIGN IN" : (auth.authenticated || state.name_locked ? "ACCOUNT" : "SIGN IN");
+            if (signIn) signIn.textContent = "SIGN IN";
         } else if (signIn) {
             signIn.remove();
         }
@@ -1081,6 +1071,11 @@
 
     window.addEventListener("wou:auth-state-change", function () {
         if (!state || root.hidden) return;
+        var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
+        if (auth.linked && authModalOpen) {
+            authModalOpen = false;
+            resetAuthFlow();
+        }
         if (!root.querySelector("[data-screen-stage]")) {
             render();
             return;

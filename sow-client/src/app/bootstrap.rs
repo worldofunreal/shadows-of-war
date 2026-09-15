@@ -264,7 +264,6 @@ impl SowApp {
                 label_positions: std::collections::HashMap::new(),
                 label_sizes: std::collections::HashMap::new(),
                 tutorial_active: false,
-                tutorial_step: crate::hud::tutorial::TutorialStep::Welcome,
                 tutorial_campaign: crate::campaign::CampaignId::Boudica,
                 tutorial_step_idx: 0,
                 tutorial_baseline_tiles: 0,

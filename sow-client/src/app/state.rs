@@ -230,9 +230,8 @@ pub struct UiState {
 
     pub label_positions: std::collections::HashMap<u16, (f32, f32)>,
     pub label_sizes: std::collections::HashMap<u16, f32>,
-    /// True while the portal intro or manual offline tutorial overlay is active.
+    /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
-    pub tutorial_step: crate::hud::tutorial::TutorialStep,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
     pub tutorial_step_idx: usize,

@@ -2646,11 +2646,9 @@
 }
 
 .sow-auth__glow--cyan { background: var(--sow-cyan); }
-.sow-auth__glow--gold { background: var(--sow-gold); }
 
 .sow-auth__head,
 .sow-auth__logos,
-.sow-auth__account,
 .sow-auth__form-links {
     display: flex;
     align-items: center;
@@ -2738,8 +2736,7 @@
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
 }
 
-.sow-auth__submit,
-.sow-auth__signout {
+.sow-auth__submit {
     min-height: 50px;
     border: 1px solid transparent;
     border-radius: 8px;
@@ -2759,8 +2756,7 @@
     color: #07131b;
 }
 
-.sow-auth__submit:hover,
-.sow-auth__signout:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.sow-auth__submit:hover { filter: brightness(1.1); transform: translateY(-1px); }
 .sow-auth__submit:disabled { cursor: wait; opacity: 0.6; transform: none; }
 
 .sow-auth__body {
@@ -2819,23 +2815,6 @@
 
 .sow-auth__message--error { border: 1px solid rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.09); color: #fca5a5; }
 .sow-auth__message--notice { border: 1px solid rgba(56, 189, 248, 0.3); background: rgba(56, 189, 248, 0.08); color: #a5f3fc; }
-
-.sow-auth__account {
-    gap: 9px;
-    margin-top: 28px;
-    min-width: 0;
-    color: #f8fafc;
-    font-size: 14px;
-}
-
-.sow-auth__account strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.sow-auth__status-dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 12px #34d399; }
-.sow-auth__signout { width: 100%; margin-top: 26px; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.09); color: #fca5a5; }
 
 .sow-auth__terms {
     display: block;

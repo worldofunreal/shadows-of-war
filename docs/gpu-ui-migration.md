@@ -66,7 +66,7 @@ derives the rendered name/troop sizes and the sword size from the same troop-tex
 size. `NameplateLayout` consumes those measured bounds; callers must not add a
 second `zoom * scale` or icon-size formula.
 
-The current defaults are human avatar `5.0x`, bot/nation avatar `3.6x`, avatar-to-text
+The current defaults are human avatar `4.0x`, bot/tribe avatar `3.0x`, nation avatar `3.6x`, avatar-to-text
 gap `0.16x`, troop sword `1.0x` the rendered troop text, and category emoji at `70%`
 of the avatar diameter. GPU emoji outline and shadow scale with content diameter:
 full size at `32px`, down to `40%` for small emojis.

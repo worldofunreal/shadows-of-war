@@ -2,6 +2,18 @@ use crate::app::SowApp;
 use crate::get_build_version;
 use sow_ui_kit::ClientPhase;
 
+fn should_complete_boudica_intro_on_exit(
+    tutorial_active: bool,
+    is_offline: bool,
+    campaign: crate::campaign::CampaignId,
+    intro_completed: Option<bool>,
+) -> bool {
+    tutorial_active
+        && is_offline
+        && campaign == crate::campaign::CampaignId::Boudica
+        && !intro_completed.unwrap_or(false)
+}
+
 impl SowApp {
     pub(crate) fn make_ready_message(
         &self,
@@ -153,11 +165,22 @@ impl SowApp {
         }
     }
 
-    /// Tear down an online match and run the existing ExitGame splash → MainMenu flow.
+    /// Tear down the current match and return to MainMenu, optionally through the ExitGame splash.
     pub(crate) fn begin_exit_to_main_menu(&mut self, use_loader: bool) {
         let was_playing = self.ui.app.phase == sow_ui_kit::ClientPhase::Playing;
-        if self.ui.tutorial_active && !self.progress.intro_completed.unwrap_or(false) {
+        let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
+            self.ui.tutorial_active,
+            self.net.is_offline,
+            self.ui.tutorial_campaign,
+            self.progress.intro_completed,
+        );
+        if exiting_boudica_intro {
             crate::analytics::track("tutorial_exit_early");
+            if self.progress.complete_tutorial_with_reward() {
+                self.save_local_progress();
+                self.persist_tutorial_completion();
+                log::info!("tutorial: intro completed on early exit");
+            }
         }
         if was_playing {
             if !self.progress_match_recorded {
@@ -244,5 +267,45 @@ impl SowApp {
             || self.net.ws_url.contains("/relay/")
             || self.net.ws_url.contains("relay.shadowsofwar.io")
             || self.net.ws_url.contains("2557")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_complete_boudica_intro_on_exit;
+    use crate::campaign::CampaignId;
+
+    #[test]
+    fn only_unfinished_offline_boudica_tutorial_exit_completes_intro() {
+        assert!(should_complete_boudica_intro_on_exit(
+            true,
+            true,
+            CampaignId::Boudica,
+            None
+        ));
+        assert!(!should_complete_boudica_intro_on_exit(
+            true,
+            false,
+            CampaignId::Boudica,
+            None
+        ));
+        assert!(!should_complete_boudica_intro_on_exit(
+            false,
+            true,
+            CampaignId::Boudica,
+            None
+        ));
+        assert!(!should_complete_boudica_intro_on_exit(
+            true,
+            true,
+            CampaignId::SixSkyEp1,
+            None
+        ));
+        assert!(!should_complete_boudica_intro_on_exit(
+            true,
+            true,
+            CampaignId::Boudica,
+            Some(true)
+        ));
     }
 }

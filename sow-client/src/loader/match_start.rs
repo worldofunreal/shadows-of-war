@@ -1,5 +1,4 @@
 use crate::app::SowApp;
-use crate::hud::tutorial::TutorialStep;
 use sow_core::game_config::GameConfig;
 
 #[cfg(target_arch = "wasm32")]
@@ -173,9 +172,8 @@ impl SowApp {
         // Ride the tutorial signal IN the match config — `tutorial_active` is no longer set here.
         // It is derived once, for every match, at the engine-init chokepoint (loader/engine.rs), so
         // a forgetful path can't leave it stale. (These field resets stay: they pre-clear the run
-        // state for an offline tutorial; a normal match never reads them.)
+        // state for any offline scripted chapter; a normal match never reads them.)
         config.tutorial = tutorial;
-        self.ui.tutorial_step = TutorialStep::Welcome;
         self.ui.tutorial_step_idx = 0;
         self.ui.tutorial_baseline_tiles = 0;
         self.ui.tutorial_baseline_set = false;

@@ -43,9 +43,8 @@ pub(super) struct Step {
     pub advance: Trigger,
 }
 
-// ponytail: inline EN strings = fastest script-iteration loop; move to sow-i18n once the
-// script settles. Each entry is one objective; the tutorial NEVER ends — just append more
-// objectives here as we build them out.
+// ponytail: inline EN strings keep scenario iteration fast; move to sow-i18n when campaign
+// localization is in scope. Keep each objective's dialog and trigger together here.
 // Guide: 9 trials — start with expansion (tap to claim), learn combat (drag to attack),
 // unite the east, then burn Rome's cities and ambush a legion. The final modal returns
 // to the main menu with 100 Crowns, where the next episode awaits.

@@ -86,16 +86,6 @@ impl CampaignId {
         }
     }
 
-    /// Next episode in the chain, if any.
-    pub fn next(self) -> Option<CampaignId> {
-        match self {
-            CampaignId::Boudica => Some(CampaignId::SixSkyEp1),
-            CampaignId::SixSkyEp1 => Some(CampaignId::SixSkyEp2),
-            CampaignId::SixSkyEp2 => Some(CampaignId::SixSkyEp3),
-            CampaignId::SixSkyEp3 => None,
-        }
-    }
-
     pub fn advisor(self) -> Leader {
         match self {
             CampaignId::Boudica => Leader::Boudica,
