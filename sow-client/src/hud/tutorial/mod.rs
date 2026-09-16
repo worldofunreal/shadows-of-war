@@ -227,18 +227,29 @@ impl SowApp {
         // Pointer ("here") always guides to the player's territory — even with the modal
         // closed — so direction is clear while they complete the objective.
         if let Some((_, true, ..)) = me {
-            // Smoothed nameplate anchor (same point the avatar is drawn at) → concentric ring.
-            let (wx, wy) = self
+            // Nameplate rendering publishes the exact screen-space avatar geometry for this
+            // frame. The fallback only covers the first frame before that renderer runs.
+            let (target, avatar_radius) = self
                 .ui
-                .label_positions
-                .get(&my_id)
-                .copied()
-                .or_else(|| me.map(|(_, _, cx, cy, _)| (cx, cy)))
-                .unwrap_or((0.0, 0.0));
-            let sf = ctx.pixels_per_point();
-            let sx = (wx * self.input.camera_zoom + self.input.camera_x) / sf;
-            let sy = (wy * self.input.camera_zoom + self.input.camera_y) / sf;
-            draw_tutorial_pointer(ctx, egui::pos2(sx, sy));
+                .tutorial_avatar_geometry
+                .unwrap_or_else(|| {
+                    let (wx, wy) = self
+                        .ui
+                        .label_positions
+                        .get(&my_id)
+                        .copied()
+                        .or_else(|| me.map(|(_, _, cx, cy, _)| (cx, cy)))
+                        .unwrap_or((0.0, 0.0));
+                    let sf = ctx.pixels_per_point();
+                    (
+                        egui::pos2(
+                            (wx * self.input.camera_zoom + self.input.camera_x) / sf,
+                            (wy * self.input.camera_zoom + self.input.camera_y) / sf,
+                        ),
+                        20.0,
+                    )
+                });
+            draw_tutorial_pointer(ctx, target, avatar_radius);
         }
 
         // First-contact intros: when our territory first reaches a tribe with a written line,

@@ -38,14 +38,7 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
     width: min(1180px, calc(100% - 48px));
-    min-height: 100%;
-    height: auto;
-    margin: 0 auto;
-    padding: max(18px, env(safe-area-inset-top)) 0 max(18px, env(safe-area-inset-bottom));
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__main {
@@ -866,9 +859,6 @@
 @media (max-width: 700px), (orientation: portrait) {
     #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
         width: calc(100% - 24px);
-        gap: 12px;
-        padding-top: max(10px, env(safe-area-inset-top));
-        padding-bottom: max(12px, env(safe-area-inset-bottom));
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__heading {
@@ -1067,12 +1057,6 @@
 }
 
 @media (orientation: landscape) and (max-height: 560px) {
-    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-        gap: 10px;
-        padding-top: max(8px, env(safe-area-inset-top));
-        padding-bottom: max(8px, env(safe-area-inset-bottom));
-    }
-
     #sow-menu[data-screen="profile"] .sow-profile__heading {
         grid-template-columns: minmax(0, 1fr) 240px;
         min-height: 190px;
@@ -1122,12 +1106,6 @@
 }
 
 /* Profile stays inside the menu viewport; only the dossier content scrolls. */
-#sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-}
-
 #sow-menu[data-screen="profile"] .sow-profile__main {
     flex: 1 1 auto;
     min-height: 0;
@@ -1142,13 +1120,6 @@
 }
 
 @media (orientation: portrait) {
-    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto;
-        height: 100%;
-        min-height: 0;
-    }
-
     #sow-menu[data-screen="profile"] .sow-profile__main {
         min-height: 0;
         overflow-y: auto;
@@ -2160,23 +2131,6 @@
     .sow-heroes__card-copy em { font-size: 9px; }
 }
 
-/* Keep the shared mobile chrome on one immutable grid across every screen. */
-@media (max-width: 599px) and (orientation: portrait) {
-    #sow-menu[data-screen="store"] .sow-menu__shell.sow-menu__store,
-    #sow-menu[data-screen="heroes"] .sow-menu__shell.sow-menu__heroes,
-    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-        display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto;
-        gap: 10px;
-        width: calc(100% - 24px);
-        height: 100%;
-        min-height: 0;
-        margin: 0 auto;
-        padding-top: max(8px, env(safe-area-inset-top));
-        padding-bottom: max(8px, env(safe-area-inset-bottom));
-    }
-}
-
 @media (max-width: 390px) {
     .sow-heroes__grid { grid-template-columns: 1fr; }
 }
@@ -2195,21 +2149,7 @@
     }
 
     #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-        display: grid;
-        grid-template-columns: 84px minmax(0, 1fr);
-        grid-template-rows: 60px minmax(0, 1fr) auto;
         width: min(calc(100% - 48px), 1440px);
-        height: 100%;
-        min-height: 0;
-        gap: 12px 16px;
-        padding: max(18px, env(safe-area-inset-top)) 0 max(18px, env(safe-area-inset-bottom));
     }
-}
 
-@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
-    #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-        grid-template-rows: 52px minmax(0, 1fr);
-        gap: 8px 12px;
-        padding: max(5px, env(safe-area-inset-top)) 0 max(5px, env(safe-area-inset-bottom));
-    }
 }

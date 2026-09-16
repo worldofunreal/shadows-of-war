@@ -219,7 +219,6 @@
   window.SOW_HOST_PRIVATE_PENDING = false;
   window.SOW_PORTAL_MUTE_AUDIO = false;
   window.SOW_DISABLE_CHAT = false;
-  window.SOW_PORTAL_LOCALE = null;
 
   function isAndroidTwa() {
     var referrer = String(document.referrer || "");
@@ -1122,15 +1121,6 @@
       console.log("CrazyGames SDK init OK (env=" + env + ")");
 
       if (crazyGamesSdkReady() && window.CrazyGames.SDK.user) {
-        try {
-          var sysInfo = window.CrazyGames.SDK.user.systemInfo;
-          if (sysInfo && sysInfo.locale) {
-            window.SOW_PORTAL_LOCALE = sysInfo.locale;
-            console.log("CrazyGames system locale detected: " + sysInfo.locale);
-          }
-        } catch (e) {
-          console.warn("CrazyGames systemInfo reading failed:", e);
-        }
         try {
           if (window.CrazyGames.SDK.user.isUserAccountAvailable) {
             var user = await window.CrazyGames.SDK.user.getUser();

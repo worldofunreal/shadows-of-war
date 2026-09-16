@@ -4,6 +4,7 @@
 
 pub const ACCOUNT_ID_STORAGE_KEY: &str = "sow_account_id";
 pub const ACCOUNT_SECRET_STORAGE_KEY: &str = "sow_account_secret";
+pub const PENDING_DISPLAY_NAME_STORAGE_KEY: &str = "poki_ignore_sow_pending_display_name";
 
 pub fn load_account_id() -> Option<String> {
     load_storage(ACCOUNT_ID_STORAGE_KEY)
@@ -25,6 +26,38 @@ pub fn load_account_secret() -> Option<String> {
 
 pub fn save_account_secret(secret: &str) {
     save_storage(ACCOUNT_SECRET_STORAGE_KEY, secret);
+}
+
+pub fn load_pending_display_name() -> Option<(Option<String>, String)> {
+    let raw = load_storage(PENDING_DISPLAY_NAME_STORAGE_KEY)?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let name = value
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())?
+        .to_string();
+    let account_id = value
+        .get("account_id")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|account_id| !account_id.is_empty())
+        .map(str::to_string);
+    Some((account_id, name))
+}
+
+pub fn save_pending_display_name(account_id: Option<&str>, name: &str) {
+    let value = serde_json::json!({
+        "account_id": account_id.unwrap_or_default(),
+        "name": name,
+    });
+    if let Ok(raw) = serde_json::to_string(&value) {
+        save_storage(PENDING_DISPLAY_NAME_STORAGE_KEY, &raw);
+    }
+}
+
+pub fn clear_pending_display_name() {
+    clear_storage(PENDING_DISPLAY_NAME_STORAGE_KEY);
 }
 
 #[cfg(target_arch = "wasm32")]

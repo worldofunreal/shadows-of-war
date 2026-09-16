@@ -3,7 +3,11 @@
 /// Animated attention pointer drawn at a screen position: a steady ring, two expanding
 /// "sonar ping" rings, and a bobbing chevron above. egui painter only (GPU via blade_egui)
 /// — no separate particle/shader pipeline needed for a 2D screen-space hint.
-pub(super) fn draw_tutorial_pointer(ctx: &egui::Context, target: egui::Pos2) {
+pub(super) fn draw_tutorial_pointer(
+    ctx: &egui::Context,
+    target: egui::Pos2,
+    avatar_radius: f32,
+) {
     let t = ctx.input(|i| i.time);
     // Middle layer: above the map/nameplates, but BELOW the Foreground dialog so the
     // dialog is never covered by the effect.
@@ -12,8 +16,8 @@ pub(super) fn draw_tutorial_pointer(ctx: &egui::Context, target: egui::Pos2) {
         egui::Id::new("tutorial_pointer"),
     ));
     let gold = egui::Color32::from_rgb(255, 200, 90);
-    // Frames the 20px-radius tutorial avatar with a small gap.
-    let base_r = 26.0_f32;
+    // Keep the pointer just outside the avatar, whatever nameplate scale is active.
+    let base_r = avatar_radius.max(0.0) + 6.0;
 
     // Two expanding, fading rings (sonar ping).
     for k in 0..2 {

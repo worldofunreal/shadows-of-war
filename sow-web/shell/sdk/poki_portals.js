@@ -5,6 +5,7 @@
   "use strict";
 
   var sdk = null;
+  var sdkInitPromise = null;
   var loadingFinished = false;
   var gameplayReady = false;
   var gameplayActive = false;
@@ -15,10 +16,6 @@
 
   function pokiSdk() {
     return window.PokiSDK || null;
-  }
-
-  function isPoki() {
-    return window.SOW_PORTAL === "poki";
   }
 
   function safeLocalGet(key) {
@@ -33,6 +30,7 @@
     window.SOW_adPlaying = true;
     document.querySelectorAll("audio,video").forEach(function (el) {
       el.dataset.sowWasPaused = el.paused ? "1" : "0";
+      el.dataset.sowWasMuted = el.muted ? "1" : "0";
       el.pause();
       el.muted = true;
     });
@@ -41,9 +39,10 @@
   function portalAdResume() {
     window.SOW_adPlaying = false;
     document.querySelectorAll("audio,video").forEach(function (el) {
-      el.muted = false;
+      el.muted = el.dataset.sowWasMuted === "1";
       if (el.dataset.sowWasPaused !== "1") el.play().catch(function () {});
       delete el.dataset.sowWasPaused;
+      delete el.dataset.sowWasMuted;
     });
   }
 
@@ -111,7 +110,6 @@
     window.SOW_isOnCrazyGames = function () { return false; };
     window.SOW_isOnPoki = function () { return true; };
     window.SOW_DISABLE_CHAT = true;
-    window.SOW_PORTAL_LOCALE = navigator.language || "en";
     window.SOW_PORTAL_PROGRESS_JSON = safeLocalGet(progressKey);
   }
 
@@ -138,21 +136,6 @@
   window.SOW_BLOCKED_IDS = [];
 
   window.SOW_isAndroidTwa = function () { return false; };
-  window.SOW_getWouSession = function () { return { token: "", accountId: "", user: null }; };
-  window.SOW_ensureWouAnonymousSession = function () {
-    return Promise.resolve({ token: "", accountId: "", user: null });
-  };
-  window.SOW_isSowProductionHost = function () { return false; };
-  window.SOW_getAuthState = function () {
-    return { platform: "poki", provider: null, authenticated: false, pending: false };
-  };
-  window.SOW_isBlockedId = function () { return false; };
-  window.SOW_portalShowAuthPrompt = function () {};
-  window.SOW_portalSignOut = function () {};
-  window.SOW_startWouOAuth = function () { return false; };
-  window.SOW_signOutWou = function () { return false; };
-  window.SOW_portalClearAuthChanged = function () { window.SOW_AUTH_CHANGED = false; };
-  window.SOW_AUTH_CHANGED = false;
 
   window.SOW_portalMuteGameAudio = portalAdPause;
   window.SOW_portalUnmuteGameAudio = portalAdResume;
@@ -175,19 +158,23 @@
   };
 
   window.SOW_initPortalSdk = async function () {
+    if (sdkInitPromise) return sdkInitPromise;
     refreshPortalFlags();
     sdk = pokiSdk();
     installFirstInputListener();
     if (!sdk || typeof sdk.init !== "function") {
       console.warn("Poki SDK unavailable; continuing anonymously");
-      return;
+      sdkInitPromise = Promise.resolve();
+      return sdkInitPromise;
     }
-    try {
-      await sdk.init();
+    sdkInitPromise = Promise.resolve().then(function () {
+      return sdk.init();
+    }).then(function () {
       console.info("Poki SDK initialized");
-    } catch (error) {
+    }).catch(function (error) {
       console.warn("Poki SDK init failed; continuing anonymously:", error);
-    }
+    });
+    return sdkInitPromise;
   };
 
   window.SOW_portalGameLoadingFinished = function () {
@@ -199,6 +186,7 @@
   };
 
   window.SOW_portalGameplayStart = function () {
+    if (gameplayReady) return;
     gameplayReady = true;
     installFirstInputListener();
     measure("gameplay", "session", "ready");

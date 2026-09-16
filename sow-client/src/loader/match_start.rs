@@ -16,7 +16,7 @@ impl SowApp {
         crate::store_portals::load_stop();
         crate::store_portals::gameplay_stop();
         self.web_loader_hidden = true;
-        if let Some(locale_str) = crate::store_portals::get_portal_locale() {
+        if let Some(locale_str) = crate::store_portals::get_ui_locale() {
             let detected_lang = sow_i18n::Language::from_locale(&locale_str);
             self.ui.app.settings_state.language = detected_lang;
             log::info!(
@@ -30,7 +30,7 @@ impl SowApp {
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn finish_boot_route(&mut self) {
         crate::store_portals::load_stop();
-        if let Some(locale_str) = crate::store_portals::get_portal_locale() {
+        if let Some(locale_str) = crate::store_portals::get_ui_locale() {
             let detected_lang = sow_i18n::Language::from_locale(&locale_str);
             self.ui.app.settings_state.language = detected_lang;
             log::info!(
@@ -61,6 +61,7 @@ impl SowApp {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn start_campaign_episode(&mut self, campaign: crate::campaign::CampaignId) {
         if !campaign.is_unlocked(&self.progress) {
             self.ui.app.main_menu_state.error_message = Some("Campaign episode is locked.".into());
@@ -109,6 +110,7 @@ impl SowApp {
     /// Launch a Lady Six Sky saga episode (1–3) as an offline tutorial match.
     /// Same isolation contract as the Boudica intro: scripted roster in,
     /// snapshots out, never touches multiplayer.
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn start_six_sky_episode(&mut self, episode: u8) {
         use crate::campaign::CampaignId;
         let campaign = match episode {

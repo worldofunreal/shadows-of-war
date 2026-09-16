@@ -83,6 +83,22 @@ impl SowApp {
 
         let stored_account_id = crate::anonymous_identity::load_account_id();
         let has_stored_account = stored_account_id.is_some();
+        let pending_display_name = match crate::anonymous_identity::load_pending_display_name() {
+            Some((pending_account_id, name))
+                if pending_account_id.is_none()
+                    || pending_account_id.as_deref() == stored_account_id.as_deref() =>
+            {
+                Some(name)
+            }
+            Some(_) => {
+                crate::anonymous_identity::clear_pending_display_name();
+                None
+            }
+            None => None,
+        };
+        if let Some(name) = pending_display_name.as_deref() {
+            app.main_menu_state.player_name = name.to_string();
+        }
         let initial_display_name = app.main_menu_state.player_name.clone();
 
         let (connect_tx, connect_rx) = crossbeam_channel::unbounded();
@@ -262,6 +278,7 @@ impl SowApp {
 
                 label_positions: std::collections::HashMap::new(),
                 label_sizes: std::collections::HashMap::new(),
+                tutorial_avatar_geometry: None,
                 tutorial_active: false,
                 tutorial_campaign: crate::campaign::CampaignId::Boudica,
                 tutorial_step_idx: 0,
@@ -356,9 +373,10 @@ impl SowApp {
             } else {
                 String::from("local")
             },
-            pending_display_name: None,
+            pending_display_name,
             queued_display_name: None,
             display_name_save_in_flight: false,
+            display_name_save_request_id: None,
             profile_request_in_flight: false,
             profile_refresh_pending: false,
             identity_request_seq: 0,

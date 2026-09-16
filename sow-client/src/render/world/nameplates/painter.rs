@@ -138,7 +138,7 @@ impl<'a> NameplatePainter<'a> {
         player_color: [f32; 3],
         leader: sow_core::player::Leader,
         asset_loader: &sow_ui::ui::asset_loader::AssetLoader,
-    ) {
+    ) -> (egui::Pos2, f32) {
         if let Some(tr) = self.text_renderer.as_deref_mut() {
             crate::hud::avatar::draw_player_avatar_gpu(
                 tr,
@@ -169,9 +169,11 @@ impl<'a> NameplatePainter<'a> {
                 asset_loader,
             );
         }
+
+        (center, radius)
     }
 
-    pub fn paint(&mut self, input: NameplateInput<'_>) {
+    pub fn paint(&mut self, input: NameplateInput<'_>) -> Option<(egui::Pos2, f32)> {
         let troops_font_id = egui::FontId::proportional(input.metrics.troops_font_size);
         let (prepared_name, troops_galley, name_size, troops_size) =
             if let Some(tr) = self.text_renderer.as_deref() {
@@ -245,6 +247,8 @@ impl<'a> NameplatePainter<'a> {
             input.show_troops,
             self.style.emoji_effect_padding(input.metrics.badge_size),
         );
+        let avatar_geometry = (layout.avatar_radius > 0.0)
+            .then_some((layout.avatar_center, layout.avatar_visual_radius));
 
         self.paint_status_badges(&layout, &input);
         self.paint_rank(&layout, input.rank_1based);
@@ -314,6 +318,8 @@ impl<'a> NameplatePainter<'a> {
             troops_galley.as_ref(),
             &troops_font_id,
         );
+
+        avatar_geometry
     }
 
     fn paint_status_badges(&mut self, layout: &NameplateLayout, input: &NameplateInput<'_>) {

@@ -329,9 +329,17 @@
         })();
     </script>
     <script src="./sdk/store_portals.js?v=__BUILD_TS__"></script>
+    <script>
+        window.SOW_LOCALE_BASE = "__SOW_LOCALE_BASE__";
+        window.SOW_LOCALE_DEFAULT = "en";
+        window.SOW_LOCALE_VERSION = "__BUILD_TS__";
+        window.SOW_LOCALE_CATALOG_VERSION = __SOW_LOCALE_CATALOG_VERSION__;
+        window.SOW_LOCALE_CODES = __SOW_LOCALE_CODES__;
+    </script>
     <script>/* __INLINE_LOADER_JS__ */</script>
     <script>/* __INLINE_MAIN_MENU_JS__ */</script>
     <script>
+        /* POKI_ANDROID_AUTH_BEGIN */
         window.addEventListener('sow:loader-ready', function () {
             // The native launcher is already visible. This is the only point
             // at which the silent Play Games request may cross the bridge.
@@ -339,6 +347,7 @@
                 window.SOW_startAndroidPlayGamesAutoAuth();
             }
         }, { once: true });
+        /* POKI_ANDROID_AUTH_END */
     </script>
     <script type="module">
         async function run() {
@@ -350,6 +359,14 @@
                 return;
             }
 
+            try {
+                await window.SOW_I18N_READY;
+            } catch (error) {
+                console.error("[SOW i18n] English catalog could not be loaded:", error);
+                return;
+            }
+
+            /* POKI_ANDROID_AUTH_STATE_BEGIN */
             // This only restores cached identity state. It never
             // starts native Play Games authentication before loader-ready.
             if (typeof window.SOW_prepareAndroidAuthState === "function") {
@@ -363,10 +380,12 @@
                     window.SOW_PLATFORM_IDENTITY = null;
                 }
             }
+            /* POKI_ANDROID_AUTH_STATE_END */
 
             if (typeof window.SOW_initPortalSdk === "function") {
                 await window.SOW_initPortalSdk();
             }
+            /* POKI_WOU_AUTH_BEGIN */
             if (typeof window.SOW_isSowProductionHost === "function" &&
                 window.SOW_isSowProductionHost() &&
                 typeof window.SOW_ensureWouAnonymousSession === "function") {
@@ -379,6 +398,7 @@
                     console.warn("WOU anonymous identity unavailable; using local fallback:", error);
                 }
             }
+            /* POKI_WOU_AUTH_END */
             if (typeof window.SOW_portalLoadStart === "function") {
                 window.SOW_portalLoadStart();
             }

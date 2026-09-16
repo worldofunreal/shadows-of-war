@@ -71,6 +71,7 @@ impl SowApp {
         self.dispatch_sim_command(SimCommand::Shutdown);
         self.ui.label_positions.clear();
         self.ui.label_sizes.clear();
+        self.ui.tutorial_avatar_geometry = None;
         self.gfx.needs_first_upload = true;
         self.gfx.last_egui_viewport = None;
         self.release_client_game_gpu();

@@ -83,9 +83,35 @@
             .replace(/'/g, "&#39;");
     }
 
+    function selfCreds() {
+        var id = null;
+        var secret = null;
+        try {
+            id = window.localStorage.getItem("sow_account_id");
+            secret = window.localStorage.getItem("sow_account_secret");
+        } catch (e) {}
+        return (id && secret) ? { account_id: id, auth_secret: secret } : null;
+    }
+
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
+    }
+
+    var MAIN_NAV_ITEMS = [
+        ["store", "shell/mobile-nav/store.webp", "menu.shop"],
+        ["heroes", "shell/mobile-nav/heroes.webp", "menu.heroes"],
+        ["battle", "shell/mobile-nav/battle.webp", "menu.battle"],
+        ["profile", "shell/mobile-nav/profile.webp", "menu.profile"]
+    ];
+
+    function renderMainNavMarkup(active, items) {
+        return "<nav class='sow-menu__main-nav' aria-label='" + esc(SOW_t("menu.main_menu_navigation")) + "'>" + items.map(function (item) {
+            var selected = active === item[0];
+            var label = SOW_t(item[2]);
+            return "<button type='button' class='sow-menu__main-nav-item" + (selected ? " is-active" : "") + "' data-command='main_nav' data-nav-screen='" + item[0] + "'" +
+                (selected ? " aria-current='page'" : "") + " aria-label='" + esc(label) + "'><span aria-hidden='true'><img src='" + esc(asset(item[1])) + "' alt='' width='128' height='128' decoding='async' draggable='false'></span><small>" + esc(label) + "</small></button>";
+        }).join("") + "</nav>";
     }
 
     function currencyAsset(kind) {

@@ -1,5 +1,6 @@
 use crate::app::SowApp;
 use crate::get_build_version;
+use sow_ui::ui::loading_screen::SplashJob;
 use sow_ui_kit::ClientPhase;
 
 fn should_complete_boudica_intro_on_exit(
@@ -12,6 +13,10 @@ fn should_complete_boudica_intro_on_exit(
         && is_offline
         && campaign == crate::campaign::CampaignId::Boudica
         && !intro_completed.unwrap_or(false)
+}
+
+fn should_use_exit_game_loader(phase: ClientPhase) -> bool {
+    matches!(phase, ClientPhase::Playing)
 }
 
 impl SowApp {
@@ -165,9 +170,13 @@ impl SowApp {
         }
     }
 
-    /// Tear down the current match and return to MainMenu through the ExitGame splash.
+    /// Tear down the current match and use ExitGame only for an active game.
     pub(crate) fn begin_exit_to_main_menu(&mut self) {
-        let was_playing = self.ui.app.phase == sow_ui_kit::ClientPhase::Playing;
+        let phase = self.ui.app.phase;
+        let entering_game = matches!(phase, ClientPhase::Splash)
+            && matches!(&self.ui.app.splash_state.job, SplashJob::EnterGame);
+        let use_loader = should_use_exit_game_loader(phase);
+        let was_playing = phase == sow_ui_kit::ClientPhase::Playing;
         let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
             self.ui.tutorial_active,
             self.net.is_offline,
@@ -197,6 +206,9 @@ impl SowApp {
         self.net.client = None;
         self.ui.app.main_menu_state.is_connected = false;
         self.ui.app.main_menu_state.is_connecting = false;
+        if entering_game {
+            self.cleanup_game_session_stub();
+        }
         #[cfg(target_arch = "wasm32")]
         {
             self.web_exit_lobbies_ready = false;
@@ -215,12 +227,16 @@ impl SowApp {
         self.sim.my_player_id = None;
         self.sim.relay_ticket = None;
         self.sim.relay_reconnect_ticket = None;
-        self.ui.app.phase = ClientPhase::Splash;
-        let lang = self.ui.app.settings_state.language;
-        self.ui
-            .app
-            .splash_state
-            .reset_anim(sow_ui::ui::loading_screen::SplashJob::ExitGame, lang);
+        if use_loader {
+            self.ui.app.phase = ClientPhase::Splash;
+            let lang = self.ui.app.settings_state.language;
+            self.ui
+                .app
+                .splash_state
+                .reset_anim(SplashJob::ExitGame, lang);
+        } else {
+            self.ui.app.phase = ClientPhase::MainMenu;
+        }
         self.ui.is_spectating = false;
         self.ui.endgame_cache = None;
         self.reset_progress_session();
@@ -269,8 +285,16 @@ impl SowApp {
 
 #[cfg(test)]
 mod tests {
-    use super::should_complete_boudica_intro_on_exit;
+    use super::{should_complete_boudica_intro_on_exit, should_use_exit_game_loader};
     use crate::campaign::CampaignId;
+    use sow_ui_kit::ClientPhase;
+
+    #[test]
+    fn exit_loader_only_runs_for_active_game() {
+        assert!(!should_use_exit_game_loader(ClientPhase::MainMenu));
+        assert!(should_use_exit_game_loader(ClientPhase::Playing));
+        assert!(!should_use_exit_game_loader(ClientPhase::Splash));
+    }
 
     #[test]
     fn only_unfinished_offline_boudica_tutorial_exit_completes_intro() {

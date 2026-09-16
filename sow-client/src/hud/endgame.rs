@@ -364,7 +364,6 @@ impl SowApp {
                                 c.send(json);
                             }
                         } else {
-                            self.net.client = None;
                             self.begin_exit_to_main_menu();
                         }
                     }

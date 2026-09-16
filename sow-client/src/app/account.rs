@@ -272,10 +272,15 @@ impl SowApp {
             self.asset_config.database_base.trim_end_matches('/')
         );
         let tx = self.tasks.db_tx.clone();
+        let requested_display_name = Some(
+            self.pending_display_name
+                .clone()
+                .unwrap_or_else(|| self.ui.app.main_menu_state.player_name.clone()),
+        );
         fetch_anonymous_profile_request(
             url,
             crate::anonymous_identity::load_account_id(),
-            Some(self.ui.app.main_menu_state.player_name.clone()),
+            requested_display_name,
             tx,
             true,
             request_id,
@@ -287,6 +292,14 @@ impl SowApp {
         if display_name.is_empty() {
             log::warn!("Refusing to save an empty display name");
             return;
+        }
+        if matches!(self.progress_provider.as_str(), "local" | "anonymous") {
+            self.pending_display_name = Some(display_name.clone());
+            self.ui.app.main_menu_state.player_name = display_name.clone();
+            crate::anonymous_identity::save_pending_display_name(
+                self.progress_account_id.as_deref(),
+                &display_name,
+            );
         }
         if self.profile_request_in_flight {
             self.queued_display_name = Some(display_name);
@@ -303,7 +316,6 @@ impl SowApp {
         }
         if self.progress_provider != "anonymous" {
             if self.progress_provider == "local" && self.progress_account_id.is_none() {
-                self.pending_display_name = Some(display_name);
                 log::debug!("Queued anonymous display-name update until the account is created");
             } else {
                 log::debug!(
@@ -314,7 +326,6 @@ impl SowApp {
             return;
         }
         let Some(account_id) = self.progress_account_id.clone() else {
-            self.pending_display_name = Some(display_name);
             log::warn!("Cannot save display name before anonymous account is loaded");
             return;
         };
@@ -322,6 +333,7 @@ impl SowApp {
         let account_hint_value = account_hint(Some(&account_id));
         let requested_name_len = display_name.chars().count();
         self.display_name_save_in_flight = true;
+        self.display_name_save_request_id = Some(request_id);
         let url = format!(
             "{}/profile/anonymous/name",
             self.asset_config.database_base.trim_end_matches('/')
@@ -447,14 +459,17 @@ impl SowApp {
             && self.progress.intro_completed.unwrap_or(false)
             && !cloud.intro_completed.unwrap_or(false);
         let portal = self.progress.clone();
-        self.progress.merge_boot_profile(cloud);
+        if retry_tutorial {
+            self.progress = portal.clone();
+        } else {
+            self.progress.merge_boot_profile(cloud);
+        }
         self.progress_account_id = Some(account_id);
         self.progress_provider = provider;
         if self.progress_provider == "anonymous" {
-            let pending_display_name = self
-                .pending_display_name
-                .take()
-                .or_else(|| self.queued_display_name.take());
+            let pending_display_name = self.pending_display_name.take();
+            let queued_display_name = self.queued_display_name.take();
+            let pending_display_name = queued_display_name.or(pending_display_name);
             self.confirmed_display_name = Some(display_name.clone());
             self.ui.app.main_menu_state.player_name = pending_display_name
                 .clone()

@@ -31,86 +31,13 @@
         "🔌", "⭐", "🐺"
     ];
 
-    var SURRENDER_COPY = {
-        en: {
-            matchTitle: "LEAVE MATCH",
-            tutorialTitle: "LEAVE TUTORIAL",
-            cancel: "CANCEL",
-            tutorialDescription: "You can return to the tutorial later from Campaign.",
-            matchMessages: [
-                "Your battle will end. We'll call it a tactical retreat.",
-                "Your battle will end. Your troops saw nothing.",
-                "Your battle will end. The map won't tell anyone.",
-                "Your battle will end. The paperwork can wait.",
-                "Your battle will end. This was definitely part of the plan."
-            ]
-        },
-        es: {
-            matchTitle: "SALIR DE LA PARTIDA",
-            tutorialTitle: "SALIR DEL TUTORIAL",
-            cancel: "CANCELAR",
-            tutorialDescription: "Puedes volver al tutorial más tarde desde Campaña.",
-            matchMessages: [
-                "Tu batalla terminará. Lo llamaremos una retirada táctica.",
-                "Tu batalla terminará. Tus tropas no vieron nada.",
-                "Tu batalla terminará. El mapa no se lo contará a nadie.",
-                "Tu batalla terminará. El papeleo puede esperar.",
-                "Tu batalla terminará. Definitivamente era parte del plan."
-            ]
-        },
-        fr: {
-            matchTitle: "QUITTER LA PARTIE",
-            tutorialTitle: "QUITTER LE TUTORIEL",
-            cancel: "ANNULER",
-            tutorialDescription: "Vous pourrez revenir au tutoriel plus tard depuis la Campagne.",
-            matchMessages: [
-                "Votre bataille prendra fin. Nous appellerons cela une retraite tactique.",
-                "Votre bataille prendra fin. Vos troupes n'ont rien vu.",
-                "Votre bataille prendra fin. La carte ne dira rien à personne.",
-                "Votre bataille prendra fin. La paperasse peut attendre.",
-                "Votre bataille prendra fin. Cela faisait définitivement partie du plan."
-            ]
-        },
-        de: {
-            matchTitle: "PARTIE VERLASSEN",
-            tutorialTitle: "TUTORIAL VERLASSEN",
-            cancel: "ABBRECHEN",
-            tutorialDescription: "Du kannst später über die Kampagne zum Tutorial zurückkehren.",
-            matchMessages: [
-                "Deine Schlacht endet. Wir nennen es einfach einen taktischen Rückzug.",
-                "Deine Schlacht endet. Deine Truppen haben nichts gesehen.",
-                "Deine Schlacht endet. Die Karte wird niemandem etwas sagen.",
-                "Deine Schlacht endet. Der Papierkram kann warten.",
-                "Deine Schlacht endet. Das war natürlich Teil des Plans."
-            ]
-        },
-        it: {
-            matchTitle: "LASCIA LA PARTITA",
-            tutorialTitle: "LASCIA IL TUTORIAL",
-            cancel: "ANNULLA",
-            tutorialDescription: "Puoi tornare al tutorial più tardi dalla Campagna.",
-            matchMessages: [
-                "La tua battaglia finirà. La chiameremo una ritirata tattica.",
-                "La tua battaglia finirà. Le tue truppe non hanno visto nulla.",
-                "La tua battaglia finirà. La mappa non dirà niente a nessuno.",
-                "La tua battaglia finirà. La burocrazia può aspettare.",
-                "La tua battaglia finirà. Faceva decisamente parte del piano."
-            ]
-        },
-        tr: {
-            matchTitle: "MAÇTAN ÇIK",
-            tutorialTitle: "TUTORIALDAN ÇIK",
-            cancel: "İPTAL",
-            tutorialDescription: "Tutoriala daha sonra Kampanya menüsünden dönebilirsin.",
-            matchMessages: [
-                "Savaşın sona erecek. Buna taktiksel geri çekilme diyeceğiz.",
-                "Savaşın sona erecek. Askerlerin hiçbir şey görmedi.",
-                "Savaşın sona erecek. Harita kimseye söylemez.",
-                "Savaşın sona erecek. Evrak işleri bekleyebilir.",
-                "Savaşın sona erecek. Bu kesinlikle planın bir parçasıydı."
-            ]
-        }
-    };
+    var surrenderMessageKeys = [
+        "endgame.match_message_1",
+        "endgame.match_message_2",
+        "endgame.match_message_3",
+        "endgame.match_message_4",
+        "endgame.match_message_5"
+    ];
 
     function send(type, extra) {
         if (typeof window.SOW_menu_command !== "function") return false;
@@ -126,13 +53,6 @@
 
     function currencyAsset(kind) {
         return asset("gameplay/currency/" + kind + ".webp");
-    }
-
-    function surrenderCopy() {
-        var locale = String(window.SOW_PORTAL_LOCALE || (window.navigator && window.navigator.language) || "en")
-            .toLowerCase()
-            .split(/[-_]/)[0];
-        return SURRENDER_COPY[locale] || SURRENDER_COPY.en;
     }
 
     function leaderById(id) {
@@ -155,21 +75,21 @@
         hudRoot.innerHTML = ''
             + '<header class="sow-hud__topbar">'
             + '  <div class="sow-hud__status-left">'
-            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_tutorial_objectives" id="sow-hud-quests-btn" aria-label="Quests" title="Quests">📜</button>'
-            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="Rankings" title="Rankings">🏆</button>'
-            + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="Dev Tools" title="Dev Tools">🛠</button>'
+            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_tutorial_objectives" id="sow-hud-quests-btn" aria-label="' + SOW_t("hud.quests") + '" title="' + SOW_t("hud.quests") + '">📜</button>'
+            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.rankings") + '" title="' + SOW_t("hud.rankings") + '">🏆</button>'
+            + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">🛠</button>'
             + '  </div>'
             + '  <div class="sow-hud__status-right">'
-            + '    <span class="sow-hud__fps" id="sow-hud-fps">60 FPS</span>'
-            + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="Inbox" title="Inbox">📩 <span class="sow-hud__inbox-badge" id="sow-hud-inbox-count">0</span></button>'
-            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="Settings" title="Settings">⚙</button>'
-            + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="Leave Match" title="Leave Match">✕</button>'
+            + '    <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: 60 }) + '</span>'
+            + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">📩 <span class="sow-hud__inbox-badge" id="sow-hud-inbox-count">0</span></button>'
+            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">⚙</button>'
+            + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' + SOW_t("hud.leave_match") + '" title="' + SOW_t("hud.leave_match") + '">✕</button>'
             + '  </div>'
             + '</header>'
             + '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">'
-            + '  <div class="sow-hud__hover-header"><span id="sow-hud-hover-avatar">👑</span> <b id="sow-hud-hover-name">Territory</b></div>'
+            + '  <div class="sow-hud__hover-header"><span id="sow-hud-hover-avatar">👑</span> <b id="sow-hud-hover-name">' + SOW_t("hud.territory") + '</b></div>'
             + '  <div class="sow-hud__hover-stats">'
-            + '    <span><b id="sow-hud-hover-pct">0%</b> Land</span>'
+            + '    <span><b id="sow-hud-hover-pct">0%</b> ' + SOW_t("hud.land") + '</span>'
             + '    <span><b id="sow-hud-hover-troops">0</b> ⚔</span>'
             + '    <span><b id="sow-hud-hover-gold">0</b> <img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"></span>'
             + '  </div>'
@@ -183,78 +103,78 @@
             + '  </div>'
             + '</aside>'
             + '<aside class="sow-hud__right-rail" id="sow-hud-right-rail">'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_in" aria-label="Zoom in" title="Zoom in">➕</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="Zoom out" title="Zoom out">➖</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="Center camera" title="Center camera">🏠</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="toggle_emoji" aria-label="Emojis" title="Emojis">😀</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_in" aria-label="' + SOW_t("hud.zoom_in") + '" title="' + SOW_t("hud.zoom_in") + '">➕</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="' + SOW_t("hud.zoom_out") + '" title="' + SOW_t("hud.zoom_out") + '">➖</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="' + SOW_t("hud.center_camera") + '" title="' + SOW_t("hud.center_camera") + '">🏠</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="toggle_emoji" aria-label="' + SOW_t("hud.emojis") + '" title="' + SOW_t("hud.emojis") + '">😀</button>'
             + '</aside>'
             + '<div class="sow-hud__emoji-popout hidden" id="sow-hud-emoji-popout">'
             + '  <div class="sow-hud__emoji-header">'
-            + '    <span>EXPRESS REACTION</span>'
-            + '    <button type="button" class="sow-hud__pin-btn" data-command="toggle_pin_emoji" aria-pressed="false">PIN</button>'
-            + '    <button type="button" class="sow-hud__close-btn" data-command="toggle_emoji" aria-label="Close emojis">✕</button>'
+            + '    <span>' + SOW_t("hud.express_reaction") + '</span>'
+            + '    <button type="button" class="sow-hud__pin-btn" data-command="toggle_pin_emoji" aria-pressed="false">' + SOW_t("hud.pin") + '</button>'
+            + '    <button type="button" class="sow-hud__close-btn" data-command="toggle_emoji" aria-label="' + SOW_t("hud.close_emojis") + '">✕</button>'
             + '  </div>'
             + '  <div class="sow-hud__emoji-grid" id="sow-hud-emoji-grid"></div>'
             + '</div>'
             + '<aside class="sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">'
-            + '  <div class="sow-hud__dev-header"><b>Dev Tools</b><button type="button" class="sow-hud__close-btn" data-command="toggle_dev_sidebar" aria-label="Close developer tools">✕</button></div>'
+            + '  <div class="sow-hud__dev-header"><b>' + SOW_t("hud.dev_tools") + '</b><button type="button" class="sow-hud__close-btn" data-command="toggle_dev_sidebar" aria-label="' + SOW_t("hud.close_developer_tools") + '">✕</button></div>'
             + '  <div class="sow-hud__dev-body">'
-            + '    <div class="sow-hud__dev-section"><b>Map &amp; Borders</b>'
-            + '      <label class="sow-hud__dev-row">Border Thk <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="thickness"></label>'
-            + '      <label class="sow-hud__dev-row">Border Drk <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="darkness"></label>'
-            + '      <label class="sow-hud__dev-row">Shore Thk  <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="shore_thickness"></label>'
-            + '      <label class="sow-hud__dev-row">Conquest Dur <input type="range" min="0.1" max="10" step="0.1" value="1.5" data-dev="conquest_duration"></label>'
-            + '      <label class="sow-hud__dev-row">Opacity <input type="range" min="0" max="1" step="0.01" value="1" data-dev="territory_opacity"></label>'
-            + '      <button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config">RESET</button>'
+            + '    <div class="sow-hud__dev-section"><b>' + SOW_t("hud.map_borders") + '</b>'
+            + '      <label class="sow-hud__dev-row">' + SOW_t("hud.border_thickness") + ' <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="thickness"></label>'
+            + '      <label class="sow-hud__dev-row">' + SOW_t("hud.border_darkness") + ' <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="darkness"></label>'
+            + '      <label class="sow-hud__dev-row">' + SOW_t("hud.shore_thickness") + ' <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="shore_thickness"></label>'
+            + '      <label class="sow-hud__dev-row">' + SOW_t("hud.conquest_duration") + ' <input type="range" min="0.1" max="10" step="0.1" value="1.5" data-dev="conquest_duration"></label>'
+            + '      <label class="sow-hud__dev-row">' + SOW_t("hud.opacity") + ' <input type="range" min="0" max="1" step="0.01" value="1" data-dev="territory_opacity"></label>'
+            + '      <button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config">' + SOW_t("hud.reset") + '</button>'
             + '    </div>'
             + '  </div>'
             + '</aside>'
             + '<aside class="sow-hud__settings hidden" id="sow-hud-settings">'
-            + '  <div class="sow-hud__panel-header"><h3>SETTINGS</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_settings" aria-label="Close settings">✕</button></div>'
-            + '  <label class="sow-hud__setting-row"><span>Sound</span><input type="checkbox" data-hud-setting="mute_all"></label>'
-            + '  <label class="sow-hud__setting-row"><span>Music</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
-            + '  <label class="sow-hud__setting-row"><span>Reduced motion</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
+            + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("menu.settings") + '</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_settings" aria-label="' + SOW_t("hud.close_settings") + '">✕</button></div>'
+            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.sound") + '</span><input type="checkbox" data-hud-setting="mute_all"></label>'
+            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
+            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
             + '</aside>'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
             + '  <div class="sow-hud__dock-inner" id="sow-hud-dock-inner">'
             + '    <div class="sow-hud__dock-actions">'
             + '      <div class="sow-hud__deploy-panel hidden" id="sow-hud-deploy-btn">'
-            + '        <span class="sow-hud__deploy-title">CHOOSE SPAWN LOCATION</span>'
-            + '        <b class="sow-hud__deploy-timer" id="sow-hud-deploy-timer">READY</b>'
+            + '        <span class="sow-hud__deploy-title">' + SOW_t("hud.choose_spawn") + '</span>'
+            + '        <b class="sow-hud__deploy-timer" id="sow-hud-deploy-timer">' + SOW_t("hud.ready") + '</b>'
             + '      </div>'
             + '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">'
             + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="City" id="sow-hud-bld-city">'
             + '          <span class="sow-hud__bld-icon">🏛️</span>'
-            + '          <b class="sow-hud__bld-name">City</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-city">100g</small>'
+            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_city") + '</b>'
+            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-city">' + SOW_t("hud.cost", { amount: 100 }) + '</small>'
             + '        </button>'
             + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="Factory" id="sow-hud-bld-factory">'
             + '          <span class="sow-hud__bld-icon">🏭</span>'
-            + '          <b class="sow-hud__bld-name">Factory</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-factory">200g</small>'
+            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_factory") + '</b>'
+            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-factory">' + SOW_t("hud.cost", { amount: 200 }) + '</small>'
             + '        </button>'
             + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="Port" id="sow-hud-bld-port">'
             + '          <span class="sow-hud__bld-icon">⚓</span>'
-            + '          <b class="sow-hud__bld-name">Port</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-port">150g</small>'
+            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_port") + '</b>'
+            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-port">' + SOW_t("hud.cost", { amount: 150 }) + '</small>'
             + '        </button>'
             + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="Bunker" id="sow-hud-bld-bunker">'
             + '          <span class="sow-hud__bld-icon">🛡️</span>'
-            + '          <b class="sow-hud__bld-name">Bunker</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-bunker">75g</small>'
+            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_bunker") + '</b>'
+            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-bunker">' + SOW_t("hud.cost", { amount: 75 }) + '</small>'
             + '        </button>'
-            + '        <button type="button" class="sow-hud__cancel-btn hidden" data-command="cancel_placement" id="sow-hud-cancel-placement">✕ Cancel</button>'
+            + '        <button type="button" class="sow-hud__cancel-btn hidden" data-command="cancel_placement" id="sow-hud-cancel-placement">✕ ' + SOW_t("hud.cancel_placement") + '</button>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
-            + '      <div class="sow-hud__res-rate" id="sow-hud-res-rate" title="Troop Production Rate">'
+            + '      <div class="sow-hud__res-rate" id="sow-hud-res-rate" title="' + SOW_t("hud.troop_production_rate") + '">'
             + '        <span class="sow-hud__rate-text" data-role="prod">⚔ +0/s</span>'
             + '      </div>'
-            + '      <div class="sow-hud__res-bar-wrap" title="Troop Pool / Capacity">'
+            + '      <div class="sow-hud__res-bar-wrap" title="' + SOW_t("hud.troop_pool_capacity") + '">'
             + '        <div class="sow-hud__res-bar-fill" id="sow-hud-troop-fill" style="width: 0%;"></div>'
             + '        <span class="sow-hud__res-bar-text" data-role="troops">0 / 0 ⚔</span>'
             + '      </div>'
-            + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="Gold Treasury">'
+            + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="' + SOW_t("hud.gold_treasury") + '">'
             + '        <span class="sow-hud__gold-text"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b data-role="gold">0</b></span>'
             + '      </div>'
             + '    </div>'
@@ -262,39 +182,39 @@
             + '</footer>'
             + '<aside class="sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
             + '  <div class="sow-hud__panel-header">'
-            + '    <h3>RANKINGS</h3>'
-            + '    <button class="sow-hud__close-btn" type="button" data-command="toggle_leaderboard" aria-label="Close rankings">✕</button>'
+            + '    <h3>' + SOW_t("hud.rankings_title") + '</h3>'
+            + '    <button class="sow-hud__close-btn" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.close_rankings") + '">✕</button>'
             + '  </div>'
             + '  <div class="sow-hud__leaderboard-rows" id="sow-hud-lb-rows"></div>'
             + '</aside>'
             + '<aside class="sow-hud__panel sow-hud__inbox hidden" id="sow-hud-inbox">'
-            + '  <div class="sow-hud__panel-header"><h3>INBOX</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_inbox" aria-label="Close inbox">✕</button></div>'
+            + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("hud.inbox") + '</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.close_inbox") + '">✕</button></div>'
             + '  <div class="sow-hud__panel-rows" id="sow-hud-inbox-rows"></div>'
             + '</aside>'
             + '<aside class="sow-hud__panel sow-hud__transfer hidden" id="sow-hud-transfer">'
-            + '  <div class="sow-hud__panel-header"><h3>RESOURCE TRANSFER</h3><button class="sow-hud__close-btn" type="button" data-command="close_transfer" aria-label="Close resource transfer">✕</button></div>'
+            + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("hud.resource_transfer") + '</h3><button class="sow-hud__close-btn" type="button" data-command="close_transfer" aria-label="' + SOW_t("hud.close_resource_transfer") + '">✕</button></div>'
             + '  <p id="sow-hud-transfer-target"></p>'
-            + '  <label>GOLD<input id="sow-hud-transfer-gold" type="number" min="0" step="1" value="0"></label>'
-            + '  <label>TROOPS<input id="sow-hud-transfer-troops" type="number" min="0" step="1" value="0"></label>'
-            + '  <div class="sow-hud__panel-actions"><button type="button" data-command="send_resources">SEND</button><button type="button" data-command="request_resources">REQUEST</button></div>'
+            + '  <label>' + SOW_t("hud.gold") + '<input id="sow-hud-transfer-gold" type="number" min="0" step="1" value="0"></label>'
+            + '  <label>' + SOW_t("hud.troops") + '<input id="sow-hud-transfer-troops" type="number" min="0" step="1" value="0"></label>'
+            + '  <div class="sow-hud__panel-actions"><button type="button" data-command="send_resources">' + SOW_t("hud.send") + '</button><button type="button" data-command="request_resources">' + SOW_t("hud.request") + '</button></div>'
             + '</aside>'
             + '<div class="sow-hud__modal-backdrop hidden" id="sow-hud-betrayal-modal">'
-            + '  <div class="sow-hud__modal-card"><h3>BREAK ALLIANCE?</h3><p id="sow-hud-betrayal-copy">Attacking this ally may turn other allies against you.</p><div class="sow-hud__panel-actions"><button type="button" data-command="cancel_betrayal">KEEP ALLIANCE</button><button class="sow-hud__btn-danger" type="button" data-command="confirm_betrayal">ATTACK</button></div></div>'
+            + '  <div class="sow-hud__modal-card"><h3>' + SOW_t("hud.break_alliance") + '</h3><p id="sow-hud-betrayal-copy">' + SOW_t("hud.break_alliance_body") + '</p><div class="sow-hud__panel-actions"><button type="button" data-command="cancel_betrayal">' + SOW_t("hud.keep_alliance") + '</button><button class="sow-hud__btn-danger" type="button" data-command="confirm_betrayal">' + SOW_t("hud.attack") + '</button></div></div>'
             + '</div>'
             + '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-surrender-modal">'
             + '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="defeat" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner" aria-describedby="sow-hud-surrender-desc">'
             + '    <div class="sow-hud__endgame-hero">'
             + '      <div class="sow-hud__endgame-portrait-wrap">'
-            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="Leader Avatar" />'
+            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="' + SOW_t("hud.leader_avatar") + '" />'
             + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">LEAVE MATCH</h2>'
-            + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">Your battle will end.</p>'
+            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">' + SOW_t("endgame.leave_match") + '</h2>'
+            + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' + SOW_t("endgame.your_battle_will_end") + '</p>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-actions">'
-            + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">CANCEL</button>'
-            + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">LEAVE MATCH</span></button>'
+            + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' + SOW_t("endgame.cancel") + '</button>'
+            + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">' + SOW_t("endgame.leave_match") + '</span></button>'
             + '    </div>'
             + '  </section>'
             + '</div>'
@@ -302,29 +222,29 @@
             + '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-title">'
             + '    <div class="sow-hud__endgame-hero">'
             + '      <div class="sow-hud__endgame-portrait-wrap">'
-            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="Leader Avatar" />'
+            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="' + SOW_t("hud.leader_avatar") + '" />'
             + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" id="sow-hud-endgame-icon" aria-hidden="true">⚔</span><span>MATCH RESULT</span></div>'
-            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-endgame-banner">DEFEAT</h2>'
-            + '        <h3 class="sow-hud__endgame-title" id="sow-hud-endgame-title">MATCH LOST</h3>'
-            + '        <p class="sow-hud__endgame-desc" id="sow-hud-endgame-desc">The match has ended.</p>'
+            + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" id="sow-hud-endgame-icon" aria-hidden="true">⚔</span><span>' + SOW_t("hud.match_result") + '</span></div>'
+            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-endgame-banner">' + SOW_t("hud.defeat") + '</h2>'
+            + '        <h3 class="sow-hud__endgame-title" id="sow-hud-endgame-title">' + SOW_t("hud.match_lost") + '</h3>'
+            + '        <p class="sow-hud__endgame-desc" id="sow-hud-endgame-desc">' + SOW_t("hud.match_ended") + '</p>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-stats" id="sow-hud-endgame-stats">'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">K / D / A</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 5.1L19 10l-4.9 1.9L12 17l-2.1-5.1L5 10l4.9-1.9z"/></svg></span><span class="sow-hud__endgame-stat-label">XP</span><b id="sow-hud-endgame-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 4 4 4-6 4 6 4-4-2 10H6zM6 20h12"/></svg></span><span class="sow-hud__endgame-stat-label">LEADER XP</span><b id="sow-hud-endgame-leader-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">CROWNS</span><b id="sow-hud-endgame-crowns">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 5.1L19 10l-4.9 1.9L12 17l-2.1-5.1L5 10l4.9-1.9z"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.xp") + '</span><b id="sow-hud-endgame-xp">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 4 4 4-6 4 6 4-4-2 10H6zM6 20h12"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.leader_xp") + '</span><b id="sow-hud-endgame-leader-xp">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.crowns") + '</span><b id="sow-hud-endgame-crowns">+0</b></div>'
             + '    </div>'
-            + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="Featured skin offer">'
+            + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="' + SOW_t("store.featured_skin") + '">'
             + '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>'
-            + '      <span class="sow-hud__endgame-store-copy"><b id="sow-hud-endgame-store-name">FEATURED SKIN</b><small id="sow-hud-endgame-store-copy">ORIGINAL SOW COSMETIC</small></span>'
-            + '      <button class="sow-hud__endgame-store-state" type="button" data-command="open_store" id="sow-hud-endgame-store-action">VIEW SHOP</button>'
+            + '      <span class="sow-hud__endgame-store-copy"><b id="sow-hud-endgame-store-name">' + SOW_t("store.featured_skin") + '</b><small id="sow-hud-endgame-store-copy">' + SOW_t("store.original_cosmetic") + '</small></span>'
+            + '      <button class="sow-hud__endgame-store-state" type="button" data-command="open_store" id="sow-hud-endgame-store-action">' + SOW_t("hud.view_shop") + '</button>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-actions">'
-            + '      <button class="sow-hud__endgame-secondary hidden" type="button" data-command="continue_observing" id="sow-hud-endgame-observe"><span aria-hidden="true">◉</span> CONTINUE AS OBSERVER</button>'
-            + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_endgame_leave"><span aria-hidden="true">⌂</span> BACK TO MENU</button>'
+            + '      <button class="sow-hud__endgame-secondary hidden" type="button" data-command="continue_observing" id="sow-hud-endgame-observe"><span aria-hidden="true">◉</span> ' + SOW_t("hud.continue_observing") + '</button>'
+            + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_endgame_leave"><span aria-hidden="true">⌂</span> ' + SOW_t("hud.back_to_menu") + '</button>'
             + '    </div>'
             + '  </section>'
             + '</div>';
@@ -472,7 +392,7 @@
                 transfer.className = "sow-hud__row-action";
                 transfer.dataset.command = "open_transfer";
                 transfer.dataset.playerId = String(player.id);
-                transfer.textContent = "GIFT";
+                transfer.textContent = SOW_t("hud.gift");
                 rank.style.cssText = "font-size:10px;color:var(--sow-muted);font-weight:800;";
                 territory.style.color = "var(--sow-gold)";
                 troops.style.color = "#86efac";
@@ -494,7 +414,7 @@
                 row.card.classList.toggle("is-dead", !player.is_alive);
                 row.rank.textContent = "#" + (idx + 1);
                 row.status.textContent = player.is_alive ? (idx === 0 ? "👑" : "🛡️") : "💀";
-                row.name.textContent = player.name || "Player";
+                row.name.textContent = player.name || SOW_t("hud.player_name");
                 row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
                 row.troops.textContent = (player.troops > 1000 ? (player.troops / 1000).toFixed(1) + "k" : Math.floor(player.troops)) + " ⚔";
             }
@@ -528,14 +448,18 @@
         if (renderKey === inboxRenderKey) return;
         var rows = requests.map(function (request) {
             var row = panelRow(request.kind === "resources"
-                ? (request.name || "Player") + " requests " + Math.floor(request.gold || 0) + " gold / " + Math.floor(request.troops || 0) + " troops"
-                : (request.name || "Player") + " requests an alliance");
+                ? SOW_t("hud.resource_request", {
+                    name: request.name || SOW_t("hud.player_name"),
+                    gold: Math.floor(request.gold || 0),
+                    troops: Math.floor(request.troops || 0)
+                })
+                : SOW_t("hud.alliance_request", { name: request.name || SOW_t("hud.player_name") }));
             var actions = document.createElement("span");
             actions.className = "sow-hud__panel-actions";
             [request.kind === "resources" ? "accept_resource_request" : "accept_alliance", request.kind === "resources" ? "reject_resource_request" : "reject_alliance"].forEach(function (command) {
                 var button = document.createElement("button");
                 button.type = "button";
-                button.textContent = command.indexOf("reject") >= 0 ? "REJECT" : "ACCEPT";
+                button.textContent = command.indexOf("reject") >= 0 ? SOW_t("hud.reject") : SOW_t("hud.accept");
                 button.dataset.command = command;
                 button.dataset.playerId = String(request.requester_id);
                 actions.appendChild(button);
@@ -543,7 +467,7 @@
             row.appendChild(actions);
             return row;
         });
-        if (!rows.length) rows.push(panelRow("No pending requests."));
+        if (!rows.length) rows.push(panelRow(SOW_t("hud.no_pending_requests")));
         appendPanelRows(hudRefs.inboxRows, rows);
         inboxRenderKey = renderKey;
     }
@@ -557,7 +481,7 @@
         hudRefs.notifications.replaceChildren.apply(hudRefs.notifications, visible.map(function (entry) {
             var node = document.createElement("div");
             node.className = "sow-hud__notification";
-            node.textContent = entry.message || "Event";
+            node.textContent = entry.message || SOW_t("hud.event");
             return node;
         }));
     }
@@ -642,7 +566,9 @@
         if (hudRefs.fps) {
             var fpsVal = hud.fps || 60;
             var pingVal = hud.ping || 0;
-            hudRefs.fps.textContent = fpsVal + ' FPS' + (pingVal > 0 ? ' | ' + pingVal + 'ms' : '');
+            hudRefs.fps.textContent = pingVal > 0
+                ? SOW_t("hud.fps_ping", { fps: fpsVal, ping: pingVal })
+                : SOW_t("hud.fps", { fps: fpsVal });
         }
         if (hudRefs.inboxCount) hudRefs.inboxCount.textContent = String(hud.inbox_count || 0);
 
@@ -651,7 +577,7 @@
             var hov = hud.hovered;
             if (hov) {
                 hudRefs.hoverCard.classList.remove("hidden");
-                if (hudRefs.hoverName) hudRefs.hoverName.textContent = hov.name || "Territory";
+                if (hudRefs.hoverName) hudRefs.hoverName.textContent = hov.name || SOW_t("hud.territory");
                 if (hudRefs.hoverPct) hudRefs.hoverPct.textContent = Math.round((hov.territory_pct || 0) * 100) + "%";
                 if (hudRefs.hoverTroops) hudRefs.hoverTroops.textContent = (hov.troops > 1000 ? (hov.troops / 1000).toFixed(1) + "k" : Math.floor(hov.troops || 0)) + " ⚔";
                 if (hudRefs.hoverGold) hudRefs.hoverGold.textContent = Math.floor(hov.gold || 0).toLocaleString();
@@ -740,14 +666,18 @@
             hudRefs.transfer.classList.toggle("hidden", !transferOpen || !hud.transfer);
             if (hud.transfer) {
                 hudRefs.transfer.dataset.targetId = String(hud.transfer.target_id);
-                if (hudRefs.transferTarget) hudRefs.transferTarget.textContent = "Target: " + (hud.transfer.target_name || "Player");
+                if (hudRefs.transferTarget) hudRefs.transferTarget.textContent = SOW_t("hud.target_player", {
+                    name: hud.transfer.target_name || SOW_t("hud.player_name")
+                });
             }
         }
         if (hudRefs.betrayal) {
             betrayalOpen = Boolean(hud.betrayal);
             hudRefs.betrayal.classList.toggle("hidden", !betrayalOpen);
             if (betrayalOpen && hudRefs.betrayalCopy) {
-                hudRefs.betrayalCopy.textContent = "Break alliance with " + (hud.betrayal.ally_name || "this player") + " and continue the attack?";
+                hudRefs.betrayalCopy.textContent = SOW_t("hud.break_alliance_with", {
+                    name: hud.betrayal.ally_name || SOW_t("hud.no_name")
+                });
             }
         }
 
@@ -765,23 +695,26 @@
         if (hudRefs.surrender) {
             hudRefs.surrender.classList.toggle("hidden", !surrenderModalOpen);
             var tutorialActive = Boolean(quests.available);
-            var copy = surrenderCopy();
             var surrenderLeader = leaderById((hud && hud.player_leader) || (hudState && hudState.selected_leader));
             if (surrenderModalOpen && !tutorialActive && surrenderMessage == null) {
-                var messages = copy.matchMessages || [];
+                var messages = surrenderMessageKeys.map(function (key) { return SOW_t(key); });
                 surrenderMessage = messages.length ? messages[Math.floor(Math.random() * messages.length)] : "";
             }
             if (tutorialActive) surrenderMessage = null;
-            if (hudRefs.surrenderBanner) hudRefs.surrenderBanner.textContent = tutorialActive ? copy.tutorialTitle : copy.matchTitle;
+            if (hudRefs.surrenderBanner) hudRefs.surrenderBanner.textContent = tutorialActive
+                ? SOW_t("endgame.leave_tutorial")
+                : SOW_t("endgame.leave_match");
             if (hudRefs.surrenderDesc) hudRefs.surrenderDesc.textContent = tutorialActive
-                ? copy.tutorialDescription
-                : (surrenderMessage || copy.matchMessages[0]);
+                ? SOW_t("endgame.tutorial_description")
+                : (surrenderMessage || SOW_t("endgame.your_battle_will_end"));
             if (hudRefs.surrenderPortrait) {
                 hudRefs.surrenderPortrait.src = asset("gameplay/avatars/" + surrenderLeader.slug + ".webp");
-                hudRefs.surrenderPortrait.alt = surrenderLeader.name || "Leader Avatar";
+                hudRefs.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
             }
-            if (hudRefs.surrenderCancel) hudRefs.surrenderCancel.textContent = copy.cancel;
-            if (hudRefs.surrenderActionLabel) hudRefs.surrenderActionLabel.textContent = tutorialActive ? copy.tutorialTitle : copy.matchTitle;
+            if (hudRefs.surrenderCancel) hudRefs.surrenderCancel.textContent = SOW_t("endgame.cancel");
+            if (hudRefs.surrenderActionLabel) hudRefs.surrenderActionLabel.textContent = tutorialActive
+                ? SOW_t("endgame.leave_tutorial")
+                : SOW_t("endgame.leave_match");
         }
 
         // Endgame Screen
@@ -796,14 +729,16 @@
                 var kdaText = [kda.kills || 0, kda.deaths || 0, kda.assists || 0].join(" / ");
                 if (hudRefs.endgameCard) hudRefs.endgameCard.dataset.result = result;
                 if (hudRefs.endgameIcon) hudRefs.endgameIcon.textContent = isWinner ? "♛" : "⚔";
-                if (hudRefs.endgameBanner) hudRefs.endgameBanner.textContent = isWinner ? "VICTORY" : "DEFEAT";
-                if (hudRefs.endgameTitle) hudRefs.endgameTitle.textContent = isWinner ? "MATCH WON" : "MATCH LOST";
-                if (hudRefs.endgameDesc) hudRefs.endgameDesc.textContent = isWinner ? "Map control secured." : (hud.winner_name ? "Winner: " + hud.winner_name : "Your empire was eliminated.");
+                if (hudRefs.endgameBanner) hudRefs.endgameBanner.textContent = isWinner ? SOW_t("hud.victory") : SOW_t("hud.defeat");
+                if (hudRefs.endgameTitle) hudRefs.endgameTitle.textContent = isWinner ? SOW_t("hud.match_won") : SOW_t("hud.match_lost");
+                if (hudRefs.endgameDesc) hudRefs.endgameDesc.textContent = isWinner
+                    ? SOW_t("hud.map_control_secured")
+                    : (hud.winner_name ? SOW_t("hud.winner", { name: hud.winner_name }) : SOW_t("hud.empire_eliminated"));
                 var activeLeaderId = (hud && hud.player_leader) || (hudState && hudState.selected_leader);
                 var activeLeader = leaderById(activeLeaderId);
                 if (hudRefs.endgamePortrait) {
                     hudRefs.endgamePortrait.src = asset("gameplay/avatars/" + activeLeader.slug + ".webp");
-                    hudRefs.endgamePortrait.alt = activeLeader.name || "Leader Avatar";
+                    hudRefs.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
@@ -812,8 +747,8 @@
                 var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {
-                    if (hudRefs.endgameStoreName) hudRefs.endgameStoreName.textContent = featuredSkin.name || "FEATURED SKIN";
-                    if (hudRefs.endgameStoreCopy) hudRefs.endgameStoreCopy.textContent = (featuredSkin.cost_gems || 0) + " GEMS · ORIGINAL SOW COSMETIC";
+                    if (hudRefs.endgameStoreName) hudRefs.endgameStoreName.textContent = featuredSkin.name || SOW_t("store.featured_skin");
+                    if (hudRefs.endgameStoreCopy) hudRefs.endgameStoreCopy.textContent = SOW_t("store.gems_count", { amount: featuredSkin.cost_gems || 0 }) + " · " + SOW_t("store.original_cosmetic");
                 }
                 if (hudRefs.endgameObserve) hudRefs.endgameObserve.classList.toggle("hidden", isWinner || Boolean(hud.winner_name));
             }

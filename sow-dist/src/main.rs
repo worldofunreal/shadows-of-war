@@ -3,14 +3,47 @@ use base64::Engine as _;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::{collections::HashMap, env, fs};
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+use std::{collections::{HashMap, HashSet}, env, fs, thread};
 
 mod prod;
 
 const WASM_OPT_TAG: &str = "oz-cli-v1";
+const POKI_FORBIDDEN_MARKERS: &[&str] = &[
+    "sdk.crazygames.com",
+    "js.stripe.com",
+    "stripe",
+    "id.worldofunreal.com",
+    "worldofunreal.com/wouid.svg",
+    "discord.gg",
+    "t.me/shadowsofwar",
+    "github.com/worldofunreal",
+    "SOW_startAndroidPlayGamesAutoAuth",
+    "SOW_prepareAndroidAuthState",
+    "SOW_ensureWouAnonymousSession",
+    "SOW_getWouSession",
+    "SOW_getAuthState",
+    "SOW_isSowProductionHost",
+    "SOW_portalShowAuthPrompt",
+    "SOW_portalSignOut",
+    "SOW_startWouOAuth",
+    "SOW_signOutWou",
+    "/api/v1/auth/",
+    "wou_session_token",
+    "wou_user_data",
+    "class='sow-menu__signin'",
+    "SIGN IN",
+    "/store/",
+    "main_menu.store.js",
+    "allowfullscreen",
+    "web-share",
+    "focus-without-user-activation",
+    "monetization",
+];
 
 fn run(cmd: &str, args: &[&str], cwd: Option<&Path>) -> Result<()> {
     println!(
@@ -510,7 +543,67 @@ fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<Str
             bundle.push('\n');
         }
     }
+    if manifest == "main_menu.js" {
+        validate_web_bundle(&bundle)?;
+    }
     Ok(bundle)
+}
+
+fn web_catalog_value<'a>(catalog: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    let mut parts = key.split('.');
+    let domain = parts.next()?;
+    let name = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    catalog.get(domain)?.get(name)
+}
+
+fn web_catalog_has_prefix(catalog: &serde_json::Value, prefix: &str) -> bool {
+    let Some((domain, key_prefix)) = prefix.split_once('.') else {
+        return false;
+    };
+    catalog
+        .get(domain)
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|values| values.keys().any(|key| key.starts_with(key_prefix)))
+}
+
+fn validate_web_bundle(bundle: &str) -> Result<()> {
+    for marker in ["SURRENDER_COPY", "surrenderCopy", "SOW_PORTAL_LOCALE"] {
+        if bundle.contains(marker) {
+            bail!("web bundle contains obsolete localization marker {marker}");
+        }
+    }
+
+    let catalog = validate_web_catalogs()?;
+    let mut offset = 0;
+    while let Some(found) = bundle[offset..].find("SOW_t(") {
+        let start = offset + found + "SOW_t(".len();
+        let rest = &bundle[start..];
+        let Some(quote) = rest.as_bytes().first().copied() else {
+            break;
+        };
+        if quote != b'"' && quote != b'\'' {
+            offset = start;
+            continue;
+        }
+        let quote = quote as char;
+        let value = &rest[1..];
+        let Some(end) = value.find(quote) else {
+            bail!("unterminated SOW_t key in web bundle");
+        };
+        let key = &value[..end];
+        if key.ends_with('_') {
+            if !web_catalog_has_prefix(&catalog, key) {
+                bail!("web bundle uses unknown localization key prefix {key}");
+            }
+        } else if web_catalog_value(&catalog, key).is_none() {
+            bail!("web bundle uses unknown localization key {key}");
+        }
+        offset = start + 1 + end;
+    }
+    Ok(())
 }
 
 fn strip_marked_section(source: &str, begin: &str, end: &str) -> Result<String> {
@@ -559,13 +652,20 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
+    let locale_codes = serde_json::to_string(
+        &sow_i18n::Language::registry()
+            .iter()
+            .map(|(_, code, _)| *code)
+            .collect::<Vec<_>>(),
+    )?;
+    let locale_base = if portal { "locales" } else { "../locales" };
     let store_portals_template = format!("src=\"./sdk/store_portals.js?v={ts}\"");
     let store_portals_src = if portal {
         format!("src=\"sdk/store_portals.js?v={ts}\"")
     } else {
         format!("src=\"../sdk/store_portals.js?v={ts}\"")
     };
-    let html = tpl
+    let mut html = tpl
         .replace("__VERSION__", version)
         .replace(
             "./__JS_FILE__",
@@ -586,6 +686,12 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         .replace("__JS_FILE__", js)
         .replace("__WASM_FILE__", wasm)
         .replace("__BUILD_TS__", ts)
+        .replace("__SOW_LOCALE_BASE__", locale_base)
+        .replace(
+            "__SOW_LOCALE_CATALOG_VERSION__",
+            &sow_i18n::WEB_CATALOG_VERSION.to_string(),
+        )
+        .replace("__SOW_LOCALE_CODES__", &locale_codes)
         .replace("__MAPS_CACHE_BUST__", maps_cache_bust)
         .replace("__SOW_SPLASH_DESKTOP_DATA__", &splash_desktop)
         .replace("__SOW_SPLASH_MOBILE_DATA__", &splash_mobile)
@@ -656,6 +762,24 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 .to_string()
             },
         );
+    if poki {
+        for (begin, end) in [
+            (
+                "/* POKI_ANDROID_AUTH_BEGIN */",
+                "/* POKI_ANDROID_AUTH_END */",
+            ),
+            (
+                "/* POKI_ANDROID_AUTH_STATE_BEGIN */",
+                "/* POKI_ANDROID_AUTH_STATE_END */",
+            ),
+            (
+                "/* POKI_WOU_AUTH_BEGIN */",
+                "/* POKI_WOU_AUTH_END */",
+            ),
+        ] {
+            html = strip_marked_section(&html, begin, end)?;
+        }
+    }
     let index = if portal {
         out.join("index.html")
     } else {
@@ -683,17 +807,19 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     )?;
     let menu_parts: Vec<&str> = if poki {
         vec![
+            "main_menu.i18n.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
             "main_menu.heroes.js",
             "main_menu.profile.js",
-            "main_menu.shell.js",
             "main_menu.poki.js",
+            "main_menu.shell.js",
             "main_menu.hud.js",
         ]
     } else {
         vec![
+            "main_menu.i18n.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -721,6 +847,38 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "/* POKI_STRIPE_STATE_BEGIN */",
             "/* POKI_STRIPE_STATE_END */",
         )?;
+        for (begin, end) in [
+            (
+                "/* POKI_SHARED_UPDATE_TOPBAR_BEGIN */",
+                "/* POKI_SHARED_UPDATE_TOPBAR_END */",
+            ),
+            (
+                "/* POKI_SHARED_STORE_ACTIONS_BEGIN */",
+                "/* POKI_SHARED_STORE_ACTIONS_END */",
+            ),
+            (
+                "/* POKI_SHARED_STORE_UNLOCK_BEGIN */",
+                "/* POKI_SHARED_STORE_UNLOCK_END */",
+            ),
+            (
+                "/* POKI_SHARED_AUTH_ACTIONS_BEGIN */",
+                "/* POKI_SHARED_AUTH_ACTIONS_END */",
+            ),
+            (
+                "/* POKI_SHARED_AUTH_EVENTS_BEGIN */",
+                "/* POKI_SHARED_AUTH_EVENTS_END */",
+            ),
+            (
+                "/* POKI_SHARED_STORE_EVENTS_BEGIN */",
+                "/* POKI_SHARED_STORE_EVENTS_END */",
+            ),
+            (
+                "/* POKI_SHARED_AUTH_SUBMIT_BEGIN */",
+                "/* POKI_SHARED_AUTH_SUBMIT_END */",
+            ),
+        ] {
+            menu_js = strip_marked_section(&menu_js, begin, end)?;
+        }
         for forbidden in [
             "https://id.worldofunreal.com",
             "https://discord.gg/d6ZDeChSE",
@@ -844,23 +1002,114 @@ fn write_manifest(out: &Path, version: &str, js: &str, wasm: &str, ts: &str) -> 
     Ok(())
 }
 
+fn placeholder_names(value: &str) -> HashSet<String> {
+    let mut names = HashSet::new();
+    let mut remainder = value;
+    while let Some(start) = remainder.find('{') {
+        let after_start = &remainder[start + 1..];
+        let Some(end) = after_start.find('}') else {
+            break;
+        };
+        let name = after_start[..end].trim();
+        if !name.is_empty() {
+            names.insert(name.to_string());
+        }
+        remainder = &after_start[end + 1..];
+    }
+    names
+}
+
+fn validate_web_node(path: &str, expected: &serde_json::Value, actual: &serde_json::Value) -> Result<()> {
+    match (expected, actual) {
+        (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => {
+            for (key, expected_value) in expected {
+                let child_path = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                let actual_value = actual
+                    .get(key)
+                    .with_context(|| format!("web catalog missing key {child_path}"))?;
+                validate_web_node(&child_path, expected_value, actual_value)?;
+            }
+            for key in actual.keys() {
+                if !expected.contains_key(key) {
+                    let child_path = if path.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    bail!("web catalog has unknown key {child_path}");
+                }
+            }
+            Ok(())
+        }
+        (serde_json::Value::String(expected), serde_json::Value::String(actual)) => {
+            if actual.trim().is_empty() {
+                bail!("web catalog has an empty value at {path}");
+            }
+            if placeholder_names(expected) != placeholder_names(actual) {
+                bail!("web catalog placeholder mismatch at {path}");
+            }
+            Ok(())
+        }
+        _ => bail!("web catalog shape mismatch at {path}"),
+    }
+}
+
+fn validate_web_catalogs() -> Result<serde_json::Value> {
+    let english = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
+    for &(language, code, _) in sow_i18n::Language::registry() {
+        let catalog = serde_json::to_value(&sow_i18n::web(language))?;
+        validate_web_node(code, &english, &catalog)
+            .with_context(|| format!("validate web catalog {code}"))?;
+    }
+    Ok(english)
+}
+
+fn verify_exported_locales(dir: &Path) -> Result<()> {
+    let expected = validate_web_catalogs()?;
+    for &(_, code, _) in sow_i18n::Language::registry() {
+        let path = dir.join("locales").join(code);
+        if !path.is_file() {
+            bail!("missing exported web catalog {code}");
+        }
+        let payload: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path)?)
+            .with_context(|| format!("parse exported web catalog {code}"))?;
+        if payload.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
+            || payload.get("version").and_then(serde_json::Value::as_u64)
+                != Some(sow_i18n::WEB_CATALOG_VERSION as u64)
+            || payload.get("locale").and_then(serde_json::Value::as_str) != Some(code)
+        {
+            bail!("exported web catalog metadata is invalid for {code}");
+        }
+        let strings = payload
+            .get("strings")
+            .with_context(|| format!("exported web catalog {code} has no strings"))?;
+        validate_web_node(code, &expected, strings)?;
+    }
+    Ok(())
+}
+
 fn export_locales(out: &Path) -> Result<()> {
+    validate_web_catalogs()?;
     let d = out.join("locales");
     fs::create_dir_all(&d)?;
-    for (l, c) in [
-        (&sow_i18n::Language::English, "en"),
-        (&sow_i18n::Language::Spanish, "es"),
-        (&sow_i18n::Language::French, "fr"),
-        (&sow_i18n::Language::German, "de"),
-        (&sow_i18n::Language::Italian, "it"),
-        (&sow_i18n::Language::Turkish, "tr"),
-    ] {
-        fs::write(d.join(c), serde_json::to_string_pretty(sow_i18n::get(*l))?)?;
+    for &(language, code, _) in sow_i18n::Language::registry() {
+        let payload = serde_json::json!({
+            "schema": 1,
+            "version": sow_i18n::WEB_CATALOG_VERSION,
+            "locale": code,
+            "strings": sow_i18n::web(language),
+        });
+        fs::write(d.join(code), serde_json::to_string_pretty(&payload)?)?;
     }
     Ok(())
 }
 
 fn verify_layout(dir: &Path) -> Result<()> {
+    verify_exported_locales(dir)?;
     let (mut wn, mut jn) = (None, None);
     for e in fs::read_dir(dir)? {
         let e = e?;
@@ -923,6 +1172,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
 }
 
 fn verify_cg_layout(dir: &Path) -> Result<()> {
+    verify_exported_locales(dir)?;
     // Portal entry points are the UNCOMPRESSED pair (restored June design):
     // a native `import()` of a `.br` URL only works if the CDN serves it with
     // Content-Encoding: br + a JS MIME, which the CrazyGames CDN does not.
@@ -963,6 +1213,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
 }
 
 fn verify_poki_layout(dir: &Path) -> Result<()> {
+    verify_exported_locales(dir)?;
     for required in [
         "index.html",
         "sow_client.js",
@@ -1024,18 +1275,30 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
             bail!("poki bundle missing {needle}");
         }
     }
-    for forbidden in [
-        "sdk.crazygames.com",
-        "js.stripe.com",
-        "id.worldofunreal.com",
-        "discord.gg",
-        "t.me/shadowsofwar",
-        "github.com/worldofunreal",
+    if html.matches("function selfCreds()").count() != 1 {
+        bail!("poki bundle must define shared selfCreds exactly once");
+    }
+    for required in [
+        "<canvas id=\"blade\"",
+        "tabindex=\"0\"",
+        "touch-action: none",
+        "\"display\": \"fullscreen\"",
+    ] {
+        if !html.contains(required) {
+            bail!("poki bundle missing responsive/focus contract {required}");
+        }
+    }
+    if html.contains("<iframe") || html.contains("href=\"https://") {
+        bail!("poki bundle must not own an iframe or direct external href");
+    }
+    if sdk.contains("rewardedBreak") {
+        bail!("poki bridge must not request rewardedBreak without a product reward");
+    }
+    for forbidden in POKI_FORBIDDEN_MARKERS.iter().copied().chain([
         "SOW_MAPS_URL = \"https://",
         "SOW_ASSETS_URL = \"https://",
-        "main_menu.store.js",
         "register('/sw.js'",
-    ] {
+    ]) {
         if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
             bail!("poki bundle contains forbidden content {forbidden}");
         }
@@ -1473,57 +1736,354 @@ fn cmd_native(paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-fn local_listener_pids(port: u16) -> Result<Vec<u32>> {
-    let port_arg = format!("-iTCP:{port}");
-    let output = Command::new("lsof")
-        .args(["-t", "-n", "-P", &port_arg, "-sTCP:LISTEN"])
-        .output()
-        .context("inspect local web server port (lsof is required)")?;
-    if !output.status.success() && !output.stderr.is_empty() {
-        bail!(
-            "inspect local web server port failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    let mut pids = String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .map(|pid| {
-            pid.parse::<u32>()
-                .with_context(|| format!("invalid PID from lsof: {pid}"))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    pids.sort_unstable();
-    pids.dedup();
-    Ok(pids)
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LocalFileStamp {
+    path: PathBuf,
+    len: u64,
+    modified_nanos: u128,
 }
 
-fn stop_local_server(port: u16) -> Result<()> {
-    let pids = local_listener_pids(port)?;
-    if pids.is_empty() {
+struct LocalWatchLock {
+    path: PathBuf,
+    pid: u32,
+}
+
+impl Drop for LocalWatchLock {
+    fn drop(&mut self) {
+        let owned = fs::read_to_string(&self.path)
+            .ok()
+            .is_some_and(|contents| contents.trim() == self.pid.to_string());
+        if owned {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
+struct LocalPreviewServer {
+    child: Child,
+}
+
+impl Drop for LocalPreviewServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+const LOCAL_WASM_CRATES: &[&str] = &[
+    "sow-audio",
+    "sow-client",
+    "sow-core",
+    "sow-data",
+    "sow-i18n",
+    "sow-net",
+    "sow-render",
+    "sow-ui",
+];
+
+fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
+    vec![
+        paths.root.join("Cargo.toml"),
+        paths.root.join("Cargo.lock"),
+        paths.root.join(".version"),
+        paths.root.join("sow-audio"),
+        paths.root.join("sow-client"),
+        paths.root.join("sow-core"),
+        paths.root.join("sow-data"),
+        paths.root.join("sow-i18n"),
+        paths.root.join("sow-net"),
+        paths.root.join("sow-render"),
+        paths.root.join("sow-ui"),
+        paths.root.join("sow-web"),
+        paths.root.join("assets"),
+    ]
+}
+
+fn local_source_snapshot(paths: &Paths) -> Result<Vec<LocalFileStamp>> {
+    let mut files = Vec::new();
+    for root in local_watch_roots(paths) {
+        if root.is_file() {
+            let metadata = fs::metadata(&root)?;
+            files.push(LocalFileStamp {
+                path: root,
+                len: metadata.len(),
+                modified_nanos: metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |duration| duration.as_nanos()),
+            });
+            continue;
+        }
+        if !root.is_dir() {
+            continue;
+        }
+        for entry in walkdir::WalkDir::new(&root)
+            .into_iter()
+            .filter_entry(|entry| {
+                !matches!(
+                    entry.file_name().to_str(),
+                    Some(".git" | "target" | "dist" | "node_modules")
+                )
+            })
+        {
+            let entry = entry?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(error)
+                    if error
+                        .io_error()
+                        .map_or(false, |io_error| io_error.kind() == std::io::ErrorKind::NotFound) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            };
+            files.push(LocalFileStamp {
+                path: entry.path().to_path_buf(),
+                len: metadata.len(),
+                modified_nanos: metadata
+                    .modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map_or(0, |duration| duration.as_nanos()),
+            });
+        }
+    }
+    files.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+    Ok(files)
+}
+
+fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(&paths.root) else {
+        return false;
+    };
+    let Some(crate_name) = relative.components().next() else {
+        return false;
+    };
+    let crate_name = crate_name.as_os_str().to_string_lossy();
+    let is_manifest = relative.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+        matches!(name, "Cargo.toml" | "Cargo.lock" | "build.rs")
+    });
+    is_manifest
+        || (LOCAL_WASM_CRATES.iter().any(|name| crate_name == *name)
+            && relative.extension().and_then(|extension| extension.to_str()) == Some("rs"))
+}
+
+fn local_change_requires_wasm(
+    previous: &[LocalFileStamp],
+    current: &[LocalFileStamp],
+    paths: &Paths,
+) -> bool {
+    let mut previous_by_path = previous
+        .iter()
+        .map(|stamp| (&stamp.path, (stamp.len, stamp.modified_nanos)))
+        .collect::<HashMap<_, _>>();
+    for stamp in current {
+        let unchanged = previous_by_path
+            .remove(&stamp.path)
+            .is_some_and(|old| old == (stamp.len, stamp.modified_nanos));
+        if !unchanged && local_file_requires_wasm(paths, &stamp.path) {
+            return true;
+        }
+    }
+    previous_by_path
+        .keys()
+        .any(|path| local_file_requires_wasm(paths, path))
+}
+
+fn local_watch_process(paths: &Paths, pid: u32) -> bool {
+    if pid == std::process::id() {
+        return false;
+    }
+    let proc_dir = Path::new("/proc").join(pid.to_string());
+    let Ok(cwd) = fs::canonicalize(proc_dir.join("cwd")) else {
+        return false;
+    };
+    if cwd != paths.root {
+        return false;
+    }
+    let Ok(cmdline) = fs::read(proc_dir.join("cmdline")) else {
+        return false;
+    };
+    let mut args = cmdline.split(|byte| *byte == 0).filter(|arg| !arg.is_empty());
+    let Some(executable) = args.next() else {
+        return false;
+    };
+    let executable = String::from_utf8_lossy(executable);
+    let command = Path::new(executable.as_ref())
+        .file_name()
+        .and_then(|name| name.to_str());
+    let subcommand = args
+        .next()
+        .map(|arg| String::from_utf8_lossy(arg).into_owned());
+    command == Some("sow") && matches!(subcommand.as_deref(), Some("l") | Some("local"))
+}
+
+fn local_process_group(pid: u32) -> Option<u32> {
+    let stat = fs::read_to_string(Path::new("/proc").join(pid.to_string()).join("stat")).ok()?;
+    let (_, fields) = stat.rsplit_once(") ")?;
+    fields.split_whitespace().nth(2)?.parse().ok()
+}
+
+fn stop_local_process(pid: u32) -> Result<()> {
+    if pid == std::process::id() {
+        bail!("refusing to stop the current local preview process");
+    }
+    let pid_arg = pid.to_string();
+    let status = if local_process_group(pid) == Some(pid) {
+        let group_arg = format!("-{pid}");
+        Command::new("kill")
+            .args(["-KILL", "--", group_arg.as_str()])
+            .status()
+    } else {
+        Command::new("kill")
+            .args(["-KILL", pid_arg.as_str()])
+            .status()
+    }
+    .with_context(|| format!("stop local preview process {pid}"))?;
+    if !status.success() && Path::new("/proc").join(pid.to_string()).exists() {
+        bail!("could not stop local preview process {pid}");
+    }
+    Ok(())
+}
+
+fn stop_local_port(port: u16) -> Result<()> {
+    let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    if TcpListener::bind(address).is_ok() {
         return Ok(());
     }
-
-    let current_pid = std::process::id();
-    for pid in pids {
-        if pid == current_pid {
-            bail!("refusing to stop the local preview process itself");
-        }
-        let pid_arg = pid.to_string();
-        let status = Command::new("kill")
-            .args(["-KILL", &pid_arg])
-            .status()
-            .with_context(|| format!("stop process {pid} using local port {port}"))?;
-        if !status.success() {
-            bail!("could not stop process {pid} using local port {port}");
-        }
+    let socket = format!("{port}/tcp");
+    let status = Command::new("fuser")
+        .args(["-k", "-KILL", &socket])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("free the local preview port (fuser is required when it is occupied)")?;
+    if !status.success() && status.code() != Some(1) {
+        bail!("could not free local preview port {port}");
     }
-
-    if !local_listener_pids(port)?.is_empty() {
-        bail!("local port {port} is still occupied after stopping the existing preview");
+    if TcpListener::bind(address).is_err() {
+        bail!("local preview port {port} is still occupied");
     }
-    println!("==> Replaced existing local preview on port {port}");
     Ok(())
+}
+
+fn acquire_local_watch_lock(paths: &Paths, port: u16) -> Result<LocalWatchLock> {
+    let dir = paths.root.join("dist/.sow-state");
+    fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("local-{port}.lock"));
+    loop {
+        if path.exists() {
+            let pid = fs::read_to_string(&path)
+                .ok()
+                .and_then(|value| value.trim().parse::<u32>().ok());
+            if let Some(pid) = pid.filter(|pid| local_watch_process(paths, *pid)) {
+                stop_local_process(pid)?;
+            }
+            match fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("remove previous local preview lock {}", path.display())
+                    });
+                }
+            }
+        }
+        stop_local_port(port)?;
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                let pid = std::process::id();
+                writeln!(file, "{pid}")?;
+                file.sync_all()?;
+                return Ok(LocalWatchLock { path, pid });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("create local preview lock {}", path.display()));
+            }
+        }
+    }
+}
+
+fn start_local_server(port: u16, webroot: &str) -> Result<LocalPreviewServer> {
+    stop_local_port(port)?;
+    let port_arg = port.to_string();
+    let child = Command::new("python3")
+        .args([
+            "-m",
+            "http.server",
+            &port_arg,
+            "--bind",
+            "127.0.0.1",
+            "--directory",
+            webroot,
+        ])
+        .spawn()
+        .context("start local web server (python3 is required)")?;
+    Ok(LocalPreviewServer {
+        child,
+    })
+}
+
+fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
+    if compile {
+        compile_wasm(paths, false)?;
+    }
+    package_self(paths, &paths.dist_web, version)?;
+    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
+    package_poki(
+        &paths.dist_web,
+        &paths.dist_poki,
+        paths,
+        version,
+        &maps_cache_bust,
+    )?;
+    Ok(())
+}
+
+fn watch_local_preview(
+    paths: &Paths,
+    version: &str,
+    port: u16,
+    webroot: &str,
+    _lock: LocalWatchLock,
+) -> Result<()> {
+    let mut server = start_local_server(port, webroot)?;
+    println!("✅ Local webroot ready at http://127.0.0.1:{port}/");
+    println!("   Backend: https://shadowsofwar.io (Ctrl-C to stop)");
+    println!("   Watching source files; refresh the browser after a rebuild.");
+    let mut previous = local_source_snapshot(paths)?;
+    loop {
+        if let Some(status) = server.child.try_wait()? {
+            bail!("local web server stopped unexpectedly: {status}");
+        }
+        thread::sleep(Duration::from_millis(250));
+        let current = local_source_snapshot(paths)?;
+        if current == previous {
+            continue;
+        }
+        let compile = local_change_requires_wasm(&previous, &current, paths);
+        previous = current;
+        println!(
+            "==> Local source change detected; rebuilding{}...",
+            if compile { " WASM" } else { " web files" }
+        );
+        if let Err(error) = build_local_preview(paths, version, compile) {
+            eprintln!("⚠️ Local preview rebuild failed: {error:#}");
+        } else {
+            println!("✅ Local preview rebuilt; refresh the browser.");
+        }
+    }
 }
 
 fn cmd_local(paths: &Paths) -> Result<()> {
@@ -1536,20 +2096,6 @@ fn cmd_local(paths: &Paths) -> Result<()> {
         bail!(".version must not be empty");
     }
 
-    println!("==> Building local web preview");
-    // Local preview must package the client from the current source tree. Reusing a stale
-    // wasm artifact makes UI/WASM work appear successful while the browser is running old code.
-    compile_wasm(paths, false)?;
-    package_self(paths, &paths.dist_web, &version)?;
-    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
-    package_poki(
-        &paths.dist_web,
-        &paths.dist_poki,
-        paths,
-        &version,
-        &maps_cache_bust,
-    )?;
-
     let port = env::var("SOW_LOCAL_PORT").unwrap_or_else(|_| "4173".to_string());
     let port_number = port
         .parse::<u16>()
@@ -1557,31 +2103,16 @@ fn cmd_local(paths: &Paths) -> Result<()> {
     if port_number == 0 {
         bail!("SOW_LOCAL_PORT must not be 0");
     }
-    let port_arg = port_number.to_string();
     let webroot = paths
         .dist_web
         .to_str()
         .context("local webroot path is not UTF-8")?;
-    stop_local_server(port_number)?;
-    println!("✅ Local webroot ready at http://127.0.0.1:{port_number}/");
-    println!("   Backend: https://shadowsofwar.io (Ctrl-C to stop)");
-
-    let status = Command::new("python3")
-        .args([
-            "-m",
-            "http.server",
-            &port_arg,
-            "--bind",
-            "127.0.0.1",
-            "--directory",
-            webroot,
-        ])
-        .status()
-        .context("start local web server (python3 is required)")?;
-    if !status.success() {
-        bail!("local web server failed");
-    }
-    Ok(())
+    let lock = acquire_local_watch_lock(paths, port_number)?;
+    println!("==> Building local web preview");
+    // Local preview must package the client from the current source tree. Reusing a stale
+    // wasm artifact makes UI/WASM work appear successful while the browser is running old code.
+    build_local_preview(paths, &version, true)?;
+    watch_local_preview(paths, &version, port_number, webroot, lock)
 }
 
 fn load_dotenv(path: &Path) {
@@ -1834,6 +2365,7 @@ mod tests {
             "index.html.template",
             "main_menu.css",
             "main_menu.js",
+            "main_menu.i18n.js",
             "main_menu.base.css",
             "main_menu.hud.css",
             "main_menu.profile.css",
@@ -1905,11 +2437,49 @@ mod tests {
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.poki.js"));
         assert!(!html.contains("main_menu.store.js"));
+        assert_eq!(html.matches("function selfCreds()").count(), 1);
+        assert!(!html.contains("<iframe"));
+        assert!(!html.contains("href=\"https://"));
+        assert!(!html.contains("allowfullscreen"));
+        assert!(!html.contains("web-share"));
+        assert!(!html.contains("focus-without-user-activation"));
+        assert!(!html.contains("monetization"));
         assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
         assert!(!html.contains("register('/sw.js'"));
+        for forbidden in POKI_FORBIDDEN_MARKERS {
+            assert!(!html.contains(forbidden), "Poki shell contains {forbidden}");
+        }
         Ok(())
     }
 
+    #[test]
+    fn test_local_watcher_rebuilds_wasm_only_for_game_rust() -> Result<()> {
+        let paths = Paths::discover()?;
+        let rust_path = paths.root.join("sow-client/src/lib.rs");
+        let css_path = paths.root.join("sow-web/shell/main_menu.base.css");
+        let previous = vec![
+            LocalFileStamp {
+                path: rust_path.clone(),
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: css_path.clone(),
+                len: 1,
+                modified_nanos: 1,
+            },
+        ];
+        let mut current = previous.clone();
+        current[0].len = 2;
+        assert!(local_change_requires_wasm(&previous, &current, &paths));
+
+        current = previous.clone();
+        current[1].len = 2;
+        assert!(!local_change_requires_wasm(&previous, &current, &paths));
+        Ok(())
+    }
+
+    #[test]
     #[test]
     fn test_leader_compendium_contains_all_twelve_leaders() -> Result<()> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

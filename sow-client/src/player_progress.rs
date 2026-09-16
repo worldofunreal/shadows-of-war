@@ -186,7 +186,6 @@ impl PlayerProgress {
         self.matches_played > 0
             || self.wins > 0
             || self.xp > 0
-            || self.preferred_leader.is_some()
             || self.intro_completed.unwrap_or(false)
             || self.crowns > 0
             || self.gems > 0
@@ -200,9 +199,13 @@ impl PlayerProgress {
     /// Episode completions always merge by union: the server never tracks them,
     /// so a cloud overwrite must not erase local saga progress.
     pub fn merge_boot_profile(&mut self, cloud: PlayerProgress) {
+        let local_intro_completed = self.intro_completed.unwrap_or(false);
         let local_episodes = std::mem::take(&mut self.completed_episodes);
         if cloud.has_history() || !self.has_history() {
             *self = cloud;
+        }
+        if local_intro_completed || self.intro_completed.unwrap_or(false) {
+            self.intro_completed = Some(true);
         }
         self.completed_episodes.extend(local_episodes);
     }
@@ -299,5 +302,42 @@ mod tests {
         assert_eq!(progress.matches_played, 1);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&140));
         assert_eq!(progress.crowns, 106);
+    }
+
+    #[test]
+    fn assigned_leader_does_not_make_a_new_profile_have_history() {
+        let progress = PlayerProgress {
+            preferred_leader: Some(Leader::Caesar),
+            ..Default::default()
+        };
+        assert!(!progress.has_history());
+    }
+
+    #[test]
+    fn completed_tutorial_cannot_be_erased_by_cloud_profile() {
+        let mut local = PlayerProgress {
+            intro_completed: Some(true),
+            xp: 100,
+            ..Default::default()
+        };
+        local.merge_boot_profile(PlayerProgress {
+            preferred_leader: Some(Leader::Caesar),
+            ..Default::default()
+        });
+        assert_eq!(local.intro_completed, Some(true));
+        assert_eq!(local.xp, 100);
+    }
+
+    #[test]
+    fn completed_tutorial_stays_completed_when_cloud_has_other_history() {
+        let mut local = PlayerProgress {
+            intro_completed: Some(true),
+            ..Default::default()
+        };
+        local.merge_boot_profile(PlayerProgress {
+            matches_played: 1,
+            ..Default::default()
+        });
+        assert_eq!(local.intro_completed, Some(true));
     }
 }

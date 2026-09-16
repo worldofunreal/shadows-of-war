@@ -23,6 +23,17 @@
     --sow-panel-soft: rgba(22, 24, 29, 0.72);
     --sow-line: rgba(255, 221, 153, 0.22);
     --sow-muted: rgba(235, 231, 220, 0.62);
+    --sow-menu-nav-rail: 0;
+    --sow-menu-nav-height: 3.75rem;
+    --sow-menu-nav-icon: 2rem;
+    --sow-menu-nav-label-size: 0.5625rem;
+    --sow-menu-nav-label-line: 0.75rem;
+    --sow-menu-nav-gap: 0.25rem;
+    --sow-menu-nav-padding: 0.25rem;
+    --sow-menu-nav-item-gap: 0;
+    --sow-menu-nav-item-padding: 0.125rem 0.5rem;
+    --sow-menu-nav-active-shift: -0.1875rem;
+    --sow-menu-nav-active-scale: 1.08;
     position: fixed;
     inset: 0;
     z-index: 100;
@@ -1739,15 +1750,6 @@
         background-position: center top;
     }
 
-    .sow-menu__shell {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        width: 100%;
-        min-height: 100%;
-        padding: max(10px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
-    }
-
     .sow-menu__topbar {
         min-height: 50px;
         padding: 5px 6px 5px 8px;
@@ -1776,13 +1778,7 @@
         display: none;
     }
 
-    .sow-menu__signin {
-        font-size: 8px;
-    }
-
-    .sow-menu__signin {
-        padding: 9px 6px;
-    }
+    .sow-menu__signin { padding: 9px 6px; font-size: 8px; }
 
     .sow-menu__main {
         display: flex;
@@ -2084,19 +2080,19 @@
 }
 
 #sow-menu .sow-menu__main-nav {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-template-rows: 1fr;
-    gap: 4px;
-    width: min(100%, 680px);
-    height: 60px;
-    min-height: 60px;
+    display: flex;
+    flex-direction: row;
+    gap: var(--sow-menu-nav-gap);
+    width: 100%;
+    height: var(--sow-menu-nav-height);
+    max-height: 100%;
+    min-height: 0;
     margin: 0 auto;
-    padding: 4px;
+    padding: var(--sow-menu-nav-padding);
     border: 1px solid var(--sow-line);
-    border-radius: 10px;
+    border-radius: 0.625rem;
     background: rgba(9, 11, 15, 0.94);
-    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 -0.5rem 1.5rem rgba(0, 0, 0, 0.18);
     contain: layout;
 }
 
@@ -2105,13 +2101,14 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    flex: 1 1 0;
+    gap: var(--sow-menu-nav-item-gap);
     min-width: 0;
-    height: 50px;
-    min-height: 50px;
-    padding: 2px 8px;
+    height: 100%;
+    min-height: 0;
+    padding: var(--sow-menu-nav-item-padding);
     border: 1px solid transparent;
-    border-radius: 7px;
+    border-radius: 0.4375rem;
     background: transparent;
     color: var(--sow-muted);
     cursor: pointer;
@@ -2120,9 +2117,9 @@
 
 #sow-menu .sow-menu__main-nav-item > span {
     display: grid;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
+    width: var(--sow-menu-nav-icon);
+    height: var(--sow-menu-nav-icon);
+    flex: 0 0 var(--sow-menu-nav-icon);
     place-items: center;
     transform: translateY(0) scale(1);
     transform-origin: center bottom;
@@ -2139,17 +2136,17 @@
 }
 
 #sow-menu .sow-menu__main-nav-item.is-active > span {
-    transform: translateY(-3px) scale(1.08);
-    filter: drop-shadow(0 3px 4px rgba(234, 179, 8, 0.42));
+    transform: translateY(var(--sow-menu-nav-active-shift)) scale(var(--sow-menu-nav-active-scale));
+    filter: drop-shadow(0 0.1875rem 0.25rem rgba(234, 179, 8, 0.42));
 }
 
 #sow-menu .sow-menu__main-nav-item small {
-    min-height: 12px;
+    min-height: var(--sow-menu-nav-label-line);
     color: inherit;
-    font-size: 9px;
+    font-size: var(--sow-menu-nav-label-size);
     font-weight: 800;
     letter-spacing: 0.06em;
-    line-height: 12px;
+    line-height: var(--sow-menu-nav-label-line);
     text-transform: uppercase;
 }
 
@@ -2263,6 +2260,19 @@
 }
 
 @media (max-width: 599px) and (orientation: portrait) {
+    #sow-menu {
+        --sow-menu-nav-height: 5.25rem;
+        --sow-menu-nav-icon: 2.875rem;
+        --sow-menu-nav-label-size: 0.5625rem;
+        --sow-menu-nav-label-line: 0.75rem;
+        --sow-menu-nav-gap: 0.25rem;
+        --sow-menu-nav-padding: 0.3125rem;
+        --sow-menu-nav-item-gap: 0;
+        --sow-menu-nav-item-padding: 0.125rem;
+        --sow-menu-nav-active-shift: -0.3125rem;
+        --sow-menu-nav-active-scale: 1.14;
+    }
+
     #sow-menu .sow-menu__shell {
         grid-template-rows: auto minmax(0, 1fr) auto auto;
         gap: 10px;
@@ -2277,29 +2287,6 @@
 
     #sow-menu .sow-menu__topbar {
         min-height: 50px;
-    }
-
-    #sow-menu .sow-menu__main-nav {
-        width: 100%;
-        height: 84px;
-        min-height: 84px;
-        padding: 5px;
-    }
-
-    #sow-menu .sow-menu__main-nav-item {
-        height: 72px;
-        min-height: 72px;
-        padding: 2px;
-    }
-
-    #sow-menu .sow-menu__main-nav-item > span {
-        width: 46px;
-        height: 46px;
-        flex-basis: 46px;
-    }
-
-    #sow-menu .sow-menu__main-nav-item.is-active > span {
-        transform: translateY(-5px) scale(1.14);
     }
 
     #sow-menu[data-screen="home"] .sow-menu__main {
@@ -2530,9 +2517,22 @@
 }
 
 @media (min-width: 681px) and (orientation: landscape) {
+    #sow-menu {
+        --sow-menu-nav-rail: clamp(7rem, 9vw, 9rem);
+        --sow-menu-nav-height: clamp(16rem, 44vh, 24rem);
+        --sow-menu-nav-icon: clamp(2rem, min(4vw, 6vh), 3.25rem);
+        --sow-menu-nav-label-size: clamp(0.5rem, min(0.85vw, 1.6vh), 0.75rem);
+        --sow-menu-nav-label-line: clamp(0.5rem, min(1vw, 1.5vh), 0.75rem);
+        --sow-menu-nav-gap: clamp(0.125rem, min(0.3vw, 0.6vh), 0.25rem);
+        --sow-menu-nav-padding: clamp(0.25rem, min(0.45vw, 0.8vh), 0.375rem);
+        --sow-menu-nav-item-gap: clamp(0.125rem, min(0.3vw, 0.6vh), 0.25rem);
+        --sow-menu-nav-item-padding: clamp(0.125rem, min(0.35vw, 0.6vh), 0.25rem) clamp(0.25rem, min(0.6vw, 1vh), 0.5rem);
+        --sow-menu-nav-active-shift: clamp(-0.25rem, max(-0.3vw, -0.6vh), -0.1875rem);
+    }
+
     #sow-menu .sow-menu__shell {
         display: grid;
-        grid-template-columns: 84px minmax(0, 1fr);
+        grid-template-columns: var(--sow-menu-nav-rail) minmax(0, 1fr);
         grid-template-rows: 60px minmax(0, 1fr) auto;
         gap: 12px 16px;
         width: min(calc(100% - 48px), 1440px);
@@ -2576,35 +2576,12 @@
     #sow-menu .sow-menu__main-nav {
         grid-column: 1;
         grid-row: 2;
-        display: grid;
-        grid-template-columns: 1fr;
-        grid-template-rows: repeat(4, minmax(0, 1fr));
+        flex-direction: column;
         align-self: center;
-        width: 84px;
-        height: min(296px, 100%);
-        min-height: 256px;
+        max-height: 100%;
         margin: 0;
-        padding: 6px;
-        border-radius: 10px;
-        box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18);
-    }
-
-    #sow-menu .sow-menu__main-nav-item {
-        height: auto;
-        min-height: 0;
-        padding: 8px 4px;
-        gap: 4px;
-    }
-
-    #sow-menu .sow-menu__main-nav-item > span {
-        width: 36px;
-        height: 36px;
-        flex-basis: 36px;
-    }
-
-    #sow-menu .sow-menu__main-nav-item small {
-        font-size: 8px;
-        line-height: 11px;
+        border-radius: 0.625rem;
+        box-shadow: 0.5rem 0 1.5rem rgba(0, 0, 0, 0.18);
     }
 
     #sow-menu .sow-menu__footer {
@@ -2634,10 +2611,6 @@
         display: none;
     }
 
-    #sow-menu .sow-menu__main-nav {
-        height: min(248px, 100%);
-        min-height: 224px;
-    }
 }
 
 @media (max-width: 680px), (orientation: portrait) {

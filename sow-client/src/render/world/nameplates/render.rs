@@ -18,6 +18,7 @@ pub(crate) fn render(
     let dot_r = ctx.dot_r;
     let wall_secs = ctx.wall_secs;
     let visible_players = ctx.visible_players;
+    ui.tutorial_avatar_geometry = None;
 
     if visible_players.is_empty() {
         return;
@@ -72,7 +73,7 @@ pub(crate) fn render(
         // contract + single-derive gate), so the standard gameplay nameplate path below is never
         // touched. To retire this, delete the whole block — never weaken the gate.
         if ui.tutorial_active && is_me && ui.tutorial_step_idx == 0 {
-            nameplate_painter.paint_tutorial_avatar(
+            ui.tutorial_avatar_geometry = Some(nameplate_painter.paint_tutorial_avatar(
                 center,
                 20.0,
                 player.id,
@@ -81,7 +82,7 @@ pub(crate) fn render(
                 player.color,
                 player.leader,
                 &ui.app.asset_loader,
-            );
+            ));
             continue;
         }
 
@@ -155,7 +156,7 @@ pub(crate) fn render(
                     .team
                     .map_or(player.color, sow_core::player::team_territory_rgb),
             );
-            nameplate_painter.paint(NameplateInput {
+            let avatar_geometry = nameplate_painter.paint(NameplateInput {
                 center,
                 metrics,
                 player_id: player.id,
@@ -179,6 +180,9 @@ pub(crate) fn render(
                 show_troops,
                 asset_loader: &ui.app.asset_loader,
             });
+            if is_me {
+                ui.tutorial_avatar_geometry = avatar_geometry;
+            }
             continue;
         } else {
             nameplate_painter.paint_lod_dot(center, dot_r, pc);

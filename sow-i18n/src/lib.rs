@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
+
+pub const WEB_CATALOG_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Language {
@@ -12,6 +15,39 @@ pub enum Language {
 }
 
 impl Language {
+    pub const fn registry() -> &'static [(Language, &'static str, &'static str)] {
+        &[
+            (Language::English, "en", "English"),
+            (Language::Spanish, "es", "Español"),
+            (Language::French, "fr", "Français"),
+            (Language::German, "de", "Deutsch"),
+            (Language::Italian, "it", "Italiano"),
+            (Language::Turkish, "tr", "Türkçe"),
+        ]
+    }
+
+    pub const fn code(self) -> &'static str {
+        match self {
+            Language::English => "en",
+            Language::Spanish => "es",
+            Language::French => "fr",
+            Language::German => "de",
+            Language::Italian => "it",
+            Language::Turkish => "tr",
+        }
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Language::English => "English",
+            Language::Spanish => "Español",
+            Language::French => "Français",
+            Language::German => "Deutsch",
+            Language::Italian => "Italiano",
+            Language::Turkish => "Türkçe",
+        }
+    }
+
     pub fn from_locale(locale: &str) -> Self {
         let normalized = locale.to_lowercase();
         if normalized.starts_with("es") {
@@ -28,6 +64,28 @@ impl Language {
             Language::English
         }
     }
+}
+
+/// Web shell strings grouped by UI responsibility. The build validates every
+/// key against the English catalog, while the map keeps this boundary easy to
+/// extend without changing the native egui catalog types.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WebStrings {
+    pub menu: WebDomain,
+    pub auth: WebDomain,
+    pub lobbies: WebDomain,
+    pub heroes: WebDomain,
+    pub profile: WebDomain,
+    pub store: WebDomain,
+    pub hud: WebDomain,
+    pub endgame: WebDomain,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WebDomain {
+    #[serde(flatten)]
+    pub values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -374,6 +432,7 @@ pub struct LanguageStrings {
     pub loading_screen: LoadingScreenStrings,
     pub endgame: EndgameStrings,
     pub hud: HudStrings,
+    pub web: WebStrings,
     #[cfg(feature = "map-editor")]
     pub map_editor: MapEditorStrings,
     pub credits: CreditsStrings,
@@ -412,6 +471,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/es/loading_screen.toml"),
                 include_str!("../strings/es/endgame.toml"),
                 include_str!("../strings/es/hud.toml"),
+                include_str!("../strings/es/web.toml"),
                 include_str!("../strings/es/credits.toml"),
             )
         }),
@@ -422,6 +482,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/fr/loading_screen.toml"),
                 include_str!("../strings/fr/endgame.toml"),
                 include_str!("../strings/fr/hud.toml"),
+                include_str!("../strings/fr/web.toml"),
                 include_str!("../strings/fr/credits.toml"),
             )
         }),
@@ -432,6 +493,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/de/loading_screen.toml"),
                 include_str!("../strings/de/endgame.toml"),
                 include_str!("../strings/de/hud.toml"),
+                include_str!("../strings/de/web.toml"),
                 include_str!("../strings/de/credits.toml"),
             )
         }),
@@ -442,6 +504,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/it/loading_screen.toml"),
                 include_str!("../strings/it/endgame.toml"),
                 include_str!("../strings/it/hud.toml"),
+                include_str!("../strings/it/web.toml"),
                 include_str!("../strings/it/credits.toml"),
             )
         }),
@@ -452,6 +515,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/tr/loading_screen.toml"),
                 include_str!("../strings/tr/endgame.toml"),
                 include_str!("../strings/tr/hud.toml"),
+                include_str!("../strings/tr/web.toml"),
                 include_str!("../strings/tr/credits.toml"),
             )
         }),
@@ -462,10 +526,15 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 include_str!("../strings/en/loading_screen.toml"),
                 include_str!("../strings/en/endgame.toml"),
                 include_str!("../strings/en/hud.toml"),
+                include_str!("../strings/en/web.toml"),
                 include_str!("../strings/en/credits.toml"),
             )
         }),
     }
+}
+
+pub fn web(lang: Language) -> &'static WebStrings {
+    &get(lang).web
 }
 
 #[cfg(feature = "map-editor")]
@@ -478,6 +547,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 loading_screen_toml: include_str!("../strings/es/loading_screen.toml"),
                 endgame_toml: include_str!("../strings/es/endgame.toml"),
                 hud_toml: include_str!("../strings/es/hud.toml"),
+                web_toml: include_str!("../strings/es/web.toml"),
                 map_editor_toml: include_str!("../strings/es/map_editor.toml"),
                 credits_toml: include_str!("../strings/es/credits.toml"),
             })
@@ -489,6 +559,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 loading_screen_toml: include_str!("../strings/fr/loading_screen.toml"),
                 endgame_toml: include_str!("../strings/fr/endgame.toml"),
                 hud_toml: include_str!("../strings/fr/hud.toml"),
+                web_toml: include_str!("../strings/fr/web.toml"),
                 map_editor_toml: include_str!("../strings/en/map_editor.toml"),
                 credits_toml: include_str!("../strings/fr/credits.toml"),
             })
@@ -500,6 +571,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 loading_screen_toml: include_str!("../strings/de/loading_screen.toml"),
                 endgame_toml: include_str!("../strings/de/endgame.toml"),
                 hud_toml: include_str!("../strings/de/hud.toml"),
+                web_toml: include_str!("../strings/de/web.toml"),
                 map_editor_toml: include_str!("../strings/en/map_editor.toml"),
                 credits_toml: include_str!("../strings/de/credits.toml"),
             })
@@ -511,6 +583,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 loading_screen_toml: include_str!("../strings/it/loading_screen.toml"),
                 endgame_toml: include_str!("../strings/it/endgame.toml"),
                 hud_toml: include_str!("../strings/it/hud.toml"),
+                web_toml: include_str!("../strings/it/web.toml"),
                 map_editor_toml: include_str!("../strings/en/map_editor.toml"),
                 credits_toml: include_str!("../strings/it/credits.toml"),
             })
@@ -522,6 +595,7 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 loading_screen_toml: include_str!("../strings/tr/loading_screen.toml"),
                 endgame_toml: include_str!("../strings/tr/endgame.toml"),
                 hud_toml: include_str!("../strings/tr/hud.toml"),
+                web_toml: include_str!("../strings/tr/web.toml"),
                 map_editor_toml: include_str!("../strings/en/map_editor.toml"),
                 credits_toml: include_str!("../strings/tr/credits.toml"),
             })
@@ -533,11 +607,17 @@ pub fn get(lang: Language) -> &'static LanguageStrings {
                 loading_screen_toml: include_str!("../strings/en/loading_screen.toml"),
                 endgame_toml: include_str!("../strings/en/endgame.toml"),
                 hud_toml: include_str!("../strings/en/hud.toml"),
+                web_toml: include_str!("../strings/en/web.toml"),
                 map_editor_toml: include_str!("../strings/en/map_editor.toml"),
                 credits_toml: include_str!("../strings/en/credits.toml"),
             })
         }),
     }
+}
+
+#[cfg(feature = "map-editor")]
+pub fn web(lang: Language) -> &'static WebStrings {
+    &get(lang).web
 }
 
 fn default_team_victory_subtitle() -> String {
@@ -559,6 +639,7 @@ fn load_language(
     loading_screen_toml: &str,
     endgame_toml: &str,
     hud_toml: &str,
+    web_toml: &str,
     credits_toml: &str,
 ) -> LanguageStrings {
     LanguageStrings {
@@ -568,6 +649,7 @@ fn load_language(
             .expect("Failed to parse loading_screen.toml"),
         endgame: toml::from_str(endgame_toml).expect("Failed to parse endgame.toml"),
         hud: toml::from_str(hud_toml).expect("Failed to parse hud.toml"),
+        web: toml::from_str(web_toml).expect("Failed to parse web.toml"),
         credits: toml::from_str(credits_toml).expect("Failed to parse credits.toml"),
     }
 }
@@ -579,6 +661,7 @@ struct I18nLoadCtx<'a> {
     loading_screen_toml: &'a str,
     endgame_toml: &'a str,
     hud_toml: &'a str,
+    web_toml: &'a str,
     map_editor_toml: &'a str,
     credits_toml: &'a str,
 }
@@ -592,6 +675,7 @@ fn load_language_with_map_editor(ctx: I18nLoadCtx) -> LanguageStrings {
             .expect("Failed to parse loading_screen.toml"),
         endgame: toml::from_str(ctx.endgame_toml).expect("Failed to parse endgame.toml"),
         hud: toml::from_str(ctx.hud_toml).expect("Failed to parse hud.toml"),
+        web: toml::from_str(ctx.web_toml).expect("Failed to parse web.toml"),
         map_editor: toml::from_str(ctx.map_editor_toml).expect("Failed to parse map_editor.toml"),
         credits: toml::from_str(ctx.credits_toml).expect("Failed to parse credits.toml"),
     }

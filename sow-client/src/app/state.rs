@@ -228,6 +228,8 @@ pub struct UiState {
 
     pub label_positions: std::collections::HashMap<u16, (f32, f32)>,
     pub label_sizes: std::collections::HashMap<u16, f32>,
+    /// Screen-space center and visual radius of the local tutorial avatar for this frame.
+    pub tutorial_avatar_geometry: Option<(egui::Pos2, f32)>,
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
     /// Which scripted campaign the running tutorial match belongs to.
@@ -461,6 +463,7 @@ pub struct SowApp {
     /// Serializes rename writes; a newer edit waits for the database ACK.
     pub queued_display_name: Option<String>,
     pub display_name_save_in_flight: bool,
+    pub display_name_save_request_id: Option<u64>,
     /// Prevents a profile refresh from racing an in-flight rename.
     pub profile_request_in_flight: bool,
     pub profile_refresh_pending: bool,

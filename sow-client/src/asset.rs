@@ -485,7 +485,7 @@ impl SowApp {
                     provider,
                     request_id,
                 } => {
-                    if request_id < self.profile_last_applied_request {
+                    if request_id <= self.profile_last_applied_request {
                         log::warn!(
                             "[identity] ignoring stale profile response id={request_id} last_applied={}",
                             self.profile_last_applied_request
@@ -548,6 +548,14 @@ impl SowApp {
                     display_name,
                     request_id,
                 } => {
+                    if self.display_name_save_request_id != Some(request_id) {
+                        log::warn!(
+                            "[identity] ignoring stale rename ACK id={request_id} current={:?}",
+                            self.display_name_save_request_id
+                        );
+                        continue;
+                    }
+                    self.display_name_save_request_id = None;
                     self.display_name_save_in_flight = false;
                     if self.progress_account_id.as_deref() != Some(account_id.as_str()) {
                         log::error!(
@@ -559,6 +567,8 @@ impl SowApp {
                         continue;
                     }
                     self.confirmed_display_name = Some(display_name.clone());
+                    crate::anonymous_identity::clear_pending_display_name();
+                    self.pending_display_name = None;
                     if let Some(next_name) = self.queued_display_name.take() {
                         // No False Victories: the UI name is provisional until the
                         // database ACK; serialize a newer edit after this ACK.
@@ -574,12 +584,31 @@ impl SowApp {
                     }
                 }
                 crate::player_progress::DbEvent::DisplayNameSaveFailed { request_id, status } => {
+                    if self.display_name_save_request_id != Some(request_id) {
+                        log::warn!(
+                            "[identity] ignoring stale rename failure id={request_id} current={:?}",
+                            self.display_name_save_request_id
+                        );
+                        continue;
+                    }
+                    self.display_name_save_request_id = None;
                     self.display_name_save_in_flight = false;
                     log::warn!(
                         "[identity] rename request id={request_id} not acknowledged status={status:?}; restoring confirmed name"
                     );
                     if let Some(confirmed) = self.confirmed_display_name.clone() {
                         self.ui.app.main_menu_state.player_name = confirmed;
+                    }
+                    if status.is_some_and(|status| (400..500).contains(&status)) {
+                        crate::anonymous_identity::clear_pending_display_name();
+                        self.pending_display_name = None;
+                    } else if let Some((pending_account_id, pending_name)) =
+                        crate::anonymous_identity::load_pending_display_name()
+                        && (pending_account_id.is_none()
+                            || pending_account_id.as_deref()
+                                == self.progress_account_id.as_deref())
+                    {
+                        self.pending_display_name = Some(pending_name);
                     }
                     if let Some(next_name) = self.queued_display_name.take() {
                         self.ui.app.main_menu_state.player_name = next_name.clone();

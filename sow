@@ -51,6 +51,33 @@ load_native_public_config() {
   fi
 }
 
+stop_local_preview() {
+  local port="${SOW_LOCAL_PORT:-4173}"
+  if [[ ! "${port}" =~ ^[1-9][0-9]{0,4}$ ]] || (( 10#${port} > 65535 )); then
+    return 0
+  fi
+
+  local lock="${ROOT}/dist/.sow-state/local-${port}.lock"
+  if [[ -f "${lock}" ]]; then
+    local pid cwd args pgid
+    pid="$(head -n 1 "${lock}" 2>/dev/null || true)"
+    if [[ "${pid}" =~ ^[0-9]+$ && -d "/proc/${pid}" ]]; then
+      cwd="$(readlink -f "/proc/${pid}/cwd" 2>/dev/null || true)"
+      args="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
+      if [[ "${cwd}" == "${ROOT}" && ( "${args}" == *"/sow l"* || "${args}" == *"/sow local"* ) ]]; then
+        pgid="$(ps -o pgid= -p "${pid}" 2>/dev/null | tr -d ' ')"
+        if [[ "${pgid}" == "${pid}" ]]; then
+          kill -KILL -- "-${pid}" 2>/dev/null || true
+        else
+          kill -KILL "${pid}" 2>/dev/null || true
+        fi
+      fi
+    fi
+    unlink "${lock}" 2>/dev/null || true
+  fi
+  fuser -k -KILL "${port}/tcp" >/dev/null 2>&1 || true
+}
+
 run_dist() {
   local log_prefix="$1"
   shift
@@ -96,6 +123,7 @@ case "${CMD}" in
     fi
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT}/target}"
     mkdir -p "${CARGO_TARGET_DIR}"
+    stop_local_preview
     BIN="${CARGO_TARGET_DIR}/debug/sow"
     cargo build -p sow-dist
     exec "${BIN}" "$@"

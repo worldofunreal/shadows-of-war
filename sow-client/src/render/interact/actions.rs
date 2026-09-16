@@ -104,7 +104,6 @@ impl SowApp {
                     self.ui.app.main_menu_state.join_password_input.clear();
                 }
                 UiAction::LeaveLobby => {
-                    crate::store_portals::left_room();
                     if let Some(c) = self.net.client.as_ref() {
                         let leave = sow_core::protocol::ClientMessage::Leave {};
                         if let Ok(json) = bincode::serialize(&leave) {
@@ -118,7 +117,6 @@ impl SowApp {
                     self.input.camera_y = 0.0;
                     self.input.camera_zoom = 2.0;
                     self.input.target_zoom = 2.0;
-                    self.net.client = None;
                     self.begin_exit_to_main_menu();
                 }
                 UiAction::SetAttackRatio(r) => {

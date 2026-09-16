@@ -2,14 +2,14 @@
 
     // ── Conduct & privacy (Terms/Privacy enforcement in-client) ──
     var REPORT_REASONS = [
-        ["cheating", "Cheating / automation"],
-        ["harassment", "Harassment"],
-        ["hate_speech", "Hate speech"],
-        ["threats", "Threats"],
-        ["spam", "Spam"],
-        ["inappropriate_name", "Inappropriate name"],
-        ["exploiting", "Exploiting bugs"],
-        ["other", "Other (explain below)"]
+        ["cheating", "profile.cheating"],
+        ["harassment", "profile.harassment"],
+        ["hate_speech", "profile.hate_speech"],
+        ["threats", "profile.threats"],
+        ["spam", "profile.spam"],
+        ["inappropriate_name", "profile.inappropriate_name"],
+        ["exploiting", "profile.exploiting"],
+        ["other", "profile.other_explain"]
     ];
     var reportOpen = false;
     var reportTarget = null;
@@ -24,7 +24,7 @@
     /* POKI_RENDER_REPLACEMENT_BEGIN */
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);
-        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || "ANONYMOUS");
+        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || SOW_t("menu.anonymous"));
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { linked: false, pending: false };
         var accountXp = Math.max(0, Number(state.xp) || 0);
         var crowns = state.crowns == null ? state.laurels : state.crowns;
@@ -32,21 +32,21 @@
             "<header class='sow-menu__topbar'>" +
                 "<div class='sow-menu__identity'>" +
                     "<button class='sow-menu__avatar' type='button' data-command='open_leader_picker' " +
-                        "aria-label='Select leader' style=\"background-image:url('" + esc(avatarImage()) + "')\"></button>" +
+                        "aria-label='" + esc(SOW_t("menu.select_leader")) + "' style=\"background-image:url('" + esc(avatarImage()) + "')\"></button>" +
                     "<div class='sow-menu__profile'>" +
                         "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='20' " +
-                            (state.name_locked ? "readonly" : "") + " aria-label='Display name'>" +
+                            (state.name_locked ? "readonly" : "") + " aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
                         "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leader.civilization) + "</button>" +
                     "</div>" +
                 "</div>" +
                 "<div class='sow-menu__top-actions'>" +
-                    "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='Open profile' aria-label='Open profile'>" +
-                        "<span class='sow-menu__progress-cell sow-menu__level'><small>LV</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
-                        "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " XP</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
+                    "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='" + esc(SOW_t("menu.open_profile")) + "' aria-label='" + esc(SOW_t("menu.open_profile")) + "'>" +
+                        "<span class='sow-menu__progress-cell sow-menu__level'><small>" + esc(SOW_t("menu.level_short")) + "</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
+                        "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " " + esc(SOW_t("menu.xp")) + "</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
                     "</div>" +
-                    (auth.linked || auth.pending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>SIGN IN</button>") +
-                    "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='Settings'>⚙</button>" +
+                    (auth.linked || auth.pending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + esc(SOW_t("menu.sign_in")) + "</button>") +
+                    "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>⚙</button>" +
                 "</div>" +
             "</header>";
     }
@@ -56,15 +56,14 @@
             "<section class='sow-menu__command'>" +
                 "<div class='sow-menu__home-public'>" + renderPublicPanel("home") + "</div>" +
                 "<div class='sow-menu__home-actions'>" +
-                    "<button class='sow-menu__primary' type='button' data-command='quick_match'>QUICK MATCH <span>↗</span></button>" +
-                    "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>CAMPAIGN <span>⚔</span></button>" +
-                    "<button class='sow-menu__secondary' type='button' data-command='open_browser'>LOBBY BROWSER <span>→</span></button>" +
+                    "<button class='sow-menu__primary' type='button' data-command='quick_match'>" + esc(SOW_t("menu.quick_match")) + " <span>↗</span></button>" +
+                    "<button class='sow-menu__secondary' type='button' data-command='open_campaign'>" + esc(SOW_t("menu.campaign")) + " <span>⚔</span></button>" +
+                    "<button class='sow-menu__secondary' type='button' data-command='open_browser'>" + esc(SOW_t("menu.lobby_browser")) + " <span>→</span></button>" +
                     "<form class='sow-menu__join' data-form='join'>" +
-                        "<input name='code' inputmode='numeric' autocomplete='off' placeholder='LOBBY CODE' aria-label='Lobby code'>" +
-                        "<button type='submit'>JOIN</button>" +
+                        "<input name='code' inputmode='numeric' autocomplete='off' placeholder='" + esc(SOW_t("menu.lobby_code")) + "' aria-label='" + esc(SOW_t("menu.lobby_code")) + "'>" +
+                        "<button type='submit'>" + esc(SOW_t("menu.join")) + "</button>" +
                     "</form>" +
-                    "<button class='sow-menu__secondary' type='button' data-command='open_create'>CREATE CUSTOM GAME <span>+</span></button>" +
-                    "<button class='sow-menu__secondary' type='button' data-command='main_nav' data-nav-screen='store'>SHOP <span>↗</span></button>" +
+                    "<button class='sow-menu__secondary' type='button' data-command='open_create'>" + esc(SOW_t("menu.create_custom_game")) + " <span>+</span></button>" +
                     renderFeedback() +
                 "</div>" +
             "</section>";
@@ -75,42 +74,39 @@
         try {
             var purchase = new URLSearchParams(window.location.search).get("purchase");
             var purchaseMessages = {
-                success: "Purchase received. Your gems may take a moment to appear.",
-                restored: "Purchases restored.",
-                cancelled: "Purchase cancelled.",
-                error: "Purchase could not be completed."
+                success: "menu.purchase_received",
+                restored: "menu.purchases_restored",
+                cancelled: "menu.purchase_cancelled",
+                error: "menu.purchase_failed"
             };
             if (purchaseMessages[purchase]) {
-                purchaseStatus = "<div class='sow-menu__status sow-menu__status--notice'>" + esc(purchaseMessages[purchase]) + "</div>";
+                purchaseStatus = "<div class='sow-menu__status sow-menu__status--notice'>" + esc(SOW_t(purchaseMessages[purchase])) + "</div>";
             }
         } catch (e) {}
         var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(state.error) + "</div>" : "";
         var notice = state.notice ? "<div class='sow-menu__status sow-menu__status--notice'>" +
-            esc({ host_left: "Host left the lobby", kicked: "You were removed from the lobby", banned: "You are banned from this lobby", connection_lost: "Connection lost" }[state.notice] || state.notice) +
+            esc(SOW_t(({ host_left: "menu.host_left", kicked: "menu.removed_from_lobby", banned: "menu.banned_from_lobby", connection_lost: "menu.connection_lost" }[state.notice] || state.notice))) +
             "</div>" : "";
         return purchaseStatus + error + notice;
     }
 
     function renderFooter(label) {
         var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
-        return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='Game links'>" +
-            "<a href='/how-to-play/'>HOW TO PLAY</a><a href='/support/'>SUPPORT</a><a href='/terms/'>TERMS</a><a href='/privacy/'>PRIVACY</a><a href='/cookies/'>COOKIES</a>" +
-            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">DISCORD</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">TELEGRAM</a><a href='https://github.com/worldofunreal/shadows-of-war'" + externalAttrs + ">GITHUB</a>" +
-            "</nav><span>SHADOWSOFWAR.IO</span></footer>";
+        return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
+            "<a href='/how-to-play/'>" + esc(SOW_t("menu.how_to_play")) + "</a><a href='/support/'>" + esc(SOW_t("menu.support")) + "</a><a href='/terms/'>" + esc(SOW_t("menu.terms")) + "</a><a href='/privacy/'>" + esc(SOW_t("menu.privacy")) + "</a><a href='/cookies/'>" + esc(SOW_t("menu.cookies")) + "</a>" +
+            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a href='https://github.com/worldofunreal/shadows-of-war'" + externalAttrs + ">" + esc(SOW_t("menu.github")) + "</a>" +
+            "</nav><span>" + esc(SOW_t("menu.brand")) + "</span></footer>";
     }
 
     function renderMainNav(active) {
-        var items = [
-            ["store", "shell/mobile-nav/store.webp", "Shop"],
-            ["heroes", "shell/mobile-nav/heroes.webp", "Heroes"],
-            ["battle", "shell/mobile-nav/battle.webp", "Battle"],
-            ["profile", "shell/mobile-nav/profile.webp", "Profile"]
-        ];
-        return "<nav class='sow-menu__main-nav' aria-label='Main menu navigation'>" + items.map(function (item) {
-            var selected = active === item[0];
-            return "<button type='button' class='sow-menu__main-nav-item" + (selected ? " is-active" : "") + "' data-command='main_nav' data-nav-screen='" + item[0] + "'" +
-                (selected ? " aria-current='page'" : "") + " aria-label='" + esc(item[2]) + "'><span aria-hidden='true'><img src='" + esc(asset(item[1])) + "' alt='' width='128' height='128' decoding='async' draggable='false'></span><small>" + item[2] + "</small></button>";
-        }).join("") + "</nav>";
+        return renderMainNavMarkup(active, MAIN_NAV_ITEMS);
+    }
+
+    function localeOptions() {
+        var codes = Array.isArray(window.SOW_LOCALE_CODES) && window.SOW_LOCALE_CODES.length ? window.SOW_LOCALE_CODES : ["en"];
+        return codes.map(function (code) {
+            return { value: code, label: SOW_t("menu.language_" + code) };
+        });
     }
 
     function renderSettings() {
@@ -121,47 +117,50 @@
         var providers = (auth.linkedProviders || []).map(function (provider) {
             return String(provider).replace(/_/g, " ").toUpperCase();
         });
-        var providerLabel = auth.platform === "twa" ? "GOOGLE PLAY GAMES" :
+        var providerLabel = auth.platform === "twa" ? SOW_t("menu.google_play_games") :
             auth.provider === "crazygames" ? "CRAZYGAMES" :
-            providers.length ? "WOU-ID · " + providers[0] + (providers.length > 1 ? " +" + (providers.length - 1) : "") : "WOU-ID ACCOUNT";
+            providers.length ? "WOU-ID · " + providers[0] + (providers.length > 1 ? " +" + (providers.length - 1) : "") : "WOU-ID " + SOW_t("menu.account");
         var accountControl = auth.pending
-            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>GOOGLE PLAY GAMES</span><strong class='sow-menu__account-pending'>CONNECTING…</strong></section>"
+            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + esc(SOW_t("menu.google_play_games")) + "</span><strong class='sow-menu__account-pending'>" + esc(SOW_t("menu.connecting")) + "</strong></section>"
             : auth.linked
-            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>ACCOUNT · " + providerLabel + "</span>" + (auth.canSignOut ? "<button class='sow-menu__danger' type='button' data-command='sign_out'>SIGN OUT</button>" : "") + "</section>"
+            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + esc(SOW_t("menu.account")) + " · " + esc(providerLabel) + "</span>" + (auth.canSignOut ? "<button class='sow-menu__danger' type='button' data-command='sign_out'>" + esc(SOW_t("menu.sign_out")) + "</button>" : "") + "</section>"
             : "";
         return "" +
             "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
                 "<section class='sow-menu__modal sow-menu__settings-modal'>" +
                     "<div class='sow-menu__modal-head'>" +
                         "<div>" +
-                            "<p class='sow-menu__panel-label'>SYSTEM CONFIGURATION</p>" +
-                            "<h2>SETTINGS</h2>" +
+                            "<p class='sow-menu__panel-label'>" + esc(SOW_t("menu.system_configuration")) + "</p>" +
+                            "<h2>" + esc(SOW_t("menu.settings")) + "</h2>" +
                         "</div>" +
-                        "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='Close'>×</button>" +
+                        "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button>" +
                     "</div>" +
                     "<div class='sow-menu__form-grid'>" +
                         accountControl +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
-                            "<span>MASTER AUDIO</span>" +
+                            "<span>" + esc(SOW_t("menu.master_audio")) + "</span>" +
                             renderDropdown({ key: "settings-mute", name: "mute_all", setting: "mute", value: settings.mute_all ? "off" : "on", options: [
-                                { value: "on", label: "AUDIO ENABLED (ON)" },
-                                { value: "off", label: "MUTED (OFF)" }
+                                { value: "on", label: SOW_t("menu.audio_enabled") },
+                                { value: "off", label: SOW_t("menu.muted") }
                             ] }) +
                         "</label>" +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
-                            "<div class='sow-menu__slider-label'><span>MUSIC VOLUME</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
+                            "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
                             "<input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'>" +
                         "</label>" +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
-                            "<span>MOTION &amp; ANIMATION</span>" +
+                            "<span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
                             renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
-                                { value: "full", label: "FULL" },
-                                { value: "reduced", label: "REDUCED MOTION" }
+                                { value: "full", label: SOW_t("menu.full") },
+                                { value: "reduced", label: SOW_t("menu.reduced_motion") }
                             ] }) +
+                        "</label>" +
+                        "<label class='sow-menu__form-field sow-menu__form-field--wide'><span>" + esc(SOW_t("menu.language")) + "</span>" +
+                            renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                         "</label>" +
                     "</div>" +
                     "<div class='sow-menu__modal-actions'>" +
-                        "<button class='sow-menu__primary' type='button' data-command='toggle_settings'>DONE <span>✓</span></button>" +
+                        "<button class='sow-menu__primary' type='button' data-command='toggle_settings'>" + esc(SOW_t("menu.done")) + " <span>✓</span></button>" +
                     "</div>" +
                 "</section>" +
             "</div>";
@@ -204,18 +203,18 @@
     }
 
     function renderAuthSocial() {
-        return [["google", "Google"], ["discord", "Discord"], ["twitter", "X"], ["meta", "Meta"]].map(function (provider) {
-            return "<button class='sow-auth__provider' type='button' data-command='wou_provider' data-provider='" + provider[0] + "'><span class='sow-auth__provider-icon sow-auth__provider-icon--" + provider[0] + "'>" + authIcon(provider[0]) + "</span><span>Continue with " + provider[1] + "</span><i>↗</i></button>";
+        return [["google", "auth.google"], ["discord", "auth.discord_provider"], ["twitter", "auth.x_provider"], ["meta", "auth.meta"]].map(function (provider) {
+            return "<button class='sow-auth__provider' type='button' data-command='wou_provider' data-provider='" + provider[0] + "'><span class='sow-auth__provider-icon sow-auth__provider-icon--" + provider[0] + "'>" + authIcon(provider[0]) + "</span><span>" + esc(SOW_t("auth.continue_with", { provider: SOW_t(provider[1]) })) + "</span><i>↗</i></button>";
         }).join("");
     }
 
     function finishWouLogin(data) {
-        if (!data || !data.session_token || !data.account) throw new Error("Identity service returned an incomplete session.");
+        if (!data || !data.session_token || !data.account) throw new Error(SOW_t("auth.identity_incomplete"));
         try {
             window.localStorage.setItem("wou_session_token", data.session_token);
             window.localStorage.setItem("wou_user_data", JSON.stringify(data.account));
         } catch (e) {
-            throw new Error("Could not save the account on this device.");
+            throw new Error(SOW_t("auth.account_save_failed"));
         }
         authBusy = false;
         authModalOpen = false;
@@ -230,7 +229,7 @@
 
     function authJson(response) {
         return response.json().catch(function () { return {}; }).then(function (data) {
-            if (!response.ok) throw new Error(data.error || "Sign-in is unavailable right now.");
+            if (!response.ok) throw new Error(data.error || SOW_t("auth.sign_in_unavailable"));
             return data;
         });
     }
@@ -239,7 +238,7 @@
         if (authBusy) return;
         var email = String(authEmail || "").trim();
         if (!/^\S+@\S+\.\S+$/.test(email)) {
-            authError = "Enter a valid email address.";
+            authError = SOW_t("auth.valid_email");
             authNotice = "";
             render();
             return;
@@ -263,11 +262,11 @@
         }).then(function (data) {
             authOtpSent = true;
             authBusy = false;
-            authNotice = data.message || "Verification code sent.";
+            authNotice = data.message || SOW_t("auth.verification_sent");
             render();
         }).catch(function (error) {
             authBusy = false;
-            authError = error && error.message ? error.message : "Could not send the verification code.";
+            authError = error && error.message ? error.message : SOW_t("auth.send_code_failed");
             render();
         });
     }
@@ -276,7 +275,7 @@
         if (authBusy) return;
         var code = String(authCode || "").trim();
         if (!/^\d{6}$/.test(code)) {
-            authError = "Enter the six-digit code.";
+            authError = SOW_t("auth.six_digit_code");
             authNotice = "";
             render();
             return;
@@ -298,7 +297,7 @@
             }).then(authJson);
         }).then(finishWouLogin).catch(function (error) {
             authBusy = false;
-            authError = error && error.message ? error.message : "That code is invalid or expired.";
+            authError = error && error.message ? error.message : SOW_t("auth.invalid_code");
             render();
         });
     }
@@ -314,14 +313,14 @@
 
     function renderAuthModal() {
         var emailPanel = authOtpSent
-            ? "<form class='sow-auth__form' data-auth-form='verify'><label>CODE SENT TO <strong>" + esc(authEmail) + "</strong></label><input class='sow-auth__code' data-auth-field='code' inputmode='numeric' autocomplete='one-time-code' maxlength='6' value='" + esc(authCode) + "' placeholder='000000' aria-label='Verification code' required><button class='sow-auth__submit sow-auth__submit--cyan' type='submit'" + (authBusy ? " disabled" : "") + ">" + (authBusy ? "CHECKING…" : "VERIFY CODE") + "</button><div class='sow-auth__form-links'><button type='button' data-command='auth_change_email'>CHANGE EMAIL</button><button type='button' data-command='auth_resend'" + (authBusy ? " disabled" : "") + ">RESEND</button></div></form>"
-            : "<form class='sow-auth__form' data-auth-form='request'><label for='sow-auth-email'>EMAIL ADDRESS</label><input id='sow-auth-email' class='sow-auth__input' data-auth-field='email' type='email' autocomplete='email' value='" + esc(authEmail) + "' placeholder='you@example.com' required><button class='sow-auth__submit' type='submit'" + (authBusy ? " disabled" : "") + ">" + (authBusy ? "SENDING…" : "SEND CODE") + "</button></form>";
+            ? "<form class='sow-auth__form' data-auth-form='verify'><label>" + esc(SOW_t("auth.code_sent_to")) + " <strong>" + esc(authEmail) + "</strong></label><input class='sow-auth__code' data-auth-field='code' inputmode='numeric' autocomplete='one-time-code' maxlength='6' value='" + esc(authCode) + "' placeholder='000000' aria-label='" + esc(SOW_t("auth.verification_code")) + "' required><button class='sow-auth__submit sow-auth__submit--cyan' type='submit'" + (authBusy ? " disabled" : "") + ">" + esc(authBusy ? SOW_t("auth.checking") : SOW_t("auth.verify_code")) + "</button><div class='sow-auth__form-links'><button type='button' data-command='auth_change_email'>" + esc(SOW_t("auth.change_email")) + "</button><button type='button' data-command='auth_resend'" + (authBusy ? " disabled" : "") + ">" + esc(SOW_t("auth.resend")) + "</button></div></form>"
+            : "<form class='sow-auth__form' data-auth-form='request'><label for='sow-auth-email'>" + esc(SOW_t("auth.email_address")) + "</label><input id='sow-auth-email' class='sow-auth__input' data-auth-field='email' type='email' autocomplete='email' value='" + esc(authEmail) + "' placeholder='" + esc(SOW_t("auth.email_placeholder")) + "' required><button class='sow-auth__submit' type='submit'" + (authBusy ? " disabled" : "") + ">" + esc(authBusy ? SOW_t("auth.sending") : SOW_t("auth.send_code")) + "</button></form>";
         var error = authError ? "<div class='sow-auth__message sow-auth__message--error' role='alert'>" + esc(authError) + "</div>" : "";
         var notice = authNotice ? "<div class='sow-auth__message sow-auth__message--notice' role='status'>" + esc(authNotice) + "</div>" : "";
-        return "<div class='sow-menu__overlay' data-menu-overlay='auth' data-auth-overlay><section class='sow-menu__modal sow-menu__auth-modal sow-auth' role='dialog' aria-modal='true' aria-label='Account'>" +
-            "<div class='sow-auth__glow sow-auth__glow--cyan'></div><div class='sow-auth__head'><div class='sow-auth__logos'><img class='sow-auth__game-logo' src='/sow-long.svg' alt='Shadows of War'><span class='sow-auth__logo-divider' aria-hidden='true'></span><img class='sow-auth__wou-logo' src='https://worldofunreal.com/wouid.svg' alt='WouID'></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='Close'>×</button></div>" +
+        return "<div class='sow-menu__overlay' data-menu-overlay='auth' data-auth-overlay><section class='sow-menu__modal sow-menu__auth-modal sow-auth' role='dialog' aria-modal='true' aria-label='" + esc(SOW_t("auth.account")) + "'>" +
+            "<div class='sow-auth__glow sow-auth__glow--cyan'></div><div class='sow-auth__head'><div class='sow-auth__logos'><img class='sow-auth__game-logo' src='/sow-long.svg' alt='" + esc(SOW_t("menu.brand")) + "'><span class='sow-auth__logo-divider' aria-hidden='true'></span><img class='sow-auth__wou-logo' src='https://worldofunreal.com/wouid.svg' alt='WouID'></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='" + esc(SOW_t("auth.close")) + "'>×</button></div>" +
             error + notice + "<div class='sow-auth__body'>" + emailPanel + "<div class='sow-auth__social-list'>" + renderAuthSocial() + "</div></div>" +
-            "<a class='sow-auth__terms' href='/terms/'>Terms</a></section></div>";
+            "<a class='sow-auth__terms' href='/terms/'>" + esc(SOW_t("auth.terms")) + "</a></section></div>";
     }
 
     /* POKI_RENDER_REPLACEMENT_END */
@@ -350,7 +349,8 @@
     }
 
     function screenFooterLabel(screen) {
-        return ({ campaign: "CAMPAIGN", browser: "LOBBY BROWSER", create: "CREATE GAME", queue: "LOBBY", store: "SHOP", heroes: "HEROES", profile: "PROFILE" })[screen] || "";
+        var key = ({ campaign: "menu.campaign", browser: "menu.lobby_browser", create: "menu.create_game", queue: "menu.lobby", store: "menu.shop", heroes: "menu.heroes", profile: "menu.profile" })[screen];
+        return key ? SOW_t(key) : "";
     }
 
     function renderFrame(screen) {
@@ -381,12 +381,13 @@
         else if (current.outerHTML !== next.outerHTML) current.replaceWith(next);
     }
 
+    /* POKI_SHARED_UPDATE_TOPBAR_BEGIN */
     function updateTopbar() {
         var topbar = root.querySelector(".sow-menu__topbar");
         if (!topbar || !state) return;
         var leader = leaderById(state.selected_leader);
         var nameInput = topbar.querySelector("[data-role='display-name']");
-        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || "ANONYMOUS");
+        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || SOW_t("menu.anonymous"));
         if (nameInput && document.activeElement !== nameInput) nameInput.value = name;
         if (nameInput) nameInput.readOnly = !!state.name_locked;
         var avatar = topbar.querySelector(".sow-menu__avatar");
@@ -410,11 +411,12 @@
                 signIn.dataset.command = "sign_in";
                 actions.insertBefore(signIn, settingsButton);
             }
-            if (signIn) signIn.textContent = "SIGN IN";
+            if (signIn) signIn.textContent = SOW_t("menu.sign_in");
         } else if (signIn) {
             signIn.remove();
         }
     }
+    /* POKI_SHARED_UPDATE_TOPBAR_END */
 
     function updateFrameChrome(screen) {
         var backdrop = root.querySelector("[data-menu-backdrop]");
@@ -561,7 +563,7 @@
             var xpFill = progression.querySelector("[data-progression-xp-fill]");
             var crownsValue = progression.querySelector("[data-progression-crowns-value]");
             if (levelValue) levelValue.textContent = progressionLevel;
-            if (xpValue) xpValue.textContent = Math.floor(progressionXp) + " XP";
+            if (xpValue) xpValue.textContent = Math.floor(progressionXp) + " " + SOW_t("menu.xp");
             if (xpFill) xpFill.style.width = (progressionXp % 100) + "%";
             var crowns = state.crowns == null ? state.laurels : state.crowns;
             if (crownsValue) crownsValue.textContent = Math.max(0, Number(crowns) || 0);
@@ -577,7 +579,7 @@
         if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
         var timer = panel.querySelector("[data-live-countdown]");
         var lobby = joinedLobby();
-        if (timer && lobby) timer.textContent = lobby.is_counting_down ? "STARTING IN " + Math.ceil(lobby.timer_secs) + "s" : "WAITING FOR PLAYERS";
+        if (timer && lobby) timer.textContent = lobby.is_counting_down ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs) }) : SOW_t("lobbies.waiting_for_players");
         updateQueueRoster(lobby);
         var cardTimers = panel.querySelectorAll("[data-timer-for]");
         for (var i = 0; i < cardTimers.length; i++) {
@@ -613,6 +615,7 @@
             render();
             return;
         }
+        /* POKI_SHARED_STORE_ACTIONS_BEGIN */
         if (command === "buy_product") {
             beginStorePurchase(target.dataset.productId);
             return;
@@ -625,6 +628,7 @@
             closeStoreCheckout();
             return;
         }
+        /* POKI_SHARED_STORE_ACTIONS_END */
         if (command === "main_nav") {
             var navScreen = target.dataset.navScreen || "battle";
             if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") {
@@ -773,7 +777,7 @@
                     profileMatchDetail = detail;
                 }
             }).catch(function () {
-                if (profileOpen && profileAccountId === detailProfileId) profileDetailError = "Match details unavailable.";
+                if (profileOpen && profileAccountId === detailProfileId) profileDetailError = SOW_t("profile.match_details_unavailable");
             }).finally(function () {
                 delete detailEntry.detailRequests[matchId];
                 if (profileDetailRequestKey === detailRequestKey) {
@@ -832,7 +836,7 @@
             }).then(function (response) {
                 if (!response.ok) throw new Error("delete failed");
                 try {
-                    ["sow_account_id", "sow_account_secret", "sow_player_progress"].forEach(function (k) {
+                    ["sow_account_id", "sow_account_secret", "sow_player_progress", "poki_ignore_sow_pending_display_name"].forEach(function (k) {
                         window.localStorage.removeItem(k);
                     });
                 } catch (e) {}
@@ -840,7 +844,7 @@
             }).catch(function () {
                 deleteBusy = false;
                 deleteArmed = false;
-                state.error = "Account deletion unavailable. Try again or email hello@shadowsofwar.io.";
+                    state.error = SOW_t("menu.account_deletion_unavailable");
                 render();
             });
             return;
@@ -887,13 +891,14 @@
             }
             return;
         }
+        /* POKI_SHARED_STORE_UNLOCK_BEGIN */
         if (command === "unlock_leader") {
             var unlockLeaderId = target.dataset.leaderId;
             var unlockCurrency = target.dataset.currency || "crowns";
             var unlockAccountId = state && state.account_id;
             var unlockAuth = storeAuth();
             if (!unlockLeaderId || !unlockAccountId || !unlockAuth.available) {
-                state.error = "Account setup is required before unlocking a leader.";
+                state.error = SOW_t("menu.account_setup_required");
                 render();
                 return;
             }
@@ -911,7 +916,7 @@
                 if (!response.ok) throw new Error("unlock failed");
                 window.location.reload();
             }).catch(function () {
-                state.error = "Leader unlock unavailable.";
+                state.error = SOW_t("menu.leader_unlock_unavailable");
                 render();
             });
             return;
@@ -921,7 +926,7 @@
             var skinAccountId = state && state.account_id;
             var skinAuth = storeAuth();
             if (!skinId || !skinAccountId || !skinAuth.available) {
-                state.error = "Account setup is required before changing skins.";
+                state.error = SOW_t("menu.skin_change_setup_required");
                 render();
                 return;
             }
@@ -938,11 +943,12 @@
                 if (!response.ok) throw new Error("skin action failed");
                 window.location.reload();
             }).catch(function () {
-                state.error = command === "unlock_skin" ? "Skin unlock unavailable." : "Skin equip unavailable.";
+                state.error = command === "unlock_skin" ? SOW_t("menu.skin_unlock_unavailable") : SOW_t("menu.skin_equip_unavailable");
                 render();
             });
             return;
         }
+        /* POKI_SHARED_STORE_UNLOCK_END */
         if (command === "set_session_mode") {
             createOffline = target.dataset.mode === "offline";
             render();
@@ -983,6 +989,7 @@
             render();
             return;
         }
+        /* POKI_SHARED_AUTH_ACTIONS_BEGIN */
         if (command === "close_auth") {
             authModalOpen = false;
             render();
@@ -1020,6 +1027,7 @@
             else if (typeof window.SOW_signOutWou === "function") window.SOW_signOutWou();
             return;
         }
+        /* POKI_SHARED_AUTH_ACTIONS_END */
         if (command === "close_password") {
             passwordLobbyId = null;
             passwordDraft = "";
@@ -1030,16 +1038,16 @@
             var lobbyCode = String(target.dataset.lobbyId || "");
             if (navigator.clipboard && lobbyCode) {
                 navigator.clipboard.writeText(lobbyCode).then(function () {
-                    target.textContent = "COPIED";
+                    target.textContent = SOW_t("menu.copied");
                 }).catch(function () {
-                    target.textContent = "COPY FAILED";
+                    target.textContent = SOW_t("menu.copy_failed");
                 });
             } else if (lobbyCode) {
-                target.textContent = "COPY UNAVAILABLE";
+                target.textContent = SOW_t("menu.copy_unavailable");
             }
             return;
         }
-        if (command === "ban_player" && !window.confirm("Ban this player from the lobby?")) {
+        if (command === "ban_player" && !window.confirm(SOW_t("auth.ban_player_confirm"))) {
             return;
         }
         if (command === "join_lobby") {
@@ -1072,6 +1080,7 @@
         }
     });
 
+    /* POKI_SHARED_AUTH_EVENTS_BEGIN */
     window.addEventListener("wou:auth-state-change", function () {
         if (!state || root.hidden) return;
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
@@ -1093,10 +1102,12 @@
     window.addEventListener("wou:auth-error", function (event) {
         authBusy = false;
         authModalOpen = true;
-        authError = event.detail && event.detail.message ? event.detail.message : "Sign-in is unavailable right now.";
+        authError = event.detail && event.detail.message ? event.detail.message : SOW_t("auth.sign_in_unavailable");
         render();
     });
+    /* POKI_SHARED_AUTH_EVENTS_END */
 
+    /* POKI_SHARED_STORE_EVENTS_BEGIN */
     window.addEventListener("sow:android-purchase-bridge-ready", function () {
         if (state && !root.hidden && currentScreen() === "store") render();
     });
@@ -1112,12 +1123,13 @@
             state.error = null;
             send("refresh_profile");
         } else if (result.status === "cancelled") {
-            state.error = "Purchase cancelled.";
+            state.error = SOW_t("menu.purchase_cancelled");
         } else {
-            state.error = "Purchase failed.";
+            state.error = SOW_t("menu.purchase_failed");
         }
         render();
     });
+    /* POKI_SHARED_STORE_EVENTS_END */
 
     root.addEventListener("keydown", function (event) {
         var dropdownTrigger = event.target.closest("[data-role='dropdown-trigger']");
@@ -1180,6 +1192,7 @@
 
     root.addEventListener("submit", function (event) {
         var form = event.target;
+        /* POKI_SHARED_AUTH_SUBMIT_BEGIN */
         if (form.dataset.authForm === "request") {
             event.preventDefault();
             requestAuthOtp();
@@ -1190,6 +1203,7 @@
             verifyAuthOtp();
             return;
         }
+        /* POKI_SHARED_AUTH_SUBMIT_END */
         if (form.dataset.form === "profile-search") {
             event.preventDefault();
             var query = form.elements.q.value.trim();
@@ -1331,6 +1345,10 @@
             render();
             return;
         }
+        if (input.dataset.setting === "locale") {
+            if (typeof window.SOW_setLocale === "function") window.SOW_setLocale(input.value);
+            return;
+        }
         if (!input.dataset.setting) return;
         if (input.dataset.setting === "mute") send("set_mute", { value: input.value === "off" });
         if (input.dataset.setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
@@ -1418,6 +1436,10 @@
         }
         syncWebLoaderForState(state);
     }
+
+    window.SOW_menu_locale_changed = function () {
+        if (state && !root.hidden) render();
+    };
 
     window.SOW_menu_state_update = handleMenuStateUpdate;
     root.hidden = true;

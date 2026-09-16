@@ -135,6 +135,20 @@ pub fn is_portal_embed() -> bool {
     }
 }
 
+pub fn is_poki() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        get_window_value("SOW_PORTAL")
+            .and_then(|value| value.as_string())
+            .is_some_and(|portal| portal == "poki")
+            || read_runtime_bool("poki").unwrap_or(false)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        false
+    }
+}
+
 pub fn is_android_twa() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
@@ -400,10 +414,10 @@ pub fn is_chat_disabled() -> bool {
     take_window_bool("SOW_DISABLE_CHAT")
 }
 
-pub fn get_portal_locale() -> Option<String> {
+pub fn get_ui_locale() -> Option<String> {
     #[cfg(target_arch = "wasm32")]
     {
-        get_window_value("SOW_PORTAL_LOCALE").and_then(|v| v.as_string())
+        get_window_value("SOW_LOCALE").and_then(|v| v.as_string())
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
