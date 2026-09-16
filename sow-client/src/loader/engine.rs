@@ -229,14 +229,7 @@ impl SowApp {
                         splash_show_loading(&mut self.ui.app.splash_state);
                         splash_show_loading_progress(&mut self.ui.app.splash_state, 0.95);
                         if self.should_portal_auto_intro() {
-                            if !self.boot_route_waiting {
-                                self.boot_route_waiting = true;
-                                self.boot_ready_since = Some(web_time::Instant::now());
-                            }
-                            let timed_out = self.boot_ready_since.is_some_and(|t| {
-                                t.elapsed() > web_time::Duration::from_millis(1500)
-                            });
-                            if self.boot_db_settled || timed_out {
+                            if self.boot_db_settled {
                                 self.finish_boot_route();
                             }
                         } else {
@@ -341,9 +334,13 @@ impl SowApp {
                             self.ui.app.main_menu_state.selected_leader,
                             sow_ui_kit::theme::portrait_layout(&self.ui.egui_ctx),
                         );
-                        if self.net.client.is_some() && hero_ready {
+                        #[cfg(target_arch = "wasm32")]
+                        let lobby_snapshot_ready = self.web_exit_lobbies_ready;
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let lobby_snapshot_ready = true;
+                        if self.net.client.is_some() && hero_ready && lobby_snapshot_ready {
                             log::info!(
-                                "Exit game splash: connected, hero image ready, transitioning to main menu"
+                                "Exit game splash: menu dependencies ready, transitioning to main menu"
                             );
                             self.ui.app.splash_state.progress = 1.0;
                             self.ui.app.splash_state.gpu_load_step = 2;

@@ -365,7 +365,7 @@ impl SowApp {
                             }
                         } else {
                             self.net.client = None;
-                            self.begin_exit_to_main_menu(true);
+                            self.begin_exit_to_main_menu();
                         }
                     }
 

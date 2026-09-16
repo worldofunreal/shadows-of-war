@@ -181,7 +181,6 @@ impl SowApp {
                 prev_sync_point,
                 needs_first_upload,
                 configured_physical: winit::dpi::PhysicalSize::new(0, 0),
-                pending_session_cleanup: false,
                 last_egui_viewport: None,
             },
             net: NetState {
@@ -345,6 +344,8 @@ impl SowApp {
             #[cfg(target_arch = "wasm32")]
             web_loader_hidden,
             #[cfg(target_arch = "wasm32")]
+            web_exit_lobbies_ready: false,
+            #[cfg(target_arch = "wasm32")]
             ime_bridge,
             gpu_init_failed: false,
             progress: crate::player_progress::PlayerProgress::default(),
@@ -371,10 +372,6 @@ impl SowApp {
             progress_session_defeats: crate::player_progress::SessionDefeats::default(),
             #[cfg(target_arch = "wasm32")]
             boot_db_settled: false,
-            #[cfg(target_arch = "wasm32")]
-            boot_route_waiting: false,
-            #[cfg(target_arch = "wasm32")]
-            boot_ready_since: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let mut sow_app = sow_app;

@@ -15,6 +15,9 @@
     var reportTarget = null;
     var reportSent = false;
     var reportBusy = false;
+    var exitMenuAssetsPending = false;
+    var exitMenuAssetsReady = false;
+    var exitMenuAssetsToken = 0;
     var deleteArmed = false;
     var deleteBusy = false;
 
@@ -1334,6 +1337,56 @@
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
     });
 
+    function waitForMenuImage(url) {
+        return new Promise(function (resolve) {
+            var image = new Image();
+            image.onload = function () {
+                if (typeof image.decode !== "function") return resolve();
+                try {
+                    image.decode().then(resolve, resolve);
+                } catch (error) {
+                    resolve();
+                }
+            };
+            image.onerror = resolve;
+            image.src = url;
+        });
+    }
+
+    function waitForExitMenuArt() {
+        var waits = [waitForMenuImage(heroImage())];
+        publicLobbies(true).forEach(function (lobby) {
+            waits.push(preloadLobbyThumbnail(lobby).catch(function () {}));
+        });
+        return Promise.all(waits);
+    }
+
+    function syncWebLoaderForState(nextState) {
+        if (typeof window.SOW_syncWebLoader !== "function") return;
+        if (nextState.phase !== "MainMenu" || nextState.loader_job !== "ExitGame") {
+            exitMenuAssetsToken += 1;
+            exitMenuAssetsPending = false;
+            exitMenuAssetsReady = false;
+            window.SOW_syncWebLoader(nextState);
+            return;
+        }
+        if (exitMenuAssetsReady) {
+            window.SOW_syncWebLoader(nextState);
+            return;
+        }
+        if (exitMenuAssetsPending) return;
+
+        exitMenuAssetsPending = true;
+        var token = ++exitMenuAssetsToken;
+        waitForExitMenuArt().then(function () {
+            if (token !== exitMenuAssetsToken) return;
+            exitMenuAssetsPending = false;
+            if (!state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
+            exitMenuAssetsReady = true;
+            window.SOW_syncWebLoader(state);
+        });
+    }
+
     function handleMenuStateUpdate(raw) {
         if (typeof raw !== "string" || raw === lastRaw) {
             updateDynamic();
@@ -1351,9 +1404,6 @@
             window.SOW_open_store_after_match = false;
             storeOpen = true;
         }
-        if (typeof window.SOW_syncWebLoader === "function") {
-            window.SOW_syncWebLoader(state);
-        }
         if (state.waiting && passwordLobbyId != null) {
             passwordLobbyId = null;
             passwordDraft = "";
@@ -1366,6 +1416,7 @@
             updateLobbyViews();
             updateDynamic();
         }
+        syncWebLoaderForState(state);
     }
 
     window.SOW_menu_state_update = handleMenuStateUpdate;

@@ -141,7 +141,7 @@ impl SowApp {
                             self.ui.app.main_menu_state.notice =
                                 Some(sow_ui::LobbyNotice::ConnectionLost);
                             self.ui.app.main_menu_state.notice_at = None;
-                            self.begin_exit_to_main_menu(true);
+                            self.begin_exit_to_main_menu();
                         } else {
                             log::warn!(
                                 "Relay connection failed: {}; retrying rapid connection attempt {}/10",
@@ -175,7 +175,7 @@ impl SowApp {
                 self.net.relay_retry_count = 0;
                 self.ui.app.main_menu_state.notice = Some(sow_ui::LobbyNotice::ConnectionLost);
                 self.ui.app.main_menu_state.notice_at = None;
-                self.begin_exit_to_main_menu(true);
+                self.begin_exit_to_main_menu();
             }
         } else {
             self.net.relay_connect_start = None;
@@ -204,7 +204,7 @@ impl SowApp {
         }
 
         if exit_to_menu_after_net {
-            self.begin_exit_to_main_menu(true);
+            self.begin_exit_to_main_menu();
         }
 
         if let Some((relay_port, relay_host)) = switch_to_relay {
@@ -277,7 +277,7 @@ impl SowApp {
                     );
                     self.ui.app.main_menu_state.notice = Some(sow_ui::LobbyNotice::ConnectionLost);
                     self.ui.app.main_menu_state.notice_at = None;
-                    self.begin_exit_to_main_menu(true);
+                    self.begin_exit_to_main_menu();
                 }
             } else if self.ui.app.phase != ClientPhase::Splash {
                 log::info!("[CLIENT NET] Disconnected outside match; reconnecting to orchestrator");

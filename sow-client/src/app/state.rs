@@ -37,8 +37,6 @@ pub struct GraphicsState {
     pub prev_sync_point: Option<blade_graphics::SyncPoint>,
     pub needs_first_upload: bool,
     pub configured_physical: winit::dpi::PhysicalSize<u32>,
-    /// Deferred teardown after instant exit (must not run mid-frame during UI actions).
-    pub pending_session_cleanup: bool,
     /// Last viewport applied to egui (`physical_w`, `physical_h`, `scale_factor`).
     pub last_egui_viewport: Option<(u32, u32, f32)>,
 }
@@ -448,6 +446,8 @@ pub struct SowApp {
     #[cfg(target_arch = "wasm32")]
     pub(crate) web_loader_hidden: bool,
     #[cfg(target_arch = "wasm32")]
+    pub(crate) web_exit_lobbies_ready: bool,
+    #[cfg(target_arch = "wasm32")]
     pub(crate) ime_bridge: crate::ime::WasmImeBridge,
     /// Set when Blade/Vulkan init fails; event loop exits on next tick.
     pub gpu_init_failed: bool,
@@ -479,8 +479,4 @@ pub struct SowApp {
     pub progress_session_defeats: crate::player_progress::SessionDefeats,
     #[cfg(target_arch = "wasm32")]
     pub boot_db_settled: bool,
-    #[cfg(target_arch = "wasm32")]
-    pub boot_route_waiting: bool,
-    #[cfg(target_arch = "wasm32")]
-    pub boot_ready_since: Option<web_time::Instant>,
 }

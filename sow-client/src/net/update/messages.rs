@@ -202,9 +202,20 @@ impl SowApp {
                         self.net.current_ping_ms = Some((rtt * 1000.0) as u32);
                     }
                     ServerMessage::LobbiesBroadcast(broadcast) => {
-                        // Don't clobber the lobby list once we've started loading into a game
-                        if self.ui.app.phase != sow_ui_kit::ClientPhase::Splash {
+                        // Keep broadcasts out of match-loading splashes, but accept the initial
+                        // snapshot during web ExitGame so the menu is ready before it appears.
+                        #[cfg(target_arch = "wasm32")]
+                        let exiting_to_web_menu = self.ui.app.phase == ClientPhase::Splash
+                            && self.ui.app.splash_state.job
+                                == sow_ui::ui::loading_screen::SplashJob::ExitGame;
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let exiting_to_web_menu = false;
+                        if self.ui.app.phase != ClientPhase::Splash || exiting_to_web_menu {
                             apply_lobbies_broadcast(&mut self.ui.app.main_menu_state, &broadcast);
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        if exiting_to_web_menu {
+                            self.web_exit_lobbies_ready = true;
                         }
 
                         let maps_base = self.asset_config.maps_base.clone();

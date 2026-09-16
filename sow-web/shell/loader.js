@@ -372,7 +372,9 @@
         }
         const progress = Number(state.loader_progress);
         if (Number.isFinite(progress)) {
-            reportedProgress = Math.max(0, Math.min(1, progress));
+            const nextProgress = Math.max(0, Math.min(1, progress));
+            // Keep the single visible loader moving forward across Boot -> EnterGame.
+            reportedProgress = Math.max(reportedProgress == null ? 0 : reportedProgress, nextProgress);
             if (barFill) barFill.style.width = (reportedProgress * 100).toFixed(1) + '%';
         }
         if (loaderText) {

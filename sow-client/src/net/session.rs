@@ -165,8 +165,8 @@ impl SowApp {
         }
     }
 
-    /// Tear down the current match and return to MainMenu, optionally through the ExitGame splash.
-    pub(crate) fn begin_exit_to_main_menu(&mut self, use_loader: bool) {
+    /// Tear down the current match and return to MainMenu through the ExitGame splash.
+    pub(crate) fn begin_exit_to_main_menu(&mut self) {
         let was_playing = self.ui.app.phase == sow_ui_kit::ClientPhase::Playing;
         let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
             self.ui.tutorial_active,
@@ -197,6 +197,10 @@ impl SowApp {
         self.net.client = None;
         self.ui.app.main_menu_state.is_connected = false;
         self.ui.app.main_menu_state.is_connecting = false;
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.web_exit_lobbies_ready = false;
+        }
         while self.net.connect_rx.try_recv().is_ok() {}
         self.net.ws_connect_not_before = web_time::Instant::now();
 
@@ -211,19 +215,12 @@ impl SowApp {
         self.sim.my_player_id = None;
         self.sim.relay_ticket = None;
         self.sim.relay_reconnect_ticket = None;
-        if use_loader {
-            self.ui.app.phase = ClientPhase::Splash;
-            let lang = self.ui.app.settings_state.language;
-            self.ui
-                .app
-                .splash_state
-                .reset_anim(sow_ui::ui::loading_screen::SplashJob::ExitGame, lang);
-        } else {
-            self.ui.app.phase = ClientPhase::MainMenu;
-            if was_playing {
-                self.gfx.pending_session_cleanup = true;
-            }
-        }
+        self.ui.app.phase = ClientPhase::Splash;
+        let lang = self.ui.app.settings_state.language;
+        self.ui
+            .app
+            .splash_state
+            .reset_anim(sow_ui::ui::loading_screen::SplashJob::ExitGame, lang);
         self.ui.is_spectating = false;
         self.ui.endgame_cache = None;
         self.reset_progress_session();

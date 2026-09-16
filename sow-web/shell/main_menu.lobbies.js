@@ -23,8 +23,18 @@
         if (lobbyThumbnailCache[url]) return lobbyThumbnailCache[url];
         lobbyThumbnailCache[url] = new Promise(function (resolve, reject) {
             var image = new Image();
-            image.onload = function () { resolve(url); };
-            image.onerror = reject;
+            image.onload = function () {
+                if (typeof image.decode !== "function") return resolve(url);
+                try {
+                    image.decode().then(function () { resolve(url); }, function () { resolve(url); });
+                } catch (error) {
+                    resolve(url);
+                }
+            };
+            image.onerror = function (error) {
+                delete lobbyThumbnailCache[url];
+                reject(error);
+            };
             image.decoding = "async";
             image.src = url;
         });
@@ -38,7 +48,7 @@
     function renderLobbyCard(lobby) {
         var lock = lobby.has_password ? "<span class='sow-menu__lobby-lock' aria-label='Password protected'>🔒</span>" : "";
         var label = lobbyLabel(lobby);
-        preloadLobbyThumbnail(lobby);
+        preloadLobbyThumbnail(lobby).catch(function () {});
         return "" +
             "<article class='sow-menu__lobby' role='button' tabindex='0' aria-label='" + esc(label) + "' data-lobby-card data-command='join_lobby' data-lobby-id='" + lobby.id +
                 "'>" +
@@ -99,6 +109,8 @@
         template.innerHTML = renderLobbyCard(lobby).trim();
         var card = template.content.firstElementChild;
         card.dataset.mapName = String(lobby.map_name || "world");
+        var art = card.querySelector(".sow-menu__lobby-art");
+        if (art) art.addEventListener("error", function () { art.remove(); }, { once: true });
         return card;
     }
 

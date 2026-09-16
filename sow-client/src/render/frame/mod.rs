@@ -1,7 +1,6 @@
 use crate::app::SowApp;
 use crate::render::gpu::MapGlobals;
 use blade_graphics as gpu;
-use sow_ui_kit::ClientPhase;
 
 mod ui;
 
@@ -53,19 +52,6 @@ impl SowApp {
         let sf = wanted.as_ref().map(|v| v.scale_factor).unwrap_or(1.0);
         crate::viewport::Viewport::from_configured(self, sf).sync_to_app(self);
         crate::viewport::scale_pointer_events(&mut self.ui.raw_input, sf);
-
-        if self.gfx.pending_session_cleanup {
-            self.gfx.pending_session_cleanup = false;
-            if self.ui.app.phase == ClientPhase::MainMenu
-                && let Some(render_ctx) = self.gfx.render_ctx.take()
-            {
-                if let Some(sp) = self.gfx.prev_sync_point.take() {
-                    let _ = render_ctx.context.wait_for(&sp, !0);
-                }
-                self.gfx.render_ctx = Some(render_ctx);
-                self.cleanup_game_session_stub();
-            }
-        }
 
         if let Some(ref mut s) = self.gfx.surface {
             let mut render_ctx = match self.gfx.render_ctx.take() {

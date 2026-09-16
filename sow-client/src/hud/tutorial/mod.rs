@@ -379,7 +379,7 @@ impl SowApp {
                             log::info!("campaign: episode {ep} completed");
                         }
                     }
-                    self.begin_exit_to_main_menu(true);
+                    self.begin_exit_to_main_menu();
                 } else {
                     self.ui.tutorial_modal_dismissed = true;
                     crate::store_portals::gameplay_start();
