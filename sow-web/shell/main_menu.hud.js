@@ -13,6 +13,7 @@
     var betrayalOpen = false;
     var pinEmoji = false;
     var surrenderModalOpen = false;
+    var surrenderMessage = null;
     var emojiPickerOpen = false;
     var devSidebarOpen = false;
     var hudSettingsOpen = false;
@@ -30,6 +31,87 @@
         "🔌", "⭐", "🐺"
     ];
 
+    var SURRENDER_COPY = {
+        en: {
+            matchTitle: "LEAVE MATCH",
+            tutorialTitle: "LEAVE TUTORIAL",
+            cancel: "CANCEL",
+            tutorialDescription: "You can return to the tutorial later from Campaign.",
+            matchMessages: [
+                "Your battle will end. We'll call it a tactical retreat.",
+                "Your battle will end. Your troops saw nothing.",
+                "Your battle will end. The map won't tell anyone.",
+                "Your battle will end. The paperwork can wait.",
+                "Your battle will end. This was definitely part of the plan."
+            ]
+        },
+        es: {
+            matchTitle: "SALIR DE LA PARTIDA",
+            tutorialTitle: "SALIR DEL TUTORIAL",
+            cancel: "CANCELAR",
+            tutorialDescription: "Puedes volver al tutorial más tarde desde Campaña.",
+            matchMessages: [
+                "Tu batalla terminará. Lo llamaremos una retirada táctica.",
+                "Tu batalla terminará. Tus tropas no vieron nada.",
+                "Tu batalla terminará. El mapa no se lo contará a nadie.",
+                "Tu batalla terminará. El papeleo puede esperar.",
+                "Tu batalla terminará. Definitivamente era parte del plan."
+            ]
+        },
+        fr: {
+            matchTitle: "QUITTER LA PARTIE",
+            tutorialTitle: "QUITTER LE TUTORIEL",
+            cancel: "ANNULER",
+            tutorialDescription: "Vous pourrez revenir au tutoriel plus tard depuis la Campagne.",
+            matchMessages: [
+                "Votre bataille prendra fin. Nous appellerons cela une retraite tactique.",
+                "Votre bataille prendra fin. Vos troupes n'ont rien vu.",
+                "Votre bataille prendra fin. La carte ne dira rien à personne.",
+                "Votre bataille prendra fin. La paperasse peut attendre.",
+                "Votre bataille prendra fin. Cela faisait définitivement partie du plan."
+            ]
+        },
+        de: {
+            matchTitle: "PARTIE VERLASSEN",
+            tutorialTitle: "TUTORIAL VERLASSEN",
+            cancel: "ABBRECHEN",
+            tutorialDescription: "Du kannst später über die Kampagne zum Tutorial zurückkehren.",
+            matchMessages: [
+                "Deine Schlacht endet. Wir nennen es einfach einen taktischen Rückzug.",
+                "Deine Schlacht endet. Deine Truppen haben nichts gesehen.",
+                "Deine Schlacht endet. Die Karte wird niemandem etwas sagen.",
+                "Deine Schlacht endet. Der Papierkram kann warten.",
+                "Deine Schlacht endet. Das war natürlich Teil des Plans."
+            ]
+        },
+        it: {
+            matchTitle: "LASCIA LA PARTITA",
+            tutorialTitle: "LASCIA IL TUTORIAL",
+            cancel: "ANNULLA",
+            tutorialDescription: "Puoi tornare al tutorial più tardi dalla Campagna.",
+            matchMessages: [
+                "La tua battaglia finirà. La chiameremo una ritirata tattica.",
+                "La tua battaglia finirà. Le tue truppe non hanno visto nulla.",
+                "La tua battaglia finirà. La mappa non dirà niente a nessuno.",
+                "La tua battaglia finirà. La burocrazia può aspettare.",
+                "La tua battaglia finirà. Faceva decisamente parte del piano."
+            ]
+        },
+        tr: {
+            matchTitle: "MAÇTAN ÇIK",
+            tutorialTitle: "TUTORIALDAN ÇIK",
+            cancel: "İPTAL",
+            tutorialDescription: "Tutoriala daha sonra Kampanya menüsünden dönebilirsin.",
+            matchMessages: [
+                "Savaşın sona erecek. Buna taktiksel geri çekilme diyeceğiz.",
+                "Savaşın sona erecek. Askerlerin hiçbir şey görmedi.",
+                "Savaşın sona erecek. Harita kimseye söylemez.",
+                "Savaşın sona erecek. Evrak işleri bekleyebilir.",
+                "Savaşın sona erecek. Bu kesinlikle planın bir parçasıydı."
+            ]
+        }
+    };
+
     function send(type, extra) {
         if (typeof window.SOW_menu_command !== "function") return false;
         var command = Object.assign({ type: type }, extra || {});
@@ -46,10 +128,25 @@
         return asset("gameplay/currency/" + kind + ".webp");
     }
 
+    function surrenderCopy() {
+        var locale = String(window.SOW_PORTAL_LOCALE || (window.navigator && window.navigator.language) || "en")
+            .toLowerCase()
+            .split(/[-_]/)[0];
+        return SURRENDER_COPY[locale] || SURRENDER_COPY.en;
+    }
+
     function leaderById(id) {
         var leaders = hudState && Array.isArray(hudState.leaders) ? hudState.leaders : [];
         var found = leaders.find(function (leader) { return leader.id === id; });
-        return found || leaders[0] || { id: "Caesar", name: "Caesar", slug: "caesar" };
+        if (found) return found;
+        if (id) {
+            return {
+                id: id,
+                name: String(id),
+                slug: String(id).replace(/([a-z])([A-Z])/g, "$1_$2").replace(/\s+/g, "_").toLowerCase()
+            };
+        }
+        return leaders[0] || { id: "Caesar", name: "Caesar", slug: "caesar" };
     }
 
     function ensureHudDom() {
@@ -185,32 +282,33 @@
             + '  <div class="sow-hud__modal-card"><h3>BREAK ALLIANCE?</h3><p id="sow-hud-betrayal-copy">Attacking this ally may turn other allies against you.</p><div class="sow-hud__panel-actions"><button type="button" data-command="cancel_betrayal">KEEP ALLIANCE</button><button class="sow-hud__btn-danger" type="button" data-command="confirm_betrayal">ATTACK</button></div></div>'
             + '</div>'
             + '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-surrender-modal">'
-            + '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="defeat" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-title" aria-describedby="sow-hud-surrender-desc">'
+            + '  <section class="sow-hud__endgame-card sow-hud__exit-card" data-result="defeat" role="dialog" aria-modal="true" aria-labelledby="sow-hud-surrender-banner" aria-describedby="sow-hud-surrender-desc">'
             + '    <div class="sow-hud__endgame-hero">'
+            + '      <div class="sow-hud__endgame-portrait-wrap">'
+            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-surrender-portrait" src="" alt="Leader Avatar" />'
+            + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
-            + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" aria-hidden="true">⚔</span><span>BATTLE OPTIONS</span></div>'
-            + '        <h2 class="sow-hud__endgame-banner">LEAVE MATCH</h2>'
-            + '        <h3 class="sow-hud__endgame-title" id="sow-hud-surrender-title">RETURN TO COMMAND?</h3>'
-            + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">Your current battle will end. From the main menu, you can choose Campaign or Multiplayer.</p>'
+            + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-surrender-banner">LEAVE MATCH</h2>'
+            + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">Your battle will end.</p>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-actions">'
-            + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal">CANCEL</button>'
-            + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> LEAVE MATCH</button>'
+            + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">CANCEL</button>'
+            + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">LEAVE MATCH</span></button>'
             + '    </div>'
             + '  </section>'
             + '</div>'
             + '<div class="sow-hud__endgame-backdrop hidden" id="sow-hud-endgame-modal">'
             + '  <section class="sow-hud__endgame-card" role="dialog" aria-modal="true" aria-labelledby="sow-hud-endgame-title">'
             + '    <div class="sow-hud__endgame-hero">'
+            + '      <div class="sow-hud__endgame-portrait-wrap">'
+            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="Leader Avatar" />'
+            + '      </div>'
             + '      <div class="sow-hud__endgame-hero-copy">'
             + '        <div class="sow-hud__endgame-kicker"><span class="sow-hud__endgame-icon" id="sow-hud-endgame-icon" aria-hidden="true">⚔</span><span>MATCH RESULT</span></div>'
             + '        <h2 class="sow-hud__endgame-banner" id="sow-hud-endgame-banner">DEFEAT</h2>'
             + '        <h3 class="sow-hud__endgame-title" id="sow-hud-endgame-title">MATCH LOST</h3>'
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-endgame-desc">The match has ended.</p>'
-            + '      </div>'
-            + '      <div class="sow-hud__endgame-portrait-wrap">'
-            + '        <img class="sow-hud__endgame-portrait" id="sow-hud-endgame-portrait" src="" alt="Leader Portrait" />'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-stats" id="sow-hud-endgame-stats">'
@@ -291,6 +389,11 @@
             betrayal: document.getElementById("sow-hud-betrayal-modal"),
             betrayalCopy: document.getElementById("sow-hud-betrayal-copy"),
             surrender: document.getElementById("sow-hud-surrender-modal"),
+            surrenderBanner: document.getElementById("sow-hud-surrender-banner"),
+            surrenderDesc: document.getElementById("sow-hud-surrender-desc"),
+            surrenderPortrait: document.getElementById("sow-hud-surrender-portrait"),
+            surrenderCancel: document.getElementById("sow-hud-surrender-cancel"),
+            surrenderActionLabel: document.getElementById("sow-hud-surrender-action-label"),
             endgame: document.getElementById("sow-hud-endgame-modal"),
             endgameCard: document.querySelector("#sow-hud-endgame-modal .sow-hud__endgame-card"),
             endgameIcon: document.getElementById("sow-hud-endgame-icon"),
@@ -661,6 +764,24 @@
         // Surrender Modal
         if (hudRefs.surrender) {
             hudRefs.surrender.classList.toggle("hidden", !surrenderModalOpen);
+            var tutorialActive = Boolean(quests.available);
+            var copy = surrenderCopy();
+            var surrenderLeader = leaderById((hud && hud.player_leader) || (hudState && hudState.selected_leader));
+            if (surrenderModalOpen && !tutorialActive && surrenderMessage == null) {
+                var messages = copy.matchMessages || [];
+                surrenderMessage = messages.length ? messages[Math.floor(Math.random() * messages.length)] : "";
+            }
+            if (tutorialActive) surrenderMessage = null;
+            if (hudRefs.surrenderBanner) hudRefs.surrenderBanner.textContent = tutorialActive ? copy.tutorialTitle : copy.matchTitle;
+            if (hudRefs.surrenderDesc) hudRefs.surrenderDesc.textContent = tutorialActive
+                ? copy.tutorialDescription
+                : (surrenderMessage || copy.matchMessages[0]);
+            if (hudRefs.surrenderPortrait) {
+                hudRefs.surrenderPortrait.src = asset("gameplay/avatars/" + surrenderLeader.slug + ".webp");
+                hudRefs.surrenderPortrait.alt = surrenderLeader.name || "Leader Avatar";
+            }
+            if (hudRefs.surrenderCancel) hudRefs.surrenderCancel.textContent = copy.cancel;
+            if (hudRefs.surrenderActionLabel) hudRefs.surrenderActionLabel.textContent = tutorialActive ? copy.tutorialTitle : copy.matchTitle;
         }
 
         // Endgame Screen
@@ -681,8 +802,8 @@
                 var activeLeaderId = (hud && hud.player_leader) || (hudState && hudState.selected_leader);
                 var activeLeader = leaderById(activeLeaderId);
                 if (hudRefs.endgamePortrait) {
-                    hudRefs.endgamePortrait.src = asset("shell/leaders/" + activeLeader.slug + "_desktop.webp");
-                    hudRefs.endgamePortrait.alt = activeLeader.name || "Leader Portrait";
+                    hudRefs.endgamePortrait.src = asset("gameplay/avatars/" + activeLeader.slug + ".webp");
+                    hudRefs.endgamePortrait.alt = activeLeader.name || "Leader Avatar";
                 }
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
@@ -769,12 +890,15 @@
                 if (id > 0) send(cmd, cmd === "cancel_attack" ? { attack_id: id } : { fleet_id: id });
             } else if (cmd === "prompt_surrender") {
                 surrenderModalOpen = true;
+                surrenderMessage = null;
                 renderHud();
             } else if (cmd === "close_surrender_modal") {
                 surrenderModalOpen = false;
+                surrenderMessage = null;
                 renderHud();
             } else if (cmd === "confirm_surrender") {
                 surrenderModalOpen = false;
+                surrenderMessage = null;
                 send("leave_lobby");
                 renderHud();
             } else if (cmd === "toggle_emoji") {

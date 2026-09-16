@@ -1473,6 +1473,59 @@ fn cmd_native(paths: &Paths) -> Result<()> {
     Ok(())
 }
 
+fn local_listener_pids(port: u16) -> Result<Vec<u32>> {
+    let port_arg = format!("-iTCP:{port}");
+    let output = Command::new("lsof")
+        .args(["-t", "-n", "-P", &port_arg, "-sTCP:LISTEN"])
+        .output()
+        .context("inspect local web server port (lsof is required)")?;
+    if !output.status.success() && !output.stderr.is_empty() {
+        bail!(
+            "inspect local web server port failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    let mut pids = String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .map(|pid| {
+            pid.parse::<u32>()
+                .with_context(|| format!("invalid PID from lsof: {pid}"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    pids.sort_unstable();
+    pids.dedup();
+    Ok(pids)
+}
+
+fn stop_local_server(port: u16) -> Result<()> {
+    let pids = local_listener_pids(port)?;
+    if pids.is_empty() {
+        return Ok(());
+    }
+
+    let current_pid = std::process::id();
+    for pid in pids {
+        if pid == current_pid {
+            bail!("refusing to stop the local preview process itself");
+        }
+        let pid_arg = pid.to_string();
+        let status = Command::new("kill")
+            .args(["-KILL", &pid_arg])
+            .status()
+            .with_context(|| format!("stop process {pid} using local port {port}"))?;
+        if !status.success() {
+            bail!("could not stop process {pid} using local port {port}");
+        }
+    }
+
+    if !local_listener_pids(port)?.is_empty() {
+        bail!("local port {port} is still occupied after stopping the existing preview");
+    }
+    println!("==> Replaced existing local preview on port {port}");
+    Ok(())
+}
+
 fn cmd_local(paths: &Paths) -> Result<()> {
     let version_path = paths.root.join(".version");
     let version = fs::read_to_string(&version_path)
@@ -1509,6 +1562,7 @@ fn cmd_local(paths: &Paths) -> Result<()> {
         .dist_web
         .to_str()
         .context("local webroot path is not UTF-8")?;
+    stop_local_server(port_number)?;
     println!("✅ Local webroot ready at http://127.0.0.1:{port_number}/");
     println!("   Backend: https://shadowsofwar.io (Ctrl-C to stop)");
 

@@ -32,6 +32,10 @@
     font: inherit;
 }
 
+#sow-hud button {
+    font-weight: var(--sow-button-weight);
+}
+
 #sow-hud button:focus-visible,
 #sow-hud input:focus-visible,
 #sow-hud select:focus-visible {
@@ -142,35 +146,6 @@
     color: var(--sow-muted);
     letter-spacing: 0.05em;
     padding: 4px 8px;
-}
-
-.sow-hud__btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid var(--sow-line);
-    background: var(--sow-panel);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    color: #f5f1e8;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.sow-hud__btn:hover {
-    background: rgba(35, 38, 46, 0.95);
-    border-color: var(--sow-gold);
-    transform: translateY(-1px);
-}
-
-.sow-hud__btn:active {
-    transform: translateY(0);
 }
 
 .sow-hud__btn-danger:hover {
@@ -628,19 +603,15 @@
     min-height: 36px;
     margin-top: 10px;
     padding: 0 12px;
-    border: 1px solid var(--sow-line);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--sow-gold);
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 10px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
-}
-
-.sow-hud__deploy-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
 }
 
 .sow-hud__cancel-btn.hidden {
@@ -661,10 +632,12 @@
     align-items: center;
     gap: 2px;
     padding: 6px 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.05);
-    color: #f5f1e8;
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    font-weight: var(--sow-button-weight);
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -687,7 +660,7 @@
 
 .sow-hud__bld-name {
     font-size: 11px;
-    font-weight: 700;
+    font-weight: var(--sow-button-weight);
 }
 
 .sow-hud__bld-cost {
@@ -698,12 +671,14 @@
 
 .sow-hud__cancel-btn {
     padding: 8px 14px;
-    border-radius: 10px;
+    border-radius: var(--sow-button-radius);
     border: 1px solid var(--sow-red);
-    background: rgba(239, 68, 68, 0.15);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
     color: var(--sow-red);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -858,6 +833,19 @@
 
 .sow-hud__endgame-card[data-result="victory"] {
     border-color: rgba(74, 222, 128, 0.5);
+}
+
+.sow-hud__exit-card {
+    width: min(620px, calc(100vw - 32px));
+    padding: 30px 32px 32px;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-actions {
+    margin-top: 22px;
+}
+
+.sow-hud__exit-card .sow-hud__endgame-banner {
+    margin-top: 0;
 }
 
 .sow-hud__endgame-hero {
@@ -1037,8 +1025,7 @@
     letter-spacing: 0.08em;
 }
 
-.sow-hud__endgame-store-copy small,
-.sow-hud__endgame-store-state {
+.sow-hud__endgame-store-copy small {
     color: var(--sow-muted);
     font-size: 9px;
     font-weight: 800;
@@ -1046,7 +1033,25 @@
 }
 
 .sow-hud__endgame-store-state {
-    color: var(--sow-gold);
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 8px 12px;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-gold-bright);
+    font-size: 9px;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
+    cursor: pointer;
+}
+
+.sow-hud__endgame-store-state:hover,
+.sow-hud__endgame-store-state:focus-visible {
+    border-color: var(--sow-button-primary-border);
+    background: var(--sow-button-primary-bg);
+    color: var(--sow-button-primary-text);
 }
 
 .sow-hud__endgame-actions {
@@ -1062,29 +1067,31 @@
     gap: 7px;
     min-height: 44px;
     padding: 11px 14px;
-    border-radius: 10px;
+    border-radius: var(--sow-button-radius);
     font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.04em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
 }
 
 .sow-hud__endgame-primary {
     flex: 1;
-    border: 1px solid var(--sow-gold);
-    background: var(--sow-gold);
-    color: var(--sow-ink);
+    border: 1px solid var(--sow-button-primary-border);
+    background: var(--sow-button-primary-bg);
+    box-shadow: var(--sow-button-primary-shadow);
+    color: var(--sow-button-primary-text);
 }
 
 .sow-hud__endgame-primary:hover {
-    background: var(--sow-gold-bright);
+    filter: brightness(1.12);
 }
 
 .sow-hud__endgame-secondary {
     flex: 1;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.06);
-    color: #f5f1e8;
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
 }
 
 .sow-hud__endgame-secondary:hover {
@@ -1123,13 +1130,15 @@
 .sow-hud__pin-btn,
 .sow-hud__row-action,
 .sow-hud__panel-actions button {
-    border: 1px solid var(--sow-line);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    color: #f5f1e8;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     cursor: pointer;
     font-size: 10px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     padding: 5px 8px;
 }
 
@@ -1253,11 +1262,6 @@
 
     .sow-hud__fps {
         display: none;
-    }
-
-    .sow-hud__btn {
-        padding: 5px 7px;
-        font-size: 10px;
     }
 
     .sow-hud__left-rail {
@@ -1484,8 +1488,7 @@
     .sow-hud__close-btn,
     .sow-hud__pin-btn,
     .sow-hud__row-action,
-    .sow-hud__panel-actions button,
-    .sow-hud__clear-log { min-height: 44px; }
+    .sow-hud__panel-actions button { min-height: 44px; }
     .sow-hud__transfer input { min-height: 44px; font-size: 16px; }
 
     .sow-hud__modal-backdrop,

@@ -1,3 +1,17 @@
+:root {
+    --sow-button-radius: 8px;
+    --sow-button-weight: 800;
+    --sow-button-tracking: 0.08em;
+    --sow-button-primary-bg: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+    --sow-button-primary-border: rgba(243, 177, 43, 0.65);
+    --sow-button-primary-text: #111318;
+    --sow-button-primary-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    --sow-button-dark-bg: linear-gradient(180deg, rgba(26, 30, 40, 0.85) 0%, rgba(14, 17, 23, 0.95) 100%);
+    --sow-button-dark-border: rgba(255, 255, 255, 0.16);
+    --sow-button-dark-text: #f5f1e8;
+    --sow-button-dark-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 #sow-menu {
     --sow-gold: #f3b12b;
     --sow-gold-bright: #ffd36a;
@@ -58,13 +72,17 @@
     background: var(--sow-gold-bright);
 }
 
-#sow-menu button,
+#sow-menu button {
+    pointer-events: auto;
+    font: inherit;
+    font-weight: var(--sow-button-weight);
+}
+
 #sow-menu input,
 #sow-menu select,
 #sow-menu a,
-#sow-menu [role="button"],
-#sow-menu [data-command],
-#sow-menu article {
+#sow-menu article,
+#sow-menu :where([role="button"]) {
     pointer-events: auto;
     font: inherit;
 }
@@ -168,7 +186,7 @@
     min-width: 96px;
 }
 
-.sow-menu__profile input {
+#sow-menu .sow-menu__profile input {
     width: 180px;
     padding: 2px 0;
     border: 0;
@@ -177,9 +195,9 @@
     background: transparent;
     color: #fff;
     font-size: 15px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
     letter-spacing: 0.06em;
-    text-transform: uppercase;
+    text-transform: none;
     transition: border-color 160ms ease;
 }
 
@@ -307,10 +325,10 @@
 .sow-menu__icon-button,
 .sow-menu__ghost-button {
     border: 1px solid var(--sow-line);
-    border-radius: 8px;
+    border-radius: var(--sow-button-radius);
     cursor: pointer;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-transform: uppercase;
 }
 
@@ -320,12 +338,11 @@
     justify-content: center;
     height: 42px;
     padding: 0 18px;
-    border: 1px solid rgba(243, 177, 43, 0.65);
-    background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    color: #111318;
+    border-color: var(--sow-button-primary-border);
+    background: var(--sow-button-primary-bg);
+    box-shadow: var(--sow-button-primary-shadow);
+    color: var(--sow-button-primary-text);
     font-size: 12px;
-    font-weight: 900;
     white-space: nowrap;
     transition: filter 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
@@ -345,8 +362,10 @@
 }
 
 .sow-menu__ghost-button {
-    background: rgba(255, 255, 255, 0.06);
-    color: #f7f3e9;
+    border-color: var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
 }
 
 .sow-menu__signin:hover {
@@ -465,19 +484,20 @@
     min-height: 48px;
     padding: 0 16px;
     border: 1px solid transparent;
-    border-radius: 5px;
+    border-radius: var(--sow-button-radius);
     cursor: pointer;
-    font-weight: 900;
-    letter-spacing: 0.1em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-align: left;
     text-transform: uppercase;
     transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease;
 }
 
 .sow-menu__primary {
-    background: var(--sow-gold);
-    color: #18130b;
-    box-shadow: 0 8px 24px rgba(243, 177, 43, 0.18);
+    border-color: var(--sow-button-primary-border);
+    background: var(--sow-button-primary-bg);
+    color: var(--sow-button-primary-text);
+    box-shadow: var(--sow-button-primary-shadow);
     font-size: 14px;
 }
 
@@ -488,15 +508,27 @@
 .sow-menu__secondary,
 .sow-menu__danger {
     margin-top: 8px;
-    border-color: var(--sow-line);
-    background: rgba(255, 255, 255, 0.07);
-    color: #f4f0e7;
+    border-color: var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 11px;
 }
 
 .sow-menu__danger {
     border-color: rgba(236, 104, 78, 0.5);
     color: #ffb1a2;
+}
+
+.sow-menu__signin:disabled,
+.sow-menu__primary:disabled,
+.sow-menu__secondary:disabled,
+.sow-menu__danger:disabled,
+.sow-menu__ghost-button:disabled {
+    cursor: not-allowed;
+    filter: none;
+    opacity: 0.55;
+    transform: none;
 }
 
 .sow-menu__primary:hover,
@@ -559,10 +591,11 @@
     justify-content: space-between;
     gap: 10px;
     padding: 0 11px;
-    border: 1px solid var(--sow-line);
-    border-radius: 7px;
-    background: rgba(10, 13, 18, .86);
-    color: #f5f1e8;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     cursor: pointer;
     text-align: left;
 }
@@ -622,13 +655,14 @@
 
 .sow-menu__join button {
     padding: 0 16px;
-    border: 1px solid var(--sow-line);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     cursor: pointer;
-    font-weight: 900;
-    letter-spacing: 0.08em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
 }
 
 .sow-menu__join button:hover {
@@ -935,12 +969,13 @@
 
 .sow-menu__mode-tab {
     padding: 10px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--sow-line);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--sow-muted);
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
     letter-spacing: 0.08em;
     cursor: pointer;
     text-align: left;
@@ -948,8 +983,7 @@
 }
 
 .sow-menu__mode-tab:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    filter: brightness(1.08);
 }
 
 .sow-menu__mode-tab.active {
@@ -1073,27 +1107,26 @@
 
 .sow-menu__pill {
     padding: 6px 12px;
-    border-radius: 4px;
-    border: 1px solid var(--sow-line);
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--sow-muted);
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 10px;
-    font-weight: 900;
+    font-weight: var(--sow-button-weight);
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .sow-menu__pill:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    filter: brightness(1.08);
 }
 
 .sow-menu__pill.active {
     border-color: var(--sow-cyan);
     background: var(--sow-cyan);
     color: #080a0e;
-    font-weight: 900;
     box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
 }
 
@@ -1147,12 +1180,14 @@
 
 .sow-menu__ghost-mini {
     padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--sow-line);
-    background: rgba(255, 255, 255, 0.05);
-    color: #fff;
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     cursor: pointer;
     font-size: 12px;
+    font-weight: var(--sow-button-weight);
 }
 
 .sow-menu__custom-launch-btn {
@@ -1350,12 +1385,14 @@
 
 .sow-menu__code-box button {
     padding: 2px 6px;
-    border-radius: 3px;
-    border: 1px solid var(--sow-line);
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    border-radius: 6px;
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 9px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
 }
 
@@ -1534,12 +1571,14 @@
 
 .sow-menu__mod-btn {
     padding: 3px 6px;
-    border-radius: 3px;
-    border: 1px solid var(--sow-line);
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    border-radius: 6px;
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 9px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
     transition: background-color 0.1s ease, border-color 0.1s ease, color 0.1s ease;
 }
@@ -2691,8 +2730,8 @@
     color: var(--sow-muted);
     background: transparent;
     font-size: 10px;
-    font-weight: 900;
-    letter-spacing: 0.13em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
 }
 
 .sow-auth__form,
@@ -2738,21 +2777,24 @@
 
 .sow-auth__submit {
     min-height: 50px;
-    border: 1px solid transparent;
-    border-radius: 8px;
+    border: 1px solid var(--sow-button-primary-border);
+    border-radius: var(--sow-button-radius);
+    box-shadow: var(--sow-button-primary-shadow);
     cursor: pointer;
     font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.13em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
 }
 
 .sow-auth__submit {
-    background: var(--sow-gold);
-    color: #17120a;
+    background: var(--sow-button-primary-bg);
+    color: var(--sow-button-primary-text);
 }
 
 .sow-auth__submit--cyan {
+    border-color: var(--sow-cyan);
     background: var(--sow-cyan);
+    box-shadow: 0 2px 8px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
     color: #07131b;
 }
 
@@ -2780,13 +2822,15 @@
     width: 100%;
     min-height: 52px;
     padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, 0.13);
-    border-radius: 8px;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.045);
-    color: #f8fafc;
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 12px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-align: left;
     transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }

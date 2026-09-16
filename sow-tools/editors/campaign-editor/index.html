@@ -82,7 +82,7 @@
         <button class="primary" id="exportBtn">Export</button>
         <button id="reloadBtn">Reload</button>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0"><input type="checkbox" id="launchChk" style="width:auto"> Launch game after export</label>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0"><input type="checkbox" id="launchChk" style="width:auto"> Launch existing client after export</label>
       <label>Load a different roster</label>
       <input type="file" id="fileIn" accept=".json" />
     </div>
@@ -416,8 +416,8 @@ document.getElementById("zout").onclick = () => zoomAt(cv.width/2, cv.height/2, 
 document.getElementById("zfit").onclick = () => { fitView(); draw(); };
 
 async function loadMap(){
-  const res = await fetch("./eastanglia.bin");
-  if(!res.ok) throw new Error("eastanglia.bin "+res.status);
+  const res = await fetch("/assets/maps/eastanglia/map.bin");
+  if(!res.ok) throw new Error("eastanglia map "+res.status);
   const buf = await res.arrayBuffer();
   const m = parseMap(buf);
   if (m.w!==MAPW || m.h!==MAPH) console.warn("map dims", m.w, m.h, "expected", MAPW, MAPH);

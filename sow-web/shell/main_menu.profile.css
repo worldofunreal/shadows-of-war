@@ -8,6 +8,7 @@
     color: var(--sow-muted);
     font: inherit;
     font-size: 10px;
+    font-weight: var(--sow-button-weight);
     text-align: left;
     cursor: pointer;
 }
@@ -101,12 +102,14 @@
     min-height: 40px;
     margin: 0;
     padding: 8px 12px;
-    border: 1px solid var(--sow-line);
-    background: transparent;
-    color: var(--sow-muted);
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-transform: uppercase;
     cursor: pointer;
 }
@@ -161,7 +164,7 @@
     background: transparent;
     color: var(--sow-gold-bright);
     font: inherit;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
     text-decoration: underline;
     cursor: pointer;
 }
@@ -317,8 +320,8 @@
     background: rgba(10, 13, 18, 0.82);
     color: var(--sow-muted);
     font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
     transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease;
 }
@@ -428,7 +431,7 @@
     background: transparent;
     color: var(--sow-gold);
     font-size: 11px;
-    font-weight: 800;
+    font-weight: var(--sow-button-weight);
     cursor: pointer;
 }
 
@@ -555,20 +558,24 @@
     min-height: 44px;
     margin-top: 16px;
     padding: 0 16px;
-    border: 1px solid var(--sow-gold);
-    background: transparent;
-    color: var(--sow-gold-bright);
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-transform: uppercase;
     cursor: pointer;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__load-more:hover,
 #sow-menu[data-screen="profile"] .sow-profile__load-more:focus-visible {
-    background: var(--sow-gold);
-    color: #111;
+    border-color: var(--sow-button-primary-border);
+    background: var(--sow-button-primary-bg);
+    color: var(--sow-button-primary-text);
+    filter: brightness(1.08);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__load-more:disabled {
@@ -620,19 +627,21 @@
 #sow-menu[data-screen="profile"] .sow-profile__search button {
     min-height: 44px;
     padding: 0 18px;
-    border: 1px solid var(--sow-gold);
-    background: var(--sow-gold);
-    color: #111;
+    border: 1px solid var(--sow-button-primary-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-primary-bg);
+    box-shadow: var(--sow-button-primary-shadow);
+    color: var(--sow-button-primary-text);
     font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.08em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-transform: uppercase;
     cursor: pointer;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__search button:hover,
 #sow-menu[data-screen="profile"] .sow-profile__search button:focus-visible {
-    background: var(--sow-gold-bright);
+    filter: brightness(1.12);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__search-results {
@@ -1459,13 +1468,14 @@
     justify-content: center;
     gap: 5px;
     padding: 7px 8px;
-    border: 1px solid rgba(243, 177, 43, .5);
-    border-radius: 5px;
-    background: rgba(243, 177, 43, .1);
-    color: var(--sow-gold-bright);
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
     font-size: 9px;
-    font-weight: 900;
-    letter-spacing: .06em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
     text-align: center;
     text-decoration: none;
     cursor: pointer;
@@ -1484,9 +1494,10 @@
 
 .sow-store__buy:hover:not(:disabled),
 .sow-store__buy--primary {
-    border-color: var(--sow-gold);
-    background: var(--sow-gold);
-    color: #0b0d10;
+    border-color: var(--sow-button-primary-border);
+    background: var(--sow-button-primary-bg);
+    box-shadow: var(--sow-button-primary-shadow);
+    color: var(--sow-button-primary-text);
 }
 
 .sow-store__buy:disabled {
@@ -1626,8 +1637,8 @@
     cursor: pointer;
     font: inherit;
     font-size: 10px;
-    font-weight: 900;
-    letter-spacing: .1em;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
 }
 
 .sow-store__close { padding: 4px 8px; font-size: 20px; line-height: 1; }
@@ -1644,10 +1655,12 @@
     gap: 4px;
     min-height: 92px;
     padding: 16px;
-    border: 1px solid rgba(255,255,255,.14);
-    border-radius: 8px;
-    background: rgba(10, 13, 18, .78);
-    color: #fff;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    font-weight: var(--sow-button-weight);
     cursor: pointer;
     text-align: left;
     transition: border-color 160ms ease, transform 160ms ease;
