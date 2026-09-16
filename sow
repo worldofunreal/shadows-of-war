@@ -12,17 +12,19 @@ USAGE:
   ./sow [COMMAND] [OPTIONS]
 
 COMMANDS:
-  (no args) / native   Run native desktop game client directly
+  (no args)            Build, package, and open the native JavaScript/WASM game
   m, map                Serve the campaign editor locally on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
+  native                Build, package, and open the native JavaScript/WASM game
   p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
   a, android           Build the Android AAB and publish it to Google Play alpha
   help, -h, --help     Show this help message
 
 EXAMPLES:
-  ./sow                # Launch desktop game client
+  ./sow                # Build and open the native desktop client
   ./sow m              # Serve the campaign editor (JSON changes need no Rust rebuild)
   ./sow l              # Build and serve the local web client (Ctrl-C to stop)
+  ./sow native         # Build and open the native desktop client
   ./sow p              # Production build and deploy to IONOS & Azure
   ./sow p -v           # Production deploy with public version bump
   ./sow a              # Android AAB + Play alpha upload (each upload restarts Play review)
@@ -64,7 +66,7 @@ stop_local_preview() {
     if [[ "${pid}" =~ ^[0-9]+$ && -d "/proc/${pid}" ]]; then
       cwd="$(readlink -f "/proc/${pid}/cwd" 2>/dev/null || true)"
       args="$(tr '\0' ' ' < "/proc/${pid}/cmdline" 2>/dev/null || true)"
-      if [[ "${cwd}" == "${ROOT}" && ( "${args}" == *"/sow l"* || "${args}" == *"/sow local"* ) ]]; then
+      if [[ "${cwd}" == "${ROOT}" && ( "${args}" == *"/sow " || "${args}" == *"/sow l"* || "${args}" == *"/sow local"* ) ]]; then
         pgid="$(ps -o pgid= -p "${pid}" 2>/dev/null | tr -d ' ')"
         if [[ "${pgid}" == "${pid}" ]]; then
           kill -KILL -- "-${pid}" 2>/dev/null || true
@@ -103,16 +105,6 @@ case "${CMD}" in
     show_help
     exit 0
     ;;
-  native|n)
-    load_native_public_config
-    export VERBOSE="${VERBOSE:-1}"
-    export SOW_WS_URL="${SOW_WS_URL:-wss://shadowsofwar.io/ws/}"
-    export SOW_MAPS_URL="${SOW_MAPS_URL:-https://shadowsofwar.io/maps}"
-    export SOW_ASSETS_URL="${SOW_ASSETS_URL:-https://shadowsofwar.io/assets}"
-    export SOW_DATABASE_URL="${SOW_DATABASE_URL:-https://shadowsofwar.io/api}"
-    shift 2>/dev/null || true
-    exec cargo run --bin client -- "$@"
-    ;;
   m|map)
     shift || true
     exec node "${ROOT}/sow-tools/editors/campaign-editor/server.mjs" "$@"
@@ -127,6 +119,10 @@ case "${CMD}" in
     BIN="${CARGO_TARGET_DIR}/debug/sow"
     cargo build -p sow-dist
     exec "${BIN}" "$@"
+    ;;
+  native)
+    load_dist_env
+    run_dist native "$@"
     ;;
   p|prod)
     load_dist_env

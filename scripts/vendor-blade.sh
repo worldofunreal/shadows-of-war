@@ -15,7 +15,7 @@ if [ -z "${REV}" ]; then
 fi
 URL="https://github.com/ohsalmeron/blade"
 
-if [ ! -f blade/blade-egui/Cargo.toml ]; then
+if [ ! -f blade/blade-graphics/Cargo.toml ]; then
   echo "vendor-blade: cloning ${URL} @ ${REV}"
   rm -rf blade
   git clone --no-checkout "${URL}" blade
@@ -28,10 +28,9 @@ if [ "${CURRENT}" != "${REV}" ]; then
   git -C blade checkout --quiet "${REV}"
 fi
 
-EGUI_VER="$(sed -nE 's/^version = "([^"]+)".*/\1/p' blade/blade-egui/Cargo.toml | head -n 1)"
 GRAPHICS_VER="$(sed -nE 's/^version = "([^"]+)".*/\1/p' blade/blade-graphics/Cargo.toml | head -n 1)"
-if [ "${EGUI_VER}" != "0.8.1" ] || [ "${GRAPHICS_VER}" != "0.8.4" ]; then
-  echo "vendor-blade: version mismatch at ${REV} (egui=${EGUI_VER} graphics=${GRAPHICS_VER})" >&2
+if [ "${GRAPHICS_VER}" != "0.8.4" ]; then
+  echo "vendor-blade: version mismatch at ${REV} (graphics=${GRAPHICS_VER})" >&2
   exit 1
 fi
-echo "vendor-blade: OK ${REV} (egui ${EGUI_VER}, graphics ${GRAPHICS_VER})"
+echo "vendor-blade: OK ${REV} (graphics ${GRAPHICS_VER})"

@@ -63,9 +63,12 @@ com.unity.textmeshpro/
 
 # Local checkout dependencies
 /blade/
-/egui/
 /winit/
 /OpenFrontIO/
+
+# Native desktop wrapper dependencies/build output
+sow-native/node_modules/
+sow-native/src-tauri/target/
 
 # Astro site build files and output
 sow-web/.astro/

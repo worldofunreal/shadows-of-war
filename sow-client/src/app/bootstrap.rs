@@ -1,9 +1,7 @@
 use super::state::*;
 use crate::render::gpu::{MapRenderer, RenderContext};
 use crate::{EngineInitEvent, MapDownloadEvent, spawn_sow_client_connect};
-use blade_egui::GuiPainter;
 use blade_graphics as gpu;
-use egui::{Context, RawInput, Rect};
 use sow_core::protocol::SimSnapshot;
 use sow_net::client::SowClient;
 use sow_ui::ClientApp;
@@ -18,12 +16,6 @@ impl Default for SowApp {
 
 impl SowApp {
     pub fn new() -> Self {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let _ = env_logger::builder()
-                .filter_level(log::LevelFilter::Info)
-                .try_init();
-        }
         // ── Simulation ──────────────────────────────────────────────────────────
         let map_w: u32 = 800;
         let map_h: u32 = 600;
@@ -40,7 +32,6 @@ impl SowApp {
         let map_renderer: Option<MapRenderer> = None;
         let mover_renderer: Option<crate::render::gpu::MoverRenderer> = None;
         let text_renderer: Option<crate::render::gpu::TextRenderer> = None;
-        let gui_painter: Option<GuiPainter> = None;
         let window: Option<Box<dyn winit::window::Window>> = None;
 
         // ── UI State ────────────────────────────────────────────────────────────
@@ -59,9 +50,6 @@ impl SowApp {
                 }
             }
         }
-        let egui_ctx = Context::default();
-        sow_ui_kit::theme::apply_theme(&egui_ctx);
-        let raw_input = RawInput::default();
 
         // ── Network State ───────────────────────────────────────────────────────
         #[cfg(not(target_arch = "wasm32"))]
@@ -111,8 +99,6 @@ impl SowApp {
         let wasm_doc_was_visible: bool = true;
         #[cfg(target_arch = "wasm32")]
         let web_loader_hidden: bool = false;
-        #[cfg(target_arch = "wasm32")]
-        let ime_bridge = crate::ime::WasmImeBridge::new();
 
         // Strict endpoint config: SOW_WS_URL must be declared by the shell
         // (wasm) or the environment (native). No default, no deriving from
@@ -161,13 +147,8 @@ impl SowApp {
         // Touch state for pinch-to-zoom
         let active_touches: HashMap<u64, (f64, f64)> = HashMap::new();
         let map_touch_start: Option<(Instant, f64, f64)> = None;
-        let map_context_menu: Option<(f32, f32, u32)> = None;
         let last_pinch_state: Option<(f64, f64, f64)> = None;
 
-        // Tracks last `Window::set_ime_allowed` value (mirrors egui-winit debounce).
-        let ime_allowed_state = false;
-        // Last physical-pixel IME area for `set_ime_cursor_area`, for debouncing.
-        let ime_cursor_rect_px: Option<Rect> = None;
         let has_snapped_camera_to_spawn = false;
 
         let prev_sync_point: Option<gpu::SyncPoint> = None;
@@ -193,11 +174,9 @@ impl SowApp {
                 map_renderer,
                 mover_renderer,
                 text_renderer,
-                gui_painter,
                 prev_sync_point,
                 needs_first_upload,
                 configured_physical: winit::dpi::PhysicalSize::new(0, 0),
-                last_egui_viewport: None,
             },
             net: NetState {
                 client: net_client,
@@ -234,6 +213,7 @@ impl SowApp {
                 tile_upgrades: Vec::new(),
                 config: sow_core::game_config::GameConfig::default(),
                 paused: false,
+                tutorial_observation: crate::app::TutorialObservation::default(),
                 fog_explored: sow_core::bitset::DenseBitSet::new(),
                 fog_visible: sow_core::bitset::DenseBitSet::new(),
                 force_fog_upload: true,
@@ -250,18 +230,9 @@ impl SowApp {
                 last_mouse_y,
                 active_touches,
                 map_touch_start,
-                map_context_menu,
-                map_context_menu_active: None,
-                map_context_menu_session: 0,
-                context_menu_timer: 0.0,
-                context_menu_open_time: None,
                 last_pinch_state,
-                hold_attack_target: None,
-                hold_attack_accum: 0.0,
                 hold_build_active: false,
                 hold_build_accum: 0.0,
-                ime_allowed_state,
-                ime_cursor_rect_px,
                 has_snapped_camera_to_spawn,
                 selected_warships: Vec::new(),
                 key_pan_up: false,
@@ -273,30 +244,13 @@ impl SowApp {
             },
             ui: UiState {
                 app,
-                egui_ctx,
-                raw_input,
-
-                label_positions: std::collections::HashMap::new(),
-                label_sizes: std::collections::HashMap::new(),
-                tutorial_avatar_geometry: None,
                 tutorial_active: false,
                 tutorial_campaign: crate::campaign::CampaignId::Boudica,
-                tutorial_step_idx: 0,
-                tutorial_baseline_tiles: 0,
-                tutorial_baseline_set: false,
-                tutorial_objectives_open: true,
-                tutorial_modal_dismissed: false,
-                tutorial_obj_done_at: std::collections::HashMap::new(),
-                tutorial_last_kills: 0,
-                tutorial_met_tribes: std::collections::HashSet::new(),
-                tutorial_pending_intro: None,
-                tutorial_pending_completion: None,
-                tutorial_spawn_time: None,
                 show_leaderboard: false,
                 leaderboard_timer: 0.0,
                 leaderboard_rankings: Vec::new(),
                 leaderboard_display: std::collections::HashMap::new(),
-                leaderboard_visible_limit: sow_ui::ui::hud::leaderboard::INITIAL_VISIBLE_LIMIT,
+                leaderboard_visible_limit: crate::ui::hud::leaderboard::INITIAL_VISIBLE_LIMIT,
                 leaderboard_paged_through_limit: 0,
                 leaderboard_search: String::new(),
                 leaderboard_team_rankings: Vec::new(),
@@ -310,23 +264,11 @@ impl SowApp {
                 last_projectiles: std::collections::HashMap::new(),
                 cached_player_colors: Vec::new(),
                 cached_player_count: 0,
-                star_svg_registered: false,
                 floating_notices: Vec::new(),
                 endgame_cache: None,
                 reward_cache: None,
-
-                cached_hovered_building_id: None,
-                cached_hovered_building_level: 0,
-                cached_hovered_building_tooltip: String::new(),
-                attack_troop_labels: std::collections::HashMap::new(),
-                attack_troop_labels_last_update: std::collections::HashMap::new(),
-                cached_galleys: std::collections::HashMap::new(),
-                cached_prepared_names: std::collections::HashMap::new(),
-                edge_mask_cache: Vec::new(),
-                rail_state: crate::render::world::railways::RailState::new(),
                 silo_cooldowns: std::collections::HashMap::new(),
                 hud_combat_sync_tick: 0,
-                bunker_last_sound_time: std::collections::HashMap::new(),
                 mover_scene: crate::render::world::movers::MoverScene::new(),
                 click_markers: Vec::new(),
                 last_build_confirm_time: None,
@@ -362,8 +304,6 @@ impl SowApp {
             web_loader_hidden,
             #[cfg(target_arch = "wasm32")]
             web_exit_lobbies_ready: false,
-            #[cfg(target_arch = "wasm32")]
-            ime_bridge,
             gpu_init_failed: false,
             progress: crate::player_progress::PlayerProgress::default(),
             progress_account_id: stored_account_id,
@@ -390,6 +330,7 @@ impl SowApp {
             progress_session_defeats: crate::player_progress::SessionDefeats::default(),
             #[cfg(target_arch = "wasm32")]
             boot_db_settled: false,
+            boot_campaign_pending: None,
         };
         #[cfg(not(target_arch = "wasm32"))]
         let mut sow_app = sow_app;

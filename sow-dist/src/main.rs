@@ -632,6 +632,7 @@ struct IndexBuild<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WebTarget {
+    Local,
     SelfHosted,
     CrazyGames,
     Poki,
@@ -736,6 +737,9 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         .replace(
             "<!-- __SOW_SERVICE_WORKER_SLOT__ -->",
             match target {
+                WebTarget::Local => {
+                    "if ('serviceWorker' in navigator && window.location.hostname !== \"appassets.androidplatform.net\" && !isPortal) { navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
+                }
                 WebTarget::SelfHosted => {
                     "if ('serviceWorker' in navigator && window.location.hostname !== \"appassets.androidplatform.net\" && !isPortal) { navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
                 }
@@ -753,13 +757,23 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             } else {
                 // Production shell declares every endpoint explicitly — the
                 // client resolves strict config only (no fallbacks).
-                concat!(
-                    "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
-                    "window.SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"; ",
-                    "window.SOW_ASSETS_URL = \"https://shadowsofwar.io/assets\"; ",
-                    "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\";"
-                )
-                .to_string()
+                if target == WebTarget::Local {
+                    concat!(
+                        "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
+                        "window.SOW_MAPS_URL = \"/maps\"; ",
+                        "window.SOW_ASSETS_URL = \"/assets\"; ",
+                        "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\";"
+                    )
+                    .to_string()
+                } else {
+                    concat!(
+                        "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
+                        "window.SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"; ",
+                        "window.SOW_ASSETS_URL = \"https://shadowsofwar.io/assets\"; ",
+                        "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\";"
+                    )
+                    .to_string()
+                }
             },
         );
     if poki {
@@ -814,6 +828,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.heroes.js",
             "main_menu.profile.js",
             "main_menu.poki.js",
+            "main_menu.tutorial.js",
             "main_menu.shell.js",
             "main_menu.hud.js",
         ]
@@ -826,6 +841,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.store.js",
             "main_menu.heroes.js",
             "main_menu.profile.js",
+            "main_menu.tutorial.js",
             "main_menu.shell.js",
             "main_menu.hud.js",
         ]
@@ -1092,6 +1108,84 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn validate_campaign_assets(paths: &Paths) -> Result<()> {
+    let dir = paths.root.join("assets/campaign");
+    let mut rosters = HashMap::new();
+    let mut triggers = HashMap::new();
+    for entry in fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+        if let Some(id) = name.strip_suffix(".triggers.json") {
+            triggers.insert(id.to_string(), path);
+        } else if let Some(id) = name.strip_suffix(".json") {
+            rosters.insert(id.to_string(), path);
+        }
+    }
+    let trigger_types = ["territory", "kills", "defeated", "contact", "attack", "troops", "building", "fleet", "nuke", "elapsed"];
+    let action_types = ["show_dialog", "set_objective", "emote", "pause", "resume", "set_flag"];
+    for episode_id in triggers.keys() {
+        if !rosters.contains_key(episode_id) {
+            bail!("campaign triggers have no roster: {episode_id}");
+        }
+    }
+    for (episode_id, roster_path) in &rosters {
+        let roster: serde_json::Value = serde_json::from_str(&fs::read_to_string(roster_path)?)
+            .with_context(|| format!("parse {}", roster_path.display()))?;
+        let factions = roster.get("factions").and_then(serde_json::Value::as_array)
+            .filter(|factions| !factions.is_empty()).context("campaign roster has no factions")?;
+        let names = factions.iter().map(|faction| faction.get("name").and_then(serde_json::Value::as_str).unwrap_or_default()).collect::<HashSet<_>>();
+        if names.len() != factions.len() || names.iter().any(|name| name.is_empty()) {
+            bail!("campaign roster has duplicate or empty faction names: {episode_id}");
+        }
+        let trigger_path = triggers.get(episode_id).with_context(|| format!("missing triggers for {episode_id}"))?;
+        let definition: serde_json::Value = serde_json::from_str(&fs::read_to_string(trigger_path)?)
+            .with_context(|| format!("parse {}", trigger_path.display()))?;
+        let expected_episode_id = episode_id.strip_prefix("lady_").unwrap_or(episode_id);
+        if definition.get("version").and_then(serde_json::Value::as_u64) != Some(1)
+            || definition.get("episode_id").and_then(serde_json::Value::as_str) != Some(expected_episode_id) {
+            bail!("campaign trigger header is invalid: {episode_id}");
+        }
+        let settings = definition.get("settings").context("campaign has no settings")?;
+        if settings.get("buildings_enabled").and_then(serde_json::Value::as_bool).is_none()
+            || !settings.get("starting_troops").and_then(serde_json::Value::as_f64).is_some_and(|value| value.is_finite() && (1.0..=100_000.0).contains(&value)) {
+            bail!("campaign settings are invalid: {episode_id}");
+        }
+        let steps = definition.get("steps").and_then(serde_json::Value::as_array)
+            .filter(|steps| !steps.is_empty()).context("campaign has no steps")?;
+        let mut ids = HashSet::new();
+        for step in steps {
+            let id = step.get("id").and_then(serde_json::Value::as_str).context("campaign step has no id")?;
+            if !ids.insert(id) { bail!("duplicate campaign step id: {id}"); }
+            let trigger = step.get("trigger").context("campaign step has no trigger")?;
+            let trigger_type = trigger.get("type").and_then(serde_json::Value::as_str).context("campaign trigger has no type")?;
+            if !trigger_types.contains(&trigger_type) { bail!("unknown campaign trigger: {trigger_type}"); }
+            if ["territory", "kills", "attack", "troops", "building", "fleet", "nuke", "elapsed"].contains(&trigger_type)
+                && !trigger.get("value").and_then(serde_json::Value::as_f64).is_some_and(|value| value.is_finite()) {
+                bail!("campaign trigger value is invalid: {id}");
+            }
+            for key in ["title_key", "body_key", "hint_key"] {
+                if !step.get(key).and_then(serde_json::Value::as_str).is_some_and(|value| value.starts_with("tutorial.")) {
+                    bail!("campaign translation key is invalid: {id}.{key}");
+                }
+            }
+            for target in [trigger.get("target").and_then(serde_json::Value::as_str), step.get("marker").and_then(|marker| marker.get("target")).and_then(serde_json::Value::as_str)]
+                .into_iter().flatten().filter(|target| *target != "player") {
+                if !names.contains(target) { bail!("campaign references unknown faction: {target}"); }
+            }
+            for phase in ["on_enter", "on_complete"] {
+                if let Some(actions) = step.get(phase).and_then(serde_json::Value::as_array) {
+                    for action in actions {
+                        if !action_types.contains(&action.get("type").and_then(serde_json::Value::as_str).unwrap_or_default()) {
+                            bail!("unknown campaign action in {id}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn export_locales(out: &Path) -> Result<()> {
     validate_web_catalogs()?;
     let d = out.join("locales");
@@ -1257,6 +1351,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     let html = fs::read_to_string(dir.join("index.html"))?;
     let loader = fs::read_to_string(dir.join("loader.js"))?;
     let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
+    let manifest = fs::read_to_string(dir.join("manifest.webmanifest"))?;
     for needle in [
         "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
         "window.SOW_PORTAL = \"poki\"",
@@ -1282,11 +1377,13 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "<canvas id=\"blade\"",
         "tabindex=\"0\"",
         "touch-action: none",
-        "\"display\": \"fullscreen\"",
     ] {
         if !html.contains(required) {
             bail!("poki bundle missing responsive/focus contract {required}");
         }
+    }
+    if !manifest.contains("\"display\": \"fullscreen\"") {
+        bail!("poki manifest missing responsive/focus contract \"display\": \"fullscreen\"");
     }
     if html.contains("<iframe") || html.contains("href=\"https://") {
         bail!("poki bundle must not own an iframe or direct external href");
@@ -1328,7 +1425,27 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
+fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Result<()> {
+    validate_campaign_assets(paths)?;
+    let previous_artifacts = if !compile && out.is_dir() {
+        let js = fs::read_dir(out)?.filter_map(Result::ok).find_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            (name.starts_with("sow_client_") && name.ends_with(".js") && !name.ends_with(".br"))
+                .then_some((name, fs::read(entry.path()).ok()?))
+        });
+        let wasm = fs::read_dir(out)?.filter_map(Result::ok).find_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            (name.starts_with("sow_client_") && name.ends_with("_bg.wasm") && !name.ends_with(".br"))
+                .then_some((name, fs::read(entry.path()).ok()?))
+        });
+        js.zip(wasm).map(|(js, wasm)| {
+            let js_br = fs::read(out.join(format!("{}.br", js.0))).ok();
+            let wasm_br = fs::read(out.join(format!("{}.br", wasm.0))).ok();
+            (js, wasm, js_br, wasm_br)
+        })
+    } else {
+        None
+    };
     if out.exists() {
         for e in fs::read_dir(out)? {
             let e = e?;
@@ -1344,8 +1461,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
     }
 
     let ts = prod::web_fingerprint(paths, version)?[..10].to_string();
-    let js = format!("sow_client_{ts}.js");
-    let wasm = format!("sow_client_{ts}_bg.wasm");
+    let (js, wasm) = previous_artifacts
+        .as_ref()
+        .map(|(js, wasm, _, _)| (js.0.clone(), wasm.0.clone()))
+        .unwrap_or_else(|| (format!("sow_client_{ts}.js"), format!("sow_client_{ts}_bg.wasm")));
 
     let assets = out.join("assets");
     copy_dir(&paths.assets_shell, &assets.join("shell"))?;
@@ -1365,6 +1484,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
         &paths.assets_gameplay.join("store"),
         &assets.join("gameplay/store"),
     )?;
+    copy_dir(
+        &paths.root.join("assets/campaign"),
+        &assets.join("campaign"),
+    )?;
     copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
     let maps = out.join("maps");
     fs::create_dir_all(&maps)?;
@@ -1374,7 +1497,20 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
     refresh_map_thumbnails(&maps, &paths.map_sources)?;
     let maps_cache_bust = thumbnail_cache_bust(&maps)?;
 
-    run_bindgen(&paths.wasm_input, out, &format!("sow_client_{ts}"))?;
+    if let Some((previous_js, previous_wasm, previous_js_br, previous_wasm_br)) = previous_artifacts {
+        let js_name = previous_js.0;
+        let wasm_name = previous_wasm.0;
+        fs::write(out.join(&js_name), previous_js.1)?;
+        fs::write(out.join(&wasm_name), previous_wasm.1)?;
+        if let Some(bytes) = previous_js_br {
+            fs::write(out.join(format!("{js_name}.br")), bytes)?;
+        }
+        if let Some(bytes) = previous_wasm_br {
+            fs::write(out.join(format!("{wasm_name}.br")), bytes)?;
+        }
+    } else {
+        run_bindgen(&paths.wasm_input, out, &format!("sow_client_{ts}"))?;
+    }
     copy_shell(paths, out)?;
     build_index(
         paths,
@@ -1385,15 +1521,24 @@ fn package_self(paths: &Paths, out: &Path, version: &str) -> Result<()> {
             wasm: &wasm,
             ts: &ts,
             maps_cache_bust: &maps_cache_bust,
-            target: WebTarget::SelfHosted,
+            target: WebTarget::Local,
         },
     )?;
     export_locales(out)?;
 
-    minify_js(&out.join(&js))?;
-    run_wasm_opt(&out.join(&wasm), &paths.wasm_cache)?;
-    brotli_file(&out.join(&wasm))?;
-    brotli_file(&out.join(&js))?;
+    if compile {
+        minify_js(&out.join(&js))?;
+        run_wasm_opt(&out.join(&wasm), &paths.wasm_cache)?;
+        brotli_file(&out.join(&wasm))?;
+        brotli_file(&out.join(&js))?;
+    } else {
+        if !brotli_dst(&out.join(&wasm)).is_file() {
+            brotli_file(&out.join(&wasm))?;
+        }
+        if !brotli_dst(&out.join(&js)).is_file() {
+            brotli_file(&out.join(&js))?;
+        }
+    }
     write_sw(out, version, &js, &wasm, &ts)?;
     write_manifest(out, version, &js, &wasm, &ts)?;
 
@@ -1719,23 +1864,6 @@ fn package_poki(
     Ok(())
 }
 
-fn cmd_native(paths: &Paths) -> Result<()> {
-    let mut c = Command::new("cargo");
-    c.args(["run", "--bin", "client", "--"])
-        .current_dir(&paths.root)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .env("VERBOSE", "1")
-        .env("SOW_WS_URL", "wss://shadowsofwar.io/ws/")
-        .env("SOW_MAPS_URL", "https://shadowsofwar.io/maps")
-        .env("SOW_ASSETS_URL", "https://shadowsofwar.io/assets")
-        .env("SOW_DATABASE_URL", "https://shadowsofwar.io/api");
-    if !c.spawn()?.wait()?.success() {
-        bail!("client failed");
-    }
-    Ok(())
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct LocalFileStamp {
     path: PathBuf,
@@ -1778,7 +1906,6 @@ const LOCAL_WASM_CRATES: &[&str] = &[
     "sow-i18n",
     "sow-net",
     "sow-render",
-    "sow-ui",
 ];
 
 fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
@@ -1793,7 +1920,6 @@ fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
         paths.root.join("sow-i18n"),
         paths.root.join("sow-net"),
         paths.root.join("sow-render"),
-        paths.root.join("sow-ui"),
         paths.root.join("sow-web"),
         paths.root.join("assets"),
     ]
@@ -1920,7 +2046,7 @@ fn local_watch_process(paths: &Paths, pid: u32) -> bool {
     let subcommand = args
         .next()
         .map(|arg| String::from_utf8_lossy(arg).into_owned());
-    command == Some("sow") && matches!(subcommand.as_deref(), Some("l") | Some("local"))
+    command == Some("sow") && matches!(subcommand.as_deref(), None | Some("l") | Some("local"))
 }
 
 fn local_process_group(pid: u32) -> Option<u32> {
@@ -2039,7 +2165,7 @@ fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()
     if compile {
         compile_wasm(paths, false)?;
     }
-    package_self(paths, &paths.dist_web, version)?;
+    package_self(paths, &paths.dist_web, version, compile)?;
     let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
     package_poki(
         &paths.dist_web,
@@ -2049,6 +2175,98 @@ fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()
         &maps_cache_bust,
     )?;
     Ok(())
+}
+
+fn read_version(paths: &Paths) -> Result<String> {
+    let version_path = paths.root.join(".version");
+    let version = fs::read_to_string(&version_path)
+        .with_context(|| format!("read {}", version_path.display()))?
+        .trim()
+        .to_string();
+    if version.is_empty() {
+        bail!(".version must not be empty");
+    }
+    Ok(version)
+}
+
+fn ensure_native_dependencies(native_root: &Path) -> Result<()> {
+    require_file(&native_root.join("package.json"), "native package.json")?;
+    require_file(&native_root.join("package-lock.json"), "native package-lock.json")?;
+    let cli = native_root.join(if cfg!(windows) {
+        "node_modules/.bin/tauri.cmd"
+    } else {
+        "node_modules/.bin/tauri"
+    });
+    if !cli.is_file() {
+        run("npm", &["ci", "--include=dev"], Some(native_root))?;
+    }
+    require_file(&cli, "Tauri CLI")?;
+    Ok(())
+}
+
+fn build_native(paths: &Paths, native_root: &Path, version: &str) -> Result<()> {
+    let config = serde_json::json!({ "version": version }).to_string();
+    println!("+ npm run tauri -- build --no-sign --config {config}");
+    let status = Command::new("npm")
+        .args([
+            "run",
+            "tauri",
+            "--",
+            "build",
+            "--no-sign",
+            "--config",
+            config.as_str(),
+        ])
+        .current_dir(native_root)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .context("build native desktop bundle (npm is required)")?;
+    if !status.success() {
+        bail!("Tauri native build failed");
+    }
+    launch_native(paths)
+}
+
+fn launch_native(paths: &Paths) -> Result<()> {
+    let target = env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| paths.root.join("target"));
+    if cfg!(target_os = "macos") {
+        let app = target.join("release/bundle/macos/Shadows of War.app");
+        if !app.is_dir() {
+            bail!("native macOS app missing: {}", app.display());
+        }
+        run(
+            "open",
+            &[app.to_str().context("native app path is not UTF-8")?],
+            None,
+        )?;
+    } else {
+        let name = if cfg!(windows) {
+            "sow-native.exe"
+        } else {
+            "sow-native"
+        };
+        let executable = target.join("release").join(name);
+        require_file(&executable, "native executable")?;
+        println!("✅ Native game ready: {}", executable.display());
+        Command::new(&executable)
+            .current_dir(&paths.root)
+            .spawn()
+            .with_context(|| format!("open native game {}", executable.display()))?;
+    }
+    Ok(())
+}
+
+fn cmd_native(paths: &Paths) -> Result<()> {
+    let version = read_version(paths)?;
+    println!("==> Building native JavaScript/WASM game");
+    compile_wasm(paths, false)?;
+    package_self(paths, &paths.dist_web, &version, true)?;
+    let native_root = paths.root.join("sow-native");
+    ensure_native_dependencies(&native_root)?;
+    build_native(paths, &native_root, &version)
 }
 
 fn watch_local_preview(
@@ -2087,14 +2305,7 @@ fn watch_local_preview(
 }
 
 fn cmd_local(paths: &Paths) -> Result<()> {
-    let version_path = paths.root.join(".version");
-    let version = fs::read_to_string(&version_path)
-        .with_context(|| format!("read {}", version_path.display()))?
-        .trim()
-        .to_string();
-    if version.is_empty() {
-        bail!(".version must not be empty");
-    }
+    let version = read_version(paths)?;
 
     let port = env::var("SOW_LOCAL_PORT").unwrap_or_else(|_| "4173".to_string());
     let port_number = port
@@ -2317,10 +2528,10 @@ fn main() -> Result<()> {
     match cmd.as_str() {
         "p" | "prod" => prod::execute(&paths, bump),
         "a" | "android" => prod::execute_android(&paths),
-        "local" | "l" => cmd_local(&paths),
-        "native" | "n" | "" => cmd_native(&paths),
+        "native" => cmd_native(&paths),
+        "local" | "l" | "" => cmd_local(&paths),
         _ => {
-            eprintln!("Usage: ./sow [p|a|local|native]");
+            eprintln!("Usage: ./sow [native|l|p|a]");
             std::process::exit(1);
         }
     }
@@ -2376,6 +2587,7 @@ mod tests {
             "main_menu.poki.js",
             "main_menu.heroes.js",
             "main_menu.profile.js",
+            "main_menu.tutorial.js",
             "main_menu.shell.js",
             "main_menu.hud.js",
         ] {

@@ -37,9 +37,9 @@ Gameplay capture: [`assets/site/media/shadows-of-war-gameplay.mp4`](assets/site/
 
 All claims are verifiable in this repo — no hype without evidence:
 
-- **Deterministic lockstep `sow-core`** — strict integer math + `wyrand` RNG, compiles to `wasm32-unknown-unknown` and native. Zero-allocation paths where it matters. Same simulation drives WASM and desktop.
+- **Deterministic lockstep `sow-core`** — strict integer math + `wyrand` RNG, compiles to `wasm32-unknown-unknown`. Zero-allocation paths where it matters.
 - **Kernel-bypass networking `fstack-bridge` + `sow-relay`** — F-Stack `FF_ZC_RECV` (FreeBSD 15, `52fa8f9ae666`) + `rustls` + `tokio-tungstenite`, 4 workers `sow-relay@0..3` via RSS (mgmt `8080..8083` HMAC, game `25592-26500` dynamic). Direct `wss://relay.shadowsofwar.io` — IONOS is not in the game packet path. See `docs/relay-architecture.md`.
-- **WebGPU rendering** — `blade-graphics` WGSL + `egui` + `winit`. Thousands of tiles/units, shared code across web/native.
+- **GPU rendering** — Blade WGSL pipeline for the map, text, images, and movers; JavaScript owns the game interface.
 - **Procedural audio `sow-audio`** — harmonic synthesizer keyed by match seed + `rodio` spatialization, no shipped `.wav` bulk.
 - **Reproducible pipeline `./sow p`** — 8 steps, immutable release `releases/<sha12>` + `release.json` content-addressed (`relay_sha256`, `relay_bin_sha256`, `fstack`, `ws_write_timeout_ms`), atomic symlink swap, health `systemctl + https://127.0.0.1:808x/healthz + HMAC /internal/metrics + sudo sha256sum`.
 
@@ -51,7 +51,7 @@ All claims are verifiable in this repo — no hype without evidence:
 - **Deep Diplomacy:** Alliances, trade and betrayal — with AI tiers (`docs/launch-graph.md`).
 - **Civilizations & Identity:** 12 legendary leaders, Nations + Tribes, OSM-derived world maps.
 - **Multiplayer & Skirmish:** Ranked matchmaking, private lobbies and offline vs bots (bot fill is internal, not all-human queue).
-- **Cross-Platform:** Identical simulation in browser and native.
+- **Browser client:** Identical simulation and GPU game world in the JavaScript/WASM client.
 
 Shipping map: [launch graph](docs/launch-graph.md) · [launch kit](docs/launch-kit.md) · [how to play](https://shadowsofwar.io/how-to-play/)
 
@@ -62,14 +62,10 @@ Shipping map: [launch graph](docs/launch-graph.md) · [launch kit](docs/launch-k
 Shadows of War is full-stack Rust, optimized for determinism and performance.
 
 ### Graphics & UI
-*   **[blade-graphics](https://github.com/kvark/blade):** low-overhead WebGPU-like abstraction — thousands of tiles/units.
-*   **[egui](https://github.com/emilk/egui):** immediate-mode UI overlay.
+*   **[blade-graphics](https://github.com/kvark/blade):** low-overhead GPU abstraction for the game world, text, and images.
+*   **JavaScript shell:** menus, HUD, panels, tutorial, and browser input.
 *   **[winit](https://github.com/rust-windowing/winit):** cross-platform windowing/input.
 
-Native egui development is officially reopened for rapid performance and visual
-validation on macOS, Linux, and Windows. The previous legacy UI hash manifest is
-kept as historical reference; developer and iOS workflows no longer freeze
-`sow-ui` source changes.
 
 ### Simulation & Networking
 *   **Deterministic Engine (`sow-core`):** `wasm32-unknown-unknown`, integer math + custom RNG for lockstep.
@@ -92,9 +88,8 @@ Custom harmonic synthesizer — layered sine harmonics, key derived from match s
 | `sow-relay` | F-Stack/DPDK WebSocket relay (4 workers). |
 | `sow-server` | Lobbies, matchmaking orchestration, map playlists. |
 | `sow-data` (`sow-database` bin, `server` feature) | Player data, profiles and API services. |
-| `sow-client` | Thin native/WASM entry (`main`, cdylib). |
+| `sow-client` | WASM game client: simulation, networking, and Blade world rendering. |
 | `sow-render` | `blade` WGSL GPU pipeline. |
-| `sow-ui` | Menus, HUD, `ClientApp`. |
 | `sow-web/site` | Marketing site — landing, `/how-to-play/`, and legal pages. Marketing binaries live in `assets/site/media/`. |
 | `sow-web/shell` | WASM game shell (`/play/`). |
 | `sow-tools` | Map generation from OSM, asset packing, `check.sh`. |
@@ -109,38 +104,13 @@ Map authoring, 16:9 thumbnail framing, and mobile terrain budgets: [Maps workflo
 The project uses `./sow` as single entrypoint:
 
 ```bash
-./sow native        # desktop client (connects to prod by default)
+./sow                # build and open the native JavaScript/WASM client
+./sow native         # same native desktop build and launch
+./sow l              # same local preview
 ./sow p             # production deploy (WASM + FreeBSD + relay)
 ./sow p -v          # also bump public patch version
 ./sow a             # Android AAB + Play Alpha; bumps versionName and versionCode
 ```
-
-**Native:**
-```bash
-./sow native
-# or
-cargo run --release -p sow-client
-```
-
-<details>
-<summary>Mobile (iOS & Android)</summary>
-
-Generic `winit` + `blade` — standard toolchains:
-
-**iOS:** macOS + Xcode + Apple Developer Account
-```bash
-rustup target add aarch64-apple-ios x86_64-apple-ios
-# open sow-dist/deploy/ios/ wrapper in Xcode → Run
-```
-Validate archives/exports with `scripts/ios-testflight.sh`; upload only on request.
-
-**Android:** Android Studio / NDK + `cargo-apk`
-```bash
-rustup target add aarch64-linux-android armv7-linux-androideabi
-cargo apk run -p sow-client
-```
-Validate locally with `scripts/android-local-test.sh`. `./sow a` builds the AAB and publishes to Play alpha (restarts review).
-</details>
 
 **Production (`./sow p`):** builds WASM locally + FreeBSD binaries on builder + relay on Azure (`make -C lib FF_ZC_RECV=1` + `cargo build -p sow-relay`), assembles checksummed release, `remote_plan` diff vs `/srv/sow/current/COMPONENTS`, stages `~/.sow-deploy/release`, activates only changed services, verifies `systemctl is-active sow-relay@0..3` + `healthz` + `HMAC /internal/metrics`, retains 5 releases. See `docs/relay-architecture.md`.
 

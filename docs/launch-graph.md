@@ -34,8 +34,8 @@ The useful product promise is therefore:
 ```mermaid
 flowchart LR
     CORE[sow-core\ndeterministic simulation]
-    UI[sow-ui\nmenus + HUD]
-    CLIENT[sow-client\nWASM / native entry]
+    UI[sow-web/shell\nmenus + HUD]
+    CLIENT[sow-client\nWASM game client]
     SERVER[sow-server\nmatchmaking + lobbies]
     RELAY[sow-relay\nWebSocket game path]
     DB[sow-database\nprofiles + API]
@@ -44,7 +44,8 @@ flowchart LR
     SHELL[sow-web/shell\nplay shell]
     WEB[shadowsofwar.io\n/ landing + /play/ game]
 
-    CORE --> UI --> CLIENT
+    CORE --> CLIENT
+    UI --> CLIENT
     CORE --> SERVER
     CLIENT --> DIST
     SERVER --> DIST

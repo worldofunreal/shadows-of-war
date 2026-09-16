@@ -14,15 +14,12 @@ MAX_LINES = 750
 # growth fails until the module is split.
 BASELINE_LIMITS: dict[Path, int] = {
     ROOT / "sow-client" / "src" / "app" / "account.rs": 1066,
-    ROOT / "sow-ui" / "src" / "ui" / "main_menu" / "profile_view.rs": 930,
 }
 
 # Static data tables and deferred UI modules (see README "Source file size guard").
 CRATES: dict[str, set[Path]] = {
     "sow-client": {
-        ROOT / "sow-client" / "src" / "hud" / "leaderboard" / "panel.rs",
         ROOT / "sow-client" / "src" / "render" / "frame" / "ui.rs",
-        ROOT / "sow-client" / "src" / "render" / "interact" / "context_menu" / "build_popover.rs",
         # HUD shell bridge grew past 750 with full menu/HUD DOM controller.
         ROOT / "sow-client" / "src" / "web_menu.rs",
     },
@@ -41,11 +38,6 @@ CRATES: dict[str, set[Path]] = {
         # Grew past 750 with bot-pool seeding (seed_bot_pool + /internal/bot-pool/seed).
         ROOT / "sow-data" / "src" / "db.rs",
         ROOT / "sow-data" / "src" / "main.rs",
-    },
-    "sow-ui": {
-        ROOT / "sow-ui" / "src" / "ui" / "hud" / "tabs" / "controls.rs",
-        ROOT / "sow-ui" / "src" / "ui" / "main_menu" / "queue_overlay.rs",
-        ROOT / "sow-ui" / "src" / "ui" / "main_menu" / "mod.rs",
     },
     "sow-audio": set(),
     "sow-map": set(),

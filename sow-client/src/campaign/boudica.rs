@@ -4,10 +4,11 @@
 //! `assets/campaign/boudica.json`, authored visually with `tools/campaign-editor` (`./sow m`).
 //! That file is the single source of truth — embedded here as the compiled-in default so web /
 //! offline always has it, and overridden at runtime on native by the same file on disk (export →
-//! relaunch, no recompile). There is deliberately no second, hand-written Rust roster to drift.
+//! relaunch, no recompile). Browser campaigns load the same JSON at runtime; this module only
+//! preserves the native first-run route.
 
 /// The committed roster, embedded so it ships in every build (incl. wasm, which can't read files).
-/// Exactly the bytes the native runtime override reads — one source, no divergence.
+/// Exactly the bytes the native fallback reads — one source, no divergence.
 const DEFAULT_ROSTER: &str = include_str!("../../../assets/campaign/boudica.json");
 
 /// Last-ditch spawn if even the embedded roster fails to parse (a test guards that it never does).
@@ -16,7 +17,7 @@ const FALLBACK_SPAWN: (u32, u32) = (720, 180);
 /// The episode roster + player spawn the tutorial uses. Resolution order (one path, no confusion):
 /// 1. native runtime override — `$SOW_CAMPAIGN_ROSTER` or `assets/campaign/boudica.json` on disk
 ///    (the editor loop: Export → relaunch, no recompile);
-/// 2. the embedded committed default (same file, compiled in) — web and installed builds;
+/// 2. the embedded committed default (same file, compiled in) — installed native builds;
 /// 3. an empty roster at `FALLBACK_SPAWN` (only if the embedded JSON is somehow corrupt).
 pub fn roster() -> (Vec<super::Faction>, (u32, u32)) {
     #[cfg(not(target_arch = "wasm32"))]

@@ -13,6 +13,7 @@
   var resumePending = false;
   var inputInstalled = false;
   var progressKey = "sow_player_progress";
+  var adFocus = null;
 
   function pokiSdk() {
     return window.PokiSDK || null;
@@ -28,6 +29,7 @@
 
   function portalAdPause() {
     window.SOW_adPlaying = true;
+    adFocus = document.activeElement || null;
     document.querySelectorAll("audio,video").forEach(function (el) {
       el.dataset.sowWasPaused = el.paused ? "1" : "0";
       el.dataset.sowWasMuted = el.muted ? "1" : "0";
@@ -39,10 +41,31 @@
   function portalAdResume() {
     window.SOW_adPlaying = false;
     document.querySelectorAll("audio,video").forEach(function (el) {
-      el.muted = el.dataset.sowWasMuted === "1";
+      el.muted = window.SOW_PORTAL_MUTE_AUDIO || el.dataset.sowWasMuted === "1";
       if (el.dataset.sowWasPaused !== "1") el.play().catch(function () {});
       delete el.dataset.sowWasPaused;
       delete el.dataset.sowWasMuted;
+    });
+    var focus = adFocus;
+    adFocus = null;
+    if (focus && focus !== document.body && typeof focus.focus === "function" &&
+        typeof document.contains === "function" && document.contains(focus)) {
+      focus.focus();
+    }
+  }
+
+  function muteGameAudio() {
+    window.SOW_PORTAL_MUTE_AUDIO = true;
+    document.querySelectorAll("audio,video").forEach(function (el) {
+      el.muted = true;
+    });
+  }
+
+  function unmuteGameAudio() {
+    window.SOW_PORTAL_MUTE_AUDIO = false;
+    if (window.SOW_adPlaying) return;
+    document.querySelectorAll("audio,video").forEach(function (el) {
+      el.muted = false;
     });
   }
 
@@ -137,8 +160,8 @@
 
   window.SOW_isAndroidTwa = function () { return false; };
 
-  window.SOW_portalMuteGameAudio = portalAdPause;
-  window.SOW_portalUnmuteGameAudio = portalAdResume;
+  window.SOW_portalMuteGameAudio = muteGameAudio;
+  window.SOW_portalUnmuteGameAudio = unmuteGameAudio;
   window.SOW_portalAdPause = portalAdPause;
   window.SOW_portalAdResume = portalAdResume;
   window.SOW_portalConsumeBootIntent = function () {};

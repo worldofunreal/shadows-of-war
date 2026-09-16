@@ -78,7 +78,7 @@ impl SowApp {
                                 self.ui
                                     .app
                                     .hud_state
-                                    .push_notification(msg, egui::Color32::from_rgb(74, 222, 128));
+                                    .push_notification(msg, crate::rgb(74, 222, 128));
 
                                 // ponytail: reuse FloatingNotice to show transferred resources visually
                                 let mut wx = 0.5;
@@ -100,7 +100,7 @@ impl SowApp {
                                         world_y: wy,
                                         start_time: now_instant,
                                         duration: web_time::Duration::from_millis(3000),
-                                        color: egui::Color32::from_rgb(250, 204, 21),
+                                        color: crate::rgb(250, 204, 21),
                                     });
                                 }
                                 if tx.troops > 0.0 {
@@ -113,7 +113,7 @@ impl SowApp {
                                         world_y: wy + 0.5,
                                         start_time: now_instant,
                                         duration: web_time::Duration::from_millis(3000),
-                                        color: egui::Color32::from_rgb(6, 182, 212), // cyan
+                                        color: crate::rgb(6, 182, 212), // cyan
                                     });
                                 }
                             } else if tx.sender_id == my_id {
@@ -145,7 +145,7 @@ impl SowApp {
                                 self.ui
                                     .app
                                     .hud_state
-                                    .push_notification(msg, egui::Color32::from_rgb(220, 220, 220));
+                                    .push_notification(msg, crate::rgb(220, 220, 220));
                             }
                         }
                         for rej in &snap.resource_rejections {
@@ -160,7 +160,7 @@ impl SowApp {
                                 self.ui
                                     .app
                                     .hud_state
-                                    .push_notification(msg, egui::Color32::from_rgb(239, 68, 68));
+                                    .push_notification(msg, crate::rgb(239, 68, 68));
                             }
                         }
                     }
@@ -253,7 +253,7 @@ impl SowApp {
                             self.ui
                                 .app
                                 .hud_state
-                                .push_notification(msg, egui::Color32::from_rgb(74, 222, 128));
+                                .push_notification(msg, crate::rgb(74, 222, 128));
 
                             // ponytail: reuse FloatingNotice to show transferred resources visually
                             let mut wx = 0.5;
@@ -275,7 +275,7 @@ impl SowApp {
                                     world_y: wy,
                                     start_time: now_instant,
                                     duration: web_time::Duration::from_millis(3000),
-                                    color: egui::Color32::from_rgb(250, 204, 21),
+                                    color: crate::rgb(250, 204, 21),
                                 });
                             }
                             if tx.troops > 0.0 {
@@ -288,7 +288,7 @@ impl SowApp {
                                     world_y: wy + 0.5,
                                     start_time: now_instant,
                                     duration: web_time::Duration::from_millis(3000),
-                                    color: egui::Color32::from_rgb(6, 182, 212), // cyan
+                                    color: crate::rgb(6, 182, 212), // cyan
                                 });
                             }
                         } else if tx.sender_id == my_id {
@@ -320,7 +320,7 @@ impl SowApp {
                             self.ui
                                 .app
                                 .hud_state
-                                .push_notification(msg, egui::Color32::from_rgb(220, 220, 220));
+                                .push_notification(msg, crate::rgb(220, 220, 220));
                         }
                     }
                     for rej in &snap.resource_rejections {
@@ -335,7 +335,7 @@ impl SowApp {
                             self.ui
                                 .app
                                 .hud_state
-                                .push_notification(msg, egui::Color32::from_rgb(239, 68, 68));
+                                .push_notification(msg, crate::rgb(239, 68, 68));
                         }
                     }
                 }

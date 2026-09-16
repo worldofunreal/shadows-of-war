@@ -962,7 +962,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   CUSTOM GAME CREATOR (1:1 with Egui custom_game)
+   CUSTOM GAME CREATOR
    ───────────────────────────────────────────────────────────── */
 .sow-menu__main--custom {
     grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
@@ -1240,7 +1240,7 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   LOBBY / MATCHMAKING ROOM QUEUE (1:1 with Egui queue_overlay)
+   LOBBY / MATCHMAKING ROOM QUEUE
    ───────────────────────────────────────────────────────────── */
 .sow-menu__main--queue {
     grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);

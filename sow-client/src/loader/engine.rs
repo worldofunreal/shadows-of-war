@@ -65,15 +65,10 @@ impl SowApp {
         self.net.pending_lobby_rejoin = false;
         self.ui.hud_combat_sync_tick = 0;
         self.ui.last_projectiles.clear();
-        self.ui.app.hud_state.bottom_dialog = None;
         self.ui.tutorial_active = false;
 
         self.dispatch_sim_command(SimCommand::Shutdown);
-        self.ui.label_positions.clear();
-        self.ui.label_sizes.clear();
-        self.ui.tutorial_avatar_geometry = None;
         self.gfx.needs_first_upload = true;
-        self.gfx.last_egui_viewport = None;
         self.release_client_game_gpu();
     }
 
@@ -245,21 +240,21 @@ impl SowApp {
                         // same test the backdrop uses to pick + decode the texture.
                         // compact_viewport's extra size thresholds would key boot
                         // focus differently and strand the decode (wide-short embeds).
-                        let mobile = sow_ui_kit::theme::portrait_layout(&self.ui.egui_ctx);
+                        let mobile = false;
 
                         splash_show_loading(&mut self.ui.app.splash_state);
 
                         self.ui
                             .app
                             .asset_loader
-                            .ensure_ui_assets_loaded(&self.ui.egui_ctx);
+                            .ensure_ui_assets_loaded();
                         // Kick the portrait fetch concurrently with the boot UI art
                         // fetch — both are network round trips on wasm and were
                         // previously serialized behind `ui_ready`.
                         self.ui
                             .app
                             .asset_loader
-                            .ensure_boot_leader_loaded(&self.ui.egui_ctx, leader);
+                            .ensure_boot_leader_loaded(leader);
                         self.ui
                             .app
                             .asset_loader
@@ -304,15 +299,15 @@ impl SowApp {
                         #[cfg(not(target_arch = "wasm32"))]
                         {
                             let leader = self.ui.app.main_menu_state.selected_leader;
-                            let mobile = sow_ui_kit::theme::portrait_layout(&self.ui.egui_ctx);
+                            let mobile = false;
                             self.ui
                                 .app
                                 .asset_loader
-                                .ensure_ui_assets_loaded(&self.ui.egui_ctx);
+                                .ensure_ui_assets_loaded();
                             self.ui
                                 .app
                                 .asset_loader
-                                .ensure_boot_leader_loaded(&self.ui.egui_ctx, leader);
+                                .ensure_boot_leader_loaded(leader);
                             self.ui
                                 .app
                                 .asset_loader
@@ -333,7 +328,7 @@ impl SowApp {
                         #[cfg(not(target_arch = "wasm32"))]
                         let hero_ready = self.ui.app.asset_loader.boot_leader_ready(
                             self.ui.app.main_menu_state.selected_leader,
-                            sow_ui_kit::theme::portrait_layout(&self.ui.egui_ctx),
+                            false,
                         );
                         #[cfg(target_arch = "wasm32")]
                         let lobby_snapshot_ready = self.web_exit_lobbies_ready;
@@ -529,6 +524,11 @@ impl SowApp {
                         }
                     }
                 }
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            if let Some(target_phase) = self.ui.app.splash_state.target_phase.take() {
+                self.ui.app.phase = target_phase;
             }
         }
     }

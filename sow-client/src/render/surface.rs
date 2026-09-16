@@ -78,19 +78,8 @@ impl SowApp {
                         &render_ctx.context,
                         format,
                     ));
-                    if let Some(mut old_gp) = self.gfx.gui_painter.take() {
-                        old_gp.destroy(&render_ctx.context);
-                    }
-
-                    self.gfx.gui_painter =
-                        Some(blade_egui::GuiPainter::new(s.info(), &render_ctx.context));
                     self.gfx.surface = Some(s);
                     self.gfx.render_ctx = Some(render_ctx);
-
-                    self.ui.egui_ctx = egui::Context::default();
-                    sow_ui_kit::theme::apply_theme(&self.ui.egui_ctx);
-                    self.ui.invalidate_egui_dependent_caches();
-                    sow_ui_kit::register_game_assets(&self.ui.egui_ctx);
                     log::info!("Successfully created surface on retry.");
                 }
                 Err(e) => {

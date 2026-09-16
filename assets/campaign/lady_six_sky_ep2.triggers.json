@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "episode_id": "six_sky_ep2",
+  "settings": { "buildings_enabled": false, "starting_troops": 1000 },
+  "steps": [
+    { "id": "six_sky_ep2_regent", "mechanic": "expansion", "trigger": { "type": "territory", "value": 256, "mode": "gained" }, "title_key": "tutorial.six_sky_ep2_regent_title", "body_key": "tutorial.six_sky_ep2_regent_body", "hint_key": "tutorial.six_sky_ep2_regent_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_provinces", "mechanic": "attack", "trigger": { "type": "kills", "value": 2 }, "title_key": "tutorial.six_sky_ep2_provinces_title", "body_key": "tutorial.six_sky_ep2_provinces_body", "hint_key": "tutorial.six_sky_ep2_provinces_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_uaxactun", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Uaxactun Rebels" }, "title_key": "tutorial.six_sky_ep2_uaxactun_title", "body_key": "tutorial.six_sky_ep2_uaxactun_body", "hint_key": "tutorial.six_sky_ep2_uaxactun_hint", "marker": { "target": "Uaxactun Rebels" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_yaxha", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Yaxha Rebels" }, "title_key": "tutorial.six_sky_ep2_yaxha_title", "body_key": "tutorial.six_sky_ep2_yaxha_body", "hint_key": "tutorial.six_sky_ep2_yaxha_hint", "marker": { "target": "Yaxha Rebels" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_tayasal", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Tayasal Rebels" }, "title_key": "tutorial.six_sky_ep2_tayasal_title", "body_key": "tutorial.six_sky_ep2_tayasal_body", "hint_key": "tutorial.six_sky_ep2_tayasal_hint", "marker": { "target": "Tayasal Rebels" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_seibal", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Seibal Rebels" }, "title_key": "tutorial.six_sky_ep2_seibal_title", "body_key": "tutorial.six_sky_ep2_seibal_body", "hint_key": "tutorial.six_sky_ep2_seibal_hint", "marker": { "target": "Seibal Rebels" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_caracol", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Caracol" }, "title_key": "tutorial.six_sky_ep2_caracol_title", "body_key": "tutorial.six_sky_ep2_caracol_body", "hint_key": "tutorial.six_sky_ep2_caracol_hint", "marker": { "target": "Caracol" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_total", "mechanic": "attack", "trigger": { "type": "kills", "value": 8 }, "title_key": "tutorial.six_sky_ep2_total_title", "body_key": "tutorial.six_sky_ep2_total_body", "hint_key": "tutorial.six_sky_ep2_total_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep2_coalition", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Tikal Coalition" }, "title_key": "tutorial.six_sky_ep2_coalition_title", "body_key": "tutorial.six_sky_ep2_coalition_body", "hint_key": "tutorial.six_sky_ep2_coalition_hint", "marker": { "target": "Tikal Coalition" }, "on_enter": [], "on_complete": [] }
+  ]
+}

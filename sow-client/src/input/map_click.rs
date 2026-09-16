@@ -26,189 +26,8 @@ impl SowApp {
             world_y,
             start_time: web_time::Instant::now(),
             duration: web_time::Duration::from_millis(1500),
-            color: egui::Color32::from_rgb(203, 213, 225), // slate
+            color: crate::rgb(203, 213, 225), // slate
         });
-    }
-
-    pub(crate) fn try_begin_hold_attack(&mut self, x: f64, y: f64, is_touch: bool) {
-        if self.ui.observing {
-            return;
-        }
-        if self.ui.app.hud_state.selected_nuke_kind.is_some() {
-            return;
-        }
-
-        let phase = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .map(|s| &s.phase)
-            .unwrap_or(&sow_core::game::GamePhase::Lobby);
-        if matches!(phase, sow_core::game::GamePhase::Spawning { .. }) {
-            return;
-        }
-
-        let (col, row) = match self.mouse_to_tile(x, y) {
-            Some(res) => res,
-            None => return,
-        };
-        let idx = (row * self.sim.map_w as i32 + col) as usize;
-        let owner = self
-            .gfx
-            .map_renderer
-            .as_ref()
-            .map(|mr| mr.owners[idx])
-            .unwrap_or(0);
-        let terrain_byte = self
-            .gfx
-            .map_renderer
-            .as_ref()
-            .map(|mr| mr.terrain[idx])
-            .unwrap_or(0);
-        let is_land = (terrain_byte & 0x80) != 0;
-        let my_id = self.sim.my_player_id.unwrap_or(0);
-
-        if is_land && owner != my_id {
-            // Verify we actually share a border with the target owner
-            let mut shares_border = false;
-            if let Some(mr) = self.gfx.map_renderer.as_ref() {
-                let map_w = self.sim.map_w as i32;
-                let map_h = self.sim.map_h as i32;
-                let owners = &mr.owners;
-                let terrain = &mr.terrain;
-
-                'outer: for r in 0..map_h {
-                    for c in 0..map_w {
-                        let idx = (r * map_w + c) as usize;
-                        if owners[idx] == my_id {
-                            let neighbors = [
-                                (1, 0),
-                                (-1, 0),
-                                (0, -1),
-                                (0, 1),
-                                (1, -1),
-                                (-1, -1),
-                                (1, 1),
-                                (-1, 1),
-                            ];
-                            for &(dc, dr) in &neighbors {
-                                let nc = c + dc;
-                                let nr = r + dr;
-                                if nc >= 0 && nc < map_w && nr >= 0 && nr < map_h {
-                                    let n_idx = (nr * map_w + nc) as usize;
-                                    if owners[n_idx] == owner && (terrain[n_idx] & 0x80) != 0 {
-                                        shares_border = true;
-                                        break 'outer;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !shares_border {
-                let messages = [
-                    "Too far! 🌌",
-                    "Out of reach! 🏃‍♂️",
-                    "No border, no battle! ⚔️",
-                    "Teleportation not researched! 📡",
-                    "Build a path first! 🗺️",
-                ];
-                let click_seed = (x + y) as usize;
-                let msg = messages[click_seed % messages.len()];
-
-                let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-                let offset_mouse_y = y as f32 - 60.0;
-                let world_y = (offset_mouse_y - self.input.camera_y) / self.input.camera_zoom;
-
-                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: msg.to_string(),
-                    world_x,
-                    world_y,
-                    start_time: web_time::Instant::now(),
-                    duration: web_time::Duration::from_millis(1500),
-                    color: egui::Color32::from_rgb(248, 113, 113), // soft red
-                });
-                return;
-            }
-
-            let is_betrayer = self
-                .sim
-                .current_snapshot
-                .as_ref()
-                .and_then(|s| s.players.iter().find(|p| p.id == owner))
-                .map(|p| p.active_emoji.as_deref() == Some("🗡️"))
-                .unwrap_or(false);
-            let is_allied = self
-                .sim
-                .current_snapshot
-                .as_ref()
-                .and_then(|s| s.players.iter().find(|p| p.id == my_id))
-                .map(|p| p.alliances.contains(&owner) && !is_betrayer)
-                .unwrap_or(false);
-            let is_teammate = self
-                .sim
-                .current_snapshot
-                .as_ref()
-                .map(|s| {
-                    let my_team = s
-                        .players
-                        .iter()
-                        .find(|p| p.id == my_id)
-                        .and_then(|p| p.team);
-                    let other_team = s
-                        .players
-                        .iter()
-                        .find(|p| p.id == owner)
-                        .and_then(|p| p.team);
-                    my_team.is_some() && my_team == other_team
-                })
-                .unwrap_or(false);
-
-            let troops = self.ui.app.hud_state.troops * (self.ui.app.hud_state.attack_ratio as f64);
-            let attack = sow_core::protocol::AttackIntent {
-                target_owner: owner,
-                troops: Some(troops),
-            };
-            let intent = sow_core::protocol::GameplayIntent::Attack(attack);
-
-            if is_allied || is_teammate {
-                // Do not attack nor open menu on press; handled on release (click) instead
-                return;
-            } else {
-                if !is_touch {
-                    // Desktop: fire immediately
-                    self.send_intent(intent);
-                    self.input.hold_attack_target =
-                        Some((owner, web_time::Instant::now(), x, y, true));
-                } else {
-                    // Mobile: wait for hold to distinguish from tap (context menu)
-                    self.input.hold_attack_target =
-                        Some((owner, web_time::Instant::now(), x, y, false));
-                }
-            }
-            self.input.hold_attack_accum = 0.0;
-        }
-    }
-
-    pub(crate) fn open_context_menu_at(&mut self, x: f64, y: f64) {
-        if self.ui.observing {
-            self.show_observer_notice(x, y);
-            return;
-        }
-        if let Some((col, row)) = self.mouse_to_tile(x, y) {
-            let idx = (row * self.sim.map_w as i32 + col) as u32;
-
-            // Clear any prior menu state first to avoid animation caching issues
-            self.input.map_context_menu = None;
-            self.input.map_context_menu_active = None;
-            self.input.context_menu_timer = 0.0;
-            self.input.context_menu_open_time = Some(web_time::Instant::now());
-            self.input.map_context_menu_session += 1;
-
-            self.input.map_context_menu = Some((x as f32, y as f32, idx));
-        }
     }
 
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
@@ -273,7 +92,7 @@ impl SowApp {
                     world_y,
                     start_time: web_time::Instant::now(),
                     duration: web_time::Duration::from_millis(1500),
-                    color: egui::Color32::from_rgb(96, 165, 250), // soft blue
+                    color: crate::rgb(96, 165, 250), // soft blue
                 });
                 return;
             }
@@ -353,7 +172,7 @@ impl SowApp {
                         world_y,
                         start_time: web_time::Instant::now(),
                         duration: web_time::Duration::from_millis(1500),
-                        color: egui::Color32::from_rgb(248, 113, 113), // soft red
+                        color: crate::rgb(248, 113, 113), // soft red
                     });
 
                     let wx = col as f32 + 0.5;
@@ -446,7 +265,7 @@ impl SowApp {
                         world_y,
                         start_time: web_time::Instant::now(),
                         duration: web_time::Duration::from_millis(2000),
-                        color: egui::Color32::from_rgb(248, 113, 113),
+                        color: crate::rgb(248, 113, 113),
                     });
                 } else {
                     let target_tile = target_res.unwrap();
@@ -481,7 +300,7 @@ impl SowApp {
             } else {
                 self.input.selected_warships.clear();
 
-                // If not selecting warships, check if we clicked on allied territory to open context menu on release
+                // If not selecting warships, let the browser HUD open the transfer panel.
                 let idx = (row * self.sim.map_w as i32 + col) as usize;
                 let owner = self
                     .gfx
@@ -524,7 +343,8 @@ impl SowApp {
                     .unwrap_or(false);
 
                 if owner != 0 && owner != my_id && (is_allied || is_teammate) {
-                    self.open_context_menu_at(x, y);
+                    self.ui.app.hud_state.show_ask_panel = Some(owner);
+                    self.ui.app.hud_state.transfer_confirm_pending = false;
                 }
             }
         }

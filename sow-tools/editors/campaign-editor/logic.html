@@ -6,7 +6,7 @@
 <title>SOW — Campaign Logic (nodes)</title>
 <style>
   :root { --bg:#14171c; --panel:#1d222b; --line:#2c333f; --text:#e6e9ee; --muted:#8b94a3; --accent:#e06b1f;
-          --event:#3aa564; --cond:#caa23a; --action:#3372f2; }
+          --event:#3aa564; --action:#3372f2; }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif; overflow:hidden; }
   #app { display:flex; height:100%; }
@@ -18,7 +18,6 @@
   .node.sel { border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.25),0 6px 18px rgba(0,0,0,.5); }
   .node .hd { padding:7px 10px; border-radius:8px 8px 0 0; font-weight:600; font-size:12px; cursor:grab; display:flex; justify-content:space-between; align-items:center; }
   .node.event .hd { background:rgba(58,165,100,.22); border-bottom:1px solid var(--event); }
-  .node.condition .hd { background:rgba(202,162,58,.20); border-bottom:1px solid var(--cond); }
   .node.action .hd { background:rgba(51,114,242,.20); border-bottom:1px solid var(--action); }
   .node .hd .x { color:var(--muted); cursor:pointer; padding:0 2px; }
   .node .hd .x:hover { color:#f1b0b4; }
@@ -29,7 +28,7 @@
   .pin { position:absolute; width:14px; height:14px; border-radius:50%; background:#11151b; border:2px solid var(--muted); top:9px; cursor:crosshair; z-index:2; }
   .pin:hover { border-color:#fff; background:#2a3340; }
   .pin.in { left:-8px; } .pin.out { right:-8px; }
-  .node.event .pin.out { border-color:var(--event); } .node.condition .pin { border-color:var(--cond); } .node.action .pin { border-color:var(--action); }
+  .node.event .pin.out { border-color:var(--event); } .node.action .pin { border-color:var(--action); }
   #side { width:250px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; }
   header { padding:12px 14px; border-bottom:1px solid var(--line); }
   header h1 { margin:0; font-size:14px; } header .sub { color:var(--muted); font-size:11px; margin-top:3px; }
@@ -39,7 +38,7 @@
   .pal { display:flex; flex-wrap:wrap; gap:6px; }
   .pal button { font-size:11px; padding:5px 8px; border-radius:6px; border:1px solid var(--line); background:#222a35; color:var(--text); cursor:pointer; }
   .pal button:hover { background:#2c3743; }
-  .pal .ev { border-left:3px solid var(--event); } .pal .co { border-left:3px solid var(--cond); } .pal .ac { border-left:3px solid var(--action); }
+  .pal .ev { border-left:3px solid var(--event); } .pal .ac { border-left:3px solid var(--action); }
   .btns { display:flex; gap:8px; flex-wrap:wrap; }
   button.primary { background:var(--accent); border:1px solid var(--accent); color:#1a1206; font-weight:600; border-radius:6px; padding:7px 10px; cursor:pointer; }
   button.ghost { background:#2a3340; border:1px solid var(--line); color:var(--text); border-radius:6px; padding:7px 10px; cursor:pointer; }
@@ -74,7 +73,7 @@
   <div id="side">
     <header>
       <h1>Campaign Logic</h1>
-      <div class="sub">ECA triggers · <a href="index.html">← Map</a></div>
+      <div class="sub"><span id="episodeLabel">boudica</span> steps · <a id="mapLink" href="index.html">← Map</a></div>
     </header>
     <div class="group">
       <h2>Add node</h2>
@@ -86,27 +85,43 @@
         <button class="primary" id="exportBtn">Export</button>
         <button class="ghost" id="reloadBtn">Reload</button>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="launchChk" style="width:auto"> Launch existing client after export</label>
       <input type="file" id="fileIn" accept=".json" style="margin-top:8px;width:100%;font-size:11px" />
     </div>
-    <div class="group" style="flex:0 0 auto"><h2>Triggers</h2></div>
+    <div class="group">
+      <h2>Episode settings</h2>
+      <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0"><input type="checkbox" id="buildingsEnabled" style="width:auto"> Buildings enabled</label>
+      <label>Starting troops</label><input id="startingTroops" type="number" min="1" max="100000" step="1" value="1000">
+    </div>
+    <div class="group" style="flex:0 0 auto"><h2>Steps</h2></div>
     <div class="list" id="list"></div>
   </div>
 </div>
 
 <script>
-// ---- node vocabulary (grounded in the real tutorial systems: steps.rs Trigger, dialogs, emotes) ----
+// ---- node vocabulary for the runtime campaign JSON ----
 // cat: event|condition|action · params: {key,label,type,opts?}
+const stepParams = extra => [
+  {k:"id",l:"step id",t:"text"},
+  {k:"mechanic",l:"mechanic",t:"text"},
+  {k:"title_key",l:"title key",t:"text"},
+  {k:"body_key",l:"body key",t:"text"},
+  {k:"hint_key",l:"hint key",t:"text"},
+  {k:"marker_target",l:"marker",t:"faction"},
+  ...extra,
+];
 const DEFS = {
-  // EVENTS (when) — no input pin
-  on_start:         { cat:"event", title:"On chapter start", params:[] },
-  on_tiles_gained:  { cat:"event", title:"On tiles gained",  params:[{k:"n",l:"tiles",t:"num",d:256}] },
-  on_tribes_eaten:  { cat:"event", title:"On tribes eaten",  params:[{k:"n",l:"count",t:"num",d:1}] },
-  on_first_contact: { cat:"event", title:"On first contact", params:[{k:"faction",l:"faction",t:"faction"}] },
-  // CONDITIONS (if)
-  troops_at_least:  { cat:"condition", title:"Troops ≥",      params:[{k:"faction",l:"faction",t:"faction"},{k:"n",l:"troops",t:"num",d:1000}] },
-  faction_alive:    { cat:"condition", title:"Faction alive", params:[{k:"faction",l:"faction",t:"faction"}] },
-  // ACTIONS (then)
+  // STEP EVENTS — no input pin
+  step_territory: { cat:"event", title:"Territory", params:stepParams([{k:"value",l:"tiles",t:"num",d:256},{k:"mode",l:"mode",t:"text",d:"gained"}]) },
+  step_kills:     { cat:"event", title:"Kills",     params:stepParams([{k:"value",l:"kills",t:"num",d:1}]) },
+  step_defeated:  { cat:"event", title:"Defeated",  params:stepParams([{k:"target",l:"faction",t:"faction"}]) },
+  step_contact:   { cat:"event", title:"Contact",   params:stepParams([{k:"target",l:"faction",t:"faction"}]) },
+  step_attack:    { cat:"event", title:"Attacks",   params:stepParams([{k:"value",l:"attacks",t:"num",d:1}]) },
+  step_troops:    { cat:"event", title:"Troops",    params:stepParams([{k:"value",l:"troops",t:"num",d:1000}]) },
+  step_building:  { cat:"event", title:"Building",  params:stepParams([{k:"value",l:"buildings",t:"num",d:1}]) },
+  step_fleet:     { cat:"event", title:"Fleet",     params:stepParams([{k:"value",l:"fleets",t:"num",d:1}]) },
+  step_nuke:      { cat:"event", title:"Nuke",      params:stepParams([{k:"value",l:"nukes",t:"num",d:1}]) },
+  step_elapsed:   { cat:"event", title:"Elapsed",   params:stepParams([{k:"value",l:"ticks",t:"num",d:1}]) },
+  // ACTIONS
   show_dialog:      { cat:"action", title:"Show dialog",      params:[{k:"speaker",l:"speaker",t:"faction"},{k:"title",l:"title",t:"text"},{k:"body",l:"body",t:"area"}] },
   set_objective:    { cat:"action", title:"Set objective",   params:[{k:"title",l:"title",t:"text"},{k:"body",l:"body",t:"area"}] },
   emote:            { cat:"action", title:"Emote",            params:[{k:"faction",l:"faction",t:"faction"},{k:"emoji",l:"emoji",t:"text",d:"🎉"}] },
@@ -117,7 +132,14 @@ const DEFS = {
 const hasIn  = k => DEFS[k].cat !== "event";
 const hasOut = () => true;
 
+const query = new URLSearchParams(location.search);
+const episodeId = /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
+document.getElementById("episodeLabel").textContent = episodeId;
+document.getElementById("mapLink").href = `index.html?episode=${encodeURIComponent(episodeId)}`;
+const episodeSettings = { buildings_enabled:false, starting_troops:1000 };
 const S = { nodes:[], wires:[], pan:{x:40,y:40}, zoom:1, nextId:1, sel:null, factions:["player"] };
+document.getElementById("buildingsEnabled").onchange = e => { episodeSettings.buildings_enabled = e.target.checked; };
+document.getElementById("startingTroops").oninput = e => { episodeSettings.starting_troops = Math.max(1, Math.min(100000, Number(e.target.value) || 1)); };
 
 const stage = document.getElementById("stage");
 const nodesEl = document.getElementById("nodes");
@@ -152,7 +174,7 @@ function selectNode(id) {
 const pal = document.getElementById("pal");
 for (const [k,def] of Object.entries(DEFS)) {
   const b = document.createElement("button");
-  b.className = def.cat==="event"?"ev":def.cat==="condition"?"co":"ac";
+  b.className = def.cat==="event"?"ev":"ac";
   b.textContent = def.title;
   b.onclick = () => addNode(k, (stage.clientWidth/2 - S.pan.x)/S.zoom - 105, (stage.clientHeight/2 - S.pan.y)/S.zoom - 40);
   pal.appendChild(b);
@@ -315,51 +337,88 @@ window.addEventListener("keydown", e => {
 });
 window.addEventListener("resize", redrawWires);
 
-// ---- compile graph -> triggers (ECA) ----
+// ---- graph -> canonical campaign steps ----
 function downstream(id) { // ordered exec chain from a node, following out->in wires
   const out = []; const seen = new Set();
   const walk = nid => { for (const w of S.wires.filter(w=>w.from===nid)) { if (!seen.has(w.to)) { seen.add(w.to); out.push(w.to); walk(w.to); } } };
   walk(id); return out;
 }
-function nodeToObj(n) { return { kind:n.kind, ...n.params }; }
-function triggerName(ev) {
-  const f = ev.faction ? " "+ev.faction : ev.n!=null ? " "+ev.n : "";
-  return DEFS[ev.kind].title + f;
+function actionToJson(n) {
+  const out = { type:n.kind };
+  for (const [key,value] of Object.entries(n.params||{})) if (key !== "_phase") out[key] = value;
+  return out;
 }
-function compile() {
-  const triggers = [];
-  for (const ev of S.nodes.filter(n=>DEFS[n.kind].cat==="event")) {
-    const chain = downstream(ev.id).map(node);
-    const event = nodeToObj(ev);
-    triggers.push({
-      name: triggerName(event),
-      event,
-      conditions: chain.filter(n=>DEFS[n.kind].cat==="condition").map(nodeToObj),
-      actions:    chain.filter(n=>DEFS[n.kind].cat==="action").map(nodeToObj),
-    });
+function triggerFromNode(n) {
+  const p = n.params || {};
+  const type = n.kind.slice("step_".length);
+  const trigger = { type };
+  if (["territory", "kills", "attack", "troops", "building", "fleet", "nuke", "elapsed"].includes(type)) trigger.value = Number(p.value);
+  if (type === "territory") trigger.mode = p.mode || "gained";
+  if (type === "defeated" || type === "contact") trigger.target = p.target;
+  return trigger;
+}
+function canonicalSteps() {
+  const steps = [];
+  for (const ev of S.nodes.filter(n=>DEFS[n.kind] && DEFS[n.kind].cat === "event")) {
+    const p = ev.params || {};
+    const chain = downstream(ev.id).map(node).filter(Boolean);
+    const step = {
+      id: p.id,
+      mechanic: p.mechanic,
+      trigger: triggerFromNode(ev),
+      title_key: p.title_key,
+      body_key: p.body_key,
+      hint_key: p.hint_key,
+      marker: { target: p.marker_target || "player" },
+      on_enter: chain.filter(n=>DEFS[n.kind].cat === "action" && n.params._phase !== "complete").map(actionToJson),
+      on_complete: chain.filter(n=>DEFS[n.kind].cat === "action" && n.params._phase === "complete").map(actionToJson),
+    };
+    steps.push(step);
   }
-  return triggers;
+  validateSteps(steps);
+  return steps;
+}
+function validateSteps(steps) {
+  if (!Array.isArray(steps) || !steps.length) throw new Error("add at least one step");
+  const ids = new Set();
+  const factions = new Set(S.factions);
+  for (const step of steps) {
+    if (!step.id || !/^[a-z0-9][a-z0-9_-]*$/.test(step.id) || ids.has(step.id)) throw new Error("duplicate or invalid step id");
+    if (!step.mechanic || !step.trigger || !DEFS[`step_${step.trigger.type}`]) throw new Error("unknown step type");
+    if (![step.title_key, step.body_key, step.hint_key].every(key=>typeof key === "string" && key.startsWith("tutorial."))) throw new Error("translation keys must start with tutorial.");
+    if ((step.trigger.type === "defeated" || step.trigger.type === "contact") && !factions.has(step.trigger.target)) throw new Error("step references an unknown faction");
+    if (step.marker && !factions.has(step.marker.target) && step.marker.target !== "player") throw new Error("step marker references an unknown faction");
+    ids.add(step.id);
+  }
 }
 function serialize() {
-  const out = {
-    _comment: "Boudica campaign triggers (ECA). Editor-only output — the game hand-codes its tutorial logic in sow-client/src/hud/tutorial/steps.rs and does NOT read this file.",
-    chapter: "boudica-1",
-    triggers: compile(),
-    _editor: { pan:S.pan, zoom:S.zoom, nodes:S.nodes, wires:S.wires },
-  };
+  if (!Number.isFinite(episodeSettings.starting_troops) || episodeSettings.starting_troops < 1 || episodeSettings.starting_troops > 100000) throw new Error("invalid starting troops");
+  const out = { version:1, episode_id:episodeId, settings:{ ...episodeSettings }, steps:canonicalSteps() };
   return JSON.stringify(out, null, 2) + "\n";
 }
 
-// ---- decompile triggers -> node layout (when a file has no _editor) ----
+// ---- canonical steps -> node layout ----
 function decompile(j) {
   S.nodes=[]; S.wires=[]; S.nextId=1;
   let col = 0;
-  for (const t of (j.triggers||[])) {
+  const steps = Array.isArray(j.steps) ? j.steps : [];
+  for (const step of steps) {
     let y = 30, x = 40 + col*270; let prev = null;
     const place = (kind, params) => { const n={id:S.nextId++,kind,x,y,params:params||{}}; S.nodes.push(n); if(prev!=null) S.wires.push({from:prev,to:n.id}); prev=n.id; y+=140; return n.id; };
-    const ev = {...t.event}; const evk = ev.kind; delete ev.kind; place(evk, ev);
-    for (const c of (t.conditions||[])) { const k=c.kind; const p={...c}; delete p.kind; place(k,p); }
-    for (const a of (t.actions||[]))   { const k=a.kind; const p={...a}; delete p.kind; place(k,p); }
+    const trigger = step.trigger || {};
+    const kind = `step_${trigger.type}`;
+    if (!DEFS[kind]) throw new Error("unknown trigger type " + trigger.type);
+    const params = { id:step.id, mechanic:step.mechanic, title_key:step.title_key, body_key:step.body_key, hint_key:step.hint_key, marker_target:step.marker && step.marker.target || "player" };
+    if (trigger.value != null) params.value = trigger.value;
+    if (trigger.mode != null) params.mode = trigger.mode;
+    if (trigger.target != null) params.target = trigger.target;
+    place(kind, params);
+    for (const action of [...(step.on_enter||[]), ...(step.on_complete||[])]) {
+      if (!action || !DEFS[action.type] || DEFS[action.type].cat !== "action") throw new Error("unknown action type");
+      const p = {...action}; delete p.type;
+      if (step.on_complete && step.on_complete.includes(action)) p._phase = "complete";
+      place(action.type, p);
+    }
     col++;
   }
 }
@@ -368,43 +427,37 @@ function decompile(j) {
 function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 document.getElementById("exportBtn").onclick = async () => {
   try {
-    const res = await fetch("/__save?file=boudica.triggers.json", {method:"POST", body:serialize()});
+    const file = `${episodeId}.triggers.json`;
+    const res = await fetch(`/__save?file=${encodeURIComponent(file)}`, {method:"POST", body:serialize()});
     if(!res.ok) throw new Error(await res.text());
-    if (document.getElementById("launchChk").checked) {
-      toast("Exported ✓ — launching game…");
-      const r2 = await fetch("/__launch", {method:"POST"});
-      if(!r2.ok) toast("Saved, but launch failed: "+await r2.text());
-    } else {
-      toast("Exported → assets/campaign/boudica.triggers.json");
-    }
+    toast(`Exported → assets/campaign/${file}`);
   } catch(e){ toast("Export failed (run via `sow m`): "+e.message); }
 };
 document.getElementById("reloadBtn").onclick = () => boot();
 document.getElementById("fileIn").onchange = e => { const f=e.target.files[0]; if(!f) return; const fr=new FileReader(); fr.onload=()=>{ try{ loadGraph(JSON.parse(fr.result)); toast("Loaded "+f.name);}catch(err){toast("Bad JSON: "+err.message);} }; fr.readAsText(f); };
 
 function renderList() {
-  const t = compile();
+  const t = S.nodes.filter(n=>DEFS[n.kind] && DEFS[n.kind].cat === "event").map(n=>({id:n.params.id, trigger:n.params, actions:downstream(n.id).map(node).filter(x=>x && DEFS[x.kind].cat === "action")}));
   document.getElementById("list").innerHTML = t.length
-    ? t.map(x=>`<div class="trow"><b>${x.name}</b> — ${x.conditions.length} cond, ${x.actions.length} act</div>`).join("")
-    : `<div class="trow">No event nodes yet. Add one from the palette.</div>`;
+    ? t.map(x=>`<div class="trow"><b>${x.id || "(missing id)"}</b> — ${x.trigger.mechanic || "step"} · ${x.actions.length} actions</div>`).join("")
+    : `<div class="trow">No steps yet. Add one from the palette.</div>`;
 }
 
 function loadGraph(j) {
-  if (j && j._editor && Array.isArray(j._editor.nodes)) {
-    S.nodes = j._editor.nodes; S.wires = j._editor.wires||[]; S.pan = j._editor.pan||{x:40,y:40}; S.zoom = j._editor.zoom||1;
-    S.nextId = (S.nodes.reduce((m,n)=>Math.max(m,n.id),0)||0)+1;
-  } else {
-    decompile(j||{}); S.pan={x:40,y:40}; S.zoom=1;
-  }
+  episodeSettings.buildings_enabled = Boolean(j && j.settings && j.settings.buildings_enabled);
+  episodeSettings.starting_troops = Number(j && j.settings && j.settings.starting_troops) || 1000;
+  document.getElementById("buildingsEnabled").checked = episodeSettings.buildings_enabled;
+  document.getElementById("startingTroops").value = episodeSettings.starting_troops;
+  decompile(j||{}); S.pan={x:40,y:40}; S.zoom=1;
   S.sel=null; render();
 }
 
 async function boot() {
   // factions for dropdowns come from the live roster (shared with the map editor)
-  try { const r=await fetch("/assets/campaign/boudica.json",{cache:"no-store"});
+  try { const r=await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.json`,{cache:"no-store"});
     if(r.ok){ const j=await r.json(); S.factions=["player",...(j.factions||[]).map(f=>f.name)]; } } catch(e){}
   let loaded=false;
-  try { const r=await fetch("/assets/campaign/boudica.triggers.json",{cache:"no-store"});
+  try { const r=await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.triggers.json`,{cache:"no-store"});
     if(r.ok){ loadGraph(await r.json()); loaded=true; } } catch(e){}
   if(!loaded) { S.nodes=[]; S.wires=[]; render(); }
 }

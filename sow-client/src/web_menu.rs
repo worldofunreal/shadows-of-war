@@ -38,6 +38,15 @@ enum WebMenuCommand {
     },
     StartCampaignEpisode {
         episode_id: String,
+        roster: serde_json::Value,
+        #[serde(rename = "match")]
+        match_config: serde_json::Value,
+    },
+    SetTutorialPaused {
+        paused: bool,
+    },
+    CompleteCampaignEpisode {
+        episode_id: String,
     },
     CreateGame {
         config: serde_json::Value,
@@ -128,7 +137,6 @@ enum WebMenuCommand {
     },
     Surrender,
     ToggleLeaderboard,
-    ToggleTutorialObjectives,
     ToggleDevSidebar,
     SetDevConfig {
         field: WebDevConfigField,
@@ -179,7 +187,7 @@ thread_local! {
     /// on every publish attempt.
     static LAST_MY_PLAYER: RefCell<Option<(u64, u16, Option<MyPlayerSummary>)>> =
         const { RefCell::new(None) };
-    /// WASM nameplates need the same rank cache as native egui for the top-three crown/medals.
+    /// WASM nameplates need the same rank cache for the top-three crown/medals.
     /// Refreshing is keyed by the authoritative snapshot tick, not the render/publish cadence.
     static LAST_WEB_RANKINGS_TICK: Cell<Option<u64>> = const { Cell::new(None) };
     /// Cold panel JSON is rebuilt only when its snapshot input changes. Hot HUD updates reuse it.
@@ -210,7 +218,6 @@ struct HudPublishKey {
     settings_reduced_motion: bool,
     leaderboard_open: bool,
     tutorial_active: bool,
-    tutorial_objectives_open: bool,
     dev_sidebar_open: bool,
     dev_thickness: u32,
     dev_darkness: u32,
@@ -344,6 +351,7 @@ fn take_commands() -> Vec<WebMenuCommand> {
 }
 
 impl SowApp {
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn process_web_menu_commands(&mut self) {
         for command in take_commands() {
             match command {
@@ -356,10 +364,7 @@ impl SowApp {
                         "menu_join_attempt",
                         serde_json::json!({ "source": "browser", "lobby_id": lobby_id }),
                     );
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::JoinLobby(lobby_id)),
-                    );
+                    self.process_ui_actions(Some(UiAction::JoinLobby(lobby_id)));
                 }
                 WebMenuCommand::JoinWithPassword { lobby_id, password } => {
                     crate::analytics::track_with(
@@ -368,18 +373,12 @@ impl SowApp {
                     );
                     self.ui.app.main_menu_state.join_password_input = password;
                     self.ui.app.main_menu_state.join_password_for_lobby = Some(lobby_id);
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::JoinWithPassword(lobby_id)),
-                    );
+                    self.process_ui_actions(Some(UiAction::JoinWithPassword(lobby_id)));
                 }
                 WebMenuCommand::JoinCode { code } => {
                     crate::analytics::track("menu_code_join_attempt");
                     self.ui.app.main_menu_state.join_lobby_code = code;
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::JoinWithCode),
-                    );
+                    self.process_ui_actions(Some(UiAction::JoinWithCode));
                 }
                 WebMenuCommand::CreateGame {
                     config,
@@ -388,14 +387,11 @@ impl SowApp {
                 } => {
                     crate::analytics::track("menu_custom_create");
                     match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
-                        Ok(config) => self.process_ui_actions(
-                            &self.ui.egui_ctx.clone(),
-                            Some(UiAction::CreateGame {
+                        Ok(config) => self.process_ui_actions(Some(UiAction::CreateGame {
                                 config: Box::new(config),
                                 is_private,
                                 password,
-                            }),
-                        ),
+                            })),
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid create-game config: {error}");
                             self.ui.app.main_menu_state.error_message =
@@ -406,10 +402,8 @@ impl SowApp {
                 WebMenuCommand::StartSinglePlayer { config } => {
                     crate::analytics::track("menu_single_player_start");
                     match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
-                        Ok(config) => self.process_ui_actions(
-                            &self.ui.egui_ctx.clone(),
-                            Some(UiAction::StartSinglePlayer(Box::new(config))),
-                        ),
+                        Ok(config) => self
+                            .process_ui_actions(Some(UiAction::StartSinglePlayer(Box::new(config)))),
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid single-player config: {error}");
                             self.ui.app.main_menu_state.error_message =
@@ -417,7 +411,11 @@ impl SowApp {
                         }
                     }
                 }
-                WebMenuCommand::StartCampaignEpisode { episode_id } => {
+                WebMenuCommand::StartCampaignEpisode {
+                    episode_id,
+                    roster,
+                    match_config,
+                } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
                             Some("Unknown campaign episode.".into());
@@ -432,7 +430,40 @@ impl SowApp {
                         "menu_campaign_start",
                         serde_json::json!({ "episode": campaign.episode_id() }),
                     );
-                    self.start_campaign_episode(campaign);
+                    self.boot_campaign_pending = None;
+                    if let Err(error) = self.start_campaign_episode_from_web(campaign, roster, match_config) {
+                        log::warn!("[WEB MENU] invalid campaign episode: {error}");
+                        self.ui.app.main_menu_state.error_message = Some(error);
+                    }
+                }
+                WebMenuCommand::SetTutorialPaused { paused } => {
+                    if self.ui.tutorial_active && self.net.is_offline {
+                        self.sim.paused = paused;
+                    }
+                }
+                WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
+                    let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
+                        self.ui.app.main_menu_state.error_message =
+                            Some("Unknown campaign episode.".into());
+                        continue;
+                    };
+                    if !self.ui.tutorial_active
+                        || !self.net.is_offline
+                        || self.ui.tutorial_campaign != campaign
+                    {
+                        log::warn!("[WEB MENU] campaign completion rejected outside active episode");
+                        continue;
+                    }
+                    if campaign == CampaignId::Boudica {
+                        if self.progress.complete_tutorial_with_reward() {
+                            self.save_local_progress();
+                            self.persist_tutorial_completion();
+                        }
+                    } else if self.progress.complete_episode(campaign.episode_id(), campaign.advisor()) {
+                        self.save_local_progress();
+                        crate::store_portals::measure("campaign", campaign.episode_id(), "complete");
+                    }
+                    self.begin_exit_to_main_menu();
                 }
                 WebMenuCommand::SetLeader { leader_id } => {
                     let value = serde_json::Value::String(leader_id);
@@ -452,73 +483,49 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::SaveDisplayName { name } => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::SaveDisplayName(name)),
-                    );
+                    self.process_ui_actions(Some(UiAction::SaveDisplayName(name)));
                 }
                 WebMenuCommand::OpenBrowser => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::OpenJoinBrowser),
-                    );
+                    self.process_ui_actions(Some(UiAction::OpenJoinBrowser));
                 }
                 WebMenuCommand::OpenCreate => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::OpenCreateGame),
-                    );
+                    self.process_ui_actions(Some(UiAction::OpenCreateGame));
                 }
                 WebMenuCommand::CloseOverlay => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::CloseOverlay),
-                    );
+                    self.process_ui_actions(Some(UiAction::CloseOverlay));
                 }
                 WebMenuCommand::LeaveLobby => {
-                    self.process_ui_actions(&self.ui.egui_ctx.clone(), Some(UiAction::LeaveLobby));
+                    self.process_ui_actions(Some(UiAction::LeaveLobby));
                 }
                 WebMenuCommand::StartPrivate { lobby_id } => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::StartPrivateLobby(lobby_id)),
-                    );
+                    self.process_ui_actions(Some(UiAction::StartPrivateLobby(lobby_id)));
                 }
                 WebMenuCommand::KickPlayer {
                     lobby_id,
                     target_player_id,
                 } => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::KickPlayer {
+                    self.process_ui_actions(Some(UiAction::KickPlayer {
                             lobby_id,
                             target_player_id,
-                        }),
-                    );
+                        }));
                 }
                 WebMenuCommand::BanPlayer {
                     lobby_id,
                     target_player_id,
                 } => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::BanPlayer {
+                    self.process_ui_actions(Some(UiAction::BanPlayer {
                             lobby_id,
                             target_player_id,
-                        }),
-                    );
+                        }));
                 }
                 WebMenuCommand::MovePlayerTeam {
                     lobby_id,
                     target_player_id,
                 } => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::MovePlayerTeam {
+                    self.process_ui_actions(Some(UiAction::MovePlayerTeam {
                             lobby_id,
                             target_player_id,
-                        }),
-                    );
+                        }));
                 }
                 WebMenuCommand::RefreshProfile => {
                     self.fetch_cloud_progress();
@@ -665,7 +672,6 @@ impl SowApp {
                 WebMenuCommand::ToggleLeaderboard => {
                     self.ui.show_leaderboard = !self.ui.show_leaderboard;
                     if self.ui.show_leaderboard {
-                        self.ui.tutorial_objectives_open = false;
                         #[cfg(any(feature = "dev", debug_assertions))]
                         {
                             self.ui.show_dev_sidebar = false;
@@ -673,38 +679,20 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::ReturnToMenu => {
-                    self.process_ui_actions(&self.ui.egui_ctx.clone(), Some(UiAction::LeaveLobby));
+                    self.process_ui_actions(Some(UiAction::LeaveLobby));
                 }
                 WebMenuCommand::ContinueObserving => {
                     self.ui.is_spectating = true;
                     self.ui.endgame_cache = None;
                 }
                 WebMenuCommand::ZoomIn => {
-                    self.process_ui_actions(&self.ui.egui_ctx.clone(), Some(UiAction::ZoomIn));
+                    self.process_ui_actions(Some(UiAction::ZoomIn));
                 }
                 WebMenuCommand::ZoomOut => {
-                    self.process_ui_actions(&self.ui.egui_ctx.clone(), Some(UiAction::ZoomOut));
+                    self.process_ui_actions(Some(UiAction::ZoomOut));
                 }
                 WebMenuCommand::CenterCamera => {
-                    self.process_ui_actions(
-                        &self.ui.egui_ctx.clone(),
-                        Some(UiAction::CenterCamera),
-                    );
-                }
-                WebMenuCommand::ToggleTutorialObjectives => {
-                    if crate::hud::tutorial::tutorial_renders(
-                        self.ui.tutorial_active,
-                        self.net.is_offline,
-                    ) {
-                        self.ui.tutorial_objectives_open = !self.ui.tutorial_objectives_open;
-                        if self.ui.tutorial_objectives_open {
-                            self.ui.show_leaderboard = false;
-                            #[cfg(any(feature = "dev", debug_assertions))]
-                            {
-                                self.ui.show_dev_sidebar = false;
-                            }
-                        }
-                    }
+                    self.process_ui_actions(Some(UiAction::CenterCamera));
                 }
                 WebMenuCommand::ToggleDevSidebar => {
                     #[cfg(any(feature = "dev", debug_assertions))]
@@ -712,7 +700,6 @@ impl SowApp {
                         self.ui.show_dev_sidebar = !self.ui.show_dev_sidebar;
                         if self.ui.show_dev_sidebar {
                             self.ui.show_leaderboard = false;
-                            self.ui.tutorial_objectives_open = false;
                         }
                     }
                 }
@@ -814,9 +801,7 @@ fn hovered_tile_owner(app: &SowApp) -> (u32, u16) {
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
-    let tutorial_active =
-        crate::hud::tutorial::tutorial_renders(app.ui.tutorial_active, app.net.is_offline);
-    let tutorial_objectives_open = tutorial_active && app.ui.tutorial_objectives_open;
+    let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
     let (dev_sidebar_open, dev_config_key) = dev_config_key(app);
     let snapshot_tick = app
         .sim
@@ -830,7 +815,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         || hud.show_ask_panel.is_some()
         || hud.show_betrayal_warning.is_some()
         || hud.sync_state.is_some()
-        || tutorial_objectives_open;
+        || tutorial_active;
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
     let inbox_count = my_player_summary(app, snapshot_tick, my_pid)
         .map(|player| player.inbox_count)
@@ -867,7 +852,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         notification_len: hud.hud_notifications.len(),
         is_spectating: app.ui.is_spectating,
         tutorial_active,
-        tutorial_objectives_open,
         dev_sidebar_open,
         dev_thickness: dev_config_key[0],
         dev_darkness: dev_config_key[1],
@@ -928,6 +912,144 @@ fn dev_tools_payload(_app: &SowApp) -> serde_json::Value {
     serde_json::json!({
         "available": false,
         "open": false,
+    })
+}
+
+fn refresh_tutorial_observation(
+    app: &mut SowApp,
+    snapshot: &sow_core::protocol::SimSnapshot,
+    my_pid: u16,
+) {
+    if !app.ui.tutorial_active || !app.net.is_offline {
+        return;
+    }
+    let attack_ids = snapshot.attacks.iter().map(|attack| attack.id).collect::<Vec<_>>();
+    let fleet_ids = snapshot.fleets.iter().map(|fleet| fleet.id).collect::<Vec<_>>();
+    let structure_ids = snapshot
+        .buildings
+        .iter()
+        .filter(|building| building.owner_id == my_pid)
+        .map(|building| building.id)
+        .collect::<Vec<_>>();
+    let defeated_ids = snapshot
+        .players
+        .iter()
+        .filter(|player| player.id != my_pid && !player.alive)
+        .map(|player| player.id)
+        .collect::<Vec<_>>();
+    let defeated_names = snapshot
+        .players
+        .iter()
+        .filter(|player| player.id != my_pid && !player.alive)
+        .map(|player| player.name.clone())
+        .collect::<Vec<_>>();
+    let contact_ids = snapshot
+        .players
+        .iter()
+        .filter(|player| player.id != my_pid && player.alive && player.tile_count > 0)
+        .map(|player| player.id)
+        .collect::<Vec<_>>();
+    let nuke_ids = snapshot
+        .nuke_alerts
+        .iter()
+        .map(|nuke| (nuke.tile_x, nuke.tile_y, nuke.owner_id))
+        .collect::<Vec<_>>();
+    let observation = &mut app.sim.tutorial_observation;
+    observation.seen_attacks.extend(attack_ids);
+    observation.seen_fleets.extend(fleet_ids);
+    observation.seen_structures.extend(structure_ids);
+    observation.seen_defeated.extend(defeated_ids);
+    observation.seen_defeated_names.extend(defeated_names);
+    observation.seen_contacts.extend(contact_ids);
+    observation.seen_nukes.extend(nuke_ids);
+}
+
+fn tutorial_payload(
+    app: &mut SowApp,
+    my_pid: u16,
+) -> serde_json::Value {
+    let Some(snapshot) = app.sim.current_snapshot.clone() else {
+        return serde_json::json!({ "active": true, "episode_id": app.ui.tutorial_campaign.episode_id(), "tick": 0 });
+    };
+    refresh_tutorial_observation(app, &snapshot, my_pid);
+    let observation = &app.sim.tutorial_observation;
+    let me = snapshot.players.iter().find(|player| player.id == my_pid);
+    let defeated_names = observation.seen_defeated_names.iter().cloned().collect::<Vec<_>>();
+    let contacts = observation.seen_contacts.iter().copied().collect::<Vec<_>>();
+    let players = snapshot
+        .players
+        .iter()
+        .map(|player| player_json(player, my_pid, snapshot.total_land_tiles))
+        .collect::<Vec<_>>();
+    let structures = snapshot
+        .buildings
+        .iter()
+        .map(|building| {
+            serde_json::json!({
+                "id": building.id,
+                "tile_idx": building.tile_idx,
+                "owner_id": building.owner_id,
+                "kind": format!("{:?}", building.kind),
+                "under_construction": building.under_construction,
+            })
+        })
+        .collect::<Vec<_>>();
+    let attacks = snapshot
+        .attacks
+        .iter()
+        .map(|attack| {
+            serde_json::json!({
+                "id": attack.id,
+                "owner_id": attack.owner_id,
+                "target_owner": attack.target_owner,
+                "troops": attack.troops,
+                "retreating": attack.retreating,
+                "front_x": attack.front_cx,
+                "front_y": attack.front_cy,
+            })
+        })
+        .collect::<Vec<_>>();
+    let fleets = snapshot
+        .fleets
+        .iter()
+        .map(|fleet| {
+            serde_json::json!({
+                "id": fleet.id,
+                "owner_id": fleet.owner_id,
+                "unit_type": format!("{:?}", fleet.unit_type),
+                "troops": fleet.troops,
+                "current_tile": fleet.current_tile,
+                "retreating": fleet.retreating,
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "active": true,
+        "episode_id": app.ui.tutorial_campaign.episode_id(),
+        "tick": snapshot.tick,
+        "facts": {
+            "tiles": me.map(|player| player.tile_count).unwrap_or(0),
+            "troops": me.map(|player| player.troops).unwrap_or(0.0),
+            "kills": me.map(|player| player.kills).unwrap_or(0),
+            "defeated": observation.seen_defeated.len(),
+            "defeated_names": defeated_names,
+            "contacts": observation.seen_contacts.len(),
+            "attacks": observation.seen_attacks.len(),
+            "buildings": observation.seen_structures.len(),
+            "fleets": observation.seen_fleets.len(),
+            "nukes": observation.seen_nukes.len(),
+            "elapsed_ticks": snapshot.tick,
+        },
+        "players": players,
+        "structures": structures,
+        "attacks": attacks,
+        "fleets": fleets,
+        "contacts": contacts,
+        "camera": {
+                "x": app.input.camera_x,
+            "y": app.input.camera_y,
+            "zoom": app.input.camera_zoom,
+        },
     })
 }
 
@@ -1111,11 +1233,20 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
     serde_json::Value::Array(requests)
 }
 
-fn build_hud_payload(app: &SowApp) -> serde_json::Value {
+fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
     if app.ui.app.phase != sow_ui::ClientPhase::Playing {
         return serde_json::Value::Null;
     }
 
+    let tutorial_pid = app
+        .sim
+        .my_player_id
+        .unwrap_or(app.ui.app.hud_state.my_player_id);
+    let tutorial_state = if app.ui.tutorial_active && app.net.is_offline {
+        tutorial_payload(app, tutorial_pid)
+    } else {
+        serde_json::json!({ "active": false })
+    };
     let hud = &app.ui.app.hud_state;
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
     let snapshot = app.sim.current_snapshot.as_ref();
@@ -1193,16 +1324,7 @@ fn build_hud_payload(app: &SowApp) -> serde_json::Value {
         "inbox_count": me.map(|player| player.inbox_count).unwrap_or(0),
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
-        "quests": {
-            "available": crate::hud::tutorial::tutorial_renders(
-                app.ui.tutorial_active,
-                app.net.is_offline,
-            ),
-            "open": crate::hud::tutorial::tutorial_renders(
-                app.ui.tutorial_active,
-                app.net.is_offline,
-            ) && app.ui.tutorial_objectives_open,
-        },
+        "tutorial": tutorial_state,
         "dev_tools": dev_tools_payload(app),
         "is_winner": is_winner,
         "winner_name": winner_name,
@@ -1465,6 +1587,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 .as_deref()
                 .unwrap_or(app.ui.app.splash_state.status_text.as_str()),
             "loader_done": app.ui.app.splash_state.done,
+            "boot_campaign": app.boot_campaign_pending.clone(),
             "connected": state.is_connected,
             "connecting": state.is_connecting,
             "waiting": state.is_waiting,

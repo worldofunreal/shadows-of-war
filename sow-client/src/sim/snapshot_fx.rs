@@ -159,13 +159,13 @@ impl SowApp {
                 // Your territory was hit
                 (
                     format!("Incoming strike from {}", attacker_name),
-                    egui::Color32::from_rgb(239, 68, 68),
+                    crate::rgb(239, 68, 68),
                 )
             } else if alert.owner_id == my_id {
                 // You hit another player
                 (
                     format!("Strategic strike hit {}", victim_name),
-                    egui::Color32::from_rgb(74, 222, 128),
+                    crate::rgb(74, 222, 128),
                 )
             } else if my_id != 0
                 && snap
@@ -179,13 +179,13 @@ impl SowApp {
                 // Ally got hit
                 (
                     format!("{} struck ally {}", attacker_name, victim_name),
-                    egui::Color32::from_rgb(251, 191, 36),
+                    crate::rgb(251, 191, 36),
                 )
             } else {
                 // Enemy vs enemy / neutral
                 (
                     format!("{} struck {}", attacker_name, victim_name),
-                    egui::Color32::from_rgb(180, 180, 200),
+                    crate::rgb(180, 180, 200),
                 )
             };
 

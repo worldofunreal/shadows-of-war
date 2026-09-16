@@ -383,12 +383,6 @@ impl SowApp {
                         let map_name = ack.map_name.clone();
                         self.ui.app.main_menu_state.downloading_map_name = Some(map_name.clone());
 
-                        if let Some(texture) = self.ui.app.asset_loader.thumbnail(&map_name) {
-                            self.ui.app.splash_state.thumbnail = Some(texture.clone());
-                        } else {
-                            self.ui.app.splash_state.thumbnail = None;
-                        }
-
                         if self.ui.app.asset_loader.has_map(&map_name) {
                             log::info!("Map already cached, skipping download.");
                             self.ui.app.main_menu_state.cached_map =

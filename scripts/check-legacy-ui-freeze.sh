@@ -2,4 +2,4 @@
 set -euo pipefail
 export LC_ALL=C
 
-echo "PASS: legacy egui freeze reopened; native sow-ui changes are allowed"
+echo "PASS: native UI is retired; the browser shell owns presentation"

@@ -183,7 +183,7 @@ impl MapRenderer {
 
         let layout = <MapShaderData as gpu::ShaderData>::layout();
         // Fragment entry contract: Linear swapchains use `fs_main`; plain UNORM (wasm WebGL
-        // canvas) uses `fs_main_srgb`. Match on surface format like blade-egui.
+        // canvas) uses `fs_main_srgb`. Match on the Blade surface format.
         let fragment_entry = if matches!(surface_format, gpu::TextureFormat::Rgba8Unorm) {
             "fs_main_srgb"
         } else {

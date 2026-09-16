@@ -1,10 +1,5 @@
 #![warn(dead_code, unused_variables, unused_imports)]
 
-#[cfg(feature = "editor")]
-extern crate sow_ui as sow_ui_kit;
-#[cfg(feature = "editor")]
-pub mod editor;
-
 #[cfg(feature = "generator")]
 pub mod heightmap;
 #[cfg(feature = "generator")]
@@ -21,9 +16,6 @@ pub mod osm_tiles;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_export;
-
-#[cfg(feature = "editor")]
-pub use editor::MapEditorSession;
 
 #[cfg(feature = "generator")]
 pub use image_pipeline::{ImagePipelineResult, generate_from_rgba, mobile_safe_dims};

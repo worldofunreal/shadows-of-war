@@ -3,7 +3,7 @@
 ## One account, separate databases
 
 `account_id` is the only account key exposed by Shadows of War. It is stable
-across Web, Android, iOS, Egui, RevenueCat, and Stripe.
+across Web, Android, RevenueCat, and Stripe.
 
 - **WOU-ID** owns sign-in, sessions, verified email, and provider links.
 - **SOW** owns the game record: progress, leaders, currencies, inventory,
@@ -38,7 +38,7 @@ Every client follows the same rules:
 2. Use a verified platform session when one is available.
 3. On production Web, create or restore the anonymous WOU-ID session before
    WASM starts, so SOW uses that same `account_id` from the first frame.
-4. On native, Android fallback, portals, or an identity-service outage, use the
+4. On Android wrapper fallback, portals, or an identity-service outage, use the
    local anonymous SOW account and keep its ownership secret.
 5. Replace the active session only after verification succeeds.
 
@@ -47,9 +47,9 @@ merged into a different WOU-ID account: a future migration must prove both
 owners before moving progress. Signing out switches the client to an anonymous
 session; it does not delete the account.
 
-Egui is only a native presentation layer. Web, Egui, Android, and iOS consume
-the same account contract. Android's Play Games adapter and iOS's native
-adapter are provider-specific edges; neither owns account creation.
+The browser shell and Android wrapper consume the same account contract.
+Android's Play Games adapter is a provider-specific edge; it does not own
+account creation.
 
 ## Web OAuth callbacks
 
@@ -68,8 +68,7 @@ the provider and callback, consumes it once, and requires S256 PKCE for X.
 - RevenueCat receives `account_id` as `app_user_id`.
 - Stripe checkout and webhook metadata use the same `account_id`.
 - Android uses Google Play Billing through RevenueCat.
-- iOS uses App Store billing through RevenueCat.
-- Web and desktop use the approved RevenueCat/Stripe web checkout.
+- Web uses the approved RevenueCat/Stripe web checkout.
 - The server verifies the account before granting content and deduplicates
   provider events by transaction/event identity.
 

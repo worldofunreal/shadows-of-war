@@ -1,7 +1,31 @@
 #![recursion_limit = "256"]
 #![warn(dead_code, unused_variables, unused_imports)]
-extern crate sow_ui as sow_ui_kit;
+#![cfg(target_arch = "wasm32")]
+extern crate self as sow_ui;
+extern crate self as sow_ui_kit;
 use sow_net::client::SowClient;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientPhase { Splash, MainMenu, Playing }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UiAction {
+    ConnectToServer(String), RetryConnection, JoinLobby(u64), LeaveLobby, HostPrivateLobby,
+    StartSinglePlayer(Box<sow_core::game_config::GameConfig>), SetAttackRatio(f32), CenterCamera,
+    FocusTile(f32, f32), ZoomIn, ZoomOut, ToggleSettings, ToggleCredits, TogglePrivacy, ToggleTerms,
+    ToggleDevSidebar, StartPrivateLobby(u64), PortalShowAuthPrompt, SaveDisplayName(String),
+    OpenCreateGame, CreateGame { config: Box<sow_core::game_config::GameConfig>, is_private: bool, password: Option<String> },
+    OpenJoinBrowser, CloseOverlay, JoinWithCode, JoinWithPassword(u64),
+    KickPlayer { lobby_id: u64, target_player_id: u16 }, BanPlayer { lobby_id: u64, target_player_id: u16 },
+    MovePlayerTeam { lobby_id: u64, target_player_id: u16 }, SetFullscreen(bool), ToggleShowcase,
+    OpenStorePage, OpenProfilePage, LoadOwnProfile, OpenPublicProfilePage(String), LoadProfileHistory,
+    LoadProfileRatings, SearchProfiles(String), LoadMatchDetail(String), CloseMatchDetail,
+    UnlockLeader { leader_id: String, currency: String }, UnlockSkin(String), EquipSkin(String),
+}
+
+pub(crate) const fn rgb(r: u8, g: u8, b: u8) -> [f32; 4] {
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
 
 pub(crate) fn get_build_version() -> String {
     #[cfg(target_arch = "wasm32")]
@@ -29,7 +53,6 @@ pub(crate) fn get_build_version() -> String {
 mod analytics;
 mod anonymous_identity;
 mod asset_config;
-mod config;
 pub mod diag;
 
 pub use asset_config::AssetConfig;
@@ -147,11 +170,11 @@ pub enum MapDownloadEvent {
         reason: String,
     },
     BootUiReady {
-        kind: sow_ui::ui::asset_loader::UiSplashTexture,
+        kind: ui::asset_loader::UiSplashTexture,
         bytes: Vec<u8>,
     },
     BootUiFailed {
-        kind: sow_ui::ui::asset_loader::UiSplashTexture,
+        kind: ui::asset_loader::UiSplashTexture,
         reason: String,
     },
     /// `leader == None` is the null/fallback avatar (`null.webp`).
@@ -187,23 +210,25 @@ pub enum EngineInitEvent {
 pub mod app;
 pub mod asset;
 pub mod campaign;
-pub mod hud;
-#[cfg(target_arch = "wasm32")]
-mod ime;
 pub mod input;
 pub mod loader;
+pub mod ui;
 mod map_cache;
 #[cfg(target_arch = "wasm32")]
 mod map_download;
 pub mod net;
-#[cfg(not(target_arch = "wasm32"))]
-mod paths;
 pub mod platform_identity;
-mod platform_output;
 pub mod player_progress;
 pub mod render;
 pub mod store_portals;
-pub mod ui_scene;
+pub use ui::app::ClientApp;
+pub use ui::main_menu::LobbyNotice;
+pub mod theme {
+    pub use crate::ui::theme::*;
+}
+pub mod utils {
+    pub use crate::ui::utils::*;
+}
 mod viewport;
 #[cfg(target_arch = "wasm32")]
 mod web_canvas;
@@ -234,7 +259,6 @@ use winit::application::ApplicationHandler;
 
 impl ApplicationHandler for SowApp {
     fn resumed(&mut self, event_loop: &dyn winit::event_loop::ActiveEventLoop) {
-        // App resumed, might need to re-init some things on iOS
         self.handle_resumed(event_loop);
     }
 
@@ -276,15 +300,6 @@ impl ApplicationHandler for SowApp {
         // browser's requestAnimationFrame compositor (Firefox/Chrome), crashing FPS to ~15.
         // Pin web to Wait and drive redraws via request_redraw below. See README
         // "Event Loop Starvation" / commit 11b8b8a. Do not collapse this cfg split.
-        #[cfg(target_os = "ios")]
-        let flow = winit::event_loop::ControlFlow::Poll;
-        #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
-        let flow = if self.ui.app.phase == sow_ui_kit::ClientPhase::Playing {
-            winit::event_loop::ControlFlow::Poll
-        } else {
-            winit::event_loop::ControlFlow::Wait
-        };
-        #[cfg(target_arch = "wasm32")]
         let flow = winit::event_loop::ControlFlow::Wait;
 
         event_loop.set_control_flow(flow);
@@ -296,70 +311,9 @@ impl ApplicationHandler for SowApp {
 }
 
 pub fn run_game(event_loop: winit::event_loop::EventLoop) {
-    #[cfg(target_arch = "wasm32")]
     map_download::install_wasm_map_export_hook();
     let app = SowApp::new();
     let _ = event_loop.run_app(app);
-}
-
-#[cfg(target_os = "ios")]
-static IOS_REVENUECAT_PURCHASE_COMPLETED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-#[cfg(target_os = "ios")]
-#[unsafe(no_mangle)]
-pub extern "C" fn sow_ios_revenuecat_purchase_completed() {
-    IOS_REVENUECAT_PURCHASE_COMPLETED.store(true, std::sync::atomic::Ordering::Release);
-}
-
-#[cfg(target_os = "ios")]
-pub(crate) fn take_ios_revenuecat_purchase_completed() -> bool {
-    IOS_REVENUECAT_PURCHASE_COMPLETED.swap(false, std::sync::atomic::Ordering::AcqRel)
-}
-
-#[cfg(target_os = "ios")]
-#[unsafe(no_mangle)]
-pub extern "C" fn sow_ios_main() {
-    use winit::event_loop::EventLoopBuilder;
-
-    let event_loop = EventLoopBuilder::default().build().unwrap();
-    run_game(event_loop);
-}
-
-#[cfg(target_os = "android")]
-#[unsafe(no_mangle)]
-pub fn android_main(app: winit::platform::android::activity::AndroidApp) {
-    use winit::event_loop::EventLoopBuilder;
-    use winit::platform::android::EventLoopBuilderExtAndroid;
-
-    // Redirect all crashes and logs to a physical file so we can see what's failing without ADB!
-    if let Some(ext_path) = app.external_data_path() {
-        let _ = std::fs::create_dir_all(&ext_path);
-        let log_file = ext_path.join("sow_crash.txt");
-        if let Ok(file) = std::fs::File::create(&log_file) {
-            use std::os::unix::io::AsRawFd;
-            let fd = file.as_raw_fd();
-            unsafe {
-                libc::dup2(fd, libc::STDERR_FILENO);
-                libc::dup2(fd, libc::STDOUT_FILENO);
-            }
-        }
-    }
-
-    // Now env_logger will write to the redirected stderr instead of logcat!
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .try_init();
-
-    log::info!("SOW ENGINE STARTING...");
-
-    let event_loop = EventLoopBuilder::default()
-        .with_android_app(app)
-        .build()
-        .unwrap();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
-
-    run_game(event_loop);
 }
 
 #[cfg(target_arch = "wasm32")]

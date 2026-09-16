@@ -75,7 +75,6 @@
         hudRoot.innerHTML = ''
             + '<header class="sow-hud__topbar">'
             + '  <div class="sow-hud__status-left">'
-            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_tutorial_objectives" id="sow-hud-quests-btn" aria-label="' + SOW_t("hud.quests") + '" title="' + SOW_t("hud.quests") + '">📜</button>'
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.rankings") + '" title="' + SOW_t("hud.rankings") + '">🏆</button>'
             + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">🛠</button>'
             + '  </div>'
@@ -268,7 +267,6 @@
             prod: hudRoot.querySelector('[data-role="prod"]'),
             fps: document.getElementById("sow-hud-fps"),
             inboxCount: document.getElementById("sow-hud-inbox-count"),
-            questsBtn: document.getElementById("sow-hud-quests-btn"),
             hoverCard: document.getElementById("sow-hud-hover-card"),
             hoverAvatar: document.getElementById("sow-hud-hover-avatar"),
             hoverName: document.getElementById("sow-hud-hover-name"),
@@ -513,12 +511,7 @@
         hudRoot.hidden = false;
 
         var hud = hudState.hud;
-        var quests = hud.quests || {};
         var devTools = hud.dev_tools || {};
-        if (hudRefs.questsBtn) {
-            hudRefs.questsBtn.classList.toggle("hidden", !quests.available);
-            hudRefs.questsBtn.classList.toggle("active", Boolean(quests.open));
-        }
         if (hudRefs.devBtn) {
             hudRefs.devBtn.classList.toggle("hidden", !devTools.available);
         }
@@ -694,7 +687,7 @@
         // Surrender Modal
         if (hudRefs.surrender) {
             hudRefs.surrender.classList.toggle("hidden", !surrenderModalOpen);
-            var tutorialActive = Boolean(quests.available);
+            var tutorialActive = Boolean(hud.tutorial && hud.tutorial.active);
             var surrenderLeader = leaderById((hud && hud.player_leader) || (hudState && hudState.selected_leader));
             if (surrenderModalOpen && !tutorialActive && surrenderMessage == null) {
                 var messages = surrenderMessageKeys.map(function (key) { return SOW_t(key); });
@@ -768,9 +761,6 @@
             if (cmd === "toggle_dev_sidebar") {
                 devSidebarOpen = !devSidebarOpen;
                 send("toggle_dev_sidebar");
-                renderHud();
-            } else if (cmd === "toggle_tutorial_objectives") {
-                send("toggle_tutorial_objectives");
                 renderHud();
             } else if (cmd === "toggle_leaderboard") {
                 leaderboardOpen = !leaderboardOpen;
@@ -892,6 +882,9 @@
             }
         }
         renderHud();
+        if (typeof window.SOW_tutorial_state_update === "function") {
+            window.SOW_tutorial_state_update(hudState);
+        }
     }
 
     window.SOW_onStateUpdate = function (raw) {

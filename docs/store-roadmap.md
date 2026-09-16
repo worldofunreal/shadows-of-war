@@ -44,10 +44,6 @@
   canonical `account_id` and product ID to `/store/checkout`; the anonymous
   ownership secret never leaves the game. Stripe completion is imported into
   the same RevenueCat project, whose webhook performs the authoritative grant.
-- The Apple App Store app uses the same RevenueCat project with bundle ID
-  `games.shadowsofwar.app`; the three consumables are configured and the
-  native bridge is in the Xcode target. A Mac/TestFlight build is still
-  required for final runtime purchase proof.
 
 ## Storefront and checkout contract
 
@@ -84,9 +80,6 @@
 
 - Validate one Google Play purchase on-device and one embedded Stripe purchase
   end to end, including the idempotent server grant.
-- Build the iOS app with the RevenueCat public SDK key supplied through the
-  signed app configuration, then validate one sandbox purchase plus the
-  idempotent server grant.
 - Balance leader prices after real retention and economy data exists.
 
 The current leaders have gameplay perks. Selling access to them is intentional under the rotation model, but future hackathon/store copy must not claim that every purchase is purely cosmetic.

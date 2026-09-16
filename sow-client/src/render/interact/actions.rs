@@ -2,20 +2,8 @@ use crate::app::SowApp;
 use crate::spawn_sow_client_connect;
 use sow_ui::UiAction;
 
-#[cfg(target_os = "ios")]
-unsafe extern "C" {
-    fn sow_revenuecat_open_store(
-        app_user_id: *const std::ffi::c_char,
-        host_view_controller: *mut std::ffi::c_void,
-    );
-}
-
 impl SowApp {
-    pub(crate) fn process_ui_actions(
-        &mut self,
-        _ctx: &egui::Context,
-        action: Option<sow_ui::UiAction>,
-    ) {
+    pub(crate) fn process_ui_actions(&mut self, action: Option<sow_ui::UiAction>) {
         if let Some(action) = action {
             match action {
                 UiAction::StartSinglePlayer(config) => {
@@ -154,7 +142,6 @@ impl SowApp {
                     self.input.camera_y = self.input.screen_h * 0.5 - world_cy * target_zoom;
                     self.clamp_camera_to_map();
                 }
-                #[cfg(any(feature = "dev", debug_assertions))]
                 UiAction::ToggleDevSidebar => {
                     self.ui.show_dev_sidebar = !self.ui.show_dev_sidebar;
                     if self.ui.show_dev_sidebar {
@@ -214,10 +201,6 @@ impl SowApp {
                         sow_ui::ui::main_menu::profile::NativeProfileTab::Overview;
                     self.ui.app.main_menu_state.profile.loading = false;
                 }
-                UiAction::OpenStore => {
-                    #[cfg(target_os = "ios")]
-                    self.open_ios_store();
-                }
                 UiAction::LoadOwnProfile => {
                     self.load_native_profile();
                 }
@@ -251,12 +234,6 @@ impl SowApp {
                 }
                 UiAction::CloseMatchDetail => {
                     self.ui.app.main_menu_state.profile.match_detail = None;
-                }
-                UiAction::BuyGems(product_id) => {
-                    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
-                    self.open_desktop_purchase(&product_id);
-                    #[cfg(any(target_arch = "wasm32", target_os = "ios"))]
-                    std::mem::drop(product_id);
                 }
                 UiAction::UnlockLeader {
                     leader_id,
@@ -346,80 +323,6 @@ impl SowApp {
                     self.save_display_name(display_name);
                 }
             }
-        }
-    }
-
-    #[cfg(target_os = "ios")]
-    fn open_ios_store(&mut self) {
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-
-        let Some(app_user_id) = self.progress_account_id.clone() else {
-            self.ui.app.main_menu_state.error_message =
-                Some("Your player profile is still loading. Try Store again in a moment.".into());
-            return;
-        };
-        let Ok(app_user_id) = std::ffi::CString::new(app_user_id) else {
-            self.ui.app.main_menu_state.error_message =
-                Some("The player profile could not open the store.".into());
-            return;
-        };
-        let Some(window) = self.active_window() else {
-            self.ui.app.main_menu_state.error_message =
-                Some("The game window is not ready to open the store.".into());
-            return;
-        };
-        let Ok(window_handle) = window.window_handle() else {
-            self.ui.app.main_menu_state.error_message =
-                Some("The game window could not open the store.".into());
-            return;
-        };
-        let RawWindowHandle::UiKit(handle) = window_handle.as_raw() else {
-            self.ui.app.main_menu_state.error_message =
-                Some("The current platform cannot open the Apple store.".into());
-            return;
-        };
-        let Some(view_controller) = handle.ui_view_controller else {
-            self.ui.app.main_menu_state.error_message =
-                Some("The Apple store host is not ready.".into());
-            return;
-        };
-        unsafe {
-            sow_revenuecat_open_store(app_user_id.as_ptr(), view_controller.as_ptr());
-        }
-    }
-
-    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))]
-    fn open_desktop_purchase(&mut self, product_id: &str) {
-        let Some(account_id) = self.progress_account_id.as_deref() else {
-            self.ui.app.main_menu_state.error_message =
-                Some("Your player profile is still loading. Try again in a moment.".into());
-            return;
-        };
-        let Some(base) = std::env::var("SOW_REVENUECAT_WEB_PURCHASE_LINK")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-        else {
-            self.ui.app.main_menu_state.error_message =
-                Some("Store purchases are not configured for this desktop build.".into());
-            return;
-        };
-        let encoded_user =
-            url::form_urlencoded::byte_serialize(account_id.as_bytes()).collect::<String>();
-        let encoded_product =
-            url::form_urlencoded::byte_serialize(product_id.as_bytes()).collect::<String>();
-        let url = format!(
-            "{}/{}/?package_id={}",
-            base.trim_end_matches('/'),
-            encoded_user,
-            encoded_product
-        );
-        if let Err(error) = open::that(&url) {
-            log::error!("[store] failed to open RevenueCat checkout: {error}");
-            self.ui.app.main_menu_state.error_message =
-                Some("Could not open the store checkout.".into());
-        } else {
-            log::info!("[store] opened RevenueCat checkout for gem bundle");
-            self.ui.app.main_menu_state.error_message = None;
         }
     }
 

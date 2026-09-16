@@ -6,8 +6,6 @@ mod ui;
 
 impl SowApp {
     pub fn render_frame(&mut self, _event_loop: &dyn winit::event_loop::ActiveEventLoop) {
-        sow_ui_kit::register_game_assets(&self.ui.egui_ctx);
-
         #[cfg(target_arch = "wasm32")]
         if let Some(win) = self.gfx.window.as_ref() {
             crate::viewport::sync_wasm_window(self, win.as_ref());
@@ -51,7 +49,6 @@ impl SowApp {
 
         let sf = wanted.as_ref().map(|v| v.scale_factor).unwrap_or(1.0);
         crate::viewport::Viewport::from_configured(self, sf).sync_to_app(self);
-        crate::viewport::scale_pointer_events(&mut self.ui.raw_input, sf);
 
         if let Some(ref mut s) = self.gfx.surface {
             let mut render_ctx = match self.gfx.render_ctx.take() {

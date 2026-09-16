@@ -67,7 +67,7 @@ impl SowApp {
                         world_y,
                         start_time: web_time::Instant::now(),
                         duration: web_time::Duration::from_millis(1500),
-                        color: egui::Color32::from_rgb(6, 182, 212), // cyan
+                        color: crate::rgb(6, 182, 212), // cyan
                     });
                 }
             }

@@ -33,12 +33,9 @@ pub struct GraphicsState {
     pub map_renderer: Option<crate::render::gpu::MapRenderer>,
     pub mover_renderer: Option<crate::render::gpu::MoverRenderer>,
     pub text_renderer: Option<crate::render::gpu::TextRenderer>,
-    pub gui_painter: Option<blade_egui::GuiPainter>,
     pub prev_sync_point: Option<blade_graphics::SyncPoint>,
     pub needs_first_upload: bool,
     pub configured_physical: winit::dpi::PhysicalSize<u32>,
-    /// Last viewport applied to egui (`physical_w`, `physical_h`, `scale_factor`).
-    pub last_egui_viewport: Option<(u32, u32, f32)>,
 }
 
 /// One-shot timings for a multiplayer match handoff and loader. These events are
@@ -52,6 +49,23 @@ pub struct LoadTelemetry {
     pub gpu_upload_complete_at: Option<web_time::Instant>,
     pub snapshot_available_at: Option<web_time::Instant>,
     pub ready_sent_at: Option<web_time::Instant>,
+}
+
+#[derive(Default)]
+pub struct TutorialObservation {
+    pub seen_attacks: std::collections::HashSet<u64>,
+    pub seen_fleets: std::collections::HashSet<u64>,
+    pub seen_structures: std::collections::HashSet<u64>,
+    pub seen_defeated: std::collections::HashSet<u16>,
+    pub seen_defeated_names: std::collections::HashSet<String>,
+    pub seen_contacts: std::collections::HashSet<u16>,
+    pub seen_nukes: std::collections::HashSet<(u32, u32, u16)>,
+}
+
+impl TutorialObservation {
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
 }
 
 impl LoadTelemetry {
@@ -153,6 +167,7 @@ pub struct SimState {
     pub tile_upgrades: Vec<u32>,
     pub config: sow_core::game_config::GameConfig,
     pub paused: bool,
+    pub tutorial_observation: TutorialObservation,
     pub fog_explored: sow_core::bitset::DenseBitSet,
     pub fog_visible: sow_core::bitset::DenseBitSet,
     pub force_fog_upload: bool,
@@ -170,20 +185,10 @@ pub struct InputState {
     pub last_mouse_y: f64,
     pub active_touches: std::collections::HashMap<u64, (f64, f64)>,
     pub map_touch_start: Option<(web_time::Instant, f64, f64)>,
-    pub map_context_menu: Option<(f32, f32, u32)>,
-    pub map_context_menu_active: Option<(f32, f32, u32)>,
-    pub map_context_menu_session: u64,
-    pub context_menu_timer: f32,
-    pub context_menu_open_time: Option<web_time::Instant>,
     pub last_pinch_state: Option<(f64, f64, f64)>,
-    /// Hold-to-attack: (target_owner, press_start_time, screen_x, screen_y, has_fired_initial)
-    pub hold_attack_target: Option<(u16, web_time::Instant, f64, f64, bool)>,
-    pub hold_attack_accum: f32,
     /// Hold-to-build
     pub hold_build_active: bool,
     pub hold_build_accum: f32,
-    pub ime_allowed_state: bool,
-    pub ime_cursor_rect_px: Option<egui::Rect>,
     pub has_snapped_camera_to_spawn: bool,
     pub selected_warships: Vec<u64>,
     pub key_pan_up: bool,
@@ -209,7 +214,7 @@ pub struct FloatingNotice {
     pub world_y: f32,
     pub start_time: web_time::Instant,
     pub duration: web_time::Duration,
-    pub color: egui::Color32,
+    pub color: [f32; 4],
 }
 
 #[derive(Clone, Debug)]
@@ -219,34 +224,12 @@ pub struct ClickMarker {
     pub start_time: web_time::Instant,
 }
 
-pub type AttackTroopLabel = (f64, String, std::sync::Arc<egui::Galley>);
-
 pub struct UiState {
     pub app: sow_ui::ClientApp,
-    pub egui_ctx: egui::Context,
-    pub raw_input: egui::RawInput,
-
-    pub label_positions: std::collections::HashMap<u16, (f32, f32)>,
-    pub label_sizes: std::collections::HashMap<u16, f32>,
-    /// Screen-space center and visual radius of the local tutorial avatar for this frame.
-    pub tutorial_avatar_geometry: Option<(egui::Pos2, f32)>,
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
-    pub tutorial_step_idx: usize,
-    pub tutorial_baseline_tiles: u32,
-    pub tutorial_baseline_set: bool,
-    pub tutorial_objectives_open: bool,
-    pub tutorial_modal_dismissed: bool,
-    pub tutorial_obj_done_at: std::collections::HashMap<usize, f64>,
-    pub tutorial_last_kills: u32,
-    pub tutorial_met_tribes: std::collections::HashSet<u16>,
-    pub tutorial_pending_intro: Option<String>,
-    /// Title of a just-completed quest, queued to flash a "Quest Complete" notification through
-    /// the bottom-panel modal before the next quest's brief opens.
-    pub tutorial_pending_completion: Option<&'static str>,
-    pub tutorial_spawn_time: Option<web_time::Instant>,
     pub show_leaderboard: bool,
     pub leaderboard_timer: f32,
     pub leaderboard_rankings: Vec<sow_ui::ui::hud::leaderboard::LeaderboardRanking>,
@@ -265,9 +248,8 @@ pub struct UiState {
     pub observing: bool,
     pub fallout_zones: Vec<FalloutZone>,
     pub last_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
-    pub cached_player_colors: Vec<egui::Color32>,
+    pub cached_player_colors: Vec<[f32; 4]>,
     pub cached_player_count: usize,
-    pub star_svg_registered: bool,
     pub floating_notices: Vec<FloatingNotice>,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
@@ -275,21 +257,10 @@ pub struct UiState {
     /// outcome is first observed so the endgame panel does not double-award.
     pub reward_cache: Option<sow_data::rewards::MatchReward>,
 
-    pub cached_hovered_building_id: Option<u64>,
-    pub cached_hovered_building_level: u8,
-    pub cached_hovered_building_tooltip: String,
-    pub attack_troop_labels: std::collections::HashMap<u64, AttackTroopLabel>,
-    pub attack_troop_labels_last_update: std::collections::HashMap<u64, web_time::Instant>,
-    pub cached_galleys: std::collections::HashMap<(String, u32), std::sync::Arc<egui::Galley>>,
-    pub cached_prepared_names:
-        std::collections::HashMap<(String, u32), sow_ui_kit::widgets::PreparedName>,
-    pub edge_mask_cache: Vec<u8>,
-    pub rail_state: crate::render::world::railways::RailState,
     /// Client-side nuke silo cooldown tracking: building id → tick when ready.
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,
     /// Last sim tick copied into `hud_state` combat vecs.
     pub hud_combat_sync_tick: u64,
-    pub bunker_last_sound_time: std::collections::HashMap<u64, web_time::Instant>,
     pub mover_scene: crate::render::world::movers::MoverScene,
     pub click_markers: Vec<ClickMarker>,
     pub last_build_confirm_time: Option<web_time::Instant>,
@@ -336,13 +307,6 @@ pub fn easeout_flash(elapsed: f32) -> Option<f32> {
 }
 
 impl UiState {
-    pub fn invalidate_egui_dependent_caches(&mut self) {
-        self.cached_galleys.clear();
-        self.cached_prepared_names.clear();
-        self.attack_troop_labels.clear();
-        self.attack_troop_labels_last_update.clear();
-    }
-
     pub(crate) fn trigger_viewport_alert(&mut self, kind: ViewportAlertKind) {
         let priority = |k: ViewportAlertKind| match k {
             ViewportAlertKind::Victory | ViewportAlertKind::Defeat => 4,
@@ -449,8 +413,6 @@ pub struct SowApp {
     pub(crate) web_loader_hidden: bool,
     #[cfg(target_arch = "wasm32")]
     pub(crate) web_exit_lobbies_ready: bool,
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) ime_bridge: crate::ime::WasmImeBridge,
     /// Set when Blade/Vulkan init fails; event loop exits on next tick.
     pub gpu_init_failed: bool,
     pub progress: crate::player_progress::PlayerProgress,
@@ -482,4 +444,5 @@ pub struct SowApp {
     pub progress_session_defeats: crate::player_progress::SessionDefeats,
     #[cfg(target_arch = "wasm32")]
     pub boot_db_settled: bool,
+    pub boot_campaign_pending: Option<String>,
 }

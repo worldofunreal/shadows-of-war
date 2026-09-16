@@ -7,7 +7,6 @@ members = [
     "sow-client",
     "sow-render",
     "sow-server",
-    "sow-ui",
     "sow-tools",
     "sow-relay",
     "sow-i18n",
@@ -15,7 +14,7 @@ members = [
     "sow-dist",
     "fstack-bridge",
 ]
-exclude = ["blade", "winit", "egui", "sow-ipwatch"]
+exclude = ["blade", "winit", "sow-ipwatch"]
 resolver = "2"
 
 [workspace.package]
@@ -35,15 +34,13 @@ raw-window-handle = "0.6"
 serde_json = "1"
 web-time = "1.1"
 wyrand = "0.2"
-egui = { version = "0.34", default-features = false }
 image = { version = "0.25.10", default-features = false, features = ["webp", "png", "jpeg"] }
 sow-i18n = { path = "sow-i18n" }
 sow-map = { path = "sow-map", default-features = false }
-sow-ui = { path = "sow-ui" }
 sha2 = "0.10"
 hmac = "0.12"
 hex = "0.4"
-winit = { version = "0.31.0-beta.2", features = ["android-native-activity"] }
+winit = "0.31.0-beta.2"
 brotli = "8.0.2"
 crossbeam-channel = "0.5.15"
 url = "2.5.8"
@@ -69,7 +66,6 @@ libm = "0.2.16"
 axum = "0.8.9"
 tower-http = { version = "0.6.10", features = ["fs", "compression-br", "cors"] }
 futures-channel = "0.3"
-open = "5.3"
 arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 rodio = { version = "0.22.2", default-features = false, features = ["playback", "wav"] }
 tempfile = "3"
@@ -98,7 +94,6 @@ path = "sow-render"
 path = "sow-net"
 
 [patch."https://github.com/ohsalmeron/blade"]
-blade-egui = { path = "blade/blade-egui" }
 blade-graphics = { path = "blade/blade-graphics" }
 blade-macros = { path = "blade/blade-macros" }
 blade-util = { path = "blade/blade-util" }
@@ -110,14 +105,6 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
-
-# sow-ui instantiates a lot of egui's boxed-closure machinery (Panel/Frame/ScrollArea
-# `show*`, ComboBox `show_ui`). With the default rust-lld linker + shared generics, that
-# drop glue gets internalized across codegen units and lld fails to resolve it on a full
-# rebuild ("undefined hidden symbol: …drop_in_place<Box<dyn FnOnce(&mut Ui)…>>"). Forcing
-# a single codegen unit keeps definition and use in the same object, sidestepping the bug.
-[profile.dev.package.sow-ui]
-codegen-units = 1
 
 [profile.release]
 opt-level = 3

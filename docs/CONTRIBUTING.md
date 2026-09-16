@@ -18,8 +18,8 @@ Thank you for your interest in contributing!
 
 Static HTML lives in `sow-web/site/` (landing, privacy, terms, cookies, support). The WASM game shell lives in `sow-web/shell/` — see `sow-web/README.md`. Do not embed game code in the marketing pages.
 
-Use `./sow l` for a local web/WASM preview and `./sow native` for a local
-desktop run; use the production packaging path for a deployable web build.
+Use `./sow` for the native desktop package, `./sow l` for the local web/WASM
+preview, and the production packaging path for a deployable web build.
 
 ## Pull requests
 
@@ -59,8 +59,5 @@ opt-level = 1
 
 The workspace default uses `opt-level = 3` for dependencies so debug runs stay smooth; lowering it trades runtime speed for compile time.
 
-Native dev tools (FPS overlay, dev sidebar, map shader sliders) require `--features dev`:
-
-```bash
-cargo run -p sow-client --features dev
-```
+The browser shell owns the menus and debug controls; the native desktop package
+only provides the Tauri window around that same client.

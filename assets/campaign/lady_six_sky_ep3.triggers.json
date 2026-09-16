@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "episode_id": "six_sky_ep3",
+  "settings": { "buildings_enabled": false, "starting_troops": 1000 },
+  "steps": [
+    { "id": "six_sky_ep3_count", "mechanic": "expansion", "trigger": { "type": "territory", "value": 256, "mode": "gained" }, "title_key": "tutorial.six_sky_ep3_count_title", "body_key": "tutorial.six_sky_ep3_count_body", "hint_key": "tutorial.six_sky_ep3_count_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_offerings", "mechanic": "attack", "trigger": { "type": "kills", "value": 2 }, "title_key": "tutorial.six_sky_ep3_offerings_title", "body_key": "tutorial.six_sky_ep3_offerings_body", "hint_key": "tutorial.six_sky_ep3_offerings_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_unknown", "mechanic": "attack", "trigger": { "type": "defeated", "target": "K'inichil Kab" }, "title_key": "tutorial.six_sky_ep3_unknown_title", "body_key": "tutorial.six_sky_ep3_unknown_body", "hint_key": "tutorial.six_sky_ep3_unknown_hint", "marker": { "target": "K'inichil Kab" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_caracol", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Caracol War Host" }, "title_key": "tutorial.six_sky_ep3_caracol_title", "body_key": "tutorial.six_sky_ep3_caracol_body", "hint_key": "tutorial.six_sky_ep3_caracol_hint", "marker": { "target": "Caracol War Host" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_hill", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Xunantunich Rebels" }, "title_key": "tutorial.six_sky_ep3_hill_title", "body_key": "tutorial.six_sky_ep3_hill_body", "hint_key": "tutorial.six_sky_ep3_hill_hint", "marker": { "target": "Xunantunich Rebels" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_moon", "mechanic": "expansion", "trigger": { "type": "territory", "value": 1024, "mode": "gained" }, "title_key": "tutorial.six_sky_ep3_moon_title", "body_key": "tutorial.six_sky_ep3_moon_body", "hint_key": "tutorial.six_sky_ep3_moon_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_vanguard", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Tikal Vanguard" }, "title_key": "tutorial.six_sky_ep3_vanguard_title", "body_key": "tutorial.six_sky_ep3_vanguard_body", "hint_key": "tutorial.six_sky_ep3_vanguard_hint", "marker": { "target": "Tikal Vanguard" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_tribute", "mechanic": "attack", "trigger": { "type": "kills", "value": 6 }, "title_key": "tutorial.six_sky_ep3_tribute_title", "body_key": "tutorial.six_sky_ep3_tribute_body", "hint_key": "tutorial.six_sky_ep3_tribute_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep3_legacy", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Tikal" }, "title_key": "tutorial.six_sky_ep3_legacy_title", "body_key": "tutorial.six_sky_ep3_legacy_body", "hint_key": "tutorial.six_sky_ep3_legacy_hint", "marker": { "target": "Tikal" }, "on_enter": [], "on_complete": [] }
+  ]
+}

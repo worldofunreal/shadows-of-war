@@ -2,7 +2,7 @@
 name = "sow-map"
 version = "0.1.0"
 edition = "2024"
-description = "Shadows of War Map Crate (Interactive Editor and Generator)"
+description = "Shadows of War Map Generator"
 license = "AGPL-3.0-or-later"
 
 [lib]
@@ -10,20 +10,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [features]
-default = ["editor", "generator", "osm"]
-editor = [
-    "generator",
-    "dep:sow-render",
-    "dep:sow-ui",
-    "sow-ui/map-editor",
-    "sow-i18n/map-editor",
-    "dep:blade-graphics",
-    "dep:blade-egui",
-    "dep:blade-macros",
-    "dep:bytemuck",
-    "dep:egui",
-    "dep:winit",
-]
+default = ["generator", "osm"]
 generator = ["dep:image", "dep:brotli"]
 osm = [
     "generator",
@@ -42,14 +29,6 @@ bincode.workspace = true
 crossbeam-channel = { workspace = true }
 web-time = { workspace = true }
 
-sow-render = { workspace = true, optional = true }
-sow-ui = { workspace = true, optional = true }
-blade-graphics = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61", optional = true }
-blade-egui = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61", optional = true }
-blade-macros = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61", optional = true }
-bytemuck = { workspace = true, optional = true }
-egui = { workspace = true, optional = true }
-winit = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 brotli = { workspace = true, optional = true }
 ehttp = { workspace = true, optional = true }

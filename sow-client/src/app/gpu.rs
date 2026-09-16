@@ -53,9 +53,6 @@ impl SowApp {
             let _ = render_ctx.context.wait_for(&sp, !0);
         }
         if let Some(mut s) = self.gfx.surface.take() {
-            if let Some(mut gp) = self.gfx.gui_painter.take() {
-                gp.destroy(&render_ctx.context);
-            }
             if let Some(mut mr) = self.gfx.map_renderer.take() {
                 mr.destroy(render_ctx);
             }
@@ -77,21 +74,6 @@ impl SowApp {
             return;
         }
         if self.gfx.window.is_none() {
-            #[cfg(any(target_os = "android", target_os = "ios"))]
-            let attributes =
-                winit::window::WindowAttributes::default().with_title("Shadows of War");
-
-            #[cfg(target_os = "ios")]
-            let attributes = {
-                let ios_attrs = winit::platform::ios::WindowAttributesIos::default()
-                    .with_valid_orientations(
-                        winit::platform::ios::ValidOrientations::LandscapeAndPortrait,
-                    )
-                    .with_prefers_status_bar_hidden(true)
-                    .with_prefers_home_indicator_hidden(true);
-                attributes.with_platform_attributes(Box::new(ios_attrs))
-            };
-            #[cfg(target_arch = "wasm32")]
             let mut attributes = {
                 let (w, h) = crate::web_canvas::canvas_logical_size();
                 winit::window::WindowAttributes::default()
@@ -113,13 +95,7 @@ impl SowApp {
                     .with_canvas(Some(canvas))
                     .with_prevent_default(true);
                 attributes = attributes.with_platform_attributes(Box::new(web_attrs));
-                crate::ime::ensure_canvas_tabindex();
             }
-
-            #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
-            let attributes = winit::window::WindowAttributes::default()
-                .with_title("Shadows of War")
-                .with_surface_size(winit::dpi::LogicalSize::new(800.0, 800.0));
 
             match event_loop.create_window(attributes) {
                 Ok(win) => self.gfx.window = Some(win),
@@ -149,9 +125,6 @@ impl Drop for SowApp {
         }
         if let Some(mut text) = self.gfx.text_renderer.take() {
             text.destroy(render_ctx);
-        }
-        if let Some(mut gui) = self.gfx.gui_painter.take() {
-            gui.destroy(&render_ctx.context);
         }
         if let Some(mut s) = self.gfx.surface.take() {
             render_ctx.context.destroy_surface(&mut s);

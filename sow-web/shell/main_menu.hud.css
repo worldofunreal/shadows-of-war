@@ -848,6 +848,150 @@
     margin-top: 0;
 }
 
+.sow-hud__tutorial-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    pointer-events: none;
+}
+
+.sow-hud__tutorial-card {
+    position: absolute;
+    left: 50%;
+    bottom: 108px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    width: min(560px, calc(100vw - 32px));
+    transform: translateX(-50%);
+    padding: 18px 20px;
+    border: 1px solid rgba(243, 177, 43, 0.42);
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(24, 27, 33, 0.98), rgba(10, 12, 16, 0.98));
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.7);
+    pointer-events: auto;
+}
+
+.sow-hud__tutorial-copy {
+    min-width: 0;
+    flex: 1;
+}
+
+.sow-hud__tutorial-step {
+    margin: 0 0 5px;
+    color: var(--sow-muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+}
+
+.sow-hud__tutorial-card h2 {
+    margin: 0 0 7px;
+    color: #fca5a5;
+    font-size: clamp(22px, 4vw, 32px);
+    line-height: 1;
+    letter-spacing: 0.04em;
+}
+
+.sow-hud__tutorial-card p {
+    margin: 0;
+    color: #f5f1e8;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.sow-hud__tutorial-card strong {
+    display: block;
+    margin-top: 10px;
+    color: var(--sow-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.sow-hud__tutorial-progress {
+    margin-top: 8px;
+    color: var(--sow-muted);
+    font-size: 10px;
+}
+
+.sow-hud__tutorial-action {
+    min-height: 38px;
+    margin-top: 14px;
+    padding: 9px 14px;
+    border: 1px solid var(--sow-button-primary-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-primary-bg);
+    color: var(--sow-button-primary-text);
+    font-size: 10px;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
+    cursor: pointer;
+}
+
+.sow-hud__tutorial-avatar {
+    order: 2;
+    width: 92px;
+    height: 92px;
+    flex: 0 0 92px;
+    border: 2px solid rgba(243, 177, 43, 0.45);
+    border-radius: 14px;
+    object-fit: cover;
+    object-position: top center;
+}
+
+.sow-hud__tutorial-marker {
+    position: absolute;
+    width: 58px;
+    height: 58px;
+    transform: translate(-50%, -50%);
+    border: 2px solid rgba(243, 177, 43, 0.9);
+    border-radius: 50%;
+    box-shadow: 0 0 0 8px rgba(243, 177, 43, 0.14), 0 0 28px rgba(243, 177, 43, 0.65);
+    color: transparent;
+    pointer-events: none;
+}
+
+.sow-tutorial__error {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transform: translateX(-50%);
+    padding: 12px 14px;
+    border: 1px solid rgba(248, 113, 113, 0.55);
+    border-radius: 10px;
+    background: rgba(10, 12, 16, 0.96);
+    color: #f5f1e8;
+    font-size: 12px;
+}
+
+.sow-tutorial__error button {
+    min-height: 30px;
+    padding: 6px 10px;
+    border: 1px solid rgba(243, 177, 43, 0.55);
+    border-radius: 7px;
+    background: transparent;
+    color: #f5f1e8;
+    cursor: pointer;
+}
+
+@media (max-width: 640px) {
+    .sow-hud__tutorial-card {
+        bottom: 88px;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .sow-hud__tutorial-avatar {
+        width: 68px;
+        height: 68px;
+        flex-basis: 68px;
+    }
+}
+
 .sow-hud__endgame-hero {
     display: flex;
     align-items: center;

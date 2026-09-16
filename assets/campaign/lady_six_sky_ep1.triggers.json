@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "episode_id": "six_sky_ep1",
+  "settings": { "buildings_enabled": false, "starting_troops": 1000 },
+  "steps": [
+    { "id": "six_sky_ep1_landfall", "mechanic": "expansion", "trigger": { "type": "territory", "value": 128, "mode": "gained" }, "title_key": "tutorial.six_sky_ep1_landfall_title", "body_key": "tutorial.six_sky_ep1_landfall_body", "hint_key": "tutorial.six_sky_ep1_landfall_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_sacred_fire", "mechanic": "expansion", "trigger": { "type": "territory", "value": 512, "mode": "gained" }, "title_key": "tutorial.six_sky_ep1_fire_title", "body_key": "tutorial.six_sky_ep1_fire_body", "hint_key": "tutorial.six_sky_ep1_fire_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_first_blood", "mechanic": "attack", "trigger": { "type": "kills", "value": 1 }, "title_key": "tutorial.six_sky_ep1_blood_title", "body_key": "tutorial.six_sky_ep1_blood_body", "hint_key": "tutorial.six_sky_ep1_blood_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_villages", "mechanic": "attack", "trigger": { "type": "kills", "value": 4 }, "title_key": "tutorial.six_sky_ep1_villages_title", "body_key": "tutorial.six_sky_ep1_villages_body", "hint_key": "tutorial.six_sky_ep1_villages_hint", "marker": { "target": "player" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_rival", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Rival Claimant" }, "title_key": "tutorial.six_sky_ep1_rival_title", "body_key": "tutorial.six_sky_ep1_rival_body", "hint_key": "tutorial.six_sky_ep1_rival_hint", "marker": { "target": "Rival Claimant" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_caracol", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Caracol" }, "title_key": "tutorial.six_sky_ep1_caracol_title", "body_key": "tutorial.six_sky_ep1_caracol_body", "hint_key": "tutorial.six_sky_ep1_caracol_hint", "marker": { "target": "Caracol" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_tikal_vanguard", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Tikal Vanguard" }, "title_key": "tutorial.six_sky_ep1_vanguard_title", "body_key": "tutorial.six_sky_ep1_vanguard_body", "hint_key": "tutorial.six_sky_ep1_vanguard_hint", "marker": { "target": "Tikal Vanguard" }, "on_enter": [], "on_complete": [] },
+    { "id": "six_sky_ep1_queen", "mechanic": "attack", "trigger": { "type": "defeated", "target": "Tikal" }, "title_key": "tutorial.six_sky_ep1_queen_title", "body_key": "tutorial.six_sky_ep1_queen_body", "hint_key": "tutorial.six_sky_ep1_queen_hint", "marker": { "target": "Tikal" }, "on_enter": [], "on_complete": [] }
+  ]
+}

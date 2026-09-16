@@ -51,32 +51,118 @@ impl SowApp {
             self.ui.app.splash_state.done = true;
             self.ui.app.phase = ClientPhase::MainMenu;
         } else {
-            log::info!("Portal boot: new player -> intro skirmish");
+            log::info!("Portal boot: new player -> JavaScript campaign bootstrap");
             crate::analytics::track_with(
                 "boot_route_decision",
                 serde_json::json!({ "route": "intro" }),
             );
             self.ui.app.main_menu_state.host_private_pending = false;
-            self.start_portal_intro_match();
+            self.boot_campaign_pending = Some(crate::campaign::CampaignId::Boudica.episode_id().to_string());
+            hide_web_loader();
+            self.web_loader_hidden = true;
+            crate::store_portals::gameplay_stop();
+            self.ui.app.splash_state.done = true;
+            self.ui.app.phase = ClientPhase::MainMenu;
         }
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) fn start_campaign_episode(&mut self, campaign: crate::campaign::CampaignId) {
-        if !campaign.is_unlocked(&self.progress) {
-            self.ui.app.main_menu_state.error_message = Some("Campaign episode is locked.".into());
-            return;
+    pub(crate) fn start_campaign_episode_from_web(
+        &mut self,
+        campaign: crate::campaign::CampaignId,
+        roster: serde_json::Value,
+        match_config: serde_json::Value,
+    ) -> Result<(), String> {
+        let expected_map = match campaign {
+            crate::campaign::CampaignId::Boudica => "eastanglia",
+            crate::campaign::CampaignId::SixSkyEp1
+            | crate::campaign::CampaignId::SixSkyEp2
+            | crate::campaign::CampaignId::SixSkyEp3 => "northamerica",
+        };
+        if roster.get("map").and_then(serde_json::Value::as_str) != Some(expected_map) {
+            return Err("Campaign roster references the wrong map.".into());
         }
-        match campaign {
-            crate::campaign::CampaignId::Boudica => self.start_portal_intro_match(),
-            crate::campaign::CampaignId::SixSkyEp1 => self.start_six_sky_episode(1),
-            crate::campaign::CampaignId::SixSkyEp2 => self.start_six_sky_episode(2),
-            crate::campaign::CampaignId::SixSkyEp3 => self.start_six_sky_episode(3),
+        let roster_text = serde_json::to_string(&roster)
+            .map_err(|_| "Campaign roster could not be read.".to_string())?;
+        let (factions, player_spawn) = crate::campaign::parse_roster(&roster_text)
+            .ok_or_else(|| "Campaign roster is invalid.".to_string())?;
+        let (map_width, map_height) = match campaign {
+            crate::campaign::CampaignId::Boudica => (896, 504),
+            crate::campaign::CampaignId::SixSkyEp1
+            | crate::campaign::CampaignId::SixSkyEp2
+            | crate::campaign::CampaignId::SixSkyEp3 => (1000, 516),
+        };
+        if player_spawn.0 >= map_width || player_spawn.1 >= map_height
+            || factions.iter().any(|faction| faction.x >= map_width || faction.y >= map_height)
+        {
+            return Err("Campaign roster contains an out-of-bounds spawn.".into());
         }
+        let options = match_config
+            .as_object()
+            .ok_or_else(|| "Campaign settings are invalid.".to_string())?;
+        for key in options.keys() {
+            if !matches!(key.as_str(), "buildings_enabled" | "starting_troops") {
+                return Err(format!("Campaign setting is not allowed: {key}"));
+            }
+        }
+        let buildings_enabled = options
+            .get("buildings_enabled")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| "Campaign buildings_enabled is invalid.".to_string())?;
+        let starting_troops = options
+            .get("starting_troops")
+            .and_then(serde_json::Value::as_f64)
+            .filter(|value| value.is_finite() && (1.0..=100_000.0).contains(value))
+            .ok_or_else(|| "Campaign starting_troops is invalid.".to_string())?;
+
+        let seed = web_time::SystemTime::now()
+            .duration_since(web_time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let (leader, civilization) = match campaign {
+            crate::campaign::CampaignId::Boudica => (
+                sow_core::player::Leader::Boudica,
+                sow_core::player::Civilization::Iceni,
+            ),
+            crate::campaign::CampaignId::SixSkyEp1
+            | crate::campaign::CampaignId::SixSkyEp2
+            | crate::campaign::CampaignId::SixSkyEp3 => (
+                sow_core::player::Leader::LadySixSky,
+                sow_core::player::Civilization::Maya,
+            ),
+        };
+        self.ui.app.main_menu_state.selected_leader = leader;
+        self.ui.app.main_menu_state.selected_civilization = civilization;
+        self.ui.tutorial_campaign = campaign;
+        crate::campaign::log_plan_for(
+            campaign.menu_title(),
+            campaign.menu_subtitle(),
+            player_spawn,
+            &factions,
+        );
+        self.start_offline_match(
+            GameConfig {
+                map_name: expected_map.to_string(),
+                bot_count: 0,
+                nation_count: 0,
+                seed,
+                random_spawn: true,
+                player_leader: leader,
+                player_civilization: civilization,
+                scripted_spawns: crate::campaign::to_scripted(&factions),
+                player_spawn: Some(player_spawn),
+                player_team: Some(crate::campaign::PLAYER_TEAM),
+                starting_troops,
+                buildings_enabled,
+                ..Default::default()
+            },
+            true,
+        );
+        Ok(())
     }
 
-    /// Launch the scripted first-run intro (Boudica campaign) as an offline match. Used by both the
-    /// web portal boot route and the native first-run gate; body is platform-agnostic.
+    /// Keep the legacy native first-run route separate from the browser JSON controller.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn start_portal_intro_match(&mut self) {
         let seed = web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
@@ -107,83 +193,19 @@ impl SowApp {
         self.start_offline_match(config, true);
     }
 
-    /// Launch a Lady Six Sky saga episode (1–3) as an offline tutorial match.
-    /// Same isolation contract as the Boudica intro: scripted roster in,
-    /// snapshots out, never touches multiplayer.
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) fn start_six_sky_episode(&mut self, episode: u8) {
-        use crate::campaign::CampaignId;
-        let campaign = match episode {
-            2 => CampaignId::SixSkyEp2,
-            3 => CampaignId::SixSkyEp3,
-            _ => CampaignId::SixSkyEp1,
-        };
-        let ep_number = match campaign {
-            CampaignId::SixSkyEp2 => 2,
-            CampaignId::SixSkyEp3 => 3,
-            _ => 1,
-        };
-        let seed = web_time::SystemTime::now()
-            .duration_since(web_time::SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-        self.ui.app.main_menu_state.selected_leader = sow_core::player::Leader::LadySixSky;
-        self.ui.app.main_menu_state.selected_civilization = sow_core::player::Civilization::Maya;
-        self.ui.tutorial_campaign = campaign;
-        let (factions, player_spawn) = crate::campaign::lady_six_sky::roster(ep_number);
-        crate::campaign::log_plan_for(
-            "Lady Six Sky",
-            "Lady Six Sky/Maya, 1000",
-            player_spawn,
-            &factions,
-        );
-        let config = GameConfig {
-            map_name: "northamerica".to_string(),
-            bot_count: 0,
-            nation_count: 0,
-            seed,
-            random_spawn: true,
-            player_leader: sow_core::player::Leader::LadySixSky,
-            player_civilization: sow_core::player::Civilization::Maya,
-            scripted_spawns: crate::campaign::to_scripted(&factions),
-            player_spawn: Some(player_spawn),
-            player_team: Some(crate::campaign::PLAYER_TEAM),
-            starting_troops: 1000.0,
-            buildings_enabled: false,
-            ..Default::default()
-        };
-        crate::store_portals::measure("campaign", campaign.episode_id(), "start");
-        crate::analytics::track_with(
-            "campaign_start",
-            serde_json::json!({ "episode": campaign.episode_id() }),
-        );
-        self.start_offline_match(config, true);
-    }
-
     pub(crate) fn start_offline_match(&mut self, mut config: GameConfig, tutorial: bool) {
         self.net.is_offline = true;
         self.sim.offline_tick_timer = 0.0;
         self.sim.offline_last_update = web_time::Instant::now();
         self.sim.paused = false;
+        self.sim.tutorial_observation.reset();
         self.net.client = None;
         self.begin_enter_game_loader();
         self.sim.my_player_id = Some(1);
         self.sim.my_lobby_id = Some(0);
-        // Ride the tutorial signal IN the match config — `tutorial_active` is no longer set here.
-        // It is derived once, for every match, at the engine-init chokepoint (loader/engine.rs), so
-        // a forgetful path can't leave it stale. (These field resets stay: they pre-clear the run
-        // state for any offline scripted chapter; a normal match never reads them.)
+        // Ride the tutorial signal in the match config. Engine initialization derives the active
+        // mode from this single flag, while the browser owns the step state and presentation.
         config.tutorial = tutorial;
-        self.ui.tutorial_step_idx = 0;
-        self.ui.tutorial_baseline_tiles = 0;
-        self.ui.tutorial_baseline_set = false;
-        self.ui.tutorial_objectives_open = true;
-        self.ui.tutorial_modal_dismissed = false;
-        self.ui.tutorial_last_kills = 0;
-        self.ui.tutorial_met_tribes.clear();
-        self.ui.tutorial_pending_intro = None;
-        self.ui.tutorial_pending_completion = None;
-        self.ui.tutorial_spawn_time = Some(web_time::Instant::now());
         if tutorial {
             log::info!(
                 "tutorial: {} started (map={})",

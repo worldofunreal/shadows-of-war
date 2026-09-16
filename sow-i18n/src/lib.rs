@@ -68,7 +68,7 @@ impl Language {
 
 /// Web shell strings grouped by UI responsibility. The build validates every
 /// key against the English catalog, while the map keeps this boundary easy to
-/// extend without changing the native egui catalog types.
+/// extend without changing the catalog types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WebStrings {
@@ -80,6 +80,7 @@ pub struct WebStrings {
     pub store: WebDomain,
     pub hud: WebDomain,
     pub endgame: WebDomain,
+    pub tutorial: WebDomain,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

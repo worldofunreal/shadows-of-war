@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "episode_id": "boudica",
+  "settings": {
+    "buildings_enabled": false,
+    "starting_troops": 1000
+  },
+  "steps": [
+    {
+      "id": "boudica_rise_of_the_iceni",
+      "mechanic": "expansion",
+      "trigger": { "type": "territory", "value": 256, "mode": "gained" },
+      "title_key": "tutorial.boudica_rise_title",
+      "body_key": "tutorial.boudica_rise_body",
+      "hint_key": "tutorial.boudica_rise_hint",
+      "marker": { "target": "player" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_grow_the_warband",
+      "mechanic": "expansion",
+      "trigger": { "type": "territory", "value": 1024, "mode": "gained" },
+      "title_key": "tutorial.boudica_warband_title",
+      "body_key": "tutorial.boudica_warband_body",
+      "hint_key": "tutorial.boudica_warband_hint",
+      "marker": { "target": "player" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_first_contact",
+      "mechanic": "attack",
+      "trigger": { "type": "kills", "value": 1 },
+      "title_key": "tutorial.boudica_contact_title",
+      "body_key": "tutorial.boudica_contact_body",
+      "hint_key": "tutorial.boudica_contact_hint",
+      "marker": { "target": "player" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_unite_the_east",
+      "mechanic": "attack",
+      "trigger": { "type": "kills", "value": 4 },
+      "title_key": "tutorial.boudica_unite_title",
+      "body_key": "tutorial.boudica_unite_body",
+      "hint_key": "tutorial.boudica_unite_hint",
+      "marker": { "target": "player" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_camulodunum",
+      "mechanic": "siege",
+      "trigger": { "type": "defeated", "target": "Camulodunum" },
+      "title_key": "tutorial.boudica_camulodunum_title",
+      "body_key": "tutorial.boudica_camulodunum_body",
+      "hint_key": "tutorial.boudica_camulodunum_hint",
+      "marker": { "target": "Camulodunum" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_londinium",
+      "mechanic": "siege",
+      "trigger": { "type": "defeated", "target": "Londinium" },
+      "title_key": "tutorial.boudica_londinium_title",
+      "body_key": "tutorial.boudica_londinium_body",
+      "hint_key": "tutorial.boudica_londinium_hint",
+      "marker": { "target": "Londinium" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_verulamium",
+      "mechanic": "siege",
+      "trigger": { "type": "defeated", "target": "Verulamium" },
+      "title_key": "tutorial.boudica_verulamium_title",
+      "body_key": "tutorial.boudica_verulamium_body",
+      "hint_key": "tutorial.boudica_verulamium_hint",
+      "marker": { "target": "Verulamium" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_ninth_legion",
+      "mechanic": "attack",
+      "trigger": { "type": "defeated", "target": "Legio IX Hispana" },
+      "title_key": "tutorial.boudica_ninth_title",
+      "body_key": "tutorial.boudica_ninth_body",
+      "hint_key": "tutorial.boudica_ninth_hint",
+      "marker": { "target": "Legio IX Hispana" },
+      "on_enter": [],
+      "on_complete": []
+    },
+    {
+      "id": "boudica_final_battle",
+      "mechanic": "attack",
+      "trigger": { "type": "defeated", "target": "Legio XIV Gemina" },
+      "title_key": "tutorial.boudica_final_title",
+      "body_key": "tutorial.boudica_final_body",
+      "hint_key": "tutorial.boudica_final_hint",
+      "marker": { "target": "Legio XIV Gemina" },
+      "on_enter": [],
+      "on_complete": []
+    }
+  ]
+}

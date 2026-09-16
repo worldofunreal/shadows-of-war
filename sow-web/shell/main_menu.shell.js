@@ -20,6 +20,9 @@
     var exitMenuAssetsToken = 0;
     var deleteArmed = false;
     var deleteBusy = false;
+    var activeMenuPointerId = null;
+    var renderPending = false;
+    var renderFlushTimer = null;
 
     /* POKI_RENDER_REPLACEMENT_BEGIN */
     function renderTopbar() {
@@ -466,6 +469,11 @@
 
     function render() {
         if (!state) return;
+        if (activeMenuPointerId !== null) {
+            renderPending = true;
+            return;
+        }
+        renderPending = false;
         var screen = currentScreen();
         var screenChanged = previousScreen !== screen;
         var sameScreen = !screenChanged;
@@ -611,7 +619,9 @@
             var episodeId = target.dataset.episodeId;
             if (!episodeId) return;
             campaignOpen = false;
-            send("start_campaign_episode", { episode_id: episodeId });
+            if (typeof window.SOW_startCampaignEpisode === "function") {
+                window.SOW_startCampaignEpisode(episodeId);
+            }
             render();
             return;
         }
@@ -1074,11 +1084,26 @@
     });
 
     document.addEventListener("pointerdown", function (event) {
-        var dropdown = event.target.closest ? event.target.closest("[data-control-dropdown]") : null;
+        var target = event.target;
+        var interactive = target && target.closest ? target.closest("[data-command], button, input, select, textarea, a, [role='button']") : null;
+        if (interactive && root.contains(interactive)) activeMenuPointerId = event.pointerId;
+        var dropdown = target && target.closest ? target.closest("[data-control-dropdown]") : null;
         if (dropdownOpenKey && (!dropdown || dropdown.dataset.dropdownKey !== dropdownOpenKey)) {
             setDropdownOpen(dropdownOpenKey, false);
         }
     });
+
+    function finishMenuPointer(event) {
+        if (activeMenuPointerId !== event.pointerId || renderFlushTimer !== null) return;
+        renderFlushTimer = setTimeout(function () {
+            renderFlushTimer = null;
+            activeMenuPointerId = null;
+            if (renderPending) render();
+        }, 0);
+    }
+
+    document.addEventListener("pointerup", finishMenuPointer);
+    document.addEventListener("pointercancel", finishMenuPointer);
 
     /* POKI_SHARED_AUTH_EVENTS_BEGIN */
     window.addEventListener("wou:auth-state-change", function () {
@@ -1416,6 +1441,9 @@
         } catch (error) {
             console.warn("[WEB MENU] invalid state:", error);
             return;
+        }
+        if (typeof window.SOW_tutorial_menu_state_update === "function") {
+            window.SOW_tutorial_menu_state_update(state);
         }
         syncProfilePreload(state);
         if (state.phase === "MainMenu" && window.SOW_open_store_after_match) {

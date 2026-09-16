@@ -20,7 +20,7 @@ buildings/render.rs::render
         +--> metrics::BuildingVisualMetrics::for_building
                  - owns marker size, level size, and level offset
                  |
-                 +--> emoji: GPU TextRenderer or egui fallback
+                 +--> emoji: GPU TextRenderer
                  +--> overlays.rs: level badge using the same metrics
 ```
 

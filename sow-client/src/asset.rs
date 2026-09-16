@@ -17,7 +17,7 @@ impl SowApp {
             self.ui
                 .app
                 .asset_loader
-                .ensure_avatars_loaded(&self.ui.egui_ctx);
+                .ensure_avatars_loaded();
         }
         self.poll_avatar_fetches();
         self.poll_portal_avatar_fetch();
@@ -57,11 +57,7 @@ impl SowApp {
                     }
                 }
                 MapDownloadEvent::ThumbnailReady(map_name, bytes) => {
-                    match self.ui.app.asset_loader.ingest_thumbnail(
-                        &self.ui.egui_ctx,
-                        &map_name,
-                        &bytes,
-                    ) {
+                    match self.ui.app.asset_loader.ingest_thumbnail(&map_name, &bytes) {
                         Ok(()) => {
                             log::debug!("Loaded map thumbnail: {}", map_name);
                         }
@@ -125,11 +121,7 @@ impl SowApp {
                         .enqueue_leader_portrait_bytes(leader, mobile, bytes);
                 }
                 MapDownloadEvent::BootUiReady { kind, bytes } => {
-                    match self.ui.app.asset_loader.ingest_boot_ui_webp_bytes(
-                        &self.ui.egui_ctx,
-                        kind,
-                        &bytes,
-                    ) {
+                    match self.ui.app.asset_loader.ingest_boot_ui_webp_bytes(kind, &bytes) {
                         Ok(()) => log::debug!("Loaded boot UI asset {:?}", kind),
                         Err(e) => log::warn!("Failed to ingest boot UI {:?}: {}", kind, e),
                     }
@@ -143,11 +135,7 @@ impl SowApp {
                         Some(l) => sow_ui::ui::asset_loader::AvatarFetchKey::Leader(l),
                         None => sow_ui::ui::asset_loader::AvatarFetchKey::Fallback,
                     };
-                    match self.ui.app.asset_loader.ingest_avatar_webp_bytes(
-                        &self.ui.egui_ctx,
-                        key,
-                        &bytes,
-                    ) {
+                    match self.ui.app.asset_loader.ingest_avatar_webp_bytes(key, &bytes) {
                         Ok(()) => log::debug!("Loaded avatar {:?}", key),
                         Err(e) => log::warn!("Failed to ingest avatar {:?}: {e}", key),
                     }
@@ -169,7 +157,7 @@ impl SowApp {
                         .ui
                         .app
                         .asset_loader
-                        .ingest_portal_avatar_bytes(&self.ui.egui_ctx, &bytes)
+                        .ingest_portal_avatar_bytes(&bytes)
                     {
                         Ok(()) => log::info!("Loaded portal identity avatar"),
                         Err(e) => log::warn!("Failed to ingest portal avatar: {e}"),
@@ -190,22 +178,9 @@ impl SowApp {
                         reason
                     );
                     self.ui.app.asset_loader.note_leader_portrait_fetch_failed(
-                        leader,
-                        mobile,
+                        sow_ui::ui::asset_loader::LeaderPortraitKey { leader, mobile },
                         reason.clone(),
                     );
-                    if let Some((attempt, retry_in, last_error)) =
-                        self.ui.app.asset_loader.leader_retry_debug(leader, mobile)
-                    {
-                        log::debug!(
-                            "Leader portrait retry scheduled for {:?} mobile={} attempt={} retry_in_ms={} last_error={}",
-                            leader,
-                            mobile,
-                            attempt,
-                            retry_in.as_millis(),
-                            last_error
-                        );
-                    }
                 }
                 MapDownloadEvent::Error(e) => {
                     log::error!("Map download aborted: {}", e);
@@ -224,7 +199,7 @@ impl SowApp {
             // Same orientation test as the backdrop's set_leader_portrait_focus
             // (`width < height`); compact_viewport would compute a different key
             // on wide-but-short windows and the decode would never match.
-            let mobile = sow_ui_kit::theme::portrait_layout(&self.ui.egui_ctx);
+            let mobile = false;
             let selected = self.ui.app.main_menu_state.selected_leader;
             let focus = sow_ui::ui::asset_loader::LeaderPortraitKey {
                 leader: selected,
@@ -233,7 +208,7 @@ impl SowApp {
             self.ui
                 .app
                 .asset_loader
-                .process_leader_decode_budget(&self.ui.egui_ctx, 1, focus);
+                .process_leader_decode_budget(1, focus);
         }
     }
 
@@ -443,7 +418,7 @@ impl SowApp {
         // (draw_leader_hero_backdrop: `width < height`). compact_viewport adds
         // width<768/height<600 thresholds that disagree on wide-but-short
         // windows (e.g. CrazyGames iframe embeds), stranding fetched bytes.
-        let portrait = sow_ui_kit::theme::portrait_layout(&self.ui.egui_ctx);
+        let portrait = false;
         let priority_leader = self.ui.app.main_menu_state.selected_leader;
         let priority = LeaderPortraitKey {
             leader: priority_leader,

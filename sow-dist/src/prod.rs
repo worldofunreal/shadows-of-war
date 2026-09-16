@@ -619,10 +619,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     // The blade graphics fork is gitignored, not vendored: a fresh clone has
     // no blade/ and every Rust build fails at workspace resolution. Fail fast
     // here with the one-command fix instead of mid-build.
-    for vendored in [
-        "blade/blade-egui/Cargo.toml",
-        "blade/blade-graphics/Cargo.toml",
-    ] {
+    for vendored in ["blade/blade-graphics/Cargo.toml"] {
         if !paths.root.join(vendored).is_file() {
             bail!("{vendored} missing (blade/ is gitignored) — run ./scripts/vendor-blade.sh");
         }
@@ -1275,7 +1272,7 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
         println!("==> Web package unchanged — reusing dist");
         return Ok(());
     }
-    package_self(paths, &paths.dist_web, version)?;
+    package_self(paths, &paths.dist_web, version, true)?;
     let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
     package_cg(
         &paths.dist_web,

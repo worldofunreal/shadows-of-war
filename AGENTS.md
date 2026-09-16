@@ -81,50 +81,28 @@ never ship without that drain report in the manifest.
 
 There is no production backfill subcommand. `./sow p` is the production
 deployment path for web/backend (WASM + FreeBSD + Azure); `./sow l` / `./sow local` is a local-only web/WASM preview;
-`./sow` without a subcommand runs the native client.
+`./sow` without a subcommand builds and opens the native JavaScript/WASM client.
 Android is decoupled on purpose: `./sow a` / `./sow android` builds the AAB
 and publishes it to Google Play alpha. Every Play upload restarts Google's
 review clock, so `./sow p` never touches Android. The owner alone runs `./sow a`
 manually only when a new build is actually ready for review; Codex must never
 run it or upload to Play. Codex validates Android locally with
-`scripts/android-local-test.sh` only. This four-command interface
-(`native`, `l`, `p`, `a`) is the amended CLI contract; do not invent
-further subcommands.
+`scripts/android-local-test.sh` only. `native`, `l`, `p`, and `a` are the CLI
+contract; do not invent further subcommands.
 
-### Legacy egui reopened
+### UI ownership
 
-`sow-ui` is the native egui UI and is officially open for development again.
-The desktop client may change `sow-ui/src/**/*.rs` on macOS, Linux, and Windows
-when native performance or rapid visual validation requires it. The old
-`sow-ui/LEGACY_UI.sha256` manifest is retained as historical reference only;
-the freeze gate is disabled in all developer and iOS workflows.
+The browser shell owns menus, HUD, panels, tutorial, and input. Rust keeps the
+simulation, networking, and Blade GPU world renderer; there is no native UI or
+native launcher to maintain.
 
 ## Platform-specific workflows
 
-- iOS-only work on macOS uses `scripts/ios-testflight.sh`. Validate the iOS
-  archive/export there and upload only when the user requests an upload.
-- Do not run `./sow p` for iOS-only work on macOS. The Mac is not a production
-  control host unless it has the complete production prerequisites configured,
-  including the Linux-side tooling, FreeBSD builder/VM, SSH access, and
-  required release credentials.
-- Never create a FreeBSD VM, provision release keys, or configure production
-  access implicitly. Those are infrastructure changes requiring explicit user
-  approval.
-- App Store Connect evidence must be stated precisely: `Upload succeeded` from
-  `xcodebuild -exportArchive` proves only that Apple accepted the upload. It
-  does not prove that the build is processed, available to testers, or in
-  TestFlight.
-- Treat an App Store Connect build marked `Missing Compliance` as blocked and
-  unavailable for testing until export compliance is completed. `Ready to Test`
-  or `Testing` is the evidence required before claiming TestFlight readiness.
-- Apple has an App Store Connect API for app-encryption declarations, but it
-  requires an authenticated JWT signed with an App Store Connect API key. Do
-  not claim API automation unless the current environment has a working
-  connector or verified credentials.
-- Agent-Reach is an internet research/access layer for web and listed upstream
-  channels; it is not an App Store Connect, TestFlight, Apple Developer, or
-  Xcode connector. Use it to verify public documentation, never as evidence of
-  private App Store Connect state.
+- Desktop uses the Tauri shell around the existing JavaScript/WASM client;
+  `./sow` builds and opens it, while `./sow l` remains the browser preview.
+- Android remains a web wrapper around `/play/`; Codex validates it locally with
+  `scripts/android-local-test.sh`. The owner alone runs `./sow a` for Play
+  uploads.
 
 ## Production pipeline validation gate
 

@@ -94,7 +94,7 @@ impl SowApp {
                 world_y: wy,
                 start_time: now_instant,
                 duration: web_time::Duration::from_millis(3000),
-                color: egui::Color32::from_rgb(250, 204, 21),
+                color: crate::rgb(250, 204, 21),
             });
         }
         for (assist_id, assist_gold) in assists {
@@ -109,7 +109,7 @@ impl SowApp {
                     world_y: wy + 0.5,
                     start_time: now_instant,
                     duration: web_time::Duration::from_millis(3000),
-                    color: egui::Color32::from_rgb(180, 220, 100),
+                    color: crate::rgb(180, 220, 100),
                 });
             }
         }

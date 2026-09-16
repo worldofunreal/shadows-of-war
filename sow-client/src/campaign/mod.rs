@@ -1,12 +1,9 @@
-//! Campaign scripting. An *episode* places a fixed roster of named, teamed, colored bots on a
-//! map; the engine consumes it as `GameConfig.scripted_spawns` (see `sow_core::game_config::
-//! ScriptedSpawn`). Adding an episode = a new submodule returning `Vec<Faction>` + the player's
-//! homeland tile. A faction's `Role` fixes its **team, color, AI, and troop tier** in one place,
-//! so allegiance + difficulty read at a glance and stay consistent across episodes.
+//! Campaign data validation and conversion. The browser owns episode JSON and sends a validated
+//! roster to the engine as `GameConfig.scripted_spawns`; Rust keeps only the generic faction rules
+//! that turn a role into team, color, AI, and troop tier.
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod boudica;
-pub mod dialog;
-pub mod lady_six_sky;
 
 use sow_core::game_config::ScriptedSpawn;
 use sow_core::player::{Civilization, Leader};
@@ -367,27 +364,23 @@ fn civ_from_id(value: &str) -> Option<Civilization> {
 /// embedded committed default — so there is exactly one format and no second way to define a roster.
 pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
     let rf: RosterFile = serde_json::from_str(text).ok()?;
-    let factions: Vec<Faction> = rf
-        .factions
-        .iter()
-        .filter_map(|e| {
-            Role::from_name(&e.role).map(|role| {
-                let mut f = Faction::new(e.name.clone(), e.x, e.y, role);
-                f.iq = e.iq;
-                if let Some(civ) = e.civ.as_deref().and_then(civ_from_id) {
-                    f.civ = civ;
-                }
-                if let Some(leader) = e
-                    .leader
-                    .as_deref()
-                    .and_then(sow_data::commerce::leader_from_id)
-                {
-                    f.leader = Some(leader);
-                }
-                f
-            })
-        })
-        .collect();
+    let mut factions = Vec::with_capacity(rf.factions.len());
+    let mut names = std::collections::HashSet::new();
+    for e in &rf.factions {
+        if e.name.trim().is_empty() || !names.insert(e.name.as_str()) {
+            return None;
+        }
+        let role = Role::from_name(&e.role)?;
+        let mut f = Faction::new(e.name.clone(), e.x, e.y, role);
+        f.iq = e.iq;
+        if let Some(civ_name) = e.civ.as_deref() {
+            f.civ = civ_from_id(civ_name)?;
+        }
+        if let Some(leader_name) = e.leader.as_deref() {
+            f.leader = Some(sow_data::commerce::leader_from_id(leader_name)?);
+        }
+        factions.push(f);
+    }
     if factions.is_empty() {
         return None;
     }

@@ -2,7 +2,6 @@ use crate::app::SowApp;
 use crate::render::world::movers::world_to_tile;
 use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound};
 use blade_graphics as gpu;
-use egui::Vec2;
 
 impl SowApp {
     pub(crate) fn mouse_to_tile(&self, x: f64, y: f64) -> Option<(i32, i32)> {
@@ -42,37 +41,14 @@ impl SowApp {
         let vp = crate::viewport::Viewport {
             physical: physical_size,
             scale_factor: sf,
-            logical: Vec2::new(
-                physical_size.width as f32 / sf,
-                physical_size.height as f32 / sf,
-            ),
         };
         let needs_reconfigure = vp.wants_reconfigure(self) || force_reconfigure;
 
-        let recreate_surface = needs_reconfigure
-            && cfg!(any(target_os = "android", target_os = "ios"))
-            && self.gfx.surface.is_some()
-            && vp.orientation_flipped(self);
-
-        if recreate_surface {
-            if let Some(render_ctx) = self.gfx.render_ctx.as_mut() {
-                if let Some(sp) = self.gfx.prev_sync_point.take() {
-                    let _ = render_ctx.context.wait_for(&sp, !0);
-                }
-                if let Some(mut s) = self.gfx.surface.take() {
-                    render_ctx.context.destroy_surface(&mut s);
-                }
-            }
-        } else if needs_reconfigure && let Some(render_ctx) = self.gfx.render_ctx.as_mut() {
+        if needs_reconfigure && let Some(render_ctx) = self.gfx.render_ctx.as_mut() {
             if let Some(sp) = self.gfx.prev_sync_point.take() {
                 let _ = render_ctx.context.wait_for(&sp, !0);
             }
             if let Some(ref mut s) = self.gfx.surface {
-                let display_sync = if cfg!(any(target_os = "android", target_os = "ios")) {
-                    gpu::DisplaySync::Block
-                } else {
-                    gpu::DisplaySync::Tear
-                };
                 #[cfg(target_arch = "wasm32")]
                 crate::web_canvas::set_canvas_backing_store_size(
                     physical_size.width,
@@ -87,7 +63,7 @@ impl SowApp {
                             depth: 1,
                         },
                         usage: gpu::TextureUsage::TARGET,
-                        display_sync,
+                        display_sync: gpu::DisplaySync::Tear,
                         color_space: gpu::ColorSpace::Linear,
                         ..Default::default()
                     },
@@ -95,7 +71,7 @@ impl SowApp {
             }
         }
 
-        if needs_reconfigure || recreate_surface {
+        if needs_reconfigure {
             self.gfx.configured_physical = physical_size;
         }
 
@@ -111,9 +87,6 @@ impl SowApp {
         self.input.target_zoom = self.input.target_zoom.clamp(zmin, zmax);
         self.clamp_camera_to_map();
 
-        if recreate_surface {
-            self.check_surface();
-        }
         if needs_reconfigure && let Some(win) = self.gfx.window.as_ref() {
             win.request_redraw();
         }
