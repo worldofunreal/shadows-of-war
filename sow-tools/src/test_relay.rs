@@ -5,8 +5,7 @@
 //!   2. Send Join, receive JoinAck
 //!   3. Send MapDownloadProgress(100) + Ready
 //!   4. Wait for ServerMessage::Start with relay_port + relay_host
-//!   5. Connect to the relay directly (wss://relay_host:relay_port/ws/,
-//!      or --relay-base-url for the legacy NGINX proxy shape)
+//!   5. Connect to the relay directly (wss://relay_host:relay_port/ws/)
 //!   6. Send Ready to relay
 //!   7. Receive at least one Turn
 //!   8. Send Leave, disconnect
@@ -43,14 +42,6 @@ fn parse_websocket_url(value: &str) -> Result<Url, String> {
     }
 
     Ok(url)
-}
-
-fn relay_url(orchestrator_url: &Url, relay_base_url: Option<&Url>, relay_port: u16) -> Url {
-    let mut url = relay_base_url.unwrap_or(orchestrator_url).clone();
-    url.set_path(&format!("/relay/{relay_port}/ws/"));
-    url.set_query(None);
-    url.set_fragment(None);
-    url
 }
 
 /// Direct relay URL from a `Start{relay_host, relay_port}` handoff.
@@ -139,10 +130,6 @@ struct Args {
     )]
     url: Url,
 
-    /// Optional origin forcing the legacy NGINX relay-proxy URL shape (/relay/{port}/ws/)
-    #[arg(long, value_parser = parse_websocket_url)]
-    relay_base_url: Option<Url>,
-
     /// Optional database account ID to include in the Join message
     #[arg(long)]
     database_account_id: Option<String>,
@@ -152,7 +139,6 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     let url = args.url;
-    let relay_base_url = args.relay_base_url;
     let database_account_id = args.database_account_id;
 
     let version = std::fs::read_to_string(".version")
@@ -310,12 +296,11 @@ async fn main() {
     // ── Step 5: Connect to relay ────────────────────────────────────────────
     step(5, &format!("Connecting to relay on port {relay_port}..."));
 
-    let relay_url = match (&relay_base_url, &relay_host) {
-        (Some(base), _) => relay_url(&url, Some(base), relay_port),
-        (None, Some(host)) => direct_relay_url(&url, host, relay_port)
-            .unwrap_or_else(|| fail(&format!("Invalid relay_host in Start: {host}"))),
-        (None, None) => relay_url(&url, None, relay_port),
-    };
+    let host = relay_host
+        .as_deref()
+        .unwrap_or_else(|| fail("Start message has no relay_host!"));
+    let relay_url = direct_relay_url(&url, host, relay_port)
+        .unwrap_or_else(|| fail(&format!("Invalid relay_host in Start: {host}")));
     eprintln!("  Relay URL: {relay_url}");
 
     // Retry connection for up to 5 seconds (relay may still be booting)
@@ -403,45 +388,8 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{Args, direct_relay_url, parse_websocket_url, relay_url};
+    use super::{Args, direct_relay_url, parse_websocket_url};
     use clap::Parser;
-
-    #[test]
-    fn relay_defaults_to_orchestrator_scheme_and_authority() {
-        let orchestrator =
-            parse_websocket_url("wss://play.example.test:8443/ws/?token=secret").unwrap();
-
-        assert_eq!(
-            relay_url(&orchestrator, None, 25_590).as_str(),
-            "wss://play.example.test:8443/relay/25590/ws/"
-        );
-    }
-
-    #[test]
-    fn relay_base_url_overrides_the_orchestrator_origin() {
-        let orchestrator = parse_websocket_url("wss://shadowsofwar.io/ws/").unwrap();
-        let relay_base = parse_websocket_url("ws://your_azure_ip").unwrap();
-
-        assert_eq!(
-            relay_url(&orchestrator, Some(&relay_base), 26_500).as_str(),
-            "ws://your_azure_ip/relay/26500/ws/"
-        );
-    }
-
-    #[test]
-    fn local_and_ipv6_origins_are_supported() {
-        let local = parse_websocket_url("ws://localhost:8080/ws/").unwrap();
-        let ipv6 = parse_websocket_url("ws://[::1]:8080/ws/").unwrap();
-
-        assert_eq!(
-            relay_url(&local, None, 25_591).as_str(),
-            "ws://localhost:8080/relay/25591/ws/"
-        );
-        assert_eq!(
-            relay_url(&ipv6, None, 25_592).as_str(),
-            "ws://[::1]:8080/relay/25592/ws/"
-        );
-    }
 
     #[test]
     fn rejects_non_websocket_and_hostless_urls() {

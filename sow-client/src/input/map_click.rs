@@ -192,15 +192,14 @@ impl SowApp {
             } else {
                 self.input.selected_warships.clear();
 
-                // If not selecting warships, let the browser HUD open the transfer panel.
                 let idx = (row * self.sim.map_w as i32 + col) as usize;
-                let owner = self
-                    .gfx
-                    .map_renderer
-                    .as_ref()
-                    .map(|mr| mr.owners[idx])
-                    .unwrap_or(0);
+                let Some(renderer) = self.gfx.map_renderer.as_ref() else { return; };
+                let owner = renderer.owners.get(idx).copied().unwrap_or(0);
                 let my_id = self.sim.my_player_id.unwrap_or(0);
+                let is_land = renderer
+                    .terrain
+                    .get(idx)
+                    .is_some_and(|terrain| terrain & 0x80 != 0);
                 let is_betrayer = self
                     .sim
                     .current_snapshot
@@ -234,11 +233,91 @@ impl SowApp {
                     })
                     .unwrap_or(false);
 
-                if owner != 0 && owner != my_id && (is_allied || is_teammate) {
-                    self.ui.app.hud_state.show_ask_panel = Some(owner);
-                    self.ui.app.hud_state.transfer_confirm_pending = false;
+                if matches!(phase, sow_core::game::GamePhase::Playing)
+                    && is_land
+                    && owner != 0
+                    && owner != my_id
+                {
+                    if is_allied || is_teammate {
+                        self.ui.app.hud_state.show_ask_panel = Some(owner);
+                        self.ui.app.hud_state.transfer_confirm_pending = false;
+                    } else if shares_land_border(
+                        &renderer.owners,
+                        &renderer.terrain,
+                        self.sim.map_w,
+                        self.sim.map_h,
+                        my_id,
+                        owner,
+                    ) {
+                        let troops = self.ui.app.hud_state.troops
+                            * self.ui.app.hud_state.attack_ratio as f64;
+                        self.send_intent(sow_core::protocol::GameplayIntent::Attack(
+                            sow_core::protocol::AttackIntent {
+                                target_owner: owner,
+                                troops: Some(troops),
+                            },
+                        ));
+                    }
                 }
             }
         }
+    }
+}
+
+fn shares_land_border(
+    owners: &[u16],
+    terrain: &[u8],
+    map_w: u32,
+    map_h: u32,
+    my_id: u16,
+    target_owner: u16,
+) -> bool {
+    if my_id == 0 || target_owner == 0 || my_id == target_owner || map_w == 0 {
+        return false;
+    }
+    let width = map_w as i32;
+    let height = map_h as i32;
+    let neighbors = [(1, 0), (-1, 0), (0, -1), (0, 1), (1, -1), (-1, -1), (1, 1), (-1, 1)];
+
+    for row in 0..height {
+        for col in 0..width {
+            let index = (row * width + col) as usize;
+            if owners.get(index).copied() != Some(my_id) {
+                continue;
+            }
+            for (dc, dr) in neighbors {
+                let neighbor_col = col + dc;
+                let neighbor_row = row + dr;
+                if neighbor_col < 0
+                    || neighbor_col >= width
+                    || neighbor_row < 0
+                    || neighbor_row >= height
+                {
+                    continue;
+                }
+                let neighbor = (neighbor_row * width + neighbor_col) as usize;
+                if owners.get(neighbor).copied() == Some(target_owner)
+                    && terrain
+                        .get(neighbor)
+                        .is_some_and(|value| value & 0x80 != 0)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shares_land_border;
+
+    #[test]
+    fn land_border_is_required_for_a_click_attack() {
+        let owners = [1, 2, 0, 0];
+        let terrain = [0x80, 0x80, 0x80, 0x80];
+        assert!(shares_land_border(&owners, &terrain, 2, 2, 1, 2));
+        assert!(!shares_land_border(&owners, &terrain, 2, 2, 1, 3));
     }
 }

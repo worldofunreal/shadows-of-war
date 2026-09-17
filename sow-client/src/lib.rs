@@ -231,13 +231,28 @@ impl ApplicationHandler for SowApp {
         }
         self.update(event_loop);
 
-        // Let the browser/WebKit compositor schedule visible frames; request_redraw keeps
-        // simulation and animation moving without spinning the event loop.
-        let flow = winit::event_loop::ControlFlow::Wait;
+        let native_shell = web_sys::window()
+            .and_then(|window| {
+                js_sys::Reflect::get(
+                    &window,
+                    &wasm_bindgen::JsValue::from_str("SOW_NATIVE"),
+                )
+                .ok()
+            })
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let native_playing = native_shell && self.ui.app.phase == ClientPhase::Playing;
+        let flow = if native_playing {
+            winit::event_loop::ControlFlow::Poll
+        } else {
+            winit::event_loop::ControlFlow::Wait
+        };
 
         event_loop.set_control_flow(flow);
 
-        if let Some(win) = self.active_window() {
+        if native_playing {
+            self.render_frame(event_loop);
+        } else if let Some(win) = self.active_window() {
             win.request_redraw();
         }
     }

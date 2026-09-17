@@ -33,7 +33,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Import a map-source folder (image.png + info.json, or map.bin + manifest.json).
+    /// Import a map-source folder (image.png + info.json, or map.bin).
     #[command(name = "import-map-source")]
     ImportMapSource(ImportMapSourceArgs),
     /// Regenerate assets/maps/catalog.bin from map.bin headers in subfolders.

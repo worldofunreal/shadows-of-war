@@ -40,17 +40,5 @@ path = "examples/echo_m1b.rs"
 name = "echo_ws"
 path = "examples/echo_ws.rs"
 
-[[example]]
-name = "relay_bincode"
-path = "examples/relay_bincode.rs"
-
-[[example]]
-name = "relay_client"
-path = "examples/relay_client.rs"
-
-[[example]]
-name = "relay_full"
-path = "examples/relay_full.rs"
-
 # Static link of libfstack.a + DPDK is configured in build.rs.
 # Build only on a host with libfstack.a + libdpdk installed (the Azure VM).

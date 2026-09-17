@@ -10,10 +10,6 @@ name = "test-relay"
 path = "src/test_relay.rs"
 
 [[bin]]
-name = "migrate-maps"
-path = "src/bin/migrate_maps.rs"
-
-[[bin]]
 name = "write-play-catalog"
 path = "src/bin/write_play_catalog.rs"
 

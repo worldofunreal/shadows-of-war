@@ -1,4 +1,4 @@
-//! Import map-source folders (PNG + info.json, or legacy map.bin + manifest.json).
+//! Import map-source folders (PNG + info.json or map.bin).
 
 use serde_json::Value;
 use sow_core::map_file::{self, MapFile, MapSpawn};
@@ -30,7 +30,7 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     let map_file = if input.join("image.png").exists() {
         import_from_png(&input, &display_name)?
     } else {
-        import_from_bin_or_manifest(&input, &slug)?
+        import_from_bin(&input)?
     };
 
     fs::create_dir_all(&args.maps_root)?;
@@ -109,7 +109,7 @@ fn import_from_png(dir: &Path, display_name: &str) -> Result<MapFile, Box<dyn st
     // as the canonical image-map path, including the axis cap.
     let (target_w, target_h) = sow_map::image_pipeline::mobile_safe_dims(src_w, src_h);
     let rgba = original.to_rgba8();
-    let result = sow_map::generate_from_rgba(&rgba, Some((target_w, target_h)))
+    let result = sow_map::image_pipeline::generate_from_rgba(&rgba, Some((target_w, target_h)))
         .map_err(|e| format!("image pipeline: {e}"))?;
 
     let mut spawns = load_info_json_spawns(dir)?;
@@ -201,10 +201,7 @@ pub fn clamp_map_dimensions_proportional(width: u32, height: u32, max_pixels: u3
     (target_w, target_h)
 }
 
-fn import_from_bin_or_manifest(
-    dir: &Path,
-    key: &str,
-) -> Result<MapFile, Box<dyn std::error::Error>> {
+fn import_from_bin(dir: &Path) -> Result<MapFile, Box<dyn std::error::Error>> {
     let raw = read_map_payload(dir)?;
     if raw.len() >= 4 && &raw[0..4] == map_file::MAP_MAGIC {
         let mut map = map_file::parse(&raw)?;
@@ -237,79 +234,8 @@ fn import_from_bin_or_manifest(
         return Ok(map);
     }
 
-    let manifest_path = dir.join("manifest.json");
-    if !manifest_path.exists() {
-        return Err("Need image.png, map.bin, or manifest.json + legacy terrain".into());
-    }
 
-    let manifest: Value = serde_json::from_str(&fs::read_to_string(&manifest_path)?)?;
-    let map_info = manifest.get("map").ok_or("manifest missing map section")?;
-    let mut width = map_info.get("width").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-    let mut height = map_info.get("height").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-    let display_name = manifest
-        .get("name")
-        .and_then(|v| v.as_str())
-        .unwrap_or(key)
-        .to_string();
-
-    let expected = (width as usize) * (height as usize);
-    if expected == 0 || raw.len() != expected {
-        if width > 0 && raw.len().is_multiple_of(width as usize) {
-            height = (raw.len() / width as usize) as u32;
-        } else if height > 0 && raw.len().is_multiple_of(height as usize) {
-            width = (raw.len() / height as usize) as u32;
-        } else {
-            return Err(format!(
-                "terrain size mismatch for {key}: manifest {width}x{height}, got {} bytes",
-                raw.len()
-            )
-            .into());
-        }
-    }
-
-    let mut spawns = Vec::new();
-    if let Some(nations) = manifest.get("nations").and_then(|v| v.as_array()) {
-        for entry in nations {
-            push_spawn(entry, &mut spawns);
-        }
-    }
-
-    let mut terrain = raw;
-    if (width as u64) * (height as u64) > sow_core::maps::MAX_MAP_PIXELS as u64 {
-        let (target_w, target_h) =
-            clamp_map_dimensions_proportional(width, height, sow_core::maps::MAX_MAP_PIXELS);
-        let mut rescaled = Vec::with_capacity((target_w * target_h) as usize);
-        for ty in 0..target_h {
-            for tx in 0..target_w {
-                let sx = (tx as f64 * (width as f64 / target_w as f64)).floor() as u32;
-                let sy = (ty as f64 * (height as f64 / target_h as f64)).floor() as u32;
-                let sx = sx.min(width - 1);
-                let sy = sy.min(height - 1);
-                rescaled.push(terrain[(sy * width + sx) as usize]);
-            }
-        }
-        for s in &mut spawns {
-            let rx = (s.x as f64 * (target_w as f64 / width as f64)).round() as u32;
-            let ry = (s.y as f64 * (target_h as f64 / height as f64)).round() as u32;
-            s.x = rx.min(target_w - 1);
-            s.y = ry.min(target_h - 1);
-        }
-        width = target_w;
-        height = target_h;
-        terrain = rescaled;
-    }
-
-    let num_land = terrain.iter().filter(|&&b| (b & 0x80) != 0).count() as u32;
-
-    Ok(MapFile {
-        display_name,
-        width,
-        height,
-        num_land_tiles: num_land,
-        spawns,
-        geo_bounds: None,
-        terrain,
-    })
+    Err("Need image.png or a valid map.bin".into())
 }
 
 fn read_map_payload(map_dir: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {

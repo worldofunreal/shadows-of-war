@@ -21,3 +21,16 @@ pub(crate) fn dev_text_style(
         underlay_softness: dev.font_underlay_softness * sf,
     }
 }
+
+pub(crate) fn dev_emoji_outline(
+    dev: &crate::theme::dev_config::DevConfig,
+    sf: f32,
+    color: [f32; 4],
+) -> gpu::OutlineStyle {
+    gpu::OutlineStyle {
+        color,
+        thickness: dev.font_outline_thickness * sf,
+        shadow_y: dev.font_shadow_y * sf,
+        reference_diameter: gpu::OutlineStyle::EMOJI_REFERENCE_DIAMETER * sf,
+    }
+}

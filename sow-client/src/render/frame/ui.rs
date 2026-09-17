@@ -2,15 +2,8 @@ use crate::app::SowApp;
 use crate::ClientPhase;
 use web_time::{Duration, Instant};
 
-fn avatar_slot(leader: Option<sow_core::player::Leader>) -> usize {
-    match leader {
-        Some(leader) => sow_core::player::Leader::ALL.iter().position(|value| *value == leader).unwrap_or(0),
-        None => sow_core::player::Leader::ALL.len(),
-    }
-}
-
 impl SowApp {
-    pub(super) fn render_frame_ui_and_present(&mut self, _sf: f32, frame: blade_graphics::Frame) {
+    pub(super) fn render_frame_ui_and_present(&mut self, sf: f32, frame: blade_graphics::Frame) {
         self.ui.app.splash_state.frames_drawn = self.ui.app.splash_state.frames_drawn.saturating_add(1);
         let now = Instant::now();
         let dt = now.duration_since(self.time.last_frame_time).as_secs_f32().min(0.1);
@@ -61,29 +54,20 @@ impl SowApp {
             text.begin_frame();
             for (key, cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
                 let leader = match key { crate::ui::asset_loader::AvatarFetchKey::Leader(l) => Some(*l), crate::ui::asset_loader::AvatarFetchKey::Fallback => None };
-                let slot = avatar_slot(leader);
+                let slot = match leader {
+                    Some(leader) => sow_core::player::Leader::ALL.iter().position(|value| *value == leader).unwrap_or(0),
+                    None => sow_core::player::Leader::ALL.len(),
+                };
                 if text.avatar_uv(slot).is_none() { text.upload_avatar(slot, cell); }
             }
             if self.ui.app.phase == ClientPhase::Playing {
-                let dev = crate::theme::dev_config::DevConfig::get();
-                let style = crate::render::dev_text_style(&dev, 1.0, [0.0, 0.0, 0.0, 0.85]);
-                if let Some(snapshot) = &self.sim.current_snapshot {
-                    for player in &snapshot.players {
-                        if !player.alive || player.tile_count == 0 || player.name.is_empty() { continue; }
-                        let x = self.input.camera_x + (player.centroid_x + 0.5) * self.input.camera_zoom;
-                        let y = self.input.camera_y + (player.centroid_y + 0.5) * self.input.camera_zoom;
-                        if x < -160.0 || x > self.input.screen_w + 160.0 || y < -80.0 || y > self.input.screen_h + 80.0 { continue; }
-                        let rgb = player.color;
-                        let color = [rgb[0], rgb[1], rgb[2], 1.0];
-                        let radius = (self.input.camera_zoom * 0.22).clamp(10.0, 28.0);
-                        if player.player_type == sow_core::player::PlayerType::Human {
-                            if let Some(uv) = text.avatar_uv(avatar_slot(Some(player.leader))).or_else(|| text.avatar_uv(avatar_slot(None))) { text.push_sprite([x, y], radius, uv, [1.0; 4]); } else { text.push_disc([x, y], radius, color); }
-                        } else { text.push_disc([x, y], radius, color); }
-                        text.push_ring([x, y], radius, [0.0, 0.0, 0.0, 0.8], (radius * 0.12).max(1.0));
-                        let label = sow_core::player::display_name(player.id, &player.name, player.player_type);
-                        text.push_string(&label, [x, y + radius + 4.0], 14.0, [1.0, 1.0, 1.0, 1.0], style, (0.5, dev.font_char_spacing, 1.0));
-                    }
-                }
+                crate::render::world::render_overlays(
+                    text,
+                    &self.sim,
+                    &self.ui,
+                    &self.input,
+                    sf,
+                );
             }
         }
 

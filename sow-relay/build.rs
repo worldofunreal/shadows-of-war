@@ -1,13 +1,13 @@
 // build.rs — replicate the M3 link order for the single F-Stack relay worker.
 //
 // fstack-bridge emits its link flags as `rustc-link-lib` (so they reach this
-// dependent crate), but the proven M3 order (relay_full example) put every
+// dependent crate), but the proven F-Stack order puts every
 // DPDK archive + libfstack.a as raw link-args AFTER the rlib inputs. Archive
 // position in the link line determines constructor (`.init_array`) ordering in
 // the final binary, and F-Stack's kernel emulation is sensitive to it: with a
 // different order, `lo_set_defaultaddr` fails and `ff_veth_attach` segfaults
 // in `uma_zalloc_pcpu_arg`. Emit the same args here so this binary links
-// exactly like the validated example.
+// exactly like the validated live relay build.
 use std::process::Command;
 
 fn main() {
