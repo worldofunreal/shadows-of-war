@@ -91,35 +91,34 @@ pub enum DbEvent {
         request_id: u64,
         status: Option<u16>,
     },
-    NativeProfileLoaded {
+    ProfileViewLoaded {
         account_id: String,
         view: sow_data::profile::PublicProfileView,
     },
-    NativeProfileLoadFailed {
+    ProfileLoadFailed {
         account_id: String,
         status: Option<u16>,
     },
-    NativeProfileHistoryLoaded {
+    ProfileHistoryLoaded {
         account_id: String,
         items: Vec<sow_data::profile::PublicMatchSummary>,
         next_cursor: Option<usize>,
     },
-    NativeProfileRatingsLoaded {
+    ProfileRatingsLoaded {
         account_id: String,
         items: Vec<sow_data::profile::PublicRatingView>,
     },
-    NativeProfileSearchLoaded {
+    ProfileSearchLoaded {
         query: String,
         items: Vec<sow_data::profile::PublicProfileSummary>,
     },
-    NativeMatchDetailLoaded {
+    MatchDetailLoaded {
         match_id: String,
         detail: sow_data::profile::PublicMatchDetail,
     },
-    NativeProfileOperationFailed {
+    ProfileOperationFailed {
         account_id: Option<String>,
         operation: String,
-        message: String,
     },
     StoreProfileLoaded {
         account_id: String,
@@ -129,7 +128,6 @@ pub enum DbEvent {
     StoreActionFailed {
         operation: String,
         status: Option<u16>,
-        message: String,
     },
 }
 

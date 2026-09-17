@@ -15,8 +15,7 @@ impl SowApp {
         };
 
         let my_id = self.sim.my_player_id.unwrap_or(0);
-        let now_instant = web_time::Instant::now();
-        let turn_defeats = self.process_tick_events(events, &snap, my_id, now_instant);
+        let turn_defeats = self.process_tick_events(events, &snap, my_id);
 
         self.progress_session_defeats.players = self
             .progress_session_defeats
@@ -79,7 +78,7 @@ impl SowApp {
                 .fog_visible
                 .blocks
                 .resize((self.sim.map_w * self.sim.map_h + 63) as usize / 64, 0);
-            let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
+            let dev = crate::theme::dev_config::DevConfig::get();
             crate::sim::visibility::compute_visibility(
                 (self.sim.map_w, self.sim.map_h),
                 my_id,

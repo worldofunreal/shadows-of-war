@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["blade-graphics", "blade-macros"]
+
+[workspace.dependencies]
+blade-graphics = { path = "blade-graphics", version = "0.8" }
+blade-macros = { path = "blade-macros", version = "0.3" }
+bitflags = "2"
+bytemuck = { version = "1", features = ["derive"] }
+log = "0.4"
+mint = "0.5"
+naga = { git = "https://github.com/gfx-rs/wgpu", rev = "b0a44f766e95a38f0aa45565ff005173cc96d46a", features = ["wgsl-in"] }
+slab = "0.4"
+openxr = "0.19"
+web-sys = "0.3.60"

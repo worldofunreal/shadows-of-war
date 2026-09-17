@@ -2,8 +2,14 @@
 // views so the Poki artifact stays anonymous, non-commercial, and external-link safe.
 
 function renderFeedback() {
-    var error = state && state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(state.error) + "</div>" : "";
-    var notice = state && state.notice ? "<div class='sow-menu__status sow-menu__status--notice'>" + esc(state.notice) + "</div>" : "";
+    var error = state && state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(localizedText(state.error)) + "</div>" : "";
+    var noticeKey = state && state.notice ? ({
+        host_left: "menu.host_left",
+        kicked: "menu.removed_from_lobby",
+        banned: "menu.banned_from_lobby",
+        connection_lost: "menu.connection_lost"
+    }[state.notice] || "menu.connection_lost") : "";
+    var notice = noticeKey ? "<div class='sow-menu__status sow-menu__status--notice'>" + esc(SOW_t(noticeKey)) + "</div>" : "";
     return error + notice;
 }
 

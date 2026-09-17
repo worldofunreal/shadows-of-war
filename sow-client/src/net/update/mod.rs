@@ -1,6 +1,6 @@
 use crate::app::SowApp;
 use crate::spawn_sow_client_connect;
-use sow_ui_kit::ClientPhase;
+use crate::ClientPhase;
 use web_time::{Duration, Instant};
 
 mod messages;
@@ -29,7 +29,7 @@ impl SowApp {
 
         if matches!(
             self.ui.app.phase,
-            sow_ui_kit::ClientPhase::MainMenu | sow_ui_kit::ClientPhase::Splash
+            crate::ClientPhase::MainMenu | crate::ClientPhase::Splash
         ) {
             self.fetch_map_catalog_if_needed();
         }
@@ -52,7 +52,7 @@ impl SowApp {
                         if let (Some(lid), Some(pid)) =
                             (self.sim.my_lobby_id, self.sim.my_player_id)
                         {
-                            let msg = if self.ui.app.phase == sow_ui_kit::ClientPhase::Playing {
+                            let msg = if self.ui.app.phase == crate::ClientPhase::Playing {
                                 log::info!("Sent Reconnect to Relay server on reconnect/playing!");
                                 self.make_reconnect_message(lid, pid)
                             } else {
@@ -66,7 +66,7 @@ impl SowApp {
                                 self.net.load_telemetry.mark_ready_sent();
                             }
                         }
-                    } else if self.ui.app.phase == sow_ui_kit::ClientPhase::Playing {
+                    } else if self.ui.app.phase == crate::ClientPhase::Playing {
                         if let (Some(lid), Some(pid)) =
                             (self.sim.my_lobby_id, self.sim.my_player_id)
                         {
@@ -139,7 +139,7 @@ impl SowApp {
                             self.net.relay_connect_start = None;
                             self.net.relay_retry_count = 0;
                             self.ui.app.main_menu_state.notice =
-                                Some(sow_ui::LobbyNotice::ConnectionLost);
+                                Some(crate::LobbyNotice::ConnectionLost);
                             self.ui.app.main_menu_state.notice_at = None;
                             self.begin_exit_to_main_menu();
                         } else {
@@ -173,7 +173,7 @@ impl SowApp {
                 log::error!("Relay connection/reconnection timed out after 15 seconds total");
                 self.net.relay_connect_start = None;
                 self.net.relay_retry_count = 0;
-                self.ui.app.main_menu_state.notice = Some(sow_ui::LobbyNotice::ConnectionLost);
+                self.ui.app.main_menu_state.notice = Some(crate::LobbyNotice::ConnectionLost);
                 self.ui.app.main_menu_state.notice_at = None;
                 self.begin_exit_to_main_menu();
             }
@@ -190,7 +190,7 @@ impl SowApp {
 
         if let Some(rematch_id) = pending_rematch {
             crate::store_portals::gameplay_stop();
-            self.cleanup_game_session_stub();
+            self.reset_game_session();
             self.net.pending_lobby_rejoin = true;
             self.ui.app.main_menu_state.pending_join_lobby_id = Some(rematch_id);
             self.ui.app.phase = ClientPhase::MainMenu;
@@ -198,6 +198,7 @@ impl SowApp {
 
             // Drop relay connection and force orchestrator reconnect for the rematch
             self.net.client = None;
+            self.net.current_ping_ms = None;
             self.net.ws_url = self.net.orchestrator_url.clone();
             self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
             self.net.ws_connect_not_before = now;
@@ -217,7 +218,7 @@ impl SowApp {
             );
 
             // Connect directly to the relay host (F-Stack endpoint with TLS).
-            // Both WASM and native clients use wss:// — the relay terminates TLS.
+                            // Browser clients use wss:// — the relay terminates TLS.
             if let Some(host) = relay_host {
                 self.net.ws_url = format!("wss://{}:{}/ws/", host, relay_port);
             } else if let Ok(mut url) = url::Url::parse(&self.net.ws_url) {
@@ -227,6 +228,7 @@ impl SowApp {
 
             log::info!("[CLIENT NET] Handoff URL resolved to: {}", self.net.ws_url);
             self.net.client = None; // Drop orchestrator connection
+            self.net.current_ping_ms = None;
             self.ui.app.main_menu_state.is_connected = false; // Reset connection status during handoff
             self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
             ws_disconnected = false;
@@ -253,6 +255,7 @@ impl SowApp {
                 self.net.ws_url
             );
             self.net.client = None;
+            self.net.current_ping_ms = None;
             self.ui.app.main_menu_state.is_connected = false;
             self.ui.app.main_menu_state.is_connecting = false;
             if self.ws_on_relay() {
@@ -275,7 +278,7 @@ impl SowApp {
                     log::warn!(
                         "[CLIENT NET] Connection lost during match — returning to main menu"
                     );
-                    self.ui.app.main_menu_state.notice = Some(sow_ui::LobbyNotice::ConnectionLost);
+                    self.ui.app.main_menu_state.notice = Some(crate::LobbyNotice::ConnectionLost);
                     self.ui.app.main_menu_state.notice_at = None;
                     self.begin_exit_to_main_menu();
                 }
@@ -286,10 +289,19 @@ impl SowApp {
             }
         }
 
-        #[cfg(target_arch = "wasm32")]
+        if now.duration_since(self.net.last_ping_time) >= Duration::from_secs(1) {
+            if let Some(client) = self.net.client.as_ref() {
+                let ping = sow_core::protocol::ClientMessage::Ping {
+                    client_time: self.time.start_time.elapsed().as_secs_f64(),
+                };
+                if let Ok(data) = bincode::serialize(&ping) {
+                    client.send(data);
+                    self.net.last_ping_time = now;
+                }
+            }
+        }
+
         let allow_ws_spawn = self.wasm_doc_was_visible;
-        #[cfg(not(target_arch = "wasm32"))]
-        let allow_ws_spawn = true;
 
         if allow_ws_spawn
             && self.net.client.is_none()
@@ -303,10 +315,7 @@ impl SowApp {
                 "[CLIENT NET] 🔄 Auto-reconnect triggered: Spawning WS connection task to {}",
                 url
             );
-            #[cfg(target_arch = "wasm32")]
             spawn_sow_client_connect(url, &self.net.connect_tx);
-            #[cfg(not(target_arch = "wasm32"))]
-            spawn_sow_client_connect(url, &self.net.connect_tx, &self.tokio_rt);
         }
     }
 }

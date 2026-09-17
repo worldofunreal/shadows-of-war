@@ -29,16 +29,6 @@ pub fn load(map_key: &str) -> Option<Vec<u8>> {
         let _ = storage.remove_item(&storage_key(&key));
         return None;
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let path = crate::paths::map_cache_dir().join(format!("{key}.bin.br"));
-        let bytes = std::fs::read(path).ok()?;
-        if validate_payload(&bytes) {
-            Some(bytes)
-        } else {
-            None
-        }
-    }
 }
 
 /// Store a map payload after a successful download or SP session.
@@ -64,18 +54,6 @@ pub fn persist(map_key: &str, bytes: &[u8]) {
             log::warn!("map_cache: localStorage set failed for {key}: {e:?}");
         }
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let dir = crate::paths::map_cache_dir();
-        if let Err(e) = std::fs::create_dir_all(&dir) {
-            log::warn!("map_cache: mkdir {}: {e}", dir.display());
-            return;
-        }
-        let path = dir.join(format!("{key}.bin.br"));
-        if let Err(e) = std::fs::write(path, bytes) {
-            log::warn!("map_cache: write failed for {key}: {e}");
-        }
-    }
 }
 
 /// Map keys with a valid cached payload.
@@ -96,28 +74,6 @@ pub fn list_cached_keys() -> Vec<String> {
             };
             if let Some(slug) = name.strip_prefix(STORAGE_KEY_PREFIX) {
                 keys.push(slug.to_string());
-            }
-        }
-        keys.sort();
-        keys
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let dir = crate::paths::map_cache_dir();
-        let Ok(read_dir) = std::fs::read_dir(dir) else {
-            return Vec::new();
-        };
-        let mut keys = Vec::new();
-        for entry in read_dir.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("br") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            if load(stem).is_some() {
-                keys.push(stem.to_string());
             }
         }
         keys.sort();

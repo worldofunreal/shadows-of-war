@@ -11,7 +11,6 @@ impl SowApp {
         events: Vec<sow_core::game::GameEvent>,
         snap: &SimSnapshot,
         my_id: u16,
-        now_instant: web_time::Instant,
     ) -> crate::player_progress::SessionDefeats {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
@@ -20,23 +19,20 @@ impl SowApp {
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
                     conqueror_id,
-                    gold_bounty,
+                    gold_bounty: _,
                     elimination_x,
                     elimination_y,
-                    assists,
+                    assists: _,
                     by_nuke: _,
                 } => {
                     self.handle_player_eliminated(
                         snap,
                         my_id,
-                        now_instant,
                         &mut turn_defeats,
                         &elimination::EliminationEventInfo {
                             player_id,
                             conqueror_id,
-                            gold_bounty,
                             pos: (elimination_x, elimination_y),
-                            assists: &assists,
                         },
                     );
                     if conqueror_id == my_id && my_id != 0 {

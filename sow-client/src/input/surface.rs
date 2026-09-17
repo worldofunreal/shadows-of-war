@@ -25,18 +25,10 @@ impl SowApp {
         if physical_size.width == 0 || physical_size.height == 0 {
             return;
         }
-        // ponytail: bypass winit scale_factor on web to avoid initial 1.0 zoom mismatch.
-        #[cfg(target_arch = "wasm32")]
+        // Bypass winit's initial 1.0 scale factor to avoid a zoom mismatch.
         let sf = web_sys::window()
             .map(|window| window.device_pixel_ratio() as f32)
             .unwrap_or(1.0)
-            .max(0.01);
-        #[cfg(not(target_arch = "wasm32"))]
-        let sf = self
-            .gfx
-            .window
-            .as_ref()
-            .map_or(1.0, |w| w.scale_factor() as f32)
             .max(0.01);
         let vp = crate::viewport::Viewport {
             physical: physical_size,
@@ -49,7 +41,6 @@ impl SowApp {
                 let _ = render_ctx.context.wait_for(&sp, !0);
             }
             if let Some(ref mut s) = self.gfx.surface {
-                #[cfg(target_arch = "wasm32")]
                 crate::web_canvas::set_canvas_backing_store_size(
                     physical_size.width,
                     physical_size.height,

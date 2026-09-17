@@ -570,12 +570,6 @@ fn web_catalog_has_prefix(catalog: &serde_json::Value, prefix: &str) -> bool {
 }
 
 fn validate_web_bundle(bundle: &str) -> Result<()> {
-    for marker in ["SURRENDER_COPY", "surrenderCopy", "SOW_PORTAL_LOCALE"] {
-        if bundle.contains(marker) {
-            bail!("web bundle contains obsolete localization marker {marker}");
-        }
-    }
-
     let catalog = validate_web_catalogs()?;
     let mut offset = 0;
     while let Some(found) = bundle[offset..].find("SOW_t(") {
@@ -633,7 +627,6 @@ struct IndexBuild<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WebTarget {
     Local,
-    SelfHosted,
     CrazyGames,
     Poki,
 }
@@ -738,9 +731,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "<!-- __SOW_SERVICE_WORKER_SLOT__ -->",
             match target {
                 WebTarget::Local => {
-                    "if ('serviceWorker' in navigator && window.location.hostname !== \"appassets.androidplatform.net\" && !isPortal) { navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
-                }
-                WebTarget::SelfHosted => {
                     "if ('serviceWorker' in navigator && window.location.hostname !== \"appassets.androidplatform.net\" && !isPortal) { navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
                 }
                 WebTarget::CrazyGames => {
@@ -1084,6 +1074,85 @@ fn validate_web_catalogs() -> Result<serde_json::Value> {
     Ok(english)
 }
 
+fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
+    let root = &paths.root;
+    let catalog = validate_web_catalogs()?;
+    let strings_root = root.join("sow-i18n/strings");
+    let registered = sow_i18n::Language::registry()
+        .iter()
+        .map(|(_, code, _)| *code)
+        .collect::<HashSet<_>>();
+    let mut found = HashSet::new();
+    for entry in fs::read_dir(&strings_root)
+        .with_context(|| format!("read {}", strings_root.display()))?
+    {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            bail!("web locale entry is not a directory: {}", entry.path().display());
+        }
+        let code = entry.file_name().to_string_lossy().into_owned();
+        if !registered.contains(code.as_str()) {
+            bail!("unregistered web locale directory: {code}");
+        }
+        let files = fs::read_dir(entry.path())?
+            .map(|entry| {
+                let entry = entry?;
+                if !entry.file_type()?.is_file() {
+                    bail!("web locale entry is not a file: {}", entry.path().display());
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name != "web.toml" {
+                    bail!("unexpected web locale file: {}/{}", code, name);
+                }
+                Ok(name)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if files.len() != 1 {
+            bail!("web locale {code} must contain exactly one catalog");
+        }
+        found.insert(code);
+    }
+    for &(_, code, _) in sow_i18n::Language::registry() {
+        if !found.contains(code) {
+            bail!("registered web locale is missing: {code}");
+        }
+    }
+
+    let source_root = root.join("sow-client/src");
+    for entry in walkdir::WalkDir::new(&source_root) {
+        let entry = entry?;
+        let path = entry.path();
+        if !entry.file_type().is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+            continue;
+        }
+        let source = fs::read_to_string(path)
+            .with_context(|| format!("read client source {}", path.display()))?;
+        let mut offset = 0;
+        while let Some(found) = source[offset..].find("UiText::new(") {
+            let start = offset + found + "UiText::new(".len();
+            let rest = &source[start..];
+            let trimmed = rest.trim_start();
+            let Some(quote) = trimmed.as_bytes().first().copied() else {
+                bail!("unterminated UiText key in {}", path.display());
+            };
+            if quote != b'"' && quote != b'\'' {
+                bail!("UiText::new requires a literal key in {}", path.display());
+            }
+            let value = &trimmed[1..];
+            let end = value
+                .find(quote as char)
+                .with_context(|| format!("unterminated UiText key in {}", path.display()))?;
+            let key = &value[..end];
+            if web_catalog_value(&catalog, key).is_none() {
+                bail!("client source uses unknown localization key {key}: {}", path.display());
+            }
+            let key_start = start + rest.len() - trimmed.len() + 1;
+            offset = key_start + end;
+        }
+    }
+    Ok(())
+}
+
 fn verify_exported_locales(dir: &Path) -> Result<()> {
     let expected = validate_web_catalogs()?;
     for &(_, code, _) in sow_i18n::Language::registry() {
@@ -1239,7 +1308,6 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "fonts/work-sans-italic-latin.woff2",
         "fonts/work-sans-italic-latin-ext.woff2",
         "wou-auth.js",
-        "grid-bg.js",
         "privacy/index.html",
         "terms/index.html",
         "cookies/index.html",
@@ -1551,7 +1619,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         "styles.css",
         "legal.css",
         "wou-auth.js",
-        "grid-bg.js",
         "8d227b8f9e6140d39e3381a1829e1db3.txt",
         "manifest.webmanifest",
     ] {
@@ -1589,7 +1656,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         "site-chrome.js",
         "legal.css",
         "wou-auth.js",
-        "grid-bg.js",
     ] {
         let hash = file_sha256(&out.join(name))?;
         let versioned = format!("{name}?v={}", &hash[..10]);
@@ -1625,6 +1691,22 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     prune_qs(out)?;
     verify_layout(out)?;
     println!("Load paths: {wasm}, {js}");
+    Ok(())
+}
+
+fn prepare_native_webroot(out: &Path) -> Result<()> {
+    let index = out.join("play/index.html");
+    let html = fs::read_to_string(&index)
+        .with_context(|| format!("read native entrypoint {}", index.display()))?;
+    let maps = "window.SOW_MAPS_URL = \"/maps\";";
+    let assets = "window.SOW_ASSETS_URL = \"/assets\";";
+    if html.matches(maps).count() != 1 || html.matches(assets).count() != 1 {
+        bail!("native entrypoint endpoints are missing or duplicated");
+    }
+    let html = html
+        .replace(maps, "window.SOW_MAPS_URL = \"../maps\";")
+        .replace(assets, "window.SOW_NATIVE = true; window.SOW_ASSETS_URL = \"../assets\";");
+    fs::write(&index, html)?;
     Ok(())
 }
 
@@ -2206,7 +2288,14 @@ fn ensure_native_dependencies(native_root: &Path) -> Result<()> {
 
 fn build_native(paths: &Paths, native_root: &Path, version: &str) -> Result<()> {
     let config = serde_json::json!({ "version": version }).to_string();
-    println!("+ npm run tauri -- build --no-sign --config {config}");
+    let bundles = if cfg!(target_os = "linux") {
+        "deb"
+    } else if cfg!(target_os = "macos") {
+        "app,dmg"
+    } else {
+        "nsis"
+    };
+    println!("+ npm run tauri -- build --no-sign --bundles {bundles} --config {config}");
     let status = Command::new("npm")
         .args([
             "run",
@@ -2214,6 +2303,8 @@ fn build_native(paths: &Paths, native_root: &Path, version: &str) -> Result<()> 
             "--",
             "build",
             "--no-sign",
+            "--bundles",
+            bundles,
             "--config",
             config.as_str(),
         ])
@@ -2251,10 +2342,18 @@ fn launch_native(paths: &Paths) -> Result<()> {
         let executable = target.join("release").join(name);
         require_file(&executable, "native executable")?;
         println!("✅ Native game ready: {}", executable.display());
-        Command::new(&executable)
-            .current_dir(&paths.root)
+        let mut command = Command::new(&executable);
+        command.current_dir(&paths.root);
+        if cfg!(target_os = "linux")
+            && env::var_os("WEBKIT_DMABUF_RENDERER_FORCE_SHM").is_none()
+            && Path::new("/sys/module/nvidia").is_dir()
+        {
+            command.env("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1");
+        }
+        let mut child = command
             .spawn()
             .with_context(|| format!("open native game {}", executable.display()))?;
+        child.wait().context("wait for native game")?;
     }
     Ok(())
 }
@@ -2264,6 +2363,7 @@ fn cmd_native(paths: &Paths) -> Result<()> {
     println!("==> Building native JavaScript/WASM game");
     compile_wasm(paths, false)?;
     package_self(paths, &paths.dist_web, &version, true)?;
+    prepare_native_webroot(&paths.dist_web)?;
     let native_root = paths.root.join("sow-native");
     ensure_native_dependencies(&native_root)?;
     build_native(paths, &native_root, &version)
@@ -2612,7 +2712,7 @@ mod tests {
                 wasm: "sow_client_test_bg.wasm",
                 ts: "test",
                 maps_cache_bust: "test-maps",
-                target: WebTarget::SelfHosted,
+                target: WebTarget::Local,
             },
         )?;
         let html = fs::read_to_string(out.path().join("play/index.html"))?;
@@ -2691,7 +2791,6 @@ mod tests {
         Ok(())
     }
 
-    #[test]
     #[test]
     fn test_leader_compendium_contains_all_twelve_leaders() -> Result<()> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

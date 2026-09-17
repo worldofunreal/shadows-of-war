@@ -208,16 +208,6 @@ pub struct FalloutZone {
 }
 
 #[derive(Clone, Debug)]
-pub struct FloatingNotice {
-    pub text: String,
-    pub world_x: f32,
-    pub world_y: f32,
-    pub start_time: web_time::Instant,
-    pub duration: web_time::Duration,
-    pub color: [f32; 4],
-}
-
-#[derive(Clone, Debug)]
 pub struct ClickMarker {
     pub world_x: f32,
     pub world_y: f32,
@@ -225,20 +215,20 @@ pub struct ClickMarker {
 }
 
 pub struct UiState {
-    pub app: sow_ui::ClientApp,
+    pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
     pub show_leaderboard: bool,
     pub leaderboard_timer: f32,
-    pub leaderboard_rankings: Vec<sow_ui::ui::hud::leaderboard::LeaderboardRanking>,
+    pub leaderboard_rankings: Vec<crate::ui::hud::leaderboard::LeaderboardRanking>,
     pub leaderboard_display:
-        std::collections::HashMap<u16, sow_ui::ui::hud::leaderboard::LeaderboardRowDisplay>,
+        std::collections::HashMap<u16, crate::ui::hud::leaderboard::LeaderboardRowDisplay>,
     pub leaderboard_visible_limit: usize,
     pub leaderboard_paged_through_limit: usize,
     pub leaderboard_search: String,
-    pub leaderboard_team_rankings: Vec<sow_ui::ui::hud::leaderboard::TeamRanking>,
+    pub leaderboard_team_rankings: Vec<crate::ui::hud::leaderboard::TeamRanking>,
     pub leaderboard_prev_search: String,
     pub leaderboard_was_open: bool,
     pub show_dev_sidebar: bool,
@@ -250,7 +240,6 @@ pub struct UiState {
     pub last_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
     pub cached_player_colors: Vec<[f32; 4]>,
     pub cached_player_count: usize,
-    pub floating_notices: Vec<FloatingNotice>,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
     /// Deterministic reward preview for the current match, cached when the
@@ -404,8 +393,6 @@ pub struct SowApp {
     pub time: TimeState,
     pub tasks: TaskState,
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pub tokio_rt: tokio::runtime::Runtime,
     #[cfg(target_arch = "wasm32")]
     pub wasm_doc_was_visible: bool,
     pub asset_config: crate::AssetConfig,

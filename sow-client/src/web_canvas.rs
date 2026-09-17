@@ -4,7 +4,6 @@
 //! (mobile browser chrome, dynamic toolbars). `winit` emits `SurfaceResized` after
 //! `request_surface_size`; [`crate::input`] reconfigures the GPU surface from that event.
 
-#[cfg(target_arch = "wasm32")]
 #[derive(Clone, Copy)]
 struct BrowserViewport {
     width: f64,
@@ -12,14 +11,12 @@ struct BrowserViewport {
     device_pixel_ratio: f64,
 }
 
-#[cfg(target_arch = "wasm32")]
 thread_local! {
     // Window measurements cross the wasm/JS boundary. They only change on a viewport event,
     // never as part of a render frame, so keep one cached sample for the hot path.
     static VIEWPORT_CACHE: std::cell::Cell<Option<BrowserViewport>> = const { std::cell::Cell::new(None) };
 }
 
-#[cfg(target_arch = "wasm32")]
 fn read_browser_viewport() -> BrowserViewport {
     let Some(window) = web_sys::window() else {
         return BrowserViewport {
@@ -52,7 +49,6 @@ fn read_browser_viewport() -> BrowserViewport {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 fn browser_viewport() -> BrowserViewport {
     VIEWPORT_CACHE.with(|cache| {
         if let Some(viewport) = cache.get() {
@@ -64,36 +60,22 @@ fn browser_viewport() -> BrowserViewport {
     })
 }
 
-#[cfg(target_arch = "wasm32")]
 fn invalidate_viewport_cache() {
     VIEWPORT_CACHE.with(|cache| cache.set(None));
 }
 
 /// Logical viewport size preferring the visible region (`visualViewport`).
-#[cfg(target_arch = "wasm32")]
 pub fn visible_logical_size() -> (f64, f64) {
     let viewport = browser_viewport();
     (viewport.width, viewport.height)
 }
 
 /// Logical viewport size from the browser window (not `#blade` client box).
-#[cfg(target_arch = "wasm32")]
 pub fn canvas_logical_size() -> (f64, f64) {
     visible_logical_size()
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn canvas_logical_size() -> (f64, f64) {
-    (800.0, 600.0)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn visible_logical_size() -> (f64, f64) {
-    canvas_logical_size()
-}
-
 /// Physical viewport size from the browser window (logical × devicePixelRatio).
-#[cfg(target_arch = "wasm32")]
 pub fn physical_viewport_size() -> (u32, u32) {
     let viewport = browser_viewport();
     (
@@ -102,18 +84,11 @@ pub fn physical_viewport_size() -> (u32, u32) {
     )
 }
 
-#[cfg(target_arch = "wasm32")]
 pub fn device_pixel_ratio() -> f64 {
     browser_viewport().device_pixel_ratio
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn physical_viewport_size() -> (u32, u32) {
-    (800, 600)
-}
-
 /// Set `#blade` backing-store pixels before Blade reconfigures the WebGL surface.
-#[cfg(target_arch = "wasm32")]
 pub fn set_canvas_backing_store_size(width: u32, height: u32) {
     use wasm_bindgen::JsCast;
     let Some(window) = web_sys::window() else {
@@ -132,11 +107,7 @@ pub fn set_canvas_backing_store_size(width: u32, height: u32) {
     canvas.set_height(height);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn set_canvas_backing_store_size(_width: u32, _height: u32) {}
-
 /// Request a winit resize when the browser visible viewport changes (URL bar, rotation).
-#[cfg(target_arch = "wasm32")]
 pub fn install_viewport_listeners() {
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
@@ -166,6 +137,3 @@ pub fn install_viewport_listeners() {
         request_resize.forget();
     }
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn install_viewport_listeners() {}

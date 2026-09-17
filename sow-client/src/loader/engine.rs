@@ -2,7 +2,7 @@ use super::helpers::*;
 use crate::EngineInitEvent;
 use crate::app::SowApp;
 use sow_core::protocol::SimCommand;
-use sow_ui_kit::ClientPhase;
+use crate::ClientPhase;
 
 #[cfg(target_arch = "wasm32")]
 async fn yield_to_browser() {
@@ -48,7 +48,7 @@ impl SowApp {
         }
     }
 
-    pub(crate) fn cleanup_game_session_stub(&mut self) {
+    pub(crate) fn reset_game_session(&mut self) {
         self.abort_engine_init();
         self.sim.turn_queue.clear();
         self.sim.offline_intents.clear();
@@ -102,7 +102,6 @@ impl SowApp {
                 );
 
                 splash_show_loading_progress(&mut self.ui.app.splash_state, 0.05);
-                self.ui.app.splash_state.status_override = None;
 
                 let mut start_msg_clone = start_msg.clone();
 
@@ -185,28 +184,9 @@ impl SowApp {
                         });
                     }
 
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        let tx_prog = tx.clone();
-                        let water = sow_core::water_components::WaterComponents::compute(
-                            &state.map,
-                            move |prog| {
-                                let _ = tx_prog.send(EngineInitEvent::Progress(prog));
-                            },
-                        );
-                        let _ = tx.send(EngineInitEvent::Complete(
-                            Box::new(state),
-                            water,
-                            Box::new(start_msg_clone),
-                        ));
-                    }
                 };
 
-                #[cfg(target_arch = "wasm32")]
                 init_logic();
-
-                #[cfg(not(target_arch = "wasm32"))]
-                std::thread::spawn(init_logic);
 
                 self.sim.turn_queue.clear();
 
@@ -215,14 +195,13 @@ impl SowApp {
             }
         }
         // Poll engine init channel
-        if self.ui.app.phase == sow_ui_kit::ClientPhase::Splash {
+        if self.ui.app.phase == crate::ClientPhase::Splash {
             match self.ui.app.splash_state.job {
-                sow_ui::ui::loading_screen::SplashJob::Boot => {
+                crate::ui::loading_screen::SplashJob::Boot => {
                     #[cfg(target_arch = "wasm32")]
                     {
                         // loader.js owns the boot presentation. Rust only publishes the phase
                         // and waits for identity/bootstrap work before exposing the menu.
-                        splash_show_loading(&mut self.ui.app.splash_state);
                         splash_show_loading_progress(&mut self.ui.app.splash_state, 0.95);
                         if self.should_portal_auto_intro() {
                             if self.boot_db_settled {
@@ -233,62 +212,8 @@ impl SowApp {
                         }
                     }
 
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        let leader = self.ui.app.main_menu_state.selected_leader;
-                        // Portrait art is keyed by orientation (`width < height`), the
-                        // same test the backdrop uses to pick + decode the texture.
-                        // compact_viewport's extra size thresholds would key boot
-                        // focus differently and strand the decode (wide-short embeds).
-                        let mobile = false;
-
-                        splash_show_loading(&mut self.ui.app.splash_state);
-
-                        self.ui
-                            .app
-                            .asset_loader
-                            .ensure_ui_assets_loaded();
-                        // Kick the portrait fetch concurrently with the boot UI art
-                        // fetch — both are network round trips on wasm and were
-                        // previously serialized behind `ui_ready`.
-                        self.ui
-                            .app
-                            .asset_loader
-                            .ensure_boot_leader_loaded(leader);
-                        self.ui
-                            .app
-                            .asset_loader
-                            .set_leader_portrait_focus(leader, mobile);
-                        let ui_ready = self.ui.app.asset_loader.ui_splash_ready();
-                        if !ui_ready {
-                            splash_show_loading_progress(&mut self.ui.app.splash_state, 0.35);
-                        } else {
-                            splash_show_loading_progress(&mut self.ui.app.splash_state, 0.65);
-                        }
-
-                        let ui_ready = self.ui.app.asset_loader.ui_splash_ready();
-                        let hero_ready = self.ui.app.asset_loader.boot_leader_ready(leader, mobile);
-                        let boot_ready = ui_ready && hero_ready;
-
-                        if boot_ready {
-                            // Native stores the same local progress snapshot as the web client. Keep
-                            // the first-run intro one-time, and expose an explicit menu-preview mode
-                            // for UI work without changing the normal player route.
-                            if std::env::var_os("SOW_NATIVE_MENU").is_some()
-                                || !self.progress.is_first_game()
-                            {
-                                log::info!("native boot: main menu");
-                                self.ui.app.splash_state.done = true;
-                                self.ui.app.splash_state.target_phase =
-                                    Some(sow_ui_kit::ClientPhase::MainMenu);
-                            } else {
-                                log::info!("native boot: first-run intro tutorial");
-                                self.start_portal_intro_match();
-                            }
-                        }
-                    }
                 }
-                sow_ui::ui::loading_screen::SplashJob::ExitGame => {
+                crate::ui::loading_screen::SplashJob::ExitGame => {
                     let step = self.ui.app.splash_state.gpu_load_step;
                     if step == 0 {
                         log::info!("Exit game splash: reconnecting to orchestrator");
@@ -296,24 +221,6 @@ impl SowApp {
                         self.ui.app.splash_state.gpu_load_step = 1;
                         self.ui.app.splash_state.frames_drawn = 0;
                     } else if step == 1 {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        {
-                            let leader = self.ui.app.main_menu_state.selected_leader;
-                            let mobile = false;
-                            self.ui
-                                .app
-                                .asset_loader
-                                .ensure_ui_assets_loaded();
-                            self.ui
-                                .app
-                                .asset_loader
-                                .ensure_boot_leader_loaded(leader);
-                            self.ui
-                                .app
-                                .asset_loader
-                                .set_leader_portrait_focus(leader, mobile);
-                        }
-
                         let p = self.ui.app.splash_state.progress;
                         if p < 0.99 {
                             let inc = ((0.99 - p) * 0.03).clamp(0.001, 0.04);
@@ -323,17 +230,8 @@ impl SowApp {
                             );
                         }
 
-                        #[cfg(target_arch = "wasm32")]
                         let hero_ready = true;
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let hero_ready = self.ui.app.asset_loader.boot_leader_ready(
-                            self.ui.app.main_menu_state.selected_leader,
-                            false,
-                        );
-                        #[cfg(target_arch = "wasm32")]
                         let lobby_snapshot_ready = self.web_exit_lobbies_ready;
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let lobby_snapshot_ready = true;
                         if self.net.client.is_some() && hero_ready && lobby_snapshot_ready {
                             log::info!(
                                 "Exit game splash: menu dependencies ready, transitioning to main menu"
@@ -343,33 +241,28 @@ impl SowApp {
                             self.ui.app.splash_state.frames_drawn = 0;
                         }
                     } else if step == 2 && self.ui.app.splash_state.frames_drawn > 1 {
-                        self.cleanup_game_session_stub();
+                        self.reset_game_session();
                         self.ui.app.splash_state.done = true;
                         if self.ui.app.splash_state.target_phase.is_none() {
                             self.ui.app.splash_state.target_phase = Some(ClientPhase::MainMenu);
                         }
                     }
                 }
-                sow_ui::ui::loading_screen::SplashJob::EnterGame => {
+                crate::ui::loading_screen::SplashJob::EnterGame => {
                     while let Ok(event) = self.tasks.engine_init_rx.try_recv() {
                         match event {
-                            EngineInitEvent::Status(msg) => {
-                                log::debug!("[loader] {msg}");
-                                splash_show_loading(&mut self.ui.app.splash_state);
-                            }
                             EngineInitEvent::Progress(prog) => {
                                 self.ui.app.splash_state.progress = 0.05 + (prog * 0.45);
                             }
                             EngineInitEvent::Complete(state, water, start_msg) => {
                                 if self.ui.app.splash_state.job
-                                    != sow_ui::ui::loading_screen::SplashJob::EnterGame
+                                    != crate::ui::loading_screen::SplashJob::EnterGame
                                 {
                                     continue;
                                 }
                                 log::info!("Engine initialization complete; allocating GPU memory");
                                 self.net.load_telemetry.mark_engine_init_complete();
                                 splash_show_loading_progress(&mut self.ui.app.splash_state, 0.55);
-                                self.ui.app.splash_state.status_override = None;
                                 self.ui.app.splash_state.frames_drawn = 0;
                                 self.ui.app.splash_state.gpu_load_step = 1;
                                 self.tasks.pending_engine_init_data =
@@ -380,7 +273,7 @@ impl SowApp {
                 }
             }
 
-            if self.ui.app.splash_state.job == sow_ui::ui::loading_screen::SplashJob::EnterGame
+            if self.ui.app.splash_state.job == crate::ui::loading_screen::SplashJob::EnterGame
                 && self.tasks.pending_engine_init_data.is_some()
             {
                 let step = self.ui.app.splash_state.gpu_load_step;
@@ -452,7 +345,6 @@ impl SowApp {
                         self.ui.app.splash_state.frames_drawn = 0;
                         log::info!("Enter game splash: uploading map texture");
                         splash_show_loading_progress(&mut self.ui.app.splash_state, 0.70);
-                        self.ui.app.splash_state.status_override = None;
 
                         // Re-insert pending data so we stay in this block until Step 4
                         self.tasks.pending_engine_init_data = Some((state, water, start_msg));
@@ -461,7 +353,6 @@ impl SowApp {
                     // Step 2 Finished: GPU Texture is uploaded!
                     self.ui.app.splash_state.gpu_load_step = 3;
                     splash_show_loading_progress(&mut self.ui.app.splash_state, 0.80);
-                    self.ui.app.splash_state.status_override = None;
                 } else if step == 3 && self.sim.current_snapshot.is_some() {
                     self.net.load_telemetry.mark_snapshot_available();
                     let ready_to_release = if self.net.is_offline {
@@ -478,7 +369,7 @@ impl SowApp {
                         self.ui.app.splash_state.done = true;
                         if self.ui.app.splash_state.target_phase.is_none() {
                             self.ui.app.splash_state.target_phase =
-                                Some(sow_ui_kit::ClientPhase::Playing);
+                                Some(crate::ClientPhase::Playing);
                             crate::store_portals::gameplay_start();
                             if !self.net.is_offline {
                                 crate::analytics::track_with(
@@ -510,7 +401,6 @@ impl SowApp {
                             let inc = ((0.95 - p) * 0.03).clamp(0.001, 0.02);
                             splash_show_loading_progress(&mut self.ui.app.splash_state, p + inc);
                         }
-                        self.ui.app.splash_state.status_override = None;
                         if self.ui.app.splash_state.frames_drawn.is_multiple_of(120) {
                             log::warn!(
                                 "[LOADER] Waiting for relay connection before releasing loader: is_connected={}, has_client={}, on_relay={}, my_lobby_id={:?}, my_player_id={:?}, phase={:?}",

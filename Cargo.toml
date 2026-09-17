@@ -96,7 +96,6 @@ path = "sow-net"
 [patch."https://github.com/ohsalmeron/blade"]
 blade-graphics = { path = "blade/blade-graphics" }
 blade-macros = { path = "blade/blade-macros" }
-blade-util = { path = "blade/blade-util" }
 
 
 

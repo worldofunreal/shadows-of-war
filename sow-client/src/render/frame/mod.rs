@@ -158,7 +158,7 @@ impl SowApp {
                         }
                     }
 
-                    let dev = sow_ui_kit::theme::dev_config::DevConfig::get();
+                    let dev = crate::theme::dev_config::DevConfig::get();
                     let border_thickness = dev.thickness;
                     let border_darkness = dev.darkness;
                     let shore_thickness = dev.shore_thickness;

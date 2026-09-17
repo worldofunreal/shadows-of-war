@@ -91,7 +91,7 @@
     }
 
     function validateEpisode(episodeId, roster, definition) {
-        if (!roster || typeof roster !== "object" || roster.map !== "string" || !Array.isArray(roster.factions)) {
+        if (!roster || typeof roster !== "object" || typeof roster.map !== "string" || !Array.isArray(roster.factions)) {
             throw new Error("roster shape");
         }
         if (!Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2) {

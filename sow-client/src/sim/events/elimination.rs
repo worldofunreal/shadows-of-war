@@ -1,12 +1,10 @@
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
 
-pub(crate) struct EliminationEventInfo<'a> {
+pub(crate) struct EliminationEventInfo {
     pub player_id: u16,
     pub conqueror_id: u16,
-    pub gold_bounty: u32,
     pub pos: (u32, u32),
-    pub assists: &'a [(u16, u32)],
 }
 
 impl SowApp {
@@ -14,15 +12,12 @@ impl SowApp {
         &mut self,
         snap: &SimSnapshot,
         my_id: u16,
-        now_instant: web_time::Instant,
         turn_defeats: &mut crate::player_progress::SessionDefeats,
         info: &EliminationEventInfo,
     ) {
         let player_id = info.player_id;
         let conqueror_id = info.conqueror_id;
-        let gold_bounty = info.gold_bounty;
         let (elimination_x, elimination_y) = info.pos;
-        let assists = info.assists;
         let mut wx = 0.5;
         let mut wy = 0.5;
 
@@ -82,36 +77,5 @@ impl SowApp {
             }
         }
 
-        // Spawn floating notice for killer and assist contributors
-        if conqueror_id == my_id && my_id != 0 {
-            let bounty_text = format!(
-                "+{} Gold",
-                sow_ui_kit::utils::format_number(gold_bounty as f64)
-            );
-            self.ui.floating_notices.push(crate::app::FloatingNotice {
-                text: bounty_text,
-                world_x: wx,
-                world_y: wy,
-                start_time: now_instant,
-                duration: web_time::Duration::from_millis(3000),
-                color: crate::rgb(250, 204, 21),
-            });
-        }
-        for (assist_id, assist_gold) in assists {
-            if *assist_id == my_id && my_id != 0 {
-                let bounty_text = format!(
-                    "+{} Gold (Assist)",
-                    sow_ui_kit::utils::format_number(*assist_gold as f64)
-                );
-                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: bounty_text,
-                    world_x: wx,
-                    world_y: wy + 0.5,
-                    start_time: now_instant,
-                    duration: web_time::Duration::from_millis(3000),
-                    color: crate::rgb(180, 220, 100),
-                });
-            }
-        }
     }
 }

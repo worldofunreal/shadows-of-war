@@ -1,8 +1,6 @@
 #![recursion_limit = "256"]
 #![warn(dead_code, unused_variables, unused_imports)]
 #![cfg(target_arch = "wasm32")]
-extern crate self as sow_ui;
-extern crate self as sow_ui_kit;
 use sow_net::client::SowClient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,7 +15,7 @@ pub enum UiAction {
     OpenCreateGame, CreateGame { config: Box<sow_core::game_config::GameConfig>, is_private: bool, password: Option<String> },
     OpenJoinBrowser, CloseOverlay, JoinWithCode, JoinWithPassword(u64),
     KickPlayer { lobby_id: u64, target_player_id: u16 }, BanPlayer { lobby_id: u64, target_player_id: u16 },
-    MovePlayerTeam { lobby_id: u64, target_player_id: u16 }, SetFullscreen(bool), ToggleShowcase,
+    MovePlayerTeam { lobby_id: u64, target_player_id: u16 }, ToggleShowcase,
     OpenStorePage, OpenProfilePage, LoadOwnProfile, OpenPublicProfilePage(String), LoadProfileHistory,
     LoadProfileRatings, SearchProfiles(String), LoadMatchDetail(String), CloseMatchDetail,
     UnlockLeader { leader_id: String, currency: String }, UnlockSkin(String), EquipSkin(String),
@@ -28,26 +26,19 @@ pub(crate) const fn rgb(r: u8, g: u8, b: u8) -> [f32; 4] {
 }
 
 pub(crate) fn get_build_version() -> String {
-    #[cfg(target_arch = "wasm32")]
-    {
-        if let Some(window) = web_sys::window() {
-            if let Ok(val) = js_sys::Reflect::get(
-                &window,
-                &wasm_bindgen::JsValue::from_str("SOW_BUILD_VERSION"),
-            ) {
-                if let Some(s) = val.as_string() {
-                    if s != "__BUILD_TS__" {
-                        return s;
-                    }
+    if let Some(window) = web_sys::window() {
+        if let Ok(val) = js_sys::Reflect::get(
+            &window,
+            &wasm_bindgen::JsValue::from_str("SOW_BUILD_VERSION"),
+        ) {
+            if let Some(s) = val.as_string() {
+                if s != "__BUILD_TS__" {
+                    return s;
                 }
             }
         }
-        "unknown".to_string()
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        include_str!("../../.version").trim().to_string()
-    }
+    "unknown".to_string()
 }
 
 mod analytics;
@@ -83,100 +74,49 @@ pub(crate) fn camera_zoom_lower_bound(screen_w: f32, screen_h: f32, map_w: u32, 
 fn spawn_sow_client_connect(
     url: String,
     connect_tx: &crossbeam_channel::Sender<Result<SowClient, String>>,
-    #[cfg(not(target_arch = "wasm32"))] tokio_rt: &tokio::runtime::Runtime,
 ) {
     let tx = connect_tx.clone();
     let url_clone = url.clone();
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use wasm_bindgen::JsCast;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let fut = async move {
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                SowClient::connect(&url_clone),
-            )
-            .await
-            {
-                Ok(Ok(c)) => {
+    let tx_for_timeout = connect_tx.clone();
+    let finished = Arc::new(AtomicBool::new(false));
+    let finished_clone = finished.clone();
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let res = SowClient::connect(&url_clone).await;
+        if !finished.swap(true, Ordering::SeqCst) {
+            match res {
+                Ok(c) => {
                     let _ = tx.send(Ok(c));
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
                     let _ = tx.send(Err(e.to_string()));
                 }
-                Err(_) => {
-                    let _ = tx.send(Err("Connection timed out after 5 seconds".to_string()));
-                }
             }
-        };
-        tokio_rt.spawn(fut);
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        use std::sync::Arc;
-        use std::sync::atomic::{AtomicBool, Ordering};
-        use wasm_bindgen::JsCast;
-
-        let tx_for_timeout = connect_tx.clone();
-        let finished = Arc::new(AtomicBool::new(false));
-        let finished_clone = finished.clone();
-
-        // Spawn the connection attempt
-        wasm_bindgen_futures::spawn_local(async move {
-            let res = SowClient::connect(&url_clone).await;
-            if !finished.swap(true, Ordering::SeqCst) {
-                match res {
-                    Ok(c) => {
-                        let _ = tx.send(Ok(c));
-                    }
-                    Err(e) => {
-                        let _ = tx.send(Err(e.to_string()));
-                    }
-                }
-            }
-        });
-
-        // Set up the timeout
-        let closure = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
-            if !finished_clone.swap(true, Ordering::SeqCst) {
-                let _ =
-                    tx_for_timeout.send(Err("Connection timed out after 5 seconds".to_string()));
-            }
-        });
-
-        if let Some(window) = web_sys::window() {
-            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                closure.as_ref().unchecked_ref(),
-                5000,
-            );
-            closure.forget(); // Keep the closure alive so JS can invoke it
         }
+    });
+
+    let closure = wasm_bindgen::closure::Closure::<dyn FnMut()>::new(move || {
+        if !finished_clone.swap(true, Ordering::SeqCst) {
+            let _ = tx_for_timeout.send(Err("Connection timed out after 5 seconds".to_string()));
+        }
+    });
+
+    if let Some(window) = web_sys::window() {
+        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+            closure.as_ref().unchecked_ref(),
+            5000,
+        );
+        closure.forget();
     }
 }
 
 pub enum MapDownloadEvent {
     CatalogReady(Vec<sow_core::maps::MapCatalogEntry>),
     MapReady(String, Vec<u8>),
-    ThumbnailReady(String, Vec<u8>),
-    ThumbnailFailed(String, String),
-    LeaderPortraitReady {
-        leader: sow_core::player::Leader,
-        mobile: bool,
-        bytes: Vec<u8>,
-    },
-    LeaderPortraitFailed {
-        leader: sow_core::player::Leader,
-        mobile: bool,
-        reason: String,
-    },
-    BootUiReady {
-        kind: ui::asset_loader::UiSplashTexture,
-        bytes: Vec<u8>,
-    },
-    BootUiFailed {
-        kind: ui::asset_loader::UiSplashTexture,
-        reason: String,
-    },
     /// `leader == None` is the null/fallback avatar (`null.webp`).
     AvatarReady {
         leader: Option<sow_core::player::Leader>,
@@ -198,7 +138,6 @@ pub enum MapDownloadEvent {
 }
 
 pub enum EngineInitEvent {
-    Status(String),
     Progress(f32),
     Complete(
         Box<sow_core::game::GameState>,
@@ -215,7 +154,6 @@ pub mod loader;
 pub mod ui;
 mod map_cache;
 #[cfg(target_arch = "wasm32")]
-mod map_download;
 pub mod net;
 pub mod platform_identity;
 pub mod player_progress;
@@ -293,13 +231,8 @@ impl ApplicationHandler for SowApp {
         }
         self.update(event_loop);
 
-        // Dynamically adjust winit control flow: Poll during active gameplay to ensure simulation
-        // ticks and nameplate/ui transitions animate smoothly even when there are no user input events,
-        // and Wait in other screens (like Main Menu) to preserve CPU and battery.
-        // WASM must NEVER use ControlFlow::Poll: it spins the event loop and starves the
-        // browser's requestAnimationFrame compositor (Firefox/Chrome), crashing FPS to ~15.
-        // Pin web to Wait and drive redraws via request_redraw below. See README
-        // "Event Loop Starvation" / commit 11b8b8a. Do not collapse this cfg split.
+        // Let the browser/WebKit compositor schedule visible frames; request_redraw keeps
+        // simulation and animation moving without spinning the event loop.
         let flow = winit::event_loop::ControlFlow::Wait;
 
         event_loop.set_control_flow(flow);
@@ -311,7 +244,6 @@ impl ApplicationHandler for SowApp {
 }
 
 pub fn run_game(event_loop: winit::event_loop::EventLoop) {
-    map_download::install_wasm_map_export_hook();
     let app = SowApp::new();
     let _ = event_loop.run_app(app);
 }

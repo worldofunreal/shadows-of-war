@@ -1,9 +1,8 @@
 //! Client diagnostics switch + sim-tick cost recorder.
 //!
 //! Verbose `[DIAG NET]`/`[DIAG SIM TICK]` logging is OFF by default in
-//! production; enable with `?diag=1` in the URL (WASM) or `SOW_DIAG=1`
-//! (native). Tick durations are always measured (two `Instant::now()` calls
-//! per tick) but only reported on anomaly — a slow frame is the actual
+//! production; enable with `?diag=1` in the URL. Tick durations are always
+//! measured (two `Instant::now()` calls per tick) but only reported on anomaly — a slow frame is the actual
 //! freeze signal, so it logs even without diag enabled.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -26,18 +25,12 @@ pub fn init_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
 }
 
-#[cfg(target_arch = "wasm32")]
 pub fn init_from_url() {
     let on = web_sys::window()
         .and_then(|w| w.location().search().ok())
         .map(|s| s.contains("diag=1"))
         .unwrap_or(false);
     init_enabled(on);
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn init_from_url() {
-    init_enabled(std::env::var("SOW_DIAG").is_ok_and(|v| v == "1"));
 }
 
 pub fn enabled() -> bool {

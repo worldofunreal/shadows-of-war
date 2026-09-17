@@ -1,4 +1,4 @@
-//! Platform-provided player identity (CrazyGames, Poki, native stores).
+//! Platform-provided player identity (CrazyGames and Poki).
 //! Game code reads this once at boot; portal SDKs populate via [`crate::store_portals`].
 
 #[derive(Clone, Debug, PartialEq, Eq)]

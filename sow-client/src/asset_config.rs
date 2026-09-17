@@ -1,9 +1,8 @@
 //! Single asset URL configuration for the browser client.
 //!
-//! Strict by design: every endpoint must be declared explicitly (JS globals on
-//! JavaScript globals on wasm, with environment variables retained only for local tooling.
-//! There are NO defaults and NO derivations — a
-//! missing endpoint is a packaging/serving bug and must crash the client at
+//! Strict by design: every endpoint must be declared explicitly as a JavaScript global.
+//! There are NO defaults and NO derivations — a missing endpoint is a
+//! packaging/serving bug and must crash the client at
 //! boot. A guessed `/api` once routed database traffic to the CrazyGames CDN
 //! (403) and silently booted players into the wrong mode; that class of
 //! silent misrouting is forbidden here.
@@ -16,7 +15,6 @@ pub struct AssetConfig {
     /// Deploy timestamp for cache busting CDN UI assets.
     pub cache_bust: String,
 }
-
 impl AssetConfig {
     /// Resolve once at boot from explicit JavaScript globals.
     /// Missing configuration panics — the client never guesses endpoints.
@@ -48,34 +46,10 @@ impl AssetConfig {
         )
     }
 
-    /// Leader portraits served by the web shell (`/assets/shell/leaders/`).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn leader_portrait_url(&self, filename: &str) -> String {
-        let base = self.assets_base.trim_end_matches('/');
-        let path = format!("{base}/shell/leaders/{filename}");
-        if self.cache_bust.is_empty() {
-            path
-        } else {
-            format!("{path}?v={}", self.cache_bust)
-        }
-    }
-
     /// Gameplay avatars (`/assets/gameplay/avatars/`).
     pub fn avatar_url(&self, filename: &str) -> String {
         let base = self.assets_base.trim_end_matches('/');
         let path = format!("{base}/gameplay/avatars/{filename}");
-        if self.cache_bust.is_empty() {
-            path
-        } else {
-            format!("{path}?v={}", self.cache_bust)
-        }
-    }
-
-    /// Legacy loader art (`/assets/shell/loader/`).
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn boot_ui_asset_url(&self, filename: &str) -> String {
-        let base = self.assets_base.trim_end_matches('/');
-        let path = format!("{base}/shell/loader/{filename}");
         if self.cache_bust.is_empty() {
             path
         } else {
@@ -93,36 +67,22 @@ impl AssetConfig {
         String::new()
     }
 
-    #[cfg(target_arch = "wasm32")]
     fn js_global(name: &str) -> Option<String> {
         let window = web_sys::window()?;
         let val = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str(name)).ok()?;
         val.as_string().filter(|s| !s.is_empty())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    fn js_global(_name: &str) -> Option<String> {
-        None
-    }
 }
 
-/// Explicit configuration only: JS globals in the browser, or environment
-/// variables for local tooling.
+/// Explicit browser configuration only: every endpoint comes from a JS global.
 /// Missing/empty value = panic. No fallback, no derivation, ever.
 pub(crate) fn require_endpoint(name: &str) -> String {
-    #[cfg(target_arch = "wasm32")]
-    {
-        if let Some(v) = AssetConfig::js_global(name) {
-            return v;
-        }
-    }
-    if let Ok(v) = std::env::var(name)
-        && !v.is_empty()
-    {
+    if let Some(v) = AssetConfig::js_global(name) {
         return v;
     }
     panic!(
-        "SOW endpoint not configured: {name}. Set the JS global (wasm shell boot), \
-         or env var for local tooling. Refusing to guess a fallback."
+        "SOW endpoint not configured: {name}. Set the JS global in the web shell. \
+         Refusing to guess a fallback."
     );
 }

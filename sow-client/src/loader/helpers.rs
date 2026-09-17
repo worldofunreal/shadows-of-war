@@ -1,16 +1,10 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
-/// Empty splash status -> loading screen shows i18n `loading_screen.loading` + progress %.
-pub(super) fn splash_show_loading(splash: &mut sow_ui::ui::loading_screen::SplashState) {
-    splash.status_text.clear();
-}
-
 pub(super) fn splash_show_loading_progress(
-    splash: &mut sow_ui::ui::loading_screen::SplashState,
+    splash: &mut crate::ui::loading_screen::SplashState,
     progress: f32,
 ) {
-    splash_show_loading(splash);
     splash.progress = splash.progress.max(progress);
 }
 

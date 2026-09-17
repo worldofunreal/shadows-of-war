@@ -2,37 +2,8 @@ use super::placement::resolve_build_target_tile;
 use crate::app::SowApp;
 
 impl SowApp {
-    fn show_observer_notice(&mut self, x: f64, y: f64) {
-        let messages = [
-            "Enjoying the view? 🍿",
-            "Best seat in the house! 🏟️",
-            "Wave at the players! 👋",
-            "The crowd goes wild! 🎉",
-            "Grab some popcorn! 🍿",
-            "Great game to watch! ⭐",
-            "Cheer them on! 📣",
-            "Spectating in style! 😎",
-        ];
-        let click_seed = (x + y) as usize;
-        let msg = messages[click_seed % messages.len()];
-
-        let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-        let offset_mouse_y = y as f32 - 60.0;
-        let world_y = (offset_mouse_y - self.input.camera_y) / self.input.camera_zoom;
-
-        self.ui.floating_notices.push(crate::app::FloatingNotice {
-            text: msg.to_string(),
-            world_x,
-            world_y,
-            start_time: web_time::Instant::now(),
-            duration: web_time::Duration::from_millis(1500),
-            color: crate::rgb(203, 213, 225), // slate
-        });
-    }
-
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
         if self.ui.observing {
-            self.show_observer_notice(x, y);
             self.ui.app.hud_state.selected_building_kind = None;
             self.ui.app.hud_state.selected_nuke_kind = None;
             self.input.hold_build_active = false;
@@ -70,30 +41,6 @@ impl SowApp {
                     start_time: web_time::Instant::now(),
                 });
 
-                let messages = [
-                    "Splat! That's water! 🌊",
-                    "Do you have gills? 🐠",
-                    "Boats are for later! 🚢",
-                    "Cannot build Atlantis yet! 🏛️",
-                    "Water deployment failed! 💧",
-                    "Too wet! ☔",
-                    "Glug glug... ⚓",
-                ];
-                let click_seed = (x + y) as usize;
-                let msg = messages[click_seed % messages.len()];
-
-                let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-                let offset_mouse_y = y as f32 - 60.0;
-                let world_y = (offset_mouse_y - self.input.camera_y) / self.input.camera_zoom;
-
-                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: msg.to_string(),
-                    world_x,
-                    world_y,
-                    start_time: web_time::Instant::now(),
-                    duration: web_time::Duration::from_millis(1500),
-                    color: crate::rgb(96, 165, 250), // soft blue
-                });
                 return;
             }
 
@@ -151,30 +98,6 @@ impl SowApp {
                     target_col = bx;
                     target_row = by;
                 } else {
-                    let messages = [
-                        "Hey! Too close to another player! 🛡️",
-                        "Respect boundaries! 🤝",
-                        "Get your own space! 🏕️",
-                        "Social distancing! ↔️",
-                        "Spawning blocked! 🛑",
-                        "Private property! 🚫",
-                    ];
-                    let click_seed = (x + y) as usize;
-                    let msg = messages[click_seed % messages.len()];
-
-                    let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-                    let offset_mouse_y = y as f32 - 60.0;
-                    let world_y = (offset_mouse_y - self.input.camera_y) / self.input.camera_zoom;
-
-                    self.ui.floating_notices.push(crate::app::FloatingNotice {
-                        text: msg.to_string(),
-                        world_x,
-                        world_y,
-                        start_time: web_time::Instant::now(),
-                        duration: web_time::Duration::from_millis(1500),
-                        color: crate::rgb(248, 113, 113), // soft red
-                    });
-
                     let wx = col as f32 + 0.5;
                     let wy = row as f32 + 0.5;
                     self.ui.click_markers.push(crate::app::ClickMarker {
@@ -235,45 +158,14 @@ impl SowApp {
                     self.ui.app.hud_state.building_costs[i]
                 };
 
-                let mut valid = true;
-                let mut err_msg = String::new();
-
                 if self.ui.app.hud_state.gold < cost {
-                    valid = false;
-                    let lang = self.ui.app.settings_state.language;
-                    err_msg = sow_i18n::get(lang)
-                        .hud
-                        .err_need_gold
-                        .replace("{}", &sow_ui_kit::utils::format_number(cost));
-                } else {
-                    match target_res {
-                        Ok(_) => {}
-                        Err(msg) => {
-                            valid = false;
-                            err_msg = msg.to_string();
-                        }
-                    }
+                    return;
                 }
-
-                if !valid {
-                    let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-                    let offset_mouse_y = y as f32 - 60.0;
-                    let world_y = (offset_mouse_y - self.input.camera_y) / self.input.camera_zoom;
-                    self.ui.floating_notices.push(crate::app::FloatingNotice {
-                        text: err_msg,
-                        world_x,
-                        world_y,
-                        start_time: web_time::Instant::now(),
-                        duration: web_time::Duration::from_millis(2000),
-                        color: crate::rgb(248, 113, 113),
-                    });
-                } else {
-                    let target_tile = target_res.unwrap();
-                    let intent =
-                        sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile };
-                    self.send_intent(intent);
-                    self.ui.last_build_confirm_time = Some(web_time::Instant::now());
-                }
+                let Ok(target_tile) = target_res else { return; };
+                let intent =
+                    sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile };
+                self.send_intent(intent);
+                self.ui.last_build_confirm_time = Some(web_time::Instant::now());
             }
         } else {
             // Check if we clicked on a Warship we own

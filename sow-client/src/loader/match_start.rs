@@ -2,7 +2,7 @@ use crate::app::SowApp;
 use sow_core::game_config::GameConfig;
 
 #[cfg(target_arch = "wasm32")]
-use sow_ui_kit::ClientPhase;
+use crate::ClientPhase;
 
 #[cfg(target_arch = "wasm32")]
 use crate::loader::hide_web_loader;
@@ -16,29 +16,11 @@ impl SowApp {
         crate::store_portals::load_stop();
         crate::store_portals::gameplay_stop();
         self.web_loader_hidden = true;
-        if let Some(locale_str) = crate::store_portals::get_ui_locale() {
-            let detected_lang = sow_i18n::Language::from_locale(&locale_str);
-            self.ui.app.settings_state.language = detected_lang;
-            log::info!(
-                "Auto-configured language from portal locale: {:?} (source: {})",
-                detected_lang,
-                locale_str
-            );
-        }
     }
 
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn finish_boot_route(&mut self) {
         crate::store_portals::load_stop();
-        if let Some(locale_str) = crate::store_portals::get_ui_locale() {
-            let detected_lang = sow_i18n::Language::from_locale(&locale_str);
-            self.ui.app.settings_state.language = detected_lang;
-            log::info!(
-                "Auto-configured language from portal locale: {:?} (source: {})",
-                detected_lang,
-                locale_str
-            );
-        }
         if !self.progress.is_first_game() {
             log::info!("Portal boot: returning player -> main menu");
             hide_web_loader();
@@ -161,38 +143,6 @@ impl SowApp {
         Ok(())
     }
 
-    /// Keep the legacy native first-run route separate from the browser JSON controller.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn start_portal_intro_match(&mut self) {
-        let seed = web_time::SystemTime::now()
-            .duration_since(web_time::SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-        self.ui.app.main_menu_state.selected_leader = sow_core::player::Leader::Boudica;
-        self.ui.app.main_menu_state.selected_civilization = sow_core::player::Civilization::Iceni;
-        self.ui.tutorial_campaign = crate::campaign::CampaignId::Boudica;
-        // Roster + spawn come from the data-driven loader: a JSON override on native (authored by
-        // tools/campaign-editor) or the hardcoded roster. Editing positions never needs a recompile.
-        let (factions, player_spawn) = crate::campaign::boudica::roster();
-        crate::campaign::log_plan("Boudica's Rebellion", player_spawn, &factions);
-        let config = GameConfig {
-            map_name: "eastanglia".to_string(),
-            bot_count: 0,
-            nation_count: 0,
-            seed,
-            random_spawn: true,
-            player_leader: sow_core::player::Leader::Boudica,
-            player_civilization: sow_core::player::Civilization::Iceni,
-            scripted_spawns: crate::campaign::to_scripted(&factions),
-            player_spawn: Some(player_spawn),
-            player_team: Some(crate::campaign::PLAYER_TEAM),
-            starting_troops: 1000.0,
-            buildings_enabled: false,
-            ..Default::default()
-        };
-        self.start_offline_match(config, true);
-    }
-
     pub(crate) fn start_offline_match(&mut self, mut config: GameConfig, tutorial: bool) {
         self.net.is_offline = true;
         self.sim.offline_tick_timer = 0.0;
@@ -200,6 +150,7 @@ impl SowApp {
         self.sim.paused = false;
         self.sim.tutorial_observation.reset();
         self.net.client = None;
+        self.net.current_ping_ms = None;
         self.begin_enter_game_loader();
         self.sim.my_player_id = Some(1);
         self.sim.my_lobby_id = Some(0);
@@ -215,7 +166,7 @@ impl SowApp {
             crate::analytics::track("tutorial_start");
         }
 
-        let map_id = sow_ui::ui::asset_loader::AssetLoader::map_key(&config.map_name);
+        let map_id = crate::ui::asset_loader::AssetLoader::map_key(&config.map_name);
         self.ui.app.main_menu_state.downloading_map_name = Some(map_id.clone());
 
         config.map_name = map_id.clone();

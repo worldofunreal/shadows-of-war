@@ -1,6 +1,6 @@
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
-use sow_ui::ui::main_menu::MainMenuState;
+use crate::ui::main_menu::MainMenuState;
 
 /// Private lobbies are excluded from the global LobbiesBroadcast; seed local state on join.
 pub(crate) fn seed_joined_lobby_entry(

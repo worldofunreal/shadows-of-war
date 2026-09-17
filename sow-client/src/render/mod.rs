@@ -6,7 +6,7 @@ mod surface;
 pub use sow_render as gpu;
 
 pub(crate) fn dev_text_style(
-    dev: &sow_ui_kit::theme::dev_config::DevConfig,
+    dev: &crate::theme::dev_config::DevConfig,
     sf: f32,
     outline_color: [f32; 4],
 ) -> gpu::TextPaintStyle {

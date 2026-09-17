@@ -4,7 +4,7 @@ use crate::{EngineInitEvent, MapDownloadEvent, spawn_sow_client_connect};
 use blade_graphics as gpu;
 use sow_core::protocol::SimSnapshot;
 use sow_net::client::SowClient;
-use sow_ui::ClientApp;
+use crate::ClientApp;
 use std::collections::HashMap;
 use web_time::{Duration, Instant};
 
@@ -52,8 +52,6 @@ impl SowApp {
         }
 
         // ── Network State ───────────────────────────────────────────────────────
-        #[cfg(not(target_arch = "wasm32"))]
-        let tokio_rt = tokio::runtime::Runtime::new().unwrap();
         let net_client: Option<SowClient> = None;
         let turn_queue = std::collections::VecDeque::new();
         let my_player_id: Option<u16> = None;
@@ -101,7 +99,7 @@ impl SowApp {
         let web_loader_hidden: bool = false;
 
         // Strict endpoint config: SOW_WS_URL must be declared by the shell
-        // (wasm) or the environment (native). No default, no deriving from
+        // the browser shell. No default, no deriving from
         // window.location — a guessed host once pointed at the wrong origin.
         let ws_url = crate::asset_config::require_endpoint("SOW_WS_URL");
         app.main_menu_state.server_address = ws_url.clone();
@@ -127,10 +125,7 @@ impl SowApp {
 
         log::info!("Auto-connecting to {}...", ws_url);
         app.main_menu_state.is_connecting = true;
-        #[cfg(target_arch = "wasm32")]
         spawn_sow_client_connect(ws_url.clone(), &connect_tx);
-        #[cfg(not(target_arch = "wasm32"))]
-        spawn_sow_client_connect(ws_url.clone(), &connect_tx, &tokio_rt);
 
         // ── Camera state ────────────────────────────────────────────────────────
         let camera_zoom: f32 = 0.5;
@@ -264,7 +259,6 @@ impl SowApp {
                 last_projectiles: std::collections::HashMap::new(),
                 cached_player_colors: Vec::new(),
                 cached_player_count: 0,
-                floating_notices: Vec::new(),
                 endgame_cache: None,
                 reward_cache: None,
                 silo_cooldowns: std::collections::HashMap::new(),
@@ -295,8 +289,6 @@ impl SowApp {
                 pending_engine_init_data,
                 engine_init_queued_msg,
             },
-            #[cfg(not(target_arch = "wasm32"))]
-            tokio_rt,
             asset_config,
             #[cfg(target_arch = "wasm32")]
             wasm_doc_was_visible,
@@ -332,9 +324,6 @@ impl SowApp {
             boot_db_settled: false,
             boot_campaign_pending: None,
         };
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut sow_app = sow_app;
-        #[cfg(target_arch = "wasm32")]
         let mut sow_app = sow_app;
         if let Some(portal) = crate::store_portals::load_portal_progress() {
             sow_app.progress = portal;
@@ -347,8 +336,6 @@ impl SowApp {
                 sow_app.boot_db_settled = true;
             }
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        sow_app.fetch_cloud_progress();
         sow_app
     }
 }

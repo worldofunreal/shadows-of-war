@@ -38,9 +38,9 @@ struct Config {
 impl Config {
     fn load() -> Self {
         Self {
-            build_host: env_or_alias("SOW_FREEBSD_BUILDER_HOST", "SOW_BUILD_HOST", BUILD_HOST),
+            build_host: env_or("SOW_FREEBSD_BUILDER_HOST", BUILD_HOST),
             build_root: env_or("SOW_FREEBSD_BUILDER_ROOT", BUILD_ROOT),
-            control_host: env_or_alias("SOW_CONTROL_HOST", "SOW_PROD_HOST", CONTROL_HOST),
+            control_host: env_or("SOW_CONTROL_HOST", CONTROL_HOST),
             relay_host: env_or("SOW_RELAY_DEPLOY_HOST", RELAY_HOST),
             fstack_repo: env_or("SOW_FSTACK_REPO", FSTACK_LOCAL_REPO),
             remote_stage: env_or("SOW_REMOTE_STAGE", REMOTE_STAGE),
@@ -260,12 +260,6 @@ fn require_config(key: &str) -> Result<()> {
 
 fn env_or(name: &str, default: &str) -> String {
     env::var(name).unwrap_or_else(|_| default.to_string())
-}
-
-fn env_or_alias(primary: &str, legacy: &str, default: &str) -> String {
-    env::var(primary)
-        .or_else(|_| env::var(legacy))
-        .unwrap_or_else(|_| default.to_string())
 }
 
 fn version(paths: &Paths, bump: bool) -> Result<String> {
@@ -580,6 +574,7 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 }
 
 fn preflight(paths: &Paths, config: &Config) -> Result<()> {
+    super::validate_current_ui_contract(paths)?;
     let dirty_files = workspace_dirty_files(paths)?;
     if dirty_files.is_empty() {
         println!("  worktree clean");
@@ -619,7 +614,11 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     // The blade graphics fork is gitignored, not vendored: a fresh clone has
     // no blade/ and every Rust build fails at workspace resolution. Fail fast
     // here with the one-command fix instead of mid-build.
-    for vendored in ["blade/blade-graphics/Cargo.toml"] {
+    for vendored in [
+        "blade/Cargo.toml",
+        "blade/blade-graphics/Cargo.toml",
+        "blade/blade-macros/Cargo.toml",
+    ] {
         if !paths.root.join(vendored).is_file() {
             bail!("{vendored} missing (blade/ is gitignored) — run ./scripts/vendor-blade.sh");
         }

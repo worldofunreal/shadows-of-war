@@ -1,6 +1,6 @@
 use crate::app::SowApp;
-use sow_ui_kit::ClientPhase;
-use web_time::Instant;
+use crate::ClientPhase;
+use web_time::{Duration, Instant};
 
 fn avatar_slot(leader: Option<sow_core::player::Leader>) -> usize {
     match leader {
@@ -96,5 +96,13 @@ impl SowApp {
         self.net.load_telemetry.mark_gpu_upload_complete();
         self.gfx.prev_sync_point = Some(sync_point);
         self.gfx.render_ctx = Some(render_ctx);
+
+        self.time.frame_count = self.time.frame_count.saturating_add(1);
+        let metrics_now = Instant::now();
+        if metrics_now.duration_since(self.time.last_fps_time) >= Duration::from_secs(1) {
+            self.time.current_fps = self.time.frame_count;
+            self.time.frame_count = 0;
+            self.time.last_fps_time = metrics_now;
+        }
     }
 }

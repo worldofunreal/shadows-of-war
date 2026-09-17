@@ -83,6 +83,13 @@
             .replace(/'/g, "&#39;");
     }
 
+    function localizedText(value) {
+        if (value && typeof value === "object" && value.key) {
+            return SOW_t(value.key, value.values || {});
+        }
+        return String(value == null ? "" : value);
+    }
+
     function selfCreds() {
         var id = null;
         var secret = null;

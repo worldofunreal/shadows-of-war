@@ -86,9 +86,9 @@
                 purchaseStatus = "<div class='sow-menu__status sow-menu__status--notice'>" + esc(SOW_t(purchaseMessages[purchase])) + "</div>";
             }
         } catch (e) {}
-        var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(state.error) + "</div>" : "";
+        var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(localizedText(state.error)) + "</div>" : "";
         var notice = state.notice ? "<div class='sow-menu__status sow-menu__status--notice'>" +
-            esc(SOW_t(({ host_left: "menu.host_left", kicked: "menu.removed_from_lobby", banned: "menu.banned_from_lobby", connection_lost: "menu.connection_lost" }[state.notice] || state.notice))) +
+            esc(SOW_t(({ host_left: "menu.host_left", kicked: "menu.removed_from_lobby", banned: "menu.banned_from_lobby", connection_lost: "menu.connection_lost" }[state.notice] || "menu.connection_lost"))) +
             "</div>" : "";
         return purchaseStatus + error + notice;
     }

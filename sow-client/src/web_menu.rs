@@ -17,7 +17,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::app::SowApp;
 use crate::campaign::CampaignId;
-use sow_ui::UiAction;
+use crate::UiAction;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -204,6 +204,8 @@ const PUBLISH_MIN_INTERVAL_MS: u128 = 75;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct HudPublishKey {
+    fps: u32,
+    ping_ms: Option<u32>,
     gold: u64,
     troops: u64,
     max_troops: u64,
@@ -302,11 +304,11 @@ fn refresh_web_leaderboard_cache(app: &mut SowApp) {
         return;
     }
 
-    let mut rankings: Vec<sow_ui::ui::hud::leaderboard::LeaderboardRanking> = snapshot
+    let mut rankings: Vec<crate::ui::hud::leaderboard::LeaderboardRanking> = snapshot
         .players
         .iter()
         .filter(|player| player.alive)
-        .map(|player| sow_ui::ui::hud::leaderboard::LeaderboardRanking {
+        .map(|player| crate::ui::hud::leaderboard::LeaderboardRanking {
             id: player.id,
             tiles: player.tile_count,
             troops: player.troops,
@@ -395,7 +397,7 @@ impl SowApp {
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid create-game config: {error}");
                             self.ui.app.main_menu_state.error_message =
-                                Some("Invalid game configuration".to_string());
+                                Some(crate::ui::UiText::new("menu.invalid_game_configuration"));
                         }
                     }
                 }
@@ -407,7 +409,7 @@ impl SowApp {
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid single-player config: {error}");
                             self.ui.app.main_menu_state.error_message =
-                                Some("Invalid game configuration".to_string());
+                                Some(crate::ui::UiText::new("menu.invalid_game_configuration"));
                         }
                     }
                 }
@@ -418,12 +420,12 @@ impl SowApp {
                 } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
-                            Some("Unknown campaign episode.".into());
+                            Some(crate::ui::UiText::new("tutorial.unavailable"));
                         continue;
                     };
                     if !campaign.is_unlocked(&self.progress) {
                         self.ui.app.main_menu_state.error_message =
-                            Some("Campaign episode is locked.".into());
+                            Some(crate::ui::UiText::new("menu.campaign_episode_locked"));
                         continue;
                     }
                     crate::analytics::track_with(
@@ -433,7 +435,8 @@ impl SowApp {
                     self.boot_campaign_pending = None;
                     if let Err(error) = self.start_campaign_episode_from_web(campaign, roster, match_config) {
                         log::warn!("[WEB MENU] invalid campaign episode: {error}");
-                        self.ui.app.main_menu_state.error_message = Some(error);
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("tutorial.invalid"));
                     }
                 }
                 WebMenuCommand::SetTutorialPaused { paused } => {
@@ -444,7 +447,7 @@ impl SowApp {
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
-                            Some("Unknown campaign episode.".into());
+                            Some(crate::ui::UiText::new("tutorial.unavailable"));
                         continue;
                     };
                     if !self.ui.tutorial_active
@@ -707,7 +710,7 @@ impl SowApp {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
                         if self.ui.show_dev_sidebar && value.is_finite() {
-                            sow_ui_kit::theme::dev_config::DevConfig::update(
+                            crate::theme::dev_config::DevConfig::update(
                                 |config| match field {
                                     WebDevConfigField::Thickness => {
                                         config.thickness = value.clamp(0.0, 1.0)
@@ -734,14 +737,14 @@ impl SowApp {
                 WebMenuCommand::ResetDevConfig => {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
-                        let defaults = sow_ui_kit::theme::dev_config::DevConfig::default();
-                        let mut config = sow_ui_kit::theme::dev_config::DevConfig::get();
+                        let defaults = crate::theme::dev_config::DevConfig::default();
+                        let mut config = crate::theme::dev_config::DevConfig::get();
                         config.thickness = defaults.thickness;
                         config.darkness = defaults.darkness;
                         config.shore_thickness = defaults.shore_thickness;
                         config.conquest_duration = defaults.conquest_duration;
                         config.territory_opacity = defaults.territory_opacity;
-                        sow_ui_kit::theme::dev_config::DevConfig::set(config);
+                        crate::theme::dev_config::DevConfig::set(config);
                     }
                 }
                 WebMenuCommand::ExpressEmoji { emoji, pinned } => {
@@ -770,11 +773,11 @@ impl SowApp {
     }
 }
 
-fn phase_name(phase: sow_ui::ClientPhase) -> &'static str {
+fn phase_name(phase: crate::ClientPhase) -> &'static str {
     match phase {
-        sow_ui::ClientPhase::Splash => "Splash",
-        sow_ui::ClientPhase::MainMenu => "MainMenu",
-        sow_ui::ClientPhase::Playing => "Playing",
+        crate::ClientPhase::Splash => "Splash",
+        crate::ClientPhase::MainMenu => "MainMenu",
+        crate::ClientPhase::Playing => "Playing",
     }
 }
 
@@ -822,6 +825,8 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         .unwrap_or(0);
 
     HudPublishKey {
+        fps: app.time.current_fps,
+        ping_ms: app.net.current_ping_ms,
         gold: hud.gold.to_bits(),
         troops: hud.troops.to_bits(),
         max_troops: hud.max_troops.to_bits(),
@@ -869,7 +874,7 @@ fn dev_config_key(app: &SowApp) -> (bool, [u32; 5]) {
     if !app.ui.show_dev_sidebar {
         return (false, [0; 5]);
     }
-    let config = sow_ui_kit::theme::dev_config::DevConfig::get();
+    let config = crate::theme::dev_config::DevConfig::get();
     (
         true,
         [
@@ -895,7 +900,7 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
         "open": open,
     });
     if open {
-        let config = sow_ui_kit::theme::dev_config::DevConfig::get();
+        let config = crate::theme::dev_config::DevConfig::get();
         payload["config"] = serde_json::json!({
             "thickness": config.thickness,
             "darkness": config.darkness,
@@ -1234,7 +1239,7 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
 }
 
 fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
-    if app.ui.app.phase != sow_ui::ClientPhase::Playing {
+    if app.ui.app.phase != crate::ClientPhase::Playing {
         return serde_json::Value::Null;
     }
 
@@ -1317,8 +1322,8 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
             "factory": costs[2],
             "port": costs[3],
         },
-        "fps": app.time.current_fps,
-        "ping": app.net.last_ping_time.elapsed().as_millis() as u32,
+        "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
+        "ping": app.net.current_ping_ms,
         "hovered_tile": if hovered_tile == u32::MAX { serde_json::Value::Null } else { serde_json::json!(hovered_tile) },
         "hovered": serde_json::Value::Null,
         "inbox_count": me.map(|player| player.inbox_count).unwrap_or(0),
@@ -1390,7 +1395,7 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
     payload["notifications"] = serde_json::Value::Array(
         hud.hud_notifications
             .iter()
-            .map(|notice| serde_json::json!({ "message": &notice.message }))
+            .map(|notice| localized_text_payload(&notice.text))
             .collect(),
     );
     if match_over {
@@ -1419,11 +1424,20 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
     payload
 }
 
-fn splash_job_name(job: &sow_ui::ui::loading_screen::SplashJob) -> &'static str {
+fn localized_text_payload(text: &crate::ui::UiText) -> serde_json::Value {
+    let values = text
+        .values
+        .iter()
+        .map(|(key, value)| ((*key).to_string(), serde_json::Value::String(value.clone())))
+        .collect::<serde_json::Map<_, _>>();
+    serde_json::json!({ "key": text.key, "values": values })
+}
+
+fn splash_job_name(job: &crate::ui::loading_screen::SplashJob) -> &'static str {
     match job {
-        sow_ui::ui::loading_screen::SplashJob::Boot => "Boot",
-        sow_ui::ui::loading_screen::SplashJob::EnterGame => "EnterGame",
-        sow_ui::ui::loading_screen::SplashJob::ExitGame => "ExitGame",
+        crate::ui::loading_screen::SplashJob::Boot => "Boot",
+        crate::ui::loading_screen::SplashJob::EnterGame => "EnterGame",
+        crate::ui::loading_screen::SplashJob::ExitGame => "ExitGame",
     }
 }
 
@@ -1434,12 +1448,12 @@ fn leader_id(leader: sow_core::player::Leader) -> String {
         .unwrap_or_else(|| leader.name().replace(' ', ""))
 }
 
-fn notice_name(notice: Option<sow_ui::LobbyNotice>) -> Option<&'static str> {
+fn notice_name(notice: Option<crate::LobbyNotice>) -> Option<&'static str> {
     match notice {
-        Some(sow_ui::LobbyNotice::HostLeft) => Some("host_left"),
-        Some(sow_ui::LobbyNotice::Kicked) => Some("kicked"),
-        Some(sow_ui::LobbyNotice::Banned) => Some("banned"),
-        Some(sow_ui::LobbyNotice::ConnectionLost) => Some("connection_lost"),
+        Some(crate::LobbyNotice::HostLeft) => Some("host_left"),
+        Some(crate::LobbyNotice::Kicked) => Some("kicked"),
+        Some(crate::LobbyNotice::Banned) => Some("banned"),
+        Some(crate::LobbyNotice::ConnectionLost) => Some("connection_lost"),
         None => None,
     }
 }
@@ -1481,7 +1495,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
     let state = &app.ui.app.main_menu_state;
     let progress = &app.progress;
 
-    let payload = if app.ui.app.phase == sow_ui_kit::ClientPhase::Playing {
+    let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
         let hud_key = hud_publish_key(app);
         let hud_changed = LAST_HUD_KEY.with(|last| {
             let mut last = last.borrow_mut();
@@ -1579,13 +1593,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "phase": phase_name(app.ui.app.phase),
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
-            "loader_status": app
-                .ui
-                .app
-                .splash_state
-                .status_override
-                .as_deref()
-                .unwrap_or(app.ui.app.splash_state.status_text.as_str()),
+            "loader_status": "",
             "loader_done": app.ui.app.splash_state.done,
             "boot_campaign": app.boot_campaign_pending.clone(),
             "connected": state.is_connected,
@@ -1598,11 +1606,11 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "selected_civilization": state.selected_civilization.name(),
             "show_browser": matches!(
                 state.visible_route(),
-                sow_ui::ui::main_menu::MainMenuRoute::Browser
+                crate::ui::main_menu::MainMenuRoute::Browser
             ),
             "show_create": matches!(
                 state.visible_route(),
-                sow_ui::ui::main_menu::MainMenuRoute::Create
+                crate::ui::main_menu::MainMenuRoute::Create
             ),
             "join_lobby_code": state.join_lobby_code,
             "joined_lobby_id": state.joined_lobby_id,
@@ -1612,7 +1620,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "downloading_map": state.is_downloading_map,
             "map_download_progress": state.map_download_progress,
             "lobbies": state.lobbies,
-            "error": state.error_message,
+            "error": state.error_message.as_ref().map(localized_text_payload),
             "notice": notice_name(state.notice),
             "level": progress.level,
             "xp": progress.xp,

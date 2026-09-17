@@ -245,6 +245,17 @@
            misrouting (a guessed /api once hit the CrazyGames CDN). */
         /* PORTAL_BOOT_SLOT: SOW_PORTAL / SOW_WS_URL overrides injected by sow-dist crazygames. */
 
+        window.addEventListener('keydown', function (event) {
+            if (!window.SOW_NATIVE || event.key !== 'F11') return;
+            event.preventDefault();
+            var root = document.documentElement;
+            if (document.fullscreenElement) {
+                if (document.exitFullscreen) document.exitFullscreen().catch(function () {});
+            } else if (root.requestFullscreen) {
+                root.requestFullscreen().catch(function () {});
+            }
+        });
+
     </script>
     <script type="text/javascript">
         window.SOW_show_graphics_error = function () {

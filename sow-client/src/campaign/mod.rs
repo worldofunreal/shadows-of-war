@@ -2,9 +2,6 @@
 //! roster to the engine as `GameConfig.scripted_spawns`; Rust keeps only the generic faction rules
 //! that turn a role into team, color, AI, and troop tier.
 
-#[cfg(not(target_arch = "wasm32"))]
-pub mod boudica;
-
 use sow_core::game_config::ScriptedSpawn;
 use sow_core::player::{Civilization, Leader};
 use sow_core::protocol::Team;
@@ -385,10 +382,4 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
         return None;
     }
     Some((factions, rf.player_spawn.unwrap_or((696, 45))))
-}
-
-/// Load a roster from a JSON file on disk (native authoring loop). Thin wrapper over `parse_roster`.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn load_roster_json(path: &str) -> Option<(Vec<Faction>, (u32, u32))> {
-    parse_roster(&std::fs::read_to_string(path).ok()?)
 }

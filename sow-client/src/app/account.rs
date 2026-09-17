@@ -517,7 +517,7 @@ impl SowApp {
         }
         let Some(account_id) = self.progress_account_id.clone() else {
             self.ui.app.main_menu_state.error_message =
-                Some("Your player profile is still loading.".into());
+                Some(crate::ui::UiText::new("profile.loading_profile"));
             return;
         };
         fields.insert(
@@ -527,14 +527,14 @@ impl SowApp {
         if self.progress_provider == "anonymous" {
             let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
                 self.ui.app.main_menu_state.error_message =
-                    Some("Account setup is required for store actions.".into());
+                    Some(crate::ui::UiText::new("menu.account_setup_required"));
                 return;
             };
             fields.insert("auth_secret".into(), serde_json::Value::String(auth_secret));
         }
         let Ok(body) = serde_json::to_vec(&serde_json::Value::Object(fields)) else {
             self.ui.app.main_menu_state.error_message =
-                Some("Could not prepare the store request.".into());
+                Some(crate::ui::UiText::new("store.action_unavailable"));
             return;
         };
         self.ui.app.main_menu_state.store_busy = true;
@@ -569,24 +569,15 @@ impl SowApp {
                         let _ = tx.send(crate::player_progress::DbEvent::StoreActionFailed {
                             operation: operation.clone(),
                             status: Some(response.status),
-                            message: "Store response was invalid.".into(),
                         });
                     }
                 }
             }
             Ok(response) => {
-                #[derive(serde::Deserialize)]
-                struct ApiError {
-                    error: String,
-                }
-                let message = serde_json::from_slice::<ApiError>(&response.bytes)
-                    .map(|error| error.error)
-                    .unwrap_or_else(|_| "Store action failed.".into());
                 log::error!("[store] {operation} failed status={}", response.status);
                 let _ = tx.send(crate::player_progress::DbEvent::StoreActionFailed {
                     operation: operation.clone(),
                     status: Some(response.status),
-                    message,
                 });
             }
             Err(error) => {
@@ -594,32 +585,31 @@ impl SowApp {
                 let _ = tx.send(crate::player_progress::DbEvent::StoreActionFailed {
                     operation: operation.clone(),
                     status: None,
-                    message: "Store action could not reach the server.".into(),
                 });
             }
         });
     }
 
-    pub(crate) fn unlock_native_leader(&mut self, leader_id: String, currency: String) {
+    pub(crate) fn unlock_leader(&mut self, leader_id: String, currency: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("leader_id".into(), serde_json::Value::String(leader_id));
         fields.insert("currency".into(), serde_json::Value::String(currency));
         self.post_store_action("leader unlock", "/store/leaders/unlock", fields);
     }
 
-    pub(crate) fn unlock_native_skin(&mut self, skin_id: String) {
+    pub(crate) fn unlock_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));
         self.post_store_action("skin unlock", "/store/skins/unlock", fields);
     }
 
-    pub(crate) fn equip_native_skin(&mut self, skin_id: String) {
+    pub(crate) fn equip_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));
         self.post_store_action("skin equip", "/store/skins/equip", fields);
     }
 
-    pub(crate) fn load_native_profile(&mut self) {
+    pub(crate) fn load_profile(&mut self) {
         let Some(account_id) = self
             .ui
             .app
@@ -631,7 +621,7 @@ impl SowApp {
         else {
             self.ui.app.main_menu_state.profile.loading = false;
             self.ui.app.main_menu_state.profile.error =
-                Some("Your player profile is still loading.".into());
+                Some(crate::ui::UiText::new("profile.loading_profile"));
             return;
         };
         self.ui.app.main_menu_state.profile.loading = true;
@@ -649,14 +639,14 @@ impl SowApp {
                     &response.bytes,
                 ) {
                     Ok(view) => {
-                        let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoaded {
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileViewLoaded {
                             account_id,
                             view,
                         });
                     }
                     Err(error) => {
-                        log::error!("[profile] native profile parse failed: {error}");
-                        let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoadFailed {
+                        log::error!("[profile] profile parse failed: {error}");
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileLoadFailed {
                             account_id,
                             status: Some(response.status),
                         });
@@ -665,17 +655,17 @@ impl SowApp {
             }
             Ok(response) => {
                 log::error!(
-                    "[profile] native profile request failed status={}",
+                    "[profile] profile request failed status={}",
                     response.status
                 );
-                let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoadFailed {
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileLoadFailed {
                     account_id,
                     status: Some(response.status),
                 });
             }
             Err(error) => {
-                log::error!("[profile] native profile request failed: {error}");
-                let _ = tx.send(crate::player_progress::DbEvent::NativeProfileLoadFailed {
+                log::error!("[profile] profile request failed: {error}");
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileLoadFailed {
                     account_id,
                     status: None,
                 });
@@ -683,7 +673,7 @@ impl SowApp {
         });
     }
 
-    pub(crate) fn load_native_profile_history(&mut self) {
+    pub(crate) fn load_profile_history(&mut self) {
         if self.ui.app.main_menu_state.profile.loading {
             return;
         }
@@ -697,7 +687,7 @@ impl SowApp {
             .or_else(|| self.profile_account_id.clone())
         else {
             self.ui.app.main_menu_state.profile.error =
-                Some("Your player profile is still loading.".into());
+                Some(crate::ui::UiText::new("profile.loading_profile"));
             return;
         };
         let cursor = self.ui.app.main_menu_state.profile.history_cursor;
@@ -721,7 +711,7 @@ impl SowApp {
                 match serde_json::from_slice::<MatchHistoryPage>(&response.bytes) {
                     Ok(page) => {
                         let _ = tx.send(
-                            crate::player_progress::DbEvent::NativeProfileHistoryLoaded {
+                            crate::player_progress::DbEvent::ProfileHistoryLoaded {
                                 account_id,
                                 items: page.items,
                                 next_cursor: page.next_cursor,
@@ -731,10 +721,9 @@ impl SowApp {
                     Err(error) => {
                         log::error!("[profile] history response parse failed: {error}");
                         let _ = tx.send(
-                            crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                            crate::player_progress::DbEvent::ProfileOperationFailed {
                                 account_id: Some(account_id),
                                 operation: "match history".into(),
-                                message: "Match history is unavailable.".into(),
                             },
                         );
                     }
@@ -746,30 +735,25 @@ impl SowApp {
                     response.status
                 );
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: Some(account_id),
                         operation: "match history".into(),
-                        message: format!(
-                            "Match history is unavailable (HTTP {}).",
-                            response.status
-                        ),
                     },
                 );
             }
             Err(error) => {
                 log::error!("[profile] history request failed: {error}");
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: Some(account_id),
                         operation: "match history".into(),
-                        message: "Match history could not reach the server.".into(),
                     },
                 );
             }
         });
     }
 
-    pub(crate) fn load_native_profile_ratings(&mut self) {
+    pub(crate) fn load_profile_ratings(&mut self) {
         if self.ui.app.main_menu_state.profile.loading {
             return;
         }
@@ -783,7 +767,7 @@ impl SowApp {
             .or_else(|| self.profile_account_id.clone())
         else {
             self.ui.app.main_menu_state.profile.error =
-                Some("Your player profile is still loading.".into());
+                Some(crate::ui::UiText::new("profile.loading_profile"));
             return;
         };
         self.ui.app.main_menu_state.profile.loading = true;
@@ -805,7 +789,7 @@ impl SowApp {
                 match serde_json::from_slice::<RatingsResponse>(&response.bytes) {
                     Ok(payload) => {
                         let _ = tx.send(
-                            crate::player_progress::DbEvent::NativeProfileRatingsLoaded {
+                            crate::player_progress::DbEvent::ProfileRatingsLoaded {
                                 account_id,
                                 items: payload.items,
                             },
@@ -814,10 +798,9 @@ impl SowApp {
                     Err(error) => {
                         log::error!("[profile] ratings response parse failed: {error}");
                         let _ = tx.send(
-                            crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                            crate::player_progress::DbEvent::ProfileOperationFailed {
                                 account_id: Some(account_id),
                                 operation: "ranked records".into(),
-                                message: "Ranked records are unavailable.".into(),
                             },
                         );
                     }
@@ -829,30 +812,25 @@ impl SowApp {
                     response.status
                 );
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: Some(account_id),
                         operation: "ranked records".into(),
-                        message: format!(
-                            "Ranked records are unavailable (HTTP {}).",
-                            response.status
-                        ),
                     },
                 );
             }
             Err(error) => {
                 log::error!("[profile] ratings request failed: {error}");
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: Some(account_id),
                         operation: "ranked records".into(),
-                        message: "Ranked records could not reach the server.".into(),
                     },
                 );
             }
         });
     }
 
-    pub(crate) fn search_native_profiles(&mut self, query: String) {
+    pub(crate) fn search_profiles(&mut self, query: String) {
         let query = query.trim().to_string();
         if query.is_empty() || self.ui.app.main_menu_state.profile.loading {
             return;
@@ -876,7 +854,7 @@ impl SowApp {
                 match serde_json::from_slice::<SearchResponse>(&response.bytes) {
                     Ok(payload) => {
                         let _ =
-                            tx.send(crate::player_progress::DbEvent::NativeProfileSearchLoaded {
+                            tx.send(crate::player_progress::DbEvent::ProfileSearchLoaded {
                                 query,
                                 items: payload.items,
                             });
@@ -884,10 +862,9 @@ impl SowApp {
                     Err(error) => {
                         log::error!("[profile] search response parse failed: {error}");
                         let _ = tx.send(
-                            crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                            crate::player_progress::DbEvent::ProfileOperationFailed {
                                 account_id: None,
                                 operation: "profile search".into(),
-                                message: "Player search is unavailable.".into(),
                             },
                         );
                     }
@@ -896,30 +873,25 @@ impl SowApp {
             Ok(response) => {
                 log::error!("[profile] search request failed status={}", response.status);
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: None,
                         operation: "profile search".into(),
-                        message: format!(
-                            "Player search is unavailable (HTTP {}).",
-                            response.status
-                        ),
                     },
                 );
             }
             Err(error) => {
                 log::error!("[profile] search request failed: {error}");
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: None,
                         operation: "profile search".into(),
-                        message: "Player search could not reach the server.".into(),
                     },
                 );
             }
         });
     }
 
-    pub(crate) fn load_native_match_detail(&mut self, match_id: String) {
+    pub(crate) fn load_match_detail(&mut self, match_id: String) {
         let match_id = match_id.trim().to_string();
         if match_id.is_empty() {
             return;
@@ -938,7 +910,7 @@ impl SowApp {
                     &response.bytes,
                 ) {
                     Ok(detail) => {
-                        let _ = tx.send(crate::player_progress::DbEvent::NativeMatchDetailLoaded {
+                        let _ = tx.send(crate::player_progress::DbEvent::MatchDetailLoaded {
                             match_id,
                             detail,
                         });
@@ -946,10 +918,9 @@ impl SowApp {
                     Err(error) => {
                         log::error!("[profile] match detail response parse failed: {error}");
                         let _ = tx.send(
-                            crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                            crate::player_progress::DbEvent::ProfileOperationFailed {
                                 account_id: None,
                                 operation: "match detail".into(),
-                                message: "Match details are unavailable.".into(),
                             },
                         );
                     }
@@ -961,23 +932,18 @@ impl SowApp {
                     response.status
                 );
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: None,
                         operation: "match detail".into(),
-                        message: format!(
-                            "Match details are unavailable (HTTP {}).",
-                            response.status
-                        ),
                     },
                 );
             }
             Err(error) => {
                 log::error!("[profile] match detail request failed: {error}");
                 let _ = tx.send(
-                    crate::player_progress::DbEvent::NativeProfileOperationFailed {
+                    crate::player_progress::DbEvent::ProfileOperationFailed {
                         account_id: None,
                         operation: "match detail".into(),
-                        message: "Match details could not reach the server.".into(),
                     },
                 );
             }

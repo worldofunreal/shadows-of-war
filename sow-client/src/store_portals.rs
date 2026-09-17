@@ -64,17 +64,6 @@ fn take_window_bool(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn call_window_hook(_name: &str) {}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn call_window_hook_str(_name: &str, _arg: &str) {}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn take_window_bool(_name: &str) -> bool {
-    false
-}
-
 pub fn gameplay_start() {
     crate::analytics::gameplay_start();
     measure("gameplay", "match", "ready");
@@ -129,10 +118,6 @@ pub fn is_portal_embed() -> bool {
         }
         false
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        false
-    }
 }
 
 pub fn is_poki() -> bool {
@@ -142,10 +127,6 @@ pub fn is_poki() -> bool {
             .and_then(|value| value.as_string())
             .is_some_and(|portal| portal == "poki")
             || read_runtime_bool("poki").unwrap_or(false)
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        false
     }
 }
 
@@ -164,10 +145,6 @@ pub fn is_android_twa() -> bool {
         }
         false
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        false
-    }
 }
 
 /// Waiting lobby uses a scroll modal on short iframe hosts (CrazyGames + marketing embed).
@@ -176,10 +153,6 @@ pub fn is_lobby_modal_embed() -> bool {
     {
         read_runtime_bool("crazygames").unwrap_or(false)
             || read_runtime_bool("site_embed").unwrap_or(false)
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        false
     }
 }
 
@@ -207,15 +180,6 @@ pub fn load_portal_progress() -> Option<crate::player_progress::PlayerProgress> 
             })?;
         serde_json::from_str(&json).ok()
     }
-    // Native uses the same JSON shape in its local data directory; the
-    // anonymous account remains the source of truth for online stats.
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let path = crate::paths::native_data_dir().join(crate::player_progress::STORAGE_KEY);
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|json| serde_json::from_str(&json).ok())
-    }
 }
 
 pub fn save_portal_progress(progress: &crate::player_progress::PlayerProgress) {
@@ -226,14 +190,6 @@ pub fn save_portal_progress(progress: &crate::player_progress::PlayerProgress) {
     #[cfg(target_arch = "wasm32")]
     if let Some(storage) = window().and_then(|window| window.local_storage().ok().flatten()) {
         let _ = storage.set_item(crate::player_progress::STORAGE_KEY, &json);
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let path = crate::paths::native_data_dir().join(crate::player_progress::STORAGE_KEY);
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::write(path, json);
     }
 }
 
@@ -338,10 +294,6 @@ pub fn take_pending_invite_lobby() -> Option<u64> {
             }
         }
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        None
-    }
 }
 
 pub fn take_host_private_pending() -> bool {
@@ -357,10 +309,6 @@ pub fn take_host_private_pending() -> bool {
         }
         pending
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        false
-    }
 }
 
 pub fn poll_pending_invite_lobby() -> Option<u64> {
@@ -373,10 +321,6 @@ pub fn poll_pending_invite_lobby() -> Option<u64> {
         )));
         call_window_hook("SOW_portalClearPendingInvite");
         Some(id)
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        None
     }
 }
 
@@ -404,25 +348,10 @@ pub fn poll_mute_audio_setting() -> Option<bool> {
     {
         get_window_value("SOW_PORTAL_MUTE_AUDIO").and_then(|v| v.as_bool())
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        None
-    }
 }
 
 pub fn is_chat_disabled() -> bool {
     take_window_bool("SOW_DISABLE_CHAT")
-}
-
-pub fn get_ui_locale() -> Option<String> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        get_window_value("SOW_LOCALE").and_then(|v| v.as_string())
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        None
-    }
 }
 
 pub fn happytime() {

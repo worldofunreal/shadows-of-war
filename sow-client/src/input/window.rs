@@ -1,6 +1,6 @@
 use crate::app::SowApp;
 use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound};
-use sow_ui_kit::ClientPhase;
+use crate::ClientPhase;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 
 impl SowApp {
@@ -33,14 +33,6 @@ impl SowApp {
     }
 
     fn handle_key_event(&mut self, pressed: bool, key: winit::keyboard::PhysicalKey) {
-        if pressed && key == winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F11) {
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(window) = self.gfx.window.as_ref() {
-                let fullscreen = window.fullscreen().is_none();
-                self.ui.app.settings_state.is_fullscreen = fullscreen;
-                window.set_fullscreen(fullscreen.then(|| winit::monitor::Fullscreen::Borderless(None)));
-            }
-        }
         let in_game = self.ui.app.phase == ClientPhase::Playing && self.ui.app.hud_state.sync_state.is_none();
         if !in_game || self.input.input_focused { self.input.key_pan_up = false; self.input.key_pan_down = false; self.input.key_pan_left = false; self.input.key_pan_right = false; return; }
         let winit::keyboard::PhysicalKey::Code(code) = key else { return; };

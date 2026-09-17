@@ -1,9 +1,9 @@
 use crate::app::SowApp;
 use crate::spawn_sow_client_connect;
-use sow_ui::UiAction;
+use crate::UiAction;
 
 impl SowApp {
-    pub(crate) fn process_ui_actions(&mut self, action: Option<sow_ui::UiAction>) {
+    pub(crate) fn process_ui_actions(&mut self, action: Option<crate::UiAction>) {
         if let Some(action) = action {
             match action {
                 UiAction::StartSinglePlayer(config) => {
@@ -12,20 +12,14 @@ impl SowApp {
                 UiAction::ConnectToServer(addr) => {
                     self.ui.app.main_menu_state.is_connecting = true;
                     let url = addr.clone();
-                    #[cfg(target_arch = "wasm32")]
                     spawn_sow_client_connect(url, &self.net.connect_tx);
-                    #[cfg(not(target_arch = "wasm32"))]
-                    spawn_sow_client_connect(url, &self.net.connect_tx, &self.tokio_rt);
                 }
                 UiAction::RetryConnection => {
                     self.ui.app.main_menu_state.error_message = None;
                     self.ui.app.main_menu_state.notice = None;
                     self.ui.app.main_menu_state.is_connecting = true;
                     let url = self.ui.app.main_menu_state.server_address.clone();
-                    #[cfg(target_arch = "wasm32")]
                     spawn_sow_client_connect(url, &self.net.connect_tx);
-                    #[cfg(not(target_arch = "wasm32"))]
-                    spawn_sow_client_connect(url, &self.net.connect_tx, &self.tokio_rt);
                 }
                 UiAction::JoinLobby(id) => {
                     if self.ui.app.main_menu_state.is_waiting {
@@ -41,7 +35,7 @@ impl SowApp {
                     self.ui
                         .app
                         .main_menu_state
-                        .open_route(sow_ui::ui::main_menu::MainMenuRoute::Create);
+                        .open_route(crate::ui::main_menu::MainMenuRoute::Create);
                     self.ui.app.main_menu_state.custom_game_is_sp = false;
                     self.ui.app.main_menu_state.error_message = None;
                 }
@@ -49,7 +43,7 @@ impl SowApp {
                     self.ui
                         .app
                         .main_menu_state
-                        .open_route(sow_ui::ui::main_menu::MainMenuRoute::Browser);
+                        .open_route(crate::ui::main_menu::MainMenuRoute::Browser);
                     self.ui.app.main_menu_state.error_message = None;
                 }
                 UiAction::CloseOverlay => {
@@ -76,7 +70,7 @@ impl SowApp {
                         self.ui.app.main_menu_state.go_home();
                     } else {
                         self.ui.app.main_menu_state.error_message =
-                            Some("Enter a valid lobby code".to_string());
+                            Some(crate::ui::UiText::new("menu.invalid_lobby_code"));
                     }
                 }
                 UiAction::JoinWithPassword(lobby_id) => {
@@ -151,18 +145,6 @@ impl SowApp {
                 UiAction::ToggleSettings => {
                     // Handle settings toggle if it's there
                 }
-                UiAction::SetFullscreen(fullscreen) => {
-                    self.ui.app.settings_state.is_fullscreen = fullscreen;
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if let Some(win) = self.gfx.window.as_ref() {
-                        let mode = if fullscreen {
-                            Some(winit::monitor::Fullscreen::Borderless(None))
-                        } else {
-                            None
-                        };
-                        win.set_fullscreen(mode);
-                    }
-                }
                 UiAction::ToggleCredits => {
                     self.ui.app.is_credits_open = !self.ui.app.is_credits_open;
                 }
@@ -179,14 +161,14 @@ impl SowApp {
                     self.ui
                         .app
                         .main_menu_state
-                        .open_route(sow_ui::ui::main_menu::MainMenuRoute::Store);
+                        .open_route(crate::ui::main_menu::MainMenuRoute::Store);
                     self.ui.app.main_menu_state.error_message = None;
                 }
                 UiAction::OpenProfilePage => {
                     self.ui
                         .app
                         .main_menu_state
-                        .open_route(sow_ui::ui::main_menu::MainMenuRoute::Profile);
+                        .open_route(crate::ui::main_menu::MainMenuRoute::Profile);
                     self.ui.app.main_menu_state.profile.account_id = self.profile_account_id.clone();
                     self.ui.app.main_menu_state.profile.error = None;
                     self.ui.app.main_menu_state.profile.view = None;
@@ -198,17 +180,17 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.ratings_loaded = false;
                     self.ui.app.main_menu_state.profile.match_detail = None;
                     self.ui.app.main_menu_state.profile.active_tab =
-                        sow_ui::ui::main_menu::profile::NativeProfileTab::Overview;
+                        crate::ui::main_menu::profile::ProfileTab::Overview;
                     self.ui.app.main_menu_state.profile.loading = false;
                 }
                 UiAction::LoadOwnProfile => {
-                    self.load_native_profile();
+                    self.load_profile();
                 }
                 UiAction::OpenPublicProfilePage(account_id) => {
                     self.ui
                         .app
                         .main_menu_state
-                        .open_route(sow_ui::ui::main_menu::MainMenuRoute::Profile);
+                        .open_route(crate::ui::main_menu::MainMenuRoute::Profile);
                     self.ui.app.main_menu_state.profile.account_id = Some(account_id);
                     self.ui.app.main_menu_state.profile.view = None;
                     self.ui.app.main_menu_state.profile.history.clear();
@@ -221,16 +203,16 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.loading = false;
                 }
                 UiAction::LoadProfileHistory => {
-                    self.load_native_profile_history();
+                    self.load_profile_history();
                 }
                 UiAction::LoadProfileRatings => {
-                    self.load_native_profile_ratings();
+                    self.load_profile_ratings();
                 }
                 UiAction::SearchProfiles(query) => {
-                    self.search_native_profiles(query);
+                    self.search_profiles(query);
                 }
                 UiAction::LoadMatchDetail(match_id) => {
-                    self.load_native_match_detail(match_id);
+                    self.load_match_detail(match_id);
                 }
                 UiAction::CloseMatchDetail => {
                     self.ui.app.main_menu_state.profile.match_detail = None;
@@ -239,13 +221,13 @@ impl SowApp {
                     leader_id,
                     currency,
                 } => {
-                    self.unlock_native_leader(leader_id, currency);
+                    self.unlock_leader(leader_id, currency);
                 }
                 UiAction::UnlockSkin(skin_id) => {
-                    self.unlock_native_skin(skin_id);
+                    self.unlock_skin(skin_id);
                 }
                 UiAction::EquipSkin(skin_id) => {
-                    self.equip_native_skin(skin_id);
+                    self.equip_skin(skin_id);
                 }
                 UiAction::ZoomIn => {
                     self.process_camera_zoom(
@@ -380,10 +362,7 @@ impl SowApp {
             );
             self.ui.app.main_menu_state.is_connecting = true;
             let url = self.net.ws_url.clone();
-            #[cfg(target_arch = "wasm32")]
             spawn_sow_client_connect(url, &self.net.connect_tx);
-            #[cfg(not(target_arch = "wasm32"))]
-            spawn_sow_client_connect(url, &self.net.connect_tx, &self.tokio_rt);
         }
     }
 }

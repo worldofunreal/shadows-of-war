@@ -265,7 +265,7 @@
         if (passwordLobbyId == null) return "";
         var lobby = findLobby(passwordLobbyId);
         var title = lobby ? formatMapName(lobby) : SOW_t("lobbies.private_lobby");
-        var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(state.error) + "</div>" : "";
+        var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(localizedText(state.error)) + "</div>" : "";
         return "<div class='sow-menu__overlay' data-menu-overlay='password'><form class='sow-menu__modal sow-menu__password-modal' data-form='password' novalidate>" +
             "<div class='sow-menu__modal-head'><div><p class='sow-menu__panel-label'>" + esc(SOW_t("lobbies.password_required")) + "</p><h2>" + esc(title) + "</h2></div>" +
             "<button class='sow-menu__icon-button' type='button' data-command='close_password' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div>" +
@@ -526,7 +526,7 @@
                     "<div class='sow-menu__map-download-bar'><div class='sow-menu__map-download-fill' style='width:" + pct + "%'></div></div>" +
                 "</div>";
         } else if (state.error) {
-            feedback = "<div class='sow-menu__queue-feedback sow-menu__queue-feedback--error'>" + esc(state.error) + "</div>";
+            feedback = "<div class='sow-menu__queue-feedback sow-menu__queue-feedback--error'>" + esc(localizedText(state.error)) + "</div>";
         }
 
         var rosterKey = queueRosterKey(lobby);

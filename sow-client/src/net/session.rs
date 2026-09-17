@@ -1,7 +1,7 @@
 use crate::app::SowApp;
 use crate::get_build_version;
-use sow_ui::ui::loading_screen::SplashJob;
-use sow_ui_kit::ClientPhase;
+use crate::ui::loading_screen::SplashJob;
+use crate::ClientPhase;
 
 fn should_complete_boudica_intro_on_exit(
     tutorial_active: bool,
@@ -176,7 +176,7 @@ impl SowApp {
         let entering_game = matches!(phase, ClientPhase::Splash)
             && matches!(&self.ui.app.splash_state.job, SplashJob::EnterGame);
         let use_loader = should_use_exit_game_loader(phase);
-        let was_playing = phase == sow_ui_kit::ClientPhase::Playing;
+        let was_playing = phase == crate::ClientPhase::Playing;
         let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
             self.ui.tutorial_active,
             self.net.is_offline,
@@ -204,10 +204,11 @@ impl SowApp {
 
         // Drop relay connection and force orchestrator reconnect
         self.net.client = None;
+        self.net.current_ping_ms = None;
         self.ui.app.main_menu_state.is_connected = false;
         self.ui.app.main_menu_state.is_connecting = false;
         if entering_game {
-            self.cleanup_game_session_stub();
+            self.reset_game_session();
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -229,11 +230,10 @@ impl SowApp {
         self.sim.relay_reconnect_ticket = None;
         if use_loader {
             self.ui.app.phase = ClientPhase::Splash;
-            let lang = self.ui.app.settings_state.language;
             self.ui
                 .app
                 .splash_state
-                .reset_anim(SplashJob::ExitGame, lang);
+                .reset_anim(SplashJob::ExitGame);
         } else {
             self.ui.app.phase = ClientPhase::MainMenu;
         }
@@ -251,24 +251,23 @@ impl SowApp {
 
     /// Enter the EnterGame splash (fade-in, progress bar, fade-out to Playing).
     pub(crate) fn begin_enter_game_loader(&mut self) {
-        self.ui.app.phase = sow_ui_kit::ClientPhase::Splash;
-        let lang = self.ui.app.settings_state.language;
+        self.ui.app.phase = crate::ClientPhase::Splash;
         self.ui
             .app
             .splash_state
-            .reset_anim(sow_ui::ui::loading_screen::SplashJob::EnterGame, lang);
+            .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
     }
 
     /// Whether the map/mover GPU path should paint this frame (hidden during splash loads).
     pub(crate) fn should_draw_world(&self) -> bool {
-        use sow_ui::ui::loading_screen::SplashJob;
-        use sow_ui_kit::ClientPhase;
+        use crate::ui::loading_screen::SplashJob;
+        use crate::ClientPhase;
 
         match self.ui.app.phase {
             ClientPhase::Playing => true,
             ClientPhase::Splash => {
                 let s = &self.ui.app.splash_state;
-                matches!(s.job, SplashJob::EnterGame) && s.done && s.fadeout_start.is_some()
+                matches!(s.job, SplashJob::EnterGame) && s.done
             }
             ClientPhase::MainMenu => false,
         }
@@ -287,7 +286,7 @@ impl SowApp {
 mod tests {
     use super::{should_complete_boudica_intro_on_exit, should_use_exit_game_loader};
     use crate::campaign::CampaignId;
-    use sow_ui_kit::ClientPhase;
+    use crate::ClientPhase;
 
     #[test]
     fn exit_loader_only_runs_for_active_game() {

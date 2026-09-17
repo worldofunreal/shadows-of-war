@@ -79,7 +79,7 @@
             + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">🛠</button>'
             + '  </div>'
             + '  <div class="sow-hud__status-right">'
-            + '    <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: 60 }) + '</span>'
+            + '    <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
             + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">📩 <span class="sow-hud__inbox-badge" id="sow-hud-inbox-count">0</span></button>'
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">⚙</button>'
             + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' + SOW_t("hud.leave_match") + '" title="' + SOW_t("hud.leave_match") + '">✕</button>'
@@ -473,13 +473,15 @@
     function renderNotifications(entries) {
         if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
         var visible = entries.slice(-3);
-        var key = visible.map(function (entry) { return entry.message || ""; }).join("\u001f");
+        var key = visible.map(function (entry) {
+            return String(entry && entry.key || "") + JSON.stringify(entry && entry.values || {});
+        }).join("\u001f");
         if (hudRefs.notifications.dataset.key === key) return;
         hudRefs.notifications.dataset.key = key;
         hudRefs.notifications.replaceChildren.apply(hudRefs.notifications, visible.map(function (entry) {
             var node = document.createElement("div");
             node.className = "sow-hud__notification";
-            node.textContent = entry.message || SOW_t("hud.event");
+            node.textContent = entry && entry.key ? SOW_t(entry.key, entry.values || {}) : SOW_t("hud.event");
             return node;
         }));
     }
@@ -557,11 +559,11 @@
         }
 
         if (hudRefs.fps) {
-            var fpsVal = hud.fps || 60;
-            var pingVal = hud.ping || 0;
-            hudRefs.fps.textContent = pingVal > 0
-                ? SOW_t("hud.fps_ping", { fps: fpsVal, ping: pingVal })
-                : SOW_t("hud.fps", { fps: fpsVal });
+            var hasFps = Number.isFinite(hud.fps) && hud.fps > 0;
+            var hasPing = Number.isFinite(hud.ping);
+            hudRefs.fps.textContent = hasFps && hasPing
+                ? SOW_t("hud.fps_ping", { fps: hud.fps, ping: hud.ping })
+                : SOW_t("hud.fps", { fps: hasFps ? hud.fps : "--" });
         }
         if (hudRefs.inboxCount) hudRefs.inboxCount.textContent = String(hud.inbox_count || 0);
 

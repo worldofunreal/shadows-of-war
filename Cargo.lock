@@ -3581,7 +3581,6 @@ dependencies = [
  "bincode",
  "blade-graphics",
  "blade-macros",
- "brotli",
  "bytemuck",
  "console_error_panic_hook",
  "console_log",
@@ -3596,7 +3595,6 @@ dependencies = [
  "sow-audio",
  "sow-core",
  "sow-data",
- "sow-i18n",
  "sow-net",
  "sow-render",
  "url",
@@ -3690,7 +3688,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sow-core",
- "sow-i18n",
  "tokio",
  "web-time",
 ]
@@ -5620,7 +5617,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "blade-util"
-version = "0.4.1"

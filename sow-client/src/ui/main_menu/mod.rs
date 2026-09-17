@@ -12,16 +12,16 @@ pub enum MainMenuSection { Battle, Heroes, Store, Profile }
 
 pub mod profile {
     #[derive(Default)]
-    pub struct NativeProfileState {
+    pub struct ProfileState {
         pub account_id: Option<String>, pub view: Option<sow_data::profile::PublicProfileView>,
         pub history: Vec<sow_data::profile::PublicMatchSummary>, pub ratings: Vec<sow_data::profile::PublicRatingView>,
         pub search_results: Vec<sow_data::profile::PublicProfileSummary>, pub search_query: String,
         pub history_cursor: usize, pub history_has_next: bool,
         pub match_detail: Option<sow_data::profile::PublicMatchDetail>, pub ratings_loaded: bool,
-        pub loading: bool, pub error: Option<String>, pub active_tab: NativeProfileTab,
+        pub loading: bool, pub error: Option<crate::ui::UiText>, pub active_tab: ProfileTab,
     }
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub enum NativeProfileTab { #[default] Overview, Leaders, History, Ranked }
+    pub enum ProfileTab { #[default] Overview, Leaders, History, Ranked }
 }
 
 pub struct MainMenuState {
@@ -35,10 +35,10 @@ pub struct MainMenuState {
     pub downloading_map_name: Option<String>, pub is_downloading_map: bool, pub cached_map: Option<Vec<u8>>, pub cached_map_key: Option<String>,
     pub map_download_progress: u8, pub show_leader_picker: bool, pub clan_tag: String,
     pub selected_leader: sow_core::player::Leader, pub selected_civilization: sow_core::player::Civilization,
-    pub error_message: Option<String>, pub my_player_id: Option<u16>, pub notice: Option<LobbyNotice>, pub notice_at: Option<f64>,
+    pub error_message: Option<crate::ui::UiText>, pub my_player_id: Option<u16>, pub notice: Option<LobbyNotice>, pub notice_at: Option<f64>,
     pub safe_area_bottom: f32, pub account_level: u32, pub account_xp: u32, pub crowns: u64,
     pub store_catalog: sow_data::commerce::StoreCatalog, pub selected_skin: Option<String>, pub store_busy: bool,
-    pub profile: profile::NativeProfileState, pub route: MainMenuRoute,
+    pub profile: profile::ProfileState, pub route: MainMenuRoute,
 }
 
 impl Default for MainMenuState {
@@ -67,7 +67,7 @@ impl Default for MainMenuState {
             error_message: None, my_player_id: None, notice: None, notice_at: None, safe_area_bottom: 0.0,
             account_level: 1, account_xp: 0, crowns: 0,
             store_catalog: sow_data::commerce::catalog_for_profile(&empty_leaders, &empty_skins, 0, 0, 0),
-            selected_skin: None, store_busy: false, profile: profile::NativeProfileState::default(), route: MainMenuRoute::Home,
+            selected_skin: None, store_busy: false, profile: profile::ProfileState::default(), route: MainMenuRoute::Home,
         }
     }
 }

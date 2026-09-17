@@ -18,10 +18,10 @@ impl SowApp {
         } else {
             self.ui.app.hud_state.spawn_timer_secs = None;
         }
-        let is_playing_or_loading = self.ui.app.phase == sow_ui_kit::ClientPhase::Playing
-            || (self.ui.app.phase == sow_ui_kit::ClientPhase::Splash
+        let is_playing_or_loading = self.ui.app.phase == crate::ClientPhase::Playing
+            || (self.ui.app.phase == crate::ClientPhase::Splash
                 && self.ui.app.splash_state.job
-                    == sow_ui::ui::loading_screen::SplashJob::EnterGame);
+                    == crate::ui::loading_screen::SplashJob::EnterGame);
 
         if is_playing_or_loading {
             if self.net.client.is_some() {
@@ -45,125 +45,7 @@ impl SowApp {
 
                     // Update UI HUD State from my player id
                     self.sync_hud_player_state();
-                    // Show notifications for actual resource transfers only
-                    if let Some(snap) = &self.sim.current_snapshot {
-                        let my_id = self.sim.my_player_id.unwrap_or(1);
-                        for tx in &snap.resource_transfers {
-                            if tx.receiver_id == my_id {
-                                let sender_name = snap
-                                    .players
-                                    .iter()
-                                    .find(|p| p.id == tx.sender_id)
-                                    .map(|p| p.name.as_str())
-                                    .unwrap_or("Ally");
-                                let msg = match (tx.gold > 0.0, tx.troops > 0.0) {
-                                    (true, true) => format!(
-                                        "+{} Gold, +{} Troops from {}",
-                                        sow_ui_kit::utils::format_number(tx.gold),
-                                        sow_ui_kit::utils::format_number(tx.troops),
-                                        sender_name
-                                    ),
-                                    (true, false) => format!(
-                                        "+{} Gold from {}",
-                                        sow_ui_kit::utils::format_number(tx.gold),
-                                        sender_name
-                                    ),
-                                    (false, true) => format!(
-                                        "+{} Troops from {}",
-                                        sow_ui_kit::utils::format_number(tx.troops),
-                                        sender_name
-                                    ),
-                                    _ => continue,
-                                };
-                                self.ui
-                                    .app
-                                    .hud_state
-                                    .push_notification(msg, crate::rgb(74, 222, 128));
-
-                                // ponytail: reuse FloatingNotice to show transferred resources visually
-                                let mut wx = 0.5;
-                                let mut wy = 0.5;
-                                if let Some(me) = snap.players.iter().find(|p| p.id == my_id)
-                                    && (me.centroid_x > 0.001 || me.centroid_y > 0.001)
-                                {
-                                    wx = me.centroid_x + 0.5;
-                                    wy = me.centroid_y + 0.5;
-                                }
-                                let now_instant = web_time::Instant::now();
-                                if tx.gold > 0.0 {
-                                    self.ui.floating_notices.push(crate::app::FloatingNotice {
-                                        text: format!(
-                                            "+{} Gold",
-                                            sow_ui_kit::utils::format_number(tx.gold)
-                                        ),
-                                        world_x: wx,
-                                        world_y: wy,
-                                        start_time: now_instant,
-                                        duration: web_time::Duration::from_millis(3000),
-                                        color: crate::rgb(250, 204, 21),
-                                    });
-                                }
-                                if tx.troops > 0.0 {
-                                    self.ui.floating_notices.push(crate::app::FloatingNotice {
-                                        text: format!(
-                                            "+{} Troops",
-                                            sow_ui_kit::utils::format_number(tx.troops)
-                                        ),
-                                        world_x: wx,
-                                        world_y: wy + 0.5,
-                                        start_time: now_instant,
-                                        duration: web_time::Duration::from_millis(3000),
-                                        color: crate::rgb(6, 182, 212), // cyan
-                                    });
-                                }
-                            } else if tx.sender_id == my_id {
-                                let receiver_name = snap
-                                    .players
-                                    .iter()
-                                    .find(|p| p.id == tx.receiver_id)
-                                    .map(|p| p.name.as_str())
-                                    .unwrap_or("Ally");
-                                let msg = match (tx.gold > 0.0, tx.troops > 0.0) {
-                                    (true, true) => format!(
-                                        "Transferred {} Gold, {} Troops to {}",
-                                        sow_ui_kit::utils::format_number(tx.gold),
-                                        sow_ui_kit::utils::format_number(tx.troops),
-                                        receiver_name
-                                    ),
-                                    (true, false) => format!(
-                                        "Transferred {} Gold to {}",
-                                        sow_ui_kit::utils::format_number(tx.gold),
-                                        receiver_name
-                                    ),
-                                    (false, true) => format!(
-                                        "Transferred {} Troops to {}",
-                                        sow_ui_kit::utils::format_number(tx.troops),
-                                        receiver_name
-                                    ),
-                                    _ => continue,
-                                };
-                                self.ui
-                                    .app
-                                    .hud_state
-                                    .push_notification(msg, crate::rgb(220, 220, 220));
-                            }
-                        }
-                        for rej in &snap.resource_rejections {
-                            if rej.requester_id == my_id {
-                                let rejector_name = snap
-                                    .players
-                                    .iter()
-                                    .find(|p| p.id == rej.rejector_id)
-                                    .map(|p| p.name.as_str())
-                                    .unwrap_or("Ally");
-                                let msg = format!("{} declined resource request", rejector_name);
-                                self.ui
-                                    .app
-                                    .hud_state
-                                    .push_notification(msg, crate::rgb(239, 68, 68));
-                            }
-                        }
-                    }
+                    self.process_resource_notifications();
                     self.sync_building_costs();
 
                     if ticks_processed >= 10 {
@@ -220,129 +102,11 @@ impl SowApp {
                 }
 
                 self.sync_hud_player_state();
-                // Show notifications for actual resource transfers only
-                if let Some(snap) = &self.sim.current_snapshot {
-                    let my_id = self.sim.my_player_id.unwrap_or(1);
-                    for tx in &snap.resource_transfers {
-                        if tx.receiver_id == my_id {
-                            let sender_name = snap
-                                .players
-                                .iter()
-                                .find(|p| p.id == tx.sender_id)
-                                .map(|p| p.name.as_str())
-                                .unwrap_or("Ally");
-                            let msg = match (tx.gold > 0.0, tx.troops > 0.0) {
-                                (true, true) => format!(
-                                    "+{} Gold, +{} Troops from {}",
-                                    sow_ui_kit::utils::format_number(tx.gold),
-                                    sow_ui_kit::utils::format_number(tx.troops),
-                                    sender_name
-                                ),
-                                (true, false) => format!(
-                                    "+{} Gold from {}",
-                                    sow_ui_kit::utils::format_number(tx.gold),
-                                    sender_name
-                                ),
-                                (false, true) => format!(
-                                    "+{} Troops from {}",
-                                    sow_ui_kit::utils::format_number(tx.troops),
-                                    sender_name
-                                ),
-                                _ => continue,
-                            };
-                            self.ui
-                                .app
-                                .hud_state
-                                .push_notification(msg, crate::rgb(74, 222, 128));
-
-                            // ponytail: reuse FloatingNotice to show transferred resources visually
-                            let mut wx = 0.5;
-                            let mut wy = 0.5;
-                            if let Some(me) = snap.players.iter().find(|p| p.id == my_id)
-                                && (me.centroid_x > 0.001 || me.centroid_y > 0.001)
-                            {
-                                wx = me.centroid_x + 0.5;
-                                wy = me.centroid_y + 0.5;
-                            }
-                            let now_instant = web_time::Instant::now();
-                            if tx.gold > 0.0 {
-                                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                                    text: format!(
-                                        "+{} Gold",
-                                        sow_ui_kit::utils::format_number(tx.gold)
-                                    ),
-                                    world_x: wx,
-                                    world_y: wy,
-                                    start_time: now_instant,
-                                    duration: web_time::Duration::from_millis(3000),
-                                    color: crate::rgb(250, 204, 21),
-                                });
-                            }
-                            if tx.troops > 0.0 {
-                                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                                    text: format!(
-                                        "+{} Troops",
-                                        sow_ui_kit::utils::format_number(tx.troops)
-                                    ),
-                                    world_x: wx,
-                                    world_y: wy + 0.5,
-                                    start_time: now_instant,
-                                    duration: web_time::Duration::from_millis(3000),
-                                    color: crate::rgb(6, 182, 212), // cyan
-                                });
-                            }
-                        } else if tx.sender_id == my_id {
-                            let receiver_name = snap
-                                .players
-                                .iter()
-                                .find(|p| p.id == tx.receiver_id)
-                                .map(|p| p.name.as_str())
-                                .unwrap_or("Ally");
-                            let msg = match (tx.gold > 0.0, tx.troops > 0.0) {
-                                (true, true) => format!(
-                                    "Transferred {} Gold, {} Troops to {}",
-                                    sow_ui_kit::utils::format_number(tx.gold),
-                                    sow_ui_kit::utils::format_number(tx.troops),
-                                    receiver_name
-                                ),
-                                (true, false) => format!(
-                                    "Transferred {} Gold to {}",
-                                    sow_ui_kit::utils::format_number(tx.gold),
-                                    receiver_name
-                                ),
-                                (false, true) => format!(
-                                    "Transferred {} Troops to {}",
-                                    sow_ui_kit::utils::format_number(tx.troops),
-                                    receiver_name
-                                ),
-                                _ => continue,
-                            };
-                            self.ui
-                                .app
-                                .hud_state
-                                .push_notification(msg, crate::rgb(220, 220, 220));
-                        }
-                    }
-                    for rej in &snap.resource_rejections {
-                        if rej.requester_id == my_id {
-                            let rejector_name = snap
-                                .players
-                                .iter()
-                                .find(|p| p.id == rej.rejector_id)
-                                .map(|p| p.name.as_str())
-                                .unwrap_or("Ally");
-                            let msg = format!("{} declined resource request", rejector_name);
-                            self.ui
-                                .app
-                                .hud_state
-                                .push_notification(msg, crate::rgb(239, 68, 68));
-                        }
-                    }
-                }
+                self.process_resource_notifications();
                 self.sync_building_costs();
             }
         }
-        if self.ui.app.phase == sow_ui_kit::ClientPhase::Playing
+        if self.ui.app.phase == crate::ClientPhase::Playing
             && !self.input.has_snapped_camera_to_spawn
             && let Some(pid) = self.sim.my_player_id
             && let Some(snap) = &self.sim.current_snapshot
@@ -457,6 +221,80 @@ impl SowApp {
             } else {
                 self.ui.app.hud_state.building_costs[i] = self.sim.config.cost_city;
             }
+        }
+    }
+
+    fn process_resource_notifications(&mut self) {
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return;
+        };
+        let my_id = self.sim.my_player_id.unwrap_or(1);
+        let mut notifications = Vec::new();
+
+        for transfer in &snapshot.resource_transfers {
+            let (prefix, other_id, color) = if transfer.receiver_id == my_id {
+                ("received", transfer.sender_id, crate::rgb(74, 222, 128))
+            } else if transfer.sender_id == my_id {
+                ("sent", transfer.receiver_id, crate::rgb(220, 220, 220))
+            } else {
+                continue;
+            };
+            let name = snapshot
+                .players
+                .iter()
+                .find(|player| player.id == other_id)
+                .map(|player| player.name.as_str())
+                .unwrap_or("Ally");
+            let text = match (prefix, transfer.gold > 0.0, transfer.troops > 0.0) {
+                ("received", true, true) => crate::ui::UiText::new(
+                    "hud.resource_received_both",
+                )
+                .with("gold", crate::utils::format_number(transfer.gold))
+                .with("troops", crate::utils::format_number(transfer.troops))
+                .with("name", name),
+                ("received", true, false) => crate::ui::UiText::new(
+                    "hud.resource_received_gold",
+                )
+                .with("gold", crate::utils::format_number(transfer.gold))
+                .with("name", name),
+                ("received", false, true) => crate::ui::UiText::new(
+                    "hud.resource_received_troops",
+                )
+                .with("troops", crate::utils::format_number(transfer.troops))
+                .with("name", name),
+                ("sent", true, true) => crate::ui::UiText::new("hud.resource_sent_both")
+                    .with("gold", crate::utils::format_number(transfer.gold))
+                    .with("troops", crate::utils::format_number(transfer.troops))
+                    .with("name", name),
+                ("sent", true, false) => crate::ui::UiText::new("hud.resource_sent_gold")
+                    .with("gold", crate::utils::format_number(transfer.gold))
+                    .with("name", name),
+                ("sent", false, true) => crate::ui::UiText::new("hud.resource_sent_troops")
+                    .with("troops", crate::utils::format_number(transfer.troops))
+                    .with("name", name),
+                _ => continue,
+            };
+            notifications.push((text, color));
+        }
+
+        for rejection in &snapshot.resource_rejections {
+            if rejection.requester_id != my_id {
+                continue;
+            }
+            let name = snapshot
+                .players
+                .iter()
+                .find(|player| player.id == rejection.rejector_id)
+                .map(|player| player.name.as_str())
+                .unwrap_or("Ally");
+            notifications.push((
+                crate::ui::UiText::new("hud.resource_request_declined").with("name", name),
+                crate::rgb(239, 68, 68),
+            ));
+        }
+
+        for (text, color) in notifications {
+            self.ui.app.hud_state.push_notification(text, color);
         }
     }
 

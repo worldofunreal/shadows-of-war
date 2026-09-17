@@ -1,7 +1,7 @@
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
 use crate::net::lobby::{apply_lobbies_broadcast, seed_joined_lobby_entry};
-use sow_ui_kit::ClientPhase;
+use crate::ClientPhase;
 
 pub(super) struct ProcessWsResult {
     pub(super) ws_disconnected: bool,
@@ -85,17 +85,16 @@ impl SowApp {
                             start_msg.relay_host
                         );
                         self.sync_portal_room(false);
-                        let not_splash = self.ui.app.phase != sow_ui_kit::ClientPhase::Splash;
+                        let not_splash = self.ui.app.phase != crate::ClientPhase::Splash;
                         let wrong_job = self.ui.app.splash_state.job
-                            != sow_ui::ui::loading_screen::SplashJob::EnterGame;
+                            != crate::ui::loading_screen::SplashJob::EnterGame;
 
                         if not_splash || wrong_job {
-                            self.ui.app.phase = sow_ui_kit::ClientPhase::Splash;
-                            let lang = self.ui.app.settings_state.language;
+                            self.ui.app.phase = crate::ClientPhase::Splash;
                             self.ui
                                 .app
                                 .splash_state
-                                .reset_anim(sow_ui::ui::loading_screen::SplashJob::EnterGame, lang);
+                                .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
                         }
                         self.ui.app.main_menu_state.is_waiting = false;
                         self.ui.app.main_menu_state.pending_join_lobby_id = None;
@@ -137,12 +136,10 @@ impl SowApp {
                                 log::info!(
                                     "[LOBBY] All ready (is_starting), entering loader screen"
                                 );
-                                if self.ui.app.phase != sow_ui_kit::ClientPhase::Splash {
-                                    self.ui.app.phase = sow_ui_kit::ClientPhase::Splash;
-                                    let lang = self.ui.app.settings_state.language;
+                                if self.ui.app.phase != crate::ClientPhase::Splash {
+                                    self.ui.app.phase = crate::ClientPhase::Splash;
                                     self.ui.app.splash_state.reset_anim(
-                                        sow_ui::ui::loading_screen::SplashJob::EnterGame,
-                                        lang,
+                                        crate::ui::loading_screen::SplashJob::EnterGame,
                                     );
                                 }
                                 self.ui.app.main_menu_state.is_waiting = false;
@@ -204,12 +201,9 @@ impl SowApp {
                     ServerMessage::LobbiesBroadcast(broadcast) => {
                         // Keep broadcasts out of match-loading splashes, but accept the initial
                         // snapshot during web ExitGame so the menu is ready before it appears.
-                        #[cfg(target_arch = "wasm32")]
                         let exiting_to_web_menu = self.ui.app.phase == ClientPhase::Splash
                             && self.ui.app.splash_state.job
-                                == sow_ui::ui::loading_screen::SplashJob::ExitGame;
-                        #[cfg(not(target_arch = "wasm32"))]
-                        let exiting_to_web_menu = false;
+                                == crate::ui::loading_screen::SplashJob::ExitGame;
                         if self.ui.app.phase != ClientPhase::Splash || exiting_to_web_menu {
                             apply_lobbies_broadcast(&mut self.ui.app.main_menu_state, &broadcast);
                         }
@@ -318,9 +312,9 @@ impl SowApp {
                             mm.is_lobby_host = false;
                             mm.my_player_id = None;
                             mm.notice = Some(match closed.reason.as_str() {
-                                "KICKED" => sow_ui::LobbyNotice::Kicked,
-                                "BANNED" => sow_ui::LobbyNotice::Banned,
-                                _ => sow_ui::LobbyNotice::HostLeft,
+                                "KICKED" => crate::LobbyNotice::Kicked,
+                                "BANNED" => crate::LobbyNotice::Banned,
+                                _ => crate::LobbyNotice::HostLeft,
                             });
                             mm.notice_at = None;
                             self.ui.app.phase = ClientPhase::MainMenu;
@@ -343,15 +337,16 @@ impl SowApp {
                         self.ui.app.main_menu_state.is_lobby_host = false;
                         self.ui.app.main_menu_state.my_player_id = None;
                         self.ui.app.main_menu_state.in_private_match = false;
-                        self.ui.app.main_menu_state.error_message = Some(fail.reason.clone());
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("menu.connection_lost"));
                         if fail.reason == "BANNED" {
                             // Banned from that lobby — show the banned notice instead of
                             // the raw connection-error modal.
-                            self.ui.app.main_menu_state.notice = Some(sow_ui::LobbyNotice::Banned);
+                            self.ui.app.main_menu_state.notice = Some(crate::LobbyNotice::Banned);
                             self.ui.app.main_menu_state.notice_at = None;
                         } else {
                             self.ui.app.main_menu_state.notice =
-                                Some(sow_ui::LobbyNotice::ConnectionLost);
+                                Some(crate::LobbyNotice::ConnectionLost);
                             self.ui.app.main_menu_state.notice_at = None;
                         }
                     }

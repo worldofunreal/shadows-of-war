@@ -51,7 +51,6 @@ pub fn configure(database_base: &str) {
     install_pagehide_flush();
 }
 
-#[cfg(target_arch = "wasm32")]
 fn install_pagehide_flush() {
     use wasm_bindgen::JsCast;
     let Some(window) = web_sys::window() else {
@@ -63,9 +62,6 @@ fn install_pagehide_flush() {
     let _ = window.add_event_listener_with_callback("pagehide", callback.as_ref().unchecked_ref());
     callback.forget();
 }
-
-#[cfg(not(target_arch = "wasm32"))]
-fn install_pagehide_flush() {}
 
 pub fn track(name: &'static str) {
     track_with(name, serde_json::Value::Null);
@@ -201,7 +197,6 @@ fn session_id() -> String {
     format!("{:x}{:04x}", now_ms(), seq)
 }
 
-#[cfg(target_arch = "wasm32")]
 fn js_global(name: &str) -> Option<String> {
     let window = web_sys::window()?;
     let key = wasm_bindgen::JsValue::from_str(name);
@@ -211,31 +206,14 @@ fn js_global(name: &str) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn js_global(_name: &str) -> Option<String> {
-    None
-}
-
-#[cfg(target_arch = "wasm32")]
 fn platform_name() -> String {
     "web".to_string()
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn platform_name() -> String {
-    std::env::consts::OS.to_string()
-}
-
-#[cfg(target_arch = "wasm32")]
 fn locale_name() -> String {
     web_sys::window()
         .and_then(|window| window.navigator().language())
         .unwrap_or_default()
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn locale_name() -> String {
-    String::new()
 }
 
 #[cfg(test)]

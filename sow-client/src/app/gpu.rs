@@ -17,22 +17,10 @@ impl SowApp {
             }
             Err(err) => {
                 self.gpu_init_failed = true;
-                #[cfg(target_arch = "wasm32")]
-                {
-                    crate::loader::show_graphics_error();
-                    eprintln!(
-                        "Failed to initialize GPU (WebGL2).\n\
-                         The browser did not provide a working WebGL2 context.\n\
-                         Details: {err}"
-                    );
-                }
-                #[cfg(not(target_arch = "wasm32"))]
+                crate::loader::show_graphics_error();
                 eprintln!(
-                    "Failed to initialize GPU (Vulkan).\n\
-                     On Linux, ensure Vulkan drivers are installed and loaded.\n\
-                     If you use NVIDIA, run `nvidia-smi` — a driver/library version mismatch \
-                     requires a reboot after updating nvidia-utils.\n\
-                     Close other GPU apps if video memory is exhausted.\n\
+                    "Failed to initialize GPU (WebGL2).\n\
+                     The browser did not provide a working WebGL2 context.\n\
                      Details: {err}"
                 );
                 log::error!("GPU init failed: {err}");

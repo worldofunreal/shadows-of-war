@@ -155,16 +155,15 @@ impl SowApp {
                     .unwrap_or_else(|| format!("Player {}", victim_id))
             };
 
-            let (message, color) = if victim_id == my_id && my_id != 0 {
-                // Your territory was hit
+            let (text, color) = if victim_id == my_id && my_id != 0 {
                 (
-                    format!("Incoming strike from {}", attacker_name),
+                    crate::ui::UiText::new("hud.nuke_incoming")
+                        .with("name", attacker_name),
                     crate::rgb(239, 68, 68),
                 )
             } else if alert.owner_id == my_id {
-                // You hit another player
                 (
-                    format!("Strategic strike hit {}", victim_name),
+                    crate::ui::UiText::new("hud.nuke_hit").with("name", victim_name),
                     crate::rgb(74, 222, 128),
                 )
             } else if my_id != 0
@@ -176,20 +175,22 @@ impl SowApp {
                     .unwrap_or(false)
                 && victim_id != 0
             {
-                // Ally got hit
                 (
-                    format!("{} struck ally {}", attacker_name, victim_name),
+                    crate::ui::UiText::new("hud.nuke_ally_hit")
+                        .with("attacker", attacker_name)
+                        .with("victim", victim_name),
                     crate::rgb(251, 191, 36),
                 )
             } else {
-                // Enemy vs enemy / neutral
                 (
-                    format!("{} struck {}", attacker_name, victim_name),
+                    crate::ui::UiText::new("hud.nuke_struck")
+                        .with("attacker", attacker_name)
+                        .with("victim", victim_name),
                     crate::rgb(180, 180, 200),
                 )
             };
 
-            self.ui.app.hud_state.push_notification(message, color);
+            self.ui.app.hud_state.push_notification(text, color);
         }
     }
 }
