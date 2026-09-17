@@ -1,266 +1,605 @@
-use super::placement::resolve_build_target_tile;
-use crate::app::SowApp;
+use super::placement::{resolve_build_target_tile, PlacementQuery};
+use crate::app::{MapContextMenu, SowApp};
+use serde::Deserialize;
+
+pub(crate) const TOUCH_HOLD_MS: u128 = 300;
+const MAP_CLICK_MAX_DISTANCE_SQ: f64 = 400.0;
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum MapMenuAction {
+    Spawn,
+    Attack,
+    Fleet,
+    Transfer,
+    Alliance,
+    BuildCity,
+    BuildFactory,
+    BuildPort,
+    BuildBunker,
+    Nuke,
+}
+
+impl MapMenuAction {
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
+            Self::Spawn => "spawn",
+            Self::Attack => "attack",
+            Self::Fleet => "fleet",
+            Self::Transfer => "transfer",
+            Self::Alliance => "alliance",
+            Self::BuildCity => "build_city",
+            Self::BuildFactory => "build_factory",
+            Self::BuildPort => "build_port",
+            Self::BuildBunker => "build_bunker",
+            Self::Nuke => "nuke",
+        }
+    }
+}
+
+pub(crate) fn is_quick_tap(elapsed_ms: u128, distance_sq: f64) -> bool {
+    elapsed_ms < TOUCH_HOLD_MS && distance_sq <= MAP_CLICK_MAX_DISTANCE_SQ
+}
+
+#[derive(Clone, Copy)]
+struct MapTarget {
+    owner: u16,
+    is_land: bool,
+    my_id: u16,
+    is_allied: bool,
+    is_teammate: bool,
+    has_alliance_request: bool,
+}
+
+impl MapTarget {
+    fn is_friendly(self) -> bool {
+        self.is_allied || self.is_teammate
+    }
+
+    fn is_player(self) -> bool {
+        self.owner != 0 && self.owner != self.my_id
+    }
+
+    fn is_enemy(self) -> bool {
+        self.is_player() && !self.is_friendly()
+    }
+
+    fn is_attackable(self) -> bool {
+        self.owner == 0 || self.is_enemy()
+    }
+
+    fn menu_actions(self, spawning: bool, can_attack: bool) -> Vec<MapMenuAction> {
+        if spawning {
+            return self
+                .is_land
+                .then_some(MapMenuAction::Spawn)
+                .into_iter()
+                .collect();
+        }
+        if self.owner == self.my_id && self.is_land {
+            return vec![
+                MapMenuAction::BuildCity,
+                MapMenuAction::BuildFactory,
+                MapMenuAction::BuildPort,
+                MapMenuAction::BuildBunker,
+            ];
+        }
+        if self.owner == 0 {
+            return (self.is_land && can_attack)
+                .then_some(MapMenuAction::Attack)
+                .into_iter()
+                .collect();
+        }
+        if !self.is_player() {
+            return Vec::new();
+        }
+
+        let mut actions = Vec::new();
+        if self.is_friendly() {
+            actions.push(MapMenuAction::Transfer);
+        } else {
+            if self.is_land && can_attack {
+                actions.push(MapMenuAction::Attack);
+            }
+            actions.push(MapMenuAction::Fleet);
+            if self.is_land {
+                actions.push(MapMenuAction::Nuke);
+            }
+        }
+        if !self.is_teammate {
+            actions.push(MapMenuAction::Alliance);
+        }
+        actions
+    }
+}
 
 impl SowApp {
+    pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
+        if self.ui.observing
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || self.ui.app.hud_state.selected_building_kind.is_some()
+            || self.ui.app.hud_state.selected_nuke_kind.is_some()
+        {
+            return false;
+        }
+        if !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+        }) {
+            return false;
+        }
+        let Some((col, row)) = self.mouse_to_tile(x, y) else {
+            return false;
+        };
+        let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_land || target.owner == target.my_id || target.is_friendly() {
+            return false;
+        }
+        self.attack_from_tile(tile_idx)
+    }
+
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
         if self.ui.observing {
-            self.ui.app.hud_state.selected_building_kind = None;
-            self.ui.app.hud_state.selected_nuke_kind = None;
-            self.input.hold_build_active = false;
-            self.input.hold_build_accum = 0.0;
+            self.clear_placement();
             return;
         }
-        let phase = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .map(|s| &s.phase)
-            .unwrap_or(&sow_core::game::GamePhase::Lobby);
 
-        let (col, row) = match self.mouse_to_tile(x, y) {
-            Some(res) => res,
-            None => return,
+        let Some((col, row)) = self.mouse_to_tile(x, y) else {
+            return;
         };
+        let is_spawning = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
+        });
 
-        if matches!(phase, sow_core::game::GamePhase::Spawning { .. }) {
-            let idx = (row * self.sim.map_w as i32 + col) as usize;
-            let terrain_byte = self
-                .gfx
-                .map_renderer
-                .as_ref()
-                .map(|mr| mr.terrain[idx])
-                .unwrap_or(0);
-            let is_land = (terrain_byte & 0x80) != 0;
+        if is_spawning {
+            self.spawn_at(col, row);
+            return;
+        }
 
-            if !is_land {
-                let wx = col as f32 + 0.5;
-                let wy = row as f32 + 0.5;
-                self.ui.click_markers.push(crate::app::ClickMarker {
-                    world_x: wx,
-                    world_y: wy,
-                    start_time: web_time::Instant::now(),
-                });
+        let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
+        if let Some(kind) = self.ui.app.hud_state.selected_nuke_kind {
+            self.launch_nuke_at(kind, tile_idx);
+            return;
+        }
+        if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
+            self.build_structure_at(kind, col, row);
+            return;
+        }
 
-                return;
-            }
+        if self.select_warships_at(x, y) {
+            return;
+        }
+        self.input.selected_warships.clear();
 
-            let owner = self
-                .gfx
-                .map_renderer
-                .as_ref()
-                .map(|mr| mr.owners[idx])
-                .unwrap_or(0);
+        if self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+        }) {
+            self.primary_target(tile_idx);
+        }
+    }
 
-            let mut target_col = col;
-            let mut target_row = row;
+    pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
+        if self.ui.observing || self.ui.app.phase != crate::ClientPhase::Playing {
+            return;
+        }
+        let Some((col, row)) = self.mouse_to_tile(x, y) else {
+            self.close_map_context_menu();
+            return;
+        };
+        let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
+        let session = self.input.map_context_menu_session.wrapping_add(1);
+        self.input.map_context_menu_session = session;
+        self.input.map_context_menu = Some(MapContextMenu {
+            x: x as f32,
+            y: y as f32,
+            tile_idx,
+            session,
+        });
+    }
 
-            if owner != 0 {
-                let mut best_tile = None;
-                let mut best_dist = i32::MAX;
-                let search_radius = 5;
+    pub(crate) fn close_map_context_menu(&mut self) {
+        self.input.map_context_menu = None;
+    }
 
-                for dy in -search_radius..=search_radius {
-                    for dx in -search_radius..=search_radius {
-                        let tx = col + dx;
-                        let ty = row + dy;
-                        if tx >= 0
-                            && tx < self.sim.map_w as i32
-                            && ty >= 0
-                            && ty < self.sim.map_h as i32
-                        {
-                            let dist = sow_core::building::hex_distance(col, row, tx, ty);
-                            if dist <= search_radius {
-                                let n_idx = (ty * self.sim.map_w as i32 + tx) as usize;
-                                let n_owner = self
-                                    .gfx
-                                    .map_renderer
-                                    .as_ref()
-                                    .map(|mr| mr.owners[n_idx])
-                                    .unwrap_or(0);
-                                let n_terrain = self
-                                    .gfx
-                                    .map_renderer
-                                    .as_ref()
-                                    .map(|mr| mr.terrain[n_idx])
-                                    .unwrap_or(0);
-                                let n_is_land = (n_terrain & 0x80) != 0;
+    pub(crate) fn map_menu_actions(&self, tile_idx: u32) -> Vec<MapMenuAction> {
+        let Some(target) = self.map_target(tile_idx) else {
+            return Vec::new();
+        };
+        let spawning = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
+        });
+        target.menu_actions(
+            spawning,
+            target.is_land && self.can_attack(tile_idx, target.owner),
+        )
+    }
 
-                                if n_owner == 0 && n_is_land && dist < best_dist {
-                                    best_dist = dist;
-                                    best_tile = Some((tx, ty));
-                                }
-                            }
-                        }
-                    }
+    pub(crate) fn handle_map_menu_action(
+        &mut self,
+        session: u64,
+        tile_idx: u32,
+        action: MapMenuAction,
+    ) {
+        let Some(menu) = self.input.map_context_menu else {
+            return;
+        };
+        if menu.session != session || menu.tile_idx != tile_idx {
+            return;
+        }
+
+        match action {
+            MapMenuAction::Spawn => {
+                if let Some((col, row)) = self.tile_coords(tile_idx) {
+                    self.spawn_at(col, row);
                 }
-
-                if let Some((bx, by)) = best_tile {
-                    target_col = bx;
-                    target_row = by;
-                } else {
-                    let wx = col as f32 + 0.5;
-                    let wy = row as f32 + 0.5;
-                    self.ui.click_markers.push(crate::app::ClickMarker {
-                        world_x: wx,
-                        world_y: wy,
-                        start_time: web_time::Instant::now(),
-                    });
-                    return;
-                }
             }
-
-            let intent = sow_core::protocol::GameplayIntent::Spawn {
-                x: target_col as u32,
-                y: target_row as u32,
-            };
-            self.send_intent(intent);
-        } else if let Some(nuke_kind) = self.ui.app.hud_state.selected_nuke_kind {
-            let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
-            let intent = sow_core::protocol::GameplayIntent::LaunchNuke {
-                kind: nuke_kind,
-                target_tile: tile_idx,
-            };
-            self.send_intent(intent);
-            self.ui.app.hud_state.selected_nuke_kind = None;
-        } else if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
-            if let Some(snap) = &self.sim.current_snapshot {
-                let my_id = self.sim.my_player_id.unwrap_or(0);
-                let owners = self
-                    .gfx
-                    .map_renderer
-                    .as_ref()
-                    .map(|mr| mr.owners.as_slice())
-                    .unwrap_or(&[]);
-                let terrain = self
-                    .gfx
-                    .map_renderer
-                    .as_ref()
-                    .map(|mr| mr.terrain.as_slice())
-                    .unwrap_or(&[]);
-
-                let target_res = resolve_build_target_tile(&super::placement::PlacementQuery {
-                    kind,
-                    click_x: col,
-                    click_y: row,
-                    map_w: self.sim.map_w,
-                    map_h: self.sim.map_h,
-                    owners,
-                    terrain,
-                    my_id,
-                    buildings: &snap.buildings,
-                });
-
-                let cost = {
-                    let i = sow_core::game::BuildingKind::ALL
-                        .iter()
-                        .position(|&k| k == kind)
-                        .unwrap_or(0);
-                    self.ui.app.hud_state.building_costs[i]
+            MapMenuAction::Attack => {
+                self.attack_from_tile(tile_idx);
+            }
+            MapMenuAction::Fleet => {
+                self.launch_fleet_from_tile(tile_idx);
+            }
+            MapMenuAction::Transfer => {
+                self.open_transfer_from_tile(tile_idx);
+            }
+            MapMenuAction::Alliance => {
+                self.alliance_from_tile(tile_idx);
+            }
+            MapMenuAction::BuildCity
+            | MapMenuAction::BuildFactory
+            | MapMenuAction::BuildPort
+            | MapMenuAction::BuildBunker => {
+                let kind = match action {
+                    MapMenuAction::BuildCity => sow_core::game::BuildingKind::City,
+                    MapMenuAction::BuildFactory => sow_core::game::BuildingKind::Factory,
+                    MapMenuAction::BuildPort => sow_core::game::BuildingKind::Port,
+                    MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
+                    _ => unreachable!(),
                 };
-
-                if self.ui.app.hud_state.gold < cost {
-                    return;
-                }
-                let Ok(target_tile) = target_res else { return; };
-                let intent =
-                    sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile };
-                self.send_intent(intent);
-                self.ui.last_build_confirm_time = Some(web_time::Instant::now());
-            }
-        } else {
-            // Check if we clicked on a Warship we own
-            let mut clicked_warships = Vec::new();
-            if let Some(snap) = &self.sim.current_snapshot {
-                let my_pid = self.sim.my_player_id.unwrap_or(0);
-                let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
-                let world_y = (y as f32 - self.input.camera_y) / self.input.camera_zoom;
-                for f in &snap.fleets {
-                    if f.unit_type == sow_core::game::UnitType::Warship && f.owner_id == my_pid {
-                        let col = (f.current_tile % self.sim.map_w) as f32;
-                        let row = (f.current_tile / self.sim.map_w) as f32;
-                        let wx = col + 0.5;
-                        let wy = row + 0.5;
-                        // Click tolerance (half a tile)
-                        if (wx - world_x).abs() < 0.5 && (wy - world_y).abs() < 0.5 {
-                            clicked_warships.push(f.id);
-                        }
-                    }
+                if let Some((col, row)) = self.tile_coords(tile_idx) {
+                    self.build_structure_at(kind, col, row);
                 }
             }
-            if !clicked_warships.is_empty() {
-                self.input.selected_warships = clicked_warships;
-            } else {
-                self.input.selected_warships.clear();
-
-                let idx = (row * self.sim.map_w as i32 + col) as usize;
-                let Some(renderer) = self.gfx.map_renderer.as_ref() else { return; };
-                let owner = renderer.owners.get(idx).copied().unwrap_or(0);
-                let my_id = self.sim.my_player_id.unwrap_or(0);
-                let is_land = renderer
-                    .terrain
-                    .get(idx)
-                    .is_some_and(|terrain| terrain & 0x80 != 0);
-                let is_betrayer = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|s| s.players.iter().find(|p| p.id == owner))
-                    .map(|p| p.active_emoji.as_deref() == Some("🗡️"))
-                    .unwrap_or(false);
-                let is_allied = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|s| s.players.iter().find(|p| p.id == my_id))
-                    .map(|p| p.alliances.contains(&owner) && !is_betrayer)
-                    .unwrap_or(false);
-                let is_teammate = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .map(|s| {
-                        let my_team = s
-                            .players
-                            .iter()
-                            .find(|p| p.id == my_id)
-                            .and_then(|p| p.team);
-                        let other_team = s
-                            .players
-                            .iter()
-                            .find(|p| p.id == owner)
-                            .and_then(|p| p.team);
-                        my_team.is_some() && my_team == other_team
-                    })
-                    .unwrap_or(false);
-
-                if matches!(phase, sow_core::game::GamePhase::Playing)
-                    && is_land
-                    && owner != 0
-                    && owner != my_id
-                {
-                    if is_allied || is_teammate {
-                        self.ui.app.hud_state.show_ask_panel = Some(owner);
-                        self.ui.app.hud_state.transfer_confirm_pending = false;
-                    } else if shares_land_border(
-                        &renderer.owners,
-                        &renderer.terrain,
-                        self.sim.map_w,
-                        self.sim.map_h,
-                        my_id,
-                        owner,
-                    ) {
-                        let troops = self.ui.app.hud_state.troops
-                            * self.ui.app.hud_state.attack_ratio as f64;
-                        self.send_intent(sow_core::protocol::GameplayIntent::Attack(
-                            sow_core::protocol::AttackIntent {
-                                target_owner: owner,
-                                troops: Some(troops),
-                            },
-                        ));
-                    }
-                }
+            MapMenuAction::Nuke => {
+                self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
             }
         }
+        self.close_map_context_menu();
+    }
+
+    pub(crate) fn move_selected_warships(&mut self, x: f64, y: f64) -> bool {
+        if self.input.selected_warships.is_empty() {
+            return false;
+        }
+        let Some((col, row)) = self.mouse_to_tile(x, y) else {
+            return false;
+        };
+        let target_tile = (row * self.sim.map_w as i32 + col) as u32;
+        let unit_ids = std::mem::take(&mut self.input.selected_warships);
+        self.send_intent(sow_core::protocol::GameplayIntent::MoveWarships {
+            unit_ids,
+            target_tile,
+        });
+        true
+    }
+
+    fn spawn_at(&mut self, col: i32, row: i32) {
+        let idx = (row * self.sim.map_w as i32 + col) as usize;
+        let Some(renderer) = self.gfx.map_renderer.as_ref() else {
+            return;
+        };
+        let is_land = renderer
+            .terrain
+            .get(idx)
+            .is_some_and(|terrain| terrain & 0x80 != 0);
+        if !is_land {
+            self.add_click_marker(col, row);
+            return;
+        }
+
+        let owner = renderer.owners.get(idx).copied().unwrap_or(0);
+        let (target_col, target_row) = if owner == 0 {
+            (col, row)
+        } else {
+            let mut best_tile = None;
+            let mut best_dist = i32::MAX;
+            for dy in -5..=5 {
+                for dx in -5..=5 {
+                    let tx = col + dx;
+                    let ty = row + dy;
+                    if tx < 0
+                        || tx >= self.sim.map_w as i32
+                        || ty < 0
+                        || ty >= self.sim.map_h as i32
+                    {
+                        continue;
+                    }
+                    let dist = sow_core::building::hex_distance(col, row, tx, ty);
+                    let n_idx = (ty * self.sim.map_w as i32 + tx) as usize;
+                    let free_land = self.gfx.map_renderer.as_ref().is_some_and(|mr| {
+                        mr.owners.get(n_idx).copied() == Some(0)
+                            && mr
+                                .terrain
+                                .get(n_idx)
+                                .is_some_and(|terrain| terrain & 0x80 != 0)
+                    });
+                    if dist <= 5 && free_land && dist < best_dist {
+                        best_dist = dist;
+                        best_tile = Some((tx, ty));
+                    }
+                }
+            }
+            let Some(tile) = best_tile else {
+                self.add_click_marker(col, row);
+                return;
+            };
+            tile
+        };
+
+        self.send_intent(sow_core::protocol::GameplayIntent::Spawn {
+            x: target_col as u32,
+            y: target_row as u32,
+        });
+    }
+
+    fn build_structure_at(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        col: i32,
+        row: i32,
+    ) -> bool {
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return false;
+        };
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let owners = self
+            .gfx
+            .map_renderer
+            .as_ref()
+            .map(|renderer| renderer.owners.as_slice())
+            .unwrap_or(&[]);
+        let terrain = self
+            .gfx
+            .map_renderer
+            .as_ref()
+            .map(|renderer| renderer.terrain.as_slice())
+            .unwrap_or(&[]);
+        let Ok(target_tile) = resolve_build_target_tile(&PlacementQuery {
+            kind,
+            click_x: col,
+            click_y: row,
+            map_w: self.sim.map_w,
+            map_h: self.sim.map_h,
+            owners,
+            terrain,
+            my_id,
+            buildings: &snapshot.buildings,
+        }) else {
+            return false;
+        };
+        let cost_index = sow_core::game::BuildingKind::ALL
+            .iter()
+            .position(|candidate| *candidate == kind)
+            .unwrap_or(0);
+        if self.ui.app.hud_state.gold < self.ui.app.hud_state.building_costs[cost_index] {
+            return false;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::BuildStructure {
+            kind,
+            target_tile,
+        });
+        self.ui.last_build_confirm_time = Some(web_time::Instant::now());
+        true
+    }
+
+    fn launch_nuke_at(&mut self, kind: sow_core::game::NukeKind, tile_idx: u32) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_land || !target.is_enemy() {
+            return false;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::LaunchNuke {
+            kind,
+            target_tile: tile_idx,
+        });
+        self.ui.app.hud_state.selected_nuke_kind = None;
+        true
+    }
+
+    fn primary_target(&mut self, tile_idx: u32) {
+        let Some(target) = self.map_target(tile_idx) else {
+            return;
+        };
+        if !target.is_land || target.owner == target.my_id {
+            return;
+        }
+        if target.is_friendly() {
+            self.open_transfer_from_tile(tile_idx);
+        } else {
+            self.attack_from_tile(tile_idx);
+        }
+    }
+
+    fn attack_from_tile(&mut self, tile_idx: u32) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_land || !target.is_attackable() || !self.can_attack(tile_idx, target.owner) {
+            return false;
+        }
+        let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
+        if troops <= 0.0 {
+            return false;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::Attack(
+            sow_core::protocol::AttackIntent {
+                target_owner: target.owner,
+                troops: Some(troops),
+            },
+        ));
+        true
+    }
+
+    pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_enemy() {
+            return false;
+        }
+        let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
+        self.send_intent(sow_core::protocol::GameplayIntent::LaunchFleet {
+            target_tile: tile_idx,
+            troops: Some(troops),
+        });
+        true
+    }
+
+    fn open_transfer_from_tile(&mut self, tile_idx: u32) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_friendly() {
+            return false;
+        }
+        self.ui.app.hud_state.show_ask_panel = Some(target.owner);
+        self.ui.app.hud_state.transfer_confirm_pending = false;
+        true
+    }
+
+    fn alliance_from_tile(&mut self, tile_idx: u32) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_player() || target.is_teammate {
+            return false;
+        }
+        let intent = if target.is_allied {
+            sow_core::protocol::GameplayIntent::BreakAlliance {
+                target_player: target.owner,
+            }
+        } else if target.has_alliance_request {
+            sow_core::protocol::GameplayIntent::AcceptAlliance {
+                target_player: target.owner,
+            }
+        } else {
+            sow_core::protocol::GameplayIntent::ProposeAlliance {
+                target_player: target.owner,
+            }
+        };
+        self.send_intent(intent);
+        true
+    }
+
+    fn map_target(&self, tile_idx: u32) -> Option<MapTarget> {
+        let map_len = self.sim.map_w.checked_mul(self.sim.map_h)?;
+        if tile_idx >= map_len {
+            return None;
+        }
+        let renderer = self.gfx.map_renderer.as_ref()?;
+        let index = tile_idx as usize;
+        let owner = renderer.owners.get(index).copied().unwrap_or(0);
+        let is_land = renderer
+            .terrain
+            .get(index)
+            .is_some_and(|terrain| terrain & 0x80 != 0);
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let snapshot = self.sim.current_snapshot.as_ref()?;
+        let me = snapshot.players.iter().find(|player| player.id == my_id);
+        let other = snapshot.players.iter().find(|player| player.id == owner);
+        let is_betrayer = other.is_some_and(|player| {
+            player.active_emoji.as_deref() == Some("🗡️")
+        });
+        let is_teammate = me
+            .zip(other)
+            .is_some_and(|(me, other)| me.team.is_some() && me.team == other.team);
+        let is_allied = me.is_some_and(|player| {
+            player.alliances.contains(&owner) && !is_betrayer
+        });
+        let has_alliance_request = me.is_some_and(|player| {
+            player.alliance_requests.contains(&owner)
+        });
+        Some(MapTarget {
+            owner,
+            is_land,
+            my_id,
+            is_allied,
+            is_teammate,
+            has_alliance_request,
+        })
+    }
+
+    fn can_attack(&self, tile_idx: u32, target_owner: u16) -> bool {
+        let Some(renderer) = self.gfx.map_renderer.as_ref() else {
+            return false;
+        };
+        shares_land_border(
+            &renderer.owners,
+            &renderer.terrain,
+            self.sim.map_w,
+            self.sim.map_h,
+            self.sim.my_player_id.unwrap_or(0),
+            target_owner,
+        ) && renderer
+            .terrain
+            .get(tile_idx as usize)
+            .is_some_and(|terrain| terrain & 0x80 != 0)
+    }
+
+    fn select_warships_at(&mut self, x: f64, y: f64) -> bool {
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return false;
+        };
+        if self.sim.map_w == 0 || self.input.camera_zoom <= 0.0 {
+            return false;
+        }
+        let my_pid = self.sim.my_player_id.unwrap_or(0);
+        let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
+        let world_y = (y as f32 - self.input.camera_y) / self.input.camera_zoom;
+        let selected = snapshot
+            .fleets
+            .iter()
+            .filter(|fleet| {
+                fleet.unit_type == sow_core::game::UnitType::Warship && fleet.owner_id == my_pid
+            })
+            .filter(|fleet| {
+                let col = (fleet.current_tile % self.sim.map_w) as f32;
+                let row = (fleet.current_tile / self.sim.map_w) as f32;
+                (col + 0.5 - world_x).abs() < 0.5 && (row + 0.5 - world_y).abs() < 0.5
+            })
+            .map(|fleet| fleet.id)
+            .collect::<Vec<_>>();
+        if selected.is_empty() {
+            false
+        } else {
+            self.input.selected_warships = selected;
+            true
+        }
+    }
+
+    fn tile_coords(&self, tile_idx: u32) -> Option<(i32, i32)> {
+        if self.sim.map_w == 0 || tile_idx >= self.sim.map_w.checked_mul(self.sim.map_h)? {
+            return None;
+        }
+        Some(((tile_idx % self.sim.map_w) as i32, (tile_idx / self.sim.map_w) as i32))
+    }
+
+    fn add_click_marker(&mut self, col: i32, row: i32) {
+        self.ui.click_markers.push(crate::app::ClickMarker {
+            world_x: col as f32 + 0.5,
+            world_y: row as f32 + 0.5,
+            start_time: web_time::Instant::now(),
+        });
+    }
+
+    pub(crate) fn clear_placement(&mut self) {
+        self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.selected_nuke_kind = None;
+        self.input.hold_build_active = false;
+        self.input.hold_build_accum = 0.0;
     }
 }
 
@@ -272,12 +611,21 @@ fn shares_land_border(
     my_id: u16,
     target_owner: u16,
 ) -> bool {
-    if my_id == 0 || target_owner == 0 || my_id == target_owner || map_w == 0 {
+    if my_id == 0 || my_id == target_owner || map_w == 0 {
         return false;
     }
     let width = map_w as i32;
     let height = map_h as i32;
-    let neighbors = [(1, 0), (-1, 0), (0, -1), (0, 1), (1, -1), (-1, -1), (1, 1), (-1, 1)];
+    let neighbors = [
+        (1, 0),
+        (-1, 0),
+        (0, -1),
+        (0, 1),
+        (1, -1),
+        (-1, -1),
+        (1, 1),
+        (-1, 1),
+    ];
 
     for row in 0..height {
         for col in 0..width {
@@ -311,13 +659,82 @@ fn shares_land_border(
 
 #[cfg(test)]
 mod tests {
-    use super::shares_land_border;
+    use super::{is_quick_tap, shares_land_border, MapMenuAction, MapTarget, TOUCH_HOLD_MS};
+
+    #[test]
+    fn tap_and_hold_are_distinct_and_drag_cancels_both() {
+        assert!(is_quick_tap(TOUCH_HOLD_MS - 1, 0.0));
+        assert!(!is_quick_tap(TOUCH_HOLD_MS, 0.0));
+        assert!(!is_quick_tap(1, 401.0));
+    }
 
     #[test]
     fn land_border_is_required_for_a_click_attack() {
         let owners = [1, 2, 0, 0];
         let terrain = [0x80, 0x80, 0x80, 0x80];
         assert!(shares_land_border(&owners, &terrain, 2, 2, 1, 2));
+        assert!(shares_land_border(&owners, &terrain, 2, 2, 1, 0));
         assert!(!shares_land_border(&owners, &terrain, 2, 2, 1, 3));
+    }
+
+    #[test]
+    fn neutral_land_is_a_valid_attack_target() {
+        let neutral = MapTarget {
+            owner: 0,
+            is_land: true,
+            my_id: 1,
+            is_allied: false,
+            is_teammate: false,
+            has_alliance_request: false,
+        };
+        assert!(neutral.is_attackable());
+        assert_eq!(neutral.menu_actions(false, true), vec![MapMenuAction::Attack]);
+    }
+
+    #[test]
+    fn map_menu_keeps_actions_on_the_rust_route() {
+        let enemy = MapTarget {
+            owner: 2,
+            is_land: true,
+            my_id: 1,
+            is_allied: false,
+            is_teammate: false,
+            has_alliance_request: false,
+        };
+        assert_eq!(
+            enemy.menu_actions(false, true),
+            vec![
+                MapMenuAction::Attack,
+                MapMenuAction::Fleet,
+                MapMenuAction::Nuke,
+                MapMenuAction::Alliance,
+            ]
+        );
+        assert_eq!(
+            enemy.menu_actions(false, false),
+            vec![MapMenuAction::Fleet, MapMenuAction::Nuke, MapMenuAction::Alliance]
+        );
+
+        let ally = MapTarget {
+            is_allied: true,
+            ..enemy
+        };
+        assert_eq!(ally.menu_actions(false, true), vec![MapMenuAction::Transfer]);
+
+        let own_land = MapTarget {
+            owner: 1,
+            ..enemy
+        };
+        assert_eq!(
+            own_land.menu_actions(false, false),
+            vec![
+                MapMenuAction::BuildCity,
+                MapMenuAction::BuildFactory,
+                MapMenuAction::BuildPort,
+                MapMenuAction::BuildBunker,
+            ]
+        );
+
+        assert_eq!(enemy.menu_actions(true, false), vec![MapMenuAction::Spawn]);
     }
 }

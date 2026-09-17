@@ -240,16 +240,16 @@
             locked: state.name_locked,
             leader: state.selected_leader,
             gems: state.gems,
-            crowns: state.crowns == null ? state.laurels : state.crowns,
+            laurels: state.laurels,
             selected_skin: state.selected_skin,
             skins: (state.store && state.store.skins || []).map(function (skin) {
                 return [skin.id, skin.owned, skin.cost_gems];
             }),
             store: state.store && {
                 gems: state.store.gems,
-                crowns: state.store.crowns == null ? state.store.laurels : state.store.crowns,
+                laurels: state.store.laurels,
                 leaders: (state.store.leaders || []).map(function (leader) {
-                return [leader.id, leader.owned, leader.free_rotation, leader.cost_crowns, leader.cost_laurels, leader.cost_gems];
+                return [leader.id, leader.owned, leader.free_rotation, leader.cost_laurels, leader.cost_gems];
                 }),
                 skins: (state.store.skins || []).map(function (skin) {
                     return [skin.id, skin.owned, skin.cost_gems];

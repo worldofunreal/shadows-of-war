@@ -78,7 +78,15 @@ impl SowApp {
                                 )
                                 .unwrap(),
                             );
-                            c.send(bincode::serialize(&self.make_ready_message(lid, pid)).unwrap());
+                            c.send(
+                                bincode::serialize(
+                                    &sow_core::protocol::ClientMessage::LobbyReady {
+                                        lobby_id: lid,
+                                        player_id: pid,
+                                    },
+                                )
+                                .unwrap(),
+                            );
                         }
                     }
                 }
@@ -134,7 +142,7 @@ impl SowApp {
 
     fn fetch_avatar(
         url: String,
-        tx: crossbeam_channel::Sender<MapDownloadEvent>,
+        tx: crate::app::WakeSender<MapDownloadEvent>,
         leader: Option<sow_core::player::Leader>,
     ) {
         let request = ehttp::Request::get(&url);
@@ -201,7 +209,7 @@ impl SowApp {
         Self::fetch_portal_avatar(url, tx);
     }
 
-    fn fetch_portal_avatar(url: String, tx: crossbeam_channel::Sender<MapDownloadEvent>) {
+    fn fetch_portal_avatar(url: String, tx: crate::app::WakeSender<MapDownloadEvent>) {
         let request = ehttp::Request::get(&url);
         ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
             let send = match result {
@@ -274,7 +282,8 @@ impl SowApp {
                             Some(self.ui.app.main_menu_state.custom_game_password.clone())
                                 .filter(|password| !password.is_empty()),
                         );
-                        if let Ok(json) = bincode::serialize(&join_msg)
+                        if let Some(join_msg) = join_msg
+                            && let Ok(json) = bincode::serialize(&join_msg)
                             && let Some(client) = self.net.client.as_ref()
                         {
                             client.send(json);

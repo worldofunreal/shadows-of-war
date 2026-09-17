@@ -44,7 +44,7 @@ hostnames, paths and compatibility behavior are not production instructions.
 - Clients receive `relay.shadowsofwar.io` and a dynamic game port, then connect
   directly with `wss://`; IONOS is not in the game-packet data path.
 - `SOW_RELAY_WORKERS` is the authoritative catalog. Production requires relay
-  management TLS and relay tickets (`SOW_RELAY_TICKETS_REQUIRED=1`).
+  management TLS and relay tickets.
 - The old Azure FreeBSD host `sow`/`20.7.77.78` and aliases `azure` and
   `sow-prod` are stale and must not be used.
 
@@ -157,15 +157,12 @@ an unauthenticated HTTP `/internal/lobbies` request as a health probe.
   Renames use `POST /profile/anonymous/name` and never change the account ID.
   CrazyGames verified identities and persistent bot accounts use
   `LinkedIdentity` records and are separate provider cases.
-- `Join.database_account_id` is client-declared roster/progress metadata. The
-  server may use it to correlate a lobby reconnect or ban, but it is not proof
-  of identity or relay authentication. The relay authenticates the direct game
-  connection with a short-lived match ticket
-  (`ReadyWithTicket`/`ReconnectWithTicket`).
+- Authenticated joins use `JoinWithAuth`; the server resolves the account and
+  leader from the proof. The relay authenticates the direct game connection
+  with a short-lived match ticket (`ReadyWithTicket`/`ReconnectWithTicket`).
 - Anonymous `account_id` is a bearer-like progress lookup key, not a secret or
   platform credential; do not use it as an authorization decision.
-- Unticketed relay frames remain only as wire-compatibility decoding; production
-  refuses them when `SOW_RELAY_TICKETS_REQUIRED=1`.
+- Unticketed relay frames are rejected; relay tickets are mandatory.
 
 ## Audit guidance
 

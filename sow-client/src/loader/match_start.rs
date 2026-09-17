@@ -221,7 +221,6 @@ impl SowApp {
                 is_ai_controlled: false,
             }],
             missed_turns: vec![],
-            map_data: None,
             relay_port: None,
             relay_host: None,
         };

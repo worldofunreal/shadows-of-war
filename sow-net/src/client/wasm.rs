@@ -4,6 +4,17 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use wasm_bindgen::prelude::*;
 use web_sys::{Event, MessageEvent, WebSocket};
 
+fn wake_event_loop() {
+    let global = js_sys::global();
+    let Ok(value) = js_sys::Reflect::get(&global, &JsValue::from_str("SOW_wake_event_loop")) else {
+        return;
+    };
+    let Ok(callback) = value.dyn_into::<js_sys::Function>() else {
+        return;
+    };
+    let _ = callback.call0(&global);
+}
+
 pub struct SowClient {
     ws: WebSocket,
     pub rx: std::sync::mpsc::Receiver<Vec<u8>>,
@@ -59,6 +70,7 @@ impl SowClient {
                 if !send_ok {
                     log::error!("[DIAG WS RX] mpsc tx send failed! bytes={}", len);
                 }
+                wake_event_loop();
             }
         });
         ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
@@ -68,6 +80,7 @@ impl SowClient {
         let onclose_callback = Closure::<dyn FnMut()>::new(move || {
             closed_flag.store(true, Ordering::Release);
             log::warn!("[DIAG WS CLOSE] WebSocket closed event fired");
+            wake_event_loop();
             if let Some(tx) = open_tx_close.borrow_mut().take() {
                 let _ = tx.send(Err("WebSocket closed".to_string()));
             }

@@ -215,7 +215,7 @@
         if (!currentAccountId) {
           try {
             const currentUser = JSON.parse(localStorage.getItem('wou_user_data') || 'null');
-            currentAccountId = String(currentUser && (currentUser.account_id || currentUser.id) || '');
+          currentAccountId = String(currentUser && currentUser.account_id || '');
           } catch {}
         }
         if (currentAccountId && signedInAccountId && currentAccountId !== signedInAccountId) {

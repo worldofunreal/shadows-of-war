@@ -234,7 +234,7 @@
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 5.1L19 10l-4.9 1.9L12 17l-2.1-5.1L5 10l4.9-1.9z"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.xp") + '</span><b id="sow-hud-endgame-xp">+0</b></div>'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 4 4 4-6 4 6 4-4-2 10H6zM6 20h12"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.leader_xp") + '</span><b id="sow-hud-endgame-leader-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.crowns") + '</span><b id="sow-hud-endgame-crowns">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.laurels") + '</span><b id="sow-hud-endgame-laurels">+0</b></div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="' + SOW_t("store.featured_skin") + '">'
             + '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>'
@@ -246,7 +246,8 @@
             + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_endgame_leave"><span aria-hidden="true">⌂</span> ' + SOW_t("hud.back_to_menu") + '</button>'
             + '    </div>'
             + '  </section>'
-            + '</div>';
+            + '</div>'
+            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="Map actions"></div>';
 
         var emojiGrid = document.getElementById("sow-hud-emoji-grid");
         if (emojiGrid) {
@@ -323,12 +324,13 @@
             endgameKda: document.getElementById("sow-hud-endgame-kda"),
             endgameXp: document.getElementById("sow-hud-endgame-xp"),
             endgameLeaderXp: document.getElementById("sow-hud-endgame-leader-xp"),
-            endgameCrowns: document.getElementById("sow-hud-endgame-crowns"),
+            endgameLaurels: document.getElementById("sow-hud-endgame-laurels"),
             endgameStore: document.getElementById("sow-hud-endgame-store"),
             endgameStoreName: document.getElementById("sow-hud-endgame-store-name"),
             endgameStoreCopy: document.getElementById("sow-hud-endgame-store-copy"),
             endgameStoreAction: document.getElementById("sow-hud-endgame-store-action"),
             endgameObserve: document.getElementById("sow-hud-endgame-observe"),
+            mapMenu: document.getElementById("sow-hud-map-menu"),
             notifications: document.createElement("div")
         };
 
@@ -357,6 +359,67 @@
             if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
         });
+    }
+
+    var mapActionLabels = {
+        spawn: "🌱 Deploy",
+        attack: "⚔ Attack",
+        fleet: "⛵ Fleet",
+        transfer: "📦 Transfer",
+        alliance: "🤝 Alliance",
+        build_city: "🏛️ City",
+        build_factory: "🏭 Factory",
+        build_port: "⚓ Port",
+        build_bunker: "🛡️ Bunker",
+        nuke: "🚀 Nuke"
+    };
+
+    function renderMapMenu(mapMenu) {
+        if (!hudRefs || !hudRefs.mapMenu) return false;
+        var menu = hudRefs.mapMenu;
+        var open = Boolean(mapMenu && mapMenu.open);
+        menu.classList.toggle("hidden", !open);
+        if (!open) {
+            menu.dataset.renderKey = "";
+            return false;
+        }
+        var actions = Array.isArray(mapMenu.actions) ? mapMenu.actions : [];
+        var renderKey = String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + actions.join(",");
+        if (menu.dataset.renderKey !== renderKey) {
+            menu.replaceChildren();
+            actions.forEach(function (action) {
+                var label = mapActionLabels[action];
+                if (!label) return;
+                var button = document.createElement("button");
+                button.type = "button";
+                button.className = "sow-hud__map-action";
+                button.dataset.mapAction = action;
+                button.setAttribute("role", "menuitem");
+                button.textContent = label;
+                menu.appendChild(button);
+            });
+            var close = document.createElement("button");
+            close.type = "button";
+            close.className = "sow-hud__map-close";
+            close.dataset.mapClose = "true";
+            close.setAttribute("aria-label", "Close map actions");
+            close.textContent = "×";
+            menu.appendChild(close);
+            menu.dataset.renderKey = renderKey;
+        }
+        menu.dataset.session = String(mapMenu.session);
+        menu.dataset.tileIdx = String(mapMenu.tile_idx);
+        var x = Number(mapMenu.x || 0);
+        var y = Number(mapMenu.y || 0);
+        var halfWidth = menu.offsetWidth * 0.5;
+        var halfHeight = menu.offsetHeight * 0.5;
+        var minX = halfWidth + 8;
+        var minY = halfHeight + 8;
+        var maxX = Math.max(minX, window.innerWidth - halfWidth - 8);
+        var maxY = Math.max(minY, window.innerHeight - halfHeight - 8);
+        menu.style.left = Math.min(Math.max(x, minX), maxX) + "px";
+        menu.style.top = Math.min(Math.max(y, minY), maxY) + "px";
+        return true;
     }
 
     function updateLeaderboard(players) {
@@ -499,6 +562,7 @@
             hudSettingsOpen = false;
 
             hudRoot.dataset.overlayOpen = "false";
+            if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
             leaderboardRows = Object.create(null);
             leaderboardRenderKey = "";
             inboxRenderKey = "";
@@ -738,7 +802,7 @@
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
                 if (hudRefs.endgameLeaderXp) hudRefs.endgameLeaderXp.textContent = "+" + (rewards.leader_xp || 0);
-                if (hudRefs.endgameCrowns) hudRefs.endgameCrowns.textContent = "+" + (rewards.crowns == null ? (rewards.laurels || 0) : rewards.crowns);
+                if (hudRefs.endgameLaurels) hudRefs.endgameLaurels.textContent = "+" + (rewards.laurels || 0);
                 var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {
@@ -748,15 +812,34 @@
                 if (hudRefs.endgameObserve) hudRefs.endgameObserve.classList.toggle("hidden", isWinner || Boolean(hud.winner_name));
             }
         }
+        var mapMenuOpen = renderMapMenu(hud.map_menu);
         hudRoot.dataset.overlayOpen = String(Boolean(
             leaderboardOpen || inboxOpen || transferOpen || betrayalOpen ||
             surrenderModalOpen || emojiPickerOpen || isOver
-            || devSidebarOpen || hudSettingsOpen
+            || devSidebarOpen || hudSettingsOpen || mapMenuOpen
         ));
     }
 
     if (hudRoot) {
         hudRoot.addEventListener("click", function (event) {
+            var mapButton = event.target.closest("[data-map-action]");
+            var mapClose = event.target.closest("[data-map-close]");
+            if (mapButton || mapClose) {
+                event.preventDefault();
+                event.stopPropagation();
+                var mapMenu = hudRefs && hudRefs.mapMenu;
+                if (!mapMenu) return;
+                if (mapClose) {
+                    send("close_map_menu");
+                } else {
+                    send("map_menu_action", {
+                        session: Number(mapMenu.dataset.session),
+                        tile_idx: Number(mapMenu.dataset.tileIdx),
+                        action: mapButton.dataset.mapAction
+                    });
+                }
+                return;
+            }
             var btn = event.target.closest("[data-command]");
             if (!btn) return;
             var cmd = btn.dataset.command;

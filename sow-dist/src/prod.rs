@@ -1398,7 +1398,6 @@ fn relay_knob_ms() -> u64 {
 /// or admission change re-deploys the relay instead of ghosting.
 struct RelayEnv {
     count: usize,
-    tickets_required: String,
     max_connections: String,
     max_connections_per_ip: String,
     handshakes_per_ip: String,
@@ -1411,10 +1410,6 @@ struct RelayEnv {
 impl RelayEnv {
     fn load() -> Result<Self> {
         let count = relay_worker_count()?;
-        let tickets_required = env_or("SOW_RELAY_TICKETS_REQUIRED", "1");
-        if tickets_required != "0" && tickets_required != "1" {
-            bail!("SOW_RELAY_TICKETS_REQUIRED must be 0 or 1");
-        }
         let max_connections = env_or("SOW_RELAY_MAX_CONNECTIONS", "32768");
         let max_connections_per_ip = env_or("SOW_RELAY_MAX_CONNECTIONS_PER_IP", "4096");
         let handshakes_per_ip = env_or("SOW_RELAY_HANDSHAKES_PER_IP", "512");
@@ -1443,7 +1438,6 @@ impl RelayEnv {
             .with_context(|| format!("invalid SOW_DB_RESOLVE_IP={db_resolve_ip}"))?;
         Ok(Self {
             count,
-            tickets_required,
             max_connections: max_connections.to_string(),
             max_connections_per_ip: max_connections_per_ip.to_string(),
             handshakes_per_ip: handshakes_per_ip.to_string(),
@@ -1726,10 +1720,6 @@ fn assemble_release(
     let relay_fstack = fstack_version(config)?;
     for (token, value) in [
         ("__SOW_RELAY_WORKER_COUNT__", env.count.to_string()),
-        (
-            "__SOW_RELAY_TICKETS_REQUIRED__",
-            env.tickets_required.clone(),
-        ),
         ("__SOW_RELAY_MAX_CONNECTIONS__", env.max_connections.clone()),
         (
             "__SOW_RELAY_MAX_CONNECTIONS_PER_IP__",
@@ -2300,7 +2290,6 @@ fn activate_control_host(
     let relay_mgmt_url = env_or("SOW_RELAY_MGMT_URL", "https://127.0.0.1:8080");
     let relay_mgmt_scheme = env_or("SOW_RELAY_MGMT_SCHEME", "https");
     let relay_mgmt_resolve_ip = env_or("SOW_RELAY_MGMT_RESOLVE_IP", "20.230.49.9");
-    let relay_tickets_required = env_or("SOW_RELAY_TICKETS_REQUIRED", "1");
     let maps_root = env_or("SOW_MAPS_ROOT", "/srv/sow/current/maps");
     let maps_catalog_path = env_or("SOW_MAPS_CATALOG_PATH", "/var/db/sow/server/catalog.bin");
     let wou_id_url = env_or("WOU_ID_URL", "https://id.worldofunreal.com");
@@ -2323,7 +2312,7 @@ fn activate_control_host(
     let play_games_leaderboard_id = env::var("SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID")?;
     let env_update_base = if runtime_env {
         format!(
-            "mkdir -p /tmp/sow-env-update; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|SOW_RELAY_TICKETS_REQUIRED|WOU_ID_URL|WOU_ID_RESOLVE_IP|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} SOW_RELAY_TICKETS_REQUIRED={relay_tickets_required} WOU_ID_URL={wou_id_url} WOU_ID_RESOLVE_IP={wou_id_resolve_ip} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
+            "mkdir -p /tmp/sow-env-update; for f in /usr/local/etc/sow/sow.env /zroot/jails/sow-server/usr/local/etc/sow/sow.env /zroot/jails/sow-database/usr/local/etc/sow/sow.env; do t=$(mktemp /tmp/sow.env.XXXXXX); if sudo test -f \"$f\"; then sudo grep -v -E '^(SOW_MAPS_ROOT|SOW_MAPS_CATALOG_PATH|SOW_DB_SECRET|SOW_RELAY_CONTROL_SECRET|SOW_RELAY_HOST|SOW_RELAY_WORKERS|SOW_RELAY_WORKER_COUNT|SOW_RELAY_MGMT_URL|SOW_RELAY_MGMT_SCHEME|SOW_RELAY_MGMT_RESOLVE_IP|WOU_ID_URL|WOU_ID_RESOLVE_IP|SOW_PLAY_GAMES_APP_ID|SOW_PLAY_GAMES_WEB_CLIENT_ID|SOW_PLAY_GAMES_MATCH_EVENT_ID|SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID|SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID|SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID|SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID|SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID|SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID|SOW_PLAY_GAMES_WEB_CLIENT_SECRET)=|^[0-9a-fA-F]{{64}}$' \"$f\" > \"$t\" || true; else : > \"$t\"; fi; printf '%s\\n' SOW_MAPS_ROOT={maps_root} SOW_MAPS_CATALOG_PATH={maps_catalog_path} SOW_RELAY_HOST={relay_host} SOW_RELAY_WORKERS={relay_workers} SOW_RELAY_WORKER_COUNT={relay_worker_count} SOW_RELAY_MGMT_URL={relay_mgmt_url} SOW_RELAY_MGMT_SCHEME={relay_mgmt_scheme} SOW_RELAY_MGMT_RESOLVE_IP={relay_mgmt_resolve_ip} WOU_ID_URL={wou_id_url} WOU_ID_RESOLVE_IP={wou_id_resolve_ip} SOW_PLAY_GAMES_APP_ID={play_games_app_id} SOW_PLAY_GAMES_WEB_CLIENT_ID={play_games_client_id} SOW_PLAY_GAMES_MATCH_EVENT_ID={play_games_match_event_id} SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID={play_games_achievement_id} SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID={play_games_battle_hardened_id} SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID={play_games_victory_march_id} SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID={play_games_laurel_hoard_id} SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID={play_games_first_command_id} SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID={play_games_commander_victorious_id} SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID={play_games_veteran_commander_id} SOW_PLAY_GAMES_BANNER_COLLECTOR_ACHIEVEMENT_ID={play_games_banner_collector_id} SOW_PLAY_GAMES_LEADER_PATH_ACHIEVEMENT_ID={play_games_leader_path_id} SOW_PLAY_GAMES_VICTORIES_LEADERBOARD_ID={play_games_leaderboard_id} | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_DB_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {db_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_RELAY_CONTROL_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {control_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; printf '%s' 'SOW_PLAY_GAMES_WEB_CLIENT_SECRET=' | sudo tee -a \"$t\" >/dev/null; sudo cat {play_games_secret} | sudo tee -a \"$t\" >/dev/null; printf '\\n' | sudo tee -a \"$t\" >/dev/null; sudo install -o root -g wheel -m 0600 \"$t\" \"$f\"; rm -f \"$t\"; done; rm -rf /tmp/sow-env-update",
             maps_root = shell_quote(&maps_root),
             maps_catalog_path = shell_quote(&maps_catalog_path),
             relay_host = shell_quote(&relay_host),
@@ -2332,7 +2321,6 @@ fn activate_control_host(
             relay_mgmt_url = shell_quote(&relay_mgmt_url),
             relay_mgmt_scheme = shell_quote(&relay_mgmt_scheme),
             relay_mgmt_resolve_ip = shell_quote(&relay_mgmt_resolve_ip),
-            relay_tickets_required = shell_quote(&relay_tickets_required),
             wou_id_url = shell_quote(&wou_id_url),
             wou_id_resolve_ip = shell_quote(&wou_id_resolve_ip),
             play_games_app_id = shell_quote(&play_games_app_id),
@@ -2465,16 +2453,18 @@ link="/srv/sow/.current.$$"
 sudo ln -s "releases/__ID__" "$link"
 sudo mv -hf "$link" /srv/sow/current
 if __NGINX_RELOAD__; then
-    for legacy_security in \
-        /usr/local/etc/nginx/conf.d/00-00-security.conf \
-        /usr/local/etc/nginx/conf.d/00-sow-security.conf; do
-        if sudo test -f "$legacy_security"; then
-            sudo cp -p "$legacy_security" "$legacy_security.bak_$(date +%s)"
-            sudo rm -f "$legacy_security"
-        fi
+    for f in "$target"/ops/conf.d/*; do
+        [ -f "$f" ] || continue
+        dest="/usr/local/etc/nginx/conf.d/$(basename "$f")"
+        if sudo test -f "$dest"; then sudo cp -p "$dest" "$dest.bak_$(date +%s)"; fi
+        sudo install -o root -g wheel -m 0644 "$f" "$dest"
     done
-    for f in "$target"/ops/conf.d/*; do [ -f "$f" ] || continue; sudo install -o root -g wheel -m 0644 "$f" "/usr/local/etc/nginx/conf.d/$(basename "$f")"; done
-    for f in "$target"/ops/snippets/*; do [ -f "$f" ] || continue; sudo install -o root -g wheel -m 0644 "$f" "/usr/local/etc/nginx/snippets/$(basename "$f")"; done
+    for f in "$target"/ops/snippets/*; do
+        [ -f "$f" ] || continue
+        dest="/usr/local/etc/nginx/snippets/$(basename "$f")"
+        if sudo test -f "$dest"; then sudo cp -p "$dest" "$dest.bak_$(date +%s)"; fi
+        sudo install -o root -g wheel -m 0644 "$f" "$dest"
+    done
     sudo nginx -t || rollback
     sudo service nginx reload || rollback
 fi

@@ -1,5 +1,5 @@
 //! Display names for fictional humans (ghost pool). Reused verbatim from the
-//! legacy daemon — NEVER invent themed names, NEVER "improve" the list.
+//! server-managed pool — NEVER invent themed names, NEVER "improve" the list.
 //!
 //! MENTAL MODEL (organic): these are just names on a shelf. They carry no
 //! timing, no order, no personality — the chaotic drip in `bot_fill/mod.rs`

@@ -278,29 +278,6 @@
         send("set_tutorial_paused", { paused: paused });
     }
 
-    function targetPlayer(hud, target) {
-        var players = hud.tutorial && Array.isArray(hud.tutorial.players) ? hud.tutorial.players : [];
-        if (target === "player") return players.find(function (player) { return player.is_me; }) || null;
-        return players.find(function (player) { return player.name === target; }) || null;
-    }
-
-    function renderMarker(hud, step) {
-        var marker = hudRoot && hudRoot.querySelector("[data-tutorial-marker]");
-        if (!marker) return;
-        var target = step && step.marker && step.marker.target;
-        var player = targetPlayer(hud, target);
-        var camera = hud.tutorial && hud.tutorial.camera || {};
-        var zoom = Number(camera.zoom);
-        var x = Number(camera.x) + Number(player && player.cap_x) * zoom;
-        var y = Number(camera.y) + Number(player && player.cap_y) * zoom;
-        var visible = Boolean(player) && Number.isFinite(x) && Number.isFinite(y) && zoom > 0;
-        marker.classList.toggle("hidden", !visible);
-        if (visible) {
-            marker.style.left = x + "px";
-            marker.style.top = y + "px";
-        }
-    }
-
     function render(hud) {
         if (!hudRoot) return;
         var tutorial = hud && hud.tutorial;
@@ -321,10 +298,15 @@
             overlay = document.createElement("section");
             overlay.className = "sow-hud__tutorial-overlay";
             overlay.dataset.tutorialOverlay = "true";
-            overlay.innerHTML = "<div class='sow-hud__tutorial-marker hidden' data-tutorial-marker aria-hidden='true'>⌖</div><article class='sow-hud__tutorial-card' data-tutorial-card role='dialog' aria-modal='true'><div class='sow-hud__tutorial-copy'><p class='sow-hud__tutorial-step' data-tutorial-step></p><h2 data-tutorial-title></h2><p data-tutorial-body></p><strong data-tutorial-hint></strong><div class='sow-hud__tutorial-progress' data-tutorial-progress></div><button type='button' class='sow-hud__tutorial-action' data-tutorial-continue></button></div><img class='sow-hud__tutorial-avatar' data-tutorial-avatar alt=''></article>";
+            overlay.innerHTML = "<article class='sow-hud__tutorial-card' data-tutorial-card role='dialog' aria-modal='true'><div class='sow-hud__tutorial-copy'><p class='sow-hud__tutorial-step' data-tutorial-step></p><h2 data-tutorial-title></h2><p data-tutorial-body></p><strong data-tutorial-hint></strong><div class='sow-hud__tutorial-progress' data-tutorial-progress></div><button type='button' class='sow-hud__tutorial-action' data-tutorial-continue></button></div><img class='sow-hud__tutorial-avatar' data-tutorial-avatar alt=''></article>";
             hudRoot.appendChild(overlay);
             overlay.addEventListener("click", function (event) {
-                if (!event.target.closest("[data-tutorial-continue]")) return;
+                event.stopPropagation();
+                var button = event.target && event.target.closest
+                    ? event.target.closest("[data-tutorial-continue]")
+                    : null;
+                if (!button) return;
+                event.preventDefault();
                 if (runtime.finalReady) {
                     if (runtime.completionSent) return;
                     completeStep(runtime.definition.steps[runtime.stepIndex]);
@@ -335,7 +317,13 @@
                 runtime.dialogOpen = false;
                 setPaused(false);
                 render(hud);
-            });
+            }, true);
+            overlay.addEventListener("pointerdown", function (event) {
+                if (runtime.dialogOpen) event.stopPropagation();
+            }, true);
+            overlay.addEventListener("pointerup", function (event) {
+                if (runtime.dialogOpen) event.stopPropagation();
+            }, true);
         }
         overlay.classList.toggle("is-open", runtime.dialogOpen);
         var card = overlay.querySelector("[data-tutorial-card]");
@@ -350,7 +338,6 @@
         var avatar = overlay.querySelector("[data-tutorial-avatar]");
         avatar.src = asset("gameplay/avatars/" + leader + ".webp");
         avatar.alt = leader;
-        renderMarker(hud, step);
         if (runtime.paused == null) setPaused(true);
     }
 

@@ -28,17 +28,5 @@ reqwest = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 
-[[example]]
-name = "echo"
-path = "examples/echo.rs"
-
-[[example]]
-name = "echo_m1b"
-path = "examples/echo_m1b.rs"
-
-[[example]]
-name = "echo_ws"
-path = "examples/echo_ws.rs"
-
 # Static link of libfstack.a + DPDK is configured in build.rs.
 # Build only on a host with libfstack.a + libdpdk installed (the Azure VM).

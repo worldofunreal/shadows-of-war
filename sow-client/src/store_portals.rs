@@ -235,7 +235,6 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                     if let Ok(user_val) = serde_json::from_str::<serde_json::Value>(&user_raw) {
                         let id = user_val
                             .get("account_id")
-                            .or_else(|| user_val.get("id"))
                             .and_then(|v| v.as_str())
                             .map(ToString::to_string);
                         let name = user_val

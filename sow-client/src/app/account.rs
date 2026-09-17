@@ -11,7 +11,7 @@ fn fetch_anonymous_profile_request(
     url: String,
     account_id: Option<String>,
     requested_display_name: Option<String>,
-    tx: crossbeam_channel::Sender<crate::player_progress::DbEvent>,
+    tx: crate::app::WakeSender<crate::player_progress::DbEvent>,
     reset_stale_id: bool,
     request_id: u64,
 ) {

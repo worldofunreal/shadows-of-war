@@ -83,7 +83,7 @@ pub struct PlayGamesMatchOutcome {
     pub won: bool,
     pub matches_played: u32,
     pub wins: u32,
-    pub crowns_earned: u64,
+    pub laurels_earned: u64,
     pub leader_matches_played: u32,
     pub leader_wins: u32,
     pub distinct_leaders: u32,
@@ -109,8 +109,8 @@ pub struct PlayerProfile {
     pub leader_xp: std::collections::BTreeMap<String, u32>,
     #[serde(default)]
     pub leader_stats: std::collections::BTreeMap<String, LeaderCareerStats>,
-    #[serde(rename = "laurels", alias = "crowns", default)]
-    pub crowns: u64,
+    #[serde(default)]
+    pub laurels: u64,
     #[serde(default)]
     pub gems: u64,
     #[serde(default)]
@@ -160,7 +160,7 @@ impl Default for PlayerProfile {
             assists: 0,
             leader_xp: std::collections::BTreeMap::new(),
             leader_stats: std::collections::BTreeMap::new(),
-            crowns: 0,
+            laurels: 0,
             gems: 0,
             owned_leaders: std::collections::BTreeSet::new(),
             owned_skins: std::collections::BTreeSet::new(),
@@ -200,7 +200,7 @@ impl PlayerProfile {
         *entry = entry.saturating_add(reward.leader_xp);
         let stats = self.leader_stats.entry(leader.to_string()).or_default();
         stats.xp = stats.xp.saturating_add(reward.leader_xp);
-        self.crowns = self.crowns.saturating_add(reward.crowns);
+        self.laurels = self.laurels.saturating_add(reward.laurels);
     }
 
     pub fn record_match_with_kda(
@@ -267,11 +267,11 @@ impl PlayerProfile {
 pub struct PlayerAccount {
     /// The sole stable account identifier. WOU-ID linked accounts use the same
     /// UUID; anonymous accounts use their existing local identifier.
-    #[serde(rename = "account_id", alias = "id")]
+    #[serde(rename = "account_id")]
     pub id: String,
     /// Mutable player-facing name. Never used as an identity key.
-    // Investigation Protocol: a missing field is not the literal name "ANON".
-    // Migrate only from observed data at the anonymous-account boundary.
+    // Missing names are normalized when the account is created; this field is
+    // never used as an identity key.
     #[serde(default)]
     pub display_name: String,
     pub profile: PlayerProfile,
@@ -769,7 +769,7 @@ impl PlayerDb {
         }
     }
 
-    /// Public profile DTO. Exact XP and crowns remain in the authenticated
+    /// Public profile DTO. Exact XP and laurels remain in the authenticated
     /// menu bridge; this endpoint exposes level and gameplay statistics only.
     pub async fn public_profile(
         &self,
@@ -1595,7 +1595,7 @@ impl PlayerDb {
             }
         }
 
-        // These keys are legacy aggregate metrics (HyperLogLog strings), not
+        // These keys are aggregate metrics (HyperLogLog strings), not
         // account records. They cannot remove individual members, so a full
         // test-data reset removes the aggregate through the Redis API.
         let mut scan_cursor = 0_u64;
@@ -2120,21 +2120,11 @@ impl PlayerDb {
         let provider = "bot".to_string();
         let mut con = self.get_connection().await?;
         let id_key = Self::environment_identity_key(&environment, &provider, &external_id);
-        let legacy_key = Self::identity_key(&provider, &external_id);
 
         // 1. Try to find existing account ID mapped to this identity
-        let lookup_key = con
-            .get::<_, Option<String>>(&id_key)
-            .await?
-            .map(|_| id_key.clone())
-            .or_else(|| (environment == "production").then_some(legacy_key));
-        if let Some(lookup_key) = lookup_key
-            && let Some(account_id) = con.get::<_, Option<String>>(&lookup_key).await?
+        if let Some(account_id) = con.get::<_, Option<String>>(&id_key).await?
             && let Ok(account) = Self::load_account(&mut con, &account_id).await
         {
-            if lookup_key != id_key {
-                let _: () = con.set(&id_key, &account.id).await?;
-            }
             let _: () = Self::record_analytics(&mut con, &account.id, false).await?;
             return self.ensure_starting_leader(account).await;
         }
@@ -2191,98 +2181,6 @@ impl PlayerDb {
         Ok(new_account)
     }
 
-    /// Rebuild the durable account/profile mirror from the live account store.
-    /// This removes the old derived public-profile key without touching match
-    /// history or ratings.
-    pub async fn rebuild_profile_index(
-        &self,
-    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-        let mut con = self.get_connection().await?;
-        let mut cursor = 0_u64;
-        let mut accounts = Vec::new();
-        loop {
-            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
-                .arg(cursor)
-                .arg("MATCH")
-                .arg("sow:player:account:*")
-                .arg("COUNT")
-                .arg(256)
-                .query_async(&mut con)
-                .await?;
-            for key in keys {
-                let Some(json): Option<String> = con.get(&key).await? else {
-                    continue;
-                };
-                let account: PlayerAccount = match serde_json::from_str(&json) {
-                    Ok(account) => account,
-                    Err(error) => {
-                        error!(
-                            "Skipping malformed account during profile migration {key}: {error}"
-                        );
-                        continue;
-                    }
-                };
-                accounts.push(account);
-            }
-            cursor = next;
-            if cursor == 0 {
-                break;
-            }
-        }
-        let Some(db) = &self.metadata_db else {
-            return Ok(accounts.len());
-        };
-        let write_txn = db.begin_write()?;
-        let old_player_keys = {
-            let table = write_txn.open_table(PLAYERS_TABLE)?;
-            table
-                .iter()?
-                .filter_map(|row| row.ok().map(|(key, _)| key.value().to_string()))
-                .collect::<Vec<_>>()
-        };
-        let old_profile_keys = {
-            let table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
-            table
-                .iter()?
-                .filter_map(|row| row.ok().map(|(key, _)| key.value().to_string()))
-                .collect::<Vec<_>>()
-        };
-        {
-            let mut table = write_txn.open_table(PLAYERS_TABLE)?;
-            for key in old_player_keys {
-                table.remove(key.as_str())?;
-            }
-        }
-        {
-            let mut table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
-            for key in old_profile_keys {
-                table.remove(key.as_str())?;
-            }
-        }
-        {
-            let mut table = write_txn.open_table(PLAYERS_TABLE)?;
-            for account in &accounts {
-                let json = serde_json::to_vec(account)?;
-                table.insert(account.id.as_str(), json.as_slice())?;
-            }
-        }
-        {
-            let mut table = write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
-            for account in &accounts {
-                let index = PublicProfileIndex {
-                    account_id: account.id.clone(),
-                    display_name: account.display_name.clone(),
-                    kind: format!("{:?}", account.kind),
-                    updated_at: account.updated_at,
-                };
-                let json = serde_json::to_vec(&index)?;
-                table.insert(account.id.as_str(), json.as_slice())?;
-            }
-        }
-        write_txn.commit()?;
-        Ok(accounts.len())
-    }
-
     /// Load or create an anonymous account using the canonical account ID.
     /// New anonymous accounts do not create a provider identity index.
     pub async fn get_or_create_anonymous(
@@ -2309,16 +2207,16 @@ impl PlayerDb {
                 return Err("invalid secret".into());
             }
             let account = self.ensure_starting_leader(account).await?;
-            if account.display_name.trim().is_empty() || account.display_name == "ANON" {
-                let migrated_name = requested_display_name
+            if account.display_name.trim().is_empty() {
+                let display_name = requested_display_name
                     .map(normalize_display_name)
                     .transpose()
                     .map_err(|error| error.to_string())?
                     .unwrap_or_else(generated_display_name);
                 let acc_key = Self::account_key(account_id);
                 let account = Self::update_account_atomic(&mut con, &acc_key, |account| {
-                    if account.display_name.trim().is_empty() || account.display_name == "ANON" {
-                        account.display_name = migrated_name.clone();
+                    if account.display_name.trim().is_empty() {
+                        account.display_name = display_name.clone();
                         account.updated_at = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
@@ -2444,8 +2342,8 @@ impl PlayerDb {
         ))
     }
 
-    /// Resolve a canonical account ID. Display handles and legacy identity
-    /// namespaces are not accepted for authenticated operations.
+    /// Resolve a canonical account ID. Display handles and non-canonical
+    /// identity namespaces are not accepted for authenticated operations.
     pub async fn account_id_from_reference(
         &self,
         reference: &str,
@@ -2769,7 +2667,7 @@ impl PlayerDb {
         let leader_id = crate::commerce::leader_id(leader).to_string();
         let (cost, use_gems) = match currency {
             "gems" => (crate::commerce::LEADER_UNLOCK_COST_GEMS, true),
-            "" | "crowns" | "laurels" => (crate::commerce::LEADER_UNLOCK_COST_CROWNS, false),
+            "" | "laurels" => (crate::commerce::LEADER_UNLOCK_COST_LAURELS, false),
             _ => return Err("invalid leader unlock currency".into()),
         };
         let period = crate::commerce::current_rotation_period();
@@ -2788,19 +2686,19 @@ impl PlayerDb {
                 } else if (if use_gems {
                     account.profile.gems
                 } else {
-                    account.profile.crowns
+                    account.profile.laurels
                 }) < cost
                 {
                     failure = Some(if use_gems {
                         "insufficient gems"
                     } else {
-                        "insufficient crowns"
+                        "insufficient laurels"
                     });
                 } else {
                     if use_gems {
                         account.profile.gems -= cost;
                     } else {
-                        account.profile.crowns -= cost;
+                        account.profile.laurels -= cost;
                     }
                     account.profile.owned_leaders.insert(leader_id.clone());
                     account.updated_at = std::time::SystemTime::now()
@@ -3448,7 +3346,7 @@ impl PlayerDb {
                 tribes_defeated: defeats.tribes,
                 xp: reward.xp,
                 leader_xp: reward.leader_xp,
-                crowns: reward.crowns,
+                laurels: reward.laurels,
                 rating_delta: None,
             });
 
@@ -3487,7 +3385,7 @@ impl PlayerDb {
                         won,
                         matches_played: account.profile.matches_played,
                         wins: account.profile.wins,
-                        crowns_earned: reward.crowns,
+                        laurels_earned: reward.laurels,
                         leader_matches_played: leader_stats
                             .map(|stats| stats.matches_played)
                             .unwrap_or_default(),
@@ -3617,9 +3515,9 @@ mod tests {
     }
 
     #[test]
-    fn missing_display_name_is_detectable_for_one_time_migration() {
+    fn missing_display_name_defaults_cleanly() {
         let json = r#"{
-            "id":"0123456789abcdef0123456789abcdef",
+            "account_id":"0123456789abcdef0123456789abcdef",
             "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
               "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
               "preferred_leader":null},
@@ -3628,29 +3526,22 @@ mod tests {
         let account: super::PlayerAccount = serde_json::from_str(json).unwrap();
         assert!(account.display_name.is_empty());
         assert!(account.profile.leader_xp.is_empty());
-        assert_eq!(account.profile.crowns, 0);
+        assert_eq!(account.profile.laurels, 0);
         assert!(!account.profile.intro_completed);
     }
 
     #[test]
-    fn crown_balance_preserves_legacy_profiles_and_accepts_new_key() {
+    fn laurels_balance_uses_the_canonical_key() {
         let mut profile = super::PlayerProfile::default();
-        profile.crowns = 725;
-        let legacy = serde_json::to_value(&profile).unwrap();
-        assert_eq!(legacy["laurels"], 725);
-
-        let mut current = legacy.as_object().unwrap().clone();
-        let amount = current.remove("laurels").unwrap();
-        current.insert("crowns".to_string(), amount);
-        let decoded: super::PlayerProfile =
-            serde_json::from_value(serde_json::Value::Object(current)).unwrap();
-        assert_eq!(decoded.crowns, 725);
+        profile.laurels = 725;
+        let value = serde_json::to_value(&profile).unwrap();
+        assert_eq!(value["laurels"], 725);
     }
 
     #[test]
     fn public_account_projection_does_not_serialize_secret_hash() {
         let json = r#"{
-            "id":"0123456789abcdef0123456789abcdef",
+            "account_id":"0123456789abcdef0123456789abcdef",
             "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
               "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
               "preferred_leader":null},

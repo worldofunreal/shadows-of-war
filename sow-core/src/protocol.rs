@@ -129,29 +129,6 @@ pub struct Turn {
 /// Envelope for all client → server messages (bincode-safe: has a discriminant).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum ClientMessage {
-    Join {
-        name: String,
-        is_observer: bool,
-        target_lobby_id: Option<u64>,
-        /// Host a new private friend room (CrazyGames instant multiplayer / play again).
-        host_private: bool,
-        build_version: String,
-        clan_tag: String,
-        civilization: crate::player::Civilization,
-        leader: crate::player::Leader,
-        /// Client-declared account/progress metadata for the roster (CrazyGames
-        /// or a persistent bot account). The server may use it to correlate a
-        /// lobby reconnect or ban, but it is not proof of identity or relay
-        /// authentication; the direct relay connection requires a short-lived
-        /// ticket.
-        database_account_id: Option<String>,
-        /// When creating a custom lobby (public or private), the host's desired config.
-        #[serde(default)]
-        host_config: Option<Box<crate::game_config::GameConfig>>,
-        /// Password for joining a password-protected lobby, or setting one when creating.
-        #[serde(default)]
-        password: Option<String>,
-    },
     Gameplay {
         intent: GameplayIntent,
     },
@@ -161,13 +138,13 @@ pub enum ClientMessage {
         progress: u8,
     },
     Leave {},
-    Ready {
+    /// Confirms that a player finished loading before the orchestrator starts
+    /// the lobby. This is distinct from the authenticated relay handshake.
+    LobbyReady {
         lobby_id: u64,
         player_id: u16,
     },
-    /// First relay frame for an authenticated game session. The unticketed
-    /// `Ready` variant remains decodable for wire compatibility, but production
-    /// relay workers reject it when `SOW_RELAY_TICKETS_REQUIRED=1`.
+    /// First relay frame for an authenticated game session.
     ReadyWithTicket {
         lobby_id: u64,
         player_id: u16,
@@ -205,28 +182,14 @@ pub enum ClientMessage {
     RematchRequest {
         lobby_id: u64,
     },
-    SubmitStats {
-        kills: u32,
-        deaths: u32,
-        assists: u32,
-        #[serde(default)]
-        players_defeated: u32,
-        #[serde(default)]
-        empires_defeated: u32,
-        #[serde(default)]
-        tribes_defeated: u32,
-    },
-    /// Identity-proving join. A separate variant (not a new field on `Join`)
-    /// keeps the legacy `Join` encoding decodable for cached/portal bundles:
-    /// bincode is not self-describing, so an in-struct field would make every
-    /// old client's join frame unparseable on a newer server.
+    /// Identity-proving join. Authentication is required before a player can
+    /// enter an online lobby.
     JoinWithAuth {
         join: Box<JoinPayload>,
         auth: AuthProof,
     },
     /// Stats submission carrying the leader used for authoritative mastery
-    /// and reward accounting. Appended for bincode compatibility with older
-    /// clients that still send `SubmitStats`.
+    /// and reward accounting.
     SubmitStatsWithLeader {
         kills: u32,
         deaths: u32,
@@ -240,7 +203,6 @@ pub enum ClientMessage {
         leader: String,
     },
     /// Final deterministic snapshot used to verify a durable match result.
-    /// Appended to preserve decoding of older clients.
     SubmitMatchReport {
         kills: u32,
         deaths: u32,
@@ -259,26 +221,23 @@ pub enum ClientMessage {
     },
 }
 
-/// Fields of a `Join`, factored out so `JoinWithAuth` can carry them without
-/// altering the legacy `Join` variant's wire encoding.
+/// Fields of an authenticated join.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JoinPayload {
     pub name: String,
-    pub is_observer: bool,
     pub target_lobby_id: Option<u64>,
     pub host_private: bool,
     pub build_version: String,
     pub clan_tag: String,
     pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
-    pub database_account_id: Option<String>,
     #[serde(default)]
     pub host_config: Option<Box<crate::game_config::GameConfig>>,
     #[serde(default)]
     pub password: Option<String>,
 }
 
-/// Proof that a join may bind to a `database_account_id`.
+/// Proof that a join may bind to a canonical account ID.
 /// - `crazygames`: `token` is the platform JWT from `getUserToken`; the server
 ///   resolves the account from the VERIFIED token and ignores any client
 ///   assertion of the account id.
@@ -307,8 +266,7 @@ pub enum ServerMessage {
     VersionUpdate {
         version: String,
     },
-    /// Separate capability frame keeps the existing Start struct wire shape
-    /// compatible with cached clients during the ticket rollout.
+    /// Separate capability frame keeps the Start payload small and stable.
     RelayTicket {
         lobby_id: u64,
         player_id: u16,
@@ -369,10 +327,8 @@ pub struct ServerJoinAckMessage {
     pub player_id: u16,
     pub map_name: String,
     pub is_private: bool,
-    /// Full server-authoritative lobby snapshot, so private lobbies (never broadcast)
-    /// can be seeded with real config (mode, slots, bots, host) instead of placeholders.
-    #[serde(default)]
-    pub lobby_info: Option<LobbyInfo>,
+    /// Full server-authoritative lobby snapshot, including private-lobby data.
+    pub lobby_info: LobbyInfo,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -398,11 +354,9 @@ pub struct ServerStartMessage {
     pub seed: u64,
     pub players: Vec<PlayerInfo>,
     pub missed_turns: Vec<Turn>,
-    pub map_data: Option<Vec<u8>>, // currently unused (maps fetched via HTTP)
     pub relay_port: Option<u16>,
-    /// Direct relay TLS hostname for the assigned DPDK worker. `None` is kept
-    /// only for wire compatibility/dev fixtures; production always supplies
-    /// the direct relay host and dynamic game port.
+    /// Direct relay TLS hostname for the assigned DPDK worker. Offline and
+    /// local fixtures may omit it because they do not use a relay.
     #[serde(default)]
     pub relay_host: Option<String>,
 }
@@ -650,66 +604,4 @@ pub struct SimSnapshot {
     pub total_land_tiles: u32,
     pub sea_lanes: std::sync::Arc<Vec<crate::sea_lane::SeaLane>>,
     pub debug_mem_info: String,
-}
-
-#[cfg(test)]
-mod protocol_compat_tests {
-    use super::{ServerStartMessage, Turn};
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Serialize, Deserialize)]
-    struct LegacyStartMessage {
-        config: crate::game_config::GameConfig,
-        my_player_id: Option<u16>,
-        lobby_id: Option<u64>,
-        seed: u64,
-        players: Vec<super::PlayerInfo>,
-        missed_turns: Vec<Turn>,
-        map_data: Option<Vec<u8>>,
-        relay_port: Option<u16>,
-        relay_host: Option<String>,
-    }
-
-    fn current_start() -> ServerStartMessage {
-        ServerStartMessage {
-            config: crate::game_config::GameConfig::default(),
-            my_player_id: Some(1),
-            lobby_id: Some(42),
-            seed: 7,
-            players: Vec::new(),
-            missed_turns: Vec::new(),
-            map_data: None,
-            relay_port: Some(25592),
-            relay_host: Some("relay.example".to_string()),
-        }
-    }
-
-    #[test]
-    fn new_start_is_decodable_by_legacy_shape() {
-        let current = current_start();
-        let bytes = bincode::serialize(&current).expect("serialize current start");
-        let legacy: LegacyStartMessage =
-            bincode::deserialize(&bytes).expect("legacy decoder accepts trailing ticket");
-        assert_eq!(legacy.lobby_id, Some(42));
-        assert_eq!(legacy.relay_port, Some(25592));
-    }
-
-    #[test]
-    fn start_wire_shape_roundtrips_without_ticket_field() {
-        let current = current_start();
-        let legacy = LegacyStartMessage {
-            config: current.config,
-            my_player_id: current.my_player_id,
-            lobby_id: current.lobby_id,
-            seed: current.seed,
-            players: current.players,
-            missed_turns: current.missed_turns,
-            map_data: current.map_data,
-            relay_port: current.relay_port,
-            relay_host: current.relay_host,
-        };
-        let bytes = bincode::serialize(&legacy).expect("serialize legacy start");
-        let decoded: ServerStartMessage = bincode::deserialize(&bytes).expect("start roundtrip");
-        assert_eq!(decoded.lobby_id, Some(42));
-    }
 }

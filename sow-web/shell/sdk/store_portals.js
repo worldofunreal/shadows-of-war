@@ -442,7 +442,7 @@
       var token = window.localStorage.getItem("wou_session_token") || "";
       var raw = window.localStorage.getItem("wou_user_data") || "";
       var user = raw ? JSON.parse(raw) : null;
-      var accountId = user && (user.account_id || user.id);
+      var accountId = user && user.account_id;
       if (!accountId && window.SOW_PLATFORM_IDENTITY && window.SOW_PLATFORM_IDENTITY.provider === "wou") {
         accountId = window.SOW_PLATFORM_IDENTITY.externalId || "";
         token = window.SOW_PLATFORM_IDENTITY.token || token;

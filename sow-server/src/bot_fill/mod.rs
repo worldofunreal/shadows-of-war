@@ -126,7 +126,7 @@ impl BotPool {
         for &i in &idx {
             let e = &self.entries[i];
             // Dedup by display name within this draw. Different account_ids
-            // may share a display name (the legacy pool cycles 1000 names
+            // may share a display name (the shared pool cycles 1000 names
             // across 10k accounts); within one lobby that would be visually
             // ambiguous, so we skip duplicates.
             if !seen_names.insert(e.display_name.as_str()) {

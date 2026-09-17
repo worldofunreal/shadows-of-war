@@ -7,8 +7,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
-// std::time::Instant panics on wasm32-unknown-unknown ("time not implemented
-// on this platform"); web_time::Instant wraps Performance.now() there instead.
 use web_time::Instant;
 
 use serde::Deserialize;
@@ -45,6 +43,12 @@ enum WebMenuCommand {
     SetTutorialPaused {
         paused: bool,
     },
+    MapMenuAction {
+        session: u64,
+        tile_idx: u32,
+        action: crate::input::map_click::MapMenuAction,
+    },
+    CloseMapMenu,
     CompleteCampaignEpisode {
         episode_id: String,
     },
@@ -173,21 +177,20 @@ enum WebDevConfigField {
 
 thread_local! {
     static COMMANDS: RefCell<VecDeque<WebMenuCommand>> = RefCell::new(VecDeque::new());
+    static EVENT_LOOP_WAKE: RefCell<Option<winit::event_loop::EventLoopProxy>> =
+        const { RefCell::new(None) };
     /// Last payload handed to JS. publish_state runs every frame; without this
     /// guard each frame allocates a fresh JSON string plus a JS-side copy.
     static LAST_PUBLISHED: RefCell<String> = RefCell::new(String::new());
     /// Cheap fingerprint for the small, hot in-match HUD payload. Heavy cold panels are
     /// represented by the snapshot tick only while a panel that needs them is open.
     static LAST_HUD_KEY: RefCell<Option<HudPublishKey>> = const { RefCell::new(None) };
-    /// The browser consumes changed payloads through SOW_onStateUpdate. The
-    /// fallback menu poll does not run during gameplay, so this keeps the
-    /// bridge from attempting work more often than the visible HUD can change.
     static LAST_PUBLISH_ATTEMPT: Cell<Option<Instant>> = const { Cell::new(None) };
     /// Player-derived hot values are cached by snapshot tick so the player list is not scanned
     /// on every publish attempt.
     static LAST_MY_PLAYER: RefCell<Option<(u64, u16, Option<MyPlayerSummary>)>> =
         const { RefCell::new(None) };
-    /// WASM nameplates need the same rank cache for the top-three crown/medals.
+    /// WASM nameplates need the same rank cache for the top-three laurels/medals.
     /// Refreshing is keyed by the authoritative snapshot tick, not the render/publish cadence.
     static LAST_WEB_RANKINGS_TICK: Cell<Option<u64>> = const { Cell::new(None) };
     /// Cold panel JSON is rebuilt only when its snapshot input changes. Hot HUD updates reuse it.
@@ -199,7 +202,6 @@ thread_local! {
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
 }
 
-/// Minimum gap between state-publish attempts, matching the JS poll cadence.
 const PUBLISH_MIN_INTERVAL_MS: u128 = 75;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,6 +238,9 @@ struct HudPublishKey {
     snapshot_tick: u64,
     hovered_tile: u32,
     hovered_owner: u16,
+    map_menu_open: bool,
+    map_menu_session: u64,
+    map_menu_tile: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -327,23 +332,43 @@ fn refresh_web_leaderboard_cache(app: &mut SowApp) {
     app.ui.leaderboard_rankings = rankings;
 }
 
-fn publish_due() -> bool {
-    let now = Instant::now();
-    let due = LAST_PUBLISH_ATTEMPT.with(|attempt| match attempt.get() {
-        Some(last) => now.duration_since(last).as_millis() >= PUBLISH_MIN_INTERVAL_MS,
-        None => true,
+pub(crate) fn register_event_loop_wake(proxy: winit::event_loop::EventLoopProxy) {
+    EVENT_LOOP_WAKE.with(|wake| *wake.borrow_mut() = Some(proxy));
+}
+
+pub(crate) fn wake_event_loop() {
+    EVENT_LOOP_WAKE.with(|wake| {
+        if let Some(proxy) = wake.borrow().as_ref() {
+            proxy.wake_up();
+        }
     });
-    if due {
-        LAST_PUBLISH_ATTEMPT.with(|attempt| attempt.set(Some(now)));
-    }
-    due
+}
+
+pub(crate) fn wake_event_loop_after(delay_ms: u64) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let callback = Closure::once_into_js(wake_event_loop);
+    let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+        callback.unchecked_ref(),
+        delay_ms.min(i32::MAX as u64) as i32,
+    );
+}
+
+/// Wake the Rust event loop after a browser-side command or async result is queued.
+#[wasm_bindgen(js_name = SOW_wake_event_loop)]
+pub fn sow_wake_event_loop() {
+    wake_event_loop();
 }
 
 /// Called by the vanilla shell after the WASM module has initialized.
 #[wasm_bindgen]
 pub fn sow_menu_command(json: String) {
     match serde_json::from_str::<WebMenuCommand>(&json) {
-        Ok(command) => COMMANDS.with(|commands| commands.borrow_mut().push_back(command)),
+        Ok(command) => {
+            COMMANDS.with(|commands| commands.borrow_mut().push_back(command));
+            wake_event_loop();
+        }
         Err(error) => log::warn!("[WEB MENU] invalid command: {error}"),
     }
 }
@@ -443,6 +468,16 @@ impl SowApp {
                     if self.ui.tutorial_active && self.net.is_offline {
                         self.sim.paused = paused;
                     }
+                }
+                WebMenuCommand::MapMenuAction {
+                    session,
+                    tile_idx,
+                    action,
+                } => {
+                    self.handle_map_menu_action(session, tile_idx, action);
+                }
+                WebMenuCommand::CloseMapMenu => {
+                    self.close_map_context_menu();
                 }
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
@@ -805,6 +840,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
+    let map_menu = app.input.map_context_menu;
     let (dev_sidebar_open, dev_config_key) = dev_config_key(app);
     let snapshot_tick = app
         .sim
@@ -818,7 +854,8 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         || hud.show_ask_panel.is_some()
         || hud.show_betrayal_warning.is_some()
         || hud.sync_state.is_some()
-        || tutorial_active;
+        || tutorial_active
+        || map_menu.is_some();
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
     let inbox_count = my_player_summary(app, snapshot_tick, my_pid)
         .map(|player| player.inbox_count)
@@ -866,6 +903,9 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
         hovered_tile,
         hovered_owner,
+        map_menu_open: map_menu.is_some(),
+        map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
+        map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
     }
 }
 
@@ -1050,11 +1090,6 @@ fn tutorial_payload(
         "attacks": attacks,
         "fleets": fleets,
         "contacts": contacts,
-        "camera": {
-                "x": app.input.camera_x,
-            "y": app.input.camera_y,
-            "zoom": app.input.camera_zoom,
-        },
     })
 }
 
@@ -1082,8 +1117,6 @@ fn player_json(
         "kills": player.kills,
         "deaths": player.deaths,
         "assists": player.assists,
-        "cap_x": player.centroid_x,
-        "cap_y": player.centroid_y,
     })
 }
 
@@ -1252,6 +1285,26 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
     } else {
         serde_json::json!({ "active": false })
     };
+    let map_menu = app
+        .input
+        .map_context_menu
+        .map(|menu| {
+            let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+            let actions = app
+                .map_menu_actions(menu.tile_idx)
+                .into_iter()
+                .map(|action| action.name())
+                .collect::<Vec<_>>();
+            serde_json::json!({
+                "open": true,
+                "x": menu.x / sf,
+                "y": menu.y / sf,
+                "tile_idx": menu.tile_idx,
+                "session": menu.session,
+                "actions": actions,
+            })
+        })
+        .unwrap_or(serde_json::Value::Null);
     let hud = &app.ui.app.hud_state;
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
     let snapshot = app.sim.current_snapshot.as_ref();
@@ -1296,7 +1349,7 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
         sow_data::commerce::catalog_for_profile(
             &app.progress.owned_leaders,
             &app.progress.owned_skins,
-            app.progress.crowns,
+            app.progress.laurels,
             app.progress.gems,
             rotation_period,
         )
@@ -1330,6 +1383,7 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
         "tutorial": tutorial_state,
+        "map_menu": map_menu,
         "dev_tools": dev_tools_payload(app),
         "is_winner": is_winner,
         "winner_name": winner_name,
@@ -1416,8 +1470,7 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
             payload["rewards"] = serde_json::json!({
                 "xp": reward.xp,
                 "leader_xp": reward.leader_xp,
-                "crowns": reward.crowns,
-                "laurels": reward.crowns,
+                "laurels": reward.laurels,
             });
         }
     }
@@ -1484,13 +1537,25 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
     })
 }
 
+fn publish_due() -> bool {
+    let now = Instant::now();
+    let due = LAST_PUBLISH_ATTEMPT.with(|attempt| match attempt.get() {
+        Some(last) => now.duration_since(last).as_millis() >= PUBLISH_MIN_INTERVAL_MS,
+        None => true,
+    });
+    if due {
+        LAST_PUBLISH_ATTEMPT.with(|attempt| attempt.set(Some(now)));
+    }
+    due
+}
+
 /// Publish a browser-safe snapshot. It is intentionally separate from MainMenuState so the
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
 pub(crate) fn publish_state(app: &mut SowApp) {
-    refresh_web_leaderboard_cache(app);
     if !publish_due() {
         return;
     }
+    refresh_web_leaderboard_cache(app);
 
     let state = &app.ui.app.main_menu_state;
     let progress = &app.progress;
@@ -1532,7 +1597,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let mut store_catalog = sow_data::commerce::catalog_for_profile(
             &progress.owned_leaders,
             &progress.owned_skins,
-            progress.crowns,
+            progress.laurels,
             progress.gems,
             rotation_period,
         );
@@ -1562,8 +1627,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                     "free_rotation": free_rotation,
                     "owned": owned,
                     "available": free_rotation || owned,
-                    "cost_crowns": sow_data::commerce::LEADER_UNLOCK_COST_CROWNS,
-                    "cost_laurels": sow_data::commerce::LEADER_UNLOCK_COST_CROWNS,
+                    "cost_laurels": sow_data::commerce::LEADER_UNLOCK_COST_LAURELS,
                     "cost_gems": sow_data::commerce::LEADER_UNLOCK_COST_GEMS,
                 })
             })
@@ -1624,8 +1688,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "notice": notice_name(state.notice),
             "level": progress.level,
             "xp": progress.xp,
-            "crowns": progress.crowns,
-            "laurels": progress.crowns,
+            "laurels": progress.laurels,
             "gems": progress.gems,
             "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,

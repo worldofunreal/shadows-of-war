@@ -1008,7 +1008,7 @@ async fn handle_stripe_webhook(
     }
 }
 
-/// POST /store/leaders/unlock — spend authoritative crowns on a leader.
+/// POST /store/leaders/unlock — spend authoritative laurels on a leader.
 async fn handle_unlock_leader(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1890,10 +1890,6 @@ async fn main() {
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");
-    match player_db.rebuild_profile_index().await {
-        Ok(migrated) => info!("Public profile index ready; migrated {migrated} legacy accounts"),
-        Err(error) => panic!("Failed to backfill public profile index: {error}"),
-    }
 
     let default_analytics_dir = std::path::Path::new(&redb_path)
         .parent()
@@ -2454,8 +2450,8 @@ async fn handle_anonymous_profile(
         .await
     {
         Ok(account) => {
-            // Mint the ownership secret on first sight (new account or
-            // pre-secret legacy account); the plaintext travels exactly once.
+            // Mint the ownership secret on first sight; the plaintext travels
+            // exactly once.
             let revealed_secret = state
                 .db
                 .ensure_auth_secret(&account.id)
@@ -3019,7 +3015,7 @@ impl AppState {
         let first_victory = env_value("SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID");
         let battle_hardened = env_value("SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID");
         let victory_march = env_value("SOW_PLAY_GAMES_VICTORY_MARCH_ACHIEVEMENT_ID");
-        let crown_hoard = env_value("SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID");
+        let laurel_hoard = env_value("SOW_PLAY_GAMES_LAUREL_HOARD_ACHIEVEMENT_ID");
         let first_command = env_value("SOW_PLAY_GAMES_FIRST_COMMAND_ACHIEVEMENT_ID");
         let commander_victorious = env_value("SOW_PLAY_GAMES_COMMANDER_VICTORIOUS_ACHIEVEMENT_ID");
         let veteran_commander = env_value("SOW_PLAY_GAMES_VETERAN_COMMANDER_ACHIEVEMENT_ID");
@@ -3029,7 +3025,7 @@ impl AppState {
         if first_victory.is_empty()
             && battle_hardened.is_empty()
             && victory_march.is_empty()
-            && crown_hoard.is_empty()
+            && laurel_hoard.is_empty()
             && first_command.is_empty()
             && commander_victorious.is_empty()
             && veteran_commander.is_empty()
@@ -3089,9 +3085,9 @@ impl AppState {
         add_increment(&mut actions, &leader_path, 1, "Leader Path");
         add_increment(
             &mut actions,
-            &crown_hoard,
-            outcome.crowns_earned,
-            "Crown Hoard",
+            &laurel_hoard,
+            outcome.laurels_earned,
+            "Laurel Hoard",
         );
         if outcome.leader_matches_played >= 1 {
             add_unlock(&mut actions, &first_command, "First Command");

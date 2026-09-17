@@ -39,7 +39,8 @@ pub struct GraphicsState {
 }
 
 /// One-shot timings for a multiplayer match handoff and loader. These events are
-/// intentionally client-local: they do not alter the wire protocol or gate Ready.
+/// intentionally client-local: they do not alter the wire protocol or gate
+/// relay admission.
 /// The timestamps let us separate relay connection time from local engine/GPU work.
 #[derive(Default)]
 pub struct LoadTelemetry {
@@ -128,7 +129,7 @@ impl LoadTelemetry {
 
 pub struct NetState {
     pub client: Option<sow_net::client::SowClient>,
-    pub connect_tx: crossbeam_channel::Sender<Result<sow_net::client::SowClient, String>>,
+    pub connect_tx: WakeSender<Result<sow_net::client::SowClient, String>>,
     pub connect_rx: crossbeam_channel::Receiver<Result<sow_net::client::SowClient, String>>,
     pub ws_url: String,
     pub orchestrator_url: String,
@@ -184,8 +185,10 @@ pub struct InputState {
     pub last_mouse_x: f64,
     pub last_mouse_y: f64,
     pub active_touches: std::collections::HashMap<u64, (f64, f64)>,
-    pub map_touch_start: Option<(web_time::Instant, f64, f64)>,
+    pub map_pointer_start: Option<MapPointerStart>,
     pub last_pinch_state: Option<(f64, f64, f64)>,
+    pub map_context_menu: Option<MapContextMenu>,
+    pub map_context_menu_session: u64,
     /// Hold-to-build
     pub hold_build_active: bool,
     pub hold_build_accum: f32,
@@ -197,6 +200,22 @@ pub struct InputState {
     pub key_pan_right: bool,
     pub camera_focus_target: Option<(f32, f32)>,
     pub input_focused: bool,
+}
+
+pub struct MapPointerStart {
+    pub started_at: web_time::Instant,
+    pub x: f64,
+    pub y: f64,
+    pub is_touch: bool,
+    pub attack_sent: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct MapContextMenu {
+    pub x: f32,
+    pub y: f32,
+    pub tile_idx: u32,
+    pub session: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -238,6 +257,8 @@ pub struct UiState {
     pub observing: bool,
     pub fallout_zones: Vec<FalloutZone>,
     pub last_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
+    pub last_projectile_snapshot_tick: Option<u64>,
+    pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,
     pub cached_player_colors: Vec<[f32; 4]>,
     pub cached_player_count: usize,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
@@ -254,6 +275,8 @@ pub struct UiState {
     pub click_markers: Vec<ClickMarker>,
     pub last_build_confirm_time: Option<web_time::Instant>,
     pub border_flashes: Vec<BorderFlashInstance>,
+    pub border_flash_intensities: std::collections::HashMap<u16, f32>,
+    pub placement_scratch: Vec<(i32, i32, f32, i32)>,
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
     /// Screen vignette alert state.
     pub viewport_alert: Option<ViewportAlertState>,
@@ -339,7 +362,7 @@ impl InterpClock {
         let elapsed = now.duration_since(self.last_applied_at).as_secs_f32();
         let dur = self.tick_dur.as_secs_f32().max(0.001);
         let t = (elapsed / dur).clamp(0.0, 1.0);
-        // Smoothstep — same feel as legacy fleet/nuke overlays.
+        // Smoothstep keeps fleet/nuke overlays visually consistent.
         t * t * (3.0 - 2.0 * t)
     }
 
@@ -369,12 +392,40 @@ pub struct TimeState {
     pub last_debug_print: Option<web_time::Instant>,
 }
 
+/// Cross-thread task results wake the single UI event loop after enqueueing.
+/// This keeps idle menu phases asleep without delaying network or asset results.
+pub struct WakeSender<T> {
+    sender: crossbeam_channel::Sender<T>,
+}
+
+impl<T> Clone for WakeSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            sender: self.sender.clone(),
+        }
+    }
+}
+
+impl<T> WakeSender<T> {
+    pub fn new(sender: crossbeam_channel::Sender<T>) -> Self {
+        Self { sender }
+    }
+
+    pub fn send(&self, value: T) -> Result<(), crossbeam_channel::SendError<T>> {
+        let result = self.sender.send(value);
+        if result.is_ok() {
+            crate::web_menu::wake_event_loop();
+        }
+        result
+    }
+}
+
 pub struct TaskState {
-    pub map_tx: crossbeam_channel::Sender<crate::MapDownloadEvent>,
+    pub map_tx: WakeSender<crate::MapDownloadEvent>,
     pub map_rx: crossbeam_channel::Receiver<crate::MapDownloadEvent>,
-    pub engine_init_tx: crossbeam_channel::Sender<crate::EngineInitEvent>,
+    pub engine_init_tx: WakeSender<crate::EngineInitEvent>,
     pub engine_init_rx: crossbeam_channel::Receiver<crate::EngineInitEvent>,
-    pub db_tx: crossbeam_channel::Sender<crate::player_progress::DbEvent>,
+    pub db_tx: WakeSender<crate::player_progress::DbEvent>,
     pub db_rx: crossbeam_channel::Receiver<crate::player_progress::DbEvent>,
     pub pending_engine_init_data: Option<(
         sow_core::game::GameState,

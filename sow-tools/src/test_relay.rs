@@ -2,11 +2,11 @@
 //!
 //! Simulates a real player:
 //!   1. Connect to orchestrator WS
-//!   2. Send Join, receive JoinAck
-//!   3. Send MapDownloadProgress(100) + Ready
+//!   2. Send authenticated JoinWithAuth, receive JoinAck
+//!   3. Send MapDownloadProgress(100) + LobbyReady
 //!   4. Wait for ServerMessage::Start with relay_port + relay_host
 //!   5. Connect to the relay directly (wss://relay_host:relay_port/ws/)
-//!   6. Send Ready to relay
+//!   6. Send ReadyWithTicket to relay
 //!   7. Receive at least one Turn
 //!   8. Send Leave, disconnect
 //!
@@ -15,7 +15,7 @@
 use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Url;
-use sow_core::protocol::{ClientMessage, ServerMessage};
+use sow_core::protocol::{AuthProof, ClientMessage, ServerMessage};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 fn parse_websocket_url(value: &str) -> Result<Url, String> {
@@ -130,16 +130,28 @@ struct Args {
     )]
     url: Url,
 
-    /// Optional database account ID to include in the Join message
+    /// Authentication provider used by the join proof
     #[arg(long)]
-    database_account_id: Option<String>,
+    auth_provider: String,
+
+    /// Account ID for providers that use an explicit account identity
+    #[arg(long)]
+    auth_account_id: Option<String>,
+
+    /// Provider token or anonymous account secret
+    #[arg(long)]
+    auth_token: String,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     let url = args.url;
-    let database_account_id = args.database_account_id;
+    let auth = AuthProof {
+        provider: args.auth_provider,
+        account_id: args.auth_account_id,
+        token: args.auth_token,
+    };
 
     let version = std::fs::read_to_string(".version")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -159,19 +171,20 @@ async fn main() {
     pass("Connected to orchestrator");
 
     // ── Step 2: Join ────────────────────────────────────────────────────────
-    step(2, "Sending Join...");
-    let join = ClientMessage::Join {
-        name: "TestBot".to_string(),
-        is_observer: false,
-        target_lobby_id: None,
-        host_private: false,
-        build_version: version,
-        clan_tag: "".to_string(),
-        civilization: sow_core::player::Civilization::Rome,
-        leader: sow_core::player::Leader::Caesar,
-        database_account_id,
-        host_config: None,
-        password: None,
+    step(2, "Sending authenticated JoinWithAuth...");
+    let join = ClientMessage::JoinWithAuth {
+        join: Box::new(sow_core::protocol::JoinPayload {
+            name: "TestBot".to_string(),
+            target_lobby_id: None,
+            host_private: false,
+            build_version: version,
+            clan_tag: "".to_string(),
+            civilization: sow_core::player::Civilization::Rome,
+            leader: sow_core::player::Leader::Caesar,
+            host_config: None,
+            password: None,
+        }),
+        auth,
     };
     ws_send(&mut write, &join).await;
 
@@ -200,10 +213,10 @@ async fn main() {
         }
     }
 
-    // ── Step 3: Send Ready (skip map download) ──────────────────────────────
+    // ── Step 3: Send LobbyReady (skip map download) ─────────────────────────
     step(
         3,
-        "Sending MapDownloadProgress(100) + Ready to orchestrator...",
+        "Sending MapDownloadProgress(100) + LobbyReady to orchestrator...",
     );
     ws_send(
         &mut write,
@@ -216,13 +229,13 @@ async fn main() {
     .await;
     ws_send(
         &mut write,
-        &ClientMessage::Ready {
+        &ClientMessage::LobbyReady {
             lobby_id,
             player_id,
         },
     )
     .await;
-    pass("Sent Ready to orchestrator");
+    pass("Sent LobbyReady to orchestrator");
 
     // ── Step 4: Wait for Start ──────────────────────────────────────────────
     step(
@@ -231,6 +244,7 @@ async fn main() {
     );
     let relay_port: u16;
     let relay_host: Option<String>;
+    let mut relay_ticket: Option<String> = None;
     let start_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
 
     loop {
@@ -256,6 +270,14 @@ async fn main() {
         .await;
 
         match msg {
+            Ok(ServerMessage::RelayTicket {
+                lobby_id: ticket_lobby,
+                player_id: ticket_player,
+                ticket,
+            }) if ticket_lobby == lobby_id && ticket_player == player_id => {
+                relay_ticket = Some(ticket);
+                continue;
+            }
             Ok(ServerMessage::Start(start)) => {
                 relay_port = start.relay_port.unwrap_or(0);
                 relay_host = start.relay_host.clone();
@@ -321,15 +343,17 @@ async fn main() {
     let relay_ws = relay_ws.unwrap_or_else(|| fail("Could not connect to relay after 10 attempts"));
     let (mut r_write, mut r_read) = relay_ws.split();
 
-    // ── Step 6: Send Ready to relay ─────────────────────────────────────────
-    step(6, "Sending Ready to relay...");
-    let ready = ClientMessage::Ready {
+    // ── Step 6: Send ReadyWithTicket to relay ───────────────────────────────
+    step(6, "Sending ReadyWithTicket to relay...");
+    let ready = ClientMessage::ReadyWithTicket {
         lobby_id,
         player_id,
+        ticket: relay_ticket
+            .unwrap_or_else(|| fail("No relay ticket was received for this player")),
     };
     let bytes = bincode::serialize(&ready).unwrap();
     r_write.send(Message::Binary(bytes)).await.unwrap();
-    pass("Sent Ready to relay");
+    pass("Sent ReadyWithTicket to relay");
 
     // ── Step 7: Receive turns ───────────────────────────────────────────────
     step(7, "Waiting for Turn messages from relay (5s window)...");
@@ -418,12 +442,18 @@ mod tests {
     }
 
     #[test]
-    fn database_account_id_is_optional_and_parsed_verbatim() {
-        let default_args = Args::try_parse_from(["test-relay"]).unwrap();
-        assert_eq!(default_args.database_account_id, None);
+    fn auth_arguments_are_required() {
+        assert!(Args::try_parse_from(["test-relay"]).is_err());
 
-        let args =
-            Args::try_parse_from(["test-relay", "--database-account-id", "account-123"]).unwrap();
-        assert_eq!(args.database_account_id.as_deref(), Some("account-123"));
+        let args = Args::try_parse_from([
+            "test-relay",
+            "--auth-provider",
+            "anonymous",
+            "--auth-token",
+            "secret",
+        ])
+        .unwrap();
+        assert_eq!(args.auth_provider, "anonymous");
+        assert_eq!(args.auth_token, "secret");
     }
 }

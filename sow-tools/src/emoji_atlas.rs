@@ -207,21 +207,7 @@ fn fetch_moji(
         }
     }
 
-    // Also check legacy cache if present
-    let legacy_cache = Path::new("assets/emoji/cache");
-    if legacy_cache.is_dir() {
-        for name in &filenames {
-            let cache_path = legacy_cache.join(format!("{}.png", name));
-            if cache_path.exists()
-                && let Ok(bytes) = fs::read(&cache_path)
-                && let Ok(img) = image::load_from_memory(&bytes)
-            {
-                return Ok(downscale_cell(&img.to_rgba8()));
-            }
-        }
-    }
-
-    // 2. Fetch from CDN and persist to disk cache
+    // Fetch from CDN and persist to disk cache.
     for name in &filenames {
         let url = format!("{MOJI_BASE}/{name}.png");
         if let Ok(resp) = client.get(&url).send()

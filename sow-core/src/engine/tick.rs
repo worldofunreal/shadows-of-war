@@ -10,9 +10,8 @@ impl SowEngine {
             // independently placed in [1, end_tick-1] via WyRand(seed ^ pid). When
             // the current tick reaches that moment, the ghost is placed via the
             // same find_valid_spawn + place_spawn path used by the safety net
-            // below. Middle ground between the two old extremes:
-            //   - legacy socketed backfill: continuous scatter-storm ("too crazy")
-            //   - pre-fix ghosts: invisible all window, then mass-pop at end_tick
+            // below. This avoids both a continuous scatter-storm and a mass-pop
+            // at the end of the deploy window.
             // Each ghost fires AT MOST once; any that miss (no valid tile) are
             // caught by the safety net at the phase transition. Deterministic →
             // lockstep-safe across all clients (same seed, same pid → same moment).

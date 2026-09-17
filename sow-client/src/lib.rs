@@ -73,15 +73,15 @@ pub(crate) fn camera_zoom_lower_bound(screen_w: f32, screen_h: f32, map_w: u32, 
 
 fn spawn_sow_client_connect(
     url: String,
-    connect_tx: &crossbeam_channel::Sender<Result<SowClient, String>>,
+    connect_tx: &app::WakeSender<Result<SowClient, String>>,
 ) {
-    let tx = connect_tx.clone();
+    let tx = (*connect_tx).clone();
     let url_clone = url.clone();
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use wasm_bindgen::JsCast;
 
-    let tx_for_timeout = connect_tx.clone();
+    let tx_for_timeout = (*connect_tx).clone();
     let finished = Arc::new(AtomicBool::new(false));
     let finished_clone = finished.clone();
 
@@ -197,10 +197,12 @@ use winit::application::ApplicationHandler;
 
 impl ApplicationHandler for SowApp {
     fn resumed(&mut self, event_loop: &dyn winit::event_loop::ActiveEventLoop) {
+        crate::web_menu::register_event_loop_wake(event_loop.create_proxy());
         self.handle_resumed(event_loop);
     }
 
     fn can_create_surfaces(&mut self, event_loop: &dyn winit::event_loop::ActiveEventLoop) {
+        crate::web_menu::register_event_loop_wake(event_loop.create_proxy());
         self.handle_resumed(event_loop);
     }
 
@@ -231,18 +233,9 @@ impl ApplicationHandler for SowApp {
         }
         self.update(event_loop);
 
-        let native_shell = web_sys::window()
-            .and_then(|window| {
-                js_sys::Reflect::get(
-                    &window,
-                    &wasm_bindgen::JsValue::from_str("SOW_NATIVE"),
-                )
-                .ok()
-            })
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        let native_playing = native_shell && self.ui.app.phase == ClientPhase::Playing;
-        let flow = if native_playing {
+        let playing = self.ui.app.phase == ClientPhase::Playing;
+        let loading = self.ui.app.phase == ClientPhase::Splash;
+        let flow = if playing || loading {
             winit::event_loop::ControlFlow::Poll
         } else {
             winit::event_loop::ControlFlow::Wait
@@ -250,9 +243,9 @@ impl ApplicationHandler for SowApp {
 
         event_loop.set_control_flow(flow);
 
-        if native_playing {
+        if playing {
             self.render_frame(event_loop);
-        } else if let Some(win) = self.active_window() {
+        } else if loading && let Some(win) = self.active_window() {
             win.request_redraw();
         }
     }

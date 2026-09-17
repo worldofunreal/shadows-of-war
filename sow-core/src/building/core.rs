@@ -371,7 +371,7 @@ impl BuildingGrid {
         self.dirty = true;
     }
 
-    /// Fill grid from all buildings (including under construction), matching legacy `existing_structure_positions_with_width`.
+    /// Fill grid from all buildings, including those under construction.
     pub fn rebuild<'a>(
         &mut self,
         buildings: impl Iterator<Item = &'a Building>,

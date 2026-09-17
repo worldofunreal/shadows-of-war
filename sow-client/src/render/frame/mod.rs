@@ -79,17 +79,21 @@ impl SowApp {
 
                 if draw_world {
                     // --- Layer 4: Track and Spawn Detonations ---
-                    let mut new_detonations = Vec::new();
+                    self.ui.detonation_scratch.clear();
                     if let Some(snap) = &self.sim.current_snapshot {
-                        for (id, prev_proj) in &self.ui.last_projectiles {
-                            if !snap.projectiles.iter().any(|p| p.id == *id) {
-                                let at_end = prev_proj.path_cursor
-                                    + (prev_proj.steps_per_tick as usize)
-                                    >= prev_proj.path_len;
-                                if at_end {
-                                    let dst_x = (prev_proj.dst_tile % self.sim.map_w) as f32;
-                                    let dst_y = (prev_proj.dst_tile / self.sim.map_w) as f32;
-                                    new_detonations.push((dst_x, dst_y, prev_proj.kind));
+                        if self.ui.last_projectile_snapshot_tick != Some(snap.tick) {
+                            for (id, prev_proj) in &self.ui.last_projectiles {
+                                if !snap.projectiles.iter().any(|p| p.id == *id) {
+                                    let at_end = prev_proj.path_cursor
+                                        + (prev_proj.steps_per_tick as usize)
+                                        >= prev_proj.path_len;
+                                    if at_end {
+                                        let dst_x = (prev_proj.dst_tile % self.sim.map_w) as f32;
+                                        let dst_y = (prev_proj.dst_tile / self.sim.map_w) as f32;
+                                        self.ui
+                                            .detonation_scratch
+                                            .push((dst_x, dst_y, prev_proj.kind));
+                                    }
                                 }
                             }
                         }
@@ -97,7 +101,7 @@ impl SowApp {
 
                     // Spawns and tracks active fallout zones
                     let current_time = web_time::Instant::now();
-                    for (dx, dy, kind) in new_detonations {
+                    for &(dx, dy, kind) in &self.ui.detonation_scratch {
                         if let sow_core::game::ProjectileKind::Nuke { level } = kind {
                             sow_audio::play_nuke_impact_sound(
                                 level,
@@ -147,14 +151,17 @@ impl SowApp {
                             .retain(|_, expires| *expires > current_tick);
                     }
 
-                    // Sync last_projectiles
+                    // Sync last_projectiles once per authoritative snapshot tick.
                     if let Some(snap) = &self.sim.current_snapshot {
-                        self.ui.last_projectiles.clear();
-                        for proj in &snap.projectiles {
-                            self.ui.last_projectiles.insert(
-                                proj.id,
-                                crate::app::TrackedProjectile::from_snapshot(proj),
-                            );
+                        if self.ui.last_projectile_snapshot_tick != Some(snap.tick) {
+                            self.ui.last_projectiles.clear();
+                            for proj in &snap.projectiles {
+                                self.ui.last_projectiles.insert(
+                                    proj.id,
+                                    crate::app::TrackedProjectile::from_snapshot(proj),
+                                );
+                            }
+                            self.ui.last_projectile_snapshot_tick = Some(snap.tick);
                         }
                     }
 
@@ -292,7 +299,7 @@ impl SowApp {
                                 &snap.buildings,
                             );
 
-                            let mut list = Vec::new();
+                            self.ui.placement_scratch.clear();
                             for b in &snap.buildings {
                                 if stack_tile == Some(b.tile_idx) {
                                     continue;
@@ -314,12 +321,14 @@ impl SowApp {
                                     let dy = (by - row).abs();
                                     let dist = dx.max(dy);
 
-                                    list.push((bx, by, r_val, dist));
+                                    self.ui.placement_scratch.push((bx, by, r_val, dist));
                                 }
                             }
 
-                            list.sort_unstable_by_key(|item| item.3);
-                            for (i, item) in list.iter().take(32).enumerate() {
+                            self.ui
+                                .placement_scratch
+                                .sort_unstable_by_key(|item| item.3);
+                            for (i, item) in self.ui.placement_scratch.iter().take(32).enumerate() {
                                 nobuild_slots[i] = [item.0 as f32, item.1 as f32, item.2, 1.0f32];
                             }
                         }
@@ -346,14 +355,13 @@ impl SowApp {
 
                     // ── Attack Border Flash ──
                     let (attack_flash_target, attack_flash_t) = {
-                        let mut player_intensities: std::collections::HashMap<u16, f32> =
-                            std::collections::HashMap::new();
+                        self.ui.border_flash_intensities.clear();
+                        let intensities = &mut self.ui.border_flash_intensities;
                         self.ui.border_flashes.retain(|flash| {
                             let elapsed =
                                 current_time.duration_since(flash.start_time).as_secs_f32();
                             if let Some(t) = crate::app::easeout_flash(elapsed) {
-                                let entry =
-                                    player_intensities.entry(flash.player_id).or_insert(0.0);
+                                let entry = intensities.entry(flash.player_id).or_insert(0.0);
                                 *entry += t * flash.max_intensity;
                                 true
                             } else {
@@ -361,12 +369,12 @@ impl SowApp {
                             }
                         });
 
-                        player_intensities
-                            .into_iter()
+                        intensities
+                            .iter()
                             .max_by(|a, b| {
-                                a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
+                                a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
                             })
-                            .map(|(id, t)| (id as f32, t.min(1.5)))
+                            .map(|(&id, &t)| (id as f32, t.min(1.5)))
                             .unwrap_or((0.0, 0.0))
                     };
 

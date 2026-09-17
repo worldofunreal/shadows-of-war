@@ -17,7 +17,7 @@ function renderTopbar() {
     var leader = leaderById(state.selected_leader);
     var name = displayNameDraft != null ? displayNameDraft : (state.player_name || SOW_t("menu.anonymous"));
     var accountXp = Math.max(0, Number(state.xp) || 0);
-    var crowns = state.crowns == null ? state.laurels : state.crowns;
+    var laurels = state.laurels || 0;
     return "" +
         "<header class='sow-menu__topbar'>" +
             "<div class='sow-menu__identity'>" +
@@ -33,7 +33,7 @@ function renderTopbar() {
                 "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='" + esc(SOW_t("menu.open_profile")) + "' aria-label='" + esc(SOW_t("menu.open_profile")) + "'>" +
                     "<span class='sow-menu__progress-cell sow-menu__level'><small>" + esc(SOW_t("menu.level_short")) + "</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
                     "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " " + esc(SOW_t("menu.xp")) + "</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
-                    "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
+                    "<span class='sow-menu__progress-cell sow-menu__laurels'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-laurels-value>" + esc(laurels) + "</strong></span>" +
                 "</div>" +
                 "<span class='sow-menu__account-label'>" + esc(SOW_t("menu.anonymous")) + "</span>" +
                 "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>⚙</button>" +
@@ -59,8 +59,8 @@ function updateTopbar() {
     if (level) level.textContent = String(state.level == null ? 1 : state.level);
     var xp = topbar.querySelector("[data-progression-xp-value]");
     if (xp) xp.textContent = Math.floor(Number(state.xp) || 0) + " " + SOW_t("menu.xp");
-    var crowns = topbar.querySelector("[data-progression-crowns-value]");
-    if (crowns) crowns.textContent = String(state.crowns == null ? state.laurels : state.crowns);
+    var laurels = topbar.querySelector("[data-progression-laurels-value]");
+    if (laurels) laurels.textContent = String(state.laurels || 0);
 }
 
 function renderCommandPanel() {

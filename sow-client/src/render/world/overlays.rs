@@ -30,12 +30,76 @@ const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
 const BUILDING_CLUSTER_TARGET_SIZE: f32 = 40.0;
 const BUILDING_LEVEL_FONT_RATIO: f32 = 0.58;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TutorialAvatarGeometry {
+    pub x: f32,
+    pub y: f32,
+    pub radius: f32,
+}
+
+pub(crate) fn nameplate_screen_center(
+    player: &PlayerSnapshot,
+    input: &InputState,
+    sf: f32,
+) -> [f32; 2] {
+    nameplate_screen_center_from_world(
+        player.centroid_x,
+        player.centroid_y,
+        input.camera_x,
+        input.camera_y,
+        input.camera_zoom,
+        sf,
+    )
+}
+
+fn nameplate_screen_center_from_world(
+    centroid_x: f32,
+    centroid_y: f32,
+    camera_x: f32,
+    camera_y: f32,
+    camera_zoom: f32,
+    sf: f32,
+) -> [f32; 2] {
+    let sf = sf.max(0.01);
+    [
+        (camera_x + (centroid_x + 0.5) * camera_zoom) / sf,
+        (camera_y + (centroid_y + 0.5) * camera_zoom) / sf,
+    ]
+}
+
+fn tutorial_avatar_geometry(
+    text: &TextRenderer,
+    player: &PlayerSnapshot,
+    input: &InputState,
+    dev: &DevConfig,
+    sf: f32,
+) -> Option<TutorialAvatarGeometry> {
+    if !player.alive || player.tile_count == 0 || !player.has_spawned {
+        return None;
+    }
+    let sf = sf.max(0.01);
+    let zoom_scaled = input.camera_zoom / sf;
+    let is_human = player.player_type == PlayerType::Human;
+    let scaled_size = nameplate_font_px(player.tile_count, zoom_scaled, is_human);
+    if !is_human && (zoom_scaled < NAMEPLATE_HIDE_ZOOM || scaled_size < 7.0) {
+        return None;
+    }
+    let center = nameplate_screen_center(player, input, sf);
+    let layout = compute_nameplate_layout(text, player, center, scaled_size, dev, sf);
+    (layout.avatar_radius > 0.0).then_some(TutorialAvatarGeometry {
+        x: layout.avatar_center[0],
+        y: layout.avatar_center[1],
+        radius: layout.avatar_radius,
+    })
+}
+
 pub(crate) fn render_overlays(
     text: &mut TextRenderer,
     sim: &SimState,
     ui: &UiState,
     input: &InputState,
     sf: f32,
+    time_secs: f32,
 ) {
     let Some(snapshot) = sim.current_snapshot.as_ref() else {
         return;
@@ -48,6 +112,51 @@ pub(crate) fn render_overlays(
         render_buildings(text, snapshot, sim, input, &dev, sf, zoom_scaled);
     }
     render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled);
+
+    if !ui.tutorial_active {
+        return;
+    }
+    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
+    if let Some(geometry) = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == my_id)
+        .and_then(|player| tutorial_avatar_geometry(text, player, input, &dev, sf))
+    {
+        render_tutorial_pointer(text, geometry, time_secs, sf);
+    }
+}
+
+fn render_tutorial_pointer(
+    text: &mut TextRenderer,
+    geometry: TutorialAvatarGeometry,
+    time_secs: f32,
+    sf: f32,
+) {
+    let sf = sf.max(0.01);
+    let base_radius = geometry.radius.max(0.0) + 6.0;
+    let center = [geometry.x * sf, geometry.y * sf];
+    let gold = [1.0, 200.0 / 255.0, 90.0 / 255.0, 1.0];
+
+    for k in 0..2 {
+        let phase = (time_secs * 1.1 + k as f32 * 0.5).rem_euclid(1.0);
+        let radius = (base_radius + phase * base_radius * 2.2) * sf;
+        text.push_ring(
+            center,
+            radius,
+            [gold[0], gold[1], gold[2], 1.0 - phase],
+            2.0 * sf,
+        );
+    }
+    text.push_ring(center, base_radius * sf, gold, 2.5 * sf);
+
+    let bob = (time_secs * 3.0).sin() * 5.0;
+    let tip_y = geometry.y - base_radius - 10.0 + bob;
+    text.push_triangle(
+        [geometry.x * sf, (tip_y - 5.5) * sf],
+        [18.0 * sf, 11.0 * sf],
+        gold,
+    );
 }
 
 fn render_nameplates(
@@ -92,10 +201,7 @@ fn render_nameplates(
             continue;
         }
 
-        let center = [
-            (input.camera_x + (player.centroid_x + 0.5) * input.camera_zoom) / sf,
-            (input.camera_y + (player.centroid_y + 0.5) * input.camera_zoom) / sf,
-        ];
+        let center = nameplate_screen_center(player, input, sf);
         if center[0] < -160.0
             || center[0] > screen_w + 160.0
             || center[1] < -160.0
@@ -291,6 +397,49 @@ impl NameplateLayout {
     }
 }
 
+fn compute_nameplate_layout(
+    text: &TextRenderer,
+    player: &PlayerSnapshot,
+    center: [f32; 2],
+    scaled_size: f32,
+    dev: &DevConfig,
+    sf: f32,
+) -> NameplateLayout {
+    let metrics = NameplateMetrics::compute(scaled_size, player.player_type, dev.vfx_bot_avatars);
+    let font_scale = dev.font_size_scale.max(0.1);
+    let char_spacing = dev.font_char_spacing.max(0.1);
+    let name_font_size = metrics.render_size * font_scale;
+    let troops_font_size = metrics.troops_render_size * font_scale;
+    let troops_measure = text_measure(
+        text,
+        &crate::utils::format_number(player.troops),
+        troops_font_size,
+        char_spacing,
+        sf,
+    );
+    let troops_icon_size = troops_font_size;
+    let troops_size = [
+        troops_icon_size + 3.0 + troops_measure[0],
+        troops_icon_size.max(troops_measure[1]),
+    ];
+    let display_name = sow_core::player::display_name(player.id, &player.name, player.player_type);
+    let name_measure = text_measure(text, &display_name, name_font_size, char_spacing, sf);
+    let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
+    let badge_padding = outline
+        .scaled_for_emoji(metrics.badge_size * sf)
+        .effect_padding()
+        / sf;
+    NameplateLayout::compute(
+        center,
+        metrics,
+        name_measure,
+        troops_size,
+        dev.vfx_nameplate_names,
+        dev.vfx_nameplate_troops,
+        badge_padding,
+    )
+}
+
 fn paint_nameplate(
     text: &mut TextRenderer,
     player: &PlayerSnapshot,
@@ -311,26 +460,8 @@ fn paint_nameplate(
     let name_font_size = metrics.render_size * font_scale;
     let troops_font_size = metrics.troops_render_size * font_scale;
     let troops_icon_size = troops_font_size;
-    let name_measure = text_measure(text, display_name, name_font_size, char_spacing, sf);
-    let troops_measure = text_measure(text, troops, troops_font_size, char_spacing, sf);
-    let troops_size = [
-        troops_icon_size + 3.0 + troops_measure[0],
-        troops_icon_size.max(troops_measure[1]),
-    ];
     let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let badge_padding = outline
-        .scaled_for_emoji(metrics.badge_size * sf)
-        .effect_padding()
-        / sf;
-    let layout = NameplateLayout::compute(
-        center,
-        metrics,
-        name_measure,
-        troops_size,
-        dev.vfx_nameplate_names,
-        dev.vfx_nameplate_troops,
-        badge_padding,
-    );
+    let layout = compute_nameplate_layout(text, player, center, scaled_size, dev, sf);
     let color = player_color(player);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
 
@@ -876,5 +1007,33 @@ mod tests {
         let lod = BuildingLod::for_zoom(1.0);
         assert!(lod.compact);
         assert_eq!(lod.cluster_cell_size, BUILDING_CLUSTER_TARGET_SIZE);
+    }
+
+    #[test]
+    fn tutorial_pointer_and_avatar_share_the_same_dpr_projection() {
+        let world = (18.25, 7.75, 96.0, 48.0, 3.0);
+        let metrics = NameplateMetrics::compute(14.0, PlayerType::Human, true);
+        for sf in [1.0, 2.0] {
+            let center = nameplate_screen_center_from_world(
+                world.0, world.1, world.2, world.3, world.4, sf,
+            );
+            let layout = NameplateLayout::compute(
+                center,
+                metrics,
+                [100.0, 20.0],
+                [100.0, 20.0],
+                true,
+                true,
+                0.0,
+            );
+            assert_eq!(layout.avatar_center[0], center[0]);
+            let total_height = metrics.avatar_diameter
+                + metrics.render_size * AVATAR_TEXT_GAP_SCALE
+                + 20.0
+                + metrics.render_size * 0.111
+                + 20.0;
+            let expected_y = center[1] - total_height * 0.5 + metrics.avatar_radius;
+            assert!((layout.avatar_center[1] - expected_y).abs() < 0.001);
+        }
     }
 }

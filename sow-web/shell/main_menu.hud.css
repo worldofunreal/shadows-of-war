@@ -855,6 +855,10 @@
     pointer-events: none;
 }
 
+.sow-hud__tutorial-overlay.is-open {
+    pointer-events: auto;
+}
+
 .sow-hud__tutorial-card {
     position: absolute;
     left: 50%;
@@ -869,7 +873,15 @@
     border-radius: 16px;
     background: linear-gradient(160deg, rgba(24, 27, 33, 0.98), rgba(10, 12, 16, 0.98));
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+}
+
+.sow-hud__tutorial-overlay.is-open .sow-hud__tutorial-card {
     pointer-events: auto;
+}
+
+.sow-hud__tutorial-card[hidden] {
+    display: none !important;
 }
 
 .sow-hud__tutorial-copy {
@@ -926,6 +938,7 @@
     font-weight: var(--sow-button-weight);
     letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
+    touch-action: manipulation;
 }
 
 .sow-hud__tutorial-avatar {
@@ -939,16 +952,54 @@
     object-position: top center;
 }
 
-.sow-hud__tutorial-marker {
+.sow-hud__map-menu {
     position: absolute;
-    width: 58px;
-    height: 58px;
+    z-index: 190;
+    display: grid;
+    min-width: 132px;
+    gap: 5px;
     transform: translate(-50%, -50%);
-    border: 2px solid rgba(243, 177, 43, 0.9);
-    border-radius: 50%;
-    box-shadow: 0 0 0 8px rgba(243, 177, 43, 0.14), 0 0 28px rgba(243, 177, 43, 0.65);
-    color: transparent;
-    pointer-events: none;
+    padding: 8px;
+    border: 1px solid rgba(243, 177, 43, 0.55);
+    border-radius: 12px;
+    background: rgba(10, 12, 16, 0.96);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.65);
+    pointer-events: auto;
+}
+
+.sow-hud__map-menu.hidden {
+    display: none !important;
+}
+
+.sow-hud__map-action,
+.sow-hud__map-close {
+    min-height: 32px;
+    padding: 6px 9px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 7px;
+    background: rgba(30, 41, 59, 0.85);
+    color: #f5f1e8;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.sow-hud__map-action:hover,
+.sow-hud__map-action:focus-visible {
+    border-color: rgba(243, 177, 43, 0.9);
+    background: rgba(71, 55, 20, 0.95);
+}
+
+.sow-hud__map-close {
+    min-height: 26px;
+    padding: 3px 7px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--sow-muted);
+    text-align: center;
 }
 
 .sow-tutorial__error {
@@ -1683,7 +1734,9 @@
     #sow-hud[data-overlay-open="true"] .sow-hud__right-rail,
     #sow-hud[data-overlay-open="true"] .sow-hud__hover-card,
     #sow-hud[data-overlay-open="true"] .sow-hud__dock,
-    #sow-hud[data-overlay-open="true"] .sow-hud__notifications
+    #sow-hud[data-overlay-open="true"] .sow-hud__notifications {
+        display: none;
+    }
 }
 
 @media (max-width: 599px) and (orientation: portrait) and (max-height: 640px) {

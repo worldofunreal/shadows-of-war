@@ -20,48 +20,42 @@ fn should_use_exit_game_loader(phase: ClientPhase) -> bool {
 }
 
 impl SowApp {
-    pub(crate) fn make_ready_message(
+    pub(crate) fn make_relay_ready_message(
         &self,
         lobby_id: u64,
         player_id: u16,
-    ) -> sow_core::protocol::ClientMessage {
-        match self.sim.relay_ticket.clone() {
-            Some(ticket) => sow_core::protocol::ClientMessage::ReadyWithTicket {
+    ) -> Option<sow_core::protocol::ClientMessage> {
+        self.sim
+            .relay_ticket
+            .clone()
+            .map(|ticket| sow_core::protocol::ClientMessage::ReadyWithTicket {
                 lobby_id,
                 player_id,
                 ticket,
-            },
-            None => sow_core::protocol::ClientMessage::Ready {
-                lobby_id,
-                player_id,
-            },
-        }
+            })
     }
 
     pub(crate) fn make_initial_relay_ready_message(
         &self,
         lobby_id: u64,
         player_id: u16,
-    ) -> sow_core::protocol::ClientMessage {
-        self.make_ready_message(lobby_id, player_id)
+    ) -> Option<sow_core::protocol::ClientMessage> {
+        self.make_relay_ready_message(lobby_id, player_id)
     }
 
     pub(crate) fn make_reconnect_message(
         &self,
         lobby_id: u64,
         player_id: u16,
-    ) -> sow_core::protocol::ClientMessage {
+    ) -> Option<sow_core::protocol::ClientMessage> {
         if let Some(ticket) = self.sim.relay_reconnect_ticket.clone() {
-            sow_core::protocol::ClientMessage::ReconnectWithTicket {
+            Some(sow_core::protocol::ClientMessage::ReconnectWithTicket {
                 lobby_id,
                 player_id,
                 ticket,
-            }
+            })
         } else {
-            // A reconnect can race the relay's capability frame. Keep the
-            // initial ticket as a compatibility fallback; production logs the
-            // replay if that race loses, rather than silently authenticating.
-            self.make_ready_message(lobby_id, player_id)
+            None
         }
     }
 
@@ -71,59 +65,29 @@ impl SowApp {
         host_private: bool,
         host_config: Option<Box<sow_core::game_config::GameConfig>>,
         password: Option<String>,
-    ) -> sow_core::protocol::ClientMessage {
+    ) -> Option<sow_core::protocol::ClientMessage> {
         let payload = sow_core::protocol::JoinPayload {
             name: self.ui.app.main_menu_state.player_name.clone(),
-            is_observer: false,
             target_lobby_id,
             host_private,
             build_version: get_build_version(),
             clan_tag: self.ui.app.main_menu_state.clan_tag.clone(),
             civilization: self.ui.app.main_menu_state.selected_civilization,
             leader: self.ui.app.main_menu_state.selected_leader,
-            database_account_id: self.progress_account_id.clone(),
             host_config,
             password,
         };
-        match self.make_auth_proof() {
-            Some(auth) => sow_core::protocol::ClientMessage::JoinWithAuth {
+        self.make_auth_proof().map(|auth| {
+            sow_core::protocol::ClientMessage::JoinWithAuth {
                 join: Box::new(payload),
                 auth,
-            },
-            None => {
-                let sow_core::protocol::JoinPayload {
-                    name,
-                    is_observer,
-                    target_lobby_id,
-                    host_private,
-                    build_version,
-                    clan_tag,
-                    civilization,
-                    leader,
-                    database_account_id,
-                    host_config,
-                    password,
-                } = payload;
-                sow_core::protocol::ClientMessage::Join {
-                    name,
-                    is_observer,
-                    target_lobby_id,
-                    host_private,
-                    build_version,
-                    clan_tag,
-                    civilization,
-                    leader,
-                    database_account_id,
-                    host_config,
-                    password,
-                }
             }
-        }
+        })
     }
 
     /// Identity proof for JoinWithAuth: the CrazyGames platform token for
-    /// signed-in portal users, or the anonymous account secret. None means a
-    /// plain guest join (offline mode, or no account yet).
+    /// signed-in portal users, or the anonymous account secret. Online joins
+    /// wait until one of these proofs is available.
     fn make_auth_proof(&self) -> Option<sow_core::protocol::AuthProof> {
         if self.net.is_offline {
             return None;

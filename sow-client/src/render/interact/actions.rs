@@ -346,10 +346,15 @@ impl SowApp {
                 let config_opt = (!self.join_matchmaking)
                     .then(|| self.ui.app.main_menu_state.custom_game_config.clone());
                 let join_msg = self.make_join_message(lobby_id, is_private, config_opt, password);
-                if let Ok(json) = bincode::serialize(&join_msg) {
+                if let Some(join_msg) = join_msg
+                    && let Ok(json) = bincode::serialize(&join_msg)
+                {
                     c.send(json);
+                    self.join_waiting_for_identity = false;
+                } else {
+                    self.join_waiting_for_identity = true;
+                    log::info!("Queueing Join until the identity proof is ready");
                 }
-                self.join_waiting_for_identity = false;
             } else {
                 // Identity must settle before Join; otherwise the server sees a
                 // second anonymous player on every refresh/race.

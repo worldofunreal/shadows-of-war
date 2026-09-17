@@ -56,14 +56,17 @@ impl SowApp {
         let turn_queue = std::collections::VecDeque::new();
         let my_player_id: Option<u16> = None;
         let my_lobby_id: Option<u64> = None;
-        let (map_tx, map_rx) = crossbeam_channel::unbounded::<MapDownloadEvent>();
-        let (db_tx, db_rx) = crossbeam_channel::unbounded::<crate::player_progress::DbEvent>();
+        let (map_tx_raw, map_rx) = crossbeam_channel::unbounded::<MapDownloadEvent>();
+        let map_tx = WakeSender::new(map_tx_raw);
+        let (db_tx_raw, db_rx) = crossbeam_channel::unbounded::<crate::player_progress::DbEvent>();
+        let db_tx = WakeSender::new(db_tx_raw);
         type EngineInitData = (
             sow_core::game::GameState,
             sow_core::water_components::WaterComponents,
             sow_core::protocol::ServerStartMessage,
         );
-        let (engine_init_tx, engine_init_rx) = crossbeam_channel::unbounded::<EngineInitEvent>();
+        let (engine_init_tx_raw, engine_init_rx) = crossbeam_channel::unbounded::<EngineInitEvent>();
+        let engine_init_tx = WakeSender::new(engine_init_tx_raw);
         let pending_engine_init_data: Option<EngineInitData> = None;
         let engine_init_queued_msg: Option<sow_core::protocol::ServerStartMessage> = None;
 
@@ -87,7 +90,8 @@ impl SowApp {
         }
         let initial_display_name = app.main_menu_state.player_name.clone();
 
-        let (connect_tx, connect_rx) = crossbeam_channel::unbounded();
+        let (connect_tx_raw, connect_rx) = crossbeam_channel::unbounded();
+        let connect_tx = WakeSender::new(connect_tx_raw);
 
         // Reconnect scheduling (idle drop / resume / failed handshake).
         let ws_connect_fail_backoff_ms: u64 = 400;
@@ -141,8 +145,10 @@ impl SowApp {
 
         // Touch state for pinch-to-zoom
         let active_touches: HashMap<u64, (f64, f64)> = HashMap::new();
-        let map_touch_start: Option<(Instant, f64, f64)> = None;
+        let map_pointer_start: Option<MapPointerStart> = None;
         let last_pinch_state: Option<(f64, f64, f64)> = None;
+        let map_context_menu: Option<MapContextMenu> = None;
+        let map_context_menu_session = 0;
 
         let has_snapped_camera_to_spawn = false;
 
@@ -224,8 +230,10 @@ impl SowApp {
                 last_mouse_x,
                 last_mouse_y,
                 active_touches,
-                map_touch_start,
+                map_pointer_start,
                 last_pinch_state,
+                map_context_menu,
+                map_context_menu_session,
                 hold_build_active: false,
                 hold_build_accum: 0.0,
                 has_snapped_camera_to_spawn,
@@ -257,6 +265,8 @@ impl SowApp {
                 observing: false,
                 fallout_zones: Vec::new(),
                 last_projectiles: std::collections::HashMap::new(),
+                last_projectile_snapshot_tick: None,
+                detonation_scratch: Vec::new(),
                 cached_player_colors: Vec::new(),
                 cached_player_count: 0,
                 endgame_cache: None,
@@ -267,6 +277,8 @@ impl SowApp {
                 click_markers: Vec::new(),
                 last_build_confirm_time: None,
                 border_flashes: Vec::new(),
+                border_flash_intensities: std::collections::HashMap::new(),
+                placement_scratch: Vec::new(),
                 last_player_attack_flash_time: std::collections::HashMap::new(),
                 viewport_alert: None,
             },

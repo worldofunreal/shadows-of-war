@@ -114,6 +114,7 @@ pub const KIND_DISC: f32 = 2.0;
 pub const KIND_RING: f32 = 3.0;
 pub const KIND_SPRITE: f32 = 4.0;
 pub const KIND_RECT: f32 = 5.0;
+pub const KIND_TRIANGLE: f32 = 6.0;
 
 pub const AVATAR_CELL: u32 = 128;
 pub const AVATAR_COLS: u32 = 4;
@@ -142,8 +143,9 @@ pub struct TextInstanceGpu {
     pub screen_pos: [f32; 2],
     pub size: [f32; 2],
     pub uv_rect: [f32; 4],
-    /// Normalized quad area containing the logical texture content. Emoji use this to reserve
-    /// transparent room for the outline/shadow; all other primitives use the full quad.
+    /// Normalized quad area containing the logical content inside the instance quad. Emoji use
+    /// this to reserve transparent room for the outline/shadow; rings use it to reserve their
+    /// antialias fringe. Other primitives use the full quad.
     pub content_rect: [f32; 4],
     pub color: [f32; 4],
     pub outline_color: [f32; 4],

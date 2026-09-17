@@ -295,7 +295,14 @@ impl SowApp {
                             self.ui.app.phase = ClientPhase::MainMenu;
                             self.ui.app.main_menu_state.is_waiting = true;
                             let join_msg = self.make_join_message(None, false, None, None);
-                            c.send(bincode::serialize(&join_msg).unwrap());
+                            if let Some(join_msg) = join_msg
+                                && let Ok(data) = bincode::serialize(&join_msg)
+                            {
+                                c.send(data);
+                                self.join_waiting_for_identity = false;
+                            } else {
+                                self.join_waiting_for_identity = true;
+                            }
                         } else if matches!(
                             closed.reason.as_str(),
                             "HOST_LEFT" | "KICKED" | "BANNED"
@@ -394,12 +401,11 @@ impl SowApp {
                                 )
                                 .unwrap(),
                             );
-                            c.send(
-                                bincode::serialize(
-                                    &self.make_ready_message(ack.lobby_id, ack.player_id),
-                                )
-                                .unwrap(),
-                            );
+                            let ready = sow_core::protocol::ClientMessage::LobbyReady {
+                                lobby_id: ack.lobby_id,
+                                player_id: ack.player_id,
+                            };
+                            c.send(bincode::serialize(&ready).unwrap());
                         } else {
                             let tx = self.tasks.map_tx.clone();
                             self.ui.app.main_menu_state.is_downloading_map = true;

@@ -254,13 +254,6 @@ fn relay_close_hook(peer: SocketAddr) {
     }
 }
 
-fn tickets_required() -> bool {
-    std::env::var("SOW_RELAY_TICKETS_REQUIRED")
-        .ok()
-        .map(|value| value == "1")
-        .unwrap_or(false)
-}
-
 fn strict_runtime_security() -> bool {
     std::env::var("SOW_MGMT_TLS_REQUIRED").ok().as_deref() == Some("1")
 }
@@ -308,11 +301,6 @@ fn db_client(db_url: &str) -> Result<reqwest::Client, String> {
 fn validate_runtime_security() -> Result<(), String> {
     if !strict_runtime_security() {
         return Err("SOW_MGMT_TLS_REQUIRED must be 1; refusing insecure relay startup".to_string());
-    }
-    if !tickets_required() {
-        return Err(
-            "SOW_RELAY_TICKETS_REQUIRED must be 1; refusing legacy relay startup".to_string(),
-        );
     }
     configured_db_url().map(|_| ())
 }
@@ -1604,22 +1592,20 @@ async fn handle_http(
                     serde_json::json!({ "error": "lobby_id required" }),
                 );
             }
-            if tickets_required() && rb.ticket_expires_at == 0 {
+            if rb.ticket_expires_at == 0 {
                 return (
                     "400 Bad Request",
                     serde_json::json!({ "error": "ticket_expires_at required" }),
                 );
             }
-            if tickets_required()
-                && rb.players.iter().any(|player| {
-                    !player.is_internal
-                        && player
-                            .relay_ticket_digest
-                            .as_deref()
-                            .and_then(decode_ticket_digest)
-                            .is_none()
-                })
-            {
+            if rb.players.iter().any(|player| {
+                !player.is_internal
+                    && player
+                        .relay_ticket_digest
+                        .as_deref()
+                        .and_then(decode_ticket_digest)
+                        .is_none()
+            }) {
                 return (
                     "400 Bad Request",
                     serde_json::json!({ "error": "relay ticket digest required for every network player" }),
@@ -2313,26 +2299,6 @@ async fn ws_task(
         Ok(Some(Ok(Message::Binary(b)))) => {
             first_frame_us = first_frame_started.elapsed().as_micros();
             match bincode::deserialize::<ClientMessage>(&b) {
-                Ok(ClientMessage::Ready {
-                    lobby_id,
-                    player_id,
-                }) => {
-                    role = try_ready_register(
-                        &registry, lobby_id, player_id, None, generation, &direct_tx,
-                    )
-                    .await;
-                    let audit_session_id = role_session_id(&role);
-                    info!(
-                        "[relay] first-frame Ready origin=external_network lobby={} player={} registered={} peer={} session_id={:?} fd={} generation={}",
-                        lobby_id,
-                        player_id,
-                        role.is_some(),
-                        peer,
-                        audit_session_id,
-                        fd,
-                        generation
-                    );
-                }
                 Ok(ClientMessage::ReadyWithTicket {
                     lobby_id,
                     player_id,
@@ -2384,15 +2350,6 @@ async fn ws_task(
                         fd,
                         generation
                     );
-                }
-                Ok(ClientMessage::Join { .. }) => {
-                    // Real clients Join the orchestrator (sow-server), never the
-                    // relay. Ignore stale/spike-era joins.
-                    warn!(
-                        "[relay] Join ignored (orchestrator handles joins) fd={}",
-                        fd
-                    );
-                    role = None;
                 }
                 Ok(_) => {
                     warn!("[relay] ignored first frame fd={}", fd);
@@ -2496,22 +2453,6 @@ async fn ws_task(
                         if msg.is_binary() {
                             if let Ok(cmsg) = bincode::deserialize::<ClientMessage>(&msg.into_data()) {
                                 match cmsg {
-                                    ClientMessage::Ready { lobby_id: l_id, player_id } => {
-                                        // Re-ready (reconnect) mid-session.
-                                        if let (Some(lobby), Some(pid)) = (&my_lobby, &my_player_id) {
-                                            if lobby.id == l_id && *pid == player_id
-                                                && !tickets_required()
-                                                && lobby.valid_players.contains_key(&player_id)
-                                            {
-                                                lobby.clients.lock().await.insert(player_id, ClientChannel { sender: direct_tx.clone(), missed_ticks: 0, generation });
-                                                info!("[relay] ready origin=external_network lobby={} player={} peer={} session_id={:?} fd={} generation={}", l_id, player_id, peer, lobby.session_ids.get(&player_id).copied(), fd, generation);
-                                                let _ = lobby.ev_tx.try_send(RelayEvent::Gameplay {
-                                                    player_id,
-                                                    intent: GameplayIntent::MarkDisconnected { is_disconnected: false },
-                                                });
-                                            }
-                                        }
-                                    }
                                     ClientMessage::ReadyWithTicket { lobby_id: l_id, player_id, ticket } => {
                                         warn!("[relay] rejected mid-session initial ticket replay lobby={} player={} fd={} ticket_len={}", l_id, player_id, fd, ticket.len());
                                     }
@@ -2537,14 +2478,6 @@ async fn ws_task(
                                         let pong = ServerMessage::Pong { client_time };
                                         if let Ok(json) = bincode::serialize(&pong) {
                                             let _ = direct_tx.try_send(Arc::new(json));
-                                        }
-                                    }
-                                    ClientMessage::SubmitStats { kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated } => {
-                                        if let (Some(lobby), Some(pid)) = (&my_lobby, my_player_id) {
-                                            record_client_stats(lobby, pid, MatchPlayerStats {
-                                                kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated,
-                                                leader: None,
-                                            });
                                         }
                                     }
                                     ClientMessage::SubmitStatsWithLeader { kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated, leader } => {
@@ -2669,29 +2602,7 @@ async fn ws_task(
     }
 }
 
-/// Resolve a `Ready` against the registry and register the client channel.
-/// Returns `Some(Role::RelayPlayer)` on success (mirrors the sow-relay Ready
-/// handler: valid lobby + valid player + history replay).
-async fn try_ready_register(
-    registry: &Registry,
-    lobby_id: u64,
-    player_id: u16,
-    ticket: Option<&str>,
-    generation: u64,
-    direct_tx: &mpsc::Sender<Arc<Vec<u8>>>,
-) -> Option<Role> {
-    let admission = match ticket {
-        Some(ticket) => RelayAdmission::Initial(ticket),
-        None => RelayAdmission::Legacy,
-    };
-    try_register_with_admission(
-        registry, lobby_id, player_id, admission, generation, direct_tx,
-    )
-    .await
-}
-
 enum RelayAdmission<'a> {
-    Legacy,
     Initial(&'a str),
     Reconnect(&'a str),
 }
@@ -2789,14 +2700,6 @@ async fn try_register_with_admission(
                 auth.reconnect_digests.insert(player_id, digest);
                 Some(token)
             }
-            RelayAdmission::Legacy if tickets_required() => {
-                warn!(
-                    "[relay] missing relay ticket lobby={} player={}",
-                    lobby_id, player_id
-                );
-                return None;
-            }
-            RelayAdmission::Legacy => None,
         }
     };
 
@@ -2929,16 +2832,11 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 
 #[cfg(test)]
 mod dispatcher_tests {
-    use super::{
-        AdmissionState, IpAdmissionState, Registry, RelayAdmissionPolicy, ticket_matches,
-        try_ready_register,
-    };
+    use super::{AdmissionState, IpAdmissionState, RelayAdmissionPolicy, ticket_matches};
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
     use std::net::SocketAddr;
-    use std::sync::Arc;
     use std::sync::Mutex as StdMutex;
-    use tokio::sync::{RwLock, mpsc};
 
     fn policy(
         max_connections: usize,
@@ -2959,17 +2857,6 @@ mod dispatcher_tests {
             rejected_rate: std::sync::atomic::AtomicU64::new(0),
             active_peak: std::sync::atomic::AtomicU64::new(0),
         }
-    }
-
-    #[tokio::test]
-    async fn rejects_ready_for_lobby_not_owned_by_worker() {
-        let registry: Registry = Arc::new(RwLock::new(HashMap::new()));
-        let (tx, _rx) = mpsc::channel(1);
-        assert!(
-            try_ready_register(&registry, 42, 7, None, 1, &tx,)
-                .await
-                .is_none()
-        );
     }
 
     #[test]

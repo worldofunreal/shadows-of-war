@@ -65,6 +65,10 @@ impl SowApp {
         self.net.pending_lobby_rejoin = false;
         self.ui.hud_combat_sync_tick = 0;
         self.ui.last_projectiles.clear();
+        self.ui.last_projectile_snapshot_tick = None;
+        self.ui.detonation_scratch.clear();
+        self.ui.border_flash_intensities.clear();
+        self.ui.placement_scratch.clear();
         self.ui.tutorial_active = false;
 
         self.dispatch_sim_command(SimCommand::Shutdown);
@@ -390,10 +394,16 @@ impl SowApp {
                             && let (Some(lid), Some(pid)) =
                                 (self.sim.my_lobby_id, self.sim.my_player_id)
                         {
-                            let ready_msg = self.make_initial_relay_ready_message(lid, pid);
-                            let json = bincode::serialize(&ready_msg).unwrap();
-                            c.send(json);
-                            self.net.load_telemetry.mark_ready_sent();
+                            if let Some(ready_msg) = self.make_initial_relay_ready_message(lid, pid)
+                                && let Ok(json) = bincode::serialize(&ready_msg)
+                            {
+                                c.send(json);
+                                self.net.load_telemetry.mark_ready_sent();
+                            } else {
+                                log::warn!(
+                                    "EnterGame waiting for relay ticket before sending ready"
+                                );
+                            }
                         }
                     } else {
                         let p = self.ui.app.splash_state.progress;

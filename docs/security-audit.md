@@ -91,14 +91,14 @@ The initial ticket is one-shot (`initial_used`); successful admission creates
 a reconnect capability whose digest is replaced on every reconnect.  Ticket
 material is not included in the persisted lobby summary or logs.
 
-`ReadyWithTicket` is a new protocol variant; the legacy `Ready` variant remains
-available only while `SOW_RELAY_TICKETS_REQUIRED=0`.  Production deployment
-defaults that flag to `1`, and `./sow p` rejects any production management
-scheme other than HTTPS.  This keeps the rollout reproducible and prevents a
-configuration fallback from silently returning the control plane to HTTP.
+Every relay player connection must use `ReadyWithTicket` or
+`ReconnectWithTicket`; there is no unticketed admission path or runtime flag.
+`./sow p` rejects any production management scheme other than HTTPS. This keeps
+the rollout reproducible and prevents a configuration fallback from silently
+returning the control plane to HTTP.
 
-The ticket protects relay admission and cross-lobby/player impersonation.  It
-does not replace platform account authentication; `database_account_id` is
+The ticket protects relay admission and cross-lobby/player impersonation. It
+does not replace platform account authentication; the canonical account ID is
 still separate and must not be treated as proof of identity.
 
 ## Phase 3 — private relay-to-database path

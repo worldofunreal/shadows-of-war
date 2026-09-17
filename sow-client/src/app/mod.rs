@@ -17,7 +17,10 @@ impl SowApp {
         self.update_net(now);
         self.update_assets();
         self.update_loader();
+        self.poll_pointer_hold();
         self.update_sim(now);
-        crate::web_menu::publish_state(self);
+        if self.ui.app.phase != crate::ClientPhase::Playing {
+            crate::web_menu::publish_state(self);
+        }
     }
 }

@@ -1347,7 +1347,6 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         "sw.js",
         "game-manifest.json",
         "sdk/store_portals.js",
-        "locales/en",
     ] {
         if !dir.join(required).is_file() {
             bail!("crazygames bundle missing {}", required);
@@ -1385,12 +1384,6 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "game-manifest.json",
         "manifest.webmanifest",
         "sdk/store_portals.js",
-        "locales/en",
-        "locales/es",
-        "locales/fr",
-        "locales/de",
-        "locales/it",
-        "locales/tr",
         "fonts/fonts.css",
         "fonts/work-sans-latin.woff2",
         "assets/shell/loader/loader_empty.webp",
@@ -2874,14 +2867,6 @@ mod tests {
         assert!(
             conf.contains("return 301 https://shadowsofwar.io$request_uri;"),
             "Nginx missing 301 redirect to canonical root"
-        );
-        assert!(
-            conf.contains("server_name play.shadowsofwar.io;"),
-            "Nginx missing dedicated play server_name"
-        );
-        assert!(
-            conf.contains("return 301 https://shadowsofwar.io/play/;"),
-            "Nginx missing 301 redirect from legacy play host to /play/"
         );
         let security =
             fs::read_to_string(root.join("sow-dist/deploy/freebsd/conf.d/00-00-security.conf"))?;

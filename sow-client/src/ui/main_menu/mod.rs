@@ -36,7 +36,7 @@ pub struct MainMenuState {
     pub map_download_progress: u8, pub show_leader_picker: bool, pub clan_tag: String,
     pub selected_leader: sow_core::player::Leader, pub selected_civilization: sow_core::player::Civilization,
     pub error_message: Option<crate::ui::UiText>, pub my_player_id: Option<u16>, pub notice: Option<LobbyNotice>, pub notice_at: Option<f64>,
-    pub safe_area_bottom: f32, pub account_level: u32, pub account_xp: u32, pub crowns: u64,
+    pub safe_area_bottom: f32, pub account_level: u32, pub account_xp: u32,
     pub store_catalog: sow_data::commerce::StoreCatalog, pub selected_skin: Option<String>, pub store_busy: bool,
     pub profile: profile::ProfileState, pub route: MainMenuRoute,
 }
@@ -65,7 +65,7 @@ impl Default for MainMenuState {
             downloading_map_name: None, is_downloading_map: false, cached_map: None, cached_map_key: None, map_download_progress: 0,
             show_leader_picker: false, clan_tag: String::new(), selected_leader: leader, selected_civilization: leader.civilization(),
             error_message: None, my_player_id: None, notice: None, notice_at: None, safe_area_bottom: 0.0,
-            account_level: 1, account_xp: 0, crowns: 0,
+            account_level: 1, account_xp: 0,
             store_catalog: sow_data::commerce::catalog_for_profile(&empty_leaders, &empty_skins, 0, 0, 0),
             selected_skin: None, store_busy: false, profile: profile::ProfileState::default(), route: MainMenuRoute::Home,
         }

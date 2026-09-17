@@ -290,10 +290,8 @@ impl Drop for ZcRxGuard {
 
 // ---- shared state ----------------------------------------------------------
 
-/// kqueue + listening fd, owned by the example and read by the driver.
+/// kqueue and dynamic listener state owned by the driver.
 pub static mut KQ: c_int = -1;
-/// Compatibility alias for older examples. Dynamic relays use LISTENERS.
-pub static mut LISTEN_FD: c_int = -1;
 /// Dynamic listener fd -> TCP port map. Only the ff_run driver mutates it.
 static mut LISTENERS: Option<HashMap<c_int, u16>> = None;
 
@@ -495,7 +493,6 @@ pub fn setup() {
         PENDING_SEND_PEAK = 0;
         FD_GEN = None;
         PEERS = None;
-        LISTEN_FD = -1;
         LISTENERS = Some(HashMap::new());
     }
 }
@@ -813,7 +810,7 @@ pub unsafe extern "C" fn driver_cb(_arg: *mut c_void) -> c_int {
         }
         let fd = ev.ident as c_int;
 
-        if fd == LISTEN_FD || is_listener(fd) {
+        if is_listener(fd) {
             if ev.flags & (EV_EOF | EV_ERROR) != 0 {
                 close_listener_fd(fd);
             } else {
@@ -917,18 +914,14 @@ unsafe fn listener_for_port(port: u16) -> Option<c_int> {
 }
 
 unsafe fn is_listener(fd: c_int) -> bool {
-    fd == LISTEN_FD
-        || LISTENERS
-            .as_ref()
-            .is_some_and(|listeners| listeners.contains_key(&fd))
+    LISTENERS
+        .as_ref()
+        .is_some_and(|listeners| listeners.contains_key(&fd))
 }
 
 unsafe fn register_listener(fd: c_int, port: u16) {
     let listeners = LISTENERS.get_or_insert_with(HashMap::new);
     listeners.insert(fd, port);
-    if LISTEN_FD < 0 {
-        LISTEN_FD = fd;
-    }
 }
 
 unsafe fn close_listener_fd(fd: c_int) {
@@ -949,9 +942,6 @@ unsafe fn close_listener_fd(fd: c_int) {
     crate::ffi::ff_close(fd);
     if let Some(listeners) = LISTENERS.as_mut() {
         listeners.remove(&fd);
-        if LISTEN_FD == fd {
-            LISTEN_FD = listeners.keys().next().copied().unwrap_or(-1);
-        }
     }
 }
 

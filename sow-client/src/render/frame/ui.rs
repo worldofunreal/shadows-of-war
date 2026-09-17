@@ -67,9 +67,11 @@ impl SowApp {
                     &self.ui,
                     &self.input,
                     sf,
+                    self.time.start_time.elapsed().as_secs_f32() % 1000.0,
                 );
             }
         }
+        crate::web_menu::publish_state(self);
 
         let Some(mut render_ctx) = self.gfx.render_ctx.take() else { return; };
         if let Some(text) = &mut self.gfx.text_renderer { text.draw(&mut render_ctx.command_encoder, frame.texture_view(), [self.input.screen_w, self.input.screen_h], &render_ctx.context); }

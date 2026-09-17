@@ -53,28 +53,23 @@ impl SowApp {
                             (self.sim.my_lobby_id, self.sim.my_player_id)
                         {
                             let msg = if self.ui.app.phase == crate::ClientPhase::Playing {
-                                log::info!("Sent Reconnect to Relay server on reconnect/playing!");
+                                log::info!("Sending reconnect ticket to relay");
                                 self.make_reconnect_message(lid, pid)
                             } else {
-                                log::info!(
-                                    "Sent Ready/ReconnectWithTicket to Relay server before loader release!"
-                                );
-                                self.make_reconnect_message(lid, pid)
+                                log::info!("Sending initial relay ticket");
+                                self.make_relay_ready_message(lid, pid)
                             };
-                            if let Ok(data) = bincode::serialize(&msg) {
+                            if let Some(msg) = msg
+                                && let Ok(data) = bincode::serialize(&msg)
+                            {
                                 client.send(data);
                                 self.net.load_telemetry.mark_ready_sent();
+                            } else {
+                                log::info!("Relay connection waiting for its ticket");
                             }
                         }
                     } else if self.ui.app.phase == crate::ClientPhase::Playing {
-                        if let (Some(lid), Some(pid)) =
-                            (self.sim.my_lobby_id, self.sim.my_player_id)
-                        {
-                            log::info!("Sent Ready to Master server on reconnect/playing!");
-                            client.send(
-                                bincode::serialize(&self.make_reconnect_message(lid, pid)).unwrap(),
-                            );
-                        }
+                        log::info!("Orchestrator reconnected while the relay session is active");
                     } else if self.net.pending_lobby_rejoin {
                         log::info!("Re-sending Join to lobby after hop");
                         let target = self.sim.my_lobby_id.or(self
@@ -83,18 +78,26 @@ impl SowApp {
                             .main_menu_state
                             .pending_join_lobby_id);
                         let join_msg = self.make_join_message(target, false, None, None);
-                        if let Ok(json) = bincode::serialize(&join_msg) {
+                        if let Some(join_msg) = join_msg
+                            && let Ok(json) = bincode::serialize(&join_msg)
+                        {
                             client.send(json);
+                            self.net.pending_lobby_rejoin = false;
+                        } else {
+                            self.join_waiting_for_identity = true;
                         }
-                        self.net.pending_lobby_rejoin = false;
                     } else if self.ui.app.main_menu_state.host_private_pending {
                         log::info!("Hosting private lobby (portal instant / play again)");
                         let join_msg = self.make_join_message(None, true, None, None);
-                        if let Ok(json) = bincode::serialize(&join_msg) {
+                        if let Some(join_msg) = join_msg
+                            && let Ok(json) = bincode::serialize(&join_msg)
+                        {
                             client.send(json);
+                            self.ui.app.main_menu_state.host_private_pending = false;
+                            self.ui.app.main_menu_state.is_waiting = true;
+                        } else {
+                            self.join_waiting_for_identity = true;
                         }
-                        self.ui.app.main_menu_state.host_private_pending = false;
-                        self.ui.app.main_menu_state.is_waiting = true;
                     } else if let Some(id) = self.ui.app.main_menu_state.pending_join_lobby_id {
                         if self.ui.app.main_menu_state.is_waiting
                             && self.ui.app.main_menu_state.joined_lobby_id.is_none()
@@ -102,10 +105,14 @@ impl SowApp {
                         {
                             log::info!("Joining lobby {} from portal invite", id);
                             let join_msg = self.make_join_message(Some(id), false, None, None);
-                            if let Ok(json) = bincode::serialize(&join_msg) {
+                            if let Some(join_msg) = join_msg
+                                && let Ok(json) = bincode::serialize(&join_msg)
+                            {
                                 client.send(json);
+                                self.join_waiting_for_identity = false;
+                            } else {
+                                self.join_waiting_for_identity = true;
                             }
-                            self.join_waiting_for_identity = false;
                         }
                     } else if self.join_waiting_for_identity
                         && self.ui.app.main_menu_state.is_waiting
@@ -120,10 +127,14 @@ impl SowApp {
                             Some(self.ui.app.main_menu_state.custom_game_password.clone())
                                 .filter(|password| !password.is_empty()),
                         );
-                        if let Ok(json) = bincode::serialize(&join_msg) {
+                        if let Some(join_msg) = join_msg
+                            && let Ok(json) = bincode::serialize(&join_msg)
+                        {
                             client.send(json);
+                            self.join_waiting_for_identity = false;
+                        } else {
+                            self.join_waiting_for_identity = true;
                         }
-                        self.join_waiting_for_identity = false;
                     }
                     self.net.client = Some(client);
                 }
@@ -150,12 +161,16 @@ impl SowApp {
                             );
                             self.net.ws_connect_fail_backoff_ms = 500;
                             self.net.ws_connect_not_before = now + Duration::from_millis(500);
+                            crate::web_menu::wake_event_loop_after(500);
                         }
                     } else {
                         self.net.ws_connect_fail_backoff_ms =
                             (self.net.ws_connect_fail_backoff_ms.saturating_mul(2)).min(30_000);
                         self.net.ws_connect_not_before =
                             now + Duration::from_millis(self.net.ws_connect_fail_backoff_ms);
+                        crate::web_menu::wake_event_loop_after(
+                            self.net.ws_connect_fail_backoff_ms,
+                        );
                     }
                 }
             }
@@ -264,12 +279,13 @@ impl SowApp {
                 self.net.relay_retry_count = 0;
             } else {
                 self.net.ws_connect_not_before = now + Duration::from_millis(2000);
+                crate::web_menu::wake_event_loop_after(2000);
             }
 
             if self.net.is_offline {
                 log::debug!("[CLIENT NET] Offline match; ignoring disconnect recovery");
             } else if self.ui.app.phase == ClientPhase::Playing {
-                // Relay can replay turns after ClientMessage::Ready (see sow-relay), but we do not
+                // Relay can replay turns after a reconnect ticket (see sow-relay), but we do not
                 // resume in-place: the socket drop may mean the relay died, and catch-up without a
                 // full snapshot risks desync. Use the existing ExitGame loader → MainMenu.
                 if self.ws_on_relay() {
@@ -289,7 +305,9 @@ impl SowApp {
             }
         }
 
-        if now.duration_since(self.net.last_ping_time) >= Duration::from_secs(1) {
+        if self.ui.app.phase == crate::ClientPhase::Playing
+            && now.duration_since(self.net.last_ping_time) >= Duration::from_secs(1)
+        {
             if let Some(client) = self.net.client.as_ref() {
                 let ping = sow_core::protocol::ClientMessage::Ping {
                     client_time: self.time.start_time.elapsed().as_secs_f64(),

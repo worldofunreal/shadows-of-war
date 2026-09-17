@@ -114,6 +114,7 @@ pub struct MoverScene {
     id_to_idx: HashMap<u64, u32>,
     slots: Vec<MoverSlot>,
     trail_points: Vec<[f32; 2]>,
+    arc_scratch: Vec<[f32; 2]>,
     arc_paths: HashMap<u64, Vec<u32>>,
     last_snap_tick: u64,
     map_w: u32,
@@ -135,6 +136,7 @@ impl MoverScene {
             id_to_idx: HashMap::new(),
             slots: Vec::new(),
             trail_points: Vec::new(),
+            arc_scratch: Vec::with_capacity(NUKE_ARC_SAMPLES + 1),
             arc_paths: HashMap::new(),
             last_snap_tick: u64::MAX,
             map_w: 1,
@@ -401,7 +403,7 @@ impl MoverScene {
     }
 
     pub fn pack_gpu(
-        &self,
+        &mut self,
         params: &MoverPackParams,
         renderer: &mut crate::render::gpu::MoverRenderer,
     ) {
@@ -412,9 +414,10 @@ impl MoverScene {
         let min_sy = -margin;
         let max_sx = params.screen_w + margin;
         let max_sy = params.screen_h + margin;
-        let mut arc_scratch = Vec::with_capacity(NUKE_ARC_SAMPLES + 1);
+        let mut arc_scratch = std::mem::take(&mut self.arc_scratch);
 
         for (id, &idx) in &self.id_to_idx {
+            arc_scratch.clear();
             let slot = &self.slots[idx as usize];
 
             let (wx, wy, progress) = if slot.is_fleet {
@@ -569,6 +572,7 @@ impl MoverScene {
                 height: height * NUKE_ARC_LIFT,
             });
         }
+        self.arc_scratch = arc_scratch;
     }
 }
 

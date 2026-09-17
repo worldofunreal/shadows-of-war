@@ -100,13 +100,15 @@ fn sample_emoji(uv: vec2<f32>, lo: vec2<f32>, hi: vec2<f32>) -> vec4<f32> {
 // is the local 0..1 quad coordinate. `outline_thickness` carries the ring width in pixels
 // (converted to uv via fwidth). `color` is the fill/stroke color.
 fn shade_shape(in: VertexOutput) -> vec4<f32> {
-    let p = in.uv - vec2<f32>(0.5, 0.5);
+    let shape_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-5));
+    let shape_uv = (in.local_uv - in.content_rect.xy) / shape_span;
+    let p = shape_uv - vec2<f32>(0.5, 0.5);
     let dist = length(p);
     let aa = max(fwidth(dist), 1e-5);
 
     if (in.kind > 2.5) {
         // Ring: outer edge at uv radius 0.5, drawn inward by `outline_thickness` px.
-        let tw = max(in.outline_thickness * fwidth(in.uv).x, aa);
+        let tw = max(in.outline_thickness * fwidth(shape_uv).x, aa);
         let outer = 1.0 - smoothstep(0.5 - aa, 0.5, dist);
         let inner = 1.0 - smoothstep(0.5 - tw - aa, 0.5 - tw, dist);
         let a = clamp(outer - inner, 0.0, 1.0) * in.color.a;
@@ -141,7 +143,23 @@ fn shade_rect(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb, alpha);
 }
 
+// Anti-aliased filled downward triangle (KIND_TRIANGLE). `local_uv` is the full quad; the
+// triangle occupies its bounding box with a flat top and a point at the bottom.
+fn shade_triangle(in: VertexOutput) -> vec4<f32> {
+    let p = in.local_uv;
+    let half_width = 0.5 * (1.0 - p.y);
+    let horizontal = half_width - abs(p.x - 0.5);
+    let vertical = min(p.y, 1.0 - p.y);
+    let signed_distance = min(horizontal, vertical);
+    let aa = max(fwidth(signed_distance), 1e-5);
+    let alpha = 1.0 - smoothstep(-aa, aa, -signed_distance);
+    return vec4<f32>(in.color.rgb, alpha * in.color.a);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 5.5) {
+        return shade_triangle(in);
+    }
     if (in.kind > 4.5) {
         return shade_rect(in);
     }

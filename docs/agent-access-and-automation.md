@@ -78,7 +78,7 @@ Verified configuration:
 - First Victory achievement ID: `CgkIsLGC7KYIEAIQBA` (draft).
 - Battle Hardened achievement ID: `CgkIsLGC7KYIEAIQBg` (draft, 10 matches).
 - Victory March achievement ID: `CgkIsLGC7KYIEAIQBw` (draft, 5 victories).
-- Crown Hoard achievement ID: `CgkIsLGC7KYIEAIQCA` (draft, 500 crowns).
+- Crown Hoard achievement ID: `CgkIsLGC7KYIEAIQCA` (draft, 500 laurels).
 - First Command achievement ID: `CgkIsLGC7KYIEAIQCQ` (draft).
 - Commander Victorious achievement ID: `CgkIsLGC7KYIEAIQCg` (draft).
 - Veteran Commander achievement ID: `CgkIsLGC7KYIEAIQCw` (draft, 10 wins with one leader).
@@ -93,7 +93,7 @@ The Android launcher hands off directly to the TWA. After the web loader emits
 exchanges a one-use server auth code with the backend when available, and falls
 back to the normal anonymous TWA session when Play Games is unavailable. The
 authoritative server submits match events, achievement
-increments/unlocks for matches, victories, crowns, and leader milestones, plus
+increments/unlocks for matches, victories, laurels, and leader milestones, plus
 cumulative victory scores, only for verified Play Games sessions. No parallel
 achievement counters are stored; all thresholds are derived from the existing
 authoritative profile and finalized match reward.

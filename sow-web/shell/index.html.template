@@ -419,6 +419,9 @@
             try {
                 const wasm = await import('./__JS_FILE__');
                 await wasm.default({ module_or_path: './__WASM_FILE__' });
+                if (typeof wasm.SOW_wake_event_loop === "function") {
+                    window.SOW_wake_event_loop = wasm.SOW_wake_event_loop;
+                }
                 if (typeof wasm.sow_menu_command === "function") {
                     window.SOW_menu_command = wasm.sow_menu_command;
                     window.SOW_MENU_READY = true;

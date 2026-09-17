@@ -5,7 +5,7 @@
 - Main menu entry: `Store`.
 - Eight leaders are free in a deterministic weekly rotation.
 - A new player receives one random leader from that rotation.
-- Leaders outside the rotation are locked until the player unlocks them with 500 crowns or 1,500 gems.
+- Leaders outside the rotation are locked until the player unlocks them with 500 laurels or 1,500 gems.
 - Leader unlocks offer either currency; the server owns both balances and validates the selected spend.
 - The server resolves the selected leader before a match, so a client cannot use a locked leader by editing local state.
 - The purchase surface is universal: in-game store → platform checkout/RevenueCat → server grant. It is not tied to CrazyGames or Poki.

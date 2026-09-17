@@ -1232,9 +1232,9 @@
     object-fit: contain;
 }
 
-.sow-store__balance--crowns {
+.sow-store__balance--laurels {
     border-color: rgba(192, 132, 252, .42) !important;
-    color: var(--sow-crown-bright) !important;
+    color: var(--sow-laurel-bright) !important;
 }
 
 .sow-store__balances small {

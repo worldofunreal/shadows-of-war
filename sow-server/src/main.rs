@@ -191,10 +191,6 @@ fn validate_runtime_security() -> Result<(), String> {
     if scheme != "https" {
         return Err("SOW_RELAY_MGMT_SCHEME must be https".to_string());
     }
-    let tickets = std::env::var("SOW_RELAY_TICKETS_REQUIRED").unwrap_or_else(|_| "1".to_string());
-    if tickets != "1" {
-        return Err("SOW_RELAY_TICKETS_REQUIRED must be 1".to_string());
-    }
     if let Ok(url) = std::env::var("SOW_RELAY_MGMT_URL") {
         let parsed = reqwest::Url::parse(&url)
             .map_err(|e| format!("invalid SOW_RELAY_MGMT_URL={url}: {e}"))?;
@@ -573,14 +569,14 @@ enum ServerEvent {
         lobby_id: u64,
         player_id: u16,
     },
-    Ready {
-        lobby_id: u64,
-        player_id: u16,
-    },
     MapDownloadProgress {
         lobby_id: u64,
         player_id: u16,
         progress: u8,
+    },
+    LobbyReady {
+        lobby_id: u64,
+        player_id: u16,
     },
     ForceStart {
         lobby_id: u64,
@@ -768,7 +764,6 @@ async fn main() {
                                 seed: rc.seed,
                                 players: rc.start_players.clone(),
                                 missed_turns: vec![],
-                                map_data: None,
                                 relay_port: Some(rc.relay_port),
                                 relay_host: Some(worker.host.clone()),
                             };
@@ -1039,16 +1034,24 @@ async fn main() {
                                 password,
                                 ip,
                                 session_id: Some(session_id),
-                            }) {
+                                }) {
                                 Ok((lobby_id, player_id, map_name, is_private)) => {
-                                    let lobby_info = games.iter().find(|g| g.id == lobby_id).map(lobby_to_info);
-                                    let ack = ServerJoinAckMessage { lobby_id, player_id, map_name, is_private, lobby_info };
-                                    match bincode::serialize(&sow_core::protocol::ServerMessage::JoinAck(ack)) {
-                                        Ok(json) => { let _ = client_tx.try_send(json); }
-                                        Err(e) => { log::error!("[JOIN] Failed to serialize JoinAck for player {} in lobby {}: {}", player_id, lobby_id, e); }
-                                    }
                                     if let Some(lobby) = games.iter().find(|g| g.id == lobby_id) {
+                                        let lobby_info = lobby_to_info(lobby);
+                                        let ack = ServerJoinAckMessage {
+                                            lobby_id,
+                                            player_id,
+                                            map_name,
+                                            is_private,
+                                            lobby_info,
+                                        };
+                                        match bincode::serialize(&sow_core::protocol::ServerMessage::JoinAck(ack)) {
+                                            Ok(json) => { let _ = client_tx.try_send(json); }
+                                            Err(e) => { log::error!("[JOIN] Failed to serialize JoinAck for player {} in lobby {}: {}", player_id, lobby_id, e); }
+                                        }
                                         sync_host_lobby_to_members(lobby);
+                                    } else {
+                                        log::error!("[JOIN] Lobby {} disappeared before JoinAck", lobby_id);
                                     }
                                 }
                                 Err(reason) => {
@@ -1082,14 +1085,6 @@ async fn main() {
                         ServerEvent::SetTeam { lobby_id, requester_id, target_id } => {
                             set_player_team(&mut games, lobby_id, requester_id, target_id);
                         }
-                        ServerEvent::Ready { lobby_id, player_id } => {
-                            if let Some(lobby) = games.iter_mut().find(|g| g.id == lobby_id) {
-                                lobby.ready_players.insert(player_id);
-                                sync_host_lobby_to_members(lobby);
-                            } else {
-                                log::warn!("[READY] Player {} sent Ready for unknown lobby {}", player_id, lobby_id);
-                            }
-                        }
                         ServerEvent::MapDownloadProgress { lobby_id, player_id, progress } => {
                             if let Some(lobby) = games.iter_mut().find(|g| g.id == lobby_id) {
                                 if let Some(p) = lobby.players.iter_mut().find(|p| p.player_id == player_id) {
@@ -1100,6 +1095,26 @@ async fn main() {
                                 sync_host_lobby_to_members(lobby);
                             } else {
                                 log::warn!("[PROGRESS] Lobby {} not found for player {} progress update", lobby_id, player_id);
+                            }
+                        }
+                        ServerEvent::LobbyReady { lobby_id, player_id } => {
+                            if let Some(lobby) = games.iter_mut().find(|g| g.id == lobby_id) {
+                                if lobby.players.iter().any(|p| p.player_id == player_id) {
+                                    lobby.ready_players.insert(player_id);
+                                    sync_host_lobby_to_members(lobby);
+                                } else {
+                                    log::warn!(
+                                        "[READY] Player {} not found in lobby {}",
+                                        player_id,
+                                        lobby_id
+                                    );
+                                }
+                            } else {
+                                log::warn!(
+                                    "[READY] Lobby {} not found for player {}",
+                                    lobby_id,
+                                    player_id
+                                );
                             }
                         }
                         ServerEvent::ForceStart { lobby_id, player_id } => {
@@ -1277,52 +1292,6 @@ async fn main() {
 
                                     if let Ok(msg) = bincode::deserialize::<sow_core::protocol::ClientMessage>(&data) {
                                         match msg {
-                                            sow_core::protocol::ClientMessage::Join { name, is_observer: _, target_lobby_id, host_private, build_version, clan_tag, civilization, leader, database_account_id, host_config, password } => {
-                                                let server_version = std::env::var("SOW_BUILD_VERSION")
-                                                    .unwrap_or_else(|_| std::fs::read_to_string(".version").unwrap_or_default().trim().to_string());
-
-                                                if !server_version.is_empty() && build_version != server_version {
-                                                    log::warn!("Client version mismatch: expected {}, got {}", server_version, build_version);
-                                                    let fail = sow_core::protocol::ServerJoinFailedMessage { reason: "VERSION_MISMATCH".to_string() };
-                                                    let json = bincode::serialize(&sow_core::protocol::ServerMessage::JoinFailed(fail)).unwrap();
-                                                    let _ = direct_tx.try_send(json);
-                                                    continue;
-                                                }
-
-                                                // Legacy join carries no identity proof: a
-                                                // client-asserted account id binds nothing
-                                                // (no stats attribution, no reconnect
-                                                // takeover). Only JoinWithAuth verifies.
-                                                if database_account_id.is_some() {
-                                                    log::info!(
-                                                        "[AUTH] legacy Join with client-asserted account id from {} — bound as unverified guest",
-                                                        ip_str
-                                                    );
-                                                }
-
-                                                let free_leaders = sow_core::commerce::current_leader_rotation();
-                                                let leader = if free_leaders.contains(&leader) {
-                                                    leader
-                                                } else {
-                                                    free_leaders[0]
-                                                };
-
-                                                let _ = ev_tx.send(ServerEvent::Join {
-                                                    name,
-                                                    clan_tag,
-                                                    civilization,
-                                                    leader,
-                                                    client_tx: direct_tx.clone(),
-                                                    target_lobby_id,
-                                                    host_private,
-                                                    build_version,
-                                                    database_account_id: None,
-                                                    host_config,
-                                                    password,
-                                                    ip: ip_str.clone(),
-                                                    session_id,
-                                                }).await;
-                                            }
                                             sow_core::protocol::ClientMessage::JoinWithAuth { join, auth } => {
                                                 let payload = *join;
                                                 let server_version = std::env::var("SOW_BUILD_VERSION")
@@ -1392,17 +1361,6 @@ async fn main() {
                                                 my_lobby_id = None;
                                                 my_player_id = None;
                                             }
-                                            sow_core::protocol::ClientMessage::Ready { lobby_id, player_id } => {
-                                                if let (Some(l_id), Some(p_id)) = (my_lobby_id, my_player_id)
-                                                    && lobby_id == l_id
-                                                    && player_id == p_id
-                                                {
-                                                    let _ = ev_tx.send(ServerEvent::Ready {
-                                                        lobby_id: l_id,
-                                                        player_id: p_id,
-                                                    }).await;
-                                                }
-                                            }
                                             sow_core::protocol::ClientMessage::ReadyWithTicket { .. } => {
                                                 // Relay tickets are valid only on the direct relay
                                                 // connection, never on the orchestrator socket.
@@ -1420,6 +1378,17 @@ async fn main() {
                                                         lobby_id: l_id,
                                                         player_id: p_id,
                                                         progress,
+                                                    }).await;
+                                                }
+                                            }
+                                            sow_core::protocol::ClientMessage::LobbyReady { lobby_id, player_id } => {
+                                                if let (Some(l_id), Some(p_id)) = (my_lobby_id, my_player_id)
+                                                    && lobby_id == l_id
+                                                    && player_id == p_id
+                                                {
+                                                    let _ = ev_tx.send(ServerEvent::LobbyReady {
+                                                        lobby_id: l_id,
+                                                        player_id: p_id,
                                                     }).await;
                                                 }
                                             }
@@ -1477,7 +1446,6 @@ async fn main() {
                                                 let json = bincode::serialize(&pong).unwrap();
                                                 let _ = direct_tx.try_send(json);
                                             }
-                                            sow_core::protocol::ClientMessage::SubmitStats { .. } => {}
                                             sow_core::protocol::ClientMessage::SubmitStatsWithLeader { .. } => {}
                                             sow_core::protocol::ClientMessage::SubmitMatchReport { .. } => {}
                                         }
