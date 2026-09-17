@@ -233,19 +233,11 @@ impl ApplicationHandler for SowApp {
         }
         self.update(event_loop);
 
-        let playing = self.ui.app.phase == ClientPhase::Playing;
-        let loading = self.ui.app.phase == ClientPhase::Splash;
-        let flow = if playing || loading {
-            winit::event_loop::ControlFlow::Poll
-        } else {
-            winit::event_loop::ControlFlow::Wait
-        };
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
 
-        event_loop.set_control_flow(flow);
-
-        if playing {
-            self.render_frame(event_loop);
-        } else if loading && let Some(win) = self.active_window() {
+        if matches!(self.ui.app.phase, ClientPhase::Playing | ClientPhase::Splash)
+            && let Some(win) = self.active_window()
+        {
             win.request_redraw();
         }
     }

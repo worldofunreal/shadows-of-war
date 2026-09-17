@@ -21,9 +21,5 @@ impl SowApp {
                 self.fetch_cloud_progress();
             }
         }
-        if let Some(mute) = crate::store_portals::poll_mute_audio_setting() {
-            crate::store_portals::apply_mute_audio_setting(mute);
-        }
-        self.ui.app.hud_state.chat_disabled = crate::store_portals::is_chat_disabled();
     }
 }

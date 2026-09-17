@@ -156,7 +156,24 @@ fn shade_triangle(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb, alpha * in.color.a);
 }
 
+// Anti-aliased diagonal cross (KIND_CROSS). The content rectangle excludes the
+// outer fringe reserved by the CPU geometry helper.
+fn shade_cross(in: VertexOutput) -> vec4<f32> {
+    let shape_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-5));
+    let shape_uv = (in.local_uv - in.content_rect.xy) / shape_span;
+    let p = shape_uv - vec2<f32>(0.5, 0.5);
+    let distance_to_line = min(abs(p.y - p.x), abs(p.y + p.x));
+    let aa = max(fwidth(distance_to_line), 1e-5);
+    let pixel = max(fwidth(shape_uv).x, fwidth(shape_uv).y);
+    let width = max(in.outline_thickness * pixel * 0.7, aa);
+    let alpha = 1.0 - smoothstep(width, width + aa, distance_to_line);
+    return vec4<f32>(in.color.rgb, alpha * in.color.a);
+}
+
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 6.5) {
+        return shade_cross(in);
+    }
     if (in.kind > 5.5) {
         return shade_triangle(in);
     }

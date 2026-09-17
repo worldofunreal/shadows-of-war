@@ -334,25 +334,6 @@ pub fn left_room() {
     call_window_hook("SOW_portalLeftRoom");
 }
 
-pub fn apply_mute_audio_setting(muted: bool) {
-    if muted {
-        call_window_hook("SOW_portalMuteGameAudio");
-    } else {
-        call_window_hook("SOW_portalUnmuteGameAudio");
-    }
-}
-
-pub fn poll_mute_audio_setting() -> Option<bool> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        get_window_value("SOW_PORTAL_MUTE_AUDIO").and_then(|v| v.as_bool())
-    }
-}
-
-pub fn is_chat_disabled() -> bool {
-    take_window_bool("SOW_DISABLE_CHAT")
-}
-
 pub fn happytime() {
     call_window_hook("SOW_portalHappytime");
 }

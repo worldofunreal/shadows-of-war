@@ -114,6 +114,27 @@ impl MapTarget {
 }
 
 impl SowApp {
+    fn show_observer_notice(&mut self, x: f64, y: f64) {
+        const MESSAGES: [&str; 8] = [
+            "Enjoying the view? 🍿",
+            "Best seat in the house! 🏟️",
+            "Wave at the players! 👋",
+            "The crowd goes wild! 🎉",
+            "Grab some popcorn! 🍿",
+            "Great game to watch! ⭐",
+            "Cheer them on! 📣",
+            "Spectating in style! 😎",
+        ];
+        let message = MESSAGES[(x + y) as usize % MESSAGES.len()];
+        self.add_notice_at_screen(
+            message,
+            x,
+            y,
+            1500,
+            crate::rgb(203, 213, 225),
+        );
+    }
+
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
         if self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
@@ -137,11 +158,12 @@ impl SowApp {
         if !target.is_land || target.owner == target.my_id || target.is_friendly() {
             return false;
         }
-        self.attack_from_tile(tile_idx)
+        self.attack_from_tile(tile_idx, (x, y))
     }
 
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
         if self.ui.observing {
+            self.show_observer_notice(x, y);
             self.clear_placement();
             return;
         }
@@ -154,7 +176,7 @@ impl SowApp {
         });
 
         if is_spawning {
-            self.spawn_at(col, row);
+            self.spawn_at(col, row, (x, y));
             return;
         }
 
@@ -164,7 +186,7 @@ impl SowApp {
             return;
         }
         if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
-            self.build_structure_at(kind, col, row);
+            self.build_structure_at(kind, col, row, (x, y));
             return;
         }
 
@@ -176,12 +198,16 @@ impl SowApp {
         if self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
             matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
         }) {
-            self.primary_target(tile_idx);
+            self.primary_target(tile_idx, (x, y));
         }
     }
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
-        if self.ui.observing || self.ui.app.phase != crate::ClientPhase::Playing {
+        if self.ui.observing {
+            self.show_observer_notice(x, y);
+            return;
+        }
+        if self.ui.app.phase != crate::ClientPhase::Playing {
             return;
         }
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
@@ -228,15 +254,16 @@ impl SowApp {
         if menu.session != session || menu.tile_idx != tile_idx {
             return;
         }
+        let anchor = (menu.x as f64, menu.y as f64);
 
         match action {
             MapMenuAction::Spawn => {
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    self.spawn_at(col, row);
+                    self.spawn_at(col, row, anchor);
                 }
             }
             MapMenuAction::Attack => {
-                self.attack_from_tile(tile_idx);
+                self.attack_from_tile(tile_idx, anchor);
             }
             MapMenuAction::Fleet => {
                 self.launch_fleet_from_tile(tile_idx);
@@ -259,7 +286,7 @@ impl SowApp {
                     _ => unreachable!(),
                 };
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    self.build_structure_at(kind, col, row);
+                    self.build_structure_at(kind, col, row, anchor);
                 }
             }
             MapMenuAction::Nuke => {
@@ -285,7 +312,7 @@ impl SowApp {
         true
     }
 
-    fn spawn_at(&mut self, col: i32, row: i32) {
+    fn spawn_at(&mut self, col: i32, row: i32, anchor: (f64, f64)) {
         let idx = (row * self.sim.map_w as i32 + col) as usize;
         let Some(renderer) = self.gfx.map_renderer.as_ref() else {
             return;
@@ -295,7 +322,7 @@ impl SowApp {
             .get(idx)
             .is_some_and(|terrain| terrain & 0x80 != 0);
         if !is_land {
-            self.add_click_marker(col, row);
+            self.show_water_feedback(col, row, anchor);
             return;
         }
 
@@ -333,6 +360,22 @@ impl SowApp {
             }
             let Some(tile) = best_tile else {
                 self.add_click_marker(col, row);
+                const MESSAGES: [&str; 6] = [
+                    "Hey! Too close to another player! 🛡️",
+                    "Respect boundaries! 🤝",
+                    "Get your own space! 🏕️",
+                    "Social distancing! ↔️",
+                    "Spawning blocked! 🛑",
+                    "Private property! 🚫",
+                ];
+                let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
+                self.add_notice_at_screen(
+                    message,
+                    anchor.0,
+                    anchor.1,
+                    1500,
+                    crate::rgb(248, 113, 113),
+                );
                 return;
             };
             tile
@@ -349,6 +392,7 @@ impl SowApp {
         kind: sow_core::game::BuildingKind,
         col: i32,
         row: i32,
+        anchor: (f64, f64),
     ) -> bool {
         let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
             return false;
@@ -366,7 +410,7 @@ impl SowApp {
             .as_ref()
             .map(|renderer| renderer.terrain.as_slice())
             .unwrap_or(&[]);
-        let Ok(target_tile) = resolve_build_target_tile(&PlacementQuery {
+        let target_res = resolve_build_target_tile(&PlacementQuery {
             kind,
             click_x: col,
             click_y: row,
@@ -376,21 +420,42 @@ impl SowApp {
             terrain,
             my_id,
             buildings: &snapshot.buildings,
-        }) else {
-            return false;
-        };
+        });
         let cost_index = sow_core::game::BuildingKind::ALL
             .iter()
             .position(|candidate| *candidate == kind)
             .unwrap_or(0);
         if self.ui.app.hud_state.gold < self.ui.app.hud_state.building_costs[cost_index] {
+            let text = format!(
+                "Need {} gold.",
+                crate::utils::format_number(self.ui.app.hud_state.building_costs[cost_index])
+            );
+            self.add_notice_at_screen(
+                text,
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
             return false;
         }
+        let target_tile = match target_res {
+            Ok(target_tile) => target_tile,
+            Err(message) => {
+                self.add_notice_at_screen(
+                    message,
+                    anchor.0,
+                    anchor.1,
+                    2000,
+                    crate::rgb(248, 113, 113),
+                );
+                return false;
+            }
+        };
         self.send_intent(sow_core::protocol::GameplayIntent::BuildStructure {
             kind,
             target_tile,
         });
-        self.ui.last_build_confirm_time = Some(web_time::Instant::now());
         true
     }
 
@@ -409,31 +474,66 @@ impl SowApp {
         true
     }
 
-    fn primary_target(&mut self, tile_idx: u32) {
+    fn primary_target(&mut self, tile_idx: u32, anchor: (f64, f64)) {
         let Some(target) = self.map_target(tile_idx) else {
             return;
         };
-        if !target.is_land || target.owner == target.my_id {
+        if !target.is_land {
+            if let Some((col, row)) = self.tile_coords(tile_idx) {
+                self.show_water_feedback(col, row, anchor);
+            }
+            return;
+        }
+        if target.owner == target.my_id {
             return;
         }
         if target.is_friendly() {
             self.open_transfer_from_tile(tile_idx);
         } else {
-            self.attack_from_tile(tile_idx);
+            self.attack_from_tile(tile_idx, anchor);
         }
     }
 
-    fn attack_from_tile(&mut self, tile_idx: u32) -> bool {
+    fn attack_from_tile(&mut self, tile_idx: u32, anchor: (f64, f64)) -> bool {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
-        if !target.is_land || !target.is_attackable() || !self.can_attack(tile_idx, target.owner) {
+        if !target.is_land {
+            if let Some((col, row)) = self.tile_coords(tile_idx) {
+                self.show_water_feedback(col, row, anchor);
+            }
+            return false;
+        }
+        if !target.is_attackable() || !self.can_attack(tile_idx, target.owner) {
+            const MESSAGES: [&str; 5] = [
+                "Too far! 🌌",
+                "Out of reach! 🏃‍♂️",
+                "No border, no battle! ⚔️",
+                "Teleportation not researched! 📡",
+                "Build a path first! 🗺️",
+            ];
+            let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
+            self.add_notice_at_screen(
+                message,
+                anchor.0,
+                anchor.1,
+                1500,
+                crate::rgb(248, 113, 113),
+            );
             return false;
         }
         let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
         if troops <= 0.0 {
             return false;
         }
+        let text = format!("⚔️ +{}", crate::utils::format_number(troops));
+        self.add_notice_at_screen(
+            text,
+            anchor.0,
+            anchor.1,
+            1500,
+            crate::rgb(6, 182, 212),
+        );
         self.send_intent(sow_core::protocol::GameplayIntent::Attack(
             sow_core::protocol::AttackIntent {
                 target_owner: target.owner,
@@ -592,6 +692,40 @@ impl SowApp {
             world_x: col as f32 + 0.5,
             world_y: row as f32 + 0.5,
             start_time: web_time::Instant::now(),
+        });
+    }
+
+    fn show_water_feedback(&mut self, col: i32, row: i32, anchor: (f64, f64)) {
+        self.add_click_marker(col, row);
+        const MESSAGES: [&str; 7] = [
+            "Splat! That's water! 🌊",
+            "Do you have gills? 🐠",
+            "Boats are for later! 🚢",
+            "Cannot build Atlantis yet! 🏛️",
+            "Water deployment failed! 💧",
+            "Too wet! ☔",
+            "Glug glug... ⚓",
+        ];
+        let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
+        self.add_notice_at_screen(message, anchor.0, anchor.1, 1500, crate::rgb(96, 165, 250));
+    }
+
+    fn add_notice_at_screen(
+        &mut self,
+        text: impl Into<String>,
+        x: f64,
+        y: f64,
+        duration_ms: u64,
+        color: [f32; 4],
+    ) {
+        let zoom = self.input.camera_zoom.max(0.01);
+        self.ui.floating_notices.push(crate::app::FloatingNotice {
+            text: text.into(),
+            world_x: (x as f32 - self.input.camera_x) / zoom,
+            world_y: (y as f32 - 60.0 - self.input.camera_y) / zoom,
+            start_time: web_time::Instant::now(),
+            duration: web_time::Duration::from_millis(duration_ms),
+            color,
         });
     }
 

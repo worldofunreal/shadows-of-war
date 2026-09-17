@@ -1,10 +1,12 @@
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
 
-pub(crate) struct EliminationEventInfo {
+pub(crate) struct EliminationEventInfo<'a> {
     pub player_id: u16,
     pub conqueror_id: u16,
     pub pos: (u32, u32),
+    pub gold_bounty: u32,
+    pub assists: &'a [(u16, u32)],
 }
 
 impl SowApp {
@@ -12,8 +14,9 @@ impl SowApp {
         &mut self,
         snap: &SimSnapshot,
         my_id: u16,
+        now_instant: web_time::Instant,
         turn_defeats: &mut crate::player_progress::SessionDefeats,
-        info: &EliminationEventInfo,
+        info: &EliminationEventInfo<'_>,
     ) {
         let player_id = info.player_id;
         let conqueror_id = info.conqueror_id;
@@ -77,5 +80,33 @@ impl SowApp {
             }
         }
 
+        if conqueror_id == my_id && my_id != 0 && info.gold_bounty > 0 {
+            self.ui.floating_notices.push(crate::app::FloatingNotice {
+                text: format!(
+                    "+{} Gold",
+                    crate::utils::format_number(info.gold_bounty as f64)
+                ),
+                world_x: wx,
+                world_y: wy,
+                start_time: now_instant,
+                duration: web_time::Duration::from_millis(3000),
+                color: crate::rgb(250, 204, 21),
+            });
+        }
+        for (assist_id, assist_gold) in info.assists {
+            if *assist_id == my_id && my_id != 0 && *assist_gold > 0 {
+                self.ui.floating_notices.push(crate::app::FloatingNotice {
+                    text: format!(
+                        "+{} Gold (Assist)",
+                        crate::utils::format_number(*assist_gold as f64)
+                    ),
+                    world_x: wx,
+                    world_y: wy + 0.5,
+                    start_time: now_instant,
+                    duration: web_time::Duration::from_millis(3000),
+                    color: crate::rgb(180, 220, 100),
+                });
+            }
+        }
     }
 }

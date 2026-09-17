@@ -2,9 +2,9 @@ use crate::context::RenderContext;
 use crate::text::msdf::FontAtlas;
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_DISC, KIND_EMOJI, KIND_GLYPH,
-    KIND_RECT, KIND_RING, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals, TextInstanceGpu,
-    TextPaintStyle, TextShaderData, avatar_slot_uv,
+    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_CROSS, KIND_DISC, KIND_EMOJI,
+    KIND_GLYPH, KIND_RECT, KIND_RING, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals,
+    TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -21,6 +21,7 @@ pub fn emoji_uv_opt(emoji: &str) -> Option<[f32; 4]> {
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
 const RING_AA_MARGIN: f32 = 1.5;
+const CROSS_AA_MARGIN: f32 = 1.0;
 
 /// Layout bounds returned by the same atlas-aware measurement used by the GPU text path.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -93,6 +94,22 @@ fn ring_geometry(center: [f32; 2], radius: f32) -> ([f32; 2], [f32; 2], [f32; 4]
     let radius = radius.max(0.0);
     let outer = radius + RING_AA_MARGIN;
     let content_min = RING_AA_MARGIN / (outer * 2.0);
+    (
+        [center[0] - outer, center[1] - outer],
+        [outer * 2.0, outer * 2.0],
+        [
+            content_min,
+            content_min,
+            1.0 - content_min,
+            1.0 - content_min,
+        ],
+    )
+}
+
+fn cross_geometry(center: [f32; 2], half_size: f32) -> ([f32; 2], [f32; 2], [f32; 4]) {
+    let half_size = half_size.max(0.0);
+    let outer = half_size + CROSS_AA_MARGIN;
+    let content_min = CROSS_AA_MARGIN / (outer * 2.0);
     (
         [center[0] - outer, center[1] - outer],
         [outer * 2.0, outer * 2.0],
@@ -511,6 +528,30 @@ impl TextRenderer {
         });
     }
 
+    /// Push an anti-aliased diagonal cross. All dimensions are physical pixels.
+    pub fn push_cross(
+        &mut self,
+        center: [f32; 2],
+        half_size: f32,
+        color: [f32; 4],
+        thickness: f32,
+    ) {
+        let (screen_pos, size, content_rect) = cross_geometry(center, half_size);
+        self.push_inst(TextInstanceGpu {
+            screen_pos,
+            size,
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+            content_rect,
+            color,
+            outline_color: [0.0; 4],
+            face_dilate: 0.0,
+            outline_thickness: thickness,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_CROSS,
+        });
+    }
+
     /// Push an anti-aliased filled downward triangle. `center`/`size` are physical pixels.
     pub fn push_triangle(&mut self, center: [f32; 2], size: [f32; 2], color: [f32; 4]) {
         let size = [size[0].max(0.0), size[1].max(0.0)];
@@ -724,6 +765,24 @@ mod tests {
         assert!((min[1] - 40.0).abs() < 1e-5);
         assert!((max[0] - 110.0).abs() < 1e-5);
         assert!((max[1] - 60.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn cross_geometry_keeps_requested_extent_inside_antialias_padding() {
+        let (screen_pos, size, content_rect) = cross_geometry([100.0, 50.0], 4.0);
+        let min = [
+            screen_pos[0] + size[0] * content_rect[0],
+            screen_pos[1] + size[1] * content_rect[1],
+        ];
+        let max = [
+            screen_pos[0] + size[0] * content_rect[2],
+            screen_pos[1] + size[1] * content_rect[3],
+        ];
+
+        assert!((min[0] - 96.0).abs() < 1e-5);
+        assert!((min[1] - 46.0).abs() < 1e-5);
+        assert!((max[0] - 104.0).abs() < 1e-5);
+        assert!((max[1] - 54.0).abs() < 1e-5);
     }
 
     #[test]

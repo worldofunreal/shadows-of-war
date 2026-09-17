@@ -233,6 +233,25 @@ pub struct ClickMarker {
     pub start_time: web_time::Instant,
 }
 
+#[derive(Clone, Debug)]
+pub struct FloatingNotice {
+    pub text: String,
+    pub world_x: f32,
+    pub world_y: f32,
+    pub start_time: web_time::Instant,
+    pub duration: web_time::Duration,
+    pub color: [f32; 4],
+}
+
+#[derive(Clone, Debug)]
+pub struct AttackBadgeLabel {
+    pub troops: f64,
+    pub text: String,
+    pub width: f32,
+    pub height: f32,
+    pub last_update: web_time::Instant,
+}
+
 pub struct UiState {
     pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
@@ -259,8 +278,6 @@ pub struct UiState {
     pub last_projectiles: std::collections::HashMap<u64, TrackedProjectile>,
     pub last_projectile_snapshot_tick: Option<u64>,
     pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,
-    pub cached_player_colors: Vec<[f32; 4]>,
-    pub cached_player_count: usize,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
     /// Deterministic reward preview for the current match, cached when the
@@ -269,11 +286,13 @@ pub struct UiState {
 
     /// Client-side nuke silo cooldown tracking: building id → tick when ready.
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,
-    /// Last sim tick copied into `hud_state` combat vecs.
-    pub hud_combat_sync_tick: u64,
     pub mover_scene: crate::render::world::movers::MoverScene,
     pub click_markers: Vec<ClickMarker>,
-    pub last_build_confirm_time: Option<web_time::Instant>,
+    pub floating_notices: Vec<FloatingNotice>,
+    pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,
+    pub attack_badge_style_key: Option<[u32; 2]>,
+    pub attack_badge_cache_tick: Option<u64>,
+    pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
     pub border_flash_intensities: std::collections::HashMap<u16, f32>,
     pub placement_scratch: Vec<(i32, i32, f32, i32)>,

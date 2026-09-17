@@ -63,12 +63,17 @@ impl SowApp {
         self.ui.app.main_menu_state.cached_map = None;
         self.ui.app.main_menu_state.cached_map_key = None;
         self.net.pending_lobby_rejoin = false;
-        self.ui.hud_combat_sync_tick = 0;
         self.ui.last_projectiles.clear();
         self.ui.last_projectile_snapshot_tick = None;
         self.ui.detonation_scratch.clear();
         self.ui.border_flash_intensities.clear();
         self.ui.placement_scratch.clear();
+        self.ui.click_markers.clear();
+        self.ui.floating_notices.clear();
+        self.ui.attack_badge_labels.clear();
+        self.ui.attack_badge_style_key = None;
+        self.ui.attack_badge_cache_tick = None;
+        self.ui.last_resource_notice_tick = None;
         self.ui.tutorial_active = false;
 
         self.dispatch_sim_command(SimCommand::Shutdown);

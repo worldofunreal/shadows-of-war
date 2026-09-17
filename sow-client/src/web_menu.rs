@@ -7,7 +7,6 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
-use web_time::Instant;
 
 use serde::Deserialize;
 use wasm_bindgen::JsCast;
@@ -185,7 +184,6 @@ thread_local! {
     /// Cheap fingerprint for the small, hot in-match HUD payload. Heavy cold panels are
     /// represented by the snapshot tick only while a panel that needs them is open.
     static LAST_HUD_KEY: RefCell<Option<HudPublishKey>> = const { RefCell::new(None) };
-    static LAST_PUBLISH_ATTEMPT: Cell<Option<Instant>> = const { Cell::new(None) };
     /// Player-derived hot values are cached by snapshot tick so the player list is not scanned
     /// on every publish attempt.
     static LAST_MY_PLAYER: RefCell<Option<(u64, u16, Option<MyPlayerSummary>)>> =
@@ -201,8 +199,6 @@ thread_local! {
     static LAST_WEB_INBOX_PAYLOAD:
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
 }
-
-const PUBLISH_MIN_INTERVAL_MS: u128 = 75;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct HudPublishKey {
@@ -1537,24 +1533,9 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
     })
 }
 
-fn publish_due() -> bool {
-    let now = Instant::now();
-    let due = LAST_PUBLISH_ATTEMPT.with(|attempt| match attempt.get() {
-        Some(last) => now.duration_since(last).as_millis() >= PUBLISH_MIN_INTERVAL_MS,
-        None => true,
-    });
-    if due {
-        LAST_PUBLISH_ATTEMPT.with(|attempt| attempt.set(Some(now)));
-    }
-    due
-}
-
 /// Publish a browser-safe snapshot. It is intentionally separate from MainMenuState so the
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
 pub(crate) fn publish_state(app: &mut SowApp) {
-    if !publish_due() {
-        return;
-    }
     refresh_web_leaderboard_cache(app);
 
     let state = &app.ui.app.main_menu_state;

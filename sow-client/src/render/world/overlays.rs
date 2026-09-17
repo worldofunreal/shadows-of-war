@@ -1,3 +1,4 @@
+use super::feedback;
 use crate::app::{InputState, SimState, UiState};
 use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
@@ -5,6 +6,7 @@ use sow_core::game::BuildingKind;
 use sow_core::player::{Leader, PlayerType};
 use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use std::collections::HashMap;
+use web_time::Instant;
 
 const NAMEPLATE_WORLD_SCALE: f32 = 0.05;
 const NAMEPLATE_MAX_FONT: f32 = 32.0;
@@ -20,7 +22,7 @@ const AVATAR_TEXT_GAP_SCALE: f32 = 0.16;
 const BADGE_GAP: f32 = 3.0;
 const BADGE_STACK_GAP: f32 = 2.0;
 const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
-const INLINE_EMOJI_SCALE: f32 = 1.4;
+pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
 const BUILDING_SCALE: f32 = 0.5;
 const BUILDING_CULL_FLOOR: f32 = 0.25;
@@ -42,9 +44,14 @@ pub(crate) fn nameplate_screen_center(
     input: &InputState,
     sf: f32,
 ) -> [f32; 2] {
-    nameplate_screen_center_from_world(
-        player.centroid_x,
-        player.centroid_y,
+    world_to_screen(player.centroid_x + 0.5, player.centroid_y + 0.5, input, sf)
+}
+
+#[inline]
+pub(crate) fn world_to_screen(world_x: f32, world_y: f32, input: &InputState, sf: f32) -> [f32; 2] {
+    world_to_screen_values(
+        world_x,
+        world_y,
         input.camera_x,
         input.camera_y,
         input.camera_zoom,
@@ -52,9 +59,10 @@ pub(crate) fn nameplate_screen_center(
     )
 }
 
-fn nameplate_screen_center_from_world(
-    centroid_x: f32,
-    centroid_y: f32,
+#[inline]
+fn world_to_screen_values(
+    world_x: f32,
+    world_y: f32,
     camera_x: f32,
     camera_y: f32,
     camera_zoom: f32,
@@ -62,8 +70,8 @@ fn nameplate_screen_center_from_world(
 ) -> [f32; 2] {
     let sf = sf.max(0.01);
     [
-        (camera_x + (centroid_x + 0.5) * camera_zoom) / sf,
-        (camera_y + (centroid_y + 0.5) * camera_zoom) / sf,
+        (camera_x + world_x * camera_zoom) / sf,
+        (camera_y + world_y * camera_zoom) / sf,
     ]
 }
 
@@ -96,10 +104,11 @@ fn tutorial_avatar_geometry(
 pub(crate) fn render_overlays(
     text: &mut TextRenderer,
     sim: &SimState,
-    ui: &UiState,
+    ui: &mut UiState,
     input: &InputState,
     sf: f32,
     time_secs: f32,
+    now: Instant,
 ) {
     let Some(snapshot) = sim.current_snapshot.as_ref() else {
         return;
@@ -112,6 +121,7 @@ pub(crate) fn render_overlays(
         render_buildings(text, snapshot, sim, input, &dev, sf, zoom_scaled);
     }
     render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled);
+    feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 
     if !ui.tutorial_active {
         return;
@@ -821,10 +831,7 @@ fn render_buildings(
             continue;
         }
 
-        let center = [
-            (input.camera_x + building.bx * input.camera_zoom) / sf,
-            (input.camera_y + building.by * input.camera_zoom) / sf,
-        ];
+        let center = world_to_screen(building.bx, building.by, input, sf);
         let margin = zoom_scaled * 2.0;
         if center[0] < -margin
             || center[0] > screen_w + margin
@@ -1014,8 +1021,13 @@ mod tests {
         let world = (18.25, 7.75, 96.0, 48.0, 3.0);
         let metrics = NameplateMetrics::compute(14.0, PlayerType::Human, true);
         for sf in [1.0, 2.0] {
-            let center = nameplate_screen_center_from_world(
-                world.0, world.1, world.2, world.3, world.4, sf,
+            let center = world_to_screen_values(
+                world.0 + 0.5,
+                world.1 + 0.5,
+                world.2,
+                world.3,
+                world.4,
+                sf,
             );
             let layout = NameplateLayout::compute(
                 center,

@@ -64,10 +64,11 @@ impl SowApp {
                 crate::render::world::render_overlays(
                     text,
                     &self.sim,
-                    &self.ui,
+                    &mut self.ui,
                     &self.input,
                     sf,
                     self.time.start_time.elapsed().as_secs_f32() % 1000.0,
+                    now,
                 );
             }
         }

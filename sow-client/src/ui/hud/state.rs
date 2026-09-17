@@ -20,7 +20,7 @@ pub struct HudState {
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
     pub hud_notifications: Vec<HudNotification>,
     pub show_ask_panel: Option<u16>, pub ask_gold: f64, pub ask_troops: f64, pub prev_resource_requests: Vec<u16>,
-    pub transfer_confirm_pending: bool, pub chat_disabled: bool,
+    pub transfer_confirm_pending: bool,
 }
 
 impl Default for HudState {
@@ -31,7 +31,7 @@ impl Default for HudState {
         show_betrayal_warning: None, betrayal_warning_cached: None, selected_building_kind: None, building_costs: [0.0; 9], selected_nuke_kind: None,
         hud_notifications: Vec::new(),
         show_ask_panel: None, ask_gold: 0.0, ask_troops: 0.0, prev_resource_requests: Vec::new(),
-        transfer_confirm_pending: false, chat_disabled: false } }
+        transfer_confirm_pending: false } }
 }
 
 impl HudState {

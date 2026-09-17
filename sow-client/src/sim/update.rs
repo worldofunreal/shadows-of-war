@@ -228,8 +228,21 @@ impl SowApp {
         let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
             return;
         };
+        if self.ui.last_resource_notice_tick == Some(snapshot.tick) {
+            return;
+        }
+        self.ui.last_resource_notice_tick = Some(snapshot.tick);
+
         let my_id = self.sim.my_player_id.unwrap_or(1);
         let mut notifications = Vec::new();
+        let (mut notice_x, mut notice_y) = (0.5, 0.5);
+        if let Some(player) = snapshot.players.iter().find(|player| player.id == my_id)
+            && (player.centroid_x > 0.001 || player.centroid_y > 0.001)
+        {
+            notice_x = player.centroid_x + 0.5;
+            notice_y = player.centroid_y + 0.5;
+        }
+        let notice_time = Instant::now();
 
         for transfer in &snapshot.resource_transfers {
             let (prefix, other_id, color) = if transfer.receiver_id == my_id {
@@ -275,6 +288,33 @@ impl SowApp {
                 _ => continue,
             };
             notifications.push((text, color));
+
+            if transfer.receiver_id == my_id && transfer.gold > 0.0 {
+                self.ui.floating_notices.push(crate::app::FloatingNotice {
+                    text: format!(
+                        "+{} Gold",
+                        crate::utils::format_number(transfer.gold)
+                    ),
+                    world_x: notice_x,
+                    world_y: notice_y,
+                    start_time: notice_time,
+                    duration: web_time::Duration::from_millis(3000),
+                    color: crate::rgb(250, 204, 21),
+                });
+            }
+            if transfer.receiver_id == my_id && transfer.troops > 0.0 {
+                self.ui.floating_notices.push(crate::app::FloatingNotice {
+                    text: format!(
+                        "+{} Troops",
+                        crate::utils::format_number(transfer.troops)
+                    ),
+                    world_x: notice_x,
+                    world_y: notice_y + 0.5,
+                    start_time: notice_time,
+                    duration: web_time::Duration::from_millis(3000),
+                    color: crate::rgb(6, 182, 212),
+                });
+            }
         }
 
         for rejection in &snapshot.resource_rejections {
