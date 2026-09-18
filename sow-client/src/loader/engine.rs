@@ -51,6 +51,7 @@ impl SowApp {
     pub(crate) fn reset_game_session(&mut self) {
         self.abort_engine_init();
         self.sim.turn_queue.clear();
+        self.time.turn_queue_peak = 0;
         self.sim.offline_intents.clear();
         self.sim.last_synced_cost_tick = None;
         self.sim.my_lobby_id = None;
@@ -59,6 +60,7 @@ impl SowApp {
         self.sim.relay_reconnect_ticket = None;
         self.ui.app.hud_state.spawn_timer_secs = None;
         self.ui.app.hud_state.sync_state = None;
+        self.ui.app.hud_state.clear_notifications();
         self.ui.app.main_menu_state.wait_timer_secs = 0.0;
         self.ui.app.main_menu_state.cached_map = None;
         self.ui.app.main_menu_state.cached_map_key = None;
@@ -73,6 +75,14 @@ impl SowApp {
         self.ui.attack_badge_labels.clear();
         self.ui.attack_badge_style_key = None;
         self.ui.attack_badge_cache_tick = None;
+        self.ui.attack_badge_active_ids.clear();
+        self.ui.nameplate_order_tick = None;
+        self.ui.nameplate_order_my_id = None;
+        self.ui.nameplate_order.clear();
+        self.ui.building_render_cache = Default::default();
+        self.ui.leaderboard_top_three = [None; 3];
+        self.ui.leaderboard_refresh_at = None;
+        self.ui.leaderboard_publish_pending = false;
         self.ui.last_resource_notice_tick = None;
         self.ui.tutorial_active = false;
 

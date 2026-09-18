@@ -61,6 +61,7 @@ pub struct WebStrings {
     pub hud: WebDomain,
     pub endgame: WebDomain,
     pub tutorial: WebDomain,
+    pub site: WebDomain,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,4 +1,5 @@
 use sow_core::protocol::{AttackSnapshot, FleetSnapshot, PlayerSnapshot};
+use std::collections::VecDeque;
 use web_time::Instant;
 use crate::ui::UiText;
 
@@ -18,7 +19,8 @@ pub struct HudState {
     pub betrayal_warning_cached: Option<(u16, sow_core::protocol::GameplayIntent)>,
     pub selected_building_kind: Option<sow_core::game::BuildingKind>, pub building_costs: [f64; 9],
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
-    pub hud_notifications: Vec<HudNotification>,
+    pub hud_notifications: VecDeque<HudNotification>,
+    pub notification_revision: u64,
     pub show_ask_panel: Option<u16>, pub ask_gold: f64, pub ask_troops: f64, pub prev_resource_requests: Vec<u16>,
     pub transfer_confirm_pending: bool,
 }
@@ -29,13 +31,47 @@ impl Default for HudState {
         safe_area_top: 0.0, safe_area_bottom: 0.0, selected_tile: None, show_emoji_panel: false, emoji_panel_pos: None,
         emoji_panel_just_opened: false, pin_emoji: false, show_alliance_inbox: false,
         show_betrayal_warning: None, betrayal_warning_cached: None, selected_building_kind: None, building_costs: [0.0; 9], selected_nuke_kind: None,
-        hud_notifications: Vec::new(),
+        hud_notifications: VecDeque::with_capacity(32), notification_revision: 0,
         show_ask_panel: None, ask_gold: 0.0, ask_troops: 0.0, prev_resource_requests: Vec::new(),
         transfer_confirm_pending: false } }
 }
 
 impl HudState {
     pub fn push_notification(&mut self, text: UiText, color: [f32; 4]) {
-        self.hud_notifications.push(HudNotification { text, color, spawned_at: Instant::now() });
+        if self.hud_notifications.len() == 32 {
+            self.hud_notifications.pop_front();
+        }
+        self.hud_notifications.push_back(HudNotification { text, color, spawned_at: Instant::now() });
+        self.notification_revision = self.notification_revision.wrapping_add(1);
+    }
+
+    pub fn clear_notifications(&mut self) {
+        self.hud_notifications.clear();
+        self.notification_revision = self.notification_revision.wrapping_add(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notifications_keep_only_the_32_most_recent_entries() {
+        let mut hud = HudState::default();
+        for _ in 0..40 {
+            hud.push_notification(UiText::new("hud.event"), [1.0; 4]);
+        }
+        assert_eq!(hud.hud_notifications.len(), 32);
+        assert_eq!(hud.notification_revision, 40);
+    }
+
+    #[test]
+    fn clearing_notifications_advances_the_revision() {
+        let mut hud = HudState::default();
+        hud.push_notification(UiText::new("hud.event"), [1.0; 4]);
+        let revision = hud.notification_revision;
+        hud.clear_notifications();
+        assert!(hud.hud_notifications.is_empty());
+        assert_eq!(hud.notification_revision, revision + 1);
     }
 }

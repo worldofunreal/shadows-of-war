@@ -118,7 +118,7 @@ pub(crate) fn render_overlays(
     let zoom_scaled = input.camera_zoom / sf;
 
     if dev.vfx_world_buildings {
-        render_buildings(text, snapshot, sim, input, &dev, sf, zoom_scaled);
+        render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled);
     }
     render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled);
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
@@ -173,30 +173,40 @@ fn render_nameplates(
     text: &mut TextRenderer,
     snapshot: &SimSnapshot,
     sim: &SimState,
-    ui: &UiState,
+    ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
     sf: f32,
     zoom_scaled: f32,
 ) {
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    let mut players: Vec<&PlayerSnapshot> = snapshot
-        .players
-        .iter()
-        .filter(|player| player.alive && player.tile_count > 0)
-        .collect();
-
-    players.sort_unstable_by(|a, b| {
-        let precedence = |player: &PlayerSnapshot| match player.player_type {
-            PlayerType::Human if player.id == my_id => 1,
-            PlayerType::Human => 2,
-            _ => 0,
-        };
-        precedence(a)
-            .cmp(&precedence(b))
-            .then_with(|| b.tile_count.cmp(&a.tile_count))
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    if ui.nameplate_order_tick != Some(snapshot.tick)
+        || ui.nameplate_order_my_id != Some(my_id)
+    {
+        let mut order: Vec<usize> = snapshot
+            .players
+            .iter()
+            .enumerate()
+            .filter(|(_, player)| player.alive && player.tile_count > 0)
+            .map(|(index, _)| index)
+            .collect();
+        order.sort_unstable_by(|a, b| {
+            let a = &snapshot.players[*a];
+            let b = &snapshot.players[*b];
+            let precedence = |player: &PlayerSnapshot| match player.player_type {
+                PlayerType::Human if player.id == my_id => 1,
+                PlayerType::Human => 2,
+                _ => 0,
+            };
+            precedence(a)
+                .cmp(&precedence(b))
+                .then_with(|| b.tile_count.cmp(&a.tile_count))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        ui.nameplate_order = order;
+        ui.nameplate_order_tick = Some(snapshot.tick);
+        ui.nameplate_order_my_id = Some(my_id);
+    }
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
@@ -204,7 +214,8 @@ fn render_nameplates(
     let screen_h = input.screen_h / sf;
     let fog_hidden = matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. });
 
-    for player in players {
+    for &player_index in &ui.nameplate_order {
+        let player = &snapshot.players[player_index];
         let is_me = player.id == my_id;
         let is_human = player.player_type == PlayerType::Human;
         if dev.fog_of_war && !is_me && !fog_hidden && !player_at_explored_tile(player, sim) {
@@ -245,11 +256,10 @@ fn render_nameplates(
             .filter(|me| me.id != player.id)
             .is_some_and(|me| me.alliance_requests.contains(&player.id));
         let rank = ui
-            .leaderboard_rankings
+            .leaderboard_top_three
             .iter()
-            .position(|ranking| ranking.id == player.id)
-            .map(|index| index + 1)
-            .filter(|rank| *rank <= 3);
+            .position(|id| *id == Some(player.id))
+            .map(|index| index + 1);
 
         paint_nameplate(
             text,
@@ -794,10 +804,28 @@ struct RenderedBuilding {
     tile_idx: Option<u32>,
 }
 
+#[derive(Default)]
+pub(crate) struct BuildingRenderCache {
+    tick: Option<u64>,
+    map_w: u32,
+    cluster_cell_size_bits: u32,
+    buildings: Vec<RenderedBuilding>,
+}
+
+impl BuildingRenderCache {
+    #[inline]
+    fn matches(&self, tick: u64, map_w: u32, cluster_cell_size_bits: u32) -> bool {
+        self.tick == Some(tick)
+            && self.map_w == map_w
+            && self.cluster_cell_size_bits == cluster_cell_size_bits
+    }
+}
+
 fn render_buildings(
     text: &mut TextRenderer,
     snapshot: &SimSnapshot,
     sim: &SimState,
+    ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
     sf: f32,
@@ -807,13 +835,7 @@ fn render_buildings(
         return;
     }
     let lod = BuildingLod::for_zoom(zoom_scaled);
-    let mut buildings = collect_buildings(snapshot, sim.map_w, lod);
-    buildings.sort_unstable_by(|a, b| {
-        a.by.partial_cmp(&b.by)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.bx.partial_cmp(&b.bx).unwrap_or(std::cmp::Ordering::Equal))
-            .then_with(|| a.count.cmp(&b.count))
-    });
+    let buildings = cached_buildings(ui, snapshot, sim.map_w, lod);
 
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
@@ -892,6 +914,31 @@ fn render_buildings(
             );
         }
     }
+}
+
+fn cached_buildings<'a>(
+    ui: &'a mut UiState,
+    snapshot: &SimSnapshot,
+    map_w: u32,
+    lod: BuildingLod,
+) -> &'a [RenderedBuilding] {
+    let map_w = map_w.max(1);
+    let cluster_cell_size_bits = lod.cluster_cell_size.to_bits();
+    let cache = &mut ui.building_render_cache;
+    if !cache.matches(snapshot.tick, map_w, cluster_cell_size_bits) {
+        let mut buildings = collect_buildings(snapshot, map_w, lod);
+        buildings.sort_unstable_by(|a, b| {
+            a.by.partial_cmp(&b.by)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.bx.partial_cmp(&b.bx).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.count.cmp(&b.count))
+        });
+        cache.tick = Some(snapshot.tick);
+        cache.map_w = map_w;
+        cache.cluster_cell_size_bits = cluster_cell_size_bits;
+        cache.buildings = buildings;
+    }
+    &cache.buildings
 }
 
 fn collect_buildings(
@@ -1014,6 +1061,24 @@ mod tests {
         let lod = BuildingLod::for_zoom(1.0);
         assert!(lod.compact);
         assert_eq!(lod.cluster_cell_size, BUILDING_CLUSTER_TARGET_SIZE);
+    }
+
+    #[test]
+    fn building_cache_key_changes_with_tick_map_or_zoom_cluster() {
+        let lod = BuildingLod::for_zoom(1.0);
+        let mut cache = BuildingRenderCache::default();
+        cache.tick = Some(4);
+        cache.map_w = 800;
+        cache.cluster_cell_size_bits = lod.cluster_cell_size.to_bits();
+
+        assert!(cache.matches(4, 800, lod.cluster_cell_size.to_bits()));
+        assert!(!cache.matches(5, 800, lod.cluster_cell_size.to_bits()));
+        assert!(!cache.matches(4, 801, lod.cluster_cell_size.to_bits()));
+        assert!(!cache.matches(
+            4,
+            800,
+            BuildingLod::for_zoom(2.0).cluster_cell_size.to_bits()
+        ));
     }
 
     #[test]

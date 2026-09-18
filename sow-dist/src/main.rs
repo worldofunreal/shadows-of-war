@@ -600,6 +600,67 @@ fn validate_web_bundle(bundle: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_source_localization_keys(
+    source: &str,
+    label: &str,
+    catalog: &serde_json::Value,
+) -> Result<()> {
+    for needle in ["SOW_t(", "siteText(", "translate("] {
+        let mut offset = 0;
+        while let Some(found) = source[offset..].find(needle) {
+            let start = offset + found + needle.len();
+            let rest = &source[start..];
+            let trimmed = rest.trim_start();
+            let Some(quote) = trimmed.as_bytes().first().copied() else {
+                break;
+            };
+            if quote != b'"' && quote != b'\'' {
+                offset = start;
+                continue;
+            }
+            let value = &trimmed[1..];
+            let end = value
+                .find(quote as char)
+                .with_context(|| format!("unterminated localization key in {label}"))?;
+            let key = &value[..end];
+            if key.ends_with('_') {
+                if !web_catalog_has_prefix(catalog, key) {
+                    bail!("{label} uses unknown localization key prefix {key}");
+                }
+            } else if web_catalog_value(catalog, key).is_none() {
+                bail!("{label} uses unknown localization key {key}");
+            }
+            offset = start + rest.len() - trimmed.len() + 1 + end;
+        }
+    }
+    for needle in [
+        "data-i18n=\"",
+        "data-i18n='",
+        "data-i18n-placeholder=\"",
+        "data-i18n-placeholder='",
+        "data-ability-key=\"",
+        "data-ability-key='",
+        "data-description-key=\"",
+        "data-description-key='",
+    ] {
+        let quote = needle.as_bytes()[needle.len() - 1] as char;
+        let mut offset = 0;
+        while let Some(found) = source[offset..].find(needle) {
+            let start = offset + found + needle.len();
+            let rest = &source[start..];
+            let end = rest
+                .find(quote)
+                .with_context(|| format!("unterminated localization attribute in {label}"))?;
+            let key = &rest[..end];
+            if web_catalog_value(catalog, key).is_none() {
+                bail!("{label} uses unknown localization key {key}");
+            }
+            offset = start + end;
+        }
+    }
+    Ok(())
+}
+
 fn strip_marked_section(source: &str, begin: &str, end: &str) -> Result<String> {
     let start = source
         .find(begin)
@@ -804,6 +865,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         &paths.shell,
         "main_menu.css",
         &[
+            "sow-controls.css",
             "main_menu.base.css",
             "main_menu.hud.css",
             "main_menu.profile.css",
@@ -811,7 +873,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     )?;
     let menu_parts: Vec<&str> = if poki {
         vec![
-            "main_menu.i18n.js",
+            "sow-i18n.js",
+            "sow-dropdown.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -824,7 +887,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         ]
     } else {
         vec![
-            "main_menu.i18n.js",
+            "sow-i18n.js",
+            "sow-dropdown.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -983,6 +1047,9 @@ fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
         )?;
     }
     fs::copy(paths.shell.join("loader.js"), out.join("loader.js"))?;
+    fs::copy(paths.shell.join("sow-i18n.js"), out.join("sow-i18n.js"))?;
+    fs::copy(paths.shell.join("sow-dropdown.js"), out.join("sow-dropdown.js"))?;
+    fs::copy(paths.shell.join("sow-controls.css"), out.join("sow-controls.css"))?;
     copy_dir(&paths.shell.join("sdk"), &out.join("sdk"))?;
     Ok(())
 }
@@ -1150,11 +1217,39 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
             offset = key_start + end;
         }
     }
+    for relative in [
+        "sow-web/site/index.html",
+        "sow-web/site/app.js",
+        "sow-web/site/site-chrome.js",
+        "sow-web/site/leaders/index.html",
+        "sow-web/site/how-to-play/index.html",
+    ] {
+        let path = root.join(relative);
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("read public source {}", path.display()))?;
+        validate_source_localization_keys(&source, relative, &catalog)?;
+    }
     Ok(())
 }
 
 fn verify_exported_locales(dir: &Path) -> Result<()> {
     let expected = validate_web_catalogs()?;
+    let expected_languages = serde_json::to_value(
+        sow_i18n::Language::registry()
+            .iter()
+            .map(|(_, code, name)| serde_json::json!({ "code": code, "name": name }))
+            .collect::<Vec<_>>(),
+    )?;
+    let registry_path = dir.join("locales/index.json");
+    let registry: serde_json::Value = serde_json::from_str(&fs::read_to_string(&registry_path)?)
+        .with_context(|| format!("parse exported locale registry {}", registry_path.display()))?;
+    if registry.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
+        || registry.get("version").and_then(serde_json::Value::as_u64)
+            != Some(sow_i18n::WEB_CATALOG_VERSION as u64)
+        || registry.get("languages") != Some(&expected_languages)
+    {
+        bail!("exported locale registry metadata is invalid");
+    }
     for &(_, code, _) in sow_i18n::Language::registry() {
         let path = dir.join("locales").join(code);
         if !path.is_file() {
@@ -1168,6 +1263,9 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
             || payload.get("locale").and_then(serde_json::Value::as_str) != Some(code)
         {
             bail!("exported web catalog metadata is invalid for {code}");
+        }
+        if payload.get("languages") != Some(&expected_languages) {
+            bail!("exported web catalog language registry is invalid for {code}");
         }
         let strings = payload
             .get("strings")
@@ -1259,11 +1357,24 @@ fn export_locales(out: &Path) -> Result<()> {
     validate_web_catalogs()?;
     let d = out.join("locales");
     fs::create_dir_all(&d)?;
+    let languages = sow_i18n::Language::registry()
+        .iter()
+        .map(|(_, code, name)| serde_json::json!({ "code": code, "name": name }))
+        .collect::<Vec<_>>();
+    fs::write(
+        d.join("index.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": 1,
+            "version": sow_i18n::WEB_CATALOG_VERSION,
+            "languages": languages.clone(),
+        }))?,
+    )?;
     for &(language, code, _) in sow_i18n::Language::registry() {
         let payload = serde_json::json!({
             "schema": 1,
             "version": sow_i18n::WEB_CATALOG_VERSION,
             "locale": code,
+            "languages": languages.clone(),
             "strings": sow_i18n::web(language),
         });
         fs::write(d.join(code), serde_json::to_string_pretty(&payload)?)?;
@@ -1300,6 +1411,10 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "sitemap.xml",
         "app.js",
         "site-chrome.js",
+        "sow-i18n.js",
+        "sow-dropdown.js",
+        "sow-controls.css",
+        "locales/index.json",
         "styles.css",
         "legal.css",
         "fonts/fonts.css",
@@ -1487,6 +1602,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
 }
 
 fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Result<()> {
+    validate_current_ui_contract(paths)?;
     validate_campaign_assets(paths)?;
     let previous_artifacts = if !compile && out.is_dir() {
         let js = fs::read_dir(out)?.filter_map(Result::ok).find_map(|entry| {
@@ -1641,23 +1757,28 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         }
         copy_dir(&src, &out.join(path))?;
     }
-    // Fingerprint site assets (styles/app/site-chrome/legal/wou-auth) with a content hash so edge and
-    // browser caches never serve a stale version after a redeploy.
+    // Fingerprint shared public assets in every page that references them.
     for name in [
         "styles.css",
         "app.js",
         "site-chrome.js",
+        "sow-i18n.js",
+        "sow-dropdown.js",
+        "sow-controls.css",
         "legal.css",
         "wou-auth.js",
     ] {
         let hash = file_sha256(&out.join(name))?;
         let versioned = format!("{name}?v={}", &hash[..10]);
-        let html = out.join("index.html");
-        let content = fs::read_to_string(&html)?;
-        fs::write(
-            &html,
-            content.replace(&format!("./{name}"), &format!("./{versioned}")),
-        )?;
+        for relative in ["index.html", "leaders/index.html", "how-to-play/index.html"] {
+            let html = out.join(relative);
+            let prefix = if relative == "index.html" { "./" } else { "../" };
+            let content = fs::read_to_string(&html)?;
+            fs::write(
+                &html,
+                content.replace(&format!("{prefix}{name}"), &format!("{prefix}{versioned}")),
+            )?;
+        }
     }
     fs::write(
         out.join("robots.txt"),
@@ -2644,6 +2765,8 @@ mod tests {
             "index.html",
             "app.js",
             "site-chrome.js",
+            "sow-dropdown.js",
+            "sow-controls.css",
             "styles.css",
             "legal.css",
             "fonts/fonts.css",
@@ -2669,7 +2792,9 @@ mod tests {
             "index.html.template",
             "main_menu.css",
             "main_menu.js",
-            "main_menu.i18n.js",
+            "sow-i18n.js",
+            "sow-dropdown.js",
+            "sow-controls.css",
             "main_menu.base.css",
             "main_menu.hud.css",
             "main_menu.profile.css",

@@ -6,15 +6,19 @@
 //! paths execute them unchanged.
 
 use std::cell::{Cell, RefCell};
+use std::cmp::Ordering;
 use std::collections::VecDeque;
 
 use serde::Deserialize;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
+use web_time::{Duration, Instant};
 
-use crate::app::SowApp;
+use crate::app::{HoverPointer, SowApp};
 use crate::campaign::CampaignId;
 use crate::UiAction;
+
+const LEADERBOARD_LIMIT: usize = 100;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -190,7 +194,7 @@ thread_local! {
         const { RefCell::new(None) };
     /// WASM nameplates need the same rank cache for the top-three laurels/medals.
     /// Refreshing is keyed by the authoritative snapshot tick, not the render/publish cadence.
-    static LAST_WEB_RANKINGS_TICK: Cell<Option<u64>> = const { Cell::new(None) };
+    static LAST_WEB_TOP_THREE_TICK: Cell<Option<u64>> = const { Cell::new(None) };
     /// Cold panel JSON is rebuilt only when its snapshot input changes. Hot HUD updates reuse it.
     static LAST_WEB_LEADERBOARD_PAYLOAD:
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
@@ -217,6 +221,7 @@ struct HudPublishKey {
     settings_music_volume: u32,
     settings_reduced_motion: bool,
     leaderboard_open: bool,
+    leaderboard_publish_revision: u64,
     tutorial_active: bool,
     dev_sidebar_open: bool,
     dev_thickness: u32,
@@ -229,7 +234,7 @@ struct HudPublishKey {
     betrayal_open: bool,
     sync_open: bool,
     inbox_count: usize,
-    notification_len: usize,
+    notification_revision: u64,
     is_spectating: bool,
     snapshot_tick: u64,
     hovered_tile: u32,
@@ -287,13 +292,13 @@ fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<My
 
 fn refresh_web_leaderboard_cache(app: &mut SowApp) {
     let Some(snapshot) = app.sim.current_snapshot.as_ref() else {
-        LAST_WEB_RANKINGS_TICK.with(|tick| tick.set(None));
-        app.ui.leaderboard_rankings.clear();
+        LAST_WEB_TOP_THREE_TICK.with(|tick| tick.set(None));
+        app.ui.leaderboard_top_three = [None; 3];
         return;
     };
 
     let snapshot_tick = snapshot.tick;
-    let changed = LAST_WEB_RANKINGS_TICK.with(|tick| {
+    let changed = LAST_WEB_TOP_THREE_TICK.with(|tick| {
         if tick.get() == Some(snapshot_tick) {
             false
         } else {
@@ -305,27 +310,29 @@ fn refresh_web_leaderboard_cache(app: &mut SowApp) {
         return;
     }
 
-    let mut rankings: Vec<crate::ui::hud::leaderboard::LeaderboardRanking> = snapshot
+    let mut rankings: Vec<&sow_core::protocol::PlayerSnapshot> = snapshot
         .players
         .iter()
         .filter(|player| player.alive)
-        .map(|player| crate::ui::hud::leaderboard::LeaderboardRanking {
-            id: player.id,
-            tiles: player.tile_count,
-            troops: player.troops,
-            name: sow_core::player::display_name(player.id, &player.name, player.player_type),
-            kills: player.kills,
-            deaths: player.deaths,
-            assists: player.assists,
-        })
         .collect();
-    rankings.sort_unstable_by(|a, b| {
-        b.tiles
-            .cmp(&a.tiles)
-            .then_with(|| b.troops.total_cmp(&a.troops))
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    app.ui.leaderboard_rankings = rankings;
+    if rankings.len() > 3 {
+        rankings.select_nth_unstable_by(2, leaderboard_cmp);
+        rankings.truncate(3);
+    }
+    rankings.sort_unstable_by(leaderboard_cmp);
+    app.ui.leaderboard_top_three =
+        std::array::from_fn(|index| rankings.get(index).map(|player| player.id));
+}
+
+#[inline]
+fn leaderboard_cmp(
+    a: &&sow_core::protocol::PlayerSnapshot,
+    b: &&sow_core::protocol::PlayerSnapshot,
+) -> Ordering {
+    b.tile_count
+        .cmp(&a.tile_count)
+        .then_with(|| b.troops.total_cmp(&a.troops))
+        .then_with(|| a.id.cmp(&b.id))
 }
 
 pub(crate) fn register_event_loop_wake(proxy: winit::event_loop::EventLoopProxy) {
@@ -706,10 +713,14 @@ impl SowApp {
                 WebMenuCommand::ToggleLeaderboard => {
                     self.ui.show_leaderboard = !self.ui.show_leaderboard;
                     if self.ui.show_leaderboard {
+                        self.ui.leaderboard_refresh_at = None;
+                        self.ui.leaderboard_publish_pending = true;
                         #[cfg(any(feature = "dev", debug_assertions))]
                         {
                             self.ui.show_dev_sidebar = false;
                         }
+                    } else {
+                        self.ui.leaderboard_publish_pending = false;
                     }
                 }
                 WebMenuCommand::ReturnToMenu => {
@@ -813,15 +824,19 @@ fn phase_name(phase: crate::ClientPhase) -> &'static str {
 }
 
 fn hovered_tile_owner(app: &SowApp) -> (u32, u16) {
+    if matches!(app.input.hover_pointer, HoverPointer::None)
+        || (matches!(app.input.hover_pointer, HoverPointer::Touch)
+            && app.input.active_touches.len() != 1)
+    {
+        return (u32::MAX, 0);
+    }
     if !app.input.camera_zoom.is_finite() || app.input.camera_zoom <= 0.0 {
         return (u32::MAX, 0);
     }
-    let world_x = (app.input.last_mouse_x as f32 - app.input.camera_x) / app.input.camera_zoom;
-    let world_y = (app.input.last_mouse_y as f32 - app.input.camera_y) / app.input.camera_zoom;
-    let (col, row) = crate::render::world::movers::world_to_tile(world_x, world_y);
-    if col < 0 || row < 0 || col >= app.sim.map_w as i32 || row >= app.sim.map_h as i32 {
+    let Some((col, row)) = app.mouse_to_tile(app.input.last_mouse_x, app.input.last_mouse_y)
+    else {
         return (u32::MAX, 0);
-    }
+    };
     let idx = (row * app.sim.map_w as i32 + col) as usize;
     let owner = app
         .gfx
@@ -882,12 +897,13 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
         leaderboard_open: app.ui.show_leaderboard,
+        leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
         inbox_open: hud.show_alliance_inbox,
         transfer_target: hud.show_ask_panel,
         betrayal_open: hud.show_betrayal_warning.is_some(),
         sync_open: hud.sync_state.is_some(),
         inbox_count,
-        notification_len: hud.hud_notifications.len(),
+        notification_revision: hud.notification_revision,
         is_spectating: app.ui.is_spectating,
         tutorial_active,
         dev_sidebar_open,
@@ -1020,7 +1036,7 @@ fn tutorial_payload(
     let players = snapshot
         .players
         .iter()
-        .map(|player| player_json(player, my_pid, snapshot.total_land_tiles))
+        .map(|player| player_json(player, my_pid, snapshot.total_land_tiles, None))
         .collect::<Vec<_>>();
     let structures = snapshot
         .buildings
@@ -1093,9 +1109,10 @@ fn player_json(
     player: &sow_core::protocol::PlayerSnapshot,
     my_pid: u16,
     total_land_tiles: u32,
+    rank: Option<usize>,
 ) -> serde_json::Value {
     let territory_pct = (player.tile_count as f32 / total_land_tiles.max(1) as f32).clamp(0.0, 1.0);
-    serde_json::json!({
+    let mut payload = serde_json::json!({
         "id": player.id,
         "name": &player.name,
         "troops": player.troops,
@@ -1113,23 +1130,51 @@ fn player_json(
         "kills": player.kills,
         "deaths": player.deaths,
         "assists": player.assists,
-    })
+    });
+    if let Some(rank) = rank {
+        payload["rank"] = serde_json::json!(rank);
+    }
+    payload
 }
 
 fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde_json::Value {
     let mut players: Vec<&sow_core::protocol::PlayerSnapshot> = snapshot.players.iter().collect();
-    players.sort_unstable_by(|a, b| {
-        b.tile_count
-            .cmp(&a.tile_count)
-            .then_with(|| b.troops.total_cmp(&a.troops))
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    serde_json::Value::Array(
-        players
-            .into_iter()
-            .map(|player| player_json(player, my_pid, snapshot.total_land_tiles))
-            .collect(),
-    )
+    if players.len() > LEADERBOARD_LIMIT {
+        players.select_nth_unstable_by(LEADERBOARD_LIMIT - 1, leaderboard_cmp);
+        players.truncate(LEADERBOARD_LIMIT);
+    }
+    players.sort_unstable_by(leaderboard_cmp);
+    let has_my_player = players.iter().any(|player| player.id == my_pid);
+    let my_player = snapshot.players.iter().find(|player| player.id == my_pid);
+    let mut payload = players
+        .into_iter()
+        .enumerate()
+        .map(|(index, player)| {
+            player_json(
+                player,
+                my_pid,
+                snapshot.total_land_tiles,
+                Some(index + 1),
+            )
+        })
+        .collect::<Vec<_>>();
+    if !has_my_player {
+        if let Some(my_player) = my_player {
+            let rank = snapshot
+                .players
+                .iter()
+                .filter(|player| leaderboard_cmp(player, &my_player) == Ordering::Less)
+                .count()
+                + 1;
+            payload.push(player_json(
+                my_player,
+                my_pid,
+                snapshot.total_land_tiles,
+                Some(rank),
+            ));
+        }
+    }
+    serde_json::Value::Array(payload)
 }
 
 fn build_hover_payload(
@@ -1155,7 +1200,7 @@ fn build_hover_payload(
             sow_core::game::BuildingKind::Bunker => bunkers += 1,
         }
     }
-    let mut payload = player_json(player, my_pid, snapshot.total_land_tiles);
+    let mut payload = player_json(player, my_pid, snapshot.total_land_tiles, None);
     payload["cities"] = serde_json::json!(cities);
     payload["factories"] = serde_json::json!(factories);
     payload["ports"] = serde_json::json!(ports);
@@ -1267,7 +1312,7 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
     serde_json::Value::Array(requests)
 }
 
-fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
+fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json::Value {
     if app.ui.app.phase != crate::ClientPhase::Playing {
         return serde_json::Value::Null;
     }
@@ -1402,7 +1447,7 @@ fn build_hud_payload(app: &mut SowApp) -> serde_json::Value {
             payload["hovered"] =
                 cached_hover_payload(snapshot, hovered_tile, hovered_owner, my_pid);
         }
-        if app.ui.show_leaderboard {
+        if app.ui.show_leaderboard && include_leaderboard {
             payload["leaderboard"] = cached_leaderboard_payload(snapshot, my_pid);
         }
         if hud.show_alliance_inbox {
@@ -1542,6 +1587,25 @@ pub(crate) fn publish_state(app: &mut SowApp) {
     let progress = &app.progress;
 
     let payload = if app.ui.app.phase == crate::ClientPhase::Playing {
+        let include_leaderboard = if app.ui.show_leaderboard {
+            let now = Instant::now();
+            let due = app.ui.leaderboard_publish_pending
+                || app
+                    .ui
+                    .leaderboard_refresh_at
+                    .map_or(true, |last| {
+                        now.duration_since(last) >= Duration::from_millis(250)
+                    });
+            if due {
+                app.ui.leaderboard_refresh_at = Some(now);
+                app.ui.leaderboard_publish_pending = false;
+                app.ui.leaderboard_publish_revision =
+                    app.ui.leaderboard_publish_revision.wrapping_add(1);
+            }
+            due
+        } else {
+            false
+        };
         let hud_key = hud_publish_key(app);
         let hud_changed = LAST_HUD_KEY.with(|last| {
             let mut last = last.borrow_mut();
@@ -1555,7 +1619,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         if !hud_changed {
             return;
         }
-        let hud_payload = build_hud_payload(app);
+        let hud_payload = build_hud_payload(app, include_leaderboard);
         serde_json::json!({
             "phase": "Playing",
             "hud": hud_payload,
@@ -1568,11 +1632,13 @@ pub(crate) fn publish_state(app: &mut SowApp) {
     } else {
         LAST_HUD_KEY.with(|last| *last.borrow_mut() = None);
         LAST_MY_PLAYER.with(|cache| *cache.borrow_mut() = None);
-        LAST_WEB_RANKINGS_TICK.with(|tick| tick.set(None));
+        LAST_WEB_TOP_THREE_TICK.with(|tick| tick.set(None));
         LAST_WEB_LEADERBOARD_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         LAST_WEB_HOVER_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
         LAST_WEB_INBOX_PAYLOAD.with(|cache| *cache.borrow_mut() = None);
-        app.ui.leaderboard_rankings.clear();
+        app.ui.leaderboard_top_three = [None; 3];
+        app.ui.leaderboard_refresh_at = None;
+        app.ui.leaderboard_publish_pending = false;
         let rotation_period = ((js_sys::Date::now().max(0.0) / 1000.0) as u64)
             / sow_data::commerce::ROTATION_PERIOD_SECS;
         let mut store_catalog = sow_data::commerce::catalog_for_profile(
@@ -1728,5 +1794,117 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         if let Ok(func) = func_val.dyn_into::<js_sys::Function>() {
             let _ = func.call1(window.as_ref(), &js_str);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sow_core::game::GamePhase;
+    use sow_core::player::{Civilization, Leader, PlayerType};
+    use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
+    use std::sync::Arc;
+
+    fn test_player(id: u16, tile_count: u32, troops: f64) -> PlayerSnapshot {
+        PlayerSnapshot {
+            id,
+            name: format!("Player {id}"),
+            troops,
+            max_troops: 100.0,
+            gold: 100.0,
+            tile_count,
+            centroid_x: 0.0,
+            centroid_y: 0.0,
+            player_type: PlayerType::Bot,
+            color: [0.5; 3],
+            team: None,
+            has_spawned: true,
+            alive: true,
+            iq: 100,
+            alliances: Vec::new(),
+            alliance_timers: std::collections::HashMap::new(),
+            alliance_requests: Vec::new(),
+            resource_requests: Vec::new(),
+            disconnected: false,
+            active_emoji: None,
+            traitor: false,
+            civilization: Civilization::Rome,
+            leader: Leader::Caesar,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+        }
+    }
+
+    fn test_snapshot(players: Vec<PlayerSnapshot>) -> SimSnapshot {
+        SimSnapshot {
+            tick: 1,
+            phase: GamePhase::Playing,
+            spawn_timer_secs: None,
+            players,
+            dirty_tiles: Vec::new(),
+            fleets: Vec::new(),
+            attacks: Vec::new(),
+            buildings: Vec::new(),
+            projectiles: Vec::new(),
+            nuke_alerts: Vec::new(),
+            resource_transfers: Vec::new(),
+            resource_rejections: Vec::new(),
+            winner: None,
+            winning_team: None,
+            defense_posts: Vec::new(),
+            defense_dirty: false,
+            total_land_tiles: 10_000,
+            sea_lanes: Arc::new(Vec::new()),
+            debug_mem_info: String::new(),
+        }
+    }
+
+    #[test]
+    fn optimized_top_three_matches_the_full_order() {
+        let players = vec![
+            test_player(3, 10, 5.0),
+            test_player(2, 10, 5.0),
+            test_player(1, 10, 6.0),
+            test_player(0, 10, 5.0),
+            test_player(4, 9, 100.0),
+        ];
+        let mut full: Vec<&PlayerSnapshot> = players.iter().collect();
+        full.sort_unstable_by(leaderboard_cmp);
+        let expected: Vec<u16> = full.iter().take(3).map(|player| player.id).collect();
+
+        let mut optimized: Vec<&PlayerSnapshot> = players.iter().collect();
+        optimized.select_nth_unstable_by(2, leaderboard_cmp);
+        optimized.truncate(3);
+        optimized.sort_unstable_by(leaderboard_cmp);
+        assert_eq!(
+            optimized.iter().map(|player| player.id).collect::<Vec<_>>(),
+            expected
+        );
+    }
+
+    #[test]
+    fn leaderboard_has_at_most_100_rows_plus_the_local_player() {
+        let snapshot = test_snapshot(
+            (0..150)
+                .map(|id| test_player(id, 150 - id as u32, 0.0))
+                .collect(),
+        );
+        let serde_json::Value::Array(rows) = build_leaderboard(&snapshot, 149) else {
+            panic!("leaderboard must be an array");
+        };
+
+        assert_eq!(rows.len(), 101);
+        assert_eq!(
+            rows.iter()
+                .filter_map(|row| row.get("id").and_then(serde_json::Value::as_u64))
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            101
+        );
+        assert_eq!(rows[0]["rank"], serde_json::json!(1));
+        assert_eq!(rows[99]["rank"], serde_json::json!(100));
+        assert_eq!(rows[100]["id"], serde_json::json!(149));
+        assert_eq!(rows[100]["rank"], serde_json::json!(150));
     }
 }

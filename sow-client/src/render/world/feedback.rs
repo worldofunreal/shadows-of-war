@@ -81,6 +81,7 @@ fn render_attack_badges(
 ) {
     if !dev.vfx_attack_badges {
         ui.attack_badge_labels.clear();
+        ui.attack_badge_active_ids.clear();
         ui.attack_badge_cache_tick = None;
         return;
     }
@@ -94,8 +95,12 @@ fn render_attack_badges(
         ui.attack_badge_style_key = Some(style_key);
     }
     if ui.attack_badge_cache_tick != Some(snapshot.tick) {
+        ui.attack_badge_active_ids.clear();
+        ui.attack_badge_active_ids
+            .extend(snapshot.attacks.iter().map(|attack| attack.id));
+        let active_ids = &ui.attack_badge_active_ids;
         ui.attack_badge_labels
-            .retain(|id, _| snapshot.attacks.iter().any(|attack| attack.id == *id));
+            .retain(|id, _| active_ids.contains(id));
         ui.attack_badge_cache_tick = Some(snapshot.tick);
     }
 

@@ -22,27 +22,8 @@
         });
     }
 
-    function renderDropdown(config) {
-        var value = config.value == null ? "" : String(config.value);
-        var options = config.options || [];
-        var key = String(config.key);
-        var inputAttrs = " data-dropdown-value" + (config.setting ? " data-setting='" + esc(config.setting) + "'" : "");
-        return "<div class='sow-control-dropdown" + (config.className ? " " + esc(config.className) : "") + "' data-control-dropdown data-dropdown-key='" + esc(key) + "'>" +
-            "<button class='sow-control-dropdown__trigger' type='button' data-command='toggle_dropdown' data-dropdown-key='" + esc(key) + "' data-role='dropdown-trigger' aria-haspopup='listbox' aria-expanded='false' aria-controls='sow-dropdown-" + esc(key) + "'>" +
-                "<span data-dropdown-label>" + esc((options.find(function (option) { return String(option.value) === value; }) || {}).label || value) + "</span><span class='sow-control-dropdown__chevron' aria-hidden='true'>⌄</span>" +
-            "</button>" +
-            "<div class='sow-control-dropdown__menu' id='sow-dropdown-" + esc(key) + "' role='listbox' aria-label='" + esc(config.label || SOW_t("lobbies.search_option")) + "' hidden>" +
-                options.map(function (option) {
-                    var selected = String(option.value) === value;
-                    return "<button class='sow-control-dropdown__option' type='button' role='option' data-command='select_dropdown' data-dropdown-key='" + esc(key) + "' data-dropdown-option-value='" + esc(option.value) + "' aria-selected='" + (selected ? "true" : "false") + "'>" + esc(option.label) + "</button>";
-                }).join("") +
-            "</div>" +
-            "<input type='hidden' name='" + esc(config.name || key) + "' value='" + esc(value) + "' data-dropdown-input" + inputAttrs + ">" +
-        "</div>";
-    }
-
     function renderHeroesRegionDropdown() {
-        return renderDropdown({
+        return SOW_renderDropdown({
             key: "heroes-region",
             label: SOW_t("heroes.filter_leaders_region"),
             name: "region",

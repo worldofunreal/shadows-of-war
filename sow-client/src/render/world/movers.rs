@@ -1,6 +1,6 @@
 use crate::render::gpu::{MoverInstanceGpu, MoverSpriteId, TrailSegmentGpu};
 use sow_core::game::{ProjectileKind, UnitType};
-use sow_core::protocol::{FleetSnapshot, PlayerSnapshot, ProjectileSnapshot, SimSnapshot};
+use sow_core::protocol::{FleetSnapshot, ProjectileSnapshot, SimSnapshot};
 use std::collections::{HashMap, HashSet};
 use web_time::Instant;
 
@@ -116,6 +116,7 @@ pub struct MoverScene {
     trail_points: Vec<[f32; 2]>,
     arc_scratch: Vec<[f32; 2]>,
     arc_paths: HashMap<u64, Vec<u32>>,
+    player_colors: HashMap<u16, [f32; 3]>,
     last_snap_tick: u64,
     map_w: u32,
 }
@@ -138,6 +139,7 @@ impl MoverScene {
             trail_points: Vec::new(),
             arc_scratch: Vec::with_capacity(NUKE_ARC_SAMPLES + 1),
             arc_paths: HashMap::new(),
+            player_colors: HashMap::new(),
             last_snap_tick: u64::MAX,
             map_w: 1,
         }
@@ -157,6 +159,14 @@ impl MoverScene {
         self.last_snap_tick = snap.tick;
         self.map_w = map_w.max(1);
         self.trail_points.clear();
+        self.player_colors.clear();
+        self.player_colors.reserve(snap.players.len());
+        for player in &snap.players {
+            let rgb = player
+                .team
+                .map_or(player.color, sow_core::player::team_territory_rgb);
+            self.player_colors.insert(player.id, rgb);
+        }
 
         let mut alive: HashSet<u64> = HashSet::new();
 
@@ -166,7 +176,7 @@ impl MoverScene {
                 || fog_visible.contains(fleet.current_tile);
             if is_visible {
                 alive.insert(fleet.id);
-                self.ingest_fleet(fleet, map_w, &snap.players);
+                self.ingest_fleet(fleet, map_w);
             }
         }
         for proj in &snap.projectiles {
@@ -212,7 +222,7 @@ impl MoverScene {
         }
     }
 
-    fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32, players: &[PlayerSnapshot]) {
+    fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32) {
         let (curr_x, curr_y) = tile_to_world(fleet.current_tile, map_w);
         let (prev_x, prev_y) = if fleet.path_cursor > 1 && !fleet.path.is_empty() {
             let prev_idx = fleet
@@ -230,10 +240,10 @@ impl MoverScene {
             UnitType::Warship => MoverSpriteId::Warship,
         };
 
-        let rgb = players
-            .iter()
-            .find(|p| p.id == fleet.owner_id)
-            .map(|p| p.team.map_or(p.color, sow_core::player::team_territory_rgb))
+        let rgb = self
+            .player_colors
+            .get(&fleet.owner_id)
+            .copied()
             .unwrap_or([0.5, 0.5, 0.5]);
         let color = [rgb[0], rgb[1], rgb[2], 1.0];
         let trail_color = [

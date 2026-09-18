@@ -26,7 +26,6 @@
 
 #sow-hud button,
 #sow-hud input,
-#sow-hud select,
 #sow-hud a {
     pointer-events: auto;
     font: inherit;
@@ -37,8 +36,7 @@
 }
 
 #sow-hud button:focus-visible,
-#sow-hud input:focus-visible,
-#sow-hud select:focus-visible {
+#sow-hud input:focus-visible {
     outline: 2px solid var(--sow-gold-bright);
     outline-offset: 2px;
 }

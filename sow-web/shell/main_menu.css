@@ -1,5 +1,5 @@
 /*
  * Source entry for the web menu styles.
  * sow-dist concatenates these files in cascade order before inlining:
- * main_menu.base.css -> main_menu.hud.css -> main_menu.profile.css
+ * sow-controls.css -> main_menu.base.css -> main_menu.hud.css -> main_menu.profile.css
  */

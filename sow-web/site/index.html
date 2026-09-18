@@ -5,26 +5,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0a0a0e">
-  <title>Shadows of War — Multiplayer Strategy</title>
+  <title data-i18n="site.title">Shadows of War — Multiplayer Strategy</title>
   <meta name="description"
-    content="Command historical leaders, build an economy, forge alliances, and conquer a living world map in Shadows of War.">
+    content="Command historical leaders, build an economy, forge alliances, and conquer a living world map in Shadows of War."
+    data-i18n="site.description" data-i18n-attr="content">
   <link rel="canonical" href="https://shadowsofwar.io/">
   <meta name="robots" content="index, follow">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Shadows of War">
-  <meta property="og:title" content="Shadows of War — Multiplayer Strategy">
+  <meta property="og:title" content="Shadows of War — Multiplayer Strategy" data-i18n="site.title" data-i18n-attr="content">
   <meta property="og:description"
-    content="Command historical leaders, build an economy, forge alliances, and conquer a living world map in Shadows of War.">
+    content="Command historical leaders, build an economy, forge alliances, and conquer a living world map in Shadows of War."
+    data-i18n="site.description" data-i18n-attr="content">
   <meta property="og:url" content="https://shadowsofwar.io/">
   <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Shadows of War — Multiplayer Strategy">
+  <meta name="twitter:title" content="Shadows of War — Multiplayer Strategy" data-i18n="site.title" data-i18n-attr="content">
   <meta name="twitter:description"
-    content="Command historical leaders, build an economy, forge alliances, and conquer a living world map in Shadows of War.">
+    content="Command historical leaders, build an economy, forge alliances, and conquer a living world map in Shadows of War."
+    data-i18n="site.description" data-i18n-attr="content">
   <meta name="twitter:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <link rel="icon" type="image/svg+xml" href="/sow.svg">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="./fonts/fonts.css">
+  <link rel="stylesheet" href="./sow-controls.css">
   <link rel="stylesheet" href="./styles.css">
   <script type="application/ld+json">
   {
@@ -52,27 +56,29 @@
 <body>
   <header class="site-nav" id="top">
     <div class="container nav-inner">
-      <a class="brand" href="#top" aria-label="Shadows of War home">
+      <a class="brand" href="#top" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label">
         <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="36">
       </a>
-      <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="/leaders/">Leaders</a>
-        <a href="/how-to-play/">How to play</a>
+      <nav class="desktop-nav" aria-label="Main navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label">
+        <a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a>
+        <a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a>
       </nav>
       <div class="nav-actions">
+        <div class="site-locale" data-locale-select aria-label="Select language"></div>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
           <span class="theme-icon" aria-hidden="true">☼</span>
           <span class="theme-label">Light mode</span>
         </button>
-        <a class="button button-small button-orange" href="/play/">Play now</a>
+        <a class="button button-small button-orange" href="/play/" data-i18n="site.play_now">PLAY NOW</a>
         <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu"
-          aria-label="Open navigation">☰</button>
+          aria-label="Open navigation" data-i18n="site.open_navigation" data-i18n-attr="aria-label">☰</button>
       </div>
     </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" aria-hidden="true">
-      <a href="/leaders/">Leaders</a>
-      <a href="/how-to-play/">How to play</a>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label" aria-hidden="true">
+      <a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a>
+      <a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a>
       <div class="mobile-menu-actions">
+        <div class="site-locale" data-locale-select aria-label="Select language"></div>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
           <span class="theme-icon" aria-hidden="true">☼</span>
           <span class="theme-label">Light mode</span>
@@ -91,12 +97,12 @@
       </div>
       <div class="container hero-grid">
         <div class="hero-copy">
-          <h1>Command<br><em>the map.</em></h1>
-          <p class="hero-lede">Lead one of twelve historical commanders across a living world map. Build cities,
+          <h1><span data-i18n="site.hero_command">Command</span><br><em data-i18n="site.hero_map">the map.</em></h1>
+          <p class="hero-lede" data-i18n="site.hero_lede">Lead one of twelve historical commanders across a living world map. Build cities,
             factories, ports, and bunkers; negotiate with rivals; and turn a frontier into an empire.</p>
           <div class="hero-actions">
-            <a class="button button-orange" href="/play/"><span class="sheen" aria-hidden="true"></span>Play</a>
-            <a class="button button-outline" href="#media"><span class="sheen" aria-hidden="true"></span>Watch gameplay
+            <a class="button button-orange" href="/play/"><span class="sheen" aria-hidden="true"></span><span data-i18n="site.play">Play</span></a>
+            <a class="button button-outline" href="#media"><span class="sheen" aria-hidden="true"></span><span data-i18n="site.watch_gameplay">Watch gameplay</span>
               <span aria-hidden="true">▶</span></a>
           </div>
         </div>
@@ -112,7 +118,7 @@
               <p data-hero-civ>Roman Empire</p>
             </div>
           </div>
-          <div class="leader-rail" data-leader-rail aria-label="Choose a leader"></div>
+          <div class="leader-rail" data-leader-rail aria-label="Choose a leader" data-i18n="site.choose_leader" data-i18n-attr="aria-label"></div>
         </div>
       </div>
     </section>
@@ -121,10 +127,10 @@
       <div class="container">
         <div class="section-heading split-heading">
           <div>
-            <p class="eyebrow">How matches work</p>
-            <h2>Build, expand,<br><em>fight.</em></h2>
+            <p class="eyebrow" data-i18n="site.how_matches_work">How matches work</p>
+            <h2><span data-i18n="site.build_expand">Build, expand,</span><br><em data-i18n="site.fight">fight.</em></h2>
           </div>
-          <p>Start small, turn territory into an economy, and decide when cooperation ends. The map is readable in
+          <p data-i18n="site.game_summary">Start small, turn territory into an economy, and decide when cooperation ends. The map is readable in
             seconds; the consequences last the whole match.</p>
         </div>
         <div class="gameplay-grid">
@@ -133,8 +139,8 @@
               alt="King Leonidas leader selection screen in Shadows of War" loading="lazy">
             <div class="card-overlay"><span class="card-number">01</span>
               <div>
-                <h3>Choose your legend</h3>
-                <p>Each leader brings a different way to take the map.</p>
+                <h3 data-i18n="site.choose_your_legend">Choose your legend</h3>
+                <p data-i18n="site.choose_your_legend_body">Each leader brings a different way to take the map.</p>
               </div>
             </div>
           </article>
@@ -143,8 +149,8 @@
               loading="lazy">
             <div class="card-overlay"><span class="card-number">02</span>
               <div>
-                <h3>Build momentum</h3>
-                <p>Grow your borders and turn land into strength.</p>
+                <h3 data-i18n="site.build_momentum">Build momentum</h3>
+                <p data-i18n="site.build_momentum_body">Grow your borders and turn land into strength.</p>
               </div>
             </div>
           </article>
@@ -153,8 +159,8 @@
               alt="Several empires competing on the world map in Shadows of War" loading="lazy">
             <div class="card-overlay"><span class="card-number">03</span>
               <div>
-                <h3>Break the frontier</h3>
-                <p>Attack, ally, betray, and survive the endgame.</p>
+                <h3 data-i18n="site.break_frontier">Break the frontier</h3>
+                <p data-i18n="site.break_frontier_body">Attack, ally, betray, and survive the endgame.</p>
               </div>
             </div>
           </article>
@@ -166,17 +172,17 @@
       <div class="container">
         <div class="section-heading split-heading">
           <div>
-            <p class="eyebrow">Leaders</p>
-            <h2>Choose<br><em>a leader.</em></h2>
+            <p class="eyebrow" data-i18n="site.leaders">Leaders</p>
+            <h2><span data-i18n="site.choose">Choose</span><br><em data-i18n="site.a_leader">a leader.</em></h2>
           </div>
-          <p>Choose a commander that matches your instincts: economy, expansion, defense, production, or pressure at the
+          <p data-i18n="site.leaders_summary">Choose a commander that matches your instincts: economy, expansion, defense, production, or pressure at the
             border.</p>
         </div>
         <div class="leaders-layout">
           <div class="leaders-grid" data-leaders-grid>
             <button class="leader-card is-active" type="button" aria-pressed="true" aria-label="Inspect Julius Caesar"
               data-leader-id="caesar" data-name="Julius Caesar" data-civ="Roman Empire" data-code="ROM"
-              data-ability="Legions of Rome" data-description="Armies fight 10% stronger." data-image="caesar">
+              data-ability-key="site.leader_caesar_ability" data-description-key="site.leader_caesar_description" data-image="caesar">
               <img src="/assets/shell/leaders/caesar_desktop.webp"
                 srcset="/assets/shell/leaders/caesar_mobile.webp 600w, /assets/shell/leaders/caesar_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Julius Caesar Roman Empire artwork"
@@ -185,7 +191,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Cleopatra VII"
               data-leader-id="cleopatra" data-name="Cleopatra VII" data-civ="Egyptian Empire" data-code="EGY"
-              data-ability="Gift of the Nile" data-description="Factory districts generate +50% Gold."
+              data-ability-key="site.leader_cleopatra_ability" data-description-key="site.leader_cleopatra_description"
               data-image="cleopatra">
               <img src="/assets/shell/leaders/cleopatra_desktop.webp"
                 srcset="/assets/shell/leaders/cleopatra_mobile.webp 600w, /assets/shell/leaders/cleopatra_desktop.webp 1200w"
@@ -195,7 +201,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Ragnar Lothbrok"
               data-leader-id="ragnar" data-name="Ragnar Lothbrok" data-civ="Norse Kingdom" data-code="NOR"
-              data-ability="Longship Raid" data-description="Ports generate +50% Gold." data-image="ragnar">
+              data-ability-key="site.leader_ragnar_ability" data-description-key="site.leader_ragnar_description" data-image="ragnar">
               <img src="/assets/shell/leaders/ragnar_desktop.webp"
                 srcset="/assets/shell/leaders/ragnar_mobile.webp 600w, /assets/shell/leaders/ragnar_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
@@ -204,7 +210,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Sun Tzu"
               data-leader-id="suntzu" data-name="Sun Tzu" data-civ="Chinese Empire" data-code="CHN"
-              data-ability="Art of War" data-description="Factory districts produce troops 20% faster."
+              data-ability-key="site.leader_suntzu_ability" data-description-key="site.leader_suntzu_description"
               data-image="sun_tzu">
               <img src="/assets/shell/leaders/sun_tzu_desktop.webp"
                 srcset="/assets/shell/leaders/sun_tzu_mobile.webp 600w, /assets/shell/leaders/sun_tzu_desktop.webp 1200w"
@@ -214,7 +220,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Alexander the Great"
               data-leader-id="alexander" data-name="Alexander the Great" data-civ="Macedonian Empire" data-code="MAC"
-              data-ability="Great Conquest" data-description="Territory conquest expands 15% faster."
+              data-ability-key="site.leader_alexander_ability" data-description-key="site.leader_alexander_description"
               data-image="alexander">
               <img src="/assets/shell/leaders/alexander_desktop.webp"
                 srcset="/assets/shell/leaders/alexander_mobile.webp 600w, /assets/shell/leaders/alexander_desktop.webp 1200w"
@@ -224,7 +230,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Genghis Khan"
               data-leader-id="genghiskhan" data-name="Genghis Khan" data-civ="Mongol Horde" data-code="MON"
-              data-ability="Horde Momentum" data-description="Gain 10% gold spent by defeated enemies."
+              data-ability-key="site.leader_genghiskhan_ability" data-description-key="site.leader_genghiskhan_description"
               data-image="genghis_khan">
               <img src="/assets/shell/leaders/genghis_khan_desktop.webp"
                 srcset="/assets/shell/leaders/genghis_khan_mobile.webp 600w, /assets/shell/leaders/genghis_khan_desktop.webp 1200w"
@@ -234,7 +240,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Richard the Lionheart"
               data-leader-id="richard" data-name="Richard the Lionheart" data-civ="Angevin Empire" data-code="ENG"
-              data-ability="Crusader Fortresses" data-description="City districts grant +50% max troop capacity."
+              data-ability-key="site.leader_richard_ability" data-description-key="site.leader_richard_description"
               data-image="richard_the_lionheart">
               <img src="/assets/shell/leaders/richard_the_lionheart_desktop.webp"
                 srcset="/assets/shell/leaders/richard_the_lionheart_mobile.webp 600w, /assets/shell/leaders/richard_the_lionheart_desktop.webp 1200w"
@@ -244,7 +250,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Vercingetorix"
               data-leader-id="vercingetorix" data-name="Vercingetorix" data-civ="Gallic Tribes" data-code="GAL"
-              data-ability="Hillfort Gaul" data-description="City districts generate +50% troop income."
+              data-ability-key="site.leader_vercingetorix_ability" data-description-key="site.leader_vercingetorix_description"
               data-image="vercingetorix">
               <img src="/assets/shell/leaders/vercingetorix_desktop.webp"
                 srcset="/assets/shell/leaders/vercingetorix_mobile.webp 600w, /assets/shell/leaders/vercingetorix_desktop.webp 1200w"
@@ -254,7 +260,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Boudica"
               data-leader-id="boudica" data-name="Boudica" data-civ="Iceni Kingdom" data-code="ICE"
-              data-ability="Iceni Revolt" data-description="City districts generate +50% Gold." data-image="boudica">
+              data-ability-key="site.leader_boudica_ability" data-description-key="site.leader_boudica_description" data-image="boudica">
               <img src="/assets/shell/leaders/boudica_desktop.webp"
                 srcset="/assets/shell/leaders/boudica_mobile.webp 600w, /assets/shell/leaders/boudica_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Boudica Iceni Kingdom artwork"
@@ -263,7 +269,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Lady Six Sky"
               data-leader-id="ladysixsky" data-name="Lady Six Sky" data-civ="Maya Civilization" data-code="MAY"
-              data-ability="Temple of the Sky" data-description="Factory districts generate +50% Gold."
+              data-ability-key="site.leader_ladysixsky_ability" data-description-key="site.leader_ladysixsky_description"
               data-image="lady_six_sky">
               <img src="/assets/shell/leaders/lady_six_sky_desktop.webp"
                 srcset="/assets/shell/leaders/lady_six_sky_mobile.webp 600w, /assets/shell/leaders/lady_six_sky_desktop.webp 1200w"
@@ -273,7 +279,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect King Leonidas"
               data-leader-id="leonidas" data-name="King Leonidas" data-civ="Sparta" data-code="SPA"
-              data-ability="Spartan Phalanx" data-description="Armory districts grant +50% max troop capacity."
+              data-ability-key="site.leader_leonidas_ability" data-description-key="site.leader_leonidas_description"
               data-image="leonidas">
               <img src="/assets/shell/leaders/leonidas_desktop.webp"
                 srcset="/assets/shell/leaders/leonidas_mobile.webp 600w, /assets/shell/leaders/leonidas_desktop.webp 1200w"
@@ -283,7 +289,7 @@
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Napoleon Bonaparte"
               data-leader-id="napoleon" data-name="Napoleon Bonaparte" data-civ="Kingdom of France" data-code="FRA"
-              data-ability="Grande Armée" data-description="Territory expansion moves 20% faster."
+              data-ability-key="site.leader_napoleon_ability" data-description-key="site.leader_napoleon_description"
               data-image="napoleon">
               <img src="/assets/shell/leaders/napoleon_desktop.webp"
                 srcset="/assets/shell/leaders/napoleon_mobile.webp 600w, /assets/shell/leaders/napoleon_desktop.webp 1200w"
@@ -302,13 +308,13 @@
               <h3 data-detail-name>Julius Caesar</h3>
               <p data-detail-civ>Roman Empire</p>
               <div class="detail-rule"></div>
-              <p class="mono-label">COMMAND TRAIT</p>
+              <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
               <p class="detail-ability" data-detail-ability>Legions of Rome</p>
               <p class="detail-description" data-detail-description>Armies fight 10% stronger.</p>
             </div>
           </aside>
         </div>
-        <div class="leaders-foot"><a class="inline-link" href="/leaders/"
+        <div class="leaders-foot"><a class="inline-link" href="/leaders/" data-i18n="site.view_all_leaders"
             style="color: var(--orange); font: 700 11px/1 var(--font-mono); text-transform: uppercase;">View all leaders</a></div>
       </div>
     </section>
@@ -317,25 +323,25 @@
       <div class="container">
         <div class="section-heading split-heading">
           <div>
-            <p class="eyebrow">Gameplay</p>
-            <h2>Watch<br><em>the game.</em></h2>
+            <p class="eyebrow" data-i18n="site.gameplay">Gameplay</p>
+            <h2><span data-i18n="site.watch">Watch</span><br><em data-i18n="site.the_game">the game.</em></h2>
           </div>
-          <p>Follow a match from first foothold to final border: territory, production, diplomacy, and the fight for map
+          <p data-i18n="site.media_summary">Follow a match from first foothold to final border: territory, production, diplomacy, and the fight for map
             control.</p>
         </div>
         <div class="media-grid">
           <div class="trailer-card">
             <video controls muted playsinline preload="metadata" poster="/assets/site/media/session-expansion.webp"
-              aria-label="Shadows of War gameplay capture">
+              aria-label="Shadows of War gameplay capture" data-i18n="site.gameplay_capture" data-i18n-attr="aria-label">
               <source src="/assets/site/media/shadows-of-war-gameplay.mp4" type="video/mp4">
-              Your browser does not support embedded video.
+              <span data-i18n="site.video_unsupported">Your browser does not support embedded video.</span>
             </video>
-            <div class="media-caption"><span>GAMEPLAY · 00:28</span></div>
+            <div class="media-caption"><span data-i18n="site.gameplay_label">GAMEPLAY · 00:28</span></div>
           </div>
           <div class="gallery-grid">
-            <img src="/assets/site/media/session-conflict.webp" alt="A contested frontier in Shadows of War"
+            <img src="/assets/site/media/session-conflict.webp" alt="A contested frontier in Shadows of War" data-i18n="site.contested_frontier" data-i18n-attr="alt"
               loading="lazy">
-            <img src="/assets/site/media/session-late-map.webp" alt="A late-game empire on the world map"
+            <img src="/assets/site/media/session-late-map.webp" alt="A late-game empire on the world map" data-i18n="site.late_game_empire" data-i18n-attr="alt"
               loading="lazy">
           </div>
         </div>
@@ -346,32 +352,32 @@
       <div class="container">
         <div class="section-heading split-heading">
           <div>
-            <p class="eyebrow">Game systems</p>
-            <h2>How matches<br><em>work.</em></h2>
+            <p class="eyebrow" data-i18n="site.game_systems">Game systems</p>
+            <h2><span data-i18n="site.matches">How matches</span><br><em data-i18n="site.work">work.</em></h2>
           </div>
-          <p>Rules that shape every match.</p>
+          <p data-i18n="site.rules_summary">Rules that shape every match.</p>
         </div>
         <div class="faq-list">
           <details class="faq-item" name="faq" open>
-            <summary>How do I start a match?</summary>
-            <p>Open the game, choose a leader, and join an active lobby.</p>
+            <summary data-i18n="site.faq_start">How do I start a match?</summary>
+            <p data-i18n="site.faq_start_answer">Open the game, choose a leader, and join an active lobby.</p>
           </details>
           <details class="faq-item" name="faq">
-            <summary>What happens during a match?</summary>
-            <p>Expand territory, build cities, factories, ports, and bunkers, form alliances, attack, and contest map
+            <summary data-i18n="site.faq_during">What happens during a match?</summary>
+            <p data-i18n="site.faq_during_answer">Expand territory, build cities, factories, ports, and bunkers, form alliances, attack, and contest map
               control.</p>
           </details>
           <details class="faq-item" name="faq">
-            <summary>Which game modes are available?</summary>
-            <p>The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active maps.</p>
+            <summary data-i18n="site.faq_modes">Which game modes are available?</summary>
+            <p data-i18n="site.faq_modes_answer">The matchmaking queue rotates through Free-For-All, Teams, and Humans vs Nations on active maps.</p>
           </details>
           <details class="faq-item" name="faq">
-            <summary>Do I need an account?</summary>
-            <p>No. You can join a match without registering.</p>
+            <summary data-i18n="site.faq_account">Do I need an account?</summary>
+            <p data-i18n="site.faq_account_answer">No. You can join a match without registering.</p>
           </details>
           <details class="faq-item" name="faq">
-            <summary>What do leaders change?</summary>
-            <p>Each leader changes a core advantage such as combat strength, expansion speed, gold generation, troop
+            <summary data-i18n="site.faq_leader">What do leaders change?</summary>
+            <p data-i18n="site.faq_leader_answer">Each leader changes a core advantage such as combat strength, expansion speed, gold generation, troop
               income, or garrison capacity.</p>
           </details>
         </div>
@@ -381,17 +387,17 @@
     <section class="section play-section section-rule" id="play">
       <div class="container play-callout">
         <div>
-          <p class="eyebrow">Are you ready?</p>
-          <h2>Play<br><em>now!</em></h2>
-          <p>Join other players, make alliances, betray rivals... and conquer the world!</p>
+          <p class="eyebrow" data-i18n="site.are_you_ready">Are you ready?</p>
+          <h2><span data-i18n="site.play_now_title">Play</span><br><em data-i18n="site.now">now!</em></h2>
+          <p data-i18n="site.play_now_body">Join other players, make alliances, betray rivals... and conquer the world!</p>
         </div>
         <div class="platform-stack">
-          <a class="platform-card platform-live" href="/play/"><span class="platform-icon">◎</span><span><b>Open
+          <a class="platform-card platform-live" href="/play/"><span class="platform-icon">◎</span><span><b data-i18n="site.open_game">Open
                 game</b><small>shadowsofwar.io</small></span></a>
           <a class="platform-card" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener"><span
-              class="platform-icon">◌</span><span><b>Discord</b><small>Community</small></span></a>
+              class="platform-icon">◌</span><span><b data-i18n="site.discord">Discord</b><small data-i18n="site.community">Community</small></span></a>
           <a class="platform-card" href="https://t.me/shadowsofwario" target="_blank" rel="noopener"><span
-              class="platform-icon">✈</span><span><b>Telegram</b><small>Official Group</small></span></a>
+              class="platform-icon">✈</span><span><b data-i18n="site.telegram">Telegram</b><small data-i18n="site.official_group">Official Group</small></span></a>
         </div>
       </div>
     </section>
@@ -401,28 +407,30 @@
     <div class="container">
       <div class="footer-updates">
         <div>
-          <p class="eyebrow">Updates</p>
-          <h2>Game updates.</h2>
-          <p>New builds, demos, and release news.</p>
+          <p class="eyebrow" data-i18n="site.updates">Updates</p>
+          <h2 data-i18n="site.game_updates">Game updates.</h2>
+          <p data-i18n="site.updates_body">New builds, demos, and release news.</p>
         </div>
-        <div class="footer-signup" aria-label="Mailing list signup preview">
-          <input type="email" aria-label="Email address" placeholder="EMAIL ADDRESS" autocomplete="email" disabled>
-          <button class="button button-orange" type="button" disabled>COMING SOON</button>
-          <small>Mailing list opens soon.</small>
+        <div class="footer-signup" aria-label="Mailing list signup preview" data-i18n="site.mailing_list_signup" data-i18n-attr="aria-label">
+          <input type="email" aria-label="Email address" placeholder="EMAIL ADDRESS" autocomplete="email" data-i18n="site.email_address" data-i18n-attr="aria-label" data-i18n-placeholder="site.email_address" disabled>
+          <button class="button button-orange" type="button" data-i18n="site.coming_soon" disabled>COMING SOON</button>
+          <small data-i18n="site.mailing_list_soon">Mailing list opens soon.</small>
         </div>
       </div>
       <div class="footer-top">
-        <a class="brand" href="#top" aria-label="Shadows of War home"><img class="brand-wordmark" src="/sow-long.svg"
+        <a class="brand" href="#top" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label"><img class="brand-wordmark" src="/sow-long.svg"
             alt="Shadows of War" height="24"></a>
-        <div class="footer-links"><a href="/leaders/">Leaders</a><a href="/how-to-play/">How to play</a><a
-            href="/support/">Support</a><a href="/privacy/">Privacy</a><a href="/cookies/">Cookies</a><a href="/terms/">Terms</a><a
-            href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Discord</a><a
-            href="https://t.me/shadowsofwario" target="_blank" rel="noopener">Telegram</a><a
-            href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener">GitHub</a></div>
+        <div class="footer-links"><a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a><a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a><a
+            href="/support/" data-i18n="site.support">Support</a><a href="/privacy/" data-i18n="site.privacy">Privacy</a><a href="/cookies/" data-i18n="site.cookies">Cookies</a><a href="/terms/" data-i18n="site.terms">Terms</a><a
+            href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord">Discord</a><a
+            href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram">Telegram</a><a
+            href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" data-i18n="site.github">GitHub</a></div>
       </div>
     </div>
-    <div class="container footer-bottom"><span>© 2026 World of Unreal</span></div>
+    <div class="container footer-bottom"><span data-i18n="site.copyright">© 2026 World of Unreal</span></div>
   </footer>
+  <script src="./sow-i18n.js"></script>
+  <script src="./sow-dropdown.js"></script>
   <script src="./site-chrome.js"></script>
   <script src="./app.js"></script>
 </body>

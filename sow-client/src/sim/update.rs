@@ -3,6 +3,7 @@ use web_time::Instant;
 
 impl SowApp {
     pub fn update_sim(&mut self, now: Instant) {
+        self.time.turn_queue_peak = self.time.turn_queue_peak.max(self.sim.turn_queue.len());
         if let Some(snap) = &self.sim.current_snapshot {
             if let Some(target_secs) = snap.spawn_timer_secs {
                 if let Some(ref mut current) = self.ui.app.hud_state.spawn_timer_secs {
@@ -166,10 +167,6 @@ impl SowApp {
                         );
                     }
 
-                    // Request redraw while animating
-                    if let Some(win) = self.gfx.window.as_ref() {
-                        win.request_redraw();
-                    }
                 }
             }
         }
@@ -186,11 +183,13 @@ impl SowApp {
                 && !snap.debug_mem_info.is_empty()
             {
                 log::info!(
-                    "[MEM_PROFILER] Turn Queue: {} | Dirty Tiles: {} | {}",
+                    "[MEM_PROFILER] Turn Queue: {} (peak {}) | Dirty Tiles: {} | {}",
                     self.sim.turn_queue.len(),
+                    self.time.turn_queue_peak,
                     snap.dirty_tiles.len(),
                     snap.debug_mem_info
                 );
+                self.time.turn_queue_peak = self.sim.turn_queue.len();
             }
         }
     }

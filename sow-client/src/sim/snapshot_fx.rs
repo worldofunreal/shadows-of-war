@@ -1,21 +1,28 @@
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
+use std::collections::HashMap;
 
 impl SowApp {
     pub(crate) fn apply_snapshot_fx(&mut self, snap: &mut SimSnapshot, my_id: u16) {
         let mut being_attacked_triggered = false;
         if let Some(mut existing) = self.sim.current_snapshot.take() {
+            let old_attack_troops: HashMap<u64, f64> = existing
+                .attacks
+                .iter()
+                .map(|attack| (attack.id, attack.troops))
+                .collect();
+            let old_buildings: HashMap<u64, (u8, bool)> = existing
+                .buildings
+                .iter()
+                .map(|building| (building.id, (building.level, building.under_construction)))
+                .collect();
             if my_id != 0 {
                 // 1. Detect incoming attacks (UnderAttack)
                 for attack in &snap.attacks {
                     if attack.target_owner == my_id && attack.troops > 0.0 {
-                        let is_new_or_increased = if let Some(old_atk) =
-                            existing.attacks.iter().find(|a| a.id == attack.id)
-                        {
-                            attack.troops > old_atk.troops
-                        } else {
-                            true
-                        };
+                        let is_new_or_increased = old_attack_troops
+                            .get(&attack.id)
+                            .is_none_or(|old_troops| attack.troops > *old_troops);
                         if is_new_or_increased {
                             being_attacked_triggered = true;
                         }
@@ -97,14 +104,14 @@ impl SowApp {
 
             // Detect building level upgrades and completions
             for b_new in &snap.buildings {
-                if let Some(b_old) = existing.buildings.iter().find(|b| b.id == b_new.id) {
-                    if b_new.level > b_old.level
-                        || (b_old.under_construction && !b_new.under_construction)
+                if let Some((old_level, old_under_construction)) = old_buildings.get(&b_new.id) {
+                    if b_new.level > *old_level
+                        || (*old_under_construction && !b_new.under_construction)
                     {
                         // ponytail: active_upgrades animations removed as they were dead code
                     }
                     // ponytail: only play building completion sound for the local player
-                    if b_old.under_construction
+                    if *old_under_construction
                         && !b_new.under_construction
                         && b_new.owner_id == my_id
                         && my_id != 0

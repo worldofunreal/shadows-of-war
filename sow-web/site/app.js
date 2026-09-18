@@ -1,6 +1,11 @@
 (() => {
   const $ = selector => document.querySelector(selector);
   const $$ = selector => [...document.querySelectorAll(selector)];
+  const siteText = (key, fallback, values) => {
+    if (typeof window.SOW_t !== 'function') return fallback;
+    const value = window.SOW_t(key, values);
+    return value === `[${key}]` ? fallback : value;
+  };
 
   // First-party, vendor-free landing funnel telemetry. The game shell owns
   // gameplay events; this page only measures entry and the Play now CTA.
@@ -27,7 +32,7 @@
       portal: 'site',
       platform: 'web',
       build: 'site',
-      locale: (navigator.language || 'en').slice(0, 32),
+      locale: (typeof window.SOW_getLocale === 'function' ? window.SOW_getLocale() : 'en').slice(0, 32),
     };
     if (props && typeof props === 'object') event.props = props;
     fetch('/api/event', {
@@ -46,17 +51,19 @@
     name: c.dataset.name,
     civ: c.dataset.civ,
     code: c.dataset.code,
-    ability: c.dataset.ability,
-    description: c.dataset.description,
+    abilityKey: c.dataset.abilityKey,
+    descriptionKey: c.dataset.descriptionKey,
     image: c.dataset.image
   }));
 
   const asset = (leader, mobile = false) => `/assets/shell/leaders/${leader.image}_${mobile ? 'mobile' : 'desktop'}.webp`;
   const avatar = leader => `/assets/gameplay/avatars/${leader.image}.webp`;
+  let activeLeaderIndex = 0;
 
   function updateLeader(index) {
     const leader = leaders[index];
     if (!leader) return;
+    activeLeaderIndex = index;
 
     // Trigger subtle glitch burst on hero frame
     const glitch = $('.hologram-glitch');
@@ -68,7 +75,7 @@
     const heroImage = $('[data-hero-image]');
     if (heroImage) {
       heroImage.src = asset(leader);
-      heroImage.alt = `${leader.name} leader artwork`;
+      heroImage.alt = siteText('site.leader_artwork', `${leader.name} leader artwork`, { name: leader.name });
     }
     const heroName = $('[data-hero-name]');
     if (heroName) heroName.textContent = leader.name;
@@ -78,7 +85,7 @@
     if (detailImage) {
       detailImage.src = asset(leader);
       detailImage.srcset = `${asset(leader, true)} 600w, ${asset(leader)} 1200w`;
-      detailImage.alt = `${leader.name} artwork`;
+      detailImage.alt = siteText('site.leader_artwork', `${leader.name} artwork`, { name: leader.name });
     }
     const detailCode = $('[data-detail-code]');
     if (detailCode) detailCode.textContent = `${leader.code} · ${String(index + 1).padStart(2, '0')}`;
@@ -87,16 +94,17 @@
     const detailCiv = $('[data-detail-civ]');
     if (detailCiv) detailCiv.textContent = leader.civ;
     const detailAbility = $('[data-detail-ability]');
-    if (detailAbility) detailAbility.textContent = leader.ability;
+    if (detailAbility) detailAbility.textContent = siteText(leader.abilityKey, '', {});
     const detailDesc = $('[data-detail-description]');
     if (detailDesc) {
-      detailDesc.textContent = leader.description;
+      detailDesc.textContent = siteText(leader.descriptionKey, '', {});
     }
 
     $$('.leader-chip').forEach((item, itemIndex) => {
       const active = itemIndex === index;
       item.classList.toggle('is-active', active);
       item.setAttribute('aria-pressed', String(active));
+      item.setAttribute('aria-label', siteText('site.inspect_leader', `Inspect ${leaders[itemIndex].name}`, { name: leaders[itemIndex].name }));
     });
     cards.forEach((item, itemIndex) => {
       const active = itemIndex === index;
@@ -115,7 +123,7 @@
       button.type = 'button';
       button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
       button.title = leader.name;
-      button.setAttribute('aria-label', `Select ${leader.name}`);
+      button.setAttribute('aria-label', siteText('site.select_leader', `Select ${leader.name}`, { name: leader.name }));
       button.innerHTML = `<span class="sheen" aria-hidden="true"></span><img src="${avatar(leader)}" alt="" width="256" height="256" decoding="async">`;
       button.addEventListener('click', () => updateLeader(index));
       rail.appendChild(button);
@@ -147,6 +155,10 @@
   bindLeaderGrid();
   if (leaders.length) {
     updateLeader(0);
+  }
+  window.addEventListener('sow:locale-change', () => updateLeader(activeLeaderIndex));
+  if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === 'function') {
+    window.SOW_I18N_READY.then(() => updateLeader(activeLeaderIndex)).catch(() => {});
   }
   bindSiteAnalytics();
 })();

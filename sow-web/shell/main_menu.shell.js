@@ -142,7 +142,7 @@
                         accountControl +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
                             "<span>" + esc(SOW_t("menu.master_audio")) + "</span>" +
-                            renderDropdown({ key: "settings-mute", name: "mute_all", setting: "mute", value: settings.mute_all ? "off" : "on", options: [
+                            SOW_renderDropdown({ key: "settings-mute", name: "mute_all", setting: "mute", value: settings.mute_all ? "off" : "on", options: [
                                 { value: "on", label: SOW_t("menu.audio_enabled") },
                                 { value: "off", label: SOW_t("menu.muted") }
                             ] }) +
@@ -153,13 +153,13 @@
                         "</label>" +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
                             "<span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
-                            renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
+                            SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
                                 { value: "full", label: SOW_t("menu.full") },
                                 { value: "reduced", label: SOW_t("menu.reduced_motion") }
                             ] }) +
                         "</label>" +
                         "<label class='sow-menu__form-field sow-menu__form-field--wide'><span>" + esc(SOW_t("menu.language")) + "</span>" +
-                            renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
+                            SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                         "</label>" +
                     "</div>" +
                     "<div class='sow-menu__modal-actions'>" +
@@ -1085,7 +1085,7 @@
 
     document.addEventListener("pointerdown", function (event) {
         var target = event.target;
-        var interactive = target && target.closest ? target.closest("[data-command], button, input, select, textarea, a, [role='button']") : null;
+        var interactive = target && target.closest ? target.closest("[data-command], button, input, textarea, a, [role='button']") : null;
         if (interactive && root.contains(interactive)) activeMenuPointerId = event.pointerId;
         var dropdown = target && target.closest ? target.closest("[data-control-dropdown]") : null;
         if (dropdownOpenKey && (!dropdown || dropdown.dataset.dropdownKey !== dropdownOpenKey)) {

@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="../fonts/fonts.css">
   <meta name="theme-color" content="#0a0a0e">
-  <title>How to Play Shadows of War — Multiplayer Strategy</title>
-  <meta name="description" content="Learn the opening moves, economy, alliances, betrayal, and map-control rules in Shadows of War.">
+  <title data-i18n="site.how_title">How to Play Shadows of War — Multiplayer Strategy</title>
+  <meta name="description" content="Learn the opening moves, economy, alliances, betrayal, and map-control rules in Shadows of War." data-i18n="site.how_description" data-i18n-attr="content">
   <link rel="canonical" href="https://shadowsofwar.io/how-to-play/">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Shadows of War">
-  <meta property="og:title" content="How to Play Shadows of War — Multiplayer Strategy">
-  <meta property="og:description" content="The field manual for territory expansion, structures, economy, alliances, betrayal, and map control.">
+  <meta property="og:title" content="How to Play Shadows of War — Multiplayer Strategy" data-i18n="site.how_title" data-i18n-attr="content">
+  <meta property="og:description" content="The field manual for territory expansion, structures, economy, alliances, betrayal, and map control." data-i18n="site.how_og_description" data-i18n-attr="content">
   <meta property="og:url" content="https://shadowsofwar.io/how-to-play/">
   <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <link rel="icon" type="image/svg+xml" href="../sow.svg">
+  <link rel="stylesheet" href="../sow-controls.css">
   <link rel="stylesheet" href="../styles.css">
   <script type="application/ld+json">
   {
@@ -35,26 +36,28 @@
 <body class="guide-page">
   <header class="site-nav" id="top">
     <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="Shadows of War home">
+      <a class="brand" href="/" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label">
         <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="28">
       </a>
-      <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="/leaders/">Leaders</a>
-        <a href="/how-to-play/" aria-current="page">How to play</a>
+      <nav class="desktop-nav" aria-label="Main navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label">
+        <a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a>
+        <a href="/how-to-play/" aria-current="page" data-i18n="site.nav_how_to_play">How to play</a>
       </nav>
       <div class="nav-actions">
+        <div class="site-locale" data-locale-select aria-label="Select language"></div>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
           <span class="theme-icon" aria-hidden="true">☼</span>
           <span class="theme-label">Light mode</span>
         </button>
-        <a class="button button-small button-orange" href="/play/">Play now</a>
-        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation">☰</button>
+        <a class="button button-small button-orange" href="/play/" data-i18n="site.play_now">PLAY NOW</a>
+        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation" data-i18n="site.open_navigation" data-i18n-attr="aria-label">☰</button>
       </div>
     </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" aria-hidden="true">
-      <a href="/leaders/">Leaders</a>
-      <a href="/how-to-play/" aria-current="page">How to play</a>
+    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label" aria-hidden="true">
+      <a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a>
+      <a href="/how-to-play/" aria-current="page" data-i18n="site.nav_how_to_play">How to play</a>
       <div class="mobile-menu-actions">
+        <div class="site-locale" data-locale-select aria-label="Select language"></div>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme"><span class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
       </div>
     </nav>
@@ -63,12 +66,12 @@
   <main class="guide-main">
     <section class="guide-hero section-rule">
       <div class="container">
-        <p class="eyebrow"><span class="eyebrow-dot"></span> How to play</p>
-        <h1>Take the<br><em>map.</em></h1>
-        <p class="guide-lede">Shadows of War is a match-based MMORTS. Start with a commander, turn territory into an economy, forge temporary alliances, and fight for control of the map.</p>
+        <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.how_eyebrow">How to play</span></p>
+        <h1><span data-i18n="site.how_heading">Take the</span><br><em data-i18n="site.how_heading_em">map.</em></h1>
+        <p class="guide-lede" data-i18n="site.how_lede">Shadows of War is a match-based MMORTS. Start with a commander, turn territory into an economy, forge temporary alliances, and fight for control of the map.</p>
         <div class="hero-actions" style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <a class="button button-orange" href="/play/">Play</a>
-          <a class="button button-outline" href="/leaders/">View leaders</a>
+          <a class="button button-orange" href="/play/" data-i18n="site.play">Play</a>
+          <a class="button button-outline" href="/leaders/" data-i18n="site.view_leaders">View leaders</a>
         </div>
       </div>
     </section>
@@ -76,82 +79,84 @@
     <section class="guide-section section-rule">
       <div class="container guide-layout">
         <div class="guide-steps">
-          <p class="eyebrow">Getting started</p>
-          <h2>Five moves<br>to understand<br>the match.</h2>
+          <p class="eyebrow" data-i18n="site.getting_started">Getting started</p>
+          <h2><span data-i18n="site.how_steps_heading_1">Five moves</span><br><span data-i18n="site.how_steps_heading_2">to understand</span><br><span data-i18n="site.how_steps_heading_3">the match.</span></h2>
           <article class="guide-step">
             <span>01</span>
             <div>
-              <h3>Join matchmaking &amp; select match mode</h3>
-              <p>Join the active matchmaking lobby. The queue cycles between <strong>Free-For-All (FFA)</strong>, <strong>Team Battles</strong>, and <strong>Humans vs. World Nations</strong> across world maps including Europe, Asia, Africa, East Anglia, and the Americas.</p>
+              <h3 data-i18n="site.how_step_1_title">Join matchmaking &amp; select match mode</h3>
+              <p data-i18n="site.how_step_1_body">Join the active matchmaking lobby. The queue cycles between Free-For-All (FFA), Team Battles, and Humans vs. World Nations across world maps including Europe, Asia, Africa, East Anglia, and the Americas.</p>
             </div>
           </article>
           <article class="guide-step">
             <span>02</span>
             <div>
-              <h3>Choose your commander &amp; civilizational edge</h3>
-              <p>Pick one of twelve historical commanders. Each leader provides a permanent mechanical multiplier—such as Julius Caesar's 1.10x combat strength, Cleopatra's +50% factory gold, Sun Tzu's 20% troop production rate, or Ragnar's +50% port gold. <a class="inline-link" href="/leaders/" style="color: var(--orange); text-decoration: underline;">Compare leader traits</a></p>
+              <h3 data-i18n="site.how_step_2_title">Choose your commander &amp; civilizational edge</h3>
+              <p><span data-i18n="site.how_step_2_body">Pick one of twelve historical commanders. Each leader provides a permanent mechanical multiplier—such as Julius Caesar's 1.10x combat strength, Cleopatra's +50% factory gold, Sun Tzu's 20% troop production rate, or Ragnar's +50% port gold.</span> <a class="inline-link" href="/leaders/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.compare_leader_traits">Compare leader traits</a></p>
             </div>
           </article>
           <article class="guide-step">
             <span>03</span>
             <div>
-              <h3>Claim territory &amp; construct specialized districts</h3>
-              <p>Expand outwards to capture adjacent tiles. Every captured tile scales baseline gold and troop income. Construct specialized buildings on your territory:</p>
+              <h3 data-i18n="site.how_step_3_title">Claim territory &amp; construct specialized districts</h3>
+              <p data-i18n="site.how_step_3_body">Expand outwards to capture adjacent tiles. Every captured tile scales baseline gold and troop income. Construct specialized buildings on your territory:</p>
               <ul style="margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.8;">
-                <li><strong>Cities:</strong> Increase max troop capacity and generate passive troop and gold income.</li>
-                <li><strong>Factories:</strong> Generate gold revenue and increase troop recruitment speed.</li>
-                <li><strong>Ports:</strong> Placed on coastal tiles to generate gold, troop income, and provide water access.</li>
-                <li><strong>Bunkers:</strong> Fortify defensive frontiers, extend defensive coverage, and reduce incoming troop losses. City Armory modules increase maximum troop capacity.</li>
+                <li><strong data-i18n="site.city_label">Cities:</strong> <span data-i18n="site.city_body">Increase max troop capacity and generate passive troop and gold income.</span></li>
+                <li><strong data-i18n="site.factory_label">Factories:</strong> <span data-i18n="site.factory_body">Generate gold revenue and increase troop recruitment speed.</span></li>
+                <li><strong data-i18n="site.port_label">Ports:</strong> <span data-i18n="site.port_body">Placed on coastal tiles to generate gold, troop income, and provide water access.</span></li>
+                <li><strong data-i18n="site.bunker_label">Bunkers:</strong> <span data-i18n="site.bunker_body">Fortify defensive frontiers, extend defensive coverage, and reduce incoming troop losses. City Armory modules increase maximum troop capacity.</span></li>
               </ul>
             </div>
           </article>
           <article class="guide-step">
             <span>04</span>
             <div>
-              <h3>Manage economy, terrain &amp; army momentum</h3>
-              <p>Conquest consumes troops. Reinvest gold from factories, cities, and ports to fund further construction. Use natural terrain multipliers (highlands and mountains increase attack defense cost) to anchor strong defensive frontiers while directing army momentum toward high-value targets.</p>
+              <h3 data-i18n="site.how_step_4_title">Manage economy, terrain &amp; army momentum</h3>
+              <p data-i18n="site.how_step_4_body">Conquest consumes troops. Reinvest gold from factories, cities, and ports to fund further construction. Use natural terrain multipliers (highlands and mountains increase attack defense cost) to anchor strong defensive frontiers while directing army momentum toward high-value targets.</p>
             </div>
           </article>
           <article class="guide-step">
             <span>05</span>
             <div>
-              <h3>Diplomacy, betrayal &amp; map control victory</h3>
-              <p>Form non-aggression alliances with neighboring players to coordinate fronts. A player secures victory by reaching the <strong>map control win threshold</strong> (controlling the required majority of total landmass) or by eliminating all rival commanders. Betrayal breaks an alliance immediately, turning shared borders into active combat frontiers.</p>
+              <h3 data-i18n="site.how_step_5_title">Diplomacy, betrayal &amp; map control victory</h3>
+              <p><span data-i18n="site.how_step_5_body_before">Form non-aggression alliances with neighboring players to coordinate fronts. A player secures victory by reaching the</span> <strong data-i18n="site.how_step_5_threshold">map control win threshold</strong> <span data-i18n="site.how_step_5_body_after">(controlling the required majority of total landmass) or by eliminating all rival commanders. Betrayal breaks an alliance immediately, turning shared borders into active combat frontiers.</span></p>
             </div>
           </article>
         </div>
         <aside class="guide-aside">
-          <h3>Match structure</h3>
-          <p>The server keeps one rolling matchmaking lobby and rotates the mode and map selection over time.</p>
+          <h3 data-i18n="site.match_structure">Match structure</h3>
+          <p data-i18n="site.match_structure_body">The server keeps one rolling matchmaking lobby and rotates the mode and map selection over time.</p>
           <ul>
-            <li>FFA (60% land victory)</li>
-            <li>Teams &amp; Coalitions</li>
-            <li>Humans vs World Nations</li>
-            <li>Weighted world-map rotation</li>
-            <li>Real-time tick engine</li>
+            <li data-i18n="site.match_ffa">FFA (60% land victory)</li>
+            <li data-i18n="site.match_teams">Teams &amp; Coalitions</li>
+            <li data-i18n="site.match_humans">Humans vs World Nations</li>
+            <li data-i18n="site.match_rotation">Weighted world-map rotation</li>
+            <li data-i18n="site.match_realtime">Real-time tick engine</li>
           </ul>
           <div style="margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line);">
-            <p class="mono-label" style="color: var(--orange); margin-bottom: 8px;">LEADERS</p>
-            <p style="font-size: 12px; color: var(--muted);">Compare all leader traits before entering matchmaking.</p>
-            <a class="button button-small button-outline" href="/leaders/" style="margin-top: 10px; width: 100%;">View leaders</a>
+            <p class="mono-label" style="color: var(--orange); margin-bottom: 8px;" data-i18n="site.aside_leaders">LEADERS</p>
+            <p style="font-size: 12px; color: var(--muted);" data-i18n="site.aside_leaders_body">Compare all leader traits before entering matchmaking.</p>
+            <a class="button button-small button-outline" href="/leaders/" style="margin-top: 10px; width: 100%;" data-i18n="site.view_leaders">View leaders</a>
           </div>
         </aside>
       </div>
       <div class="container guide-callout">
-        <h2>Start a match.</h2>
-        <p>Choose a leader and join a lobby.</p>
-        <a class="button button-orange" href="/play/">Play</a>
+        <h2 data-i18n="site.start_match">Start a match.</h2>
+        <p data-i18n="site.start_match_body">Choose a leader and join a lobby.</p>
+        <a class="button button-orange" href="/play/" data-i18n="site.play">Play</a>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="container footer-top">
-      <a class="brand" href="/" aria-label="Shadows of War home"><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="18"></a>
-      <div class="footer-links"><a href="/">Home</a><a href="/leaders/">Leaders</a><a href="/how-to-play/">How to play</a><a href="/#faq">FAQ</a><a href="/support/">Support</a><a href="/privacy/">Privacy</a><a href="/cookies/">Cookies</a><a href="/terms/">Terms</a><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Discord</a><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener">Telegram</a><a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener">GitHub</a></div>
+      <a class="brand" href="/" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label"><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="18"></a>
+      <div class="footer-links"><a href="/" data-i18n="site.nav_home">Home</a><a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a><a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a><a href="/#faq" data-i18n="site.faq">FAQ</a><a href="/support/" data-i18n="site.support">Support</a><a href="/privacy/" data-i18n="site.privacy">Privacy</a><a href="/cookies/" data-i18n="site.cookies">Cookies</a><a href="/terms/" data-i18n="site.terms">Terms</a><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord">Discord</a><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram">Telegram</a><a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" data-i18n="site.github">GitHub</a></div>
     </div>
-    <div class="container footer-bottom"><span>© 2026 World of Unreal</span></div>
+    <div class="container footer-bottom"><span data-i18n="site.copyright">© 2026 World of Unreal</span></div>
   </footer>
+  <script src="../sow-i18n.js"></script>
+  <script src="../sow-dropdown.js"></script>
   <script src="../site-chrome.js"></script>
 </body>
 </html>

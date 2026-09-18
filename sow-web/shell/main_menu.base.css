@@ -1,17 +1,3 @@
-:root {
-    --sow-button-radius: 8px;
-    --sow-button-weight: 800;
-    --sow-button-tracking: 0.08em;
-    --sow-button-primary-bg: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-    --sow-button-primary-border: rgba(243, 177, 43, 0.65);
-    --sow-button-primary-text: #111318;
-    --sow-button-primary-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    --sow-button-dark-bg: linear-gradient(180deg, rgba(26, 30, 40, 0.85) 0%, rgba(14, 17, 23, 0.95) 100%);
-    --sow-button-dark-border: rgba(255, 255, 255, 0.16);
-    --sow-button-dark-text: #f5f1e8;
-    --sow-button-dark-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
 #sow-menu {
     --sow-gold: #f3b12b;
     --sow-gold-bright: #ffd36a;
@@ -90,7 +76,6 @@
 }
 
 #sow-menu input,
-#sow-menu select,
 #sow-menu a,
 #sow-menu article,
 #sow-menu :where([role="button"]) {
@@ -557,8 +542,7 @@
 }
 
 .sow-menu__join input,
-.sow-menu__field,
-#sow-menu select {
+.sow-menu__field {
     min-width: 0;
     padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.18);
@@ -568,100 +552,13 @@
     color: #fff;
 }
 
-#sow-menu select {
-    appearance: none;
-    padding-right: 36px;
-    color-scheme: dark;
-    background-image: linear-gradient(45deg, transparent 50%, var(--sow-gold-bright) 50%), linear-gradient(135deg, var(--sow-gold-bright) 50%, transparent 50%);
-    background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
-    background-repeat: no-repeat;
-    background-size: 5px 5px, 5px 5px;
-}
-
 .sow-menu__join input:focus,
-.sow-menu__field:focus,
-#sow-menu select:focus {
+.sow-menu__field:focus {
     border-color: var(--sow-gold);
-}
-
-.sow-control-dropdown {
-    position: relative;
-    min-width: 0;
 }
 
 .sow-menu__form-field .sow-control-dropdown {
     width: 100%;
-}
-
-.sow-control-dropdown__trigger {
-    display: flex;
-    width: 100%;
-    min-width: 0;
-    height: 40px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 0 11px;
-    border: 1px solid var(--sow-button-dark-border);
-    border-radius: var(--sow-button-radius);
-    background: var(--sow-button-dark-bg);
-    box-shadow: var(--sow-button-dark-shadow);
-    color: var(--sow-button-dark-text);
-    cursor: pointer;
-    text-align: left;
-}
-
-.sow-control-dropdown__trigger:focus-visible,
-.sow-control-dropdown__option:focus-visible {
-    outline: 2px solid var(--sow-gold-bright);
-    outline-offset: 2px;
-}
-
-.sow-control-dropdown__trigger > span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.sow-control-dropdown__chevron {
-    flex: 0 0 auto;
-    color: var(--sow-gold-bright);
-    font-size: 17px;
-    line-height: 1;
-}
-
-.sow-control-dropdown__menu:not([hidden]) {
-    position: absolute;
-    z-index: 8;
-    top: calc(100% + 6px);
-    right: 0;
-    display: grid;
-    width: 100%;
-    max-height: min(240px, calc(100dvh - 120px));
-    overflow-y: auto;
-    padding: 4px;
-    border: 1px solid var(--sow-gold);
-    border-radius: 7px;
-    background: rgba(12, 15, 20, .98);
-    box-shadow: 0 16px 32px rgba(0, 0, 0, .42);
-}
-
-.sow-control-dropdown__option {
-    min-height: 36px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--sow-muted);
-    cursor: pointer;
-    text-align: left;
-    white-space: nowrap;
-}
-
-.sow-control-dropdown__option:hover,
-.sow-control-dropdown__option[aria-selected="true"] {
-    background: rgba(243, 177, 43, .14);
-    color: var(--sow-gold-bright);
 }
 
 .sow-menu__join button {

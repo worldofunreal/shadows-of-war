@@ -184,6 +184,7 @@ pub struct InputState {
     pub dragging: bool,
     pub last_mouse_x: f64,
     pub last_mouse_y: f64,
+    pub hover_pointer: HoverPointer,
     pub active_touches: std::collections::HashMap<u64, (f64, f64)>,
     pub map_pointer_start: Option<MapPointerStart>,
     pub last_pinch_state: Option<(f64, f64, f64)>,
@@ -200,6 +201,13 @@ pub struct InputState {
     pub key_pan_right: bool,
     pub camera_focus_target: Option<(f32, f32)>,
     pub input_focused: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HoverPointer {
+    None,
+    Mouse,
+    Touch,
 }
 
 pub struct MapPointerStart {
@@ -259,16 +267,10 @@ pub struct UiState {
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
     pub show_leaderboard: bool,
-    pub leaderboard_timer: f32,
-    pub leaderboard_rankings: Vec<crate::ui::hud::leaderboard::LeaderboardRanking>,
-    pub leaderboard_display:
-        std::collections::HashMap<u16, crate::ui::hud::leaderboard::LeaderboardRowDisplay>,
-    pub leaderboard_visible_limit: usize,
-    pub leaderboard_paged_through_limit: usize,
-    pub leaderboard_search: String,
-    pub leaderboard_team_rankings: Vec<crate::ui::hud::leaderboard::TeamRanking>,
-    pub leaderboard_prev_search: String,
-    pub leaderboard_was_open: bool,
+    pub leaderboard_top_three: [Option<u16>; 3],
+    pub leaderboard_refresh_at: Option<web_time::Instant>,
+    pub leaderboard_publish_pending: bool,
+    pub leaderboard_publish_revision: u64,
     pub show_dev_sidebar: bool,
     pub update_available: bool,
     pub is_spectating: bool,
@@ -292,6 +294,11 @@ pub struct UiState {
     pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,
     pub attack_badge_style_key: Option<[u32; 2]>,
     pub attack_badge_cache_tick: Option<u64>,
+    pub attack_badge_active_ids: std::collections::HashSet<u64>,
+    pub nameplate_order_tick: Option<u64>,
+    pub nameplate_order_my_id: Option<u16>,
+    pub nameplate_order: Vec<usize>,
+    pub(crate) building_render_cache: crate::render::world::BuildingRenderCache,
     pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
     pub border_flash_intensities: std::collections::HashMap<u16, f32>,
@@ -409,6 +416,7 @@ pub struct TimeState {
     pub current_fps: u32,
     pub last_frame_time: web_time::Instant,
     pub last_debug_print: Option<web_time::Instant>,
+    pub turn_queue_peak: usize,
 }
 
 /// Cross-thread task results wake the single UI event loop after enqueueing.

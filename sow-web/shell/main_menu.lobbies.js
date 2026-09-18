@@ -348,7 +348,7 @@
                                                 "</div>" +
                                             "</div>" +
                                             "<label class='sow-menu__form-field sow-create__map-select'>" + esc(SOW_t("lobbies.select_map")) +
-                                                renderDropdown({ key: "create-map", name: "map_name", value: selectedMap.key, options: mapCatalogOptions }) +
+                                                SOW_renderDropdown({ key: "create-map", name: "map_name", value: selectedMap.key, options: mapCatalogOptions }) +
                                             "</label>" +
                                         "</section>" +
                                         "<section class='sow-menu__custom-card'>" +

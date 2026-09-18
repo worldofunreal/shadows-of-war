@@ -1,0 +1,95 @@
+:root {
+    --sow-button-radius: 8px;
+    --sow-button-weight: 800;
+    --sow-button-tracking: 0.08em;
+    --sow-button-primary-bg: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+    --sow-button-primary-border: rgba(243, 177, 43, 0.65);
+    --sow-button-primary-text: #111318;
+    --sow-button-primary-shadow: 0 2px 8px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    --sow-button-dark-bg: linear-gradient(180deg, rgba(26, 30, 40, 0.85) 0%, rgba(14, 17, 23, 0.95) 100%);
+    --sow-button-dark-border: rgba(255, 255, 255, 0.16);
+    --sow-button-dark-text: #f5f1e8;
+    --sow-button-dark-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --sow-control-accent: #f3b12b;
+    --sow-control-accent-bright: #ffd36a;
+    --sow-control-muted: rgba(235, 231, 220, 0.62);
+    --sow-control-panel: rgba(12, 15, 20, 0.98);
+}
+
+.sow-control-dropdown {
+    position: relative;
+    min-width: 0;
+}
+
+.sow-control-dropdown__trigger {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 11px;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.sow-control-dropdown__trigger:focus-visible,
+.sow-control-dropdown__option:focus-visible {
+    outline: 2px solid var(--sow-control-accent-bright);
+    outline-offset: 2px;
+}
+
+.sow-control-dropdown__trigger > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sow-control-dropdown__chevron {
+    flex: 0 0 auto;
+    color: var(--sow-control-accent-bright);
+    font-size: 17px;
+    line-height: 1;
+}
+
+.sow-control-dropdown__menu:not([hidden]) {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 6px);
+    right: 0;
+    display: grid;
+    width: 100%;
+    max-height: min(240px, calc(100dvh - 120px));
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--sow-control-accent);
+    border-radius: 7px;
+    background: var(--sow-control-panel);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, .42);
+}
+
+.sow-control-dropdown__option {
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--sow-control-muted);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.sow-control-dropdown__option:hover,
+.sow-control-dropdown__option[aria-selected="true"] {
+    background: rgba(243, 177, 43, .14);
+    color: var(--sow-control-accent-bright);
+}

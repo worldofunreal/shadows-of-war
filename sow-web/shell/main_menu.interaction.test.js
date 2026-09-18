@@ -26,6 +26,13 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
 });
 
+test("mobile hover is Rust-owned and the HUD only presents its state", () => {
+    assert.match(hud, /var hov = hud\.hovered/);
+    assert.match(hud, /hoverCard\.classList\.remove\("hidden"\)/);
+    assert.match(hud, /hoverCard\.classList\.add\("hidden"\)/);
+    assert.doesNotMatch(hud, /addEventListener\("(?:touch|pointer)(?:start|move|up|cancel)"/);
+});
+
 test("tutorial pointer stays in the Rust/Blade render pass", () => {
     assert.match(worldOverlays, /fn render_tutorial_pointer/);
     assert.match(worldOverlays, /text\.push_ring/);

@@ -554,7 +554,7 @@
         return "<section class='sow-profile__section' aria-label='" + esc(SOW_t("profile.report_player")) + "'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.report_player")) + "</h2></div>" +
             "<form data-form='report'>" +
             "<label for='sow-report-reason'>" + esc(SOW_t("profile.reason")) + "</label>" +
-            renderDropdown({ key: "report-reason", name: "reason", value: REPORT_REASONS[0][0], options: REPORT_REASONS.map(function (r) { return { value: r[0], label: SOW_t(r[1]) }; }) }) +
+            SOW_renderDropdown({ key: "report-reason", name: "reason", value: REPORT_REASONS[0][0], options: REPORT_REASONS.map(function (r) { return { value: r[0], label: SOW_t(r[1]) }; }) }) +
             "<label for='sow-report-details'>" + esc(SOW_t("profile.report_details")) + "</label>" +
             "<textarea id='sow-report-details' name='details' rows='3' maxlength='500' placeholder='" + esc(SOW_t("profile.what_happened")) + "'></textarea>" +
             "<p class='sow-profile__empty'>" + esc(SOW_t("profile.report_notice")) + "</p>" +

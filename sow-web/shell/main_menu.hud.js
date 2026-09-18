@@ -22,6 +22,7 @@
     var hudRefs = null;
     var leaderboardRows = Object.create(null);
     var leaderboardRenderKey = "";
+    var lastLeaderboardPlayers = [];
     var inboxRenderKey = "";
 
     var EMOJIS = [
@@ -424,9 +425,14 @@
 
     function updateLeaderboard(players) {
         if (!hudRefs || !hudRefs.rows) return;
+        if (Array.isArray(players)) {
+            lastLeaderboardPlayers = players;
+        } else {
+            players = lastLeaderboardPlayers;
+        }
         if (!Array.isArray(players)) return;
         var renderKey = players.map(function (player, idx) {
-            return [idx, player.id, player.name, player.troops, player.tile_count, player.territory_pct, player.is_alive, player.is_me].join("|");
+            return [idx, player.id, player.rank, player.name, player.troops, player.tile_count, player.territory_pct, player.is_alive, player.is_me].join("|");
         }).join("\u001e");
         if (renderKey === leaderboardRenderKey) return;
         var nextRows = Object.create(null);
@@ -468,13 +474,14 @@
                 row = { card: card, rank: rank, status: status, name: name, territory: territory, troops: troops, key: "" };
             }
 
-            var rowKey = [idx, player.name, player.troops, player.tile_count, player.is_alive, player.is_me].join("|");
+            var rowKey = [player.rank, idx, player.name, player.troops, player.tile_count, player.is_alive, player.is_me].join("|");
             if (row.key !== rowKey) {
                 row.key = rowKey;
                 row.card.classList.toggle("is-me", !!player.is_me);
                 row.card.classList.toggle("is-dead", !player.is_alive);
-                row.rank.textContent = "#" + (idx + 1);
-                row.status.textContent = player.is_alive ? (idx === 0 ? "👑" : "🛡️") : "💀";
+                var displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : idx + 1;
+                row.rank.textContent = "#" + displayRank;
+                row.status.textContent = player.is_alive ? (displayRank === 1 ? "👑" : "🛡️") : "💀";
                 row.name.textContent = player.name || SOW_t("hud.player_name");
                 row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
                 row.troops.textContent = (player.troops > 1000 ? (player.troops / 1000).toFixed(1) + "k" : Math.floor(player.troops)) + " ⚔";
@@ -565,6 +572,7 @@
             if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
             leaderboardRows = Object.create(null);
             leaderboardRenderKey = "";
+            lastLeaderboardPlayers = [];
             inboxRenderKey = "";
             if (hudRefs && hudRefs.rows) hudRefs.rows.replaceChildren();
             if (hudRefs && hudRefs.notifications) {
@@ -747,7 +755,7 @@
             hudRefs.leaderboard.classList.toggle("hidden", !leaderboardOpen);
         }
         if (leaderboardOpen) {
-            updateLeaderboard(hud.leaderboard);
+            updateLeaderboard(Array.isArray(hud.leaderboard) ? hud.leaderboard : lastLeaderboardPlayers);
         }
 
         // Surrender Modal

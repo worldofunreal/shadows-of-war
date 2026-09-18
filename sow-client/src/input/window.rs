@@ -1,7 +1,7 @@
-use crate::app::{MapPointerStart, SowApp};
+use crate::app::{HoverPointer, MapPointerStart, SowApp};
 use crate::input::map_click::{is_quick_tap, TOUCH_HOLD_MS};
 use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound, ClientPhase};
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
 
 impl SowApp {
     pub fn handle_window_event(
@@ -36,6 +36,13 @@ impl SowApp {
             WindowEvent::Focused(false) => {
                 self.cancel_pointer_gesture();
             }
+            WindowEvent::PointerEntered {
+                position,
+                primary,
+                kind,
+                ..
+            } => self.handle_pointer_enter(kind, position.x, position.y, primary),
+            WindowEvent::PointerLeft { kind, .. } => self.handle_pointer_left(kind),
             WindowEvent::KeyboardInput { event, .. } => {
                 self.handle_key_event(event.state == ElementState::Pressed, event.physical_key)
             }
@@ -60,6 +67,60 @@ impl SowApp {
             } => self.handle_pointer_move(source, position.x, position.y, primary),
             WindowEvent::MouseWheel { delta, .. } => self.handle_wheel(delta),
             _ => {}
+        }
+    }
+
+    fn handle_pointer_enter(&mut self, kind: PointerKind, x: f64, y: f64, primary: bool) {
+        match kind {
+            PointerKind::Touch(_) => self.sync_hover_pointer(HoverPointer::Touch, None),
+            _ if primary => self.sync_hover_pointer(HoverPointer::Mouse, Some((x, y))),
+            _ => {}
+        }
+    }
+
+    fn handle_pointer_left(&mut self, kind: PointerKind) {
+        match kind {
+            PointerKind::Touch(finger_id) => {
+                self.input
+                    .active_touches
+                    .remove(&(finger_id.into_raw() as u64));
+                if self.input.active_touches.len() < 2 {
+                    self.input.last_pinch_state = None;
+                }
+                if self.input.active_touches.is_empty() {
+                    self.input.map_pointer_start = None;
+                    self.input.dragging = false;
+                }
+                self.sync_hover_pointer(HoverPointer::Touch, None);
+            }
+            _ => {
+                self.input.map_pointer_start = None;
+                self.input.dragging = false;
+                self.sync_hover_pointer(HoverPointer::None, None);
+            }
+        }
+    }
+
+    fn sync_hover_pointer(&mut self, pointer: HoverPointer, position: Option<(f64, f64)>) {
+        match pointer {
+            HoverPointer::None => self.input.hover_pointer = HoverPointer::None,
+            HoverPointer::Mouse => {
+                let Some((x, y)) = position else {
+                    return;
+                };
+                self.input.last_mouse_x = x;
+                self.input.last_mouse_y = y;
+                self.input.hover_pointer = HoverPointer::Mouse;
+            }
+            HoverPointer::Touch => {
+                let Some((x, y)) = single_touch_position(&self.input.active_touches) else {
+                    self.input.hover_pointer = HoverPointer::None;
+                    return;
+                };
+                self.input.last_mouse_x = x;
+                self.input.last_mouse_y = y;
+                self.input.hover_pointer = HoverPointer::Touch;
+            }
         }
     }
 
@@ -149,10 +210,6 @@ impl SowApp {
         let pointer_was_down = self.input.map_pointer_start.is_some();
         let previous_mouse_x = self.input.last_mouse_x;
         let previous_mouse_y = self.input.last_mouse_y;
-        if primary {
-            self.input.last_mouse_x = x;
-            self.input.last_mouse_y = y;
-        }
 
         let is_touch = matches!(button, winit::event::ButtonSource::Touch { .. });
         let left = matches!(button, winit::event::ButtonSource::Mouse(MouseButton::Left))
@@ -183,6 +240,12 @@ impl SowApp {
                     self.input.last_pinch_state = None;
                 }
             }
+        }
+
+        if is_touch {
+            self.sync_hover_pointer(HoverPointer::Touch, None);
+        } else if primary {
+            self.sync_hover_pointer(HoverPointer::Mouse, Some((x, y)));
         }
 
         if left {
@@ -308,9 +371,10 @@ impl SowApp {
             self.input.camera_y += (y - self.input.last_mouse_y) as f32;
             self.clamp_camera_to_map();
         }
-        if primary {
-            self.input.last_mouse_x = x;
-            self.input.last_mouse_y = y;
+        if is_touch {
+            self.sync_hover_pointer(HoverPointer::Touch, None);
+        } else if primary {
+            self.sync_hover_pointer(HoverPointer::Mouse, Some((x, y)));
         }
     }
 
@@ -353,6 +417,7 @@ impl SowApp {
         self.input.map_pointer_start = None;
         self.input.active_touches.clear();
         self.input.last_pinch_state = None;
+        self.sync_hover_pointer(HoverPointer::None, None);
     }
 
     pub(crate) fn poll_pointer_hold(&mut self) {
@@ -372,5 +437,31 @@ impl SowApp {
         self.input.map_pointer_start = None;
         self.input.dragging = false;
         self.open_map_context_menu(x, y);
+    }
+}
+
+fn single_touch_position(
+    active_touches: &std::collections::HashMap<u64, (f64, f64)>,
+) -> Option<(f64, f64)> {
+    (active_touches.len() == 1)
+        .then(|| active_touches.values().next().copied())
+        .flatten()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::single_touch_position;
+    use std::collections::HashMap;
+
+    #[test]
+    fn touch_hover_requires_exactly_one_finger() {
+        let mut touches = HashMap::new();
+        assert_eq!(single_touch_position(&touches), None);
+
+        touches.insert(7, (120.0, 240.0));
+        assert_eq!(single_touch_position(&touches), Some((120.0, 240.0)));
+
+        touches.insert(8, (320.0, 480.0));
+        assert_eq!(single_touch_position(&touches), None);
     }
 }

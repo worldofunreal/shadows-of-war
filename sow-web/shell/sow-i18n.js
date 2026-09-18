@@ -2,15 +2,30 @@
     "use strict";
 
     var STORAGE_KEY = "sow_ui_locale";
+    var runtimeScript = document.currentScript;
+    var inferredBase = "locales";
+    if (runtimeScript && runtimeScript.src) {
+        try {
+            inferredBase = new URL("locales", runtimeScript.src).toString().replace(/\/$/, "");
+        } catch (error) {}
+    }
     var defaultLocale = String(window.SOW_LOCALE_DEFAULT || "en").toLowerCase();
     var catalogVersion = Number(window.SOW_LOCALE_CATALOG_VERSION || 1);
-    var configuredCodes = Array.isArray(window.SOW_LOCALE_CODES) ? window.SOW_LOCALE_CODES : [defaultLocale];
+    var configuredCodes = Array.isArray(window.SOW_LOCALE_CODES) ? window.SOW_LOCALE_CODES : [];
+    var hasConfiguredCodes = configuredCodes.length > 0;
     var supported = Object.create(null);
+    var supportedCodes = [];
     configuredCodes.forEach(function (code) {
         var normalized = String(code || "").toLowerCase();
-        if (normalized) supported[normalized] = true;
+        if (normalized && !supported[normalized]) {
+            supported[normalized] = true;
+            supportedCodes.push(normalized);
+        }
     });
-    supported[defaultLocale] = true;
+    if (!supported[defaultLocale]) {
+        supported[defaultLocale] = true;
+        supportedCodes.unshift(defaultLocale);
+    }
 
     var cache = Object.create(null);
     var errors = Object.create(null);
@@ -25,16 +40,49 @@
 
     function storedLocale() {
         try {
-            return normalizeLocale(window.localStorage.getItem(STORAGE_KEY));
+            return window.localStorage.getItem(STORAGE_KEY) || defaultLocale;
         } catch (error) {
             return defaultLocale;
         }
     }
 
     function catalogUrl(locale) {
-        var base = String(window.SOW_LOCALE_BASE || "locales").replace(/\/$/, "");
+        var base = String(window.SOW_LOCALE_BASE || inferredBase).replace(/\/$/, "");
         var version = String(window.SOW_LOCALE_VERSION || "");
         return base + "/" + encodeURIComponent(locale) + (version ? "?v=" + encodeURIComponent(version) : "");
+    }
+
+    function registryUrl() {
+        var base = String(window.SOW_LOCALE_BASE || inferredBase).replace(/\/$/, "");
+        var version = String(window.SOW_LOCALE_VERSION || "");
+        return base + "/index.json" + (version ? "?v=" + encodeURIComponent(version) : "");
+    }
+
+    function addSupportedLanguage(code) {
+        var normalized = String(code || "").toLowerCase();
+        if (normalized && !supported[normalized]) {
+            supported[normalized] = true;
+            supportedCodes.push(normalized);
+        }
+    }
+
+    function loadRegistry() {
+        if (hasConfiguredCodes) return Promise.resolve();
+        return fetch(registryUrl(), { credentials: "same-origin" }).then(function (response) {
+            if (!response.ok) throw new Error("locale registry returned " + response.status);
+            return response.json();
+        }).then(function (payload) {
+            if (!payload || payload.schema !== 1 || !Array.isArray(payload.languages)) {
+                throw new Error("locale registry has incompatible metadata");
+            }
+            payload.languages.forEach(function (entry) {
+                addSupportedLanguage(typeof entry === "string" ? entry : entry && entry.code);
+            });
+            if (!supported[defaultLocale]) addSupportedLanguage(defaultLocale);
+        }).catch(function (error) {
+            console.error("[SOW i18n] locale registry", error);
+            addSupportedLanguage(defaultLocale);
+        });
     }
 
     function load(locale) {
@@ -46,6 +94,12 @@
         }).then(function (payload) {
             if (!payload || payload.schema !== 1 || Number(payload.version) !== catalogVersion || payload.locale !== code) {
                 throw new Error("locale " + code + " has incompatible catalog metadata");
+            }
+            if (Array.isArray(payload.languages)) {
+                payload.languages.forEach(function (entry) {
+                    var code = typeof entry === "string" ? entry : entry && entry.code;
+                    addSupportedLanguage(code);
+                });
             }
             var strings = payload.strings;
             if (!strings || typeof strings !== "object") throw new Error("locale " + code + " has no strings");
@@ -89,20 +143,27 @@
         }
     }
 
+    function announce(locale) {
+        if (typeof window.CustomEvent === "function") {
+            window.dispatchEvent(new CustomEvent("sow:locale-change", { detail: { locale: locale } }));
+        }
+        if (typeof window.SOW_menu_locale_changed === "function") {
+            window.SOW_menu_locale_changed(locale);
+        }
+    }
+
     function activate(locale, strings, notify) {
         activeLocale = locale;
         activeStrings = strings;
         window.SOW_LOCALE = locale;
         saveLocale(locale);
-        if (notify && typeof window.SOW_menu_locale_changed === "function") {
-            window.SOW_menu_locale_changed(locale);
-        }
+        if (notify) announce(locale);
         return strings;
     }
 
     window.SOW_t = translate;
     window.SOW_getLocale = function () { return activeLocale; };
-    window.SOW_getSupportedLocales = function () { return Object.keys(supported); };
+    window.SOW_getSupportedLocales = function () { return supportedCodes.slice(); };
     window.SOW_setLocale = function (locale) {
         var requested = normalizeLocale(locale);
         return load(requested).then(function (strings) {
@@ -116,9 +177,12 @@
         });
     };
 
-    var initialLocale = storedLocale();
     window.SOW_LOCALE = defaultLocale;
-    window.SOW_I18N_READY = load(defaultLocale).then(function (strings) {
+    var initialLocale = defaultLocale;
+    window.SOW_I18N_READY = loadRegistry().then(function () {
+        initialLocale = normalizeLocale(storedLocale());
+        return load(defaultLocale);
+    }).then(function (strings) {
         englishStrings = strings;
         if (initialLocale === defaultLocale) return activate(defaultLocale, strings, false);
         return load(initialLocale).then(function (selected) {
