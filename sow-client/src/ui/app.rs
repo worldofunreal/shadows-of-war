@@ -1,4 +1,7 @@
-use crate::{ClientPhase, ui::{asset_loader, hud, loading_screen, main_menu, settings}};
+use crate::{
+    ClientPhase,
+    ui::{asset_loader, hud, loading_screen, main_menu, settings},
+};
 
 pub struct ClientApp {
     pub phase: ClientPhase,
@@ -14,7 +17,11 @@ pub struct ClientApp {
     pub settings_state: settings::SettingsState,
 }
 
-impl Default for ClientApp { fn default() -> Self { Self::new() } }
+impl Default for ClientApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ClientApp {
     pub fn new() -> Self {

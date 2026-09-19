@@ -76,9 +76,15 @@ impl CampaignId {
     pub fn menu_subtitle_text(self) -> crate::ui::UiText {
         match self {
             CampaignId::Boudica => crate::ui::UiText::new("lobbies.campaign_boudica_subtitle"),
-            CampaignId::SixSkyEp1 => crate::ui::UiText::new("lobbies.campaign_six_sky_ep1_subtitle"),
-            CampaignId::SixSkyEp2 => crate::ui::UiText::new("lobbies.campaign_six_sky_ep2_subtitle"),
-            CampaignId::SixSkyEp3 => crate::ui::UiText::new("lobbies.campaign_six_sky_ep3_subtitle"),
+            CampaignId::SixSkyEp1 => {
+                crate::ui::UiText::new("lobbies.campaign_six_sky_ep1_subtitle")
+            }
+            CampaignId::SixSkyEp2 => {
+                crate::ui::UiText::new("lobbies.campaign_six_sky_ep2_subtitle")
+            }
+            CampaignId::SixSkyEp3 => {
+                crate::ui::UiText::new("lobbies.campaign_six_sky_ep3_subtitle")
+            }
         }
     }
 

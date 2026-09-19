@@ -179,14 +179,10 @@ impl AssetLoader {
         let image = image::load_from_memory(bytes)
             .map_err(|error| format!("decode avatar: {error}"))?
             .to_rgba8();
-        let cell = image::imageops::resize(
-            &image,
-            128,
-            128,
-            image::imageops::FilterType::Triangle,
-        )
-        .into_raw();
-        self.gpu_avatar_cells.retain(|(loaded_key, _)| *loaded_key != key);
+        let cell = image::imageops::resize(&image, 128, 128, image::imageops::FilterType::Triangle)
+            .into_raw();
+        self.gpu_avatar_cells
+            .retain(|(loaded_key, _)| *loaded_key != key);
         self.gpu_avatar_cells.push((key, cell));
         match key {
             AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
@@ -228,5 +224,4 @@ impl AssetLoader {
             })
             .collect()
     }
-
 }

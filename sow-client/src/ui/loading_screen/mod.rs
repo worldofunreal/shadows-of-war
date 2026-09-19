@@ -1,7 +1,11 @@
 use crate::ClientPhase;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SplashJob { Boot, EnterGame, ExitGame }
+pub enum SplashJob {
+    Boot,
+    EnterGame,
+    ExitGame,
+}
 
 pub struct SplashState {
     pub job: SplashJob,

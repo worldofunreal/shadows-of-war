@@ -1,10 +1,10 @@
 use std::num::NonZero;
-use std::time::Duration;
-
-use rodio::source::Source;
+use web_time::Duration;
 
 use super::death::PulseSource;
-use super::engine::{ArpeggioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial};
+use super::engine::{
+    ArpeggioSource, AudioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial,
+};
 use super::music::{
     MusicSession, degrees_to_freqs, freq_at, music_session, note_dur_samples, pick_base_degree,
     tile_hash,
@@ -46,7 +46,7 @@ impl Iterator for DoublePulseSource {
     }
 }
 
-impl Source for DoublePulseSource {
+impl AudioSource for DoublePulseSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -107,7 +107,7 @@ impl Iterator for WarHornSource {
     }
 }
 
-impl Source for WarHornSource {
+impl AudioSource for WarHornSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -169,7 +169,7 @@ impl Iterator for SweepSource {
     }
 }
 
-impl Source for SweepSource {
+impl AudioSource for SweepSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -214,7 +214,7 @@ impl Iterator for DualSweepSource {
     }
 }
 
-impl Source for DualSweepSource {
+impl AudioSource for DualSweepSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -269,7 +269,7 @@ impl Iterator for DeploySource {
     }
 }
 
-impl Source for DeploySource {
+impl AudioSource for DeploySource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -313,7 +313,7 @@ impl Iterator for ProceduralSound {
     }
 }
 
-impl Source for ProceduralSound {
+impl AudioSource for ProceduralSound {
     fn current_span_len(&self) -> Option<usize> {
         None
     }

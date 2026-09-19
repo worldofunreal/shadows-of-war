@@ -1,7 +1,7 @@
+use crate::ClientPhase;
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
 use crate::net::lobby::{apply_lobbies_broadcast, seed_joined_lobby_entry};
-use crate::ClientPhase;
 
 pub(super) struct ProcessWsResult {
     pub(super) ws_disconnected: bool,

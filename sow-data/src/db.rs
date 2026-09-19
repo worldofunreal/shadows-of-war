@@ -5,8 +5,7 @@ use crate::metadata_db::{
 use crate::profile::{
     LeaderCareerStats, MatchRecord, PublicLeaderSummary, PublicLeaderboardEntry, PublicMatchDetail,
     PublicMatchParticipant, PublicMatchSummary, PublicProfileIndex, PublicProfileSummary,
-    PublicProfileView, PublicRatingView, SeasonRating, SeasonRecord, public_handle,
-    win_rate,
+    PublicProfileView, PublicRatingView, SeasonRating, SeasonRecord, public_handle, win_rate,
 };
 use log::{error, info};
 use redb::ReadableTable;
@@ -1514,9 +1513,9 @@ impl PlayerDb {
                     let account_id = serde_json::from_slice::<SeasonRating>(value.value())
                         .ok()
                         .map(|rating| rating.account_id);
-                    let key_matches = human_ids.iter().any(|id| {
-                        key.value().starts_with(&format!("rating:{id}:"))
-                    });
+                    let key_matches = human_ids
+                        .iter()
+                        .any(|id| key.value().starts_with(&format!("rating:{id}:")));
                     if account_id
                         .as_deref()
                         .is_some_and(|id| human_ids.contains(id))
@@ -1530,9 +1529,9 @@ impl PlayerDb {
                 let table = read_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
                 for item in table.iter()? {
                     let (key, value) = item?;
-                    let key_matches = human_ids.iter().any(|id| {
-                        key.value().starts_with(&format!("player:{id}:"))
-                    });
+                    let key_matches = human_ids
+                        .iter()
+                        .any(|id| key.value().starts_with(&format!("player:{id}:")));
                     let value_matches = std::str::from_utf8(value.value())
                         .ok()
                         .is_some_and(|match_id| match_rows.iter().any(|id| id == match_id));
@@ -1942,16 +1941,17 @@ impl PlayerDb {
         if !is_valid_account_id(account_id) {
             return Err("invalid canonical account_id".into());
         }
-        if provider.trim().is_empty() || environment.trim().is_empty() || external_id.trim().is_empty() {
+        if provider.trim().is_empty()
+            || environment.trim().is_empty()
+            || external_id.trim().is_empty()
+        {
             return Err("canonical identity fields are incomplete".into());
         }
 
         let mut con = self.get_connection().await?;
         let id_key = Self::environment_identity_key(&environment, &provider, &external_id);
 
-        let mapped_identity = con
-            .get::<_, Option<String>>(&id_key)
-            .await?;
+        let mapped_identity = con.get::<_, Option<String>>(&id_key).await?;
         if let Some(mapped_id) = &mapped_identity
             && mapped_id != account_id
         {
@@ -1961,13 +1961,7 @@ impl PlayerDb {
         if mapped_identity.is_some() {
             let account = Self::load_account(&mut con, account_id).await?;
             let account = self
-                .bind_provider_identity(
-                    &mut con,
-                    account,
-                    &provider,
-                    &environment,
-                    &external_id,
-                )
+                .bind_provider_identity(&mut con, account, &provider, &environment, &external_id)
                 .await?;
             return self.ensure_starting_leader(account).await;
         }
@@ -1984,13 +1978,7 @@ impl PlayerDb {
                 return Err("canonical account_id belongs to a bot".into());
             }
             let account = self
-                .bind_provider_identity(
-                    &mut con,
-                    account,
-                    &provider,
-                    &environment,
-                    &external_id,
-                )
+                .bind_provider_identity(&mut con, account, &provider, &environment, &external_id)
                 .await?;
             let _: () = con.set(&id_key, account_id).await?;
             return self.ensure_starting_leader(account).await;
@@ -2044,7 +2032,10 @@ impl PlayerDb {
         if result == "collision" {
             return Err("account_id already exists without this provider mapping".into());
         }
-        let Some(claimed_id) = result.strip_prefix("created:").or_else(|| result.strip_prefix("existing:")) else {
+        let Some(claimed_id) = result
+            .strip_prefix("created:")
+            .or_else(|| result.strip_prefix("existing:"))
+        else {
             return Err("canonical identity claim returned an invalid result".into());
         };
         if result.starts_with("existing:") {
@@ -2053,13 +2044,7 @@ impl PlayerDb {
             }
             let account = Self::load_account(&mut con, claimed_id).await?;
             let account = self
-                .bind_provider_identity(
-                    &mut con,
-                    account,
-                    &provider,
-                    &environment,
-                    &external_id,
-                )
+                .bind_provider_identity(&mut con, account, &provider, &environment, &external_id)
                 .await?;
             return self.ensure_starting_leader(account).await;
         }
@@ -2081,30 +2066,31 @@ impl PlayerDb {
         external_id: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         if account.linked_identities.iter().any(|identity| {
-                identity.provider == provider
-                    && identity.external_id == external_id
-                    && identity.environment == environment
-            }) {
+            identity.provider == provider
+                && identity.external_id == external_id
+                && identity.environment == environment
+        }) {
             return Ok(account);
         }
-        let updated = Self::update_account_atomic(con, &Self::account_key(&account.id), |account| {
-            if !account.linked_identities.iter().any(|identity| {
-                identity.provider == provider
-                    && identity.external_id == external_id
-                    && identity.environment == environment
-            }) {
-                account.linked_identities.push(LinkedIdentity {
-                    provider: provider.to_string(),
-                    external_id: external_id.to_string(),
-                    environment: environment.to_string(),
-                });
-            }
-            account.updated_at = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-        })
-        .await?;
+        let updated =
+            Self::update_account_atomic(con, &Self::account_key(&account.id), |account| {
+                if !account.linked_identities.iter().any(|identity| {
+                    identity.provider == provider
+                        && identity.external_id == external_id
+                        && identity.environment == environment
+                }) {
+                    account.linked_identities.push(LinkedIdentity {
+                        provider: provider.to_string(),
+                        external_id: external_id.to_string(),
+                        environment: environment.to_string(),
+                    });
+                }
+                account.updated_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+            })
+            .await?;
         self.save_player_account_to_redb(&updated);
         Ok(updated)
     }
@@ -2430,15 +2416,21 @@ impl PlayerDb {
                         account.profile.purchased_skins.insert(skin.id);
                     }
                 } else if product_id == "sow_offer_genghis_khan_royal_lattice" {
-                    let leader_id = crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan)
-                        .to_string();
+                    let leader_id =
+                        crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan).to_string();
                     if !account.profile.owned_leaders.contains(&leader_id) {
                         account.profile.owned_leaders.insert(leader_id.clone());
                         account.profile.purchased_leaders.insert(leader_id);
                     }
                     if !account.profile.owned_skins.contains("royal_lattice") {
-                        account.profile.owned_skins.insert("royal_lattice".to_string());
-                        account.profile.purchased_skins.insert("royal_lattice".to_string());
+                        account
+                            .profile
+                            .owned_skins
+                            .insert("royal_lattice".to_string());
+                        account
+                            .profile
+                            .purchased_skins
+                            .insert("royal_lattice".to_string());
                     }
                 }
                 account.profile.purchase_history.insert(
@@ -2473,7 +2465,11 @@ impl PlayerDb {
     ) -> Result<Vec<PurchaseRecord>, Box<dyn std::error::Error + Send + Sync>> {
         let mut con = self.get_connection().await?;
         let account = Self::load_account(&mut con, account_id).await?;
-        let mut records = account.profile.purchase_history.into_values().collect::<Vec<_>>();
+        let mut records = account
+            .profile
+            .purchase_history
+            .into_values()
+            .collect::<Vec<_>>();
         records.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
         Ok(records)
     }
@@ -2512,10 +2508,8 @@ impl PlayerDb {
             .unwrap_or_default()
             .as_secs();
         let mut con = self.get_connection().await?;
-        let account = Self::update_account_atomic(
-            &mut con,
-            &Self::account_key(&account_id),
-            |account| {
+        let account =
+            Self::update_account_atomic(&mut con, &Self::account_key(&account_id), |account| {
                 if let Some(existing) = account.profile.purchase_history.get_mut(&purchase_id) {
                     if existing.status == "granted" || existing.status == "revoked" {
                         return;
@@ -2538,9 +2532,8 @@ impl PlayerDb {
                     },
                 );
                 account.updated_at = now;
-            },
-        )
-        .await?;
+            })
+            .await?;
         self.save_player_account_to_redb(&account);
         Ok(())
     }
@@ -2614,8 +2607,8 @@ impl PlayerDb {
                         }
                     }
                 } else if product_id == "sow_offer_genghis_khan_royal_lattice" {
-                    let leader_id = crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan)
-                        .to_string();
+                    let leader_id =
+                        crate::commerce::leader_id(crate::leaders::Leader::GenghisKhan).to_string();
                     if account.profile.purchased_leaders.remove(&leader_id) {
                         account.profile.owned_leaders.remove(&leader_id);
                     }

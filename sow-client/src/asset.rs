@@ -1,16 +1,13 @@
+use crate::ClientPhase;
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
-use crate::ClientPhase;
 
 impl SowApp {
     pub fn update_assets(&mut self) {
         if self.ui.app.phase == ClientPhase::Playing {
             // The browser shell owns the main menu, so the normal WASM path never reaches
             // ClientApp::draw(MainMenu), where avatars are otherwise queued.
-            self.ui
-                .app
-                .asset_loader
-                .ensure_avatars_loaded();
+            self.ui.app.asset_loader.ensure_avatars_loaded();
         }
         self.poll_avatar_fetches();
         self.poll_portal_avatar_fetch();
@@ -95,7 +92,12 @@ impl SowApp {
                         Some(l) => crate::ui::asset_loader::AvatarFetchKey::Leader(l),
                         None => crate::ui::asset_loader::AvatarFetchKey::Fallback,
                     };
-                    match self.ui.app.asset_loader.ingest_avatar_webp_bytes(key, &bytes) {
+                    match self
+                        .ui
+                        .app
+                        .asset_loader
+                        .ingest_avatar_webp_bytes(key, &bytes)
+                    {
                         Ok(()) => log::debug!("Loaded avatar {:?}", key),
                         Err(e) => log::warn!("Failed to ingest avatar {:?}: {e}", key),
                     }
@@ -113,12 +115,7 @@ impl SowApp {
                         .note_avatar_fetch_failed(key, reason);
                 }
                 MapDownloadEvent::PortalAvatarReady { bytes } => {
-                    match self
-                        .ui
-                        .app
-                        .asset_loader
-                        .ingest_portal_avatar_bytes(&bytes)
-                    {
+                    match self.ui.app.asset_loader.ingest_portal_avatar_bytes(&bytes) {
                         Ok(()) => log::info!("Loaded portal identity avatar"),
                         Err(e) => log::warn!("Failed to ingest portal avatar: {e}"),
                     }
@@ -137,7 +134,6 @@ impl SowApp {
                 }
             }
         }
-
     }
 
     fn fetch_avatar(
@@ -225,7 +221,6 @@ impl SowApp {
         });
     }
 
-
     fn poll_database_events(&mut self) {
         while let Ok(event) = self.tasks.db_rx.try_recv() {
             match event {
@@ -251,12 +246,7 @@ impl SowApp {
                         account_id.chars().count(),
                         display_name.chars().count()
                     );
-                    self.apply_cloud_profile(
-                        progress,
-                        account_id,
-                        display_name,
-                        provider,
-                    );
+                    self.apply_cloud_profile(progress, account_id, display_name, provider);
                     log::info!(
                         "Successfully synced profile from cloud database: level {} ({} XP)",
                         self.progress.level,
@@ -290,7 +280,7 @@ impl SowApp {
                             self.join_waiting_for_identity = false;
                         }
                     }
-                    if self.profile_refresh_pending && !self.display_name_save_in_flight {
+                    if self.profile_refresh_pending && self.display_name_save_request_id.is_none() {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
                     }
@@ -308,31 +298,30 @@ impl SowApp {
                         continue;
                     }
                     self.display_name_save_request_id = None;
-                    self.display_name_save_in_flight = false;
                     if self.progress_account_id.as_deref() != Some(account_id.as_str()) {
                         log::error!(
                             "[identity] ignoring rename ACK id={request_id}: account changed while request was in flight"
                         );
-                        if let Some(confirmed) = self.confirmed_display_name.clone() {
-                            self.ui.app.main_menu_state.player_name = confirmed;
-                        }
-                        continue;
-                    }
-                    self.confirmed_display_name = Some(display_name.clone());
-                    crate::anonymous_identity::clear_pending_display_name();
-                    self.pending_display_name = None;
-                    if let Some(next_name) = self.queued_display_name.take() {
-                        // No False Victories: the UI name is provisional until the
-                        // database ACK; serialize a newer edit after this ACK.
-                        self.ui.app.main_menu_state.player_name = next_name.clone();
-                        self.save_display_name(next_name);
-                    } else {
-                        self.ui.app.main_menu_state.player_name = display_name;
-                        self.ui.app.main_menu_state.name_locked = false;
                         if self.profile_refresh_pending {
                             self.profile_refresh_pending = false;
                             self.fetch_cloud_progress();
                         }
+                        continue;
+                    }
+                    if self.pending_display_name.as_deref() != Some(display_name.as_str()) {
+                        if let Some(next_name) = self.pending_display_name.clone() {
+                            self.ui.app.main_menu_state.player_name = next_name.clone();
+                            self.save_display_name(next_name);
+                        }
+                        continue;
+                    }
+                    crate::anonymous_identity::clear_pending_display_name();
+                    self.pending_display_name = None;
+                    self.ui.app.main_menu_state.player_name = display_name;
+                    self.ui.app.main_menu_state.error_message = None;
+                    if self.profile_refresh_pending {
+                        self.profile_refresh_pending = false;
+                        self.fetch_cloud_progress();
                     }
                 }
                 crate::player_progress::DbEvent::DisplayNameSaveFailed { request_id, status } => {
@@ -344,28 +333,12 @@ impl SowApp {
                         continue;
                     }
                     self.display_name_save_request_id = None;
-                    self.display_name_save_in_flight = false;
                     log::warn!(
-                        "[identity] rename request id={request_id} not acknowledged status={status:?}; restoring confirmed name"
+                        "[identity] rename request id={request_id} failed status={status:?}; keeping pending name"
                     );
-                    if let Some(confirmed) = self.confirmed_display_name.clone() {
-                        self.ui.app.main_menu_state.player_name = confirmed;
-                    }
-                    if status.is_some_and(|status| (400..500).contains(&status)) {
-                        crate::anonymous_identity::clear_pending_display_name();
-                        self.pending_display_name = None;
-                    } else if let Some((pending_account_id, pending_name)) =
-                        crate::anonymous_identity::load_pending_display_name()
-                        && (pending_account_id.is_none()
-                            || pending_account_id.as_deref()
-                                == self.progress_account_id.as_deref())
-                    {
-                        self.pending_display_name = Some(pending_name);
-                    }
-                    if let Some(next_name) = self.queued_display_name.take() {
-                        self.ui.app.main_menu_state.player_name = next_name.clone();
-                        self.save_display_name(next_name);
-                    } else if self.profile_refresh_pending {
+                    self.ui.app.main_menu_state.error_message =
+                        Some(crate::ui::UiText::new("profile.profile_unavailable"));
+                    if self.profile_refresh_pending {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
                     }
@@ -416,7 +389,9 @@ impl SowApp {
                         continue;
                     }
                     self.ui.app.main_menu_state.profile.loading = false;
-                    log::error!("[profile] profile unavailable account={account_id} status={status:?}");
+                    log::error!(
+                        "[profile] profile unavailable account={account_id} status={status:?}"
+                    );
                     self.ui.app.main_menu_state.profile.error =
                         Some(crate::ui::UiText::new("profile.profile_unavailable"));
                 }
@@ -437,10 +412,7 @@ impl SowApp {
                         next_cursor.unwrap_or(self.ui.app.main_menu_state.profile.history_cursor);
                     self.ui.app.main_menu_state.profile.history_has_next = next_cursor.is_some();
                 }
-                crate::player_progress::DbEvent::ProfileRatingsLoaded {
-                    account_id,
-                    items,
-                } => {
+                crate::player_progress::DbEvent::ProfileRatingsLoaded { account_id, items } => {
                     if self.ui.app.main_menu_state.profile.account_id.as_deref()
                         != Some(account_id.as_str())
                     {
@@ -499,10 +471,7 @@ impl SowApp {
                     self.ui.app.main_menu_state.error_message = None;
                     log::info!("[store] {operation} acknowledged by server");
                 }
-                crate::player_progress::DbEvent::StoreActionFailed {
-                    operation,
-                    status,
-                } => {
+                crate::player_progress::DbEvent::StoreActionFailed { operation, status } => {
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message =
                         Some(crate::ui::UiText::new("store.action_unavailable"));

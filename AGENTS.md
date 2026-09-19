@@ -149,14 +149,13 @@ an unauthenticated HTTP `/internal/lobbies` request as a health probe.
 
 ## Identity and player-flow contract
 
-- Anonymous players have one canonical account ID issued by
-  `POST /profile/anonymous`, stored client-side as `sow_account_id`.
-- The anonymous account also owns a persisted `display_name`; the client does
-  not cache that name separately. Browser refresh reloads it by account ID;
-  clearing site storage intentionally creates a new account.
-  Renames use `POST /profile/anonymous/name` and never change the account ID.
-  CrazyGames verified identities and persistent bot accounts use
-  `LinkedIdentity` records and are separate provider cases.
+- Players have one canonical account ID and persisted `display_name`; the
+  client keeps only the current value plus one pending rename while the server
+  acknowledges it. Browser refresh reloads the canonical profile, and a
+  rename uses `POST /profile/name` for anonymous or verified platform
+  identities without changing the account ID. Provider display names never
+  overwrite the SOW name. CrazyGames, WOU, Play Games, and persistent bot
+  accounts use their verified identity records.
 - Authenticated joins use `JoinWithAuth`; the server resolves the account and
   leader from the proof. The relay authenticates the direct game connection
   with a short-lived match ticket (`ReadyWithTicket`/`ReconnectWithTicket`).

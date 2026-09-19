@@ -385,7 +385,8 @@ fn canonical_store_product_id(product_id: &str) -> Option<String> {
         return Some(product_id.to_string());
     }
 
-    let catalog = sow_data::commerce::catalog_for_profile(&Default::default(), &Default::default(), 0, 0, 0);
+    let catalog =
+        sow_data::commerce::catalog_for_profile(&Default::default(), &Default::default(), 0, 0, 0);
     catalog
         .gem_bundles
         .into_iter()
@@ -640,13 +641,12 @@ async fn store_account_for_request(
                 account.id
             }
             "crazygames" => {
-                let external_id = resolve_external_id(
-                    "crazygames",
-                    account_reference,
-                    Some(&token),
-                )
-                .await
-                .map_err(|error| (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })))?;
+                let external_id =
+                    resolve_external_id("crazygames", account_reference, Some(&token))
+                        .await
+                        .map_err(|error| {
+                            (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error }))
+                        })?;
                 state
                     .db
                     .get_existing_identity("crazygames".to_string(), external_id)
@@ -679,7 +679,10 @@ async fn store_account_for_request(
                 ));
             }
         };
-        if requested_account_id.as_deref().is_some_and(|id| id != account_id) {
+        if requested_account_id
+            .as_deref()
+            .is_some_and(|id| id != account_id)
+        {
             return Err((
                 StatusCode::FORBIDDEN,
                 Json(ErrorResponse {
@@ -1025,7 +1028,7 @@ async fn handle_unlock_leader(
         &payload.account_id,
         payload.auth_secret.as_deref(),
     )
-        .await
+    .await
     {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
@@ -1057,7 +1060,7 @@ async fn handle_unlock_skin(
         &payload.account_id,
         payload.auth_secret.as_deref(),
     )
-        .await
+    .await
     {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
@@ -1089,7 +1092,7 @@ async fn handle_equip_skin(
         &payload.account_id,
         payload.auth_secret.as_deref(),
     )
-        .await
+    .await
     {
         Ok(account_id) => account_id,
         Err(response) => return response.into_response(),
@@ -1316,7 +1319,11 @@ async fn handle_report_player(
             .into_response();
     }
     let reported_account_id = payload.reported_account_id.trim().to_string();
-    let reported_account_id = match state.db.account_id_from_reference(&reported_account_id).await {
+    let reported_account_id = match state
+        .db
+        .account_id_from_reference(&reported_account_id)
+        .await
+    {
         Ok(Some(id)) => id,
         Ok(None) => {
             return (
@@ -1606,13 +1613,10 @@ async fn handle_internal_identity_resolve(
     let provider = payload.provider.trim();
     let environment = payload.environment.trim();
     let external_subject = payload.external_subject.trim();
-        let account_result = if provider == "bot" {
-            state
-                .db
-                .get_or_create_bot_account(
-                    environment.to_string(),
-                    external_subject.to_string(),
-                )
+    let account_result = if provider == "bot" {
+        state
+            .db
+            .get_or_create_bot_account(environment.to_string(), external_subject.to_string())
             .await
     } else if let Some(account_id) = payload.account_id.as_deref() {
         state
@@ -1945,7 +1949,10 @@ async fn main() {
         .route("/store/catalog", get(handle_store_catalog))
         .route("/store/checkout", post(handle_store_checkout))
         .route("/store/purchases", post(handle_store_purchases))
-        .route("/store/purchases/{purchase_id}", post(handle_store_purchase))
+        .route(
+            "/store/purchases/{purchase_id}",
+            post(handle_store_purchase),
+        )
         .route("/store/leaders/unlock", post(handle_unlock_leader))
         .route("/store/skins/unlock", post(handle_unlock_skin))
         .route("/store/skins/equip", post(handle_equip_skin))
@@ -1975,10 +1982,7 @@ async fn main() {
             get(handle_public_leaderboard),
         )
         .route("/profile/anonymous", post(handle_anonymous_profile))
-        .route(
-            "/profile/name",
-            post(handle_display_name),
-        )
+        .route("/profile/name", post(handle_display_name))
         .route(
             "/profile/anonymous/tutorial-complete",
             post(handle_anonymous_tutorial_complete),
@@ -2520,17 +2524,18 @@ async fn handle_display_name(
         account_hint(payload.account_id.as_deref()),
         payload.display_name.chars().count()
     );
-    let account_id = if let (Some(account_id), Some(auth_secret)) =
-        (payload.account_id.as_deref(), payload.auth_secret.as_deref())
-    {
-        match state.db.verify_anonymous_secret(account_id, auth_secret).await {
+    let account_id = if let (Some(account_id), Some(auth_secret)) = (
+        payload.account_id.as_deref(),
+        payload.auth_secret.as_deref(),
+    ) {
+        match state
+            .db
+            .verify_anonymous_secret(account_id, auth_secret)
+            .await
+        {
             Ok(account_id) => account_id,
             Err(error) => {
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    Json(ErrorResponse { error }),
-                )
-                    .into_response();
+                return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
             }
         }
     } else {
@@ -2550,7 +2555,14 @@ async fn handle_display_name(
             )
                 .into_response();
         }
-        match resolve_platform_account(&state, provider, external_id, platform_auth_token(&headers).as_deref()).await {
+        match resolve_platform_account(
+            &state,
+            provider,
+            external_id,
+            platform_auth_token(&headers).as_deref(),
+        )
+        .await
+        {
             Ok(account) => account.id,
             Err(error) => {
                 warn!("[identity] rename identity failed id={request_id}: {error}");
@@ -3314,7 +3326,7 @@ async fn resolve_platform_account(
                 &resolved_external_id,
                 "wou".to_string(),
                 "production".to_string(),
-                resolved_external_id,
+                resolved_external_id.clone(),
             )
             .await
             .map_err(|error| error.to_string())

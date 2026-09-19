@@ -168,10 +168,11 @@ impl SowEngine {
                     .iter()
                     .find(|b| {
                         b.tile_idx == *port_tile
-                            && b.kind == crate::game::BuildingKind::City
-                            && b.modules.port > 0
                             && b.owner_id == pid
                             && !b.under_construction
+                            && (b.kind == crate::game::BuildingKind::Port
+                                || (b.kind == crate::game::BuildingKind::City
+                                    && b.modules.port > 0))
                     })
                     .map(|b| b.id);
 

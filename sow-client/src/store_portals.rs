@@ -262,13 +262,6 @@ fn js_string_field(obj: &wasm_bindgen::JsValue, key: &str) -> Option<String> {
         .and_then(|v| v.as_string())
 }
 
-#[cfg(target_arch = "wasm32")]
-fn js_bool_field(obj: &wasm_bindgen::JsValue, key: &str) -> Option<bool> {
-    js_sys::Reflect::get(obj, &wasm_bindgen::JsValue::from_str(key))
-        .ok()
-        .and_then(|v| v.as_bool())
-}
-
 pub fn take_pending_invite_lobby() -> Option<u64> {
     #[cfg(target_arch = "wasm32")]
     {

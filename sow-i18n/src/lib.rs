@@ -42,7 +42,12 @@ impl Language {
             (Language::Vietnamese, "vi", "Tiếng Việt", true),
             (Language::Indonesian, "id", "Bahasa Indonesia", true),
             (Language::Filipino, "fil", "Filipino", true),
-            (Language::BrazilianPortuguese, "pt-BR", "Português (Brasil)", true),
+            (
+                Language::BrazilianPortuguese,
+                "pt-BR",
+                "Português (Brasil)",
+                true,
+            ),
         ]
     }
 
@@ -52,7 +57,6 @@ impl Language {
             .filter(|(_, _, _, published)| *published)
             .map(|(language, code, name, _)| (*language, *code, *name))
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,15 +104,25 @@ pub fn web(language: Language) -> &'static WebStrings {
         Language::German => DE_WEB.get_or_init(|| parse(include_str!("../strings/de/web.toml"))),
         Language::Italian => IT_WEB.get_or_init(|| parse(include_str!("../strings/it/web.toml"))),
         Language::Turkish => TR_WEB.get_or_init(|| parse(include_str!("../strings/tr/web.toml"))),
-        Language::SimplifiedChinese => ZH_CN_WEB.get_or_init(|| parse(include_str!("../strings/zh-cn/web.toml"))),
+        Language::SimplifiedChinese => {
+            ZH_CN_WEB.get_or_init(|| parse(include_str!("../strings/zh-cn/web.toml")))
+        }
         Language::Japanese => JA_WEB.get_or_init(|| parse(include_str!("../strings/ja/web.toml"))),
         Language::Korean => KO_WEB.get_or_init(|| parse(include_str!("../strings/ko/web.toml"))),
         Language::Arabic => AR_WEB.get_or_init(|| parse(include_str!("../strings/ar/web.toml"))),
         Language::Russian => RU_WEB.get_or_init(|| parse(include_str!("../strings/ru/web.toml"))),
-        Language::Vietnamese => VI_WEB.get_or_init(|| parse(include_str!("../strings/vi/web.toml"))),
-        Language::Indonesian => ID_WEB.get_or_init(|| parse(include_str!("../strings/id/web.toml"))),
-        Language::Filipino => FIL_WEB.get_or_init(|| parse(include_str!("../strings/fil/web.toml"))),
-        Language::BrazilianPortuguese => PT_BR_WEB.get_or_init(|| parse(include_str!("../strings/pt-br/web.toml"))),
+        Language::Vietnamese => {
+            VI_WEB.get_or_init(|| parse(include_str!("../strings/vi/web.toml")))
+        }
+        Language::Indonesian => {
+            ID_WEB.get_or_init(|| parse(include_str!("../strings/id/web.toml")))
+        }
+        Language::Filipino => {
+            FIL_WEB.get_or_init(|| parse(include_str!("../strings/fil/web.toml")))
+        }
+        Language::BrazilianPortuguese => {
+            PT_BR_WEB.get_or_init(|| parse(include_str!("../strings/pt-br/web.toml")))
+        }
     }
 }
 

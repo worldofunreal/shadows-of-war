@@ -234,7 +234,6 @@ fn import_from_bin(dir: &Path) -> Result<MapFile, Box<dyn std::error::Error>> {
         return Ok(map);
     }
 
-
     Err("Need image.png or a valid map.bin".into())
 }
 

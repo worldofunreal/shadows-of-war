@@ -1,7 +1,7 @@
+use crate::ClientPhase;
 use crate::app::SowApp;
 use crate::get_build_version;
 use crate::ui::loading_screen::SplashJob;
-use crate::ClientPhase;
 
 fn should_complete_boudica_intro_on_exit(
     tutorial_active: bool,
@@ -25,14 +25,13 @@ impl SowApp {
         lobby_id: u64,
         player_id: u16,
     ) -> Option<sow_core::protocol::ClientMessage> {
-        self.sim
-            .relay_ticket
-            .clone()
-            .map(|ticket| sow_core::protocol::ClientMessage::ReadyWithTicket {
+        self.sim.relay_ticket.clone().map(|ticket| {
+            sow_core::protocol::ClientMessage::ReadyWithTicket {
                 lobby_id,
                 player_id,
                 ticket,
-            })
+            }
+        })
     }
 
     pub(crate) fn make_initial_relay_ready_message(
@@ -77,12 +76,11 @@ impl SowApp {
             host_config,
             password,
         };
-        self.make_auth_proof().map(|auth| {
-            sow_core::protocol::ClientMessage::JoinWithAuth {
+        self.make_auth_proof()
+            .map(|auth| sow_core::protocol::ClientMessage::JoinWithAuth {
                 join: Box::new(payload),
                 auth,
-            }
-        })
+            })
     }
 
     /// Identity proof for JoinWithAuth: the CrazyGames platform token for
@@ -194,10 +192,7 @@ impl SowApp {
         self.sim.relay_reconnect_ticket = None;
         if use_loader {
             self.ui.app.phase = ClientPhase::Splash;
-            self.ui
-                .app
-                .splash_state
-                .reset_anim(SplashJob::ExitGame);
+            self.ui.app.splash_state.reset_anim(SplashJob::ExitGame);
         } else {
             self.ui.app.phase = ClientPhase::MainMenu;
         }
@@ -224,8 +219,8 @@ impl SowApp {
 
     /// Whether the map/mover GPU path should paint this frame (hidden during splash loads).
     pub(crate) fn should_draw_world(&self) -> bool {
-        use crate::ui::loading_screen::SplashJob;
         use crate::ClientPhase;
+        use crate::ui::loading_screen::SplashJob;
 
         match self.ui.app.phase {
             ClientPhase::Playing => true,
@@ -249,8 +244,8 @@ impl SowApp {
 #[cfg(test)]
 mod tests {
     use super::{should_complete_boudica_intro_on_exit, should_use_exit_game_loader};
-    use crate::campaign::CampaignId;
     use crate::ClientPhase;
+    use crate::campaign::CampaignId;
 
     #[test]
     fn exit_loader_only_runs_for_active_game() {

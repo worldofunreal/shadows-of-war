@@ -463,9 +463,7 @@
 
     function renderQueueRoster(lobby) {
         var players = (lobby && lobby.players) || [];
-        if (!players.length) {
-            return "<div class='sow-menu__empty'>" + esc(SOW_t("lobbies.connecting_server")) + "</div>";
-        }
+        if (!players.length) return "";
 
         if (lobby && lobby.game_mode === "Teams") {
             var redPlayers = players.filter(function (player) { return player.team === "Red"; });

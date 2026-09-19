@@ -15,7 +15,6 @@ pub mod osm_overpass;
 pub mod osm_tiles;
 
 #[cfg(target_arch = "wasm32")]
-
 #[cfg(feature = "generator")]
 pub use image_pipeline::{ImagePipelineResult, generate_from_rgba, mobile_safe_dims};
 #[cfg(feature = "generator")]

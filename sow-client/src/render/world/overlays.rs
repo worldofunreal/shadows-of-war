@@ -180,9 +180,7 @@ fn render_nameplates(
     zoom_scaled: f32,
 ) {
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    if ui.nameplate_order_tick != Some(snapshot.tick)
-        || ui.nameplate_order_my_id != Some(my_id)
-    {
+    if ui.nameplate_order_tick != Some(snapshot.tick) || ui.nameplate_order_my_id != Some(my_id) {
         let mut order: Vec<usize> = snapshot
             .players
             .iter()
@@ -1086,14 +1084,8 @@ mod tests {
         let world = (18.25, 7.75, 96.0, 48.0, 3.0);
         let metrics = NameplateMetrics::compute(14.0, PlayerType::Human, true);
         for sf in [1.0, 2.0] {
-            let center = world_to_screen_values(
-                world.0 + 0.5,
-                world.1 + 0.5,
-                world.2,
-                world.3,
-                world.4,
-                sf,
-            );
+            let center =
+                world_to_screen_values(world.0 + 0.5, world.1 + 0.5, world.2, world.3, world.4, sf);
             let layout = NameplateLayout::compute(
                 center,
                 metrics,

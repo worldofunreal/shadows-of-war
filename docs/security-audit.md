@@ -39,12 +39,11 @@ or least-privilege service isolation.
    has no attached Azure DDoS Protection plan.  Game ports are intentionally
    public and require a separate flood-mitigation decision.
 
-Anonymous identity is one canonical browser/native `account_id` issued by
-`POST /profile/anonymous`, with a persisted mutable `display_name`.  A rename
-uses `POST /profile/anonymous/name`; it never changes the account ID.  CrazyGames
-is the only external provider accepted by `GET /profile`, and its ID is
-verified from the platform token.  The legacy identity migration and all
-profile-link/conflict routes were removed; they are not compatibility paths.
+Identity uses one canonical `account_id` with a persisted mutable
+`display_name`. A rename uses `POST /profile/name`; it never changes the
+account ID, and the server verifies anonymous or supported platform identity
+proof before updating the account. Provider display names are not a source of
+truth for the SOW name.
 
 The canonical anonymous ID is the only client-persisted identity key and a
 progress lookup key, not a secret or an

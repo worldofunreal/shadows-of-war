@@ -1,10 +1,10 @@
 use std::num::NonZero;
-use std::sync::OnceLock;
-use std::sync::atomic::AtomicU64;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
-use rodio::source::Source;
-use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{FromSample, SampleFormat, SizedSample, Stream, StreamConfig};
+use web_time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::tone::{note_envelope, warm_at};
 
@@ -12,20 +12,19 @@ pub(super) const SAMPLE_RATE: u32 = 22050;
 pub(super) const OPEN_BACKOFF: Duration = Duration::from_secs(2);
 pub(super) const MAX_VOICES: u8 = 3; // ponytail: reduced to 3 for stability and less clutter
 
-pub(super) static MASTER_VOLUME: std::sync::atomic::AtomicU32 =
-    std::sync::atomic::AtomicU32::new(500); // ponytail: 50% default volume (halfway headroom up to 2x)
+pub(super) static MASTER_VOLUME: AtomicU32 = AtomicU32::new(800);
 
 pub fn set_master_volume(volume: f32) {
     let vol_u32 = (volume * 1000.0).clamp(0.0, 1000.0) as u32;
-    MASTER_VOLUME.store(vol_u32, std::sync::atomic::Ordering::Relaxed);
+    MASTER_VOLUME.store(vol_u32, Ordering::Relaxed);
 }
 
 pub(super) static LAST_BUNKER_SOUND_MS: AtomicU64 = AtomicU64::new(0);
 pub(super) static LAST_COMBAT_SOUND_MS: AtomicU64 = AtomicU64::new(0);
 
 pub(super) fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
 }
@@ -36,160 +35,117 @@ pub(super) enum SoundPriority {
     Foreground,
 }
 
-pub(super) struct PlayCommand {
-    source: BoxedSource,
-    left: f32,
-    right: f32,
-    priority: SoundPriority,
-    duration: Duration,
-}
-
-pub(super) struct VoiceSlot {
-    ends_at: Instant,
-}
-
-pub(super) struct BoxedSource(Box<dyn Source<Item = f32> + Send>);
-
-impl Iterator for BoxedSource {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-}
-
-impl Source for BoxedSource {
+pub trait AudioSource: Iterator<Item = f32> + Send {
     fn current_span_len(&self) -> Option<usize> {
-        self.0.current_span_len()
+        None
     }
 
-    fn channels(&self) -> NonZero<u16> {
-        self.0.channels()
-    }
+    fn channels(&self) -> NonZero<u16>;
 
-    fn sample_rate(&self) -> NonZero<u32> {
-        self.0.sample_rate()
-    }
+    fn sample_rate(&self) -> NonZero<u32>;
 
-    fn total_duration(&self) -> Option<Duration> {
-        self.0.total_duration()
-    }
-
-    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
-        self.0.try_seek(pos)
-    }
+    fn total_duration(&self) -> Option<Duration>;
 }
 
-pub(super) struct AudioWorkerState {
-    stream: Option<MixerDeviceSink>,
-    open_backoff_until: Option<Instant>,
-    voices: Vec<VoiceSlot>,
-}
-
-pub(super) fn prune_voices(voices: &mut Vec<VoiceSlot>) {
-    let now = Instant::now();
-    voices.retain(|v| v.ends_at > now);
-}
-
-pub(super) fn active_voice_count(voices: &[VoiceSlot]) -> u8 {
-    voices.len().min(u8::MAX as usize) as u8
-}
-
-pub(super) fn should_play(priority: SoundPriority, active: u8) -> bool {
-    match priority {
-        SoundPriority::Background => active < MAX_VOICES,
-        SoundPriority::Normal => active < MAX_VOICES + 1,
-        SoundPriority::Foreground => true,
-    }
-}
-
-pub(super) fn priority_gain(priority: SoundPriority, active: u8) -> f32 {
-    let base = match priority {
-        SoundPriority::Background => 0.30,
-        SoundPriority::Normal => 0.70,
-        SoundPriority::Foreground => 1.0,
-    };
-    if priority == SoundPriority::Background {
-        base / (1.0 + active as f32 * 0.2)
-    } else {
-        base
-    }
-}
-
-pub(super) fn source_duration<S: Source<Item = f32>>(source: &S) -> Duration {
-    source
-        .total_duration()
-        .unwrap_or(Duration::from_millis(150))
-}
-
-static AUDIO_TX: OnceLock<std::sync::mpsc::Sender<PlayCommand>> = OnceLock::new();
-
-pub(super) fn get_audio_channel() -> &'static std::sync::mpsc::Sender<PlayCommand> {
-    AUDIO_TX.get_or_init(|| {
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            audio_worker_thread(rx);
-        });
-        tx
-    })
-}
-
-pub(super) struct PannedSource<I> {
-    inner: I,
+struct Voice {
+    source: Box<dyn AudioSource>,
     left_gain: f32,
     right_gain: f32,
-    next_right: Option<f32>,
+    source_rate: f32,
+    phase: f32,
+    current: Option<f32>,
+    next: Option<f32>,
 }
 
-impl<I> Iterator for PannedSource<I>
-where
-    I: Source<Item = f32>,
-{
-    type Item = f32;
+impl Voice {
+    fn new(source: Box<dyn AudioSource>, left_gain: f32, right_gain: f32) -> Self {
+        let source_rate = source.sample_rate().get() as f32;
+        let mut source = source;
+        let current = source.next();
+        let next = source.next();
+        Self {
+            source,
+            left_gain,
+            right_gain,
+            source_rate,
+            phase: 0.0,
+            current,
+            next,
+        }
+    }
 
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(right) = self.next_right.take() {
-            return Some(right);
+    fn next_frame(&mut self, output_rate: u32) -> Option<(f32, f32)> {
+        let current = self.current?;
+        let next = self.next.unwrap_or(current);
+        let sample = current + (next - current) * self.phase;
+
+        self.phase += self.source_rate / output_rate.max(1) as f32;
+        while self.phase >= 1.0 {
+            self.phase -= 1.0;
+            self.current = self.next;
+            self.next = self.source.next();
+            if self.current.is_none() {
+                break;
+            }
         }
-        if let Some(mono_sample) = self.inner.next() {
-            self.next_right = Some(mono_sample * self.right_gain);
-            Some(mono_sample * self.left_gain)
-        } else {
-            None
-        }
+
+        Some((sample * self.left_gain, sample * self.right_gain))
     }
 }
 
-impl<I> Source for PannedSource<I>
-where
-    I: Source<Item = f32>,
-{
-    #[inline]
-    fn current_span_len(&self) -> Option<usize> {
-        self.inner.current_span_len().map(|l| l * 2)
+struct AudioMixer {
+    voices: Vec<Voice>,
+    sample_rate: u32,
+}
+
+impl AudioMixer {
+    fn new() -> Self {
+        Self {
+            voices: Vec::new(),
+            sample_rate: SAMPLE_RATE,
+        }
     }
 
-    #[inline]
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(2).unwrap()
+    fn set_sample_rate(&mut self, sample_rate: u32) {
+        self.sample_rate = sample_rate;
     }
 
-    #[inline]
-    fn sample_rate(&self) -> NonZero<u32> {
-        self.inner.sample_rate()
+    fn push(&mut self, source: Box<dyn AudioSource>, left_gain: f32, right_gain: f32) {
+        self.voices.push(Voice::new(source, left_gain, right_gain));
     }
 
-    #[inline]
-    fn total_duration(&self) -> Option<Duration> {
-        self.inner.total_duration()
-    }
+    fn next_frame(&mut self) -> (f32, f32) {
+        let mut left = 0.0;
+        let mut right = 0.0;
+        for voice in &mut self.voices {
+            if let Some((voice_left, voice_right)) = voice.next_frame(self.sample_rate) {
+                left += voice_left;
+                right += voice_right;
+            }
+        }
+        self.voices.retain(|voice| voice.current.is_some());
 
-    #[inline]
-    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
-        self.next_right = None;
-        self.inner.try_seek(pos)
+        let master = MASTER_VOLUME.load(Ordering::Relaxed) as f32 / 1000.0;
+        (left * master, right * master)
     }
+}
+
+struct AudioState {
+    mixer: Arc<Mutex<AudioMixer>>,
+    stream: Option<Stream>,
+    open_backoff_until: Option<Instant>,
+}
+
+static AUDIO_STATE: OnceLock<Mutex<AudioState>> = OnceLock::new();
+
+fn audio_state() -> &'static Mutex<AudioState> {
+    AUDIO_STATE.get_or_init(|| {
+        Mutex::new(AudioState {
+            mixer: Arc::new(Mutex::new(AudioMixer::new())),
+            stream: None,
+            open_backoff_until: None,
+        })
+    })
 }
 
 pub(super) struct SimpleRng {
@@ -286,7 +242,7 @@ impl Iterator for ArpeggioSource {
     }
 }
 
-impl Source for ArpeggioSource {
+impl AudioSource for ArpeggioSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -306,7 +262,62 @@ impl Source for ArpeggioSource {
     }
 }
 
-pub(super) fn ensure_audio_stream(state: &mut AudioWorkerState) -> bool {
+fn active_voice_count(mixer: &AudioMixer) -> u8 {
+    mixer.voices.len().min(u8::MAX as usize) as u8
+}
+
+fn should_play(priority: SoundPriority, active: u8) -> bool {
+    match priority {
+        SoundPriority::Background => active < MAX_VOICES,
+        SoundPriority::Normal => active < MAX_VOICES + 1,
+        SoundPriority::Foreground => true,
+    }
+}
+
+fn priority_gain(priority: SoundPriority, active: u8) -> f32 {
+    let base = match priority {
+        SoundPriority::Background => 0.30,
+        SoundPriority::Normal => 0.70,
+        SoundPriority::Foreground => 1.0,
+    };
+    if priority == SoundPriority::Background {
+        base / (1.0 + active as f32 * 0.2)
+    } else {
+        base
+    }
+}
+
+fn build_output_stream<T>(
+    device: &cpal::Device,
+    config: &StreamConfig,
+    mixer: Arc<Mutex<AudioMixer>>,
+) -> Result<Stream, cpal::BuildStreamError>
+where
+    T: SizedSample + FromSample<f32>,
+{
+    let channels = config.channels.max(1) as usize;
+    device.build_output_stream(
+        config,
+        move |data: &mut [T], _| {
+            let mut mixer = mixer.lock().unwrap_or_else(|e| e.into_inner());
+            for frame in data.chunks_mut(channels) {
+                let (left, right) = mixer.next_frame();
+                for (channel, sample) in frame.iter_mut().enumerate() {
+                    let value = match channel {
+                        0 => left,
+                        1 => right,
+                        _ => (left + right) * 0.5,
+                    };
+                    *sample = T::from_sample(value);
+                }
+            }
+        },
+        |error| log::warn!("Audio stream error: {error}"),
+        None,
+    )
+}
+
+fn open_audio_stream(state: &mut AudioState) -> bool {
     if state.stream.is_some() {
         return true;
     }
@@ -316,73 +327,84 @@ pub(super) fn ensure_audio_stream(state: &mut AudioWorkerState) -> bool {
     {
         return false;
     }
-    match DeviceSinkBuilder::open_default_sink() {
-        Ok(mut stream) => {
-            stream.log_on_drop(false);
-            state.stream = Some(stream);
-            state.open_backoff_until = None;
-            true
-        }
-        Err(e) => {
-            log::warn!("Failed to open default audio device: {e:?}");
+
+    let host = cpal::default_host();
+    let Some(device) = host.default_output_device() else {
+        log::warn!("No default audio output device");
+        state.open_backoff_until = Some(Instant::now() + OPEN_BACKOFF);
+        return false;
+    };
+    let supported = match device.default_output_config() {
+        Ok(config) => config,
+        Err(error) => {
+            log::warn!("Failed to read default audio output config: {error}");
             state.open_backoff_until = Some(Instant::now() + OPEN_BACKOFF);
-            false
+            return false;
         }
+    };
+    let config = supported.config();
+    state
+        .mixer
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .set_sample_rate(config.sample_rate);
+
+    let stream = match supported.sample_format() {
+        SampleFormat::I8 => build_output_stream::<i8>(&device, &config, state.mixer.clone()),
+        SampleFormat::I16 => build_output_stream::<i16>(&device, &config, state.mixer.clone()),
+        SampleFormat::I24 => {
+            build_output_stream::<cpal::I24>(&device, &config, state.mixer.clone())
+        }
+        SampleFormat::I32 => build_output_stream::<i32>(&device, &config, state.mixer.clone()),
+        SampleFormat::I64 => build_output_stream::<i64>(&device, &config, state.mixer.clone()),
+        SampleFormat::U8 => build_output_stream::<u8>(&device, &config, state.mixer.clone()),
+        SampleFormat::U16 => build_output_stream::<u16>(&device, &config, state.mixer.clone()),
+        SampleFormat::U24 => {
+            build_output_stream::<cpal::U24>(&device, &config, state.mixer.clone())
+        }
+        SampleFormat::U32 => build_output_stream::<u32>(&device, &config, state.mixer.clone()),
+        SampleFormat::U64 => build_output_stream::<u64>(&device, &config, state.mixer.clone()),
+        SampleFormat::F32 => build_output_stream::<f32>(&device, &config, state.mixer.clone()),
+        SampleFormat::F64 => build_output_stream::<f64>(&device, &config, state.mixer.clone()),
+        _ => Err(cpal::BuildStreamError::StreamConfigNotSupported),
+    };
+    let Ok(stream) = stream else {
+        log::warn!("Failed to build default audio output stream");
+        state.open_backoff_until = Some(Instant::now() + OPEN_BACKOFF);
+        return false;
+    };
+    if let Err(error) = stream.play() {
+        log::warn!("Failed to start default audio output stream: {error}");
+        state.open_backoff_until = Some(Instant::now() + OPEN_BACKOFF);
+        return false;
     }
+    state.stream = Some(stream);
+    state.open_backoff_until = None;
+    true
 }
 
-pub(super) fn play_panned_source(
-    state: &mut AudioWorkerState,
-    source: BoxedSource,
-    left: f32,
-    right: f32,
-    priority: SoundPriority,
-    duration: Duration,
-) {
-    prune_voices(&mut state.voices);
-    let active = active_voice_count(&state.voices);
+fn queue_source<S>(source: S, left: f32, right: f32, priority: SoundPriority)
+where
+    S: AudioSource + 'static,
+{
+    let state_lock = audio_state();
+    let mut state = state_lock.lock().unwrap_or_else(|e| e.into_inner());
+    let active = {
+        let mixer = state.mixer.lock().unwrap_or_else(|e| e.into_inner());
+        active_voice_count(&mixer)
+    };
     if !should_play(priority, active) {
         return;
     }
-    if !ensure_audio_stream(state) {
+    if !open_audio_stream(&mut state) {
         return;
     }
-    let Some(stream) = state.stream.as_ref() else {
-        return;
-    };
-    let master = MASTER_VOLUME.load(std::sync::atomic::Ordering::Relaxed) as f32 / 1000.0;
-    let gain = priority_gain(priority, active) * master;
-    let panned = PannedSource {
-        inner: source,
-        left_gain: left * gain,
-        right_gain: right * gain,
-        next_right: None,
-    };
-    state.voices.push(VoiceSlot {
-        ends_at: Instant::now() + duration,
-    });
-    let player = Player::connect_new(stream.mixer());
-    player.append(panned);
-    player.detach();
-}
-
-pub(super) fn audio_worker_thread(rx: std::sync::mpsc::Receiver<PlayCommand>) {
-    let mut state = AudioWorkerState {
-        stream: None,
-        open_backoff_until: None,
-        voices: Vec::new(),
-    };
-
-    while let Ok(cmd) = rx.recv() {
-        play_panned_source(
-            &mut state,
-            cmd.source,
-            cmd.left,
-            cmd.right,
-            cmd.priority,
-            cmd.duration,
-        );
-    }
+    let gain = priority_gain(priority, active);
+    state.mixer.lock().unwrap_or_else(|e| e.into_inner()).push(
+        Box::new(source),
+        left * gain,
+        right * gain,
+    );
 }
 
 pub(super) fn spatial_gains(spatial: crate::SpatialSoundParams) -> (f32, f32, f32) {
@@ -439,39 +461,24 @@ pub(super) fn queue_spatial<S>(
     spatial: crate::SpatialSoundParams,
     priority: SoundPriority,
 ) where
-    S: Source<Item = f32> + Send + 'static,
+    S: AudioSource + 'static,
 {
     let (left, right, total_volume) = spatial_gains(spatial);
 
     if total_volume > 0.01 {
-        let duration = source_duration(&source);
-        let _ = get_audio_channel().send(PlayCommand {
-            source: BoxedSource(Box::new(source)),
-            left,
-            right,
-            priority,
-            duration,
-        });
+        queue_source(source, left, right, priority);
     }
 }
 
 pub fn play_spatial<S>(source: S, spatial: crate::SpatialSoundParams)
 where
-    S: Source<Item = f32> + Send + 'static,
+    S: AudioSource + 'static,
 {
     queue_spatial(source, spatial, SoundPriority::Normal);
 }
 pub fn play_ui<S>(source: S)
 where
-    S: Source<Item = f32> + Send + 'static,
+    S: AudioSource + 'static,
 {
-    let duration = source_duration(&source);
-    let master = MASTER_VOLUME.load(std::sync::atomic::Ordering::Relaxed) as f32 / 1000.0;
-    let _ = get_audio_channel().send(PlayCommand {
-        source: BoxedSource(Box::new(source)),
-        left: master,
-        right: master,
-        priority: SoundPriority::Foreground,
-        duration,
-    });
+    queue_source(source, 1.0, 1.0, SoundPriority::Foreground);
 }

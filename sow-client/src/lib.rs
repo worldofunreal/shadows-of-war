@@ -4,21 +4,71 @@
 use sow_net::client::SowClient;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClientPhase { Splash, MainMenu, Playing }
+pub enum ClientPhase {
+    Splash,
+    MainMenu,
+    Playing,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiAction {
-    ConnectToServer(String), RetryConnection, JoinLobby(u64), LeaveLobby, HostPrivateLobby,
-    StartSinglePlayer(Box<sow_core::game_config::GameConfig>), SetAttackRatio(f32), CenterCamera,
-    FocusTile(f32, f32), ZoomIn, ZoomOut, ToggleSettings, ToggleCredits, TogglePrivacy, ToggleTerms,
-    ToggleDevSidebar, StartPrivateLobby(u64), PortalShowAuthPrompt, SaveDisplayName(String),
-    OpenCreateGame, CreateGame { config: Box<sow_core::game_config::GameConfig>, is_private: bool, password: Option<String> },
-    OpenJoinBrowser, CloseOverlay, JoinWithCode, JoinWithPassword(u64),
-    KickPlayer { lobby_id: u64, target_player_id: u16 }, BanPlayer { lobby_id: u64, target_player_id: u16 },
-    MovePlayerTeam { lobby_id: u64, target_player_id: u16 }, ToggleShowcase,
-    OpenStorePage, OpenProfilePage, LoadOwnProfile, OpenPublicProfilePage(String), LoadProfileHistory,
-    LoadProfileRatings, SearchProfiles(String), LoadMatchDetail(String), CloseMatchDetail,
-    UnlockLeader { leader_id: String, currency: String }, UnlockSkin(String), EquipSkin(String),
+    ConnectToServer(String),
+    RetryConnection,
+    JoinLobby(u64),
+    LeaveLobby,
+    HostPrivateLobby,
+    StartSinglePlayer(Box<sow_core::game_config::GameConfig>),
+    SetAttackRatio(f32),
+    CenterCamera,
+    FocusTile(f32, f32),
+    ZoomIn,
+    ZoomOut,
+    ToggleSettings,
+    ToggleCredits,
+    TogglePrivacy,
+    ToggleTerms,
+    ToggleDevSidebar,
+    StartPrivateLobby(u64),
+    PortalShowAuthPrompt,
+    SaveDisplayName(String),
+    OpenCreateGame,
+    CreateGame {
+        config: Box<sow_core::game_config::GameConfig>,
+        is_private: bool,
+        password: Option<String>,
+    },
+    OpenJoinBrowser,
+    CloseOverlay,
+    JoinWithCode,
+    JoinWithPassword(u64),
+    KickPlayer {
+        lobby_id: u64,
+        target_player_id: u16,
+    },
+    BanPlayer {
+        lobby_id: u64,
+        target_player_id: u16,
+    },
+    MovePlayerTeam {
+        lobby_id: u64,
+        target_player_id: u16,
+    },
+    ToggleShowcase,
+    OpenStorePage,
+    OpenProfilePage,
+    LoadOwnProfile,
+    OpenPublicProfilePage(String),
+    LoadProfileHistory,
+    LoadProfileRatings,
+    SearchProfiles(String),
+    LoadMatchDetail(String),
+    CloseMatchDetail,
+    UnlockLeader {
+        leader_id: String,
+        currency: String,
+    },
+    UnlockSkin(String),
+    EquipSkin(String),
 }
 
 pub(crate) const fn rgb(r: u8, g: u8, b: u8) -> [f32; 4] {
@@ -71,10 +121,7 @@ pub(crate) fn camera_zoom_lower_bound(screen_w: f32, screen_h: f32, map_w: u32, 
     fit_w.max(fit_h).max(CAMERA_MIN_ZOOM)
 }
 
-fn spawn_sow_client_connect(
-    url: String,
-    connect_tx: &app::WakeSender<Result<SowClient, String>>,
-) {
+fn spawn_sow_client_connect(url: String, connect_tx: &app::WakeSender<Result<SowClient, String>>) {
     let tx = (*connect_tx).clone();
     let url_clone = url.clone();
     use std::sync::Arc;
@@ -151,7 +198,6 @@ pub mod asset;
 pub mod campaign;
 pub mod input;
 pub mod loader;
-pub mod ui;
 mod map_cache;
 #[cfg(target_arch = "wasm32")]
 pub mod net;
@@ -159,6 +205,7 @@ pub mod platform_identity;
 pub mod player_progress;
 pub mod render;
 pub mod store_portals;
+pub mod ui;
 pub use ui::app::ClientApp;
 pub use ui::main_menu::LobbyNotice;
 pub mod theme {
@@ -235,8 +282,10 @@ impl ApplicationHandler for SowApp {
 
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
 
-        if matches!(self.ui.app.phase, ClientPhase::Playing | ClientPhase::Splash)
-            && let Some(win) = self.active_window()
+        if matches!(
+            self.ui.app.phase,
+            ClientPhase::Playing | ClientPhase::Splash
+        ) && let Some(win) = self.active_window()
         {
             win.request_redraw();
         }

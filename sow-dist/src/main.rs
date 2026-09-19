@@ -8,7 +8,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
-use std::{collections::{HashMap, HashSet}, env, fs, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs, thread,
+};
 
 mod prod;
 
@@ -212,11 +215,17 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         )?;
     }
     copy_dir(&src.join("gameplay/avatars"), &dst.join("gameplay/avatars"))?;
-    copy_dir(&src.join("gameplay/currency"), &dst.join("gameplay/currency"))?;
+    copy_dir(
+        &src.join("gameplay/currency"),
+        &dst.join("gameplay/currency"),
+    )?;
     let mobile_nav = dst.join("shell/mobile-nav");
     fs::create_dir_all(&mobile_nav)?;
     for file in ["heroes.webp", "battle.webp", "profile.webp"] {
-        fs::copy(src.join("shell/mobile-nav").join(file), mobile_nav.join(file))?;
+        fs::copy(
+            src.join("shell/mobile-nav").join(file),
+            mobile_nav.join(file),
+        )?;
     }
     Ok(())
 }
@@ -549,7 +558,10 @@ fn read_shell_bundle(shell: &Path, manifest: &str, parts: &[&str]) -> Result<Str
     Ok(bundle)
 }
 
-fn web_catalog_value<'a>(catalog: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+fn web_catalog_value<'a>(
+    catalog: &'a serde_json::Value,
+    key: &str,
+) -> Option<&'a serde_json::Value> {
     let mut parts = key.split('.');
     let domain = parts.next()?;
     let name = parts.next()?;
@@ -836,10 +848,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 "/* POKI_ANDROID_AUTH_STATE_BEGIN */",
                 "/* POKI_ANDROID_AUTH_STATE_END */",
             ),
-            (
-                "/* POKI_WOU_AUTH_BEGIN */",
-                "/* POKI_WOU_AUTH_END */",
-            ),
+            ("/* POKI_WOU_AUTH_BEGIN */", "/* POKI_WOU_AUTH_END */"),
         ] {
             html = strip_marked_section(&html, begin, end)?;
         }
@@ -899,12 +908,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.hud.js",
         ]
     };
-    let mut menu_js = read_shell_bundle(
-        &paths.shell,
-        "main_menu.js",
-        &menu_parts,
-    )?
-    .replace("</script>", "<\\/script>");
+    let mut menu_js = read_shell_bundle(&paths.shell, "main_menu.js", &menu_parts)?
+        .replace("</script>", "<\\/script>");
     if poki {
         menu_js = strip_marked_section(
             &menu_js,
@@ -1013,8 +1018,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
 }
 
 fn inline_webp(path: &Path) -> Result<String> {
-    let bytes = fs::read(path)
-        .with_context(|| format!("read critical loader asset {}", path.display()))?;
+    let bytes =
+        fs::read(path).with_context(|| format!("read critical loader asset {}", path.display()))?;
     Ok(format!(
         "data:image/webp;base64,{}",
         base64::engine::general_purpose::STANDARD.encode(bytes)
@@ -1052,8 +1057,14 @@ fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
     }
     fs::copy(paths.shell.join("loader.js"), out.join("loader.js"))?;
     fs::copy(paths.shell.join("sow-i18n.js"), out.join("sow-i18n.js"))?;
-    fs::copy(paths.shell.join("sow-dropdown.js"), out.join("sow-dropdown.js"))?;
-    fs::copy(paths.shell.join("sow-controls.css"), out.join("sow-controls.css"))?;
+    fs::copy(
+        paths.shell.join("sow-dropdown.js"),
+        out.join("sow-dropdown.js"),
+    )?;
+    fs::copy(
+        paths.shell.join("sow-controls.css"),
+        out.join("sow-controls.css"),
+    )?;
     copy_dir(&paths.shell.join("sdk"), &out.join("sdk"))?;
     Ok(())
 }
@@ -1078,7 +1089,10 @@ fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
         let source = fs::read_to_string(&path)
             .with_context(|| format!("read public page {}", path.display()))?;
         if source.matches(marker).count() != 1 {
-            bail!("public page {} must contain one site header marker", path.display());
+            bail!(
+                "public page {} must contain one site header marker",
+                path.display()
+            );
         }
         fs::write(&path, source.replace(marker, &header))?;
     }
@@ -1123,7 +1137,11 @@ fn placeholder_names(value: &str) -> HashSet<String> {
     names
 }
 
-fn validate_web_node(path: &str, expected: &serde_json::Value, actual: &serde_json::Value) -> Result<()> {
+fn validate_web_node(
+    path: &str,
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+) -> Result<()> {
     match (expected, actual) {
         (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => {
             for (key, expected_value) in expected {
@@ -1185,12 +1203,15 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         .map(|(_, code, _, _)| locale_folder(code))
         .collect::<HashSet<_>>();
     let mut found = HashSet::new();
-    for entry in fs::read_dir(&strings_root)
-        .with_context(|| format!("read {}", strings_root.display()))?
+    for entry in
+        fs::read_dir(&strings_root).with_context(|| format!("read {}", strings_root.display()))?
     {
         let entry = entry?;
         if !entry.file_type()?.is_dir() {
-            bail!("web locale entry is not a directory: {}", entry.path().display());
+            bail!(
+                "web locale entry is not a directory: {}",
+                entry.path().display()
+            );
         }
         let code = entry.file_name().to_string_lossy().into_owned();
         if !registered.contains(&code) {
@@ -1224,7 +1245,9 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
     for entry in walkdir::WalkDir::new(&source_root) {
         let entry = entry?;
         let path = entry.path();
-        if !entry.file_type().is_file() || path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+        if !entry.file_type().is_file()
+            || path.extension().and_then(|ext| ext.to_str()) != Some("rs")
+        {
             continue;
         }
         let source = fs::read_to_string(path)
@@ -1246,7 +1269,10 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
                 .with_context(|| format!("unterminated UiText key in {}", path.display()))?;
             let key = &value[..end];
             if web_catalog_value(&catalog, key).is_none() {
-                bail!("client source uses unknown localization key {key}: {}", path.display());
+                bail!(
+                    "client source uses unknown localization key {key}: {}",
+                    path.display()
+                );
             }
             let key_start = start + rest.len() - trimmed.len() + 1;
             offset = key_start + end;
@@ -1300,8 +1326,7 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
         if payload.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
             || payload.get("version").and_then(serde_json::Value::as_u64)
                 != Some(sow_i18n::WEB_CATALOG_VERSION as u64)
-            || payload.get("locale").and_then(serde_json::Value::as_str)
-                != Some(folder.as_str())
+            || payload.get("locale").and_then(serde_json::Value::as_str) != Some(folder.as_str())
         {
             bail!("exported web catalog metadata is invalid for {code}");
         }
@@ -1322,15 +1347,36 @@ fn validate_campaign_assets(paths: &Paths) -> Result<()> {
     let mut triggers = HashMap::new();
     for entry in fs::read_dir(&dir).with_context(|| format!("read {}", dir.display()))? {
         let path = entry?.path();
-        let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
         if let Some(id) = name.strip_suffix(".triggers.json") {
             triggers.insert(id.to_string(), path);
         } else if let Some(id) = name.strip_suffix(".json") {
             rosters.insert(id.to_string(), path);
         }
     }
-    let trigger_types = ["territory", "kills", "defeated", "contact", "attack", "troops", "building", "fleet", "nuke", "elapsed"];
-    let action_types = ["show_dialog", "set_objective", "emote", "pause", "resume", "set_flag"];
+    let trigger_types = [
+        "territory",
+        "kills",
+        "defeated",
+        "contact",
+        "attack",
+        "troops",
+        "building",
+        "fleet",
+        "nuke",
+        "elapsed",
+    ];
+    let action_types = [
+        "show_dialog",
+        "set_objective",
+        "emote",
+        "pause",
+        "resume",
+        "set_flag",
+    ];
     for episode_id in triggers.keys() {
         if !rosters.contains_key(episode_id) {
             bail!("campaign triggers have no roster: {episode_id}");
@@ -1339,51 +1385,129 @@ fn validate_campaign_assets(paths: &Paths) -> Result<()> {
     for (episode_id, roster_path) in &rosters {
         let roster: serde_json::Value = serde_json::from_str(&fs::read_to_string(roster_path)?)
             .with_context(|| format!("parse {}", roster_path.display()))?;
-        let factions = roster.get("factions").and_then(serde_json::Value::as_array)
-            .filter(|factions| !factions.is_empty()).context("campaign roster has no factions")?;
-        let names = factions.iter().map(|faction| faction.get("name").and_then(serde_json::Value::as_str).unwrap_or_default()).collect::<HashSet<_>>();
+        let factions = roster
+            .get("factions")
+            .and_then(serde_json::Value::as_array)
+            .filter(|factions| !factions.is_empty())
+            .context("campaign roster has no factions")?;
+        let names = factions
+            .iter()
+            .map(|faction| {
+                faction
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+            })
+            .collect::<HashSet<_>>();
         if names.len() != factions.len() || names.iter().any(|name| name.is_empty()) {
             bail!("campaign roster has duplicate or empty faction names: {episode_id}");
         }
-        let trigger_path = triggers.get(episode_id).with_context(|| format!("missing triggers for {episode_id}"))?;
-        let definition: serde_json::Value = serde_json::from_str(&fs::read_to_string(trigger_path)?)
-            .with_context(|| format!("parse {}", trigger_path.display()))?;
+        let trigger_path = triggers
+            .get(episode_id)
+            .with_context(|| format!("missing triggers for {episode_id}"))?;
+        let definition: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(trigger_path)?)
+                .with_context(|| format!("parse {}", trigger_path.display()))?;
         let expected_episode_id = episode_id.strip_prefix("lady_").unwrap_or(episode_id);
-        if definition.get("version").and_then(serde_json::Value::as_u64) != Some(1)
-            || definition.get("episode_id").and_then(serde_json::Value::as_str) != Some(expected_episode_id) {
+        if definition
+            .get("version")
+            .and_then(serde_json::Value::as_u64)
+            != Some(1)
+            || definition
+                .get("episode_id")
+                .and_then(serde_json::Value::as_str)
+                != Some(expected_episode_id)
+        {
             bail!("campaign trigger header is invalid: {episode_id}");
         }
-        let settings = definition.get("settings").context("campaign has no settings")?;
-        if settings.get("buildings_enabled").and_then(serde_json::Value::as_bool).is_none()
-            || !settings.get("starting_troops").and_then(serde_json::Value::as_f64).is_some_and(|value| value.is_finite() && (1.0..=100_000.0).contains(&value)) {
+        let settings = definition
+            .get("settings")
+            .context("campaign has no settings")?;
+        if settings
+            .get("buildings_enabled")
+            .and_then(serde_json::Value::as_bool)
+            .is_none()
+            || !settings
+                .get("starting_troops")
+                .and_then(serde_json::Value::as_f64)
+                .is_some_and(|value| value.is_finite() && (1.0..=100_000.0).contains(&value))
+        {
             bail!("campaign settings are invalid: {episode_id}");
         }
-        let steps = definition.get("steps").and_then(serde_json::Value::as_array)
-            .filter(|steps| !steps.is_empty()).context("campaign has no steps")?;
+        let steps = definition
+            .get("steps")
+            .and_then(serde_json::Value::as_array)
+            .filter(|steps| !steps.is_empty())
+            .context("campaign has no steps")?;
         let mut ids = HashSet::new();
         for step in steps {
-            let id = step.get("id").and_then(serde_json::Value::as_str).context("campaign step has no id")?;
-            if !ids.insert(id) { bail!("duplicate campaign step id: {id}"); }
-            let trigger = step.get("trigger").context("campaign step has no trigger")?;
-            let trigger_type = trigger.get("type").and_then(serde_json::Value::as_str).context("campaign trigger has no type")?;
-            if !trigger_types.contains(&trigger_type) { bail!("unknown campaign trigger: {trigger_type}"); }
-            if ["territory", "kills", "attack", "troops", "building", "fleet", "nuke", "elapsed"].contains(&trigger_type)
-                && !trigger.get("value").and_then(serde_json::Value::as_f64).is_some_and(|value| value.is_finite()) {
+            let id = step
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .context("campaign step has no id")?;
+            if !ids.insert(id) {
+                bail!("duplicate campaign step id: {id}");
+            }
+            let trigger = step
+                .get("trigger")
+                .context("campaign step has no trigger")?;
+            let trigger_type = trigger
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .context("campaign trigger has no type")?;
+            if !trigger_types.contains(&trigger_type) {
+                bail!("unknown campaign trigger: {trigger_type}");
+            }
+            if [
+                "territory",
+                "kills",
+                "attack",
+                "troops",
+                "building",
+                "fleet",
+                "nuke",
+                "elapsed",
+            ]
+            .contains(&trigger_type)
+                && !trigger
+                    .get("value")
+                    .and_then(serde_json::Value::as_f64)
+                    .is_some_and(|value| value.is_finite())
+            {
                 bail!("campaign trigger value is invalid: {id}");
             }
             for key in ["title_key", "body_key", "hint_key"] {
-                if !step.get(key).and_then(serde_json::Value::as_str).is_some_and(|value| value.starts_with("tutorial.")) {
+                if !step
+                    .get(key)
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|value| value.starts_with("tutorial."))
+                {
                     bail!("campaign translation key is invalid: {id}.{key}");
                 }
             }
-            for target in [trigger.get("target").and_then(serde_json::Value::as_str), step.get("marker").and_then(|marker| marker.get("target")).and_then(serde_json::Value::as_str)]
-                .into_iter().flatten().filter(|target| *target != "player") {
-                if !names.contains(target) { bail!("campaign references unknown faction: {target}"); }
+            for target in [
+                trigger.get("target").and_then(serde_json::Value::as_str),
+                step.get("marker")
+                    .and_then(|marker| marker.get("target"))
+                    .and_then(serde_json::Value::as_str),
+            ]
+            .into_iter()
+            .flatten()
+            .filter(|target| *target != "player")
+            {
+                if !names.contains(target) {
+                    bail!("campaign references unknown faction: {target}");
+                }
             }
             for phase in ["on_enter", "on_complete"] {
                 if let Some(actions) = step.get(phase).and_then(serde_json::Value::as_array) {
                     for action in actions {
-                        if !action_types.contains(&action.get("type").and_then(serde_json::Value::as_str).unwrap_or_default()) {
+                        if !action_types.contains(
+                            &action
+                                .get("type")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default(),
+                        ) {
                             bail!("unknown campaign action in {id}");
                         }
                     }
@@ -1639,7 +1763,10 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     for entry in fs::read_dir(dir.join("maps"))? {
         let entry = entry?;
         if entry.file_type()?.is_dir() && entry.path().join("map.bin").exists() {
-            bail!("Poki bundle contains an uncompressed map: {}", entry.path().display());
+            bail!(
+                "Poki bundle contains an uncompressed map: {}",
+                entry.path().display()
+            );
         }
     }
     if dir.join("sdk/poki_portals.js").exists() {
@@ -1660,8 +1787,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         });
         let wasm = fs::read_dir(out)?.filter_map(Result::ok).find_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
-            (name.starts_with("sow_client_") && name.ends_with("_bg.wasm") && !name.ends_with(".br"))
-                .then_some((name, fs::read(entry.path()).ok()?))
+            (name.starts_with("sow_client_")
+                && name.ends_with("_bg.wasm")
+                && !name.ends_with(".br"))
+            .then_some((name, fs::read(entry.path()).ok()?))
         });
         js.zip(wasm).map(|(js, wasm)| {
             let js_br = fs::read(out.join(format!("{}.br", js.0))).ok();
@@ -1689,7 +1818,12 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     let (js, wasm) = previous_artifacts
         .as_ref()
         .map(|(js, wasm, _, _)| (js.0.clone(), wasm.0.clone()))
-        .unwrap_or_else(|| (format!("sow_client_{ts}.js"), format!("sow_client_{ts}_bg.wasm")));
+        .unwrap_or_else(|| {
+            (
+                format!("sow_client_{ts}.js"),
+                format!("sow_client_{ts}_bg.wasm"),
+            )
+        });
 
     let assets = out.join("assets");
     copy_dir(&paths.assets_shell, &assets.join("shell"))?;
@@ -1722,7 +1856,8 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     refresh_map_thumbnails(&maps, &paths.map_sources)?;
     let maps_cache_bust = thumbnail_cache_bust(&maps)?;
 
-    if let Some((previous_js, previous_wasm, previous_js_br, previous_wasm_br)) = previous_artifacts {
+    if let Some((previous_js, previous_wasm, previous_js_br, previous_wasm_br)) = previous_artifacts
+    {
         let js_name = previous_js.0;
         let wasm_name = previous_wasm.0;
         fs::write(out.join(&js_name), previous_js.1)?;
@@ -1821,7 +1956,11 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         let versioned = format!("{name}?v={}", &hash[..10]);
         for relative in PUBLIC_SITE_PAGES {
             let html = out.join(relative);
-            let prefix = if relative == "index.html" { "./" } else { "../" };
+            let prefix = if relative == "index.html" {
+                "./"
+            } else {
+                "../"
+            };
             let content = fs::read_to_string(&html)?;
             fs::write(
                 &html,
@@ -1868,7 +2007,10 @@ fn prepare_native_webroot(out: &Path) -> Result<()> {
     }
     let html = html
         .replace(maps, "window.SOW_MAPS_URL = \"../maps\";")
-        .replace(assets, "window.SOW_NATIVE = true; window.SOW_ASSETS_URL = \"../assets\";");
+        .replace(
+            assets,
+            "window.SOW_NATIVE = true; window.SOW_ASSETS_URL = \"../assets\";",
+        );
     fs::write(&index, html)?;
     Ok(())
 }
@@ -2013,15 +2155,11 @@ fn package_poki(
 
     copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
     copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
-    copy_dir(
-        &paths.root.join("sow-web/site/fonts"),
-        &out.join("fonts"),
-    )?;
+    copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     copy_shell(paths, out)?;
     optimize_poki_thumbnail(
         &paths.assets_shell.join("brand/app-icon.png"),
-        &out
-            .parent()
+        &out.parent()
             .context("Poki output directory has no parent")?
             .join("poki-thumbnail.png"),
     )?;
@@ -2086,15 +2224,18 @@ fn package_poki(
             );
             sdk = true;
         } else if line.trim() == "/* PORTAL_BOOT_SLOT */" {
-            lines.push(concat!(
-                "        window.SOW_ENABLE_PORTAL_ADS = true; ",
-                "window.SOW_PORTAL = \"poki\"; ",
-                "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
-                "window.SOW_MAPS_URL = \"./maps\"; ",
-                "window.SOW_ASSETS_URL = \"./assets\"; ",
-                "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\"; ",
-                "window.SOW_DISABLE_CHAT = true;"
-            ).to_string());
+            lines.push(
+                concat!(
+                    "        window.SOW_ENABLE_PORTAL_ADS = true; ",
+                    "window.SOW_PORTAL = \"poki\"; ",
+                    "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
+                    "window.SOW_MAPS_URL = \"./maps\"; ",
+                    "window.SOW_ASSETS_URL = \"./assets\"; ",
+                    "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\"; ",
+                    "window.SOW_DISABLE_CHAT = true;"
+                )
+                .to_string(),
+            );
             boot = true;
         } else {
             lines.push(line.to_string());
@@ -2206,9 +2347,9 @@ fn local_source_snapshot(paths: &Paths) -> Result<Vec<LocalFileStamp>> {
             let metadata = match entry.metadata() {
                 Ok(metadata) => metadata,
                 Err(error)
-                    if error
-                        .io_error()
-                        .map_or(false, |io_error| io_error.kind() == std::io::ErrorKind::NotFound) =>
+                    if error.io_error().map_or(false, |io_error| {
+                        io_error.kind() == std::io::ErrorKind::NotFound
+                    }) =>
                 {
                     continue;
                 }
@@ -2237,12 +2378,16 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
         return false;
     };
     let crate_name = crate_name.as_os_str().to_string_lossy();
-    let is_manifest = relative.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
-        matches!(name, "Cargo.toml" | "Cargo.lock" | "build.rs")
-    });
+    let is_manifest = relative
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| matches!(name, "Cargo.toml" | "Cargo.lock" | "build.rs"));
     is_manifest
         || (LOCAL_WASM_CRATES.iter().any(|name| crate_name == *name)
-            && relative.extension().and_then(|extension| extension.to_str()) == Some("rs"))
+            && relative
+                .extension()
+                .and_then(|extension| extension.to_str())
+                == Some("rs"))
 }
 
 fn local_change_requires_wasm(
@@ -2281,7 +2426,9 @@ fn local_watch_process(paths: &Paths, pid: u32) -> bool {
     let Ok(cmdline) = fs::read(proc_dir.join("cmdline")) else {
         return false;
     };
-    let mut args = cmdline.split(|byte| *byte == 0).filter(|arg| !arg.is_empty());
+    let mut args = cmdline
+        .split(|byte| *byte == 0)
+        .filter(|arg| !arg.is_empty());
     let Some(executable) = args.next() else {
         return false;
     };
@@ -2402,9 +2549,7 @@ fn start_local_server(port: u16, webroot: &str) -> Result<LocalPreviewServer> {
         ])
         .spawn()
         .context("start local web server (python3 is required)")?;
-    Ok(LocalPreviewServer {
-        child,
-    })
+    Ok(LocalPreviewServer { child })
 }
 
 fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
@@ -2437,7 +2582,10 @@ fn read_version(paths: &Paths) -> Result<String> {
 
 fn ensure_native_dependencies(native_root: &Path) -> Result<()> {
     require_file(&native_root.join("package.json"), "native package.json")?;
-    require_file(&native_root.join("package-lock.json"), "native package-lock.json")?;
+    require_file(
+        &native_root.join("package-lock.json"),
+        "native package-lock.json",
+    )?;
     let cli = native_root.join(if cfg!(windows) {
         "node_modules/.bin/tauri.cmd"
     } else {
@@ -2642,8 +2790,9 @@ fn shared_identity_secret_path() -> Result<PathBuf> {
     env::var_os("WOU_SOW_IDENTITY_SECRET_FILE")
         .map(PathBuf::from)
         .or_else(|| {
-            env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(".config/shadows-of-war/wou_sow_identity_secret"))
+            env::var_os("HOME").map(|home| {
+                PathBuf::from(home).join(".config/shadows-of-war/wou_sow_identity_secret")
+            })
         })
         .ok_or_else(|| anyhow::anyhow!("cannot determine the shared WOU-ID secret path"))
 }
@@ -2666,10 +2815,7 @@ fn ensure_shared_identity_secret() -> Result<()> {
     if let (Some(configured), Some(stored)) = (&configured, &stored)
         && configured != stored
     {
-        bail!(
-            "WOU_SOW_IDENTITY_SECRET differs from {}",
-            path.display()
-        );
+        bail!("WOU_SOW_IDENTITY_SECRET differs from {}", path.display());
     }
     let value = stored.or(configured).unwrap_or_else(|| {
         let mut bytes = [0u8; 32];
@@ -2683,8 +2829,7 @@ fn ensure_shared_identity_secret() -> Result<()> {
         let parent = path
             .parent()
             .context("shared WOU-ID secret path has no parent")?;
-        fs::create_dir_all(parent)
-            .with_context(|| format!("create {}", parent.display()))?;
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -2830,9 +2975,9 @@ mod tests {
             "fonts/noto-sans-cjk-regular.ttc",
             "wou-auth.js",
             "how-to-play/index.html",
-        "leaders/index.html",
-        "auth/callback/index.html",
-        "8d227b8f9e6140d39e3381a1829e1db3.txt",
+            "leaders/index.html",
+            "auth/callback/index.html",
+            "8d227b8f9e6140d39e3381a1829e1db3.txt",
             "privacy/index.html",
             "terms/index.html",
             "support/index.html",

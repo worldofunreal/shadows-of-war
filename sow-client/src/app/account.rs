@@ -155,7 +155,7 @@ impl SowApp {
     }
 
     pub(crate) fn fetch_cloud_progress(&mut self) {
-        if self.display_name_save_in_flight {
+        if self.display_name_save_request_id.is_some() {
             self.profile_refresh_pending = true;
             log::debug!(
                 "[identity] profile refresh queued behind rename request; account={}",
@@ -293,56 +293,58 @@ impl SowApp {
             log::warn!("Refusing to save an empty display name");
             return;
         }
-        if matches!(self.progress_provider.as_str(), "local" | "anonymous") {
-            self.pending_display_name = Some(display_name.clone());
-            self.ui.app.main_menu_state.player_name = display_name.clone();
-            crate::anonymous_identity::save_pending_display_name(
-                self.progress_account_id.as_deref(),
-                &display_name,
-            );
-        }
+        self.pending_display_name = Some(display_name.clone());
+        self.ui.app.main_menu_state.player_name = display_name.clone();
+        self.ui.app.main_menu_state.error_message = None;
+        crate::anonymous_identity::save_pending_display_name(
+            self.progress_account_id.as_deref(),
+            &display_name,
+        );
         if self.profile_request_in_flight {
-            self.queued_display_name = Some(display_name);
             log::debug!(
                 "[identity] rename queued behind profile request account={}",
                 account_hint(self.progress_account_id.as_deref())
             );
             return;
         }
-        if self.display_name_save_in_flight {
-            self.queued_display_name = Some(display_name);
+        if self.display_name_save_request_id.is_some() {
             log::debug!("[identity] newer rename queued behind in-flight rename");
             return;
         }
-        if self.progress_provider != "anonymous" {
-            if self.progress_provider == "local" && self.progress_account_id.is_none() {
-                log::debug!("Queued anonymous display-name update until the account is created");
-            } else {
-                log::debug!(
-                    "Skipping anonymous display-name save for provider {}",
-                    self.progress_provider
-                );
-            }
-            return;
-        }
         let Some(account_id) = self.progress_account_id.clone() else {
-            log::warn!("Cannot save display name before anonymous account is loaded");
+            log::debug!("Queued display-name update until the account is loaded");
             return;
         };
+        let identity = crate::store_portals::load_identity("Player");
+        let external_id = identity.external_id.clone().filter(|id| !id.is_empty());
+        let use_platform_identity = identity.provider != "self"
+            && external_id.is_some()
+            && identity
+                .auth_token
+                .as_ref()
+                .is_some_and(|token| !token.is_empty());
+        if !use_platform_identity && self.progress_provider != "anonymous" {
+            log::warn!(
+                "Cannot save display name without the current identity provider={}",
+                self.progress_provider
+            );
+            return;
+        }
         let request_id = self.next_identity_request_id();
         let account_hint_value = account_hint(Some(&account_id));
         let requested_name_len = display_name.chars().count();
-        self.display_name_save_in_flight = true;
         self.display_name_save_request_id = Some(request_id);
         let url = format!(
-            "{}/profile/anonymous/name",
+            "{}/profile/name",
             self.asset_config.database_base.trim_end_matches('/')
         );
         #[derive(serde::Serialize)]
         struct RenameRequest {
-            account_id: String,
+            account_id: Option<String>,
             display_name: String,
-            auth_secret: String,
+            auth_secret: Option<String>,
+            provider: Option<String>,
+            external_id: Option<String>,
         }
         #[derive(serde::Deserialize)]
         struct DbAccount {
@@ -350,31 +352,36 @@ impl SowApp {
             #[serde(default)]
             display_name: String,
         }
-        let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
-            log::error!(
-                "[identity] rename request id={request_id} missing account secret account={account_hint_value}"
-            );
-            self.display_name_save_in_flight = false;
-            let _ = self
-                .tasks
-                .db_tx
-                .send(crate::player_progress::DbEvent::DisplayNameSaveFailed {
-                    request_id,
-                    status: Some(401),
-                });
-            return;
+        let auth_secret = if use_platform_identity {
+            None
+        } else {
+            let Some(secret) = crate::anonymous_identity::load_account_secret() else {
+                log::error!(
+                    "[identity] rename request id={request_id} missing account secret account={account_hint_value}"
+                );
+                let _ =
+                    self.tasks
+                        .db_tx
+                        .send(crate::player_progress::DbEvent::DisplayNameSaveFailed {
+                            request_id,
+                            status: Some(401),
+                        });
+                return;
+            };
+            Some(secret)
         };
         let body = match serde_json::to_vec(&RenameRequest {
-            account_id,
+            account_id: Some(account_id),
             display_name,
             auth_secret,
+            provider: use_platform_identity.then(|| identity.provider.to_string()),
+            external_id,
         }) {
             Ok(body) => body,
             Err(error) => {
                 log::error!(
                     "[identity] rename request id={request_id} serialize_failed account={account_hint_value}: {error}"
                 );
-                self.display_name_save_in_flight = false;
                 let _ =
                     self.tasks
                         .db_tx
@@ -388,6 +395,9 @@ impl SowApp {
         let tx = self.tasks.db_tx.clone();
         let mut request = ehttp::Request::post(&url, body);
         request.headers.insert("Content-Type", "application/json");
+        if use_platform_identity {
+            Self::apply_platform_auth(&mut request);
+        }
         request
             .headers
             .insert("X-SOW-Identity-Request", request_id.to_string());
@@ -398,7 +408,9 @@ impl SowApp {
             Ok(response) if response.ok => {
                 match serde_json::from_slice::<DbAccount>(&response.bytes) {
                     Ok(account) => {
-                        crate::anonymous_identity::save_account_id(&account.account_id);
+                        if !use_platform_identity {
+                            crate::anonymous_identity::save_account_id(&account.account_id);
+                        }
                         log::info!(
                             "[identity] rename request id={request_id} ack account={} name_len={}",
                             account_hint(Some(&account.account_id)),
@@ -464,20 +476,39 @@ impl SowApp {
         } else {
             self.progress.merge_boot_profile(cloud);
         }
-        self.progress_account_id = Some(account_id);
+        if self
+            .progress_account_id
+            .as_deref()
+            .is_some_and(|current| current != account_id)
+        {
+            self.pending_display_name = None;
+            crate::anonymous_identity::clear_pending_display_name();
+        }
+        self.progress_account_id = Some(account_id.clone());
         self.progress_provider = provider;
-        if self.progress_provider == "anonymous" {
-            let pending_display_name = self.pending_display_name.take();
-            let queued_display_name = self.queued_display_name.take();
-            let pending_display_name = queued_display_name.or(pending_display_name);
-            self.confirmed_display_name = Some(display_name.clone());
-            self.ui.app.main_menu_state.player_name = pending_display_name
-                .clone()
-                .unwrap_or_else(|| display_name.clone());
-            self.ui.app.main_menu_state.name_locked = false;
-            if let Some(pending_display_name) = pending_display_name {
-                self.save_display_name(pending_display_name);
+        if self.pending_display_name.is_none() {
+            if let Some((pending_account_id, pending_name)) =
+                crate::anonymous_identity::load_pending_display_name()
+            {
+                if pending_account_id.is_none()
+                    || pending_account_id.as_deref() == Some(account_id.as_str())
+                {
+                    self.pending_display_name = Some(pending_name);
+                } else {
+                    crate::anonymous_identity::clear_pending_display_name();
+                }
             }
+        }
+        if self.pending_display_name.as_deref() == Some(display_name.as_str()) {
+            self.pending_display_name = None;
+            crate::anonymous_identity::clear_pending_display_name();
+        }
+        self.ui.app.main_menu_state.player_name =
+            self.pending_display_name.clone().unwrap_or(display_name);
+        if let Some(pending_display_name) = self.pending_display_name.clone()
+            && self.display_name_save_request_id.is_none()
+        {
+            self.save_display_name(pending_display_name);
         }
         if !self.progress.has_history() && portal.has_history() {
             self.progress = portal;
@@ -520,10 +551,7 @@ impl SowApp {
                 Some(crate::ui::UiText::new("profile.loading_profile"));
             return;
         };
-        fields.insert(
-            "account_id".into(),
-            serde_json::Value::String(account_id),
-        );
+        fields.insert("account_id".into(), serde_json::Value::String(account_id));
         if self.progress_provider == "anonymous" {
             let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
                 self.ui.app.main_menu_state.error_message =
@@ -710,22 +738,18 @@ impl SowApp {
                 }
                 match serde_json::from_slice::<MatchHistoryPage>(&response.bytes) {
                     Ok(page) => {
-                        let _ = tx.send(
-                            crate::player_progress::DbEvent::ProfileHistoryLoaded {
-                                account_id,
-                                items: page.items,
-                                next_cursor: page.next_cursor,
-                            },
-                        );
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileHistoryLoaded {
+                            account_id,
+                            items: page.items,
+                            next_cursor: page.next_cursor,
+                        });
                     }
                     Err(error) => {
                         log::error!("[profile] history response parse failed: {error}");
-                        let _ = tx.send(
-                            crate::player_progress::DbEvent::ProfileOperationFailed {
-                                account_id: Some(account_id),
-                                operation: "match history".into(),
-                            },
-                        );
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                            account_id: Some(account_id),
+                            operation: "match history".into(),
+                        });
                     }
                 }
             }
@@ -734,21 +758,17 @@ impl SowApp {
                     "[profile] history request failed status={}",
                     response.status
                 );
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: Some(account_id),
-                        operation: "match history".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: Some(account_id),
+                    operation: "match history".into(),
+                });
             }
             Err(error) => {
                 log::error!("[profile] history request failed: {error}");
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: Some(account_id),
-                        operation: "match history".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: Some(account_id),
+                    operation: "match history".into(),
+                });
             }
         });
     }
@@ -788,21 +808,17 @@ impl SowApp {
                 }
                 match serde_json::from_slice::<RatingsResponse>(&response.bytes) {
                     Ok(payload) => {
-                        let _ = tx.send(
-                            crate::player_progress::DbEvent::ProfileRatingsLoaded {
-                                account_id,
-                                items: payload.items,
-                            },
-                        );
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileRatingsLoaded {
+                            account_id,
+                            items: payload.items,
+                        });
                     }
                     Err(error) => {
                         log::error!("[profile] ratings response parse failed: {error}");
-                        let _ = tx.send(
-                            crate::player_progress::DbEvent::ProfileOperationFailed {
-                                account_id: Some(account_id),
-                                operation: "ranked records".into(),
-                            },
-                        );
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                            account_id: Some(account_id),
+                            operation: "ranked records".into(),
+                        });
                     }
                 }
             }
@@ -811,21 +827,17 @@ impl SowApp {
                     "[profile] ratings request failed status={}",
                     response.status
                 );
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: Some(account_id),
-                        operation: "ranked records".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: Some(account_id),
+                    operation: "ranked records".into(),
+                });
             }
             Err(error) => {
                 log::error!("[profile] ratings request failed: {error}");
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: Some(account_id),
-                        operation: "ranked records".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: Some(account_id),
+                    operation: "ranked records".into(),
+                });
             }
         });
     }
@@ -853,40 +865,33 @@ impl SowApp {
                 }
                 match serde_json::from_slice::<SearchResponse>(&response.bytes) {
                     Ok(payload) => {
-                        let _ =
-                            tx.send(crate::player_progress::DbEvent::ProfileSearchLoaded {
-                                query,
-                                items: payload.items,
-                            });
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileSearchLoaded {
+                            query,
+                            items: payload.items,
+                        });
                     }
                     Err(error) => {
                         log::error!("[profile] search response parse failed: {error}");
-                        let _ = tx.send(
-                            crate::player_progress::DbEvent::ProfileOperationFailed {
-                                account_id: None,
-                                operation: "profile search".into(),
-                            },
-                        );
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                            account_id: None,
+                            operation: "profile search".into(),
+                        });
                     }
                 }
             }
             Ok(response) => {
                 log::error!("[profile] search request failed status={}", response.status);
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: None,
-                        operation: "profile search".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: None,
+                    operation: "profile search".into(),
+                });
             }
             Err(error) => {
                 log::error!("[profile] search request failed: {error}");
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: None,
-                        operation: "profile search".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: None,
+                    operation: "profile search".into(),
+                });
             }
         });
     }
@@ -917,12 +922,10 @@ impl SowApp {
                     }
                     Err(error) => {
                         log::error!("[profile] match detail response parse failed: {error}");
-                        let _ = tx.send(
-                            crate::player_progress::DbEvent::ProfileOperationFailed {
-                                account_id: None,
-                                operation: "match detail".into(),
-                            },
-                        );
+                        let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                            account_id: None,
+                            operation: "match detail".into(),
+                        });
                     }
                 }
             }
@@ -931,21 +934,17 @@ impl SowApp {
                     "[profile] match detail request failed status={}",
                     response.status
                 );
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: None,
-                        operation: "match detail".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: None,
+                    operation: "match detail".into(),
+                });
             }
             Err(error) => {
                 log::error!("[profile] match detail request failed: {error}");
-                let _ = tx.send(
-                    crate::player_progress::DbEvent::ProfileOperationFailed {
-                        account_id: None,
-                        operation: "match detail".into(),
-                    },
-                );
+                let _ = tx.send(crate::player_progress::DbEvent::ProfileOperationFailed {
+                    account_id: None,
+                    operation: "match detail".into(),
+                });
             }
         });
     }
@@ -990,9 +989,9 @@ impl SowApp {
             .insert("X-SOW-Identity-Request", request_id.to_string());
         ehttp::fetch(request, move |result| match result {
             Ok(response) if response.ok => {
-            #[derive(serde::Deserialize)]
-            struct DbAccount {
-                account_id: String,
+                #[derive(serde::Deserialize)]
+                struct DbAccount {
+                    account_id: String,
                     #[serde(default)]
                     display_name: String,
                     profile: crate::player_progress::PlayerProgress,

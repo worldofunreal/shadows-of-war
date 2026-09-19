@@ -52,7 +52,6 @@ impl SowApp {
                         start_time: web_time::Instant::now(),
                         max_intensity: 1.0,
                     });
-
             }
             _ => {}
         }

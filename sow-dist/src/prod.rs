@@ -462,9 +462,8 @@ fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &s
     .find(|path| path.is_file())
     .context("Android output metadata not found after release build")?;
     require_file(&metadata_path, "Android output metadata")?;
-    let release_build_config = project.join(
-        "app/build/generated/source/buildConfig/release/com/shadowsofwar/BuildConfig.java",
-    );
+    let release_build_config = project
+        .join("app/build/generated/source/buildConfig/release/com/shadowsofwar/BuildConfig.java");
     let build_config = fs::read_to_string(&release_build_config)
         .with_context(|| format!("read {}", release_build_config.display()))?;
     if !build_config.contains(&format!("SOW_SOURCE_SHA = \"{source_sha}\""))
@@ -726,18 +725,16 @@ fn validate_android_release_inputs(paths: &Paths) -> Result<()> {
         .context("assetlinks.json must contain an array")?;
     for package in ["com.shadowsofwar", "com.shadowsofwar.debug"] {
         let found = statements.iter().any(|statement| {
-                statement
-                    .get("relation")
-                    .and_then(serde_json::Value::as_array)
-                    .is_some_and(|relations| {
-                        relations.iter().any(|relation| {
-                            relation.as_str()
-                                == Some("delegate_permission/common.handle_all_urls")
-                        }) && relations.iter().any(|relation| {
-                            relation.as_str()
-                                == Some("delegate_permission/common.use_as_origin")
-                        })
+            statement
+                .get("relation")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|relations| {
+                    relations.iter().any(|relation| {
+                        relation.as_str() == Some("delegate_permission/common.handle_all_urls")
+                    }) && relations.iter().any(|relation| {
+                        relation.as_str() == Some("delegate_permission/common.use_as_origin")
                     })
+                })
                 && statement
                     .get("target")
                     .and_then(|target| target.get("namespace"))
@@ -1927,9 +1924,9 @@ fn relay_boot_git_remote(config: &Config) -> Result<Option<String>> {
             "sudo journalctl -u sow-relay@0.service --no-pager -n 8000 2>/dev/null | grep '\\[BOOT\\] git=' | tail -1",
         ],
     )?;
-    Ok(boot.split_whitespace().find_map(|part| {
-        part.strip_prefix("git=").map(ToString::to_string)
-    }))
+    Ok(boot
+        .split_whitespace()
+        .find_map(|part| part.strip_prefix("git=").map(ToString::to_string)))
 }
 
 fn remote_plan(config: &Config, release: &Release) -> Result<ComponentPlan> {

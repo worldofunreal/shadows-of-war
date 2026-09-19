@@ -1,10 +1,8 @@
 use std::num::NonZero;
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
-use rodio::source::Source;
-
-use super::engine::{SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial};
+use super::engine::{AudioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial};
 use super::tone::{note_envelope, sweep_envelope, warm_at};
 use crate::{BuildingSoundKind, SpatialSoundParams};
 
@@ -131,7 +129,7 @@ impl Iterator for BuildingPlacementSource {
     }
 }
 
-impl Source for BuildingPlacementSource {
+impl AudioSource for BuildingPlacementSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -192,7 +190,7 @@ impl Iterator for BuildingCompletionSource {
     }
 }
 
-impl Source for BuildingCompletionSource {
+impl AudioSource for BuildingCompletionSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -249,7 +247,7 @@ impl Iterator for NukeLaunchSource {
     }
 }
 
-impl Source for NukeLaunchSource {
+impl AudioSource for NukeLaunchSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -315,7 +313,7 @@ impl Iterator for NukeImpactSource {
     }
 }
 
-impl Source for NukeImpactSource {
+impl AudioSource for NukeImpactSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }
@@ -382,7 +380,7 @@ impl Iterator for BunkerDefenseSource {
     }
 }
 
-impl Source for BunkerDefenseSource {
+impl AudioSource for BunkerDefenseSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }

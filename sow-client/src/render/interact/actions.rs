@@ -1,6 +1,6 @@
+use crate::UiAction;
 use crate::app::SowApp;
 use crate::spawn_sow_client_connect;
-use crate::UiAction;
 
 impl SowApp {
     pub(crate) fn process_ui_actions(&mut self, action: Option<crate::UiAction>) {
@@ -169,7 +169,8 @@ impl SowApp {
                         .app
                         .main_menu_state
                         .open_route(crate::ui::main_menu::MainMenuRoute::Profile);
-                    self.ui.app.main_menu_state.profile.account_id = self.profile_account_id.clone();
+                    self.ui.app.main_menu_state.profile.account_id =
+                        self.profile_account_id.clone();
                     self.ui.app.main_menu_state.profile.error = None;
                     self.ui.app.main_menu_state.profile.view = None;
                     self.ui.app.main_menu_state.profile.history.clear();

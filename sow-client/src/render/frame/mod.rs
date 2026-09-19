@@ -90,9 +90,11 @@ impl SowApp {
                                     if at_end {
                                         let dst_x = (prev_proj.dst_tile % self.sim.map_w) as f32;
                                         let dst_y = (prev_proj.dst_tile / self.sim.map_w) as f32;
-                                        self.ui
-                                            .detonation_scratch
-                                            .push((dst_x, dst_y, prev_proj.kind));
+                                        self.ui.detonation_scratch.push((
+                                            dst_x,
+                                            dst_y,
+                                            prev_proj.kind,
+                                        ));
                                     }
                                 }
                             }

@@ -24,6 +24,8 @@
     var leaderboardRenderKey = "";
     var lastLeaderboardPlayers = [];
     var inboxRenderKey = "";
+    var mapMenuView = "root";
+    var mapMenuStateKey = "";
 
     var EMOJIS = [
         "😀", "😎", "😏", "😂", "🤣", "😋", "😉", "😜", "😍", "🥰", "🥳", "🥺", "😇", "🤩", "👍",
@@ -366,14 +368,139 @@
         spawn: { icon: "🌱", key: "hud.map_action_deploy" },
         attack: { icon: "⚔", key: "hud.map_action_attack" },
         fleet: { icon: "⛵", key: "hud.map_action_fleet" },
-        transfer: { icon: "📦", key: "hud.map_action_transfer" },
+        transfer: { icon: "⚖️", key: "hud.map_action_transfer" },
         alliance: { icon: "🤝", key: "hud.map_action_alliance" },
         build_city: { icon: "🏛️", key: "hud.map_action_city" },
         build_factory: { icon: "🏭", key: "hud.map_action_factory" },
         build_port: { icon: "⚓", key: "hud.map_action_port" },
         build_bunker: { icon: "🛡️", key: "hud.map_action_bunker" },
-        nuke: { icon: "🚀", key: "hud.map_action_nuke" }
+        nuke: { icon: "🚀", key: "hud.map_action_nuke" },
+        upgrade_tile: { icon: "✦", text: "Upgrade tile" },
+        upgrade_arsenal: { icon: "🚀", text: "Arsenal District" },
+        upgrade_port: { icon: "⚓", text: "Port District" },
+        upgrade_foundry: { icon: "🏭", text: "Foundry District" },
+        build_warship: { icon: "🚢", text: "Warship" },
+        build_trade_ship: { icon: "⛴️", text: "Trade Ship" }
     };
+
+    var buildMenuActions = {
+        build_city: true,
+        build_factory: true,
+        build_port: true,
+        build_bunker: true,
+        upgrade_tile: true,
+        upgrade_arsenal: true,
+        upgrade_port: true,
+        upgrade_foundry: true,
+        build_warship: true,
+        build_trade_ship: true
+    };
+
+    function mapLabel(action) {
+        var label = mapActionLabels[action] || { icon: "•", text: action };
+        return label.key ? SOW_t(label.key) : label.text;
+    }
+
+    function mapItems(mapMenu) {
+        var actions = Array.isArray(mapMenu.actions) ? mapMenu.actions : [];
+        var supplied = Array.isArray(mapMenu.items) ? mapMenu.items : [];
+        return actions.map(function (action) {
+            var item = supplied.find(function (candidate) {
+                return candidate && candidate.action === action;
+            });
+            return {
+                action: action,
+                cost: item && Number.isFinite(Number(item.cost)) ? Number(item.cost) : null,
+                level: item && Number.isFinite(Number(item.level)) ? Number(item.level) : null,
+                disabled: Boolean(item && item.disabled)
+            };
+        });
+    }
+
+    function mapActionButton(item, className, withDetails) {
+        var label = mapActionLabels[item.action] || { icon: "•", text: item.action };
+        var button = document.createElement("button");
+        var action = item.action;
+        button.type = "button";
+        button.className = className;
+        button.dataset.mapAction = action;
+        button.setAttribute("role", "menuitem");
+        button.setAttribute("aria-label", mapLabel(action));
+        button.disabled = Boolean(item.disabled);
+        button.setAttribute("aria-disabled", String(Boolean(item.disabled)));
+        var title = document.createElement("span");
+        title.className = "sow-hud__map-action-title";
+        title.textContent = label.icon;
+        button.appendChild(title);
+        if (withDetails && (item.cost != null || item.level != null)) {
+            var details = document.createElement("small");
+            details.className = "sow-hud__map-action-meta";
+            var parts = [];
+            if (item.level != null) parts.push(item.level + "→" + (item.level + 1));
+            if (item.cost != null) parts.push(Math.round(item.cost) + "g");
+            details.textContent = parts.join(" · ");
+            button.appendChild(details);
+        }
+        return button;
+    }
+
+    function radialSectorGeometry(button, index, count) {
+        var span = 360 / count;
+        var gap = Math.min(7, span * 0.14);
+        var origin = -90 - span / 2;
+        var start = origin + index * span + gap / 2;
+        var end = origin + (index + 1) * span - gap / 2;
+        var outerRadius = 46;
+        var innerRadius = 17;
+        var points = [];
+        var steps = Math.max(4, Math.ceil((end - start) / 12));
+        var point = function (angle, radius) {
+            var radians = angle * Math.PI / 180;
+            return (50 + Math.cos(radians) * radius).toFixed(2) + "% "
+                + (50 + Math.sin(radians) * radius).toFixed(2) + "%";
+        };
+        for (var outer = 0; outer <= steps; outer += 1) {
+            points.push(point(start + (end - start) * outer / steps, outerRadius));
+        }
+        for (var inner = steps; inner >= 0; inner -= 1) {
+            points.push(point(start + (end - start) * inner / steps, innerRadius));
+        }
+        var polygon = "polygon(" + points.join(", ") + ")";
+        button.style.clipPath = polygon;
+        button.style.webkitClipPath = polygon;
+
+        var midpoint = origin + (index + 0.5) * span;
+        var midpointRadians = midpoint * Math.PI / 180;
+        var icon = button.querySelector(".sow-hud__map-action-title");
+        if (icon) {
+            icon.style.left = (50 + Math.cos(midpointRadians) * ((outerRadius + innerRadius) / 2)) + "%";
+            icon.style.top = (50 + Math.sin(midpointRadians) * ((outerRadius + innerRadius) / 2)) + "%";
+            icon.style.transform = "translate(-50%, -50%)";
+        }
+    }
+
+    function mapSector(radial, item, index, count, kind) {
+        var label = mapActionLabels[item.action] || { icon: "•", text: item.action };
+        var button = mapActionButton(item, "sow-hud__map-sector sow-hud__map-sector--" + kind, false);
+        button.querySelector(".sow-hud__map-action-title").textContent = label.icon;
+        radialSectorGeometry(button, index, count);
+        radial.appendChild(button);
+    }
+
+    function mapGroupSector(radial, items, index, count, group, icon, text) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "sow-hud__map-sector sow-hud__map-sector--" + group;
+        button.dataset.mapGroup = group;
+        button.setAttribute("role", "menuitem");
+        button.setAttribute("aria-label", text);
+        var title = document.createElement("span");
+        title.className = "sow-hud__map-action-title";
+        title.textContent = icon;
+        button.appendChild(title);
+        radialSectorGeometry(button, index, count);
+        radial.appendChild(button);
+    }
 
     function renderMapMenu(mapMenu) {
         if (!hudRefs || !hudRefs.mapMenu) return false;
@@ -382,30 +509,86 @@
         menu.classList.toggle("hidden", !open);
         if (!open) {
             menu.dataset.renderKey = "";
+            mapMenuStateKey = "";
+            mapMenuView = "root";
             return false;
         }
-        var actions = Array.isArray(mapMenu.actions) ? mapMenu.actions : [];
-        var renderKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + actions.join(",");
+        var items = mapItems(mapMenu);
+        var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + JSON.stringify(items);
+        if (!items.length) {
+            menu.replaceChildren();
+            menu.dataset.renderKey = "";
+            menu.classList.add("hidden");
+            mapMenuStateKey = stateKey;
+            mapMenuView = "root";
+            return false;
+        }
+        if (stateKey !== mapMenuStateKey) {
+            mapMenuStateKey = stateKey;
+            mapMenuView = "root";
+        }
+        var renderKey = stateKey + ":" + mapMenuView;
         if (menu.dataset.renderKey !== renderKey) {
             menu.replaceChildren();
-            actions.forEach(function (action) {
-                var label = mapActionLabels[action];
-                if (!label) return;
-                var button = document.createElement("button");
-                button.type = "button";
-                button.className = "sow-hud__map-action";
-                button.dataset.mapAction = action;
-                button.setAttribute("role", "menuitem");
-                button.textContent = label.icon + " " + SOW_t(label.key);
-                menu.appendChild(button);
-            });
-            var close = document.createElement("button");
-            close.type = "button";
-            close.className = "sow-hud__map-close";
-            close.dataset.mapClose = "true";
-            close.setAttribute("aria-label", SOW_t("hud.map_actions_close"));
-            close.textContent = "×";
-            menu.appendChild(close);
+            menu.classList.toggle("is-submenu", mapMenuView !== "root");
+            var buildItems = items.filter(function (item) { return buildMenuActions[item.action]; });
+            var nukeItems = items.filter(function (item) { return item.action === "nuke"; });
+            if (mapMenuView === "root") {
+                var radial = document.createElement("div");
+                radial.className = "sow-hud__map-radial";
+                var centerItem = items.find(function (item) { return item.action === "spawn" || item.action === "attack"; });
+                if (centerItem) {
+                    var center = mapActionButton(centerItem, "sow-hud__map-center " + (centerItem.action === "spawn" ? "is-spawn" : "is-attack"), false);
+                    center.querySelector(".sow-hud__map-action-title").textContent = "⚔";
+                    if (centerItem.action === "spawn") center.querySelector(".sow-hud__map-action-title").textContent = "🌱";
+                    radial.appendChild(center);
+                }
+                var transfer = items.find(function (item) { return item.action === "transfer"; });
+                var fleet = items.find(function (item) { return item.action === "fleet"; });
+                var alliance = items.find(function (item) { return item.action === "alliance"; });
+                var rootNodes = [];
+                if (transfer) rootNodes.push({ kind: "transfer", item: transfer });
+                if (fleet) rootNodes.push({ kind: "fleet", item: fleet });
+                if (alliance) rootNodes.push({ kind: "alliance", item: alliance });
+                if (buildItems.length) {
+                    rootNodes.push({ kind: "build", group: "build", icon: "🔧", label: "Build", items: buildItems });
+                } else if (nukeItems.length === 1) {
+                    rootNodes.push({ kind: "nuke", item: nukeItems[0] });
+                } else if (nukeItems.length > 1) {
+                    rootNodes.push({ kind: "nuke", group: "nuke", icon: "🚀", label: mapLabel("nuke"), items: nukeItems });
+                }
+                rootNodes.forEach(function (node, index) {
+                    if (node.item) {
+                        mapSector(radial, node.item, index, rootNodes.length, node.kind);
+                    } else {
+                        mapGroupSector(radial, node.items, index, rootNodes.length, node.group, node.icon, node.label);
+                    }
+                });
+                menu.appendChild(radial);
+            } else {
+                var panel = document.createElement("div");
+                panel.className = "sow-hud__map-submenu";
+                var header = document.createElement("div");
+                header.className = "sow-hud__map-submenu-header";
+                var heading = document.createElement("span");
+                heading.className = "sow-hud__map-submenu-icon";
+                heading.textContent = mapMenuView === "nuke" ? "🚀" : "🔧";
+                heading.setAttribute("aria-hidden", "true");
+                header.appendChild(heading);
+                var back = document.createElement("button");
+                back.type = "button";
+                back.className = "sow-hud__map-back";
+                back.dataset.mapBack = "true";
+                back.textContent = "←";
+                back.setAttribute("aria-label", "Back");
+                header.appendChild(back);
+                panel.appendChild(header);
+                var submenuItems = mapMenuView === "nuke" ? nukeItems : buildItems;
+                submenuItems.forEach(function (item) {
+                    panel.appendChild(mapActionButton(item, "sow-hud__map-action sow-hud__map-card", true));
+                });
+                menu.appendChild(panel);
+            }
             menu.dataset.renderKey = renderKey;
         }
         menu.dataset.session = String(mapMenu.session);
@@ -422,6 +605,7 @@
         menu.style.top = Math.min(Math.max(y, minY), maxY) + "px";
         return true;
     }
+
 
     function updateLeaderboard(players) {
         if (!hudRefs || !hudRefs.rows) return;
@@ -736,6 +920,11 @@
                 if (hudRefs.transferTarget) hudRefs.transferTarget.textContent = SOW_t("hud.target_player", {
                     name: hud.transfer.target_name || SOW_t("hud.player_name")
                 });
+                if (hudRefs.transfer.dataset.suggestedTarget !== String(hud.transfer.target_id)) {
+                    hudRefs.transfer.dataset.suggestedTarget = String(hud.transfer.target_id);
+                    if (hudRefs.transferGold) hudRefs.transferGold.value = String(Math.floor(hud.transfer.suggested_gold || 0));
+                    if (hudRefs.transferTroops) hudRefs.transferTroops.value = String(Math.floor(hud.transfer.suggested_troops || 0));
+                }
             }
         }
         if (hudRefs.betrayal) {
@@ -831,15 +1020,21 @@
     if (hudRoot) {
         hudRoot.addEventListener("click", function (event) {
             var mapButton = event.target.closest("[data-map-action]");
-            var mapClose = event.target.closest("[data-map-close]");
-            if (mapButton || mapClose) {
+            var mapGroup = event.target.closest("[data-map-group]");
+            var mapBack = event.target.closest("[data-map-back]");
+            if (mapButton || mapGroup || mapBack) {
                 event.preventDefault();
                 event.stopPropagation();
                 var mapMenu = hudRefs && hudRefs.mapMenu;
                 if (!mapMenu) return;
-                if (mapClose) {
-                    send("close_map_menu");
+                if (mapBack) {
+                    mapMenuView = "root";
+                    renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
+                } else if (mapGroup) {
+                    mapMenuView = mapGroup.dataset.mapGroup || "build";
+                    renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
                 } else {
+                    if (mapButton.disabled || mapButton.getAttribute("aria-disabled") === "true") return;
                     send("map_menu_action", {
                         session: Number(mapMenu.dataset.session),
                         tile_idx: Number(mapMenu.dataset.tileIdx),

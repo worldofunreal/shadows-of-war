@@ -1,9 +1,9 @@
 use std::num::NonZero;
-use std::time::Duration;
+use web_time::Duration;
 
-use rodio::source::Source;
-
-use super::engine::{ArpeggioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial};
+use super::engine::{
+    ArpeggioSource, AudioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial,
+};
 use super::music::{
     MusicSession, degrees_to_freqs, music_session, note_dur_samples, pick_base_degree, tile_hash,
 };
@@ -90,7 +90,7 @@ impl Iterator for PulseSource {
     }
 }
 
-impl Source for PulseSource {
+impl AudioSource for PulseSource {
     fn current_span_len(&self) -> Option<usize> {
         None
     }

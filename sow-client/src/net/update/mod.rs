@@ -1,6 +1,6 @@
+use crate::ClientPhase;
 use crate::app::SowApp;
 use crate::spawn_sow_client_connect;
-use crate::ClientPhase;
 use web_time::{Duration, Instant};
 
 mod messages;
@@ -168,9 +168,7 @@ impl SowApp {
                             (self.net.ws_connect_fail_backoff_ms.saturating_mul(2)).min(30_000);
                         self.net.ws_connect_not_before =
                             now + Duration::from_millis(self.net.ws_connect_fail_backoff_ms);
-                        crate::web_menu::wake_event_loop_after(
-                            self.net.ws_connect_fail_backoff_ms,
-                        );
+                        crate::web_menu::wake_event_loop_after(self.net.ws_connect_fail_backoff_ms);
                     }
                 }
             }
@@ -233,7 +231,7 @@ impl SowApp {
             );
 
             // Connect directly to the relay host (F-Stack endpoint with TLS).
-                            // Browser clients use wss:// — the relay terminates TLS.
+            // Browser clients use wss:// — the relay terminates TLS.
             if let Some(host) = relay_host {
                 self.net.ws_url = format!("wss://{}:{}/ws/", host, relay_port);
             } else if let Ok(mut url) = url::Url::parse(&self.net.ws_url) {

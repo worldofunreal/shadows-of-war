@@ -6,6 +6,10 @@ pub struct SettingsState {
 
 impl Default for SettingsState {
     fn default() -> Self {
-        Self { music_volume: 0.8, mute_all: false, reduced_motion: false }
+        Self {
+            music_volume: 0.8,
+            mute_all: false,
+            reduced_motion: false,
+        }
     }
 }

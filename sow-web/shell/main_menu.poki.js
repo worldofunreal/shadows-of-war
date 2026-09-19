@@ -87,24 +87,23 @@ function renderSettings() {
     var settings = state.settings || {};
     var vol = settings.music_volume == null ? 0.8 : settings.music_volume;
     var volPct = Math.round(vol * 100);
+    var accountControl = "<div class='sow-menu__settings-account'><strong class='sow-menu__account-value'>" + esc(SOW_t("menu.anonymous")) + "</strong></div>";
     return "" +
         "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
             "<section class='sow-menu__modal sow-menu__settings-modal'>" +
-                "<div class='sow-menu__modal-head'><div><p class='sow-menu__panel-label'>" + esc(SOW_t("menu.system_configuration")) + "</p><h2>" + esc(SOW_t("menu.settings")) + "</h2></div><button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div>" +
-                "<div class='sow-menu__form-grid'>" +
-                    "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + esc(SOW_t("menu.player_mode")) + "</span><strong>" + esc(SOW_t("menu.anonymous")) + "</strong></section>" +
-                    "<label class='sow-menu__form-field sow-menu__form-field--wide'><span>" + esc(SOW_t("menu.master_audio")) + "</span>" +
-                        SOW_renderDropdown({ key: "settings-mute", name: "mute_all", setting: "mute", value: settings.mute_all ? "off" : "on", options: [{ value: "on", label: SOW_t("menu.audio_enabled") }, { value: "off", label: SOW_t("menu.muted") }] }) +
-                    "</label>" +
-                    "<label class='sow-menu__form-field sow-menu__form-field--wide'><div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div><input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'></label>" +
-                    "<label class='sow-menu__form-field sow-menu__form-field--wide'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
+                "<div class='sow-menu__modal-head'><div><h2>" + esc(SOW_t("menu.settings")) + "</h2></div><button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div>" +
+                "<div class='sow-menu__settings-body'>" +
+                    accountControl +
+                    "<div class='sow-menu__settings-controls'>" +
+                        "<label class='sow-menu__form-field'><div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div><input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'></label>" +
+                    "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
                         SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [{ value: "full", label: SOW_t("menu.full") }, { value: "reduced", label: SOW_t("menu.reduced_motion") }] }) +
                     "</label>" +
-                    "<label class='sow-menu__form-field sow-menu__form-field--wide'><span>" + esc(SOW_t("menu.language")) + "</span>" +
+                    "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                         SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                     "</label>" +
+                    "</div>" +
                 "</div>" +
-                "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='toggle_settings'>" + esc(SOW_t("menu.done")) + " <span>✓</span></button></div>" +
             "</section>" +
         "</div>";
 }

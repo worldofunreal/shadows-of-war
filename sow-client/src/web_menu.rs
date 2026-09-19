@@ -14,9 +14,9 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use web_time::{Duration, Instant};
 
+use crate::UiAction;
 use crate::app::{HoverPointer, SowApp};
 use crate::campaign::CampaignId;
-use crate::UiAction;
 
 const LEADERBOARD_LIMIT: usize = 100;
 
@@ -51,7 +51,6 @@ enum WebMenuCommand {
         tile_idx: u32,
         action: crate::input::map_click::MapMenuAction,
     },
-    CloseMapMenu,
     CompleteCampaignEpisode {
         episode_id: String,
     },
@@ -418,10 +417,10 @@ impl SowApp {
                     crate::analytics::track("menu_custom_create");
                     match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
                         Ok(config) => self.process_ui_actions(Some(UiAction::CreateGame {
-                                config: Box::new(config),
-                                is_private,
-                                password,
-                            })),
+                            config: Box::new(config),
+                            is_private,
+                            password,
+                        })),
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid create-game config: {error}");
                             self.ui.app.main_menu_state.error_message =
@@ -432,8 +431,9 @@ impl SowApp {
                 WebMenuCommand::StartSinglePlayer { config } => {
                     crate::analytics::track("menu_single_player_start");
                     match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
-                        Ok(config) => self
-                            .process_ui_actions(Some(UiAction::StartSinglePlayer(Box::new(config)))),
+                        Ok(config) => self.process_ui_actions(Some(UiAction::StartSinglePlayer(
+                            Box::new(config),
+                        ))),
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid single-player config: {error}");
                             self.ui.app.main_menu_state.error_message =
@@ -461,7 +461,9 @@ impl SowApp {
                         serde_json::json!({ "episode": campaign.episode_id() }),
                     );
                     self.boot_campaign_pending = None;
-                    if let Err(error) = self.start_campaign_episode_from_web(campaign, roster, match_config) {
+                    if let Err(error) =
+                        self.start_campaign_episode_from_web(campaign, roster, match_config)
+                    {
                         log::warn!("[WEB MENU] invalid campaign episode: {error}");
                         self.ui.app.main_menu_state.error_message =
                             Some(crate::ui::UiText::new("tutorial.invalid"));
@@ -479,9 +481,6 @@ impl SowApp {
                 } => {
                     self.handle_map_menu_action(session, tile_idx, action);
                 }
-                WebMenuCommand::CloseMapMenu => {
-                    self.close_map_context_menu();
-                }
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
@@ -492,7 +491,9 @@ impl SowApp {
                         || !self.net.is_offline
                         || self.ui.tutorial_campaign != campaign
                     {
-                        log::warn!("[WEB MENU] campaign completion rejected outside active episode");
+                        log::warn!(
+                            "[WEB MENU] campaign completion rejected outside active episode"
+                        );
                         continue;
                     }
                     if campaign == CampaignId::Boudica {
@@ -500,9 +501,16 @@ impl SowApp {
                             self.save_local_progress();
                             self.persist_tutorial_completion();
                         }
-                    } else if self.progress.complete_episode(campaign.episode_id(), campaign.advisor()) {
+                    } else if self
+                        .progress
+                        .complete_episode(campaign.episode_id(), campaign.advisor())
+                    {
                         self.save_local_progress();
-                        crate::store_portals::measure("campaign", campaign.episode_id(), "complete");
+                        crate::store_portals::measure(
+                            "campaign",
+                            campaign.episode_id(),
+                            "complete",
+                        );
                     }
                     self.begin_exit_to_main_menu();
                 }
@@ -546,27 +554,27 @@ impl SowApp {
                     target_player_id,
                 } => {
                     self.process_ui_actions(Some(UiAction::KickPlayer {
-                            lobby_id,
-                            target_player_id,
-                        }));
+                        lobby_id,
+                        target_player_id,
+                    }));
                 }
                 WebMenuCommand::BanPlayer {
                     lobby_id,
                     target_player_id,
                 } => {
                     self.process_ui_actions(Some(UiAction::BanPlayer {
-                            lobby_id,
-                            target_player_id,
-                        }));
+                        lobby_id,
+                        target_player_id,
+                    }));
                 }
                 WebMenuCommand::MovePlayerTeam {
                     lobby_id,
                     target_player_id,
                 } => {
                     self.process_ui_actions(Some(UiAction::MovePlayerTeam {
-                            lobby_id,
-                            target_player_id,
-                        }));
+                        lobby_id,
+                        target_player_id,
+                    }));
                 }
                 WebMenuCommand::RefreshProfile => {
                     self.fetch_cloud_progress();
@@ -579,9 +587,19 @@ impl SowApp {
                 }
                 WebMenuCommand::SetMute { value } => {
                     self.ui.app.settings_state.mute_all = value;
+                    let volume = if value {
+                        0.0
+                    } else {
+                        self.ui.app.settings_state.music_volume
+                    };
+                    sow_audio::set_master_volume(volume);
                 }
                 WebMenuCommand::SetMusicVolume { value } => {
-                    self.ui.app.settings_state.music_volume = value.clamp(0.0, 1.0);
+                    let volume = value.clamp(0.0, 1.0);
+                    self.ui.app.settings_state.music_volume = volume;
+                    if !self.ui.app.settings_state.mute_all {
+                        sow_audio::set_master_volume(volume);
+                    }
                 }
                 WebMenuCommand::SetReducedMotion { value } => {
                     self.ui.app.settings_state.reduced_motion = value;
@@ -636,6 +654,8 @@ impl SowApp {
                 }
                 WebMenuCommand::OpenTransfer { target_player_id } => {
                     self.ui.app.hud_state.show_ask_panel = Some(target_player_id);
+                    self.ui.app.hud_state.ask_gold = 0.0;
+                    self.ui.app.hud_state.ask_troops = 0.0;
                     self.ui.app.hud_state.transfer_confirm_pending = false;
                 }
                 WebMenuCommand::CloseTransfer => {
@@ -752,25 +772,23 @@ impl SowApp {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
                         if self.ui.show_dev_sidebar && value.is_finite() {
-                            crate::theme::dev_config::DevConfig::update(
-                                |config| match field {
-                                    WebDevConfigField::Thickness => {
-                                        config.thickness = value.clamp(0.0, 1.0)
-                                    }
-                                    WebDevConfigField::Darkness => {
-                                        config.darkness = value.clamp(0.0, 1.0)
-                                    }
-                                    WebDevConfigField::ShoreThickness => {
-                                        config.shore_thickness = value.clamp(0.0, 1.0)
-                                    }
-                                    WebDevConfigField::ConquestDuration => {
-                                        config.conquest_duration = value.clamp(0.1, 10.0)
-                                    }
-                                    WebDevConfigField::TerritoryOpacity => {
-                                        config.territory_opacity = value.clamp(0.0, 1.0)
-                                    }
-                                },
-                            );
+                            crate::theme::dev_config::DevConfig::update(|config| match field {
+                                WebDevConfigField::Thickness => {
+                                    config.thickness = value.clamp(0.0, 1.0)
+                                }
+                                WebDevConfigField::Darkness => {
+                                    config.darkness = value.clamp(0.0, 1.0)
+                                }
+                                WebDevConfigField::ShoreThickness => {
+                                    config.shore_thickness = value.clamp(0.0, 1.0)
+                                }
+                                WebDevConfigField::ConquestDuration => {
+                                    config.conquest_duration = value.clamp(0.1, 10.0)
+                                }
+                                WebDevConfigField::TerritoryOpacity => {
+                                    config.territory_opacity = value.clamp(0.0, 1.0)
+                                }
+                            });
                         }
                     }
                     #[cfg(not(any(feature = "dev", debug_assertions)))]
@@ -833,8 +851,7 @@ fn hovered_tile_owner(app: &SowApp) -> (u32, u16) {
     if !app.input.camera_zoom.is_finite() || app.input.camera_zoom <= 0.0 {
         return (u32::MAX, 0);
     }
-    let Some((col, row)) = app.mouse_to_tile(app.input.last_mouse_x, app.input.last_mouse_y)
-    else {
+    let Some((col, row)) = app.mouse_to_tile(app.input.last_mouse_x, app.input.last_mouse_y) else {
         return (u32::MAX, 0);
     };
     let idx = (row * app.sim.map_w as i32 + col) as usize;
@@ -980,8 +997,16 @@ fn refresh_tutorial_observation(
     if !app.ui.tutorial_active || !app.net.is_offline {
         return;
     }
-    let attack_ids = snapshot.attacks.iter().map(|attack| attack.id).collect::<Vec<_>>();
-    let fleet_ids = snapshot.fleets.iter().map(|fleet| fleet.id).collect::<Vec<_>>();
+    let attack_ids = snapshot
+        .attacks
+        .iter()
+        .map(|attack| attack.id)
+        .collect::<Vec<_>>();
+    let fleet_ids = snapshot
+        .fleets
+        .iter()
+        .map(|fleet| fleet.id)
+        .collect::<Vec<_>>();
     let structure_ids = snapshot
         .buildings
         .iter()
@@ -1021,18 +1046,23 @@ fn refresh_tutorial_observation(
     observation.seen_nukes.extend(nuke_ids);
 }
 
-fn tutorial_payload(
-    app: &mut SowApp,
-    my_pid: u16,
-) -> serde_json::Value {
+fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     let Some(snapshot) = app.sim.current_snapshot.clone() else {
         return serde_json::json!({ "active": true, "episode_id": app.ui.tutorial_campaign.episode_id(), "tick": 0 });
     };
     refresh_tutorial_observation(app, &snapshot, my_pid);
     let observation = &app.sim.tutorial_observation;
     let me = snapshot.players.iter().find(|player| player.id == my_pid);
-    let defeated_names = observation.seen_defeated_names.iter().cloned().collect::<Vec<_>>();
-    let contacts = observation.seen_contacts.iter().copied().collect::<Vec<_>>();
+    let defeated_names = observation
+        .seen_defeated_names
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    let contacts = observation
+        .seen_contacts
+        .iter()
+        .copied()
+        .collect::<Vec<_>>();
     let players = snapshot
         .players
         .iter()
@@ -1150,12 +1180,7 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
         .into_iter()
         .enumerate()
         .map(|(index, player)| {
-            player_json(
-                player,
-                my_pid,
-                snapshot.total_land_tiles,
-                Some(index + 1),
-            )
+            player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1))
         })
         .collect::<Vec<_>>();
     if !has_my_player {
@@ -1331,10 +1356,21 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .map_context_menu
         .map(|menu| {
             let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
-            let actions = app
-                .map_menu_actions(menu.tile_idx)
+            let items = app
+                .map_menu_items(menu.tile_idx)
                 .into_iter()
-                .map(|action| action.name())
+                .map(|item| {
+                    serde_json::json!({
+                        "action": item.action.name(),
+                        "cost": item.cost,
+                        "level": item.level,
+                        "disabled": item.disabled,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let actions = items
+                .iter()
+                .filter_map(|item| item.get("action").and_then(|action| action.as_str()))
                 .collect::<Vec<_>>();
             serde_json::json!({
                 "open": true,
@@ -1343,6 +1379,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 "tile_idx": menu.tile_idx,
                 "session": menu.session,
                 "actions": actions,
+                "items": items,
             })
         })
         .unwrap_or(serde_json::Value::Null);
@@ -1464,6 +1501,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     "target_name": &target.name,
                     "target_alive": target.alive,
                     "confirm_pending": hud.transfer_confirm_pending,
+                    "suggested_gold": hud.ask_gold,
+                    "suggested_troops": hud.ask_troops,
                 });
             }
         }
@@ -1590,12 +1629,9 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let include_leaderboard = if app.ui.show_leaderboard {
             let now = Instant::now();
             let due = app.ui.leaderboard_publish_pending
-                || app
-                    .ui
-                    .leaderboard_refresh_at
-                    .map_or(true, |last| {
-                        now.duration_since(last) >= Duration::from_millis(250)
-                    });
+                || app.ui.leaderboard_refresh_at.map_or(true, |last| {
+                    now.duration_since(last) >= Duration::from_millis(250)
+                });
             if due {
                 app.ui.leaderboard_refresh_at = Some(now);
                 app.ui.leaderboard_publish_pending = false;
@@ -1663,6 +1699,10 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             .into_iter()
             .map(|leader| {
                 let slug = sow_data::commerce::leader_id(leader);
+                let perk_slug = match leader {
+                    sow_core::player::Leader::RichardTheLionheart => "richard".to_string(),
+                    _ => slug.replace('_', ""),
+                };
                 let free_rotation = store_catalog.free_leaders.iter().any(|id| id == slug);
                 let owned = progress.owned_leaders.contains(slug);
                 serde_json::json!({
@@ -1686,8 +1726,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                         }
                     ),
                     "perk_key": format!(
-                        "profile.leader_{}_description",
-                        slug.replace('_', "")
+                        "site.leader_{}_description",
+                        perk_slug
                     ),
                     "slug": slug,
                     "free_rotation": free_rotation,

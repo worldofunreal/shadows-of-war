@@ -39,7 +39,11 @@ impl SowApp {
                 serde_json::json!({ "route": "intro" }),
             );
             self.ui.app.main_menu_state.host_private_pending = false;
-            self.boot_campaign_pending = Some(crate::campaign::CampaignId::Boudica.episode_id().to_string());
+            self.boot_campaign_pending = Some(
+                crate::campaign::CampaignId::Boudica
+                    .episode_id()
+                    .to_string(),
+            );
             hide_web_loader();
             self.web_loader_hidden = true;
             crate::store_portals::gameplay_stop();
@@ -74,8 +78,11 @@ impl SowApp {
             | crate::campaign::CampaignId::SixSkyEp2
             | crate::campaign::CampaignId::SixSkyEp3 => (1000, 516),
         };
-        if player_spawn.0 >= map_width || player_spawn.1 >= map_height
-            || factions.iter().any(|faction| faction.x >= map_width || faction.y >= map_height)
+        if player_spawn.0 >= map_width
+            || player_spawn.1 >= map_height
+            || factions
+                .iter()
+                .any(|faction| faction.x >= map_width || faction.y >= map_height)
         {
             return Err("Campaign roster contains an out-of-bounds spawn.".into());
         }

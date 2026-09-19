@@ -41,7 +41,7 @@ Solicitar solamente las conexiones que el juego necesita:
 
 - SDK de Poki: `https://game-cdn.poki.com/scripts/v2/poki-sdk.js`.
 - Orquestador: `wss://shadowsofwar.io/ws/`.
-- API anónima: `https://shadowsofwar.io/api/profile/anonymous`, `https://shadowsofwar.io/api/profile/anonymous/name` y `https://shadowsofwar.io/api/profile/anonymous/tutorial-complete`.
+- API de perfil: `https://shadowsofwar.io/api/profile/anonymous`, `https://shadowsofwar.io/api/profile/name` y `https://shadowsofwar.io/api/profile/anonymous/tutorial-complete`.
 - Perfil público, si se mantiene la pantalla de perfil: `https://shadowsofwar.io/api/profiles/*`, `https://shadowsofwar.io/api/profiles/*/matches`, `https://shadowsofwar.io/api/profiles/*/seasons`, `https://shadowsofwar.io/api/profiles/search` y `https://shadowsofwar.io/api/matches/*`.
 - Partidas: el servidor puede entregar un `relay_host` y un puerto entre `25592` y `26500`; con la configuración actual el host público es `relay.shadowsofwar.io`, por lo que Poki debe aprobar `wss://relay.shadowsofwar.io:25592-26500/ws/` o la forma exacta que indique su panel.
 - Privacidad: `https://shadowsofwar.io/privacy/`, siempre abierta mediante `PokiSDK.openExternalLink()`.

@@ -21,8 +21,7 @@ impl SowApp {
         }
         let is_playing_or_loading = self.ui.app.phase == crate::ClientPhase::Playing
             || (self.ui.app.phase == crate::ClientPhase::Splash
-                && self.ui.app.splash_state.job
-                    == crate::ui::loading_screen::SplashJob::EnterGame);
+                && self.ui.app.splash_state.job == crate::ui::loading_screen::SplashJob::EnterGame);
 
         if is_playing_or_loading {
             if self.net.client.is_some() {
@@ -166,7 +165,6 @@ impl SowApp {
                             self.input.camera_zoom
                         );
                     }
-
                 }
             }
         }
@@ -258,22 +256,16 @@ impl SowApp {
                 .map(|player| player.name.as_str())
                 .unwrap_or("Ally");
             let text = match (prefix, transfer.gold > 0.0, transfer.troops > 0.0) {
-                ("received", true, true) => crate::ui::UiText::new(
-                    "hud.resource_received_both",
-                )
-                .with("gold", crate::utils::format_number(transfer.gold))
-                .with("troops", crate::utils::format_number(transfer.troops))
-                .with("name", name),
-                ("received", true, false) => crate::ui::UiText::new(
-                    "hud.resource_received_gold",
-                )
-                .with("gold", crate::utils::format_number(transfer.gold))
-                .with("name", name),
-                ("received", false, true) => crate::ui::UiText::new(
-                    "hud.resource_received_troops",
-                )
-                .with("troops", crate::utils::format_number(transfer.troops))
-                .with("name", name),
+                ("received", true, true) => crate::ui::UiText::new("hud.resource_received_both")
+                    .with("gold", crate::utils::format_number(transfer.gold))
+                    .with("troops", crate::utils::format_number(transfer.troops))
+                    .with("name", name),
+                ("received", true, false) => crate::ui::UiText::new("hud.resource_received_gold")
+                    .with("gold", crate::utils::format_number(transfer.gold))
+                    .with("name", name),
+                ("received", false, true) => crate::ui::UiText::new("hud.resource_received_troops")
+                    .with("troops", crate::utils::format_number(transfer.troops))
+                    .with("name", name),
                 ("sent", true, true) => crate::ui::UiText::new("hud.resource_sent_both")
                     .with("gold", crate::utils::format_number(transfer.gold))
                     .with("troops", crate::utils::format_number(transfer.troops))
@@ -290,10 +282,7 @@ impl SowApp {
 
             if transfer.receiver_id == my_id && transfer.gold > 0.0 {
                 self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: format!(
-                        "+{} Gold",
-                        crate::utils::format_number(transfer.gold)
-                    ),
+                    text: format!("+{} Gold", crate::utils::format_number(transfer.gold)),
                     world_x: notice_x,
                     world_y: notice_y,
                     start_time: notice_time,
@@ -303,10 +292,7 @@ impl SowApp {
             }
             if transfer.receiver_id == my_id && transfer.troops > 0.0 {
                 self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: format!(
-                        "+{} Troops",
-                        crate::utils::format_number(transfer.troops)
-                    ),
+                    text: format!("+{} Troops", crate::utils::format_number(transfer.troops)),
                     world_x: notice_x,
                     world_y: notice_y + 0.5,
                     start_time: notice_time,

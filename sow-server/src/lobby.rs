@@ -414,10 +414,9 @@ pub fn join_player(
                 new_lobby.id = req; // Override the ID to match the rematch ID
                 req
             }
-            None
-                if games
-                    .iter()
-                    .any(|g| g.id == req && g.kind == LobbyKind::Matchmaking) =>
+            None if games
+                .iter()
+                .any(|g| g.id == req && g.kind == LobbyKind::Matchmaking) =>
             {
                 log::info!(
                     "[JOIN] Requested Matchmaking lobby {} is no longer joinable for {}; falling back",

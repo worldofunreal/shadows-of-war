@@ -1,10 +1,10 @@
 use super::state::*;
+use crate::ClientApp;
 use crate::render::gpu::{MapRenderer, RenderContext};
 use crate::{EngineInitEvent, MapDownloadEvent, spawn_sow_client_connect};
 use blade_graphics as gpu;
 use sow_core::protocol::SimSnapshot;
 use sow_net::client::SowClient;
-use crate::ClientApp;
 use std::collections::HashMap;
 use web_time::{Duration, Instant};
 
@@ -65,7 +65,8 @@ impl SowApp {
             sow_core::water_components::WaterComponents,
             sow_core::protocol::ServerStartMessage,
         );
-        let (engine_init_tx_raw, engine_init_rx) = crossbeam_channel::unbounded::<EngineInitEvent>();
+        let (engine_init_tx_raw, engine_init_rx) =
+            crossbeam_channel::unbounded::<EngineInitEvent>();
         let engine_init_tx = WakeSender::new(engine_init_tx_raw);
         let pending_engine_init_data: Option<EngineInitData> = None;
         let engine_init_queued_msg: Option<sow_core::protocol::ServerStartMessage> = None;
@@ -79,10 +80,7 @@ impl SowApp {
             {
                 Some(name)
             }
-            Some(_) => {
-                crate::anonymous_identity::clear_pending_display_name();
-                None
-            }
+            Some(_) => None,
             None => None,
         };
         if let Some(name) = pending_display_name.as_deref() {

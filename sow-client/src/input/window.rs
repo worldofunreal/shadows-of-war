@@ -1,6 +1,6 @@
 use crate::app::{HoverPointer, MapPointerStart, SowApp};
-use crate::input::map_click::{is_quick_tap, TOUCH_HOLD_MS};
-use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound, ClientPhase};
+use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
+use crate::{ClientPhase, camera_zoom_lower_bound, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
 
 impl SowApp {
@@ -125,8 +125,8 @@ impl SowApp {
     }
 
     fn handle_key_event(&mut self, pressed: bool, key: winit::keyboard::PhysicalKey) {
-        let in_game = self.ui.app.phase == ClientPhase::Playing
-            && self.ui.app.hud_state.sync_state.is_none();
+        let in_game =
+            self.ui.app.phase == ClientPhase::Playing && self.ui.app.hud_state.sync_state.is_none();
         if !in_game || self.input.input_focused {
             self.input.key_pan_up = false;
             self.input.key_pan_down = false;
@@ -161,7 +161,10 @@ impl SowApp {
                 self.mouse_to_tile(self.input.last_mouse_x, self.input.last_mouse_y)
             {
                 let idx = (row * self.sim.map_w as i32 + col) as usize;
-                self.launch_fleet_from_tile(idx as u32);
+                self.launch_fleet_from_tile(
+                    idx as u32,
+                    (self.input.last_mouse_x, self.input.last_mouse_y),
+                );
             }
         }
 
@@ -185,9 +188,7 @@ impl SowApp {
             *selected = (*selected != Some(kind)).then_some(kind);
             self.ui.app.hud_state.selected_nuke_kind = None;
         }
-        if code == winit::keyboard::KeyCode::Digit0
-            || code == winit::keyboard::KeyCode::Numpad0
-        {
+        if code == winit::keyboard::KeyCode::Digit0 || code == winit::keyboard::KeyCode::Numpad0 {
             let kind = sow_core::game::NukeKind::AtomBomb;
             let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
             *selected = (*selected != Some(kind)).then_some(kind);
@@ -212,9 +213,12 @@ impl SowApp {
         let previous_mouse_y = self.input.last_mouse_y;
 
         let is_touch = matches!(button, winit::event::ButtonSource::Touch { .. });
-        let left = matches!(button, winit::event::ButtonSource::Mouse(MouseButton::Left))
-            || is_touch;
-        let right = matches!(button, winit::event::ButtonSource::Mouse(MouseButton::Right));
+        let left =
+            matches!(button, winit::event::ButtonSource::Mouse(MouseButton::Left)) || is_touch;
+        let right = matches!(
+            button,
+            winit::event::ButtonSource::Mouse(MouseButton::Right)
+        );
 
         if let winit::event::ButtonSource::Touch { finger_id, .. } = button {
             let id = finger_id.into_raw() as u64;
@@ -394,11 +398,7 @@ impl SowApp {
             MouseScrollDelta::PixelDelta(position) => {
                 let x = position.x as f32 / 50.0;
                 let y = position.y as f32 / 50.0;
-                if y.abs() >= x.abs() {
-                    y
-                } else {
-                    x
-                }
+                if y.abs() >= x.abs() { y } else { x }
             }
         };
         let zmin = camera_zoom_lower_bound(
@@ -408,8 +408,7 @@ impl SowApp {
             self.sim.map_h,
         );
         let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
-        self.input.target_zoom =
-            (self.input.target_zoom * (1.0 + scroll * 0.15)).clamp(zmin, zmax);
+        self.input.target_zoom = (self.input.target_zoom * (1.0 + scroll * 0.15)).clamp(zmin, zmax);
     }
 
     fn cancel_pointer_gesture(&mut self) {

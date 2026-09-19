@@ -1,11 +1,11 @@
-pub mod theme;
-pub mod utils;
+pub mod app;
 pub mod asset_loader;
 pub mod hud;
 pub mod loading_screen;
 pub mod main_menu;
 pub mod settings;
-pub mod app;
+pub mod theme;
+pub mod utils;
 
 pub use crate::ClientPhase;
 pub use app::ClientApp;
@@ -17,7 +17,12 @@ pub struct UiText {
 }
 
 impl UiText {
-    pub fn new(key: &'static str) -> Self { Self { key, values: Vec::new() } }
+    pub fn new(key: &'static str) -> Self {
+        Self {
+            key,
+            values: Vec::new(),
+        }
+    }
 
     pub fn with(mut self, key: &'static str, value: impl Into<String>) -> Self {
         self.values.push((key, value.into()));

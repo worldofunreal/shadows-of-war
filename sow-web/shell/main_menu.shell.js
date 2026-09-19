@@ -116,53 +116,58 @@
         var vol = settings.music_volume == null ? 0.8 : settings.music_volume;
         var volPct = Math.round(vol * 100);
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { platform: isAndroidTwa() ? "twa" : "web", linked: false, pending: false };
+        var session = typeof window.SOW_getWouSession === "function" ? window.SOW_getWouSession() : authSession();
+        var accountEmail = session && session.user && session.user.email ? String(session.user.email).trim() : "";
         var providers = (auth.linkedProviders || []).map(function (provider) {
             return String(provider).replace(/_/g, " ").toUpperCase();
         });
         var providerLabel = auth.platform === "twa" ? SOW_t("menu.google_play_games") :
             auth.provider === "crazygames" ? "CRAZYGAMES" :
-            providers.length ? "WOU-ID · " + providers[0] + (providers.length > 1 ? " +" + (providers.length - 1) : "") : "WOU-ID " + SOW_t("menu.account");
+            providers.join(" · ") || (auth.provider ? String(auth.provider).replace(/_/g, " ").toUpperCase() : "");
+        var accountDetail = auth.linked ? (accountEmail || providerLabel || SOW_t("menu.anonymous")) : SOW_t("menu.anonymous");
         var accountControl = auth.pending
-            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + esc(SOW_t("menu.google_play_games")) + "</span><strong class='sow-menu__account-pending'>" + esc(SOW_t("menu.connecting")) + "</strong></section>"
-            : auth.linked
-            ? "<section class='sow-menu__form-field sow-menu__form-field--wide sow-menu__account-row'><span>" + esc(SOW_t("menu.account")) + " · " + esc(providerLabel) + "</span>" + (auth.canSignOut ? "<button class='sow-menu__danger' type='button' data-command='sign_out'>" + esc(SOW_t("menu.sign_out")) + "</button>" : "") + "</section>"
-            : "";
+            ? "<div class='sow-menu__settings-account sow-menu__settings-account--pending'><strong class='sow-menu__account-pending'>" + esc(SOW_t("menu.connecting")) + "</strong></div>"
+            : "<div class='sow-menu__settings-account'><strong class='sow-menu__account-value'>" + esc(accountDetail) + "</strong></div>";
+        var signOutControl = "";
+        if (auth.canSignOut) {
+            signOutControl = signOutConfirmOpen
+                ? "<section class='sow-menu__settings-confirm' role='alertdialog' aria-label='" + esc(SOW_t("menu.sign_out")) + "'>" +
+                    "<strong>" + esc(SOW_t("menu.sign_out")) + "?</strong>" +
+                    "<div class='sow-menu__settings-confirm-actions'>" +
+                        "<button class='sow-menu__secondary' type='button' data-command='cancel_sign_out'>" + esc(SOW_t("lobbies.cancel")) + "</button>" +
+                        "<button class='sow-menu__danger' type='button' data-command='confirm_sign_out'>" + esc(SOW_t("menu.sign_out")) + "</button>" +
+                    "</div>" +
+                "</section>"
+                : "<button class='sow-menu__danger sow-menu__settings-signout' type='button' data-command='sign_out'>" + esc(SOW_t("menu.sign_out")) + "</button>";
+        }
         return "" +
             "<div class='sow-menu__overlay' data-menu-overlay='settings'>" +
                 "<section class='sow-menu__modal sow-menu__settings-modal'>" +
                     "<div class='sow-menu__modal-head'>" +
                         "<div>" +
-                            "<p class='sow-menu__panel-label'>" + esc(SOW_t("menu.system_configuration")) + "</p>" +
                             "<h2>" + esc(SOW_t("menu.settings")) + "</h2>" +
                         "</div>" +
                         "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button>" +
                     "</div>" +
-                    "<div class='sow-menu__form-grid'>" +
+                    "<div class='sow-menu__settings-body'>" +
                         accountControl +
-                        "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
-                            "<span>" + esc(SOW_t("menu.master_audio")) + "</span>" +
-                            SOW_renderDropdown({ key: "settings-mute", name: "mute_all", setting: "mute", value: settings.mute_all ? "off" : "on", options: [
-                                { value: "on", label: SOW_t("menu.audio_enabled") },
-                                { value: "off", label: SOW_t("menu.muted") }
-                            ] }) +
-                        "</label>" +
-                        "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
-                            "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
-                            "<input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'>" +
-                        "</label>" +
-                        "<label class='sow-menu__form-field sow-menu__form-field--wide'>" +
-                            "<span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
-                            SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
-                                { value: "full", label: SOW_t("menu.full") },
-                                { value: "reduced", label: SOW_t("menu.reduced_motion") }
-                            ] }) +
-                        "</label>" +
-                        "<label class='sow-menu__form-field sow-menu__form-field--wide'><span>" + esc(SOW_t("menu.language")) + "</span>" +
-                            SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
-                        "</label>" +
-                    "</div>" +
-                    "<div class='sow-menu__modal-actions'>" +
-                        "<button class='sow-menu__primary' type='button' data-command='toggle_settings'>" + esc(SOW_t("menu.done")) + " <span>✓</span></button>" +
+                        "<div class='sow-menu__settings-controls'>" +
+                            "<label class='sow-menu__form-field'>" +
+                                "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
+                                "<input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'>" +
+                            "</label>" +
+                            "<label class='sow-menu__form-field'>" +
+                                "<span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
+                                SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [
+                                    { value: "full", label: SOW_t("menu.full") },
+                                    { value: "reduced", label: SOW_t("menu.reduced_motion") }
+                                ] }) +
+                            "</label>" +
+                            "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
+                                SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
+                            "</label>" +
+                        "</div>" +
+                        (signOutControl ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>" : "") +
                     "</div>" +
                 "</section>" +
             "</div>";
@@ -575,10 +580,8 @@
             if (laurelsValue) laurelsValue.textContent = Math.max(0, Number(laurels) || 0);
         }
         var settings = state.settings || {};
-        var muteInput = root.querySelector("[data-setting='mute']");
         var musicInput = root.querySelector("[data-setting='music_volume']");
         var motionInput = root.querySelector("[data-setting='reduced_motion']");
-        if (muteInput && document.activeElement !== muteInput) muteInput.value = settings.mute_all ? "off" : "on";
         if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
         if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
         var musicValBadge = root.querySelector("[data-val-for='music_vol']");
@@ -595,6 +598,14 @@
     }
 
     root.addEventListener("click", function (event) {
+        var settingsOverlay = event.target.closest("[data-menu-overlay='settings']");
+        if (settingsOverlay && event.target === settingsOverlay) {
+            settingsOpen = false;
+            signOutConfirmOpen = false;
+            dropdownOpenKey = null;
+            render();
+            return;
+        }
         var target = event.target.closest("[data-command]");
         if (!target || !root.contains(target)) return;
         var command = target.dataset.command;
@@ -647,6 +658,7 @@
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
             settingsOpen = false;
+            signOutConfirmOpen = false;
             campaignOpen = false;
             passwordLobbyId = null;
             passwordDraft = "";
@@ -870,6 +882,7 @@
             dropdownOpenKey = null;
             tempSelectedLeader = state ? state.selected_leader : "Caesar";
             settingsOpen = false;
+            signOutConfirmOpen = false;
             render();
             return;
         }
@@ -993,6 +1006,7 @@
         }
         if (command === "toggle_settings") {
             settingsOpen = !settingsOpen;
+            if (!settingsOpen) signOutConfirmOpen = false;
             authModalOpen = false;
             render();
             return;
@@ -1024,6 +1038,7 @@
                 send(command);
             } else {
                 settingsOpen = false;
+                signOutConfirmOpen = false;
                 resetAuthFlow();
                 authModalOpen = true;
                 render();
@@ -1031,7 +1046,18 @@
             return;
         }
         if (command === "sign_out") {
-            if (isAndroidTwa()) send(command);
+            signOutConfirmOpen = true;
+            render();
+            return;
+        }
+        if (command === "cancel_sign_out") {
+            signOutConfirmOpen = false;
+            render();
+            return;
+        }
+        if (command === "confirm_sign_out") {
+            signOutConfirmOpen = false;
+            if (isAndroidTwa()) send("sign_out");
             else if (typeof window.SOW_signOutWou === "function") window.SOW_signOutWou();
             return;
         }
@@ -1191,6 +1217,19 @@
             event.preventDefault();
             var openKey = dropdownOpenKey;
             setDropdownOpen(openKey, false, root.querySelector("[data-control-dropdown][data-dropdown-key='" + openKey + "'] [data-role='dropdown-trigger']"));
+            return;
+        }
+        if (event.key === "Escape" && settingsOpen) {
+            event.preventDefault();
+            if (signOutConfirmOpen) {
+                signOutConfirmOpen = false;
+                render();
+                return;
+            }
+            settingsOpen = false;
+            signOutConfirmOpen = false;
+            dropdownOpenKey = null;
+            render();
             return;
         }
         if (event.key === "Escape" && profileMatchDetail) {
@@ -1367,7 +1406,6 @@
             return;
         }
         if (!input.dataset.setting) return;
-        if (input.dataset.setting === "mute") send("set_mute", { value: input.value === "off" });
         if (input.dataset.setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
     });

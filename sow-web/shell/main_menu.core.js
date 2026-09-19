@@ -21,6 +21,7 @@
     var authError = "";
     var authNotice = "";
     var settingsOpen = false;
+    var signOutConfirmOpen = false;
     var profileOpen = false;
     var profileAccountId = null;
     var profileTab = "overview";
@@ -130,7 +131,7 @@
         var found = leaders.find(function (leader) { return leader.id === id; });
         if (found) return found;
         return leaders[0] || {
-            id: "Caesar", name: "Caesar", civilization_key: "heroes.civilization_rome", perk_key: "profile.leader_caesar_description", slug: "caesar"
+            id: "Caesar", name: "Caesar", civilization_key: "heroes.civilization_rome", perk_key: "site.leader_caesar_description", slug: "caesar"
         };
     }
 

@@ -1,4 +1,4 @@
-use super::placement::{resolve_build_target_tile, PlacementQuery};
+use super::placement::{PlacementQuery, resolve_build_target_tile};
 use crate::app::{MapContextMenu, SowApp};
 use serde::Deserialize;
 
@@ -18,6 +18,12 @@ pub(crate) enum MapMenuAction {
     BuildPort,
     BuildBunker,
     Nuke,
+    UpgradeTile,
+    UpgradeArsenal,
+    UpgradePort,
+    UpgradeFoundry,
+    BuildWarship,
+    BuildTradeShip,
 }
 
 impl MapMenuAction {
@@ -33,8 +39,22 @@ impl MapMenuAction {
             Self::BuildPort => "build_port",
             Self::BuildBunker => "build_bunker",
             Self::Nuke => "nuke",
+            Self::UpgradeTile => "upgrade_tile",
+            Self::UpgradeArsenal => "upgrade_arsenal",
+            Self::UpgradePort => "upgrade_port",
+            Self::UpgradeFoundry => "upgrade_foundry",
+            Self::BuildWarship => "build_warship",
+            Self::BuildTradeShip => "build_trade_ship",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MapMenuItem {
+    pub action: MapMenuAction,
+    pub cost: Option<f64>,
+    pub level: Option<u8>,
+    pub disabled: bool,
 }
 
 pub(crate) fn is_quick_tap(elapsed_ms: u128, distance_sq: f64) -> bool {
@@ -49,6 +69,8 @@ struct MapTarget {
     is_allied: bool,
     is_teammate: bool,
     has_alliance_request: bool,
+    has_proposed_alliance: bool,
+    is_in_renewal_window: bool,
 }
 
 impl MapTarget {
@@ -96,7 +118,15 @@ impl MapTarget {
 
         let mut actions = Vec::new();
         if self.is_friendly() {
-            actions.push(MapMenuAction::Transfer);
+            if self.is_allied && self.is_land {
+                actions.push(MapMenuAction::Attack);
+            }
+            if self.is_allied {
+                actions.push(MapMenuAction::Transfer);
+            }
+            if !self.is_teammate {
+                actions.push(MapMenuAction::Fleet);
+            }
         } else {
             if self.is_land && can_attack {
                 actions.push(MapMenuAction::Attack);
@@ -126,13 +156,7 @@ impl SowApp {
             "Spectating in style! 😎",
         ];
         let message = MESSAGES[(x + y) as usize % MESSAGES.len()];
-        self.add_notice_at_screen(
-            message,
-            x,
-            y,
-            1500,
-            crate::rgb(203, 213, 225),
-        );
+        self.add_notice_at_screen(message, x, y, 1500, crate::rgb(203, 213, 225));
     }
 
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
@@ -143,9 +167,12 @@ impl SowApp {
         {
             return false;
         }
-        if !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
-        }) {
+        if !self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| matches!(snapshot.phase, sow_core::game::GamePhase::Playing))
+        {
             return false;
         }
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
@@ -195,9 +222,12 @@ impl SowApp {
         }
         self.input.selected_warships.clear();
 
-        if self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
-        }) {
+        if self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| matches!(snapshot.phase, sow_core::game::GamePhase::Playing))
+        {
             self.primary_target(tile_idx, (x, y));
         }
     }
@@ -215,6 +245,10 @@ impl SowApp {
             return;
         };
         let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
+        if self.map_menu_actions(tile_idx).is_empty() {
+            self.close_map_context_menu();
+            return;
+        }
         let session = self.input.map_context_menu_session.wrapping_add(1);
         self.input.map_context_menu_session = session;
         self.input.map_context_menu = Some(MapContextMenu {
@@ -236,10 +270,81 @@ impl SowApp {
         let spawning = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
             matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
         });
-        target.menu_actions(
+        let mut actions = target.menu_actions(
             spawning,
             target.is_land && self.can_attack(tile_idx, target.owner),
-        )
+        );
+        if target.owner != target.my_id || !target.is_land || spawning {
+            return actions;
+        }
+
+        actions.clear();
+
+        let building = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx));
+        match building {
+            Some(building) if !building.under_construction => match building.kind {
+                sow_core::game::BuildingKind::City => {
+                    for module in [
+                        sow_core::building::ModuleKind::Arsenal,
+                        sow_core::building::ModuleKind::Port,
+                        sow_core::building::ModuleKind::Foundry,
+                    ] {
+                        if self.city_module_is_available(building, module, tile_idx) {
+                            actions.push(match module {
+                                sow_core::building::ModuleKind::Arsenal => {
+                                    MapMenuAction::UpgradeArsenal
+                                }
+                                sow_core::building::ModuleKind::Port => MapMenuAction::UpgradePort,
+                                sow_core::building::ModuleKind::Foundry => {
+                                    MapMenuAction::UpgradeFoundry
+                                }
+                                _ => continue,
+                            });
+                        }
+                    }
+                    if building.modules.port > 0 {
+                        actions
+                            .extend([MapMenuAction::BuildWarship, MapMenuAction::BuildTradeShip]);
+                    }
+                }
+                sow_core::game::BuildingKind::Port => {
+                    actions.extend([MapMenuAction::BuildWarship, MapMenuAction::BuildTradeShip]);
+                }
+                _ => {}
+            },
+            Some(_) => {}
+            None => {
+                actions.extend([
+                    MapMenuAction::UpgradeTile,
+                    MapMenuAction::BuildCity,
+                    MapMenuAction::BuildFactory,
+                    MapMenuAction::BuildPort,
+                    MapMenuAction::BuildBunker,
+                ]);
+            }
+        }
+        actions
+    }
+
+    pub(crate) fn map_menu_items(&self, tile_idx: u32) -> Vec<MapMenuItem> {
+        self.map_menu_actions(tile_idx)
+            .into_iter()
+            .map(|action| {
+                let (cost, level) = self.map_menu_cost(action, tile_idx);
+                MapMenuItem {
+                    action,
+                    cost,
+                    level,
+                    disabled: cost.is_some_and(|value| {
+                        !value.is_finite() || self.ui.app.hud_state.gold < value
+                    }),
+                }
+            })
+            .collect()
     }
 
     pub(crate) fn handle_map_menu_action(
@@ -254,6 +359,9 @@ impl SowApp {
         if menu.session != session || menu.tile_idx != tile_idx {
             return;
         }
+        if !self.map_menu_actions(tile_idx).contains(&action) {
+            return;
+        }
         let anchor = (menu.x as f64, menu.y as f64);
 
         match action {
@@ -266,13 +374,13 @@ impl SowApp {
                 self.attack_from_tile(tile_idx, anchor);
             }
             MapMenuAction::Fleet => {
-                self.launch_fleet_from_tile(tile_idx);
+                self.launch_fleet_from_tile(tile_idx, anchor);
             }
             MapMenuAction::Transfer => {
                 self.open_transfer_from_tile(tile_idx);
             }
             MapMenuAction::Alliance => {
-                self.alliance_from_tile(tile_idx);
+                self.alliance_from_tile(tile_idx, anchor);
             }
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
@@ -291,6 +399,28 @@ impl SowApp {
             }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
+            }
+            MapMenuAction::UpgradeTile => {
+                self.upgrade_tile_at(tile_idx);
+            }
+            MapMenuAction::UpgradeArsenal
+            | MapMenuAction::UpgradePort
+            | MapMenuAction::UpgradeFoundry => {
+                let module = match action {
+                    MapMenuAction::UpgradeArsenal => sow_core::building::ModuleKind::Arsenal,
+                    MapMenuAction::UpgradePort => sow_core::building::ModuleKind::Port,
+                    MapMenuAction::UpgradeFoundry => sow_core::building::ModuleKind::Foundry,
+                    _ => unreachable!(),
+                };
+                self.upgrade_city_module_at(tile_idx, module);
+            }
+            MapMenuAction::BuildWarship | MapMenuAction::BuildTradeShip => {
+                let kind = match action {
+                    MapMenuAction::BuildWarship => sow_core::game::UnitType::Warship,
+                    MapMenuAction::BuildTradeShip => sow_core::game::UnitType::TradeShip,
+                    _ => unreachable!(),
+                };
+                self.build_ship_at(tile_idx, kind);
             }
         }
         self.close_map_context_menu();
@@ -430,13 +560,7 @@ impl SowApp {
                 "Need {} gold.",
                 crate::utils::format_number(self.ui.app.hud_state.building_costs[cost_index])
             );
-            self.add_notice_at_screen(
-                text,
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
-            );
+            self.add_notice_at_screen(text, anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
             return false;
         }
         let target_tile = match target_res {
@@ -452,9 +576,187 @@ impl SowApp {
                 return false;
             }
         };
-        self.send_intent(sow_core::protocol::GameplayIntent::BuildStructure {
+        self.send_intent(sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile });
+        true
+    }
+
+    fn city_module_is_available(
+        &self,
+        building: &sow_core::protocol::BuildingSnapshot,
+        module: sow_core::building::ModuleKind,
+        tile_idx: u32,
+    ) -> bool {
+        let current_level = building.modules.get_level(module);
+        let next_level = current_level.saturating_add(1);
+        if next_level > 5 || (module == sow_core::building::ModuleKind::Arsenal && next_level > 3) {
+            return false;
+        }
+        if module == sow_core::building::ModuleKind::Arsenal && building.level < 3 {
+            return false;
+        }
+        if module == sow_core::building::ModuleKind::Port {
+            return self
+                .gfx
+                .map_renderer
+                .as_ref()
+                .and_then(|renderer| renderer.terrain.get(tile_idx as usize))
+                .is_some_and(|terrain| terrain & 0xc0 == 0xc0);
+        }
+        true
+    }
+
+    fn map_menu_cost(&self, action: MapMenuAction, tile_idx: u32) -> (Option<f64>, Option<u8>) {
+        match action {
+            MapMenuAction::UpgradeTile => {
+                let level = self
+                    .sim
+                    .tile_upgrades
+                    .get(tile_idx as usize)
+                    .copied()
+                    .unwrap_or(0) as i32;
+                let cost = (1000.0 * 1.5_f64.powi(level)) / sow_core::config::GOLD_SCALE.max(1.0);
+                (Some(cost), Some(level as u8))
+            }
+            MapMenuAction::UpgradeArsenal
+            | MapMenuAction::UpgradePort
+            | MapMenuAction::UpgradeFoundry => {
+                let module = match action {
+                    MapMenuAction::UpgradeArsenal => sow_core::building::ModuleKind::Arsenal,
+                    MapMenuAction::UpgradePort => sow_core::building::ModuleKind::Port,
+                    MapMenuAction::UpgradeFoundry => sow_core::building::ModuleKind::Foundry,
+                    _ => unreachable!(),
+                };
+                let level = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| {
+                        snapshot
+                            .buildings
+                            .iter()
+                            .find(|building| building.tile_idx == tile_idx)
+                    })
+                    .map(|building| building.modules.get_level(module))
+                    .unwrap_or(0);
+                (
+                    Some(sow_core::building::cost::module_upgrade_cost_gold(
+                        module,
+                        level.saturating_add(1),
+                    )),
+                    Some(level),
+                )
+            }
+            MapMenuAction::BuildWarship => {
+                (Some(sow_core::game::UnitType::Warship.gold_cost()), None)
+            }
+            MapMenuAction::BuildTradeShip => {
+                (Some(sow_core::game::UnitType::TradeShip.gold_cost()), None)
+            }
+            MapMenuAction::BuildCity
+            | MapMenuAction::BuildFactory
+            | MapMenuAction::BuildPort
+            | MapMenuAction::BuildBunker => {
+                let kind = match action {
+                    MapMenuAction::BuildCity => sow_core::game::BuildingKind::City,
+                    MapMenuAction::BuildFactory => sow_core::game::BuildingKind::Factory,
+                    MapMenuAction::BuildPort => sow_core::game::BuildingKind::Port,
+                    MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
+                    _ => unreachable!(),
+                };
+                let owner = self.sim.my_player_id.unwrap_or(0);
+                let count = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .map(|snapshot| {
+                        snapshot
+                            .buildings
+                            .iter()
+                            .filter(|building| building.owner_id == owner && building.kind == kind)
+                            .map(|building| building.level as u32)
+                            .sum()
+                    })
+                    .unwrap_or(0);
+                (
+                    Some(sow_core::building::cost::structure_build_cost_gold(
+                        kind,
+                        count,
+                        &self.sim.config,
+                    )),
+                    None,
+                )
+            }
+            _ => (None, None),
+        }
+    }
+
+    fn upgrade_tile_at(&mut self, tile_idx: u32) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !target.is_land || target.owner != target.my_id {
+            return false;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::UpgradeTile { tile_idx });
+        true
+    }
+
+    fn upgrade_city_module_at(
+        &mut self,
+        tile_idx: u32,
+        module: sow_core::building::ModuleKind,
+    ) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if target.owner != target.my_id || !target.is_land {
+            return false;
+        }
+        let Some(building) = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
+        else {
+            return false;
+        };
+        if building.kind != sow_core::game::BuildingKind::City
+            || building.under_construction
+            || !self.city_module_is_available(building, module, tile_idx)
+        {
+            return false;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::UpgradeCityModule {
+            building_id: building.id,
+            module,
+        });
+        true
+    }
+
+    fn build_ship_at(&mut self, tile_idx: u32, kind: sow_core::game::UnitType) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if target.owner != target.my_id || !target.is_land {
+            return false;
+        }
+        let ready_port = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
+            .is_some_and(|building| {
+                !building.under_construction
+                    && (building.kind == sow_core::game::BuildingKind::Port
+                        || (building.kind == sow_core::game::BuildingKind::City
+                            && building.modules.port > 0))
+            });
+        if !ready_port {
+            return false;
+        }
+        self.send_intent(sow_core::protocol::GameplayIntent::BuildShip {
+            port_tile: tile_idx,
             kind,
-            target_tile,
         });
         true
     }
@@ -504,6 +806,21 @@ impl SowApp {
             }
             return false;
         }
+        if target.is_teammate {
+            return false;
+        }
+        let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
+        if troops <= 0.0 {
+            return false;
+        }
+        let intent = sow_core::protocol::GameplayIntent::Attack(sow_core::protocol::AttackIntent {
+            target_owner: target.owner,
+            troops: Some(troops),
+        });
+        if target.is_allied {
+            self.ui.app.hud_state.show_betrayal_warning = Some((target.owner, intent));
+            return true;
+        }
         if !target.is_attackable() || !self.can_attack(tile_idx, target.owner) {
             const MESSAGES: [&str; 5] = [
                 "Too far! 🌌",
@@ -513,40 +830,32 @@ impl SowApp {
                 "Build a path first! 🗺️",
             ];
             let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
+            self.add_notice_at_screen(message, anchor.0, anchor.1, 1500, crate::rgb(248, 113, 113));
+            return false;
+        }
+        let text = format!("⚔️ +{}", crate::utils::format_number(troops));
+        self.add_notice_at_screen(text, anchor.0, anchor.1, 1500, crate::rgb(6, 182, 212));
+        self.send_intent(intent);
+        true
+    }
+
+    pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32, anchor: (f64, f64)) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if target.is_teammate {
+            return false;
+        }
+        if target.is_allied {
             self.add_notice_at_screen(
-                message,
+                "Break the alliance before launching a fleet. 🛡️",
                 anchor.0,
                 anchor.1,
-                1500,
+                2000,
                 crate::rgb(248, 113, 113),
             );
             return false;
         }
-        let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
-        if troops <= 0.0 {
-            return false;
-        }
-        let text = format!("⚔️ +{}", crate::utils::format_number(troops));
-        self.add_notice_at_screen(
-            text,
-            anchor.0,
-            anchor.1,
-            1500,
-            crate::rgb(6, 182, 212),
-        );
-        self.send_intent(sow_core::protocol::GameplayIntent::Attack(
-            sow_core::protocol::AttackIntent {
-                target_owner: target.owner,
-                troops: Some(troops),
-            },
-        ));
-        true
-    }
-
-    pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32) -> bool {
-        let Some(target) = self.map_target(tile_idx) else {
-            return false;
-        };
         if !target.is_enemy() {
             return false;
         }
@@ -566,31 +875,86 @@ impl SowApp {
             return false;
         }
         self.ui.app.hud_state.show_ask_panel = Some(target.owner);
+        if target.is_allied {
+            if let Some(player) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                snapshot
+                    .players
+                    .iter()
+                    .find(|player| player.id == target.owner)
+            }) {
+                self.ui.app.hud_state.ask_gold = (player.gold * 0.10).floor();
+                self.ui.app.hud_state.ask_troops = (player.troops * 0.10).floor();
+            }
+        } else {
+            self.ui.app.hud_state.ask_gold = 0.0;
+            self.ui.app.hud_state.ask_troops = 0.0;
+        }
         self.ui.app.hud_state.transfer_confirm_pending = false;
         true
     }
 
-    fn alliance_from_tile(&mut self, tile_idx: u32) -> bool {
+    fn alliance_from_tile(&mut self, tile_idx: u32, anchor: (f64, f64)) -> bool {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
         if !target.is_player() || target.is_teammate {
             return false;
         }
-        let intent = if target.is_allied {
-            sow_core::protocol::GameplayIntent::BreakAlliance {
-                target_player: target.owner,
+        if target.is_allied {
+            if target.is_in_renewal_window {
+                if target.has_alliance_request {
+                    self.send_intent(sow_core::protocol::GameplayIntent::AcceptAlliance {
+                        target_player: target.owner,
+                    });
+                } else if target.has_proposed_alliance {
+                    self.add_notice_at_screen(
+                        "Alliance renewal is already pending.",
+                        anchor.0,
+                        anchor.1,
+                        2000,
+                        crate::rgb(248, 113, 113),
+                    );
+                } else {
+                    self.send_intent(sow_core::protocol::GameplayIntent::ProposeAlliance {
+                        target_player: target.owner,
+                    });
+                    self.add_notice_at_screen(
+                        "Alliance renewal requested. 🤝",
+                        anchor.0,
+                        anchor.1,
+                        2000,
+                        crate::rgb(74, 222, 128),
+                    );
+                }
+            } else {
+                self.send_intent(sow_core::protocol::GameplayIntent::BreakAlliance {
+                    target_player: target.owner,
+                });
             }
         } else if target.has_alliance_request {
-            sow_core::protocol::GameplayIntent::AcceptAlliance {
+            self.send_intent(sow_core::protocol::GameplayIntent::AcceptAlliance {
                 target_player: target.owner,
-            }
+            });
+        } else if target.has_proposed_alliance {
+            self.add_notice_at_screen(
+                "Alliance request already pending.",
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
         } else {
-            sow_core::protocol::GameplayIntent::ProposeAlliance {
+            self.send_intent(sow_core::protocol::GameplayIntent::ProposeAlliance {
                 target_player: target.owner,
-            }
-        };
-        self.send_intent(intent);
+            });
+            self.add_notice_at_screen(
+                "Alliance requested. 🤝",
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(74, 222, 128),
+            );
+        }
         true
     }
 
@@ -610,18 +974,18 @@ impl SowApp {
         let snapshot = self.sim.current_snapshot.as_ref()?;
         let me = snapshot.players.iter().find(|player| player.id == my_id);
         let other = snapshot.players.iter().find(|player| player.id == owner);
-        let is_betrayer = other.is_some_and(|player| {
-            player.active_emoji.as_deref() == Some("🗡️")
-        });
+        let is_betrayer = other.is_some_and(|player| player.active_emoji.as_deref() == Some("🗡️"));
         let is_teammate = me
             .zip(other)
             .is_some_and(|(me, other)| me.team.is_some() && me.team == other.team);
-        let is_allied = me.is_some_and(|player| {
-            player.alliances.contains(&owner) && !is_betrayer
-        });
-        let has_alliance_request = me.is_some_and(|player| {
-            player.alliance_requests.contains(&owner)
-        });
+        let is_allied = me.is_some_and(|player| player.alliances.contains(&owner) && !is_betrayer);
+        let has_alliance_request =
+            me.is_some_and(|player| player.alliance_requests.contains(&owner));
+        let has_proposed_alliance =
+            other.is_some_and(|player| player.alliance_requests.contains(&my_id));
+        let alliance_timer = me
+            .and_then(|player| player.alliance_timers.get(&owner).copied())
+            .unwrap_or(2400);
         Some(MapTarget {
             owner,
             is_land,
@@ -629,6 +993,8 @@ impl SowApp {
             is_allied,
             is_teammate,
             has_alliance_request,
+            has_proposed_alliance,
+            is_in_renewal_window: is_allied && alliance_timer <= 300,
         })
     }
 
@@ -684,7 +1050,10 @@ impl SowApp {
         if self.sim.map_w == 0 || tile_idx >= self.sim.map_w.checked_mul(self.sim.map_h)? {
             return None;
         }
-        Some(((tile_idx % self.sim.map_w) as i32, (tile_idx / self.sim.map_w) as i32))
+        Some((
+            (tile_idx % self.sim.map_w) as i32,
+            (tile_idx / self.sim.map_w) as i32,
+        ))
     }
 
     fn add_click_marker(&mut self, col: i32, row: i32) {
@@ -779,9 +1148,7 @@ fn shares_land_border(
                 }
                 let neighbor = (neighbor_row * width + neighbor_col) as usize;
                 if owners.get(neighbor).copied() == Some(target_owner)
-                    && terrain
-                        .get(neighbor)
-                        .is_some_and(|value| value & 0x80 != 0)
+                    && terrain.get(neighbor).is_some_and(|value| value & 0x80 != 0)
                 {
                     return true;
                 }
@@ -793,7 +1160,7 @@ fn shares_land_border(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_quick_tap, shares_land_border, MapMenuAction, MapTarget, TOUCH_HOLD_MS};
+    use super::{MapMenuAction, MapTarget, TOUCH_HOLD_MS, is_quick_tap, shares_land_border};
 
     #[test]
     fn tap_and_hold_are_distinct_and_drag_cancels_both() {
@@ -820,9 +1187,14 @@ mod tests {
             is_allied: false,
             is_teammate: false,
             has_alliance_request: false,
+            has_proposed_alliance: false,
+            is_in_renewal_window: false,
         };
         assert!(neutral.is_attackable());
-        assert_eq!(neutral.menu_actions(false, true), vec![MapMenuAction::Attack]);
+        assert_eq!(
+            neutral.menu_actions(false, true),
+            vec![MapMenuAction::Attack]
+        );
     }
 
     #[test]
@@ -834,6 +1206,8 @@ mod tests {
             is_allied: false,
             is_teammate: false,
             has_alliance_request: false,
+            has_proposed_alliance: false,
+            is_in_renewal_window: false,
         };
         assert_eq!(
             enemy.menu_actions(false, true),
@@ -846,19 +1220,34 @@ mod tests {
         );
         assert_eq!(
             enemy.menu_actions(false, false),
-            vec![MapMenuAction::Fleet, MapMenuAction::Nuke, MapMenuAction::Alliance]
+            vec![
+                MapMenuAction::Fleet,
+                MapMenuAction::Nuke,
+                MapMenuAction::Alliance
+            ]
         );
 
         let ally = MapTarget {
             is_allied: true,
             ..enemy
         };
-        assert_eq!(ally.menu_actions(false, true), vec![MapMenuAction::Transfer]);
+        assert_eq!(
+            ally.menu_actions(false, true),
+            vec![
+                MapMenuAction::Attack,
+                MapMenuAction::Transfer,
+                MapMenuAction::Fleet,
+                MapMenuAction::Alliance,
+            ]
+        );
 
-        let own_land = MapTarget {
-            owner: 1,
+        let teammate = MapTarget {
+            is_teammate: true,
             ..enemy
         };
+        assert!(teammate.menu_actions(false, true).is_empty());
+
+        let own_land = MapTarget { owner: 1, ..enemy };
         assert_eq!(
             own_land.menu_actions(false, false),
             vec![

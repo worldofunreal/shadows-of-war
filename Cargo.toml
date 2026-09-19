@@ -67,7 +67,7 @@ axum = "0.8.9"
 tower-http = { version = "0.6.10", features = ["fs", "compression-br", "cors"] }
 futures-channel = "0.3"
 arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
-rodio = { version = "0.22.2", default-features = false, features = ["playback", "wav"] }
+cpal = { version = "0.17.3", features = ["wasm-bindgen"] }
 tempfile = "3"
 
 [workspace.dependencies.bytemuck]

@@ -72,7 +72,6 @@ impl AssetConfig {
         let val = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str(name)).ok()?;
         val.as_string().filter(|s| !s.is_empty())
     }
-
 }
 
 /// Explicit browser configuration only: every endpoint comes from a JS global.

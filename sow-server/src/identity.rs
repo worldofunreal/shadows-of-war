@@ -97,7 +97,6 @@ pub(crate) struct PlayGamesIdentityResponse {
     display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     avatar_url: Option<String>,
-    name_locked: bool,
     token: String,
 }
 
@@ -262,7 +261,8 @@ impl IdentityState {
             }
             "wou" | "wou_id" | "world_of_unreal" => {
                 let (client, wou_url) = wou_client()?;
-                let response = client.get(format!(
+                let response = client
+                    .get(format!(
                         "{}/api/v1/inventory/me",
                         wou_url.trim_end_matches('/')
                     ))
@@ -678,7 +678,6 @@ impl IdentityState {
             external_id: handoff.external_id,
             display_name: handoff.display_name,
             avatar_url: handoff.avatar_url,
-            name_locked: true,
             token,
         })
     }

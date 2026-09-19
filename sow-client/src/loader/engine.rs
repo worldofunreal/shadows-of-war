@@ -1,8 +1,8 @@
 use super::helpers::*;
+use crate::ClientPhase;
 use crate::EngineInitEvent;
 use crate::app::SowApp;
 use sow_core::protocol::SimCommand;
-use crate::ClientPhase;
 
 #[cfg(target_arch = "wasm32")]
 async fn yield_to_browser() {
@@ -202,7 +202,6 @@ impl SowApp {
                             }
                         });
                     }
-
                 };
 
                 init_logic();
@@ -230,7 +229,6 @@ impl SowApp {
                             self.finish_boot_to_main_menu();
                         }
                     }
-
                 }
                 crate::ui::loading_screen::SplashJob::ExitGame => {
                     let step = self.ui.app.splash_state.gpu_load_step;

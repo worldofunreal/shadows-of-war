@@ -496,7 +496,7 @@ And dough handles the voice allocation, synthesis, and mixing.
 - ✅ Simple arpeggiator (ArpeggioSource)
 - ✅ Pulse / sweep / noise sources for SFX
 - ✅ Sample-rate: 22050 Hz (low, mobile-friendly)
-- ✅ Thread-based audio worker with mpsc channel
+- ✅ CPAL output callback with a shared native/Web Audio mixer
 
 ### What sow-audio is MISSING for live music:
 
@@ -515,7 +515,7 @@ And dough handles the voice allocation, synthesis, and mixing.
 | **Parameter smoothing**   | High     | No interpolation (clicks on changes)     |
 | **Pattern/sequencer**      | High     | Only ArpeggioSource (4 notes, no rhythm) |
 | **Music Director**         | High     | No game-state→music mapping at all       |
-| **WASM audio output**     | High     | rodio is native-only. Need Web Audio     |
+| **WASM audio output**     | Done     | CPAL uses the browser's Web Audio backend |
 
 ### What sow-audio has that dough DOESN'T:
 - ✅ Spatial 3D panning + distance attenuation
@@ -577,19 +577,11 @@ Not a full language like Strudel — just a programmatic sequencer.
 
 ### 11.4 WASM Strategy
 
-rodio doesn't work in WASM. Options:
-
-| Option                              | Pros                           | Cons                          |
-|-------------------------------------|--------------------------------|-------------------------------|
-| **web-audio-api crate**             | Rust API, WASM, Web Audio      | Limited doc, early crate       |
-| **wasm-bindgen → AudioContext**    | Full control, browser-native    | Boilerplate, JS bridge        |
-| **Compile dough.c → WASM**         | Already works, single C file   | C interop, AGPL copyleft      |
-| **Pure Rust synth + Web Audio**    | Own code, no C deps            | Most work, most control        |
-| **cpal + WASM shim**               | Native + WASM abstraction       | cpal WASM support unclear      |
-
-**Recommended:** Pure Rust synth engine (learning from dough.c architecture)
-with a thin WASM output layer using `wasm-bindgen` → `AudioContext` + `AudioWorklet`.
-This keeps the engine in Rust, no C FFI, and works on both native + WASM.
+The audio output must work in both native and WASM builds. The current
+implementation uses CPAL's native backend and its Web Audio backend for WASM.
+The mixer renders the existing Rust sources into CPAL's output callback. On the
+browser target CPAL maps that callback to `AudioContext`, so no separate JS
+audio engine, worklet, or target-specific no-op path is needed.
 
 ---
 
@@ -740,29 +732,31 @@ To compile for WASM without a standard library (`#ifdef CLANGWASM`), Dough imple
 
 ## 15. Audit: sow-audio vs. dough architecture
 
-Before starting the WASM migration and the new music engine, here is where `sow-audio` currently stands compared to the `dough` blueprint:
+Here is where `sow-audio` currently stands compared to the `dough` blueprint:
 
 ### 1. Audio Output Threading
 *   **dough:** Native uses PortAudio with a single callback. WASM uses a shared memory block; JS calls `js_init` and reads the float buffer directly via `requestAnimationFrame` or `AudioWorklet`.
-*   **sow-audio:** Uses `rodio` heavily gated behind `#[cfg(not(target_arch = "wasm32"))]`. `engine.rs` spawns a dedicated background thread that receives commands via an `mpsc` channel. For WASM, everything is stubbed out (no audio). 
-
-**Migration Path:** We need to rip out `rodio`. We will keep the `mpsc` channel and background worker thread concept for Native (using `cpal` to drive the audio stream, which `rodio` uses underneath anyway). For WASM, we'll expose a function like `fill_buffer(&mut [f32])` to the JS/WebAudio side, which will pull from our Rust mixer.
+*   **sow-audio:** Uses one Rust mixer backed by CPAL. Native output uses the
+    platform audio device; WASM output uses CPAL's Web Audio backend. The CPAL
+    callback pulls frames from the same mixer on both targets.
 
 ### 2. Audio Processing (Sources vs Mixer)
 *   **dough:** One monolithic `Mixer` that loops over `active_voices`, rendering sample-by-sample (`gen_sample`).
-*   **sow-audio:** Defines sources as structs implementing `Iterator<Item = f32>` and `rodio::source::Source` (e.g., `DoublePulseSource`, `ArpeggioSource`). These are pushed into a `rodio::MixerDeviceSink`.
-
-**Migration Path:** We need to write our own `Mixer` in Rust. Our SFX sources (`combat.rs`, `death.rs`) need to be rewritten slightly to simply provide a `.next_sample() -> f32` method instead of implementing the complex `rodio::Source` trait. 
+*   **sow-audio:** Defines sources as structs implementing `Iterator<Item = f32>`
+    and the small local `AudioSource` trait (e.g., `DoublePulseSource`,
+    `ArpeggioSource`). The local mixer resamples and mixes them into CPAL's
+    output callback.
 
 ### 3. State Management & Commands
 *   **dough:** `Event` struct holds 50+ parameters. Messages mutate the parameters of a `voice` struct.
-*   **sow-audio:** Commands like `AudioCommand::PlayCombatSound` carry simple enums, which the engine turns into new `Source` objects and pushes to `rodio`. Priority system tracks the number of active voices.
+*   **sow-audio:** Commands like `AudioCommand::PlayCombatSound` carry simple
+    enums, which the engine turns into source objects and pushes to the local
+    mixer. The priority system tracks the number of active voices.
 
-**Migration Path:** The `mpsc` command system in `sow-audio` is good and works well for game integration. We will extend `AudioCommand` to include `PlaySynthEvent(Box<Event>)` for the music engine, allowing the game's `MusicSession` to send parameter updates to the mixer thread.
+**Next step:** The command enums already provide the game integration boundary. A future music engine can add a synth-event command without changing the output backend.
 
 ### 4. Math Dependencies
 *   **dough:** Implements `our_sinf`, `our_exp2f` to avoid C `math.h` and shrink WASM size.
 *   **sow-audio:** Uses `std::f32::consts` and standard `.sin()` methods.
 
 **Migration Path:** Since Rust's `core` doesn't include trig functions, compiling `sow-audio` for `wasm32-unknown-unknown` without `std` (or without `libm`) would fail. We can either just use `std` (since WASM size isn't a critical bottleneck for us yet, and web-sys brings in a lot anyway) or port Dough's bit-hack math functions if we want an ultra-minimal core. For now, we will stick to `std::f32::sin()` for simplicity.
-

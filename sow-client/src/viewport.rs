@@ -50,7 +50,6 @@ impl Viewport {
         app.input.screen_w = self.physical.width as f32;
         app.input.screen_h = self.physical.height as f32;
     }
-
 }
 
 pub fn sync_wasm_window(app: &SowApp, win: &dyn winit::window::Window) {

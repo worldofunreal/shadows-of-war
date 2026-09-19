@@ -164,8 +164,7 @@ impl SowApp {
 
             let (text, color) = if victim_id == my_id && my_id != 0 {
                 (
-                    crate::ui::UiText::new("hud.nuke_incoming")
-                        .with("name", attacker_name),
+                    crate::ui::UiText::new("hud.nuke_incoming").with("name", attacker_name),
                     crate::rgb(239, 68, 68),
                 )
             } else if alert.owner_id == my_id {
