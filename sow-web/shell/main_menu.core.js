@@ -255,7 +255,6 @@
             create: state.show_create,
             campaign: state.campaign,
             name: state.player_name,
-            locked: state.name_locked,
             leader: state.selected_leader,
             gems: state.gems,
             laurels: state.laurels,
@@ -299,5 +298,3 @@
             })
         });
     }
-
-    var displayNameDraft = null;

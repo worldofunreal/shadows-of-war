@@ -77,10 +77,16 @@ struct AnonymousProfileRequest {
 }
 
 #[derive(Deserialize)]
-struct AnonymousDisplayNameRequest {
-    account_id: String,
+struct DisplayNameRequest {
+    #[serde(default)]
+    account_id: Option<String>,
     display_name: String,
-    auth_secret: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    external_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -205,7 +211,6 @@ struct PlayGamesIdentityResponse {
     display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     avatar_url: Option<String>,
-    name_locked: bool,
     token: String,
 }
 
@@ -1971,8 +1976,8 @@ async fn main() {
         )
         .route("/profile/anonymous", post(handle_anonymous_profile))
         .route(
-            "/profile/anonymous/name",
-            post(handle_anonymous_display_name),
+            "/profile/name",
+            post(handle_display_name),
         )
         .route(
             "/profile/anonymous/tutorial-complete",
@@ -2498,25 +2503,64 @@ async fn handle_anonymous_profile(
     }
 }
 
-/// POST /profile/anonymous/name — persist a rename for an anonymous account.
-async fn handle_anonymous_display_name(
+/// POST /profile/name — persist the SOW display name for any authenticated account.
+async fn handle_display_name(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Json(payload): Json<AnonymousDisplayNameRequest>,
+    Json(payload): Json<DisplayNameRequest>,
 ) -> impl IntoResponse {
     let request_id = identity_request_hint(&headers);
+    let platform_provider = headers
+        .get("x-platform-provider")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     info!(
         "[identity] rename request id={request_id} account={} requested_name_len={}",
-        account_hint(Some(&payload.account_id)),
+        account_hint(payload.account_id.as_deref()),
         payload.display_name.chars().count()
     );
+    let account_id = if let (Some(account_id), Some(auth_secret)) =
+        (payload.account_id.as_deref(), payload.auth_secret.as_deref())
+    {
+        match state.db.verify_anonymous_secret(account_id, auth_secret).await {
+            Ok(account_id) => account_id,
+            Err(error) => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(ErrorResponse { error }),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        let provider = payload
+            .provider
+            .as_deref()
+            .or(platform_provider)
+            .unwrap_or_default()
+            .trim();
+        let external_id = payload.external_id.as_deref().unwrap_or_default().trim();
+        if provider.is_empty() || external_id.is_empty() {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "identity proof is incomplete".to_string(),
+                }),
+            )
+                .into_response();
+        }
+        match resolve_platform_account(&state, provider, external_id, platform_auth_token(&headers).as_deref()).await {
+            Ok(account) => account.id,
+            Err(error) => {
+                warn!("[identity] rename identity failed id={request_id}: {error}");
+                return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
+            }
+        }
+    };
     match state
         .db
-        .update_anonymous_display_name(
-            &payload.account_id,
-            &payload.display_name,
-            &payload.auth_secret,
-        )
+        .update_display_name(&account_id, &payload.display_name)
         .await
     {
         Ok(account) => {
@@ -2538,7 +2582,7 @@ async fn handle_anonymous_display_name(
             };
             warn!(
                 "[identity] rename failed id={request_id} account={} status={} error={}",
-                account_hint(Some(&payload.account_id)),
+                account_hint(Some(&account_id)),
                 status,
                 message
             );
@@ -2920,7 +2964,6 @@ async fn handle_playgames_consume(
             external_id: handoff.external_id,
             display_name: handoff.display_name,
             avatar_url: handoff.avatar_url,
-            name_locked: true,
             token,
         }),
     )
@@ -3246,7 +3289,43 @@ async fn resolve_external_id(
         }
         return Ok(verified_id);
     }
-    Err("unsupported provider; anonymous clients must use /profile/anonymous".into())
+    Err("unsupported platform provider".into())
+}
+
+async fn resolve_platform_account(
+    state: &AppState,
+    provider: &str,
+    external_id: &str,
+    auth_token: Option<&str>,
+) -> Result<sow_data::db::PlayerAccount, String> {
+    let resolved_external_id = if provider == "playgames" {
+        state
+            .verify_playgames_session(Some(external_id), auth_token.unwrap_or(""))
+            .map(|identity| identity.external_id)
+            .map_err(|error| error.to_string())?
+    } else {
+        resolve_external_id(provider, external_id, auth_token).await?
+    };
+
+    if provider == "wou" || provider == "wou_id" || provider == "world_of_unreal" {
+        state
+            .db
+            .get_or_create_for_account_id(
+                &resolved_external_id,
+                "wou".to_string(),
+                "production".to_string(),
+                resolved_external_id,
+            )
+            .await
+            .map_err(|error| error.to_string())
+    } else {
+        state
+            .db
+            .get_existing_identity(provider.to_string(), resolved_external_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "canonical account identity is required".to_string())
+    }
 }
 
 /// Verify if the request has the correct Authorization bearer secret
@@ -3286,43 +3365,7 @@ async fn handle_get_profile(
             .into_response();
     }
 
-    let resolved_external_id = match if provider == "playgames" {
-        state
-            .verify_playgames_session(Some(external_id), auth_token.as_deref().unwrap_or(""))
-            .map(|identity| identity.external_id)
-            .map_err(|error| error.to_string())
-    } else {
-        resolve_external_id(provider, external_id, auth_token.as_deref()).await
-    } {
-        Ok(id) => id,
-        Err(e) => {
-            warn!("[identity] platform profile failed id={request_id} provider={provider}: {e}");
-            return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: e })).into_response();
-        }
-    };
-
-    let account = if provider == "wou" || provider == "wou_id" || provider == "world_of_unreal" {
-        state
-            .db
-            .get_or_create_for_account_id(
-                &resolved_external_id,
-                "wou".to_string(),
-                "production".to_string(),
-                resolved_external_id.clone(),
-            )
-            .await
-    } else {
-        let account = state
-            .db
-            .get_existing_identity(provider.to_string(), resolved_external_id.clone())
-            .await;
-        match account {
-            Ok(Some(account)) => Ok(account),
-            Ok(None) => Err("canonical WOU-ID identity is required".into()),
-            Err(error) => Err(error),
-        }
-    };
-    match account {
+    match resolve_platform_account(&state, provider, external_id, auth_token.as_deref()).await {
         Ok(account) => {
             info!(
                 "[identity] platform profile ack id={request_id} account={} name_len={}",
@@ -3331,13 +3374,7 @@ async fn handle_get_profile(
             );
             (StatusCode::OK, Json(account.without_auth_secret())).into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response(),
+        Err(e) => (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error: e })).into_response(),
     }
 }
 

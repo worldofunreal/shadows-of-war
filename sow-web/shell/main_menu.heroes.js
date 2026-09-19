@@ -102,6 +102,51 @@
         return true;
     }
 
+    function resetDropdownPosition(menu) {
+        menu.style.position = "";
+        menu.style.insetInlineEnd = "";
+        menu.style.left = "";
+        menu.style.right = "";
+        menu.style.top = "";
+        menu.style.width = "";
+        menu.style.maxHeight = "";
+    }
+
+    function positionDropdown(trigger, menu) {
+        var rect = trigger.getBoundingClientRect();
+        var viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        var viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+        var edge = 8;
+        var gap = 6;
+        var maxHeight = Math.min(240, Math.max(40, viewportHeight - edge * 2));
+        var width = Math.min(
+            Math.max(rect.width, menu.scrollWidth + 8),
+            Math.max(rect.width, viewportWidth - edge * 2)
+        );
+        var rtl = document.documentElement && document.documentElement.dir === "rtl";
+        var left = rtl ? rect.right - width : rect.left;
+        left = Math.max(edge, Math.min(left, viewportWidth - width - edge));
+
+        menu.style.position = "fixed";
+        menu.style.insetInlineEnd = "auto";
+        menu.style.left = left + "px";
+        menu.style.right = "auto";
+        menu.style.width = width + "px";
+
+        var desiredHeight = Math.min(menu.scrollHeight, maxHeight);
+        var below = viewportHeight - rect.bottom - gap - edge;
+        var above = rect.top - gap - edge;
+        var opensBelow = below >= desiredHeight || below >= above;
+        var available = opensBelow ? below : above;
+        var menuMaxHeight = Math.max(40, Math.min(maxHeight, available));
+        menu.style.maxHeight = menuMaxHeight + "px";
+
+        var height = Math.min(menu.scrollHeight, menuMaxHeight);
+        var top = opensBelow ? rect.bottom + gap : rect.top - gap - height;
+        top = Math.max(edge, Math.min(top, viewportHeight - height - edge));
+        menu.style.top = top + "px";
+    }
+
     function syncDropdowns(focusTarget) {
         var scopes = [];
         var panel = activeScreenPanel();
@@ -119,6 +164,8 @@
             if (!trigger || !menu) continue;
             trigger.setAttribute("aria-expanded", open ? "true" : "false");
             menu.hidden = !open;
+            if (open) positionDropdown(trigger, menu);
+            else resetDropdownPosition(menu);
             var input = dropdown.querySelector("[data-dropdown-value]");
             var value = input ? input.value : "";
             var label = dropdown.querySelector("[data-dropdown-label]");
@@ -137,6 +184,14 @@
         dropdownOpenKey = open ? key : null;
         syncDropdowns(focusTarget);
     }
+
+    window.addEventListener("resize", function () {
+        if (dropdownOpenKey) syncDropdowns();
+    });
+
+    document.addEventListener("scroll", function () {
+        if (dropdownOpenKey) syncDropdowns();
+    }, true);
 
     function selectDropdown(key, value) {
         var panel = activeScreenPanel();

@@ -426,7 +426,6 @@
       externalId: serverIdentity.external_id,
       displayName: serverIdentity.display_name || "Player",
       avatarUrl: serverIdentity.avatar_url || null,
-      nameLocked: serverIdentity.name_locked === true,
       token: serverIdentity.token,
     };
   }
@@ -862,7 +861,6 @@
       displayName: user.username,
       externalId: user.userId || user.id || null,
       avatarUrl: user.profilePictureUrl || null,
-      nameLocked: true,
       token: token,
     };
   }

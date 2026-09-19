@@ -205,7 +205,6 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                     .unwrap_or_else(|| fallback_name.to_string());
                 let external_id = js_string_field(&obj, "externalId");
                 let avatar_url = js_string_field(&obj, "avatarUrl");
-                let name_locked = js_bool_field(&obj, "nameLocked").unwrap_or(false);
                 let auth_token = js_string_field(&obj, "token");
                 let provider_static: &'static str = match provider.as_str() {
                     "wou" | "wou_id" | "world_of_unreal" => "wou",
@@ -224,7 +223,6 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                     display_name,
                     external_id,
                     avatar_url,
-                    name_locked,
                     auth_token,
                 };
             }
@@ -247,7 +245,6 @@ pub fn load_identity(fallback_name: &str) -> PlatformIdentity {
                             display_name: name,
                             external_id: id,
                             avatar_url: None,
-                            name_locked: false,
                             auth_token: Some(token),
                         };
                     }

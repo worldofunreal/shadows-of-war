@@ -1730,7 +1730,6 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "connecting": state.is_connecting,
             "waiting": state.is_waiting,
             "player_name": state.player_name,
-            "name_locked": state.name_locked,
             "selected_leader": leader_id(state.selected_leader),
             "selected_leader_name": state.selected_leader.name(),
             "selected_civilization": state.selected_civilization.name(),

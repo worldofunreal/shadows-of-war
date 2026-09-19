@@ -12,8 +12,6 @@ impl SowApp {
         if crate::store_portals::poll_auth_changed() {
             let fallback = self.ui.app.main_menu_state.player_name.clone();
             let identity = crate::store_portals::load_identity(&fallback);
-            self.ui.app.main_menu_state.player_name = identity.display_name;
-            self.ui.app.main_menu_state.name_locked = identity.name_locked;
             if let Some(url) = identity.avatar_url {
                 self.ui.app.asset_loader.queue_portal_avatar(url);
             }

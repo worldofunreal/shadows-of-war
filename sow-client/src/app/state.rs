@@ -484,12 +484,8 @@ pub struct SowApp {
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,
     pub progress_provider: String,
-    /// Anonymous rename entered before the first profile response arrives.
-    /// It is flushed once the canonical account ID is available.
+    /// Last requested name, kept until the canonical profile acknowledges it.
     pub pending_display_name: Option<String>,
-    /// Serializes rename writes; a newer edit waits for the database ACK.
-    pub queued_display_name: Option<String>,
-    pub display_name_save_in_flight: bool,
     pub display_name_save_request_id: Option<u64>,
     /// Prevents a profile refresh from racing an in-flight rename.
     pub profile_request_in_flight: bool,
@@ -497,8 +493,6 @@ pub struct SowApp {
     /// Monotonic identity request sequence; used to reject stale async responses.
     pub identity_request_seq: u64,
     pub profile_last_applied_request: u64,
-    /// Last server-confirmed presentation name. UI edits remain provisional until ACK.
-    pub confirmed_display_name: Option<String>,
     /// A Join request held until the canonical account ID is available.
     pub join_waiting_for_identity: bool,
     /// A queued join with no target/config enters the server matchmaking pool.

@@ -27,7 +27,7 @@ pub mod profile {
 pub struct MainMenuState {
     pub is_connected: bool, pub is_connecting: bool, pub is_waiting: bool, pub wait_timer_secs: f32,
     pub server_address: String, pub lobbies: Vec<LobbyInfo>, pub last_matchmaking_lobby: Option<LobbyInfo>,
-    pub matchmaking_countdown_anchor: Option<(u64, f32, f64)>, pub player_name: String, pub name_locked: bool,
+    pub matchmaking_countdown_anchor: Option<(u64, f32, f64)>, pub player_name: String,
     pub host_private_pending: bool, pub in_private_match: bool, pub is_lobby_host: bool, pub custom_game_is_private: bool,
     pub custom_game_is_sp: bool, pub custom_game_config: Box<sow_core::game_config::GameConfig>, pub custom_game_password: String,
     pub join_mode_filter: GameModeFilter, pub join_lobby_code: String, pub join_password_input: String,
@@ -57,7 +57,7 @@ impl Default for MainMenuState {
             is_connected: false, is_connecting: false, is_waiting: false, wait_timer_secs: 0.0,
             server_address: std::env::var("SOW_WS_URL").unwrap_or_else(|_| "wss://ws.shadowsofwar.io/ws/".into()),
             lobbies: Vec::new(), last_matchmaking_lobby: None, matchmaking_countdown_anchor: None,
-            player_name: format!("ANON{:03}", ms % 1000), name_locked: false, host_private_pending: false,
+            player_name: format!("ANON{:03}", ms % 1000), host_private_pending: false,
             in_private_match: false, is_lobby_host: false, custom_game_is_private: false, custom_game_is_sp: true,
             custom_game_config: Box::new(sow_core::game_config::GameConfig { seed: ms as u64, ..Default::default() }),
             custom_game_password: String::new(), join_mode_filter: GameModeFilter::All, join_lobby_code: String::new(),

@@ -2974,13 +2974,12 @@ impl PlayerDb {
         }
     }
 
-    /// Rename an anonymous account. The account ID is the bearer identity;
-    /// the mutable display name is never treated as an account key.
-    pub async fn update_anonymous_display_name(
+    /// Update the SOW display name after the request handler has authenticated
+    /// the account through its anonymous or platform identity.
+    pub async fn update_display_name(
         &self,
         account_id: &str,
         display_name: &str,
-        auth_secret: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         if !is_valid_account_id(account_id) {
             return Err("account_id must be exactly 32 hexadecimal characters".into());
@@ -2991,14 +2990,6 @@ impl PlayerDb {
         let Some(acc_json) = con.get::<_, Option<String>>(&acc_key).await? else {
             return Err("Account not found".into());
         };
-        let account: PlayerAccount = serde_json::from_str(&acc_json)?;
-        if !account.linked_identities.is_empty() {
-            return Err("account is not anonymous".into());
-        }
-        let provided_hash = blake3::hash(auth_secret.as_bytes()).to_hex().to_string();
-        if account.auth_secret_hash.as_deref() != Some(provided_hash.as_str()) {
-            return Err("invalid secret".into());
-        }
         let account = Self::update_account_atomic(&mut con, &acc_key, |account| {
             account.display_name = display_name.clone();
             account.updated_at = std::time::SystemTime::now()

@@ -1998,6 +1998,16 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     overflow-y: visible;
 }
 
+#sow-menu .sow-control-dropdown__menu:not([hidden]) {
+    position: fixed;
+    inset-inline-end: auto;
+    top: 0;
+    left: 0;
+    right: auto;
+    width: auto;
+    max-width: calc(100vw - 16px);
+}
+
 #sow-menu .sow-menu__main-nav {
     display: flex;
     flex-direction: row;

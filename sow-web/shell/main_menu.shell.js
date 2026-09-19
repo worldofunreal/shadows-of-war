@@ -27,7 +27,7 @@
     /* POKI_RENDER_REPLACEMENT_BEGIN */
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);
-        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || SOW_t("menu.anonymous"));
+        var name = state.player_name || SOW_t("menu.anonymous");
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { linked: false, pending: false };
         var accountXp = Math.max(0, Number(state.xp) || 0);
         var laurels = state.laurels || 0;
@@ -37,8 +37,7 @@
                     "<button class='sow-menu__avatar' type='button' data-command='open_leader_picker' " +
                         "aria-label='" + esc(SOW_t("menu.select_leader")) + "' style=\"background-image:url('" + esc(avatarImage()) + "')\"></button>" +
                     "<div class='sow-menu__profile'>" +
-                        "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='20' " +
-                            (state.name_locked ? "readonly" : "") + " aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
+                        "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='16' aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
                         "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leaderCivilization(leader)) + "</button>" +
                     "</div>" +
                 "</div>" +
@@ -390,9 +389,8 @@
         if (!topbar || !state) return;
         var leader = leaderById(state.selected_leader);
         var nameInput = topbar.querySelector("[data-role='display-name']");
-        var name = displayNameDraft != null ? displayNameDraft : (state.player_name || SOW_t("menu.anonymous"));
+        var name = state.player_name || SOW_t("menu.anonymous");
         if (nameInput && document.activeElement !== nameInput) nameInput.value = name;
-        if (nameInput) nameInput.readOnly = !!state.name_locked;
         var avatar = topbar.querySelector(".sow-menu__avatar");
         var avatarUrl = avatarImage();
         if (avatar && avatar.dataset.avatarUrl !== avatarUrl) {
@@ -1325,9 +1323,6 @@
         var input = event.target;
         if (input.dataset && input.dataset.authField === "email") authEmail = input.value;
         if (input.dataset && input.dataset.authField === "code") authCode = input.value.replace(/\D/g, "").slice(0, 6);
-        if (input.dataset && input.dataset.role === "display-name") {
-            displayNameDraft = input.value;
-        }
         if (input.dataset && input.dataset.role === "browser-search") {
             browserSearchQuery = input.value;
             var publicPanel = root.querySelector(".sow-menu__public");
@@ -1354,16 +1349,13 @@
         }
     });
 
-    root.addEventListener("focusout", function (event) {
-        var input = event.target;
-        if (input.dataset.role !== "display-name" || state.name_locked) return;
-        var name = input.value.trim();
-        displayNameDraft = null;
-        if (name && name !== state.player_name) send("save_display_name", { name: name });
-    });
-
     root.addEventListener("change", function (event) {
         var input = event.target;
+        if (input.dataset && input.dataset.role === "display-name") {
+            var name = input.value.trim();
+            if (name && name !== state.player_name) send("save_display_name", { name: name });
+            return;
+        }
         var createForm = input.closest("form[data-form='create']");
         if (createForm) {
             syncCreateDraft(createForm);

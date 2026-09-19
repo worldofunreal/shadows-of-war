@@ -88,8 +88,6 @@ impl SowApp {
         if let Some(name) = pending_display_name.as_deref() {
             app.main_menu_state.player_name = name.to_string();
         }
-        let initial_display_name = app.main_menu_state.player_name.clone();
-
         let (connect_tx_raw, connect_rx) = crossbeam_channel::unbounded();
         let connect_tx = WakeSender::new(connect_tx_raw);
 
@@ -112,8 +110,6 @@ impl SowApp {
         #[cfg(target_arch = "wasm32")]
         {
             let identity = crate::store_portals::load_identity(&app.main_menu_state.player_name);
-            app.main_menu_state.player_name = identity.display_name;
-            app.main_menu_state.name_locked = identity.name_locked;
             if let Some(url) = identity.avatar_url {
                 app.asset_loader.queue_portal_avatar(url);
             }
@@ -321,14 +317,11 @@ impl SowApp {
                 String::from("local")
             },
             pending_display_name,
-            queued_display_name: None,
-            display_name_save_in_flight: false,
             display_name_save_request_id: None,
             profile_request_in_flight: false,
             profile_refresh_pending: false,
             identity_request_seq: 0,
             profile_last_applied_request: 0,
-            confirmed_display_name: Some(initial_display_name),
             join_waiting_for_identity: false,
             join_matchmaking: false,
             progress_match_recorded: false,
