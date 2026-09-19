@@ -9,7 +9,7 @@
     font: inherit;
     font-size: 10px;
     font-weight: var(--sow-button-weight);
-    text-align: left;
+    text-align: start;
     cursor: pointer;
 }
 .sow-menu__profile-link:hover { color: var(--sow-gold); }
@@ -73,7 +73,7 @@
     flex-direction: column;
     min-width: 0;
     padding: clamp(22px, 4vw, 42px);
-    border-right: 1px solid var(--sow-profile-line);
+    border-inline-end: 1px solid var(--sow-profile-line);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__heading-top {
@@ -164,8 +164,8 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__level {
     min-width: 74px;
-    padding-left: 16px;
-    border-left: 1px solid var(--sow-line);
+    padding-inline-start: 16px;
+    border-inline-start: 1px solid var(--sow-line);
     text-align: center;
 }
 
@@ -193,7 +193,7 @@
     justify-content: center;
     gap: 12px;
     padding: 24px 26px;
-    border-left: 1px solid var(--sow-profile-line);
+    border-inline-start: 1px solid var(--sow-profile-line);
     background: linear-gradient(145deg, rgba(243, 177, 43, 0.08), transparent 62%), var(--sow-profile-surface-soft);
 }
 
@@ -445,7 +445,7 @@
     border-top: 1px solid rgba(255, 221, 153, 0.14);
     background: transparent;
     color: var(--sow-text);
-    text-align: left;
+    text-align: start;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__leader {
@@ -537,7 +537,7 @@
     font-size: 11px;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
-    text-align: right;
+    text-align: end;
     white-space: nowrap;
 }
 
@@ -656,7 +656,7 @@
     border-top: 1px solid rgba(255, 221, 153, 0.14);
     background: transparent;
     color: #fff;
-    text-align: left;
+    text-align: start;
     cursor: pointer;
 }
 
@@ -676,7 +676,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__search-result span {
     color: var(--sow-muted);
     font-size: 11px;
-    text-align: right;
+    text-align: end;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__ratings {
@@ -754,7 +754,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__detail-close {
     position: absolute;
     top: 14px;
-    right: 14px;
+    inset-inline-end: 14px;
     display: grid;
     width: 40px;
     height: 40px;
@@ -869,14 +869,14 @@
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-card {
         padding: 20px 18px;
-        border-right: 0;
+        border-inline-end: 0;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__favorites {
         gap: 10px;
         padding: 14px 14px 12px;
         border-top: 1px solid var(--sow-profile-line);
-        border-left: 0;
+        border-inline-start: 0;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__favorites-track {
@@ -930,7 +930,7 @@
 
     #sow-menu[data-screen="profile"] .sow-profile__level {
         min-width: 52px;
-        padding-left: 10px;
+        padding-inline-start: 10px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__level strong {
@@ -1002,7 +1002,7 @@
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__search-result span {
-        text-align: left;
+        text-align: start;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__rating {
@@ -1032,7 +1032,7 @@
     #sow-menu[data-screen="profile"] .sow-profile__detail {
         max-height: 85dvh;
         padding: 24px 18px max(24px, env(safe-area-inset-bottom));
-        border-right: 0;
+        border-inline-end: 0;
         border-bottom: 0;
         border-radius: 16px 16px 0 0;
     }
@@ -1336,7 +1336,7 @@
     position: absolute;
     z-index: 1;
     bottom: -24px;
-    left: 14px;
+    inset-inline-start: 14px;
     display: block;
     width: 64px;
     height: 64px;
@@ -1358,7 +1358,7 @@
 .sow-store__leader-status {
     position: absolute;
     z-index: 1;
-    right: 10px;
+    inset-inline-end: 10px;
     bottom: 10px;
     padding: 4px 6px;
     border: 1px solid rgba(243, 177, 43, .45);
@@ -1633,7 +1633,7 @@
     color: var(--sow-button-dark-text);
     font-weight: var(--sow-button-weight);
     cursor: pointer;
-    text-align: left;
+    text-align: start;
     transition: border-color 160ms ease, transform 160ms ease;
 }
 
@@ -1836,7 +1836,7 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-right: 4px;
+    padding-inline-end: 4px;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -1866,7 +1866,7 @@
     border-radius: 7px;
     background: rgba(10, 13, 18, .82);
     color: #fff;
-    text-align: left;
+    text-align: start;
     cursor: pointer;
     transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
 }
@@ -1939,7 +1939,7 @@
 .sow-heroes__card-state {
     position: absolute;
     top: 8px;
-    right: 8px;
+    inset-inline-end: 8px;
     color: var(--sow-gold-bright);
     font-size: 8px;
     font-weight: 900;
@@ -2112,7 +2112,7 @@
 
     #sow-menu[data-screen="heroes"] .sow-heroes__roster {
         flex: 1 1 auto;
-        padding-right: 0;
+        padding-inline-end: 0;
     }
 
     .sow-heroes__grid { gap: 8px; }

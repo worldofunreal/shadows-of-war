@@ -7,21 +7,21 @@
   <meta name="theme-color" content="#0a0a0e">
   <title data-i18n="site.leaders_title">Leaders &amp; Civilizations — Shadows of War</title>
   <meta name="description"
-    content="Official compendium of the 12 playable historical leaders and civilizations in Shadows of War. Compare command traits, district bonuses, and conquest synergies."
+    content="The 12 playable leaders in Shadows of War. Compare attack, gold, troop and capacity bonuses."
     data-i18n="site.leaders_description" data-i18n-attr="content">
   <link rel="canonical" href="https://shadowsofwar.io/leaders/">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Shadows of War">
   <meta property="og:title" content="Leaders & Civilizations — Shadows of War" data-i18n="site.leaders_title" data-i18n-attr="content">
   <meta property="og:description"
-    content="Official compendium of the 12 historical leaders in Shadows of War: Command traits, district mechanics, and territorial conquest synergies."
+    content="The 12 playable leaders in Shadows of War: attack, gold, troop and capacity bonuses."
     data-i18n="site.leaders_og_description" data-i18n-attr="content">
   <meta property="og:url" content="https://shadowsofwar.io/leaders/">
   <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Leaders & Civilizations — Shadows of War" data-i18n="site.leaders_title" data-i18n-attr="content">
   <meta name="twitter:description"
-    content="Official compendium of the 12 historical leaders in Shadows of War: Command traits, district mechanics, and territorial conquest synergies."
+    content="The 12 playable leaders in Shadows of War: attack, gold, troop and capacity bonuses."
     data-i18n="site.leaders_og_description" data-i18n-attr="content">
   <meta name="twitter:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <link rel="icon" type="image/svg+xml" href="../sow.svg">
@@ -33,7 +33,7 @@
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": "Leaders & Civilizations in Shadows of War",
-    "description": "Technical guide to the 12 playable historical leaders, command traits, and district bonuses in Shadows of War.",
+    "description": "The 12 playable leaders in Shadows of War: attack, gold, troop and capacity bonuses.",
     "url": "https://shadowsofwar.io/leaders/",
     "mainEntity": {
       "@type": "ItemList",
@@ -58,43 +58,14 @@
 </head>
 
 <body class="guide-page">
-  <header class="site-nav" id="top">
-    <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label">
-        <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="28">
-      </a>
-      <nav class="desktop-nav" aria-label="Main navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label">
-        <a href="/leaders/" aria-current="page" data-i18n="site.nav_leaders">Leaders</a>
-        <a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a>
-      </nav>
-      <div class="nav-actions">
-        <div class="site-locale" data-locale-select aria-label="Select language"></div>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
-          <span class="theme-icon" aria-hidden="true">☼</span>
-          <span class="theme-label">Light mode</span>
-        </button>
-        <a class="button button-small button-orange" href="/play/" data-i18n="site.play_now">PLAY NOW</a>
-        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu"
-          aria-label="Open navigation" data-i18n="site.open_navigation" data-i18n-attr="aria-label">☰</button>
-      </div>
-    </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label" aria-hidden="true">
-      <a href="/leaders/" aria-current="page" data-i18n="site.nav_leaders">Leaders</a>
-      <a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a>
-      <div class="mobile-menu-actions">
-        <div class="site-locale" data-locale-select aria-label="Select language"></div>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme"><span
-            class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
-      </div>
-    </nav>
-  </header>
+  <!-- SOW_SITE_HEADER -->
 
   <main class="guide-main">
     <section class="guide-hero section-rule">
       <div class="container">
         <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.leaders_count">12 leaders</span></p>
         <h1><span data-i18n="site.leaders_heading">Leaders &amp;</span><br><em data-i18n="site.leaders_heading_em">Civilizations.</em></h1>
-        <p class="guide-lede" data-i18n="site.leaders_lede">Every match in Shadows of War assigns permanent civilizational command traits. Your leader dictates your core mechanical multiplier—governing combat strength, expansion rate, district gold generation, troop income, or maximum garrison capacity.</p>
+        <p class="guide-lede" data-i18n="site.leaders_lede">Each leader gives one bonus: attack, expansion, gold, troops, or capacity. Pick it to match how you play.</p>
         <div class="hero-actions" style="display: flex; gap: 12px; flex-wrap: wrap;">
           <a class="button button-orange" href="/play/" data-i18n="site.play">Play</a>
           <a class="button button-outline" href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a>
@@ -109,7 +80,7 @@
             <p class="eyebrow" data-i18n="site.leaders_section_label">Leaders</p>
             <h2><span data-i18n="site.leaders_section_heading">Command Traits</span><br><em data-i18n="site.leaders_section_heading_em">&amp; Specializations.</em></h2>
           </div>
-          <p data-i18n="site.leaders_section_summary">Inspect the 12 playable historical leaders currently active in the rotation. Align your district construction (Cities, Factories, Ports, Bunkers) with your leader's mechanical multiplier.</p>
+          <p data-i18n="site.leaders_section_summary">12 leaders live now. Match your districts (Cities, Factories, Ports, Bunkers) to the bonus.</p>
         </div>
 
         <div class="compendium-list">
@@ -127,7 +98,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_caesar_category">ROM · COMBAT MULTIPLIER</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_caesar_category">ROM · ATTACK</span>
                   <h3>Julius Caesar</h3>
                   <p>Roman Empire</p>
                 </div>
@@ -138,7 +109,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_caesar_ability">Legions of Rome</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_caesar_multiplier">Armies fight 10% stronger (troop strength multiplier 1.10x).</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_caesar_multiplier">Armies fight 10% stronger (troop strength multiplier 1.10x).</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_combat">Combat Str</span>
                       <div class="stat-track">
@@ -158,8 +129,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_caesar_mechanics">Reduces troop losses during tile conquest and contested border battles. Caesar trades units with superior efficiency against neutral defenders and enemy borders.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_caesar_mechanics">Lose fewer troops taking tiles and fighting at borders.</p>
                 </div>
               </div>
             </div>
@@ -178,7 +149,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_cleopatra_category">EGY · INDUSTRIAL ECONOMY</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_cleopatra_category">EGY · GOLD</span>
                   <h3>Cleopatra VII</h3>
                   <p>Egyptian Empire</p>
                 </div>
@@ -189,7 +160,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_cleopatra_ability">Gift of the Nile</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_cleopatra_multiplier">Factory districts generate +50% Gold income per tick.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_cleopatra_multiplier">Factory districts generate +50% Gold income per tick.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_factory_gold">Factory Gold</span>
                       <div class="stat-track">
@@ -209,8 +180,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_cleopatra_mechanics">Accelerates gold generation from industrial clusters. Surplus gold allows rapid placement of additional cities, defensive bunkers, and structure upgrades.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_cleopatra_mechanics">More gold from each factory district.</p>
                 </div>
               </div>
             </div>
@@ -229,7 +200,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_ragnar_category">NOR · MARITIME COMMERCE</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_ragnar_category">NOR · PORTS</span>
                   <h3>Ragnar Lothbrok</h3>
                   <p>Norse Kingdom</p>
                 </div>
@@ -240,7 +211,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_ragnar_ability">Longship Raid</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_ragnar_multiplier">Port districts generate +50% Gold income per tick.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_ragnar_multiplier">Port districts generate +50% Gold income per tick.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_port_gold">Port Gold</span>
                       <div class="stat-track">
@@ -260,8 +231,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_ragnar_mechanics">Rewards coastal expansion. Placing ports along water boundaries generates high gold returns while enabling water tile access across waterways.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_ragnar_mechanics">More gold from each port. Ports also open water tiles.</p>
                 </div>
               </div>
             </div>
@@ -280,7 +251,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_suntzu_category">CHN · INDUSTRIAL MOBILIZATION</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_suntzu_category">CHN · TROOPS</span>
                   <h3>Sun Tzu</h3>
                   <p>Chinese Empire</p>
                 </div>
@@ -291,7 +262,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_suntzu_ability">Art of War</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_suntzu_multiplier">Factory districts produce troops 20% faster.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_suntzu_multiplier">Factory districts produce troops 20% faster.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_troop_cadence">Troop Cadence</span>
                       <div class="stat-track">
@@ -311,8 +282,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_suntzu_mechanics">Increases troop recruitment cadence from factories. Accelerates army replenishment after major battles to sustain continuous territorial pressure.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_suntzu_mechanics">Factories refill your troops faster after battles.</p>
                 </div>
               </div>
             </div>
@@ -331,7 +302,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_alexander_category">MAC · EXPANSION VELOCITY</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_alexander_category">MAC · SPEED</span>
                   <h3>Alexander the Great</h3>
                   <p>Macedonian Empire</p>
                 </div>
@@ -342,7 +313,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_alexander_ability">Great Conquest</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_alexander_multiplier">Territory-conquering troops expand 15% faster.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_alexander_multiplier">Territory-conquering troops expand 15% faster.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_expansion_rate">Expansion Rate</span>
                       <div class="stat-track">
@@ -362,8 +333,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_alexander_mechanics">Increases the tile conquest rate per simulation tick. Enables rapid expansion into open neutral territory to secure early geographical boundaries.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_alexander_mechanics">Take neutral land faster at the start.</p>
                 </div>
               </div>
             </div>
@@ -382,7 +353,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_genghiskhan_category">MON · COMBAT BOUNTY</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_genghiskhan_category">MON · LOOT</span>
                   <h3>Genghis Khan</h3>
                   <p>Mongol Horde</p>
                 </div>
@@ -393,7 +364,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_genghiskhan_ability">Horde Momentum</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_genghiskhan_multiplier">Gain 10% of gold spent by defeated enemies.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_genghiskhan_multiplier">Gain 10% of gold spent by defeated enemies.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_combat_bounty">Combat Bounty</span>
                       <div class="stat-track">
@@ -413,8 +384,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_genghiskhan_mechanics">Converts combat victories into treasury income. Defeating developed enemy armies and structures siphons gold back into your own economy.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_genghiskhan_mechanics">Beating built-up enemies pays gold back into your treasury.</p>
                 </div>
               </div>
             </div>
@@ -433,7 +404,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_richard_category">ENG · URBAN CAPACITY</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_richard_category">ENG · CAPACITY</span>
                   <h3>Richard the Lionheart</h3>
                   <p>Angevin Empire</p>
                 </div>
@@ -444,7 +415,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_richard_ability">Crusader Fortresses</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_richard_multiplier">City districts grant +50% max troop capacity.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_richard_multiplier">City districts grant +50% max troop capacity.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_city_capacity">City Capacity</span>
                       <div class="stat-track">
@@ -464,8 +435,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_richard_mechanics">Raises the troop ceiling per placed City district. Allows hoarding large standing armies before launching full-scale frontier offensives.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_richard_mechanics">Each city holds more troops, so you can stock up before you attack.</p>
                 </div>
               </div>
             </div>
@@ -484,7 +455,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_vercingetorix_category">GAL · URBAN RECRUITMENT</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_vercingetorix_category">GAL · TROOPS</span>
                   <h3>Vercingetorix</h3>
                   <p>Gallic Tribes</p>
                 </div>
@@ -495,7 +466,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_vercingetorix_ability">Hillfort Gaul</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_vercingetorix_multiplier">City districts generate +50% troop income.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_vercingetorix_multiplier">City districts generate +50% troop income.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_city_troops">City Troops</span>
                       <div class="stat-track">
@@ -515,8 +486,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_vercingetorix_mechanics">Boosts baseline troop regeneration directly from Cities. Scales passive manpower generation with territory urbanization.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_vercingetorix_mechanics">Cities refill troops on their own.</p>
                 </div>
               </div>
             </div>
@@ -534,7 +505,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_boudica_category">ICE · URBAN REVENUE</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_boudica_category">ICE · GOLD</span>
                   <h3>Boudica</h3>
                   <p>Iceni Kingdom</p>
                 </div>
@@ -545,7 +516,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_boudica_ability">Iceni Revolt</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_boudica_multiplier">City districts generate +50% Gold.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_boudica_multiplier">City districts generate +50% Gold.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_city_gold">City Gold</span>
                       <div class="stat-track">
@@ -565,8 +536,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_boudica_mechanics">Increases gold yield from City districts. Enables an economy fueled primarily by territorial population centers rather than dedicated factories.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_boudica_mechanics">Earn gold from cities instead of factories.</p>
                 </div>
               </div>
             </div>
@@ -585,7 +556,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_ladysixsky_category">MAY · FACTORY REVENUE</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_ladysixsky_category">MAY · GOLD</span>
                   <h3>Lady Six Sky</h3>
                   <p>Maya Civilization</p>
                 </div>
@@ -596,7 +567,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_ladysixsky_ability">Temple of the Sky</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_ladysixsky_multiplier">Factory districts generate +50% Gold.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_ladysixsky_multiplier">Factory districts generate +50% Gold.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_factory_gold">Factory Gold</span>
                       <div class="stat-track">
@@ -616,8 +587,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_ladysixsky_mechanics">Maximizes gold efficiency from industrial factory placements. Produces heavy revenue streams to fund expansion and defensive structures.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_ladysixsky_mechanics">More gold from each factory to pay for troops and walls.</p>
                 </div>
               </div>
             </div>
@@ -635,7 +606,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_leonidas_category">SPA · GARRISON DEFENSE</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_leonidas_category">SPA · DEFENSE</span>
                   <h3>King Leonidas</h3>
                   <p>Sparta</p>
                 </div>
@@ -646,7 +617,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_leonidas_ability">Spartan Phalanx</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_leonidas_multiplier">Armory modules grant +50% max troop capacity.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_leonidas_multiplier">Armory modules grant +50% max troop capacity.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_armory_capacity">Armory Capacity</span>
                       <div class="stat-track">
@@ -666,8 +637,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_leonidas_mechanics">Expands maximum army capacity through Armory modules installed in City districts. Bunkers remain defensive structures; they do not provide Leonidas's capacity bonus.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_leonidas_mechanics">Armory modules in cities raise your troop cap. Bunkers stay defensive only.</p>
                 </div>
               </div>
             </div>
@@ -686,7 +657,7 @@
             <div class="compendium-content">
               <div class="compendium-header">
                 <div class="compendium-title">
-                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_napoleon_category">FRA · RAPID EXPANSION</span>
+                  <span class="mono-label" style="color: var(--orange);" data-i18n="site.leader_napoleon_category">FRA · SPEED</span>
                   <h3>Napoleon Bonaparte</h3>
                   <p>Kingdom of France</p>
                 </div>
@@ -697,7 +668,7 @@
                 <div class="compendium-block">
                   <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
                   <p class="compendium-ability-name" data-i18n="site.leader_napoleon_ability">Grande Armée</p>
-                  <p><strong data-i18n="site.mechanical_multiplier">Mechanical Multiplier:</strong> <span data-i18n="site.leader_napoleon_multiplier">Territory-conquering troops expand 20% faster.</span></p>
+                  <p><strong data-i18n="site.mechanical_multiplier">Bonus:</strong> <span data-i18n="site.leader_napoleon_multiplier">Territory-conquering troops expand 20% faster.</span></p>
                   <div class="stat-meters-grid">
                     <div class="stat-meter"><span class="stat-label" data-i18n="site.stat_expansion_rate">Expansion Rate</span>
                       <div class="stat-track">
@@ -717,8 +688,8 @@
                   </div>
                 </div>
                 <div class="compendium-block">
-                  <p class="mono-label" data-i18n="site.engine_mechanics">ENGINE MECHANICS</p>
-                  <p data-i18n="site.leader_napoleon_mechanics">Highest expansion speed multiplier in the engine. Rapidly claims territory across neutral regions and accelerates border advancement.</p>
+                  <p class="mono-label" data-i18n="site.engine_mechanics">HOW IT PLAYS</p>
+                  <p data-i18n="site.leader_napoleon_mechanics">Fastest land grab in the game.</p>
                 </div>
               </div>
             </div>
@@ -733,7 +704,7 @@
         <div>
           <p class="eyebrow" data-i18n="site.leaders_ready">Are you ready?</p>
           <h2><span data-i18n="site.leaders_ready_title">Choose a leader.</span><br><em data-i18n="site.leaders_ready_em">Play now!.</em></h2>
-          <p data-i18n="site.leaders_ready_body">Join other players, make alliances, betray rivals... and together we shall conquer the world!</p>
+          <p data-i18n="site.leaders_ready_body">Join a lobby, ally, betray, and take the map.</p>
         </div>
         <div class="platform-stack">
           <a class="platform-card platform-live" href="/play/"><span class="platform-icon">◎</span><span><b data-i18n="site.open_game">Open game</b><small>shadowsofwar.io</small></span></a>

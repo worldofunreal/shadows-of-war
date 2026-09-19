@@ -167,10 +167,10 @@ pub fn resolve_building_placement_tile(query: &PlacementQuery) -> Result<u32, &'
 
     if valid_land_tiles.is_empty() {
         if !found_any_owned {
-            return Err("Target area must be inside your owned territory!");
+            return Err("Build inside your own land.");
         }
         if !found_any_land {
-            return Err("Structures can only be built on land territory!");
+            return Err("Structures go on land, not water.");
         }
         if !found_any_far_enough {
             if kind == sow_core::game::BuildingKind::City {

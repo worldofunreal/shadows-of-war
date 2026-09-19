@@ -292,7 +292,7 @@
             portal: window.SOW_PORTAL || 'site',
             platform: 'web',
             build: window.SOW_BUILD_TS && window.SOW_BUILD_TS !== '__BUILD_TS__' ? window.SOW_BUILD_TS : undefined,
-            locale: navigator.language || '',
+            locale: typeof window.SOW_getLocale === 'function' ? window.SOW_getLocale() : (window.SOW_LOCALE_DEFAULT || 'en'),
         };
     }
 

@@ -161,8 +161,8 @@
         return "<main class='sow-menu__main' data-screen-panel='home'>" +
             renderCommandPanel() +
             "<section class='sow-menu__battlefield'>" +
-                "<div class='sow-menu__leader-copy'><small>" + esc(leader.civilization) + "</small><h2>" + esc(leader.name) +
-                    "</h2><p>" + esc(leader.perk) + "</p></div>" +
+                "<div class='sow-menu__leader-copy'><small>" + esc(leaderCivilization(leader)) + "</small><h2>" + esc(leader.name) +
+                    "</h2><p>" + esc(leaderPerk(leader)) + "</p></div>" +
             "</section>" +
         "</main>";
     }
@@ -171,6 +171,8 @@
         var completed = !!episode.completed;
         var unlocked = !!episode.unlocked;
         var isNext = unlocked && !completed && episode.id === continueId;
+        var title = localizedText(episode.title);
+        var subtitle = localizedText(episode.subtitle);
         var status = completed ? SOW_t("lobbies.completed") : unlocked ? (isNext ? SOW_t("lobbies.next") : SOW_t("lobbies.available")) : SOW_t("lobbies.locked");
         var label = completed ? SOW_t("lobbies.replay") : isNext ? SOW_t("lobbies.continue") : SOW_t("lobbies.play");
         var action = unlocked
@@ -178,8 +180,8 @@
             : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>" + esc(SOW_t("lobbies.locked")) + "</button>";
         return "<article class='sow-campaign__episode" + (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") + "'>" +
             "<div class='sow-campaign__episode-status'>" + esc(status) + "</div>" +
-            "<h2>" + esc(episode.title) + "</h2>" +
-            "<p>" + esc(episode.subtitle) + "</p>" +
+            "<h2>" + esc(title) + "</h2>" +
+            "<p>" + esc(subtitle) + "</p>" +
             action +
         "</article>";
     }

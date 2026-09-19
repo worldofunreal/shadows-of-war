@@ -10,9 +10,22 @@
     return value === key || value === `[${key}]` ? fallback : value;
   };
 
+  function syncCurrentNavigation() {
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    document.querySelectorAll('[data-site-nav]').forEach(link => {
+      const active = path === `/${link.dataset.siteNav}`;
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+  }
+
+  syncCurrentNavigation();
+
   const localeOptions = codes => codes.map(code => ({
     value: code,
-    label: translate(`menu.language_${code}`)
+    label: typeof window.SOW_getLocaleLabel === 'function'
+      ? window.SOW_getLocaleLabel(code)
+      : translate(`menu.language_${String(code).replace(/-/g, '_')}`)
   }));
 
   function syncLocaleDropdown(dropdown, open) {
@@ -64,8 +77,11 @@
 
   function applyLocale() {
     if (typeof window.SOW_getLocale !== 'function' || typeof window.SOW_t !== 'function') return;
+    syncCurrentNavigation();
     const locale = window.SOW_getLocale();
-    root.lang = locale;
+    root.lang = typeof window.SOW_getLocaleTag === 'function'
+      ? window.SOW_getLocaleTag(locale)
+      : locale;
     document.querySelectorAll('[data-i18n]').forEach(element => {
       const key = element.dataset.i18n;
       const value = translate(key);

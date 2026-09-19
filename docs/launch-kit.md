@@ -6,9 +6,9 @@ Use this copy for the first distribution pass. Keep the wording consistent:
 
 ## Canonical description
 
-> Shadows of War is a match-based browser MMORTS where legendary leaders
-> compete for territory on world maps. Expand your borders, build an economy,
-> forge alliances, betray rivals, and fight for control of the map in real time.
+> Shadows of War is a match-based browser MMORTS with 12 historic leaders
+> fighting for land. Take ground, build an economy, ally, betray,
+> and hold the map.
 
 CTA: **Play now at shadowsofwar.io**
 
@@ -20,8 +20,8 @@ CTA: **Play now at shadowsofwar.io**
 
 ### Two sentences
 
-> Choose one of twelve legendary leaders and enter a real-time territory war.
-> Expand, build, ally, betray, and survive long enough to control the map.
+> Choose 1 of 12 historic leaders and enter a real-time territory war.
+> Expand, build, ally, betray, and hold the map.
 
 ### Search-friendly video title options
 
@@ -35,8 +35,8 @@ CTA: **Play now at shadowsofwar.io**
 Shadows of War is a match-based browser MMORTS about territory conquest on
 world maps.
 
-Choose a legendary leader, expand your borders, build your war economy, forge
-alliances, and betray rivals when the front line changes.
+Choose 1 of 12 leaders, take land, build your economy, ally,
+and break it when the front line changes.
 
 Play now: https://shadowsofwar.io
 How to play: https://shadowsofwar.io/how-to-play/
@@ -53,17 +53,16 @@ GitHub: https://github.com/worldofunreal/shadows-of-war
 
 ### Summary
 
-`Real-time world-map territory conquest with legendary leaders, economy, alliances, and betrayal.`
+`Real-time territory war with 12 leaders, economy, alliances, and betrayal.`
 
 ### Page body
 
 ```text
-Command one of twelve legendary leaders in a real-time territory war.
+Command 1 of 12 leaders in a real-time territory war. 12 live now, roster growing.
 
-Expand your borders, build cities and ports, grow your economy, negotiate
-alliances, and decide when betrayal is worth the risk. Shadows of War is a
-match-based browser MMORTS built around the stories that emerge from every
-front line.
+Take land, build cities and ports, grow your economy, ally,
+and decide when breaking it is worth it. Each match turns
+on the front line.
 
 Play the current browser build at https://shadowsofwar.io/play/
 
@@ -79,8 +78,8 @@ Suggested tags: `strategy`, `multiplayer`, `real-time`, `browser`, `war`,
 Shadows of War is now positioned around one clear idea: browser MMORTS
 territory conquest.
 
-Choose a legendary leader, expand across a world map, build your economy, form
-an alliance, and decide when to break it.
+Choose 1 of 12 leaders, take land, build your economy, ally,
+and decide when to break it.
 
 Play now: https://shadowsofwar.io
 Field manual: https://shadowsofwar.io/how-to-play/

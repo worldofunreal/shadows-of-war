@@ -9,8 +9,8 @@
             inferredBase = new URL("locales", runtimeScript.src).toString().replace(/\/$/, "");
         } catch (error) {}
     }
-    var defaultLocale = String(window.SOW_LOCALE_DEFAULT || "en").toLowerCase();
-    var catalogVersion = Number(window.SOW_LOCALE_CATALOG_VERSION || 1);
+    var defaultLocale = String(window.SOW_LOCALE_DEFAULT || "en").toLowerCase().replace(/_/g, "-");
+    var catalogVersion = Number(window.SOW_LOCALE_CATALOG_VERSION || 0);
     var configuredCodes = Array.isArray(window.SOW_LOCALE_CODES) ? window.SOW_LOCALE_CODES : [];
     var hasConfiguredCodes = configuredCodes.length > 0;
     var supported = Object.create(null);
@@ -34,8 +34,32 @@
     var englishStrings = {};
 
     function normalizeLocale(value) {
-        var locale = String(value || "").toLowerCase().replace(/_/g, "-").split("-")[0];
-        return supported[locale] ? locale : defaultLocale;
+        var locale = String(value || "").toLowerCase().replace(/_/g, "-");
+        if (supported[locale]) return locale;
+        var aliases = { zh: "zh-cn", pt: "pt-br", tl: "fil" };
+        var alias = aliases[locale];
+        return alias && supported[alias] ? alias : defaultLocale;
+    }
+
+    function localeTag(locale) {
+        var code = String(locale || defaultLocale).toLowerCase();
+        return code === "zh-cn" ? "zh-CN" : code === "pt-br" ? "pt-BR" : code;
+    }
+
+    function localeToken(locale) {
+        return String(locale || "").toLowerCase().replace(/-/g, "_");
+    }
+
+    function localeDirection(locale) {
+        return String(locale || "").toLowerCase() === "ar" ? "rtl" : "ltr";
+    }
+
+    function localeScript(locale) {
+        var code = String(locale || "").toLowerCase();
+        if (code === "ar") return "arabic";
+        if (code === "zh-cn" || code === "ja" || code === "ko") return "cjk";
+        if (code === "ru") return "cyrillic";
+        return "latin";
     }
 
     function storedLocale() {
@@ -67,14 +91,19 @@
     }
 
     function loadRegistry() {
-        if (hasConfiguredCodes) return Promise.resolve();
+        if (hasConfiguredCodes && catalogVersion > 0) return Promise.resolve();
         return fetch(registryUrl(), { credentials: "same-origin" }).then(function (response) {
             if (!response.ok) throw new Error("locale registry returned " + response.status);
             return response.json();
         }).then(function (payload) {
-            if (!payload || payload.schema !== 1 || !Array.isArray(payload.languages)) {
+            var registryVersion = Number(payload && payload.version);
+            if (!payload || payload.schema !== 1 || !Number.isInteger(registryVersion) || registryVersion < 1 || !Array.isArray(payload.languages)) {
                 throw new Error("locale registry has incompatible metadata");
             }
+            if (catalogVersion > 0 && catalogVersion !== registryVersion) {
+                throw new Error("locale registry version does not match the configured catalog");
+            }
+            catalogVersion = registryVersion;
             payload.languages.forEach(function (entry) {
                 addSupportedLanguage(typeof entry === "string" ? entry : entry && entry.code);
             });
@@ -92,9 +121,11 @@
             if (!response.ok) throw new Error("locale " + code + " returned " + response.status);
             return response.json();
         }).then(function (payload) {
-            if (!payload || payload.schema !== 1 || Number(payload.version) !== catalogVersion || payload.locale !== code) {
+            var payloadVersion = Number(payload && payload.version);
+            if (!payload || payload.schema !== 1 || !Number.isInteger(payloadVersion) || payloadVersion < 1 || (catalogVersion > 0 && payloadVersion !== catalogVersion) || payload.locale !== code) {
                 throw new Error("locale " + code + " has incompatible catalog metadata");
             }
+            catalogVersion = payloadVersion;
             if (Array.isArray(payload.languages)) {
                 payload.languages.forEach(function (entry) {
                     var code = typeof entry === "string" ? entry : entry && entry.code;
@@ -144,26 +175,39 @@
     }
 
     function announce(locale) {
+        var tag = localeTag(locale);
         if (typeof window.CustomEvent === "function") {
-            window.dispatchEvent(new CustomEvent("sow:locale-change", { detail: { locale: locale } }));
+            window.dispatchEvent(new CustomEvent("sow:locale-change", { detail: { locale: tag } }));
         }
         if (typeof window.SOW_menu_locale_changed === "function") {
-            window.SOW_menu_locale_changed(locale);
+            window.SOW_menu_locale_changed(tag);
         }
     }
 
     function activate(locale, strings, notify) {
         activeLocale = locale;
         activeStrings = strings;
-        window.SOW_LOCALE = locale;
+        window.SOW_LOCALE = localeTag(locale);
+        if (document.documentElement) {
+            document.documentElement.lang = localeTag(locale);
+            document.documentElement.dir = localeDirection(locale);
+            document.documentElement.dataset.locale = localeTag(locale);
+            document.documentElement.dataset.localeScript = localeScript(locale);
+        }
         saveLocale(locale);
         if (notify) announce(locale);
         return strings;
     }
 
     window.SOW_t = translate;
-    window.SOW_getLocale = function () { return activeLocale; };
-    window.SOW_getSupportedLocales = function () { return supportedCodes.slice(); };
+    window.SOW_getLocale = function () { return localeTag(activeLocale); };
+    window.SOW_getSupportedLocales = function () { return supportedCodes.map(localeTag); };
+    window.SOW_getLocaleTag = function (locale) { return localeTag(normalizeLocale(locale)); };
+    window.SOW_getLocaleDirection = function (locale) { return localeDirection(normalizeLocale(locale)); };
+    window.SOW_getLocaleScript = function (locale) { return localeScript(normalizeLocale(locale)); };
+    window.SOW_getLocaleLabel = function (locale) {
+        return translate("menu.language_" + localeToken(normalizeLocale(locale)));
+    };
     window.SOW_setLocale = function (locale) {
         var requested = normalizeLocale(locale);
         return load(requested).then(function (strings) {

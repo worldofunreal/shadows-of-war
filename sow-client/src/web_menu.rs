@@ -1560,8 +1560,8 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
             let unlocked = episode.is_unlocked(progress);
             serde_json::json!({
                 "id": episode.episode_id(),
-                "title": episode.menu_title(),
-                "subtitle": episode.menu_subtitle(),
+                "title": localized_text_payload(&episode.menu_title_text()),
+                "subtitle": localized_text_payload(&episode.menu_subtitle_text()),
                 "completed": completed,
                 "unlocked": unlocked,
                 "replayable": unlocked,
@@ -1668,8 +1668,27 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 serde_json::json!({
                     "id": leader_id(leader),
                     "name": leader.name(),
-                    "civilization": leader.civilization().name(),
-                    "perk": leader.perk_description(),
+                    "civilization_key": format!(
+                        "heroes.civilization_{}",
+                        match leader.civilization() {
+                            sow_core::player::Civilization::Rome => "rome",
+                            sow_core::player::Civilization::Egypt => "egypt",
+                            sow_core::player::Civilization::Vikings => "vikings",
+                            sow_core::player::Civilization::China => "china",
+                            sow_core::player::Civilization::Macedon => "macedon",
+                            sow_core::player::Civilization::Mongols => "mongols",
+                            sow_core::player::Civilization::Angevin => "angevin",
+                            sow_core::player::Civilization::Gallic => "gallic",
+                            sow_core::player::Civilization::Iceni => "iceni",
+                            sow_core::player::Civilization::Maya => "maya",
+                            sow_core::player::Civilization::Sparta => "sparta",
+                            sow_core::player::Civilization::France => "france",
+                        }
+                    ),
+                    "perk_key": format!(
+                        "profile.leader_{}_description",
+                        slug.replace('_', "")
+                    ),
                     "slug": slug,
                     "free_rotation": free_rotation,
                     "owned": owned,

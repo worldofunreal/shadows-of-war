@@ -26,7 +26,7 @@ function renderTopbar() {
                 "<div class='sow-menu__profile'>" +
                     "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='16' " +
                         (state.name_locked ? "readonly" : "") + " aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
-                    "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leader.civilization) + "</button>" +
+                    "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leaderCivilization(leader)) + "</button>" +
                 "</div>" +
             "</div>" +
             "<div class='sow-menu__top-actions'>" +
@@ -54,7 +54,7 @@ function updateTopbar() {
     var avatar = topbar.querySelector(".sow-menu__avatar");
     if (avatar) avatar.style.backgroundImage = "url(" + JSON.stringify(avatarImage()) + ")";
     var leaderLink = topbar.querySelector(".sow-menu__profile-link");
-    if (leaderLink) leaderLink.textContent = leader.name + " · " + leader.civilization;
+    if (leaderLink) leaderLink.textContent = leader.name + " · " + leaderCivilization(leader);
     var level = topbar.querySelector("[data-progression-level-value]");
     if (level) level.textContent = String(state.level == null ? 1 : state.level);
     var xp = topbar.querySelector("[data-progression-xp-value]");

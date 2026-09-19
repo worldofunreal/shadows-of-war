@@ -140,7 +140,7 @@
             left: 50%;
             transform: translate(-50%, -50%);
             margin: 0;
-            font-family: "Work Sans", system-ui, sans-serif;
+            font-family: var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
             font-size: 10px;
             font-weight: 600;
             color: #fff;

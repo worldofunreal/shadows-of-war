@@ -39,7 +39,7 @@
                     "<div class='sow-menu__profile'>" +
                         "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='20' " +
                             (state.name_locked ? "readonly" : "") + " aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
-                        "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leader.civilization) + "</button>" +
+                        "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leaderCivilization(leader)) + "</button>" +
                     "</div>" +
                 "</div>" +
                 "<div class='sow-menu__top-actions'>" +
@@ -106,9 +106,9 @@
     }
 
     function localeOptions() {
-        var codes = Array.isArray(window.SOW_LOCALE_CODES) && window.SOW_LOCALE_CODES.length ? window.SOW_LOCALE_CODES : ["en"];
+        var codes = typeof window.SOW_getSupportedLocales === "function" ? window.SOW_getSupportedLocales() : [];
         return codes.map(function (code) {
-            return { value: code, label: SOW_t("menu.language_" + code) };
+            return { value: code, label: typeof window.SOW_getLocaleLabel === "function" ? window.SOW_getLocaleLabel(code) : SOW_t("menu.language_" + String(code).replace(/-/g, "_")) };
         });
     }
 
@@ -400,7 +400,7 @@
             avatar.dataset.avatarUrl = avatarUrl;
         }
         var leaderLink = topbar.querySelector(".sow-menu__profile-link");
-        if (leaderLink) leaderLink.textContent = leader.name + " · " + leader.civilization;
+        if (leaderLink) leaderLink.textContent = leader.name + " · " + leaderCivilization(leader);
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
         var showSignIn = !(auth.linked || auth.pending);
         var actions = topbar.querySelector(".sow-menu__top-actions");

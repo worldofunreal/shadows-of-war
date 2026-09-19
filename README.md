@@ -5,7 +5,7 @@
 <h1 align="center">Shadows of War</h1>
 
 <p align="center">
-  <strong>Command one of hundreds of legendary historic leaders in real-time territory wars.</strong><br />
+  <strong>Command 1 of 12 historic leaders in real-time territory wars. Roster growing.</strong><br />
   Build cities, factories and ports, forge alliances, betray rivals, and redraw the world map in this multiplayer game.
 </p>
 
@@ -28,7 +28,7 @@
 
 Shadows of War is a multiplayer strategy game about taking territory and turning it into power.
 
-- Expand across a living world map.
+- Expand across the world map.
 - Build cities, factories, ports and an economy that supports your wars.
 - Choose a historic leader and play around their strengths.
 - Forge alliances, betray rivals and fight for control of the map.

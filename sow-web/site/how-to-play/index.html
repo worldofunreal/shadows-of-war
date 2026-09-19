@@ -24,51 +24,24 @@
     "name": "How to play Shadows of War",
     "description": "The opening moves for a match-based multiplayer strategy game.",
     "step": [
-      { "@type": "HowToStep", "name": "Join matchmaking", "text": "Open the game and enter the current matchmaking lobby." },
-      { "@type": "HowToStep", "name": "Choose a leader", "text": "Select a leader whose command trait fits your opening." },
-      { "@type": "HowToStep", "name": "Expand and build", "text": "Claim territory, construct structures, and grow your economy." },
-      { "@type": "HowToStep", "name": "Ally or betray", "text": "Use diplomacy and resources to shape the front line." },
-      { "@type": "HowToStep", "name": "Control the map", "text": "Reach the map-control threshold or eliminate the remaining opposition." }
+      { "@type": "HowToStep", "name": "Join a lobby", "text": "Open the game and join the open lobby." },
+      { "@type": "HowToStep", "name": "Pick a leader", "text": "Pick 1 of 12 leaders. Each gives one bonus." },
+      { "@type": "HowToStep", "name": "Take land and build", "text": "Take nearby tiles. Each pays gold and troops. Build on your land." },
+      { "@type": "HowToStep", "name": "Ally or betray", "text": "Ally with neighbors, break it when it pays." },
+      { "@type": "HowToStep", "name": "Hold the map", "text": "Hold most of the land or wipe out every rival." }
     ]
   }
   </script>
 </head>
 <body class="guide-page">
-  <header class="site-nav" id="top">
-    <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label">
-        <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="28">
-      </a>
-      <nav class="desktop-nav" aria-label="Main navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label">
-        <a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a>
-        <a href="/how-to-play/" aria-current="page" data-i18n="site.nav_how_to_play">How to play</a>
-      </nav>
-      <div class="nav-actions">
-        <div class="site-locale" data-locale-select aria-label="Select language"></div>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
-          <span class="theme-icon" aria-hidden="true">☼</span>
-          <span class="theme-label">Light mode</span>
-        </button>
-        <a class="button button-small button-orange" href="/play/" data-i18n="site.play_now">PLAY NOW</a>
-        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation" data-i18n="site.open_navigation" data-i18n-attr="aria-label">☰</button>
-      </div>
-    </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" data-i18n="site.main_navigation" data-i18n-attr="aria-label" aria-hidden="true">
-      <a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a>
-      <a href="/how-to-play/" aria-current="page" data-i18n="site.nav_how_to_play">How to play</a>
-      <div class="mobile-menu-actions">
-        <div class="site-locale" data-locale-select aria-label="Select language"></div>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme"><span class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
-      </div>
-    </nav>
-  </header>
+  <!-- SOW_SITE_HEADER -->
 
   <main class="guide-main">
     <section class="guide-hero section-rule">
       <div class="container">
         <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.how_eyebrow">How to play</span></p>
         <h1><span data-i18n="site.how_heading">Take the</span><br><em data-i18n="site.how_heading_em">map.</em></h1>
-        <p class="guide-lede" data-i18n="site.how_lede">Shadows of War is a match-based MMORTS. Start with a commander, turn territory into an economy, forge temporary alliances, and fight for control of the map.</p>
+        <p class="guide-lede" data-i18n="site.how_lede">Shadows of War is a match-based MMORTS. Start with a leader, turn territory into an economy, ally for a while, and fight for the map.</p>
         <div class="hero-actions" style="display: flex; gap: 12px; flex-wrap: wrap;">
           <a class="button button-orange" href="/play/" data-i18n="site.play">Play</a>
           <a class="button button-outline" href="/leaders/" data-i18n="site.view_leaders">View leaders</a>
@@ -85,47 +58,47 @@
             <span>01</span>
             <div>
               <h3 data-i18n="site.how_step_1_title">Join matchmaking &amp; select match mode</h3>
-              <p data-i18n="site.how_step_1_body">Join the active matchmaking lobby. The queue cycles between Free-For-All (FFA), Team Battles, and Humans vs. World Nations across world maps including Europe, Asia, Africa, East Anglia, and the Americas.</p>
+              <p data-i18n="site.how_step_1_body">Join the lobby. Modes rotate: Free-For-All, Teams, and Humans vs Nations, on maps like Europe, Asia, Africa, East Anglia and the Americas.</p>
             </div>
           </article>
           <article class="guide-step">
             <span>02</span>
             <div>
-              <h3 data-i18n="site.how_step_2_title">Choose your commander &amp; civilizational edge</h3>
-              <p><span data-i18n="site.how_step_2_body">Pick one of twelve historical commanders. Each leader provides a permanent mechanical multiplier—such as Julius Caesar's 1.10x combat strength, Cleopatra's +50% factory gold, Sun Tzu's 20% troop production rate, or Ragnar's +50% port gold.</span> <a class="inline-link" href="/leaders/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.compare_leader_traits">Compare leader traits</a></p>
+              <h3 data-i18n="site.how_step_2_title">Choose your leader &amp; bonus</h3>
+              <p><span data-i18n="site.how_step_2_body">Pick 1 of 12 leaders. Each gives one bonus, like Caesar's 10% attack, Cleopatra's +50% factory gold, Sun Tzu's 20% troop speed, or Ragnar's +50% port gold.</span> <a class="inline-link" href="/leaders/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.compare_leader_traits">Compare leader traits</a></p>
             </div>
           </article>
           <article class="guide-step">
             <span>03</span>
             <div>
-              <h3 data-i18n="site.how_step_3_title">Claim territory &amp; construct specialized districts</h3>
-              <p data-i18n="site.how_step_3_body">Expand outwards to capture adjacent tiles. Every captured tile scales baseline gold and troop income. Construct specialized buildings on your territory:</p>
-              <ul style="margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.8;">
-                <li><strong data-i18n="site.city_label">Cities:</strong> <span data-i18n="site.city_body">Increase max troop capacity and generate passive troop and gold income.</span></li>
-                <li><strong data-i18n="site.factory_label">Factories:</strong> <span data-i18n="site.factory_body">Generate gold revenue and increase troop recruitment speed.</span></li>
-                <li><strong data-i18n="site.port_label">Ports:</strong> <span data-i18n="site.port_body">Placed on coastal tiles to generate gold, troop income, and provide water access.</span></li>
-                <li><strong data-i18n="site.bunker_label">Bunkers:</strong> <span data-i18n="site.bunker_body">Fortify defensive frontiers, extend defensive coverage, and reduce incoming troop losses. City Armory modules increase maximum troop capacity.</span></li>
+              <h3 data-i18n="site.how_step_3_title">Claim land &amp; build districts</h3>
+              <p data-i18n="site.how_step_3_body">Take the tiles next to you. Each tile pays gold and troops. Build on your land:</p>
+              <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 13px; line-height: 1.8;">
+                <li><strong data-i18n="site.city_label">Cities:</strong> <span data-i18n="site.city_body">Cities hold more troops and pay troops and gold.</span></li>
+                <li><strong data-i18n="site.factory_label">Factories:</strong> <span data-i18n="site.factory_body">Factories pay gold and refill troops faster.</span></li>
+                <li><strong data-i18n="site.port_label">Ports:</strong> <span data-i18n="site.port_body">Build ports on coasts for gold, troops and water tiles.</span></li>
+                <li><strong data-i18n="site.bunker_label">Bunkers:</strong> <span data-i18n="site.bunker_body">Bunkers cut your losses on defense. Armory modules in cities raise the troop cap.</span></li>
               </ul>
             </div>
           </article>
           <article class="guide-step">
             <span>04</span>
             <div>
-              <h3 data-i18n="site.how_step_4_title">Manage economy, terrain &amp; army momentum</h3>
-              <p data-i18n="site.how_step_4_body">Conquest consumes troops. Reinvest gold from factories, cities, and ports to fund further construction. Use natural terrain multipliers (highlands and mountains increase attack defense cost) to anchor strong defensive frontiers while directing army momentum toward high-value targets.</p>
+              <h3 data-i18n="site.how_step_4_title">Spend gold, hold hills</h3>
+              <p data-i18n="site.how_step_4_body">Taking land costs troops. Spend factory, city and port gold on more buildings. Hills and mountains cost attackers extra, so hold them and push where it pays.</p>
             </div>
           </article>
           <article class="guide-step">
             <span>05</span>
             <div>
               <h3 data-i18n="site.how_step_5_title">Diplomacy, betrayal &amp; map control victory</h3>
-              <p><span data-i18n="site.how_step_5_body_before">Form non-aggression alliances with neighboring players to coordinate fronts. A player secures victory by reaching the</span> <strong data-i18n="site.how_step_5_threshold">map control win threshold</strong> <span data-i18n="site.how_step_5_body_after">(controlling the required majority of total landmass) or by eliminating all rival commanders. Betrayal breaks an alliance immediately, turning shared borders into active combat frontiers.</span></p>
+              <p><span data-i18n="site.how_step_5_body_before">Ally with neighbors to hold a front. You win at</span> <strong data-i18n="site.how_step_5_threshold">map control win threshold</strong> <span data-i18n="site.how_step_5_body_after">(most of the land) or by wiping out every rival. Breaking an alliance turns that border into a fight at once.</span></p>
             </div>
           </article>
         </div>
         <aside class="guide-aside">
           <h3 data-i18n="site.match_structure">Match structure</h3>
-          <p data-i18n="site.match_structure_body">The server keeps one rolling matchmaking lobby and rotates the mode and map selection over time.</p>
+          <p data-i18n="site.match_structure_body">One lobby stays open. Mode and map rotate over time.</p>
           <ul>
             <li data-i18n="site.match_ffa">FFA (60% land victory)</li>
             <li data-i18n="site.match_teams">Teams &amp; Coalitions</li>

@@ -26,9 +26,29 @@
     overflow-x: hidden;
     overflow-y: hidden;
     color: #f5f1e8;
-    font-family: "Work Sans", system-ui, sans-serif;
+    font-family: var(--sow-ui-font, "Work Sans", system-ui, sans-serif);
+    direction: ltr;
     letter-spacing: 0.01em;
     pointer-events: auto;
+}
+
+html[dir="rtl"] #sow-menu {
+    direction: rtl;
+}
+
+html[dir="rtl"] #sow-menu,
+html[data-locale-script="arabic"] #sow-menu,
+html[data-locale-script="cjk"] #sow-menu,
+html[data-locale-script="cyrillic"] #sow-menu {
+    letter-spacing: normal;
+}
+
+html[data-locale-script="cjk"] #sow-menu :where(h1, h2, h3, p, button, input, label, span) {
+    overflow-wrap: anywhere;
+}
+
+html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]) {
+    text-align: start;
 }
 
 #sow-menu[hidden] {
@@ -71,6 +91,9 @@
 
 #sow-menu button {
     pointer-events: auto;
+}
+
+#sow-menu button:not(.sow-control-dropdown__trigger):not(.sow-control-dropdown__option) {
     font: inherit;
     font-weight: var(--sow-button-weight);
 }
@@ -159,7 +182,7 @@
 .sow-menu__avatar::after {
     content: "";
     position: absolute;
-    right: -2px;
+    inset-inline-end: -2px;
     bottom: -2px;
     width: 9px;
     height: 9px;
@@ -222,7 +245,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-left: auto;
+    margin-inline-start: auto;
 }
 
 .sow-menu__progress {
@@ -255,7 +278,7 @@
     color: #f7f3e9;
     font-weight: 800;
     gap: 5px;
-    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    border-inline-end: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .sow-menu__level small {
@@ -307,7 +330,7 @@
     font-weight: 800;
     text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
     gap: 6px;
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .sow-menu__currency-icon {
@@ -397,7 +420,7 @@
     overflow-x: hidden;
     overflow-y: visible;
     padding: 22px;
-    border-left: 3px solid var(--sow-gold);
+    border-inline-start: 3px solid var(--sow-gold);
     background: linear-gradient(90deg, rgba(9, 11, 15, 0.88), rgba(9, 11, 15, 0.56));
     box-sizing: border-box;
     display: flex;
@@ -484,7 +507,7 @@
     cursor: pointer;
     font-weight: var(--sow-button-weight);
     letter-spacing: var(--sow-button-tracking);
-    text-align: left;
+    text-align: start;
     text-transform: uppercase;
     transition: transform 160ms ease, filter 160ms ease, border-color 160ms ease;
 }
@@ -614,7 +637,7 @@
 .sow-menu__leader-copy {
     width: min(100%, 600px);
     margin-bottom: 22px;
-    text-align: right;
+    text-align: end;
     text-shadow: 0 3px 18px rgba(0, 0, 0, 0.8);
 }
 
@@ -700,8 +723,7 @@
 .sow-menu__lobby-bottom {
     position: absolute;
     z-index: 2;
-    left: 12px;
-    right: 12px;
+    inset-inline: 12px;
 }
 
 .sow-menu__lobby-top {
@@ -758,7 +780,7 @@
 }
 
 .sow-menu__lobby-lock {
-    margin-left: auto;
+    margin-inline-start: auto;
     color: var(--sow-gold-bright);
 }
 
@@ -886,7 +908,7 @@
     font-weight: var(--sow-button-weight);
     letter-spacing: 0.08em;
     cursor: pointer;
-    text-align: left;
+    text-align: start;
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1630,7 +1652,7 @@
     }
 
     .sow-menu__leader-copy {
-        text-align: left;
+        text-align: start;
     }
 }
 
@@ -1688,7 +1710,7 @@
     .sow-menu__command {
         max-height: none;
         padding: 18px;
-        border-left: 0;
+        border-inline-start: 0;
         border-top: 2px solid var(--sow-gold);
         background: linear-gradient(0deg, rgba(9, 11, 15, 0.92), rgba(9, 11, 15, 0.46));
         overflow: visible;
@@ -1840,7 +1862,7 @@
     .sow-menu__top-actions {
         width: auto;
         min-width: 0;
-        margin-left: 0;
+        margin-inline-start: 0;
         justify-content: flex-end;
         gap: 4px;
     }
@@ -1892,7 +1914,7 @@
         margin: 0;
         padding: 14px;
         border: 1px solid var(--sow-line);
-        border-left: 2px solid var(--sow-gold);
+        border-inline-start: 2px solid var(--sow-gold);
         border-radius: 8px;
         background: rgba(10, 12, 16, 0.88);
     }
@@ -2197,7 +2219,7 @@
         overflow: visible;
         padding: 14px;
         border-top: 2px solid var(--sow-gold);
-        border-left: 0;
+        border-inline-start: 0;
     }
 
     #sow-menu[data-screen="home"] .sow-menu__home-public {
@@ -2224,13 +2246,13 @@
     #sow-menu[data-screen="queue"] .sow-menu__main,
     #sow-menu[data-screen="heroes"] .sow-menu__main,
     #sow-menu[data-screen="store"] .sow-menu__main {
-        padding-right: 1px;
+        padding-inline-end: 1px;
         padding-bottom: 2px;
     }
 
     #sow-menu .sow-menu__topbar {
         gap: 8px;
-        padding-right: 6px;
+        padding-inline-end: 6px;
     }
 
     #sow-menu .sow-menu__identity {
@@ -2547,7 +2569,7 @@
     width: 180px;
     height: 180px;
     top: -110px;
-    right: -70px;
+    inset-inline-end: -70px;
     border-radius: 50%;
     filter: blur(8px);
     opacity: 0.24;
@@ -2701,7 +2723,7 @@
     font-size: 12px;
     font-weight: var(--sow-button-weight);
     letter-spacing: var(--sow-button-tracking);
-    text-align: left;
+    text-align: start;
     transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
@@ -2795,14 +2817,14 @@
     min-width: 0;
     padding: 18px;
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-left: 3px solid var(--sow-line);
+    border-inline-start: 3px solid var(--sow-line);
     border-radius: 7px;
     background: rgba(10, 12, 16, 0.82);
 }
 
 .sow-campaign__episode.is-unlocked,
 .sow-campaign__episode.is-complete {
-    border-left-color: var(--sow-gold);
+    border-inline-start-color: var(--sow-gold);
 }
 
 .sow-campaign__episode.is-complete {
@@ -2867,7 +2889,7 @@
         justify-content: flex-start;
         padding: 14px;
         border-top: 2px solid var(--sow-gold);
-        border-left: 0;
+        border-inline-start: 0;
     }
 
     #sow-menu[data-screen="campaign"] .sow-campaign__battlefield {

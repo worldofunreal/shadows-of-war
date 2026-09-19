@@ -708,9 +708,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
     let locale_codes = serde_json::to_string(
-        &sow_i18n::Language::registry()
-            .iter()
-            .map(|(_, code, _)| *code)
+        &sow_i18n::Language::published_registry()
+            .map(|(_, code, _)| code)
             .collect::<Vec<_>>(),
     )?;
     let locale_base = if portal { "locales" } else { "../locales" };
@@ -1003,6 +1002,11 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             .replace("<meta property=\"og:image\" content=\"https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp\">", "")
             .replace("<meta property=\"twitter:image\" content=\"https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp\">", "")
             .replace("<link rel=\"canonical\" href=\"https://shadowsofwar.io/play/\">", "");
+    } else if cg {
+        fh = fh.replace(
+            "href=\"/fonts/fonts.css\"",
+            "href=\"https://shadowsofwar.io/fonts/fonts.css\"",
+        );
     }
     fs::write(&index, fh)?;
     Ok(())
@@ -1051,6 +1055,33 @@ fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
     fs::copy(paths.shell.join("sow-dropdown.js"), out.join("sow-dropdown.js"))?;
     fs::copy(paths.shell.join("sow-controls.css"), out.join("sow-controls.css"))?;
     copy_dir(&paths.shell.join("sdk"), &out.join("sdk"))?;
+    Ok(())
+}
+
+const PUBLIC_SITE_PAGES: [&str; 7] = [
+    "index.html",
+    "leaders/index.html",
+    "how-to-play/index.html",
+    "support/index.html",
+    "privacy/index.html",
+    "cookies/index.html",
+    "terms/index.html",
+];
+
+fn expand_public_site_header(paths: &Paths, out: &Path) -> Result<()> {
+    let header = fs::read_to_string(paths.root.join("sow-web/site/site-header.html"))?
+        .trim()
+        .to_string();
+    let marker = "<!-- SOW_SITE_HEADER -->";
+    for relative in PUBLIC_SITE_PAGES {
+        let path = out.join(relative);
+        let source = fs::read_to_string(&path)
+            .with_context(|| format!("read public page {}", path.display()))?;
+        if source.matches(marker).count() != 1 {
+            bail!("public page {} must contain one site header marker", path.display());
+        }
+        fs::write(&path, source.replace(marker, &header))?;
+    }
     Ok(())
 }
 
@@ -1133,12 +1164,16 @@ fn validate_web_node(path: &str, expected: &serde_json::Value, actual: &serde_js
 
 fn validate_web_catalogs() -> Result<serde_json::Value> {
     let english = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
-    for &(language, code, _) in sow_i18n::Language::registry() {
+    for &(language, code, _, _) in sow_i18n::Language::registry() {
         let catalog = serde_json::to_value(&sow_i18n::web(language))?;
         validate_web_node(code, &english, &catalog)
             .with_context(|| format!("validate web catalog {code}"))?;
     }
     Ok(english)
+}
+
+fn locale_folder(code: &str) -> String {
+    code.to_ascii_lowercase()
 }
 
 fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
@@ -1147,7 +1182,7 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
     let strings_root = root.join("sow-i18n/strings");
     let registered = sow_i18n::Language::registry()
         .iter()
-        .map(|(_, code, _)| *code)
+        .map(|(_, code, _, _)| locale_folder(code))
         .collect::<HashSet<_>>();
     let mut found = HashSet::new();
     for entry in fs::read_dir(&strings_root)
@@ -1158,7 +1193,7 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
             bail!("web locale entry is not a directory: {}", entry.path().display());
         }
         let code = entry.file_name().to_string_lossy().into_owned();
-        if !registered.contains(code.as_str()) {
+        if !registered.contains(&code) {
             bail!("unregistered web locale directory: {code}");
         }
         let files = fs::read_dir(entry.path())?
@@ -1179,8 +1214,8 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         }
         found.insert(code);
     }
-    for &(_, code, _) in sow_i18n::Language::registry() {
-        if !found.contains(code) {
+    for &(_, code, _, _) in sow_i18n::Language::registry() {
+        if !found.contains(&locale_folder(code)) {
             bail!("registered web locale is missing: {code}");
         }
     }
@@ -1221,8 +1256,13 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         "sow-web/site/index.html",
         "sow-web/site/app.js",
         "sow-web/site/site-chrome.js",
+        "sow-web/site/site-header.html",
         "sow-web/site/leaders/index.html",
         "sow-web/site/how-to-play/index.html",
+        "sow-web/site/support/index.html",
+        "sow-web/site/privacy/index.html",
+        "sow-web/site/cookies/index.html",
+        "sow-web/site/terms/index.html",
     ] {
         let path = root.join(relative);
         let source = fs::read_to_string(&path)
@@ -1235,8 +1275,7 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
 fn verify_exported_locales(dir: &Path) -> Result<()> {
     let expected = validate_web_catalogs()?;
     let expected_languages = serde_json::to_value(
-        sow_i18n::Language::registry()
-            .iter()
+        sow_i18n::Language::published_registry()
             .map(|(_, code, name)| serde_json::json!({ "code": code, "name": name }))
             .collect::<Vec<_>>(),
     )?;
@@ -1250,8 +1289,9 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
     {
         bail!("exported locale registry metadata is invalid");
     }
-    for &(_, code, _) in sow_i18n::Language::registry() {
-        let path = dir.join("locales").join(code);
+    for (_, code, _) in sow_i18n::Language::published_registry() {
+        let folder = locale_folder(code);
+        let path = dir.join("locales").join(&folder);
         if !path.is_file() {
             bail!("missing exported web catalog {code}");
         }
@@ -1260,7 +1300,8 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
         if payload.get("schema").and_then(serde_json::Value::as_u64) != Some(1)
             || payload.get("version").and_then(serde_json::Value::as_u64)
                 != Some(sow_i18n::WEB_CATALOG_VERSION as u64)
-            || payload.get("locale").and_then(serde_json::Value::as_str) != Some(code)
+            || payload.get("locale").and_then(serde_json::Value::as_str)
+                != Some(folder.as_str())
         {
             bail!("exported web catalog metadata is invalid for {code}");
         }
@@ -1270,7 +1311,7 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
         let strings = payload
             .get("strings")
             .with_context(|| format!("exported web catalog {code} has no strings"))?;
-        validate_web_node(code, &expected, strings)?;
+        validate_web_node(&folder, &expected, strings)?;
     }
     Ok(())
 }
@@ -1357,8 +1398,7 @@ fn export_locales(out: &Path) -> Result<()> {
     validate_web_catalogs()?;
     let d = out.join("locales");
     fs::create_dir_all(&d)?;
-    let languages = sow_i18n::Language::registry()
-        .iter()
+    let languages = sow_i18n::Language::published_registry()
         .map(|(_, code, name)| serde_json::json!({ "code": code, "name": name }))
         .collect::<Vec<_>>();
     fs::write(
@@ -1369,15 +1409,16 @@ fn export_locales(out: &Path) -> Result<()> {
             "languages": languages.clone(),
         }))?,
     )?;
-    for &(language, code, _) in sow_i18n::Language::registry() {
+    for (language, code, _) in sow_i18n::Language::published_registry() {
+        let folder = locale_folder(code);
         let payload = serde_json::json!({
             "schema": 1,
             "version": sow_i18n::WEB_CATALOG_VERSION,
-            "locale": code,
+            "locale": folder.clone(),
             "languages": languages.clone(),
             "strings": sow_i18n::web(language),
         });
-        fs::write(d.join(code), serde_json::to_string_pretty(&payload)?)?;
+        fs::write(d.join(folder), serde_json::to_string_pretty(&payload)?)?;
     }
     Ok(())
 }
@@ -1422,6 +1463,9 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "fonts/work-sans-latin-ext.woff2",
         "fonts/work-sans-italic-latin.woff2",
         "fonts/work-sans-italic-latin-ext.woff2",
+        "fonts/noto-sans-regular.ttf",
+        "fonts/noto-sans-arabic-regular.ttf",
+        "fonts/noto-sans-cjk-regular.ttc",
         "wou-auth.js",
         "privacy/index.html",
         "terms/index.html",
@@ -1478,6 +1522,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         "sdk.crazygames.com/crazygames-sdk-v3.js",
         "SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"",
         "SOW_ASSETS_URL = \"https://shadowsofwar.io/assets\"",
+        "https://shadowsofwar.io/fonts/fonts.css",
         "sow_client.js",
         "sow_client_bg.wasm",
     ] {
@@ -1501,6 +1546,9 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "sdk/store_portals.js",
         "fonts/fonts.css",
         "fonts/work-sans-latin.woff2",
+        "fonts/noto-sans-regular.ttf",
+        "fonts/noto-sans-arabic-regular.ttf",
+        "fonts/noto-sans-cjk-regular.ttc",
         "assets/shell/loader/loader_empty.webp",
         "assets/shell/loader/loader_full.webp",
         "maps/catalog.bin",
@@ -1757,6 +1805,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         }
         copy_dir(&src, &out.join(path))?;
     }
+    expand_public_site_header(paths, out)?;
     // Fingerprint shared public assets in every page that references them.
     for name in [
         "styles.css",
@@ -1770,7 +1819,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     ] {
         let hash = file_sha256(&out.join(name))?;
         let versioned = format!("{name}?v={}", &hash[..10]);
-        for relative in ["index.html", "leaders/index.html", "how-to-play/index.html"] {
+        for relative in PUBLIC_SITE_PAGES {
             let html = out.join(relative);
             let prefix = if relative == "index.html" { "./" } else { "../" };
             let content = fs::read_to_string(&html)?;
@@ -2116,6 +2165,7 @@ fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
         paths.root.join("sow-i18n"),
         paths.root.join("sow-net"),
         paths.root.join("sow-render"),
+        paths.root.join("sow-dist"),
         paths.root.join("sow-web"),
         paths.root.join("assets"),
     ]
@@ -2765,6 +2815,7 @@ mod tests {
             "index.html",
             "app.js",
             "site-chrome.js",
+            "site-header.html",
             "sow-dropdown.js",
             "sow-controls.css",
             "styles.css",
@@ -2774,6 +2825,9 @@ mod tests {
             "fonts/work-sans-latin-ext.woff2",
             "fonts/work-sans-italic-latin.woff2",
             "fonts/work-sans-italic-latin-ext.woff2",
+            "fonts/noto-sans-regular.ttf",
+            "fonts/noto-sans-arabic-regular.ttf",
+            "fonts/noto-sans-cjk-regular.ttc",
             "wou-auth.js",
             "how-to-play/index.html",
         "leaders/index.html",

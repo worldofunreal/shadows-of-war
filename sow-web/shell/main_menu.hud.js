@@ -248,7 +248,7 @@
             + '    </div>'
             + '  </section>'
             + '</div>'
-            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="Map actions"></div>';
+            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' + SOW_t("hud.map_actions") + '"></div>';
 
         var emojiGrid = document.getElementById("sow-hud-emoji-grid");
         if (emojiGrid) {
@@ -363,16 +363,16 @@
     }
 
     var mapActionLabels = {
-        spawn: "🌱 Deploy",
-        attack: "⚔ Attack",
-        fleet: "⛵ Fleet",
-        transfer: "📦 Transfer",
-        alliance: "🤝 Alliance",
-        build_city: "🏛️ City",
-        build_factory: "🏭 Factory",
-        build_port: "⚓ Port",
-        build_bunker: "🛡️ Bunker",
-        nuke: "🚀 Nuke"
+        spawn: { icon: "🌱", key: "hud.map_action_deploy" },
+        attack: { icon: "⚔", key: "hud.map_action_attack" },
+        fleet: { icon: "⛵", key: "hud.map_action_fleet" },
+        transfer: { icon: "📦", key: "hud.map_action_transfer" },
+        alliance: { icon: "🤝", key: "hud.map_action_alliance" },
+        build_city: { icon: "🏛️", key: "hud.map_action_city" },
+        build_factory: { icon: "🏭", key: "hud.map_action_factory" },
+        build_port: { icon: "⚓", key: "hud.map_action_port" },
+        build_bunker: { icon: "🛡️", key: "hud.map_action_bunker" },
+        nuke: { icon: "🚀", key: "hud.map_action_nuke" }
     };
 
     function renderMapMenu(mapMenu) {
@@ -385,7 +385,7 @@
             return false;
         }
         var actions = Array.isArray(mapMenu.actions) ? mapMenu.actions : [];
-        var renderKey = String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + actions.join(",");
+        var renderKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + actions.join(",");
         if (menu.dataset.renderKey !== renderKey) {
             menu.replaceChildren();
             actions.forEach(function (action) {
@@ -396,14 +396,14 @@
                 button.className = "sow-hud__map-action";
                 button.dataset.mapAction = action;
                 button.setAttribute("role", "menuitem");
-                button.textContent = label;
+                button.textContent = label.icon + " " + SOW_t(label.key);
                 menu.appendChild(button);
             });
             var close = document.createElement("button");
             close.type = "button";
             close.className = "sow-hud__map-close";
             close.dataset.mapClose = "true";
-            close.setAttribute("aria-label", "Close map actions");
+            close.setAttribute("aria-label", SOW_t("hud.map_actions_close"));
             close.textContent = "×";
             menu.appendChild(close);
             menu.dataset.renderKey = renderKey;

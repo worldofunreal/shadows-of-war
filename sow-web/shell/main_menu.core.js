@@ -130,8 +130,26 @@
         var found = leaders.find(function (leader) { return leader.id === id; });
         if (found) return found;
         return leaders[0] || {
-            id: "Caesar", name: "Caesar", civilization: "Roman Empire", perk: "Imperium: +15% Territory Expansion Speed", slug: "caesar"
+            id: "Caesar", name: "Caesar", civilization_key: "heroes.civilization_rome", perk_key: "profile.leader_caesar_description", slug: "caesar"
         };
+    }
+
+    function leaderPerk(leader) {
+        var key = leader && leader.perk_key;
+        if (key) {
+            var value = SOW_t(key);
+            if (value && value !== "[" + key + "]") return value;
+        }
+        return SOW_t("heroes.enhanced_bonuses");
+    }
+
+    function leaderCivilization(leader) {
+        var key = leader && leader.civilization_key;
+        if (key) {
+            var value = SOW_t(key);
+            if (value && value !== "[" + key + "]") return value;
+        }
+        return leader && leader.civilization ? leader.civilization : "";
     }
 
     function mapInfo(key) {

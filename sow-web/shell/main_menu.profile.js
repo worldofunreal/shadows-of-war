@@ -384,7 +384,7 @@
             var leader = entry.leader;
             var share = recent.length ? Math.round((entry.matches / recent.length) * 100) : 0;
             var unit = entry.matches === 1 ? SOW_t("profile.game_one") : SOW_t("profile.game_many");
-            return "<article class='sow-profile__favorite'><img src='" + esc(asset("gameplay/avatars/" + leader.slug + ".webp")) + "' alt='" + esc(leader.name) + " avatar' width='64' height='64' loading='lazy'><div class='sow-profile__favorite-copy'><strong>" + esc(leader.name) + "</strong><span>" + esc(entry.matches) + " " + esc(unit) + " · " + esc(share) + "%</span></div></article>";
+            return "<article class='sow-profile__favorite'><img src='" + esc(asset("gameplay/avatars/" + leader.slug + ".webp")) + "' alt='" + esc(SOW_t("hud.leader_avatar")) + "' width='64' height='64' loading='lazy'><div class='sow-profile__favorite-copy'><strong>" + esc(leader.name) + "</strong><span>" + esc(entry.matches) + " " + esc(unit) + " · " + esc(share) + "%</span></div></article>";
         }).join("");
         return "<section class='sow-profile__favorites' data-profile-favorites aria-labelledby='sow-profile-favorites-title'><div class='sow-profile__favorites-head'><h2 id='sow-profile-favorites-title'>" + esc(SOW_t("profile.most_played_leaders")) + "</h2><span>" + esc(SOW_t("profile.last_matches", { count: recent.length })) + "</span></div>" +
             (cards ? "<div class='sow-profile__favorites-track' data-count='" + esc(favorites.length) + "'>" + cards + "</div>" : "<div class='sow-profile__favorites-track' data-count='0'><p class='sow-profile__favorites-empty'>" + esc(loading ? SOW_t("profile.loading_profile") : SOW_t("profile.no_leader_data")) + "</p></div>") +

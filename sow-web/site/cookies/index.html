@@ -5,52 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="../fonts/fonts.css">
   <meta name="theme-color" content="#0a0a0e">
-  <title>Cookie Notice — Shadows of War</title>
-  <meta name="description" content="How Shadows of War uses strictly-necessary storage only: theme preference, session identifiers, and first-party product events. No advertising cookies.">
+  <title data-i18n="site.cookies_title">Cookie Notice — Shadows of War</title>
+  <meta name="description" content="How Shadows of War uses strictly-necessary storage only: theme preference, session identifiers, and first-party product events. No advertising cookies." data-i18n="site.cookies_description" data-i18n-attr="content">
   <link rel="canonical" href="https://shadowsofwar.io/cookies/">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Shadows of War">
-  <meta property="og:title" content="Cookie Notice — Shadows of War">
-  <meta property="og:description" content="Strictly-necessary storage only. No advertising, social, or cross-site-tracking cookies.">
+  <meta property="og:title" content="Cookie Notice — Shadows of War" data-i18n="site.cookies_title" data-i18n-attr="content">
+  <meta property="og:description" content="Strictly-necessary storage only. No advertising, social, or cross-site-tracking cookies." data-i18n="site.cookies_og_description" data-i18n-attr="content">
   <meta property="og:url" content="https://shadowsofwar.io/cookies/">
   <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <link rel="icon" type="image/svg+xml" href="../sow.svg">
+  <link rel="stylesheet" href="../sow-controls.css">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body class="guide-page">
-  <header class="site-nav" id="top">
-    <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="Shadows of War home">
-        <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="28">
-      </a>
-      <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="/leaders/">Leaders</a>
-        <a href="/how-to-play/">How to play</a>
-      </nav>
-      <div class="nav-actions">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
-          <span class="theme-icon" aria-hidden="true">☼</span>
-          <span class="theme-label">Light mode</span>
-        </button>
-        <a class="button button-small button-orange" href="/play/">Play now</a>
-        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation">☰</button>
-      </div>
-    </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" aria-hidden="true">
-      <a href="/leaders/">Leaders</a>
-      <a href="/how-to-play/">How to play</a>
-      <div class="mobile-menu-actions">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme"><span class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
-      </div>
-    </nav>
-  </header>
+  <!-- SOW_SITE_HEADER -->
 
   <main class="guide-main">
     <section class="guide-hero section-rule">
       <div class="container">
-        <p class="eyebrow"><span class="eyebrow-dot"></span> Legal &amp; Storage</p>
-        <h1>Cookie<br><em>notice.</em></h1>
-        <p class="guide-lede">Last updated: September 2026 · World of Unreal</p>
+        <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.cookies_eyebrow">Legal &amp; Storage</span></p>
+        <h1><span data-i18n="site.cookies_heading">Cookie</span><br><em data-i18n="site.cookies_heading_em">notice.</em></h1>
+        <p class="guide-lede" data-i18n="site.cookies_updated">Last updated: September 2026 · World of Unreal</p>
       </div>
     </section>
 
@@ -60,13 +36,13 @@
           <article class="guide-step">
             <span>01</span>
             <div>
-              <h3>What we use</h3>
-              <p>Shadows of War uses strictly-necessary client storage only — the kind that needs no consent banner because the site and game cannot function without it:</p>
-              <ul style="margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
-                <li><strong>Theme preference</strong> (<code>sow-theme</code>, localStorage): remembers your light/dark choice. First-party, strictly necessary.</li>
-                <li><strong>Analytics session identifiers</strong> (<code>sow_site_session_id</code>, <code>sow_analytics_session</code>, sessionStorage): random IDs that group first-party product events within one visit. They vanish when the tab closes.</li>
-                <li><strong>First-party product events:</strong> anonymous funnel events sent to our own servers (<code>/api/event</code>). Not a cookie, not shared with any vendor.</li>
-                <li><strong>Game settings &amp; cached map assets</strong> (browser local storage): client preferences and downloaded game data.</li>
+              <h3 data-i18n="site.cookies_use_title">What we use</h3>
+              <p data-i18n="site.cookies_use_body">Shadows of War uses strictly-necessary client storage only — the kind that needs no consent banner because the site and game cannot function without it:</p>
+              <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
+                <li><strong data-i18n="site.cookies_theme_label">Theme preference</strong> (<code>sow-theme</code>, localStorage): <span data-i18n="site.cookies_theme_body">remembers your light/dark choice. First-party, strictly necessary.</span></li>
+                <li><strong data-i18n="site.cookies_session_label">Analytics session identifiers</strong> (<code>sow_site_session_id</code>, <code>sow_analytics_session</code>, sessionStorage): <span data-i18n="site.cookies_session_body">random IDs that group first-party product events within one visit. They vanish when the tab closes.</span></li>
+                <li><strong data-i18n="site.cookies_events_label">First-party product events:</strong> <span data-i18n="site.cookies_events_body">anonymous funnel events sent to our own servers</span> (<code>/api/event</code>). <span data-i18n="site.cookies_events_after">Not a cookie, not shared with any vendor.</span></li>
+                <li><strong data-i18n="site.cookies_game_label">Game settings &amp; cached map assets</strong> (browser local storage): <span data-i18n="site.cookies_game_body">client preferences and downloaded game data.</span></li>
               </ul>
             </div>
           </article>
@@ -74,32 +50,32 @@
           <article class="guide-step">
             <span>02</span>
             <div>
-              <h3>Third parties</h3>
-              <p>Fonts are self-hosted on our own domain. No third-party code runs storage or tracking on our pages: no advertising networks, no social widgets, no session-replay scripts, no cross-site identifiers. Our pages make zero cross-origin requests.</p>
+              <h3 data-i18n="site.cookies_third_party_title">Third parties</h3>
+              <p data-i18n="site.cookies_third_party_body">Fonts are self-hosted on our own domain. No third-party code runs storage or tracking on our pages: no advertising networks, no social widgets, no session-replay scripts, no cross-site identifiers. Our pages make zero cross-origin requests.</p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>03</span>
             <div>
-              <h3>What we don't do</h3>
-              <ul style="margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
-                <li>No advertising cookies and no interest-based advertising.</li>
-                <li>No sale or sharing of personal data for advertising.</li>
-                <li>No cross-site or cross-app tracking.</li>
+              <h3 data-i18n="site.cookies_dont_title">What we don't do</h3>
+              <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
+                <li data-i18n="site.cookies_dont_ads">No advertising cookies and no interest-based advertising.</li>
+                <li data-i18n="site.cookies_dont_sell">No sale or sharing of personal data for advertising.</li>
+                <li data-i18n="site.cookies_dont_tracking">No cross-site or cross-app tracking.</li>
               </ul>
-              <p>Because there is no behavioral tracking, Global Privacy Control and Do Not Track signals have nothing to switch off — and we honor GPC as a sale/sharing opt-out regardless.</p>
+              <p data-i18n="site.cookies_dont_body">Because there is no behavioral tracking, Global Privacy Control and Do Not Track signals have nothing to switch off — and we honor GPC as a sale/sharing opt-out regardless.</p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>04</span>
             <div>
-              <h3>Your controls</h3>
-              <ul style="margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
-                <li>Clear site data anytime in your browser settings — this removes the theme preference, session IDs, and cached assets. The game keeps working; it simply forgets your theme and starts a fresh session.</li>
-                <li>Blocking all storage may force re-downloads of game assets and reset preferences each visit.</li>
-                <li>For personal-data rights (access, deletion, portability), see the Privacy Policy — email <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>.</li>
+              <h3 data-i18n="site.cookies_controls_title">Your controls</h3>
+              <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
+                <li data-i18n="site.cookies_controls_clear">Clear site data anytime in your browser settings — this removes the theme preference, session IDs, and cached assets. The game keeps working; it simply forgets your theme and starts a fresh session.</li>
+                <li data-i18n="site.cookies_controls_block">Blocking all storage may force re-downloads of game assets and reset preferences each visit.</li>
+                <li><span data-i18n="site.cookies_controls_rights">For personal-data rights (access, deletion, portability), see the Privacy Policy — email</span> <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>.</li>
               </ul>
             </div>
           </article>
@@ -107,18 +83,18 @@
           <article class="guide-step">
             <span>05</span>
             <div>
-              <h3>Changes</h3>
-              <p>If we ever add non-essential storage (analytics vendors, embeds, advertising), this notice will list each item with its purpose and controls before it ships — and the Privacy Policy will be updated alongside. Last updated: September 2026.</p>
+              <h3 data-i18n="site.cookies_changes_title">Changes</h3>
+              <p data-i18n="site.cookies_changes_body">If we ever add non-essential storage (analytics vendors, embeds, advertising), this notice will list each item with its purpose and controls before it ships — and the Privacy Policy will be updated alongside. Last updated: September 2026.</p>
             </div>
           </article>
         </div>
 
         <aside class="guide-aside">
-          <h3>Legal Navigation</h3>
+          <h3 data-i18n="site.legal_navigation">Legal Navigation</h3>
           <ul>
-            <li><a href="/privacy/" style="color: var(--orange);">Privacy Policy</a></li>
-            <li><a href="/terms/" style="color: var(--orange);">Terms of Service</a></li>
-            <li><a href="/support/" style="color: var(--orange);">Support &amp; Help Center</a></li>
+            <li><a href="/privacy/" style="color: var(--orange);" data-i18n="site.privacy">Privacy Policy</a></li>
+            <li><a href="/terms/" style="color: var(--orange);" data-i18n="site.terms">Terms of Service</a></li>
+            <li><a href="/support/" style="color: var(--orange);" data-i18n="site.support">Support &amp; Help Center</a></li>
           </ul>
         </aside>
       </div>
@@ -127,12 +103,14 @@
 
   <footer class="site-footer">
     <div class="container footer-top">
-      <a class="brand" href="/" aria-label="Shadows of War home"><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="18"></a>
-      <div class="footer-links"><a href="/">Home</a><a href="/leaders/">Leaders</a><a href="/how-to-play/">How to play</a><a href="/#faq">FAQ</a><a href="/support/">Support</a><a href="/privacy/">Privacy</a><a href="/cookies/">Cookies</a><a href="/terms/">Terms</a><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Discord</a><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener">Telegram</a><a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener">GitHub</a></div>
+      <a class="brand" href="/" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label"><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="18"></a>
+      <div class="footer-links"><a href="/" data-i18n="site.nav_home">Home</a><a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a><a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a><a href="/#faq" data-i18n="site.faq">FAQ</a><a href="/support/" data-i18n="site.support">Support</a><a href="/privacy/" data-i18n="site.privacy">Privacy</a><a href="/cookies/" data-i18n="site.cookies">Cookies</a><a href="/terms/" data-i18n="site.terms">Terms</a><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord">Discord</a><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram">Telegram</a><a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" data-i18n="site.github">GitHub</a></div>
     </div>
-    <div class="container footer-bottom"><span>© 2026 World of Unreal</span></div>
+    <div class="container footer-bottom"><span data-i18n="site.copyright">© 2026 World of Unreal</span></div>
   </footer>
 
+  <script src="../sow-i18n.js"></script>
+  <script src="../sow-dropdown.js"></script>
   <script src="../site-chrome.js"></script>
 </body>
 </html>

@@ -75,10 +75,6 @@
         return value;
     }
 
-    function safeTranslation(key, fallback) {
-        try { return translation(key); } catch (error) { return fallback; }
-    }
-
     function ensureI18n() {
         return Promise.resolve(window.SOW_I18N_READY).catch(function () {});
     }
@@ -168,7 +164,7 @@
         node.id = "sow-tutorial-error";
         node.className = "sow-tutorial__error";
         node.setAttribute("role", "alert");
-        node.innerHTML = "<span>" + esc(safeTranslation("tutorial.unavailable", "Tutorial unavailable")) + "</span><button type='button' data-tutorial-retry>" + esc(safeTranslation("tutorial.retry", "Retry")) + "</button>";
+        node.innerHTML = "<span>" + esc(translation("tutorial.unavailable")) + "</span><button type='button' data-tutorial-retry>" + esc(translation("tutorial.retry")) + "</button>";
         document.body.appendChild(node);
         node.querySelector("[data-tutorial-retry]").addEventListener("click", function () {
             removeError();

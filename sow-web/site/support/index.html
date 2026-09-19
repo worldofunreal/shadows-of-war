@@ -5,55 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="../fonts/fonts.css">
   <meta name="theme-color" content="#0a0a0e">
-  <title>Support &amp; Help Center — Shadows of War</title>
-  <meta name="description" content="Get support, report bugs, connect with the development team, or report security vulnerabilities for Shadows of War.">
+  <title data-i18n="site.support_title">Support &amp; Help Center — Shadows of War</title>
+  <meta name="description" content="Get support, report bugs, connect with the development team, or report security vulnerabilities for Shadows of War." data-i18n="site.support_description" data-i18n-attr="content">
   <link rel="canonical" href="https://shadowsofwar.io/support/">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Shadows of War">
-  <meta property="og:title" content="Support &amp; Help Center — Shadows of War">
-  <meta property="og:description" content="Get official support, connect on Discord or Telegram, report bugs, or submit security vulnerabilities.">
+  <meta property="og:title" content="Support &amp; Help Center — Shadows of War" data-i18n="site.support_title" data-i18n-attr="content">
+  <meta property="og:description" content="Get official support, connect on Discord or Telegram, report bugs, or submit security vulnerabilities." data-i18n="site.support_og_description" data-i18n-attr="content">
   <meta property="og:url" content="https://shadowsofwar.io/support/">
   <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <link rel="icon" type="image/svg+xml" href="../sow.svg">
+  <link rel="stylesheet" href="../sow-controls.css">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body class="guide-page">
-  <header class="site-nav" id="top">
-    <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="Shadows of War home">
-        <img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="28">
-      </a>
-      <nav class="desktop-nav" aria-label="Main navigation">
-        <a href="/leaders/">Leaders</a>
-        <a href="/how-to-play/">How to play</a>
-      </nav>
-      <div class="nav-actions">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme">
-          <span class="theme-icon" aria-hidden="true">☼</span>
-          <span class="theme-label">Light mode</span>
-        </button>
-        <a class="button button-small button-orange" href="/play/">Play now</a>
-        <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Open navigation">☰</button>
-      </div>
-    </div>
-    <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile navigation" aria-hidden="true">
-      <a href="/leaders/">Leaders</a>
-      <a href="/how-to-play/">How to play</a>
-      <div class="mobile-menu-actions">
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch color theme"><span class="theme-icon" aria-hidden="true">☼</span><span class="theme-label">Light mode</span></button>
-      </div>
-    </nav>
-  </header>
+  <!-- SOW_SITE_HEADER -->
 
   <main class="guide-main">
     <section class="guide-hero section-rule">
       <div class="container">
-        <p class="eyebrow"><span class="eyebrow-dot"></span> Support &amp; Help Center</p>
-        <h1>Command<br><em>support.</em></h1>
-        <p class="guide-lede">Need help with a match, account questions, connection troubleshooting, or security disclosures? Reach out through our official channels below.</p>
+        <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.support_eyebrow">Support &amp; Help Center</span></p>
+        <h1><span data-i18n="site.support_heading">Command</span><br><em data-i18n="site.support_heading_em">support.</em></h1>
+        <p class="guide-lede" data-i18n="site.support_lede">Need help with a match, account questions, connection troubleshooting, or security disclosures? Reach out through our official channels below.</p>
         <div class="hero-actions" style="display: flex; gap: 12px; flex-wrap: wrap;">
-          <a class="button button-orange" href="mailto:hello@shadowsofwar.io">Email Support <span aria-hidden="true">✉</span></a>
-          <a class="button button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Join Discord</a>
+          <a class="button button-orange" href="mailto:hello@shadowsofwar.io"><span data-i18n="site.email_support">Email Support</span> <span aria-hidden="true">✉</span></a>
+          <a class="button button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.join_discord">Join Discord</a>
         </div>
       </div>
     </section>
@@ -61,95 +37,97 @@
     <section class="guide-section section-rule">
       <div class="container guide-layout">
         <div class="guide-steps">
-          <p class="eyebrow">Support Channels</p>
-          <h2>Official channels<br>for assistance.</h2>
+          <p class="eyebrow" data-i18n="site.support_channels">Support Channels</p>
+          <h2><span data-i18n="site.support_channels_heading">Official channels</span><br><em data-i18n="site.support_channels_heading_em">for assistance.</em></h2>
 
           <article class="guide-step">
             <span>01</span>
             <div>
-              <h3>Direct Email Support</h3>
-              <p>For connection issues, account problems, match state glitches, or general inquiries, contact us directly at <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>.</p>
-              <p style="font-size: 13px; color: var(--muted); margin-top: 4px;">Please include your browser version, device, approximate match timestamp, and a summary of what occurred.</p>
+              <h3 data-i18n="site.support_email_title">Direct Email Support</h3>
+              <p><span data-i18n="site.support_email_body">For connection issues, account problems, match state glitches, or general inquiries, contact us directly at</span> <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>.</p>
+              <p style="font-size: 13px; color: var(--muted); margin-top: 4px;" data-i18n="site.support_email_note">Please include your browser version, device, approximate match timestamp, and a summary of what occurred.</p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>02</span>
             <div>
-              <h3>Discord Community &amp; Live Chat</h3>
-              <p>Join our active Discord community for real-time discussion, strategy sharing, live matchmaking coordination, and instant developer interaction.</p>
-              <p><a class="button button-small button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" style="margin-top: 8px;">Open Discord Community</a></p>
+              <h3 data-i18n="site.support_discord_title">Discord Community &amp; Live Chat</h3>
+              <p data-i18n="site.support_discord_body">Talk live on Discord: share tactics, find matches, reach the devs.</p>
+              <p><a class="button button-small button-outline" href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" style="margin-top: 8px;" data-i18n="site.open_discord">Open Discord Community</a></p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>03</span>
             <div>
-              <h3>Official Telegram Group</h3>
-              <p>Follow official announcements, game updates, patch releases, and community discussions on our Telegram group.</p>
-              <p><a class="button button-small button-outline" href="https://t.me/shadowsofwario" target="_blank" rel="noopener" style="margin-top: 8px;">Join Telegram Group</a></p>
+              <h3 data-i18n="site.support_telegram_title">Official Telegram Group</h3>
+              <p data-i18n="site.support_telegram_body">News and patch notes on our Telegram group.</p>
+              <p><a class="button button-small button-outline" href="https://t.me/shadowsofwario" target="_blank" rel="noopener" style="margin-top: 8px;" data-i18n="site.join_telegram">Join Telegram Group</a></p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>04</span>
             <div>
-              <h3>GitHub &amp; Open-Source Issues</h3>
-              <p>Shadows of War is built with an open-source engine. Track development, read the source code, or submit formal technical issue reports on our GitHub repository.</p>
-              <p><a class="button button-small button-outline" href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" style="margin-top: 8px;">View GitHub Repository</a></p>
+              <h3 data-i18n="site.support_github_title">GitHub &amp; Open-Source Issues</h3>
+              <p data-i18n="site.support_github_body">Read the code and file bug reports on GitHub.</p>
+              <p><a class="button button-small button-outline" href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" style="margin-top: 8px;" data-i18n="site.view_github">View GitHub Repository</a></p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>05</span>
             <div>
-              <h3>Security &amp; Vulnerability Reporting</h3>
-              <p>We take security seriously. Please do not post security vulnerabilities in public forums or public GitHub issues. Send vulnerability reports privately to <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>. We acknowledge reports within 48 hours.</p>
+              <h3 data-i18n="site.support_security_title">Security &amp; Vulnerability Reporting</h3>
+              <p><span data-i18n="site.support_security_body">We take security seriously. Please do not post security vulnerabilities in public forums or public GitHub issues. Send vulnerability reports privately to</span> <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>. <span data-i18n="site.support_security_after">We acknowledge reports within 48 hours.</span></p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>06</span>
             <div>
-              <h3>Privacy &amp; Data Deletion</h3>
-              <p>To access, correct, or delete your data, email <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a> with your in-game account ID (or display name plus approximate creation date). Verified deletions permanently erase the account, its platform-identity mappings, and analytics memberships.</p>
-              <p><a class="inline-link" href="/privacy/" style="color: var(--orange); text-decoration: underline;">Privacy Policy</a> · <a class="inline-link" href="/cookies/" style="color: var(--orange); text-decoration: underline;">Cookie Notice</a> · <a class="inline-link" href="/terms/" style="color: var(--orange); text-decoration: underline;">Terms of Service</a></p>
+              <h3 data-i18n="site.support_privacy_title">Privacy &amp; Data Deletion</h3>
+              <p><span data-i18n="site.support_privacy_body">To access, correct, or delete your data, email</span> <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a> <span data-i18n="site.support_privacy_after">with your in-game account ID (or display name plus approximate creation date). Verified deletions permanently erase the account, its platform-identity mappings, and analytics memberships.</span></p>
+              <p><a class="inline-link" href="/privacy/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.privacy">Privacy Policy</a> · <a class="inline-link" href="/cookies/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.cookies">Cookie Notice</a> · <a class="inline-link" href="/terms/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.terms">Terms of Service</a></p>
             </div>
           </article>
         </div>
 
         <aside class="guide-aside">
-          <h3>Quick Help</h3>
-          <p>Looking for match rules, leader stats, or game mechanics?</p>
+          <h3 data-i18n="site.quick_help">Quick Help</h3>
+          <p data-i18n="site.quick_help_body">Looking for match rules, leader stats, or game mechanics?</p>
           <ul style="margin-bottom: 20px;">
-            <li><a href="/how-to-play/" style="color: var(--orange);">How to Play Guide</a></li>
-            <li><a href="/leaders/" style="color: var(--orange);">Leader Compendium</a></li>
-            <li><a href="/#faq" style="color: var(--orange);">Match FAQ</a></li>
+            <li><a href="/how-to-play/" style="color: var(--orange);" data-i18n="site.how_to_play_guide">How to Play Guide</a></li>
+            <li><a href="/leaders/" style="color: var(--orange);" data-i18n="site.leader_compendium">Leader Compendium</a></li>
+            <li><a href="/#faq" style="color: var(--orange);" data-i18n="site.match_faq">Match FAQ</a></li>
           </ul>
           <div style="padding-top: 18px; border-top: 1px solid var(--line);">
-            <p class="mono-label" style="color: var(--orange); margin-bottom: 8px;">OFFICIAL EMAIL</p>
+            <p class="mono-label" style="color: var(--orange); margin-bottom: 8px;" data-i18n="site.official_email">OFFICIAL EMAIL</p>
             <p style="font-size: 13px; color: var(--ink); font-weight: 700;">hello@shadowsofwar.io</p>
-            <p style="font-size: 12px; color: var(--muted); margin-top: 4px;">General support &amp; inquiries</p>
+            <p style="font-size: 12px; color: var(--muted); margin-top: 4px;" data-i18n="site.general_support">General support &amp; inquiries</p>
           </div>
         </aside>
       </div>
 
       <div class="container guide-callout">
-        <h2>Need game rules?</h2>
-        <p>Learn territory expansion, structures, economy, and win conditions.</p>
-        <a class="button button-orange" href="/how-to-play/">Read How to Play</a>
+        <h2 data-i18n="site.need_game_rules">Need game rules?</h2>
+        <p data-i18n="site.game_rules_body">Learn territory expansion, structures, economy, and win conditions.</p>
+        <a class="button button-orange" href="/how-to-play/" data-i18n="site.read_how_to_play">Read How to Play</a>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="container footer-top">
-      <a class="brand" href="/" aria-label="Shadows of War home"><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="18"></a>
-      <div class="footer-links"><a href="/">Home</a><a href="/leaders/">Leaders</a><a href="/how-to-play/">How to play</a><a href="/#faq">FAQ</a><a href="/support/">Support</a><a href="/privacy/">Privacy</a><a href="/cookies/">Cookies</a><a href="/terms/">Terms</a><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener">Discord</a><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener">Telegram</a><a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener">GitHub</a></div>
+      <a class="brand" href="/" aria-label="Shadows of War home" data-i18n="site.home" data-i18n-attr="aria-label"><img class="brand-wordmark" src="/sow-long.svg" alt="Shadows of War" height="18"></a>
+      <div class="footer-links"><a href="/" data-i18n="site.nav_home">Home</a><a href="/leaders/" data-i18n="site.nav_leaders">Leaders</a><a href="/how-to-play/" data-i18n="site.nav_how_to_play">How to play</a><a href="/#faq" data-i18n="site.faq">FAQ</a><a href="/support/" data-i18n="site.support">Support</a><a href="/privacy/" data-i18n="site.privacy">Privacy</a><a href="/cookies/" data-i18n="site.cookies">Cookies</a><a href="/terms/" data-i18n="site.terms">Terms</a><a href="https://discord.gg/d6ZDeChSE" target="_blank" rel="noopener" data-i18n="site.discord">Discord</a><a href="https://t.me/shadowsofwario" target="_blank" rel="noopener" data-i18n="site.telegram">Telegram</a><a href="https://github.com/worldofunreal/shadows-of-war" target="_blank" rel="noopener" data-i18n="site.github">GitHub</a></div>
     </div>
-    <div class="container footer-bottom"><span>© 2026 World of Unreal</span></div>
+    <div class="container footer-bottom"><span data-i18n="site.copyright">© 2026 World of Unreal</span></div>
   </footer>
 
+  <script src="../sow-i18n.js"></script>
+  <script src="../sow-dropdown.js"></script>
   <script src="../site-chrome.js"></script>
 </body>
 </html>
