@@ -1,6 +1,11 @@
 use super::engine::{ArpeggioSource, SAMPLE_RATE, play_ui};
 
-fn result_source(note_freqs: [f32; 4], note_duration_secs: f32, decay: f32, amplitude: f32) -> ArpeggioSource {
+fn result_source(
+    note_freqs: [f32; 4],
+    note_duration_secs: f32,
+    decay: f32,
+    amplitude: f32,
+) -> ArpeggioSource {
     let note_duration = (SAMPLE_RATE as f32 * note_duration_secs) as u32;
     ArpeggioSource::new(
         note_freqs,

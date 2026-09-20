@@ -37,6 +37,9 @@ pub struct MatchParticipantRecord {
     pub tribes_defeated: u32,
     pub xp: u32,
     pub leader_xp: u32,
+    #[serde(default)]
+    pub crowns: u64,
+    #[serde(default)]
     pub laurels: u64,
     pub rating_delta: Option<i16>,
 }

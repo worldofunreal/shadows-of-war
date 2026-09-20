@@ -30,7 +30,7 @@
         var name = state.player_name || SOW_t("menu.anonymous");
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { linked: false, pending: false };
         var accountXp = Math.max(0, Number(state.xp) || 0);
-        var laurels = state.laurels || 0;
+        var crowns = state.crowns || 0;
         return "" +
             "<header class='sow-menu__topbar'>" +
                 "<div class='sow-menu__identity'>" +
@@ -45,7 +45,7 @@
                     "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='" + esc(SOW_t("menu.open_profile")) + "' aria-label='" + esc(SOW_t("menu.open_profile")) + "'>" +
                         "<span class='sow-menu__progress-cell sow-menu__level'><small>" + esc(SOW_t("menu.level_short")) + "</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " " + esc(SOW_t("menu.xp")) + "</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
-                        "<span class='sow-menu__progress-cell sow-menu__laurels'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-laurels-value>" + esc(laurels) + "</strong></span>" +
+                        "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
                     "</div>" +
                     (auth.linked || auth.pending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + esc(SOW_t("menu.sign_in")) + "</button>") +
                     "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>⚙</button>" +
@@ -572,12 +572,12 @@
             var levelValue = progression.querySelector("[data-progression-level-value]");
             var xpValue = progression.querySelector("[data-progression-xp-value]");
             var xpFill = progression.querySelector("[data-progression-xp-fill]");
-            var laurelsValue = progression.querySelector("[data-progression-laurels-value]");
+            var crownsValue = progression.querySelector("[data-progression-crowns-value]");
             if (levelValue) levelValue.textContent = progressionLevel;
             if (xpValue) xpValue.textContent = Math.floor(progressionXp) + " " + SOW_t("menu.xp");
             if (xpFill) xpFill.style.width = (progressionXp % 100) + "%";
-            var laurels = state.laurels || 0;
-            if (laurelsValue) laurelsValue.textContent = Math.max(0, Number(laurels) || 0);
+            var crowns = state.crowns || 0;
+            if (crownsValue) crownsValue.textContent = Math.max(0, Number(crowns) || 0);
         }
         var settings = state.settings || {};
         var musicInput = root.querySelector("[data-setting='music_volume']");
@@ -915,7 +915,7 @@
         /* POKI_SHARED_STORE_UNLOCK_BEGIN */
         if (command === "unlock_leader") {
             var unlockLeaderId = target.dataset.leaderId;
-            var unlockCurrency = target.dataset.currency || "laurels";
+            var unlockCurrency = target.dataset.currency || "crowns";
             var unlockAccountId = state && state.account_id;
             var unlockAuth = storeAuth();
             if (!unlockLeaderId || !unlockAccountId || !unlockAuth.available) {

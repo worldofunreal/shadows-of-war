@@ -159,8 +159,10 @@
         var value = lookup(activeStrings, key);
         if (typeof value !== "string") {
             value = lookup(englishStrings, key);
-            if (!englishReady) return "[" + key + "]";
-            report(key);
+            if (typeof value !== "string") {
+                if (!englishReady) return "[" + key + "]";
+                report(key);
+            }
         }
         if (typeof value !== "string") return "[" + key + "]";
         return value.replace(/\{([A-Za-z0-9_]+)\}/g, function (match, name) {

@@ -1,0 +1,199 @@
+/* Lobby domain: home/browser lists, join flow, and search. */
+
+.sow-menu__home-public .sow-menu__lobbies {
+    max-height: none;
+    overflow: visible;
+}
+
+.sow-menu__join {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.sow-menu__join button {
+    padding: 0 16px;
+    border: 1px solid var(--sow-button-dark-border);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    cursor: pointer;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: var(--sow-button-tracking);
+}
+
+.sow-menu__join button:hover {
+    border-color: var(--sow-gold);
+}
+
+.sow-menu__lobbies {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+}
+
+.sow-menu__lobby {
+    position: relative;
+    min-width: 0;
+    aspect-ratio: 16 / 9;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    cursor: pointer;
+    overflow: hidden;
+    background: #3d7bab;
+    transition: border-color 160ms ease, box-shadow 180ms ease;
+}
+
+.sow-menu__lobby-art {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #173c58;
+    transition: opacity 180ms ease;
+}
+
+.sow-menu__lobby.is-map-changing .sow-menu__lobby-art {
+    opacity: 0.72;
+}
+
+.sow-menu__lobby::after {
+    content: "";
+    position: absolute;
+    inset: 36% 0 0;
+    z-index: 1;
+    background: linear-gradient(0deg, rgba(8, 10, 14, 0.94), rgba(8, 10, 14, 0));
+    pointer-events: none;
+}
+
+.sow-menu__lobby-top,
+.sow-menu__lobby-bottom {
+    position: absolute;
+    z-index: 2;
+    inset-inline: 12px;
+}
+
+.sow-menu__lobby-top {
+    top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sow-menu__lobby-bottom {
+    bottom: 12px;
+}
+
+.sow-menu__lobby:hover {
+    border-color: rgba(243, 177, 43, 0.74);
+}
+
+.sow-menu__lobby:focus-visible {
+    outline: 2px solid var(--sow-gold-bright);
+    outline-offset: 2px;
+}
+
+.sow-menu__lobby-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sow-menu__lobby-chip,
+.sow-menu__lobby-join {
+    padding: 5px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    background: rgba(8, 10, 14, 0.78);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+    color: #fff8e7;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.sow-menu__lobby-chip:first-child {
+    border-color: rgba(6, 182, 212, 0.6);
+    color: #b6f4ff;
+}
+
+.sow-menu__lobby-chip--status,
+.sow-menu__lobby-join {
+    border-color: rgba(243, 177, 43, 0.62);
+    color: var(--sow-gold-bright);
+}
+
+.sow-menu__lobby-lock {
+    margin-inline-start: auto;
+    color: var(--sow-gold-bright);
+}
+
+.sow-menu__lobby h3 {
+    min-width: 0;
+    max-width: calc(100% - 76px);
+    margin: 0;
+    overflow: hidden;
+    color: #fff;
+    font-size: 16px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.sow-menu__lobby-bottom {
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BROWSER SEARCH
+   ───────────────────────────────────────────────────────────── */
+.sow-menu__browser-search {
+    margin-bottom: 12px;
+}
+
+.sow-menu__browser-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(0, 0, 0, 0.4);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    box-sizing: border-box;
+}
+
+.sow-menu__browser-search input:focus {
+    outline: none;
+    border-color: var(--sow-gold);
+}
+
+@media (max-width: 680px), (orientation: portrait) {
+    .sow-menu__lobbies {
+            grid-template-columns: 1fr;
+            max-height: 300px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+}
+
+@media (max-width: 599px) and (orientation: portrait) {
+    .sow-menu__lobbies { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 599px) and (orientation: portrait) {
+    #sow-menu[data-screen="home"] .sow-menu__lobbies {
+            max-height: none;
+            overflow: visible;
+        }
+}

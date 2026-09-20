@@ -434,6 +434,49 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     width: 100%;
 }
 
+.sow-hud__buildings-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.sow-hud__building-btn {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--sow-line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sow-hud__building-btn:hover {
+    border-color: var(--sow-gold);
+    background: rgba(255, 255, 255, 0.14);
+    transform: translateY(-2px);
+}
+
+.sow-hud__building-btn.active {
+    border-color: var(--sow-cyan);
+    background: rgba(56, 189, 248, 0.15);
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.6);
+}
+
+.sow-hud__building-btn:disabled {
+    cursor: default;
+    opacity: 0.35;
+    filter: grayscale(0.6);
+}
+
 .sow-hud__deploy-panel {
     display: flex;
     flex-direction: column;
@@ -1643,6 +1686,16 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
         padding: 4px 12px;
     }
 
+    .sow-hud__buildings-strip {
+        gap: 4px;
+        justify-content: space-around;
+    }
+
+    .sow-hud__building-btn {
+        flex: 1 1 0;
+        max-width: 52px;
+    }
+
     .sow-hud__hover-card {
         top: max(56px, calc(var(--sow-sat) + 48px));
         max-width: calc(100vw - 32px);
@@ -1883,5 +1936,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     #sow-hud button { touch-action: manipulation; }
     #sow-hud button:hover,
     .sow-hud__icon-btn:hover,
+    .sow-hud__building-btn:hover,
     .sow-hud__player-card:hover { transform: none; }
 }

@@ -521,10 +521,7 @@ impl SowApp {
                     MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
                     _ => unreachable!(),
                 };
-                self.ui.app.hud_state.selected_building_kind = Some(kind);
-                self.ui.app.hud_state.selected_nuke_kind = None;
-                self.input.hold_build_active = false;
-                self.input.hold_build_accum = 0.0;
+                self.select_building_kind(kind);
             }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
@@ -1267,6 +1264,26 @@ impl SowApp {
 
     pub(crate) fn clear_placement(&mut self) {
         self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.selected_nuke_kind = None;
+        self.input.hold_build_active = false;
+        self.input.hold_build_accum = 0.0;
+    }
+
+    pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
+        if self.ui.observing
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || !self
+                .sim
+                .current_snapshot
+                .as_ref()
+                .is_some_and(|snapshot| {
+                    matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+                })
+        {
+            return;
+        }
+        let selected = &mut self.ui.app.hud_state.selected_building_kind;
+        *selected = (*selected != Some(kind)).then_some(kind);
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.input.hold_build_active = false;
         self.input.hold_build_accum = 0.0;

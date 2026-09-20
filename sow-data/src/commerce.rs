@@ -5,7 +5,9 @@ use std::collections::BTreeSet;
 pub const FREE_ROTATION_SIZE: usize = 8;
 pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 // ponytail: one balancing constant until real retention data exists; move pricing to live config then.
-pub const LEADER_UNLOCK_COST_LAURELS: u64 = 500;
+// Crowns are the free spendable currency (owner decision 2026-09); laurels are
+// achievement points and are never a price.
+pub const LEADER_UNLOCK_COST_CROWNS: u64 = 500;
 pub const LEADER_UNLOCK_COST_GEMS: u64 = 1_500;
 
 const GEM_BUNDLES: [(&str, u64); 3] = [
@@ -46,7 +48,7 @@ pub struct LeaderOffer {
     pub name: String,
     pub civilization: String,
     pub perk: String,
-    pub cost_laurels: u64,
+    pub cost_crowns: u64,
     pub cost_gems: u64,
     pub free_rotation: bool,
     pub owned: bool,
@@ -85,7 +87,7 @@ pub struct StoreCatalog {
     pub gem_bundles: Vec<GemBundle>,
     #[serde(default)]
     pub web_checkout_available: bool,
-    pub laurels: u64,
+    pub crowns: u64,
     pub gems: u64,
 }
 
@@ -306,7 +308,7 @@ pub fn resolve_leader(
 pub fn catalog_for_profile(
     owned_leaders: &BTreeSet<String>,
     owned_skins: &BTreeSet<String>,
-    laurels: u64,
+    crowns: u64,
     gems: u64,
     period: u64,
 ) -> StoreCatalog {
@@ -321,7 +323,7 @@ pub fn catalog_for_profile(
                 name: leader.name().to_string(),
                 civilization: leader.civilization().name().to_string(),
                 perk: leader.perk_description().to_string(),
-                cost_laurels: LEADER_UNLOCK_COST_LAURELS,
+                cost_crowns: LEADER_UNLOCK_COST_CROWNS,
                 cost_gems: LEADER_UNLOCK_COST_GEMS,
                 free_rotation,
                 owned,
@@ -349,10 +351,11 @@ pub fn catalog_for_profile(
         skins,
         gem_bundles: gem_bundles(),
         web_checkout_available: false,
-        laurels,
+        crowns,
         gems,
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -408,16 +411,18 @@ mod tests {
 
     #[test]
     fn leader_has_dual_currency_price() {
-        assert_eq!(LEADER_UNLOCK_COST_LAURELS, 500);
+        assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
         assert_eq!(LEADER_UNLOCK_COST_GEMS, 1_500);
         assert!(skins().iter().map(|skin| skin.cost_gems).sum::<u64>() > GEM_BUNDLES[2].1);
     }
 
     #[test]
-    fn laurels_catalog_uses_the_canonical_balance_key() {
+    fn crowns_catalog_uses_the_canonical_balance_key() {
         let owned = BTreeSet::new();
         let catalog = catalog_for_profile(&owned, &owned, 725, 0, 0);
         let value = serde_json::to_value(&catalog).unwrap();
-        assert_eq!(value["laurels"], 725);
+        assert_eq!(value["crowns"], 725);
+        assert_eq!(value["leaders"][0]["cost_crowns"], 500);
     }
+
 }

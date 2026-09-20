@@ -78,8 +78,8 @@ notes = "In-match HUD/audio/UI assets only."
 path = "assets/gameplay/currency/"
 source = "user_supplied"
 license = "Project-owner supplied; cleared for distribution"
-files = ["crown.webp", "gem.webp", "gold.webp"]
-notes = "Optimized transparent currency icons shared by the shop and gameplay HUD."
+files = ["crown.webp", "gem.webp", "gold.webp", "laurel.webp"]
+notes = "Optimized transparent currency icons shared by the shop and gameplay HUD. laurel.webp is a generated placeholder for achievement points (laurels) pending final art."
 
 [gameplay_store]
 path = "assets/gameplay/store/gem_bundles/"

@@ -5,6 +5,24 @@ use sow_core::player::Leader;
 
 pub const STORAGE_KEY: &str = "sow_player_progress";
 
+/// Lazy migration for the 2026-09 currency split (owner decision): local
+/// progress saved before the split stores the spendable balance under the
+/// legacy `"laurels"` key. Move it to `"crowns"` and drop the legacy key so
+/// the new `laurels` (achievement points) field defaults to 0 instead of
+/// inheriting the old currency amount. No-op for already-migrated objects;
+/// stored bytes are rewritten on the next regular save.
+pub fn migrate_legacy_currency_json(value: &mut serde_json::Value) {
+    let Some(obj) = value.as_object_mut() else {
+        return;
+    };
+    if obj.contains_key("crowns") {
+        return;
+    }
+    if let Some(legacy) = obj.remove("laurels") {
+        obj.insert("crowns".to_string(), legacy);
+    }
+}
+
 #[derive(Default, Clone, Copy, Debug)]
 pub struct SessionDefeats {
     pub players: u32,
@@ -32,6 +50,11 @@ pub struct PlayerProgress {
     pub assists: u32,
     #[serde(default)]
     pub leader_xp: std::collections::BTreeMap<String, u32>,
+    /// Free spendable currency (legacy local saves stored it under "laurels";
+    /// [`migrate_legacy_currency_json`] moves it here on load).
+    #[serde(default)]
+    pub crowns: u64,
+    /// Achievement points — earned, never spent.
     #[serde(default)]
     pub laurels: u64,
     #[serde(default)]
@@ -141,6 +164,7 @@ impl PlayerProgress {
         self.add_xp(reward.xp);
         let entry = self.leader_xp.entry(leader.name().to_string()).or_default();
         *entry = entry.saturating_add(reward.leader_xp);
+        self.crowns = self.crowns.saturating_add(reward.crowns);
         self.laurels = self.laurels.saturating_add(reward.laurels);
     }
 
@@ -160,7 +184,7 @@ impl PlayerProgress {
     }
 
     /// Mark a campaign episode complete with the same reward weight as the
-    /// teaching intro (100 laurels): finishing an episode is the retention
+    /// teaching intro (100 crowns + 100 laurels): finishing an episode is the retention
     /// backbone, and a full saga lands near one free leader unlock.
     /// Idempotent per episode id.
     pub fn complete_episode(&mut self, episode_id: &str, leader: Leader) -> bool {
@@ -182,6 +206,7 @@ impl PlayerProgress {
             || self.wins > 0
             || self.xp > 0
             || self.intro_completed.unwrap_or(false)
+            || self.crowns > 0
             || self.laurels > 0
             || self.gems > 0
             || !self.owned_leaders.is_empty()
@@ -258,18 +283,38 @@ mod tests {
         assert!(!progress.complete_tutorial_with_reward());
         assert_eq!(progress.intro_completed, Some(true));
         assert_eq!(progress.xp, 100);
+        assert_eq!(progress.crowns, 100);
         assert_eq!(progress.laurels, 100);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&100));
     }
 
     #[test]
-    fn laurels_balance_uses_the_canonical_local_storage_key() {
+    fn currency_balances_use_their_canonical_local_storage_keys() {
         let progress = PlayerProgress {
-            laurels: 725,
+            crowns: 725,
+            laurels: 40,
             ..Default::default()
         };
         let value = serde_json::to_value(&progress).unwrap();
-        assert_eq!(value["laurels"], 725);
+        assert_eq!(value["crowns"], 725);
+        assert_eq!(value["laurels"], 40);
+    }
+
+    #[test]
+    fn legacy_local_laurels_balance_migrates_to_crowns() {
+        // Pre-split local save: "laurels" holds the spendable balance.
+        let mut legacy = serde_json::json!({ "laurels": 725, "xp": 10 });
+        super::migrate_legacy_currency_json(&mut legacy);
+        let progress: PlayerProgress = serde_json::from_value(legacy).unwrap();
+        assert_eq!(progress.crowns, 725);
+        assert_eq!(progress.laurels, 0);
+
+        // Post-split save: untouched.
+        let mut current = serde_json::json!({ "crowns": 100, "laurels": 40 });
+        super::migrate_legacy_currency_json(&mut current);
+        let progress: PlayerProgress = serde_json::from_value(current).unwrap();
+        assert_eq!(progress.crowns, 100);
+        assert_eq!(progress.laurels, 40);
     }
 
     #[test]
@@ -290,7 +335,8 @@ mod tests {
         );
         assert_eq!(progress.matches_played, 1);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&140));
-        assert_eq!(progress.laurels, 106);
+        assert_eq!(progress.crowns, 106);
+        assert_eq!(progress.laurels, 22);
     }
 
     #[test]

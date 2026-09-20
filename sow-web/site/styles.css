@@ -904,7 +904,7 @@ html[data-theme="light"] .hero-wash { opacity: .35; filter: saturate(.8) contras
     white-space: normal;
     border: 0;
   }
-  .hero { padding-top: 48px; }
+  .hero { padding-top: calc(74px + max(10px, var(--site-sat))); }
   .hero h1 { font-size: clamp(48px, 16vw, 76px); }
   .hero-grid { gap: 20px; }
   .hero-frame {

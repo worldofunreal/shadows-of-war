@@ -54,9 +54,9 @@
     function renderLeaderPurchase(leader) {
         var offer = storeLeaderById(leader.id);
         if (!offer || offer.owned) return "";
-        var laurels = offer.cost_laurels;
+        var crowns = offer.cost_crowns;
         return "<div class='sow-heroes__purchase-actions'><span>" + esc(SOW_t("store.unlock")) + "</span>" +
-            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='laurels' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(laurels, "crown") + "</button>" +
+            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='crowns' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(crowns, "crown") + "</button>" +
             "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='gems' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(offer.cost_gems, "gem") + "</button>" +
             (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy")) : "") +
             "</div>";
@@ -85,7 +85,7 @@
         var store = state.store || {};
         var bundles = Array.isArray(store.gem_bundles) ? store.gem_bundles : [];
         var skins = Array.isArray(store.skins) ? store.skins : [];
-        var laurels = store.laurels || 0;
+        var crowns = store.crowns || 0;
         var featured = bundles.find(function (bundle) { return bundle.product_id === "sow_gems_2600"; }) || bundles[bundles.length - 1];
         var featuredAction = featured && canRenderProductPurchase(featured.product_id) ? storeProductButton(featured.product_id, SOW_t("store.buy")) : "";
         var restoreAction = isAndroidTwa() && state.account_id &&
@@ -98,7 +98,7 @@
             ? "<section class='sow-store__checkout' data-store-checkout><div class='sow-store__section-head'><h2>" + esc(SOW_t("store.checkout")) + "</h2><button class='sow-store__close' type='button' data-command='close_store_checkout' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div><div class='sow-store__checkout-host' data-store-checkout-host><p>" + esc(SOW_t("store.loading_checkout")) + "</p></div></section>"
             : "";
         return "<main class='sow-menu__main sow-menu__main--store' data-screen-panel='store'><section class='sow-menu__store-slot' data-store-slot aria-label='" + esc(SOW_t("store.shop")) + "'>" +
-                    "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>" + esc(SOW_t("store.shop")) + "</p><h1>" + esc(SOW_t("store.featured_offers")) + "</h1></div><div class='sow-store__balances'><span class='sow-store__balance--gems' aria-label='" + esc(SOW_t("store.gems_count", { amount: store.gems || 0 })) + "'>" + renderCurrencyAmount(store.gems || 0, "gem") + "</span><span class='sow-store__balance--laurels' aria-label='" + esc(SOW_t("store.laurels_count", { amount: laurels })) + "'>" + renderCurrencyAmount(laurels, "crown") + "</span></div></header>" +
+                    "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>" + esc(SOW_t("store.shop")) + "</p><h1>" + esc(SOW_t("store.featured_offers")) + "</h1></div><div class='sow-store__balances'><span class='sow-store__balance--gems' aria-label='" + esc(SOW_t("store.gems_count", { amount: store.gems || 0 })) + "'>" + renderCurrencyAmount(store.gems || 0, "gem") + "</span><span class='sow-store__balance--crowns' aria-label='" + esc(SOW_t("store.crowns_count", { amount: crowns })) + "'>" + renderCurrencyAmount(crowns, "crown") + "</span></div></header>" +
                     restoreAction +
                     renderFeedback() +
                     (featured ? "<article class='sow-store__featured'><div><p class='sow-store__eyebrow'>" + esc(SOW_t("store.kingdom_vault")) + "</p><h2>" + renderCurrencyAmount(featured.gems, "gem") + " " + esc(SOW_t("store.gems")) + "</h2><p>" + esc(SOW_t("store.build_next_army")) + "</p></div>" + featuredAction + "</article>" : "") +
@@ -236,7 +236,7 @@
                 });
                 state.store = Object.assign({}, current, catalog, {
                     gems: current.gems == null ? 0 : current.gems,
-                    laurels: current.laurels == null ? 0 : current.laurels
+                    crowns: current.crowns == null ? 0 : current.crowns
                 });
                 storeCatalogLoaded = true;
                 render();

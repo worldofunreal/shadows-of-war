@@ -380,6 +380,10 @@
     text-align: center;
 }
 
+#sow-menu[data-screen="profile"] .sow-profile__stat-laurels strong {
+    color: var(--sow-laurel-bright);
+}
+
 #sow-menu[data-screen="profile"] .sow-profile__columns {
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
@@ -1232,9 +1236,9 @@
     object-fit: contain;
 }
 
-.sow-store__balance--laurels {
-    border-color: rgba(192, 132, 252, .42) !important;
-    color: var(--sow-laurel-bright) !important;
+.sow-store__balance--crowns {
+    border-color: rgba(243, 177, 43, .42) !important;
+    color: var(--sow-gold-bright) !important;
 }
 
 .sow-store__balances small {

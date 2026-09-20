@@ -102,6 +102,9 @@ enum WebMenuCommand {
         ratio: f32,
     },
     SpawnTroops,
+    SelectBuilding {
+        kind: sow_core::game::BuildingKind,
+    },
     ToggleInbox,
     AcceptAlliance {
         target_player_id: u16,
@@ -209,6 +212,8 @@ struct HudPublishKey {
     troop_rate: u64,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
+    selected_building: u8,
+    building_costs: [u64; 9],
     settings_mute: bool,
     settings_music_volume: u32,
     settings_reduced_motion: bool,
@@ -617,6 +622,9 @@ impl SowApp {
                         }
                     }
                 }
+                WebMenuCommand::SelectBuilding { kind } => {
+                    self.select_building_kind(kind);
+                }
                 WebMenuCommand::ToggleInbox => {
                     self.ui.app.hud_state.show_alliance_inbox =
                         !self.ui.app.hud_state.show_alliance_inbox;
@@ -880,6 +888,11 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .spawn_timer_secs
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
+        selected_building: hud
+            .selected_building_kind
+            .map(|kind| kind as u8)
+            .unwrap_or(u8::MAX),
+        building_costs: std::array::from_fn(|index| hud.building_costs[index].to_bits()),
         settings_mute: app.ui.app.settings_state.mute_all,
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
@@ -1390,7 +1403,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         sow_data::commerce::catalog_for_profile(
             &app.progress.owned_leaders,
             &app.progress.owned_skins,
-            app.progress.laurels,
+            app.progress.crowns,
             app.progress.gems,
             rotation_period,
         )
@@ -1400,6 +1413,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     } else {
         None
     };
+    let selected_building = hud.selected_building_kind.map(|kind| match kind {
+        sow_core::game::BuildingKind::City => "City",
+        sow_core::game::BuildingKind::Bunker => "Bunker",
+        sow_core::game::BuildingKind::Factory => "Factory",
+        sow_core::game::BuildingKind::Port => "Port",
+    });
+    let costs = &hud.building_costs;
     let mut payload = serde_json::json!({
         "gold": me.map(|player| player.gold).unwrap_or(hud.gold),
         "troops": me.map(|player| player.troops).unwrap_or(hud.troops),
@@ -1407,6 +1427,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "troop_rate": hud.troop_rate,
         "attack_ratio": hud.attack_ratio,
         "spawn_timer_secs": hud.spawn_timer_secs,
+        "selected_building": selected_building,
+        "building_costs": {
+            "city": costs[0],
+            "bunker": costs[1],
+            "factory": costs[2],
+            "port": costs[3],
+        },
         "pin_emoji": hud.pin_emoji,
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,
@@ -1505,6 +1532,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             payload["rewards"] = serde_json::json!({
                 "xp": reward.xp,
                 "leader_xp": reward.leader_xp,
+                "crowns": reward.crowns,
                 "laurels": reward.laurels,
             });
         }
@@ -1635,7 +1663,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let mut store_catalog = sow_data::commerce::catalog_for_profile(
             &progress.owned_leaders,
             &progress.owned_skins,
-            progress.laurels,
+            progress.crowns,
             progress.gems,
             rotation_period,
         );
@@ -1688,7 +1716,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                     "free_rotation": free_rotation,
                     "owned": owned,
                     "available": free_rotation || owned,
-                    "cost_laurels": sow_data::commerce::LEADER_UNLOCK_COST_LAURELS,
+                    "cost_crowns": sow_data::commerce::LEADER_UNLOCK_COST_CROWNS,
                     "cost_gems": sow_data::commerce::LEADER_UNLOCK_COST_GEMS,
                 })
             })
@@ -1748,6 +1776,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "notice": notice_name(state.notice),
             "level": progress.level,
             "xp": progress.xp,
+            "crowns": progress.crowns,
             "laurels": progress.laurels,
             "gems": progress.gems,
             "campaign": campaign_payload(progress),

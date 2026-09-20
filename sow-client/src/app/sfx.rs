@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use sow_audio::{
-    BuildingSoundKind, CombatSoundKind, PlayerSoundType, SpatialSoundParams,
-};
+use sow_audio::{BuildingSoundKind, CombatSoundKind, PlayerSoundType, SpatialSoundParams};
 use sow_core::game::GamePhase;
 use web_time::{Duration, Instant};
 
 const DEPLOY_GAP: Duration = Duration::from_millis(180);
 const PLACEMENT_GAP: Duration = Duration::from_millis(250);
+const ORDINARY_GAP: Duration = Duration::from_millis(160);
 const COMPLETION_GAP: Duration = Duration::from_millis(500);
 const UNDER_ATTACK_GAP: Duration = Duration::from_secs(8);
 const ELIMINATION_GAP: Duration = Duration::from_millis(700);
@@ -25,6 +24,7 @@ struct PendingElimination {
 pub(crate) struct SfxDirector {
     client_active: bool,
     server_playing: bool,
+    last_ordinary: Option<Instant>,
     last_deploy: Option<Instant>,
     last_placement: Option<Instant>,
     last_completion: Option<Instant>,
@@ -80,6 +80,7 @@ impl SfxDirector {
         if !self.ordinary_allowed(now) || !Self::open_gap(&mut self.last_deploy, now, DEPLOY_GAP) {
             return;
         }
+        self.last_ordinary = Some(now);
         sow_audio::play_deploy_sound(spatial);
     }
 
@@ -94,6 +95,7 @@ impl SfxDirector {
         {
             return;
         }
+        self.last_ordinary = Some(now);
         sow_audio::play_building_placement_sound(kind, spatial);
     }
 
@@ -139,6 +141,7 @@ impl SfxDirector {
             return;
         }
         self.last_combat.insert(kind, now);
+        self.last_ordinary = Some(now);
         sow_audio::play_combat_sound(kind, troops, seed, spatial);
     }
 
@@ -190,9 +193,7 @@ impl SfxDirector {
     }
 
     pub(crate) fn play_nuke_launch(&mut self, now: Instant, spatial: SpatialSoundParams) {
-        if !self.gameplay_allowed(now)
-            || !Self::open_gap(&mut self.last_nuke_launch, now, NUKE_GAP)
-        {
+        if !self.gameplay_allowed(now) || !Self::open_gap(&mut self.last_nuke_launch, now, NUKE_GAP) {
             return;
         }
         self.mark_critical(now);
@@ -205,9 +206,7 @@ impl SfxDirector {
         level: u8,
         spatial: SpatialSoundParams,
     ) {
-        if !self.gameplay_allowed(now)
-            || !Self::open_gap(&mut self.last_nuke_impact, now, NUKE_GAP)
-        {
+        if !self.gameplay_allowed(now) || !Self::open_gap(&mut self.last_nuke_impact, now, NUKE_GAP) {
             return;
         }
         self.mark_critical(now);
@@ -231,12 +230,11 @@ impl SfxDirector {
     }
 
     fn ordinary_allowed(&self, now: Instant) -> bool {
-        self.gameplay_allowed(now)
+        self.gameplay_allowed(now) && Self::gap_open(self.last_ordinary, now, ORDINARY_GAP)
     }
 
     fn critical_active(&self, now: Instant) -> bool {
-        self.critical_silence_until
-            .is_some_and(|until| until > now)
+        self.critical_silence_until.is_some_and(|until| until > now)
     }
 
     fn mark_critical(&mut self, now: Instant) {
@@ -303,7 +301,10 @@ mod tests {
             1,
             silent_spatial(),
         );
-        let first = director.last_combat.get(&CombatSoundKind::AttackTribe).copied();
+        let first = director
+            .last_combat
+            .get(&CombatSoundKind::AttackTribe)
+            .copied();
         director.play_combat(
             now + Duration::from_millis(100),
             CombatSoundKind::AttackTribe,
@@ -311,7 +312,13 @@ mod tests {
             2,
             silent_spatial(),
         );
-        assert_eq!(director.last_combat.get(&CombatSoundKind::AttackTribe).copied(), first);
+        assert_eq!(
+            director
+                .last_combat
+                .get(&CombatSoundKind::AttackTribe)
+                .copied(),
+            first
+        );
         director.play_combat(
             now + Duration::from_millis(350),
             CombatSoundKind::AttackTribe,
@@ -319,7 +326,13 @@ mod tests {
             3,
             silent_spatial(),
         );
-        assert_ne!(director.last_combat.get(&CombatSoundKind::AttackTribe).copied(), first);
+        assert_ne!(
+            director
+                .last_combat
+                .get(&CombatSoundKind::AttackTribe)
+                .copied(),
+            first
+        );
     }
 
     #[test]

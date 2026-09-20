@@ -144,6 +144,12 @@
             + '        <span class="sow-hud__deploy-title">' + SOW_t("hud.choose_spawn") + '</span>'
             + '        <b class="sow-hud__deploy-timer" id="sow-hud-deploy-timer">' + SOW_t("hud.ready") + '</b>'
             + '      </div>'
+            + '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="City" aria-label="' + SOW_t("hud.map_action_city") + '">🏛️</button>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Factory" aria-label="' + SOW_t("hud.map_action_factory") + '">🏭</button>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Port" aria-label="' + SOW_t("hud.map_action_port") + '">⚓</button>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Bunker" aria-label="' + SOW_t("hud.map_action_bunker") + '">🛡️</button>'
+            + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
             + '      <div class="sow-hud__res-rate" id="sow-hud-res-rate" title="' + SOW_t("hud.troop_production_rate") + '">'
@@ -214,7 +220,8 @@
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 5.1L19 10l-4.9 1.9L12 17l-2.1-5.1L5 10l4.9-1.9z"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.xp") + '</span><b id="sow-hud-endgame-xp">+0</b></div>'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 4 4 4-6 4 6 4-4-2 10H6zM6 20h12"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.leader_xp") + '</span><b id="sow-hud-endgame-leader-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.laurels") + '</span><b id="sow-hud-endgame-laurels">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.crowns") + '</span><b id="sow-hud-endgame-crowns">+0</b></div>'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("laurel") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.laurels") + '</span><b id="sow-hud-endgame-laurels">+0</b></div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="' + SOW_t("store.featured_skin") + '">'
             + '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>'
@@ -265,6 +272,8 @@
             settings: document.getElementById("sow-hud-settings"),
             deployBtn: document.getElementById("sow-hud-deploy-btn"),
             deployTimer: document.getElementById("sow-hud-deploy-timer"),
+            buildingsStrip: document.getElementById("sow-hud-buildings-strip"),
+            buildingButtons: Array.prototype.slice.call(hudRoot.querySelectorAll("[data-command='select_building']")),
             troopFill: document.getElementById("sow-hud-troop-fill"),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
@@ -293,6 +302,7 @@
             endgameKda: document.getElementById("sow-hud-endgame-kda"),
             endgameXp: document.getElementById("sow-hud-endgame-xp"),
             endgameLeaderXp: document.getElementById("sow-hud-endgame-leader-xp"),
+            endgameCrowns: document.getElementById("sow-hud-endgame-crowns"),
             endgameLaurels: document.getElementById("sow-hud-endgame-laurels"),
             endgameStore: document.getElementById("sow-hud-endgame-store"),
             endgameStoreName: document.getElementById("sow-hud-endgame-store-name"),
@@ -843,6 +853,26 @@
                 hudRefs.deployTimer.textContent = spawnSecs.toFixed(1) + 's';
             }
         }
+        if (hudRefs.buildingsStrip) {
+            hudRefs.buildingsStrip.style.display = isDeploying ? "none" : "flex";
+            var selectedBuilding = hud.selected_building;
+            var buildingCosts = hud.building_costs || {};
+            hudRefs.buildingButtons.forEach(function (button) {
+                var kind = button.dataset.kind || "";
+                var cost = Number(buildingCosts[kind.toLowerCase()]);
+                var hasCost = Number.isFinite(cost) && cost > 0;
+                var affordable = !hasCost || gold >= cost;
+                var selected = selectedBuilding === kind;
+                button.disabled = !affordable && !selected;
+                button.classList.toggle("active", selected);
+                button.setAttribute("aria-pressed", String(selected));
+                var costText = hasCost ? Math.floor(cost).toLocaleString() + "g" : "";
+                var label = button.dataset.label || button.getAttribute("aria-label") || kind;
+                button.dataset.label = label;
+                button.setAttribute("aria-label", costText ? label + " " + costText : label);
+                button.title = costText;
+            });
+        }
 
         // Emoji Popout
         if (hudRefs.emojiPopout) {
@@ -964,6 +994,7 @@
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
                 if (hudRefs.endgameLeaderXp) hudRefs.endgameLeaderXp.textContent = "+" + (rewards.leader_xp || 0);
+                if (hudRefs.endgameCrowns) hudRefs.endgameCrowns.textContent = "+" + (rewards.crowns || 0);
                 if (hudRefs.endgameLaurels) hudRefs.endgameLaurels.textContent = "+" + (rewards.laurels || 0);
                 var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
@@ -1101,6 +1132,8 @@
                 }
             } else if (cmd === "spawn_troops") {
                 send("spawn_troops");
+            } else if (cmd === "select_building") {
+                send("select_building", { kind: btn.dataset.kind });
             } else if (cmd === "confirm_endgame_leave") {
                 send("leave_lobby");
             } else if (cmd === "open_store") {
@@ -1141,6 +1174,14 @@
         }
         handleHudStateUpdate(raw);
     };
+
+    window.addEventListener("sow:locale-change", function () {
+        if (!hudState) return;
+        hudInitialized = false;
+        hudRefs = null;
+        if (hudRoot) hudRoot.replaceChildren();
+        renderHud();
+    });
 
     if (hudRoot) hudRoot.hidden = true;
     window.SOW_onStateUpdate(window.SOW_MENU_STATE);

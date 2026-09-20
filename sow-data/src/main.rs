@@ -1016,7 +1016,8 @@ async fn handle_stripe_webhook(
     }
 }
 
-/// POST /store/leaders/unlock — spend authoritative laurels on a leader.
+/// POST /store/leaders/unlock — spend authoritative crowns on a leader.
+/// The legacy currency alias "laurels" is still accepted and spends crowns.
 async fn handle_unlock_leader(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,

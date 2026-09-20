@@ -875,6 +875,13 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         &[
             "sow-controls.css",
             "main_menu.base.css",
+            "main_menu.layout.css",
+            "main_menu.lobbies.css",
+            "main_menu.create.css",
+            "main_menu.queue.css",
+            "main_menu.settings.css",
+            "main_menu.auth.css",
+            "main_menu.campaign.css",
             "main_menu.hud.css",
             "main_menu.profile.css",
         ],
@@ -1186,8 +1193,48 @@ fn validate_web_catalogs() -> Result<serde_json::Value> {
         let catalog = serde_json::to_value(&sow_i18n::web(language))?;
         validate_web_node(code, &english, &catalog)
             .with_context(|| format!("validate web catalog {code}"))?;
+        if code != "en" {
+            println!(
+                "i18n audit {code}: {} values remain equal to English",
+                count_equal_web_values(&english, &catalog)
+            );
+        }
     }
     Ok(english)
+}
+
+fn count_equal_web_values(expected: &serde_json::Value, actual: &serde_json::Value) -> usize {
+    match (expected, actual) {
+        (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => expected
+            .iter()
+            .map(|(key, value)| {
+                actual
+                    .get(key)
+                    .map_or(0, |candidate| count_equal_web_values(value, candidate))
+            })
+            .sum(),
+        (serde_json::Value::String(expected), serde_json::Value::String(actual)) => {
+            if expected == actual { 1 } else { 0 }
+        }
+        _ => 0,
+    }
+}
+
+fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
+    for &(_, code, _, _) in sow_i18n::Language::registry() {
+        let token = code.to_ascii_lowercase().replace('-', "_");
+        let key = format!("menu.language_{token}");
+        if web_catalog_value(catalog, &key).is_none() {
+            bail!("dynamic localization key is missing: {key}");
+        }
+    }
+    for tab in ["overview", "leaders", "history", "ranked"] {
+        let key = format!("profile.tab_{tab}");
+        if web_catalog_value(catalog, &key).is_none() {
+            bail!("dynamic localization key is missing: {key}");
+        }
+    }
+    Ok(())
 }
 
 fn locale_folder(code: &str) -> String {
@@ -1197,6 +1244,7 @@ fn locale_folder(code: &str) -> String {
 fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
     let root = &paths.root;
     let catalog = validate_web_catalogs()?;
+    validate_dynamic_web_keys(&catalog)?;
     let strings_root = root.join("sow-i18n/strings");
     let registered = sow_i18n::Language::registry()
         .iter()
@@ -1294,6 +1342,19 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         let source = fs::read_to_string(&path)
             .with_context(|| format!("read public source {}", path.display()))?;
         validate_source_localization_keys(&source, relative, &catalog)?;
+    }
+    let shell_root = root.join("sow-web/shell");
+    for entry in walkdir::WalkDir::new(&shell_root) {
+        let entry = entry?;
+        let path = entry.path();
+        if !entry.file_type().is_file()
+            || path.extension().and_then(|ext| ext.to_str()) != Some("js")
+        {
+            continue;
+        }
+        let source = fs::read_to_string(path)
+            .with_context(|| format!("read shell source {}", path.display()))?;
+        validate_source_localization_keys(&source, &path.display().to_string(), &catalog)?;
     }
     Ok(())
 }
@@ -2995,6 +3056,13 @@ mod tests {
             "sow-dropdown.js",
             "sow-controls.css",
             "main_menu.base.css",
+            "main_menu.layout.css",
+            "main_menu.lobbies.css",
+            "main_menu.create.css",
+            "main_menu.queue.css",
+            "main_menu.settings.css",
+            "main_menu.auth.css",
+            "main_menu.campaign.css",
             "main_menu.hud.css",
             "main_menu.profile.css",
             "main_menu.core.js",

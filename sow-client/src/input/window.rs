@@ -89,8 +89,8 @@ impl SowApp {
                 }
                 if self.input.active_touches.is_empty() {
                     self.input.map_pointer_start = None;
-                    self.input.dragging = false;
                 }
+                self.rebase_single_touch_drag();
                 self.sync_hover_pointer(HoverPointer::Touch, None);
             }
             _ => {
@@ -98,6 +98,21 @@ impl SowApp {
                 self.input.dragging = false;
                 self.sync_hover_pointer(HoverPointer::None, None);
             }
+        }
+    }
+
+    fn rebase_single_touch_drag(&mut self) {
+        if self.input.active_touches.len() == 1
+            && self.ui.app.hud_state.selected_building_kind.is_none()
+            && self.ui.app.hud_state.selected_nuke_kind.is_none()
+        {
+            if let Some((x, y)) = single_touch_position(&self.input.active_touches) {
+                self.input.last_mouse_x = x;
+                self.input.last_mouse_y = y;
+                self.input.dragging = true;
+            }
+        } else {
+            self.input.dragging = false;
         }
     }
 
@@ -184,9 +199,7 @@ impl SowApp {
             _ => None,
         };
         if let Some(kind) = building {
-            let selected = &mut self.ui.app.hud_state.selected_building_kind;
-            *selected = (*selected != Some(kind)).then_some(kind);
-            self.ui.app.hud_state.selected_nuke_kind = None;
+            self.select_building_kind(kind);
         }
         if code == winit::keyboard::KeyCode::Digit0 || code == winit::keyboard::KeyCode::Numpad0 {
             let kind = sow_core::game::NukeKind::AtomBomb;
@@ -243,6 +256,7 @@ impl SowApp {
                 if self.input.active_touches.len() < 2 {
                     self.input.last_pinch_state = None;
                 }
+                self.rebase_single_touch_drag();
             }
         }
 
@@ -291,7 +305,9 @@ impl SowApp {
                     });
                 }
             } else {
-                self.input.dragging = false;
+                if self.input.active_touches.is_empty() {
+                    self.input.dragging = false;
+                }
                 let Some(start) = self.input.map_pointer_start.take() else {
                     return;
                 };
@@ -342,6 +358,7 @@ impl SowApp {
         if self.input.active_touches.len() >= 2 {
             self.input.map_pointer_start = None;
             self.input.dragging = false;
+            self.input.hover_pointer = HoverPointer::None;
             self.close_map_context_menu();
             let mut points = self.input.active_touches.values();
             let (x1, y1) = *points.next().expect("two active touches");
@@ -362,14 +379,23 @@ impl SowApp {
             }
             self.input.last_pinch_state = Some((distance, cx, cy));
         } else if is_touch {
+            let mut crossed_drag_threshold = false;
             if let Some(start) = self.input.map_pointer_start.as_ref() {
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
                 if distance_sq > 400.0 {
                     self.input.map_pointer_start = None;
-                    self.input.dragging = false;
+                    crossed_drag_threshold = true;
                 }
             }
-        } else if primary && self.input.dragging && !is_touch {
+            if (crossed_drag_threshold || self.input.map_pointer_start.is_none())
+                && self.input.dragging
+            {
+                self.close_map_context_menu();
+                self.input.camera_x += (x - self.input.last_mouse_x) as f32;
+                self.input.camera_y += (y - self.input.last_mouse_y) as f32;
+                self.clamp_camera_to_map();
+            }
+        } else if primary && self.input.dragging {
             self.close_map_context_menu();
             self.input.camera_x += (x - self.input.last_mouse_x) as f32;
             self.input.camera_y += (y - self.input.last_mouse_y) as f32;

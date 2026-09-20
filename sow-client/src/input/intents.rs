@@ -21,10 +21,8 @@ impl SowApp {
                     world_y: wy,
                     start_time: web_time::Instant::now(),
                 });
-                self.sfx.play_deploy(
-                    web_time::Instant::now(),
-                    self.spatial_sound_params(wx, wy),
-                );
+                self.sfx
+                    .play_deploy(web_time::Instant::now(), self.spatial_sound_params(wx, wy));
             }
             sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile } => {
                 let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;

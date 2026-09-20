@@ -10,7 +10,21 @@ const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), 
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+const windowInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/window.rs"), "utf8");
+const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
+const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
 const worldOverlays = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
+const menuCssFiles = [
+    "main_menu.base.css",
+    "main_menu.layout.css",
+    "main_menu.lobbies.css",
+    "main_menu.create.css",
+    "main_menu.queue.css",
+    "main_menu.settings.css",
+    "main_menu.auth.css",
+    "main_menu.campaign.css"
+];
+const menuCss = Object.fromEntries(menuCssFiles.map((file) => [file, fs.readFileSync(path.join(shell, file), "utf8")]));
 
 function renderSettingsBody(source, endMarker) {
     const start = source.indexOf("function renderSettings()");
@@ -19,6 +33,23 @@ function renderSettingsBody(source, endMarker) {
     assert.notEqual(end, -1);
     return source.slice(start, end);
 }
+
+test("menu CSS keeps shared layout separate from live screen domains", () => {
+    for (const file of menuCssFiles) assert.ok(menuCss[file].length > 0, file);
+    assert.match(menuCss["main_menu.base.css"], /#sow-menu/);
+    assert.match(menuCss["main_menu.layout.css"], /sow-menu__main-nav/);
+    assert.match(menuCss["main_menu.lobbies.css"], /sow-menu__lobbies/);
+    assert.match(menuCss["main_menu.create.css"], /sow-create__/);
+    assert.match(menuCss["main_menu.queue.css"], /sow-menu__queue-summary-card/);
+    assert.match(menuCss["main_menu.settings.css"], /sow-menu__settings-modal/);
+    assert.match(menuCss["main_menu.auth.css"], /sow-auth__/);
+    assert.match(menuCss["main_menu.campaign.css"], /sow-campaign__/);
+    assert.doesNotMatch(menuCss["main_menu.base.css"], /sow-(create|auth|campaign)__/);
+    assert.doesNotMatch(menuCss["main_menu.base.css"], /\.sow-menu__queue(?![-\w])/);
+    assert.doesNotMatch(menuCss["main_menu.layout.css"], /\.sow-menu__queue(?![-\w])/);
+    assert.match(lobbiesSource, /modeClass = "sow-menu__mode-chip--"/);
+    assert.match(shellSource, /sow-auth__provider-icon--/);
+});
 
 test("settings panel keeps only useful controls and real account state", () => {
     const settings = [
@@ -80,10 +111,27 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hudCss, /@keyframes sow-map-menu-in/);
     assert.match(hud, /title\.textContent = label\.icon/);
     assert.match(hud, /parts\.push\(item\.level/);
-    assert.doesNotMatch(hud, /sow-hud__buildings-strip|build_structure|cancel_placement/);
-    assert.doesNotMatch(hudCss, /sow-hud__buildings-strip|sow-hud__bld-btn|sow-hud__cancel-btn/);
+    assert.match(hud, /sow-hud__buildings-strip/);
+    assert.match(hudCss, /\.sow-hud__buildings-strip/);
+    assert.match(hudCss, /\.sow-hud__building-btn/);
+    assert.doesNotMatch(hud, /build_structure|cancel_placement/);
+    assert.doesNotMatch(hudCss, /sow-hud__bld-btn|sow-hud__cancel-btn/);
     assert.doesNotMatch(hud, /mapClose|data-map-close|close_map_menu|STRATEGIC STRIKE|CONSTRUCT/);
     assert.doesNotMatch(hudCss, /sow-hud__map-sector-caption|sow-hud__map-close/);
+});
+
+test("building dock exposes four emoji selectors without a cancel button", () => {
+    const kinds = [...hud.matchAll(/data-command="select_building" data-kind="(City|Factory|Port|Bunker)"/g)]
+        .map((match) => match[1]);
+    assert.deepEqual(kinds, ["City", "Factory", "Port", "Bunker"]);
+    assert.match(hud, /send\("select_building", \{ kind: btn\.dataset\.kind \}\)/);
+    assert.match(webMenu, /SelectBuilding\s*\{\s*kind: sow_core::game::BuildingKind/);
+    assert.match(webMenu, /WebMenuCommand::SelectBuilding\s*\{\s*kind\s*\}\s*=>\s*\{\s*self\.select_building_kind\(kind\)/);
+    assert.match(windowInput, /fn rebase_single_touch_drag/);
+    assert.match(windowInput, /\} else if is_touch \{[\s\S]*?camera_x \+=/);
+    assert.doesNotMatch(windowInput, /self\.input\.dragging && !is_touch/);
+    assert.match(mapClick, /MapMenuAction::BuildCity[\s\S]*?self\.select_building_kind\(kind\)/);
+    assert.doesNotMatch(hud, /cancel_placement/);
 });
 
 test("mobile hover is Rust-owned and the HUD only presents its state", () => {

@@ -78,7 +78,7 @@ Verified configuration:
 - First Victory achievement ID: `CgkIsLGC7KYIEAIQBA` (draft).
 - Battle Hardened achievement ID: `CgkIsLGC7KYIEAIQBg` (draft, 10 matches).
 - Victory March achievement ID: `CgkIsLGC7KYIEAIQBw` (draft, 5 victories).
-- Crown Hoard achievement ID: `CgkIsLGC7KYIEAIQCA` (draft, 500 laurels).
+- Laurel Hoard achievement ID: `CgkIsLGC7KYIEAIQCA` (draft, advanced by laurels — achievement points — earned from each verified match).
 - First Command achievement ID: `CgkIsLGC7KYIEAIQCQ` (draft).
 - Commander Victorious achievement ID: `CgkIsLGC7KYIEAIQCg` (draft).
 - Veteran Commander achievement ID: `CgkIsLGC7KYIEAIQCw` (draft, 10 wins with one leader).

@@ -1,0 +1,95 @@
+/* Settings domain: account, preferences, and sign-out modal. */
+
+.sow-menu__settings-modal {
+    width: min(100%, 480px);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.sow-menu__settings-modal .sow-menu__modal-head {
+    margin-bottom: 0;
+}
+
+.sow-menu__settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.sow-menu__settings-account {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--sow-line);
+}
+
+.sow-menu__account-value {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    color: #f5f1e8;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    text-align: start;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.sow-menu__account-pending {
+    color: var(--sow-gold-bright);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+}
+
+.sow-menu__settings-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sow-menu__settings-controls .sow-menu__form-field {
+    gap: 8px;
+}
+
+.sow-menu__settings-actions {
+    padding-top: 18px;
+    border-top: 1px solid var(--sow-line);
+}
+
+.sow-menu__settings-signout {
+    margin-top: 0;
+}
+
+.sow-menu__settings-confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid rgba(236, 104, 78, 0.55);
+    border-radius: var(--sow-button-radius);
+    background: rgba(35, 17, 18, 0.72);
+}
+
+.sow-menu__settings-confirm > strong {
+    color: #ffb1a2;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.sow-menu__settings-confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.sow-menu__settings-confirm-actions .sow-menu__secondary,
+.sow-menu__settings-confirm-actions .sow-menu__danger {
+    min-height: 44px;
+    margin-top: 0;
+}
+

@@ -258,6 +258,7 @@
             name: state.player_name,
             leader: state.selected_leader,
             gems: state.gems,
+            crowns: state.crowns,
             laurels: state.laurels,
             selected_skin: state.selected_skin,
             skins: (state.store && state.store.skins || []).map(function (skin) {
@@ -265,9 +266,9 @@
             }),
             store: state.store && {
                 gems: state.store.gems,
-                laurels: state.store.laurels,
+                crowns: state.store.crowns,
                 leaders: (state.store.leaders || []).map(function (leader) {
-                return [leader.id, leader.owned, leader.free_rotation, leader.cost_laurels, leader.cost_gems];
+                return [leader.id, leader.owned, leader.free_rotation, leader.cost_crowns, leader.cost_gems];
                 }),
                 skins: (state.store.skins || []).map(function (skin) {
                     return [skin.id, skin.owned, skin.cost_gems];

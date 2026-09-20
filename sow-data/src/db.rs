@@ -76,6 +76,33 @@ pub struct MatchOutcomeKda {
     pub leader: Option<String>,
 }
 
+/// Deserialize one stored account, applying the legacy currency migration
+/// (pre-split `"laurels"` spendable balance → `"crowns"`) at this single
+/// chokepoint. Every stored-account parse in the workspace goes through here.
+pub fn parse_account_with_migration(raw: &[u8]) -> serde_json::Result<PlayerAccount> {
+    let mut value: serde_json::Value = serde_json::from_slice(raw)?;
+    if let Some(profile) = value.get_mut("profile").and_then(|p| p.as_object_mut()) {
+        migrate_legacy_currency(profile);
+    }
+    serde_json::from_value(value)
+}
+
+/// Lazy migration for the 2026-09 currency split (owner decision): profiles
+/// saved before the split store the spendable balance under the legacy
+/// `"laurels"` key. Move it to `"crowns"` and drop the legacy key so the new
+/// `laurels` (achievement points) field deserializes to its default 0 instead
+/// of inheriting the old currency amount. Deterministic, order-independent,
+/// a no-op for already-migrated objects; stored bytes are only rewritten on
+/// the next regular save.
+fn migrate_legacy_currency(profile: &mut serde_json::Map<String, serde_json::Value>) {
+    if profile.contains_key("crowns") {
+        return;
+    }
+    if let Some(legacy) = profile.remove("laurels") {
+        profile.insert("crowns".to_string(), legacy);
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PlayGamesMatchOutcome {
     pub account_id: String,
@@ -108,6 +135,11 @@ pub struct PlayerProfile {
     pub leader_xp: std::collections::BTreeMap<String, u32>,
     #[serde(default)]
     pub leader_stats: std::collections::BTreeMap<String, LeaderCareerStats>,
+    /// Free spendable currency (legacy profiles stored it under "laurels";
+    /// `parse_account_with_migration` moves it here on load).
+    #[serde(default)]
+    pub crowns: u64,
+    /// Achievement points — earned, never spent.
     #[serde(default)]
     pub laurels: u64,
     #[serde(default)]
@@ -159,6 +191,7 @@ impl Default for PlayerProfile {
             assists: 0,
             leader_xp: std::collections::BTreeMap::new(),
             leader_stats: std::collections::BTreeMap::new(),
+            crowns: 0,
             laurels: 0,
             gems: 0,
             owned_leaders: std::collections::BTreeSet::new(),
@@ -199,6 +232,7 @@ impl PlayerProfile {
         *entry = entry.saturating_add(reward.leader_xp);
         let stats = self.leader_stats.entry(leader.to_string()).or_default();
         stats.xp = stats.xp.saturating_add(reward.leader_xp);
+        self.crowns = self.crowns.saturating_add(reward.crowns);
         self.laurels = self.laurels.saturating_add(reward.laurels);
     }
 
@@ -768,7 +802,7 @@ impl PlayerDb {
         }
     }
 
-    /// Public profile DTO. Exact XP and laurels remain in the authenticated
+    /// Public profile DTO. Exact XP, crowns and laurels remain in the authenticated
     /// menu bridge; this endpoint exposes level and gameplay statistics only.
     pub async fn public_profile(
         &self,
@@ -1124,7 +1158,7 @@ impl PlayerDb {
         let Some(acc_json) = acc_json else {
             return Err("Account not found".into());
         };
-        Ok(serde_json::from_str(&acc_json)?)
+        Ok(parse_account_with_migration(acc_json.as_bytes())?)
     }
 
     async fn ensure_starting_leader(
@@ -1438,7 +1472,7 @@ impl PlayerDb {
                 let Some(raw): Option<String> = con.get(&key).await? else {
                     continue;
                 };
-                let Ok(account) = serde_json::from_str::<PlayerAccount>(&raw) else {
+                let Ok(account) = parse_account_with_migration(raw.as_bytes()) else {
                     error!("Skipping malformed account during test reset: {key}");
                     continue;
                 };
@@ -1466,7 +1500,7 @@ impl PlayerDb {
                 for item in table.iter()? {
                     let (key, value) = item?;
                     let account_id = key.value().to_string();
-                    if let Ok(account) = serde_json::from_slice::<PlayerAccount>(value.value()) {
+                    if let Ok(account) = parse_account_with_migration(value.value()) {
                         if account.kind == AccountKind::Human {
                             human_ids.insert(account_id.clone());
                             collect_purchase_markers(&account, &mut purchase_markers);
@@ -2660,7 +2694,9 @@ impl PlayerDb {
         let leader_id = crate::commerce::leader_id(leader).to_string();
         let (cost, use_gems) = match currency {
             "gems" => (crate::commerce::LEADER_UNLOCK_COST_GEMS, true),
-            "" | "laurels" => (crate::commerce::LEADER_UNLOCK_COST_LAURELS, false),
+            // "laurels" stays accepted as a legacy alias for crowns so cached
+            // pre-split shells keep working; it spends crowns, never points.
+            "" | "crowns" | "laurels" => (crate::commerce::LEADER_UNLOCK_COST_CROWNS, false),
             _ => return Err("invalid leader unlock currency".into()),
         };
         let period = crate::commerce::current_rotation_period();
@@ -2679,19 +2715,19 @@ impl PlayerDb {
                 } else if (if use_gems {
                     account.profile.gems
                 } else {
-                    account.profile.laurels
+                    account.profile.crowns
                 }) < cost
                 {
                     failure = Some(if use_gems {
                         "insufficient gems"
                     } else {
-                        "insufficient laurels"
+                        "insufficient crowns"
                     });
                 } else {
                     if use_gems {
                         account.profile.gems -= cost;
                     } else {
-                        account.profile.laurels -= cost;
+                        account.profile.crowns -= cost;
                     }
                     account.profile.owned_leaders.insert(leader_id.clone());
                     account.updated_at = std::time::SystemTime::now()
@@ -3330,6 +3366,7 @@ impl PlayerDb {
                 tribes_defeated: defeats.tribes,
                 xp: reward.xp,
                 leader_xp: reward.leader_xp,
+                crowns: reward.crowns,
                 laurels: reward.laurels,
                 rating_delta: None,
             });
@@ -3369,6 +3406,7 @@ impl PlayerDb {
                         won,
                         matches_played: account.profile.matches_played,
                         wins: account.profile.wins,
+                        // Laurel Hoard tracks achievement points, not currency.
                         laurels_earned: reward.laurels,
                         leader_matches_played: leader_stats
                             .map(|stats| stats.matches_played)
@@ -3510,16 +3548,46 @@ mod tests {
         let account: super::PlayerAccount = serde_json::from_str(json).unwrap();
         assert!(account.display_name.is_empty());
         assert!(account.profile.leader_xp.is_empty());
+        assert_eq!(account.profile.crowns, 0);
         assert_eq!(account.profile.laurels, 0);
         assert!(!account.profile.intro_completed);
     }
 
     #[test]
-    fn laurels_balance_uses_the_canonical_key() {
+    fn currency_balances_use_their_canonical_keys() {
         let mut profile = super::PlayerProfile::default();
-        profile.laurels = 725;
+        profile.crowns = 725;
+        profile.laurels = 40;
         let value = serde_json::to_value(&profile).unwrap();
-        assert_eq!(value["laurels"], 725);
+        assert_eq!(value["crowns"], 725);
+        assert_eq!(value["laurels"], 40);
+    }
+
+    #[test]
+    fn legacy_account_laurels_balance_migrates_to_crowns_on_parse() {
+        // Pre-split stored account: profile.laurels holds the spendable balance.
+        let legacy = r#"{
+            "account_id":"0123456789abcdef0123456789abcdef",
+            "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
+              "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
+              "preferred_leader":null,"laurels":725},
+            "linked_identities":[],"created_at":0,"updated_at":0
+        }"#;
+        let account = super::parse_account_with_migration(legacy.as_bytes()).unwrap();
+        assert_eq!(account.profile.crowns, 725, "legacy balance must become crowns");
+        assert_eq!(account.profile.laurels, 0, "points must not inherit the legacy balance");
+
+        // Post-split account: both balances survive untouched.
+        let current = r#"{
+            "account_id":"0123456789abcdef0123456789abcdef",
+            "profile":{"xp":0,"level":1,"wins":0,"matches_played":0,
+              "players_defeated":0,"empires_defeated":0,"tribes_defeated":0,
+              "preferred_leader":null,"crowns":100,"laurels":40},
+            "linked_identities":[],"created_at":0,"updated_at":0
+        }"#;
+        let account = super::parse_account_with_migration(current.as_bytes()).unwrap();
+        assert_eq!(account.profile.crowns, 100);
+        assert_eq!(account.profile.laurels, 40);
     }
 
     #[test]

@@ -432,6 +432,7 @@
                 "<div><strong>" + esc(data.matches_played) + "</strong><span>" + esc(SOW_t("profile.matches")) + "</span></div>" +
                 "<div><strong>" + esc(data.wins) + "</strong><span>" + esc(SOW_t("profile.wins")) + "</span></div>" +
                 "<div><strong>" + esc(Math.round((data.win_rate || 0) * 100)) + "%</strong><span>" + esc(SOW_t("profile.win_rate")) + "</span></div>" +
+                "<div class='sow-profile__stat-laurels'><strong>" + esc(state.laurels || 0) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
                 "<div class='sow-profile__stat-kda'><strong><i>" + esc(data.kills) + "</i><i>" + esc(data.deaths) + "</i><i>" + esc(data.assists) + "</i></strong><span>" + esc(SOW_t("profile.kda")) + "</span></div>" +
                 "</div><div class='sow-profile__columns'><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.recent_matches")) + "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>" + esc(SOW_t("profile.view_all")) + "</button></div>" + recent +
                 "</section><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.leaders")) + "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>" + esc(SOW_t("profile.view_all")) + "</button></div>" + leaders +

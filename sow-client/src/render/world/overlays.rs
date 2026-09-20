@@ -93,7 +93,11 @@ fn tutorial_avatar_geometry(
     let sf = sf.max(0.01);
     let zoom_scaled = input.camera_zoom / sf;
     let is_human = player.player_type == PlayerType::Human;
-    let scaled_size = nameplate_font_px(nameplate_world_size(player.tile_count), zoom_scaled, is_human);
+    let scaled_size = nameplate_font_px(
+        nameplate_world_size(player.tile_count),
+        zoom_scaled,
+        is_human,
+    );
     if !is_human && (zoom_scaled < NAMEPLATE_HIDE_ZOOM || scaled_size < 7.0) {
         return None;
     }
@@ -125,16 +129,7 @@ pub(crate) fn render_overlays(
     let zoom_scaled = input.camera_zoom / sf;
 
     if dev.vfx_world_buildings {
-        render_buildings(
-            text,
-            snapshot,
-            sim,
-            ui,
-            input,
-            &dev,
-            sf,
-            zoom_scaled,
-        );
+        render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled);
     }
     render_building_placement_preview(
         text,
@@ -147,7 +142,18 @@ pub(crate) fn render_overlays(
         sf,
         zoom_scaled,
     );
-    render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, dt, now);
+    render_nameplates(
+        text,
+        snapshot,
+        sim,
+        ui,
+        input,
+        &dev,
+        sf,
+        zoom_scaled,
+        dt,
+        now,
+    );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 
     if !ui.tutorial_active {
@@ -273,10 +279,8 @@ fn render_nameplates(
         }
 
         let target_size = nameplate_world_size(player.tile_count);
-        let state = ui
-            .nameplate_visuals
-            .entry(player.id)
-            .or_insert_with(|| crate::app::NameplateVisualState {
+        let state = ui.nameplate_visuals.entry(player.id).or_insert_with(|| {
+            crate::app::NameplateVisualState {
                 world_center: target_center,
                 world_size: target_size,
                 source_name: player.name.clone(),
@@ -289,45 +293,23 @@ fn render_nameplates(
                 troops_bits: player.troops.to_bits(),
                 troops_text: crate::utils::format_number(player.troops),
                 troops_updated_at: now,
-            });
-
-        let dx = target_center[0] - state.world_center[0];
-        let dy = target_center[1] - state.world_center[1];
-        let distance = (dx * dx + dy * dy).sqrt();
-        if distance > 50.0 {
-            state.world_center = target_center;
-        } else {
-            let screen_distance = distance * input.camera_zoom / sf;
-            if screen_distance > 0.5 && distance > 0.05 {
-                let factor = 1.0 - (-NAMEPLATE_POSITION_RATE * dt.max(0.0)).exp();
-                state.world_center[0] += dx * factor;
-                state.world_center[1] += dy * factor;
-            } else {
-                state.world_center = target_center;
             }
-        }
+        });
 
-        let size_delta = target_size - state.world_size;
-        if size_delta.abs() > NAMEPLATE_SIZE_DEADZONE {
-            let rate = if size_delta > 0.0 {
-                NAMEPLATE_SIZE_GROW_RATE
-            } else {
-                NAMEPLATE_SIZE_SHRINK_RATE
-            };
-            let factor = 1.0 - (-rate * dt.max(0.0)).exp();
-            state.world_size += size_delta * factor;
-        } else {
-            state.world_size = target_size;
-        }
+        smooth_nameplate_position(
+            &mut state.world_center,
+            target_center,
+            input.camera_zoom,
+            sf,
+            dt,
+        );
+        smooth_nameplate_size(&mut state.world_size, target_size, dt);
 
         if state.source_name != player.name || state.player_type != player.player_type {
             state.source_name = player.name.clone();
             state.player_type = player.player_type;
-            state.display_name = sow_core::player::display_name(
-                player.id,
-                &player.name,
-                player.player_type,
-            );
+            state.display_name =
+                sow_core::player::display_name(player.id, &player.name, player.player_type);
         }
         if now.duration_since(state.troops_updated_at).as_secs_f32()
             >= NAMEPLATE_TROOPS_REFRESH_SECS
@@ -413,6 +395,45 @@ fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
     } else {
         world_px
     }
+}
+
+fn smooth_nameplate_position(
+    current: &mut [f32; 2],
+    target: [f32; 2],
+    camera_zoom: f32,
+    sf: f32,
+    dt: f32,
+) {
+    let dx = target[0] - current[0];
+    let dy = target[1] - current[1];
+    let distance = (dx * dx + dy * dy).sqrt();
+    if distance > 50.0 {
+        *current = target;
+        return;
+    }
+    let screen_distance = distance * camera_zoom / sf.max(0.01);
+    if screen_distance > 0.5 && distance > 0.05 {
+        let factor = 1.0 - (-NAMEPLATE_POSITION_RATE * dt.max(0.0)).exp();
+        current[0] += dx * factor;
+        current[1] += dy * factor;
+    } else {
+        *current = target;
+    }
+}
+
+fn smooth_nameplate_size(current: &mut f32, target: f32, dt: f32) {
+    let delta = target - *current;
+    if delta.abs() <= NAMEPLATE_SIZE_DEADZONE {
+        *current = target;
+        return;
+    }
+    let rate = if delta > 0.0 {
+        NAMEPLATE_SIZE_GROW_RATE
+    } else {
+        NAMEPLATE_SIZE_SHRINK_RATE
+    };
+    let factor = 1.0 - (-rate * dt.max(0.0)).exp();
+    *current += delta * factor;
 }
 
 #[derive(Clone, Copy)]
@@ -1074,31 +1095,25 @@ fn render_building_placement_preview(
     }
     let hovered_tile = (row as u32) * sim.map_w + col as u32;
     let my_id = sim.my_player_id.unwrap_or(0);
-    let target = crate::input::resolve_build_target_tile(&crate::input::placement::PlacementQuery {
-        kind,
-        click_x: col,
-        click_y: row,
-        map_w: sim.map_w,
-        map_h: sim.map_h,
-        owners: &map_renderer.owners,
-        terrain: &map_renderer.terrain,
-        my_id,
-        buildings: &snapshot.buildings,
-    });
-    let stack_building = crate::input::find_stack_target_tile(
-        kind,
-        col,
-        row,
-        sim.map_w,
-        my_id,
-        &snapshot.buildings,
-    )
-    .and_then(|tile| {
-        snapshot
-            .buildings
-            .iter()
-            .find(|building| building.tile_idx == tile && building.owner_id == my_id && building.kind == kind)
-    });
+    let target =
+        crate::input::resolve_build_target_tile(&crate::input::placement::PlacementQuery {
+            kind,
+            click_x: col,
+            click_y: row,
+            map_w: sim.map_w,
+            map_h: sim.map_h,
+            owners: &map_renderer.owners,
+            terrain: &map_renderer.terrain,
+            my_id,
+            buildings: &snapshot.buildings,
+        });
+    let stack_building =
+        crate::input::find_stack_target_tile(kind, col, row, sim.map_w, my_id, &snapshot.buildings)
+            .and_then(|tile| {
+                snapshot.buildings.iter().find(|building| {
+                    building.tile_idx == tile && building.owner_id == my_id && building.kind == kind
+                })
+            });
     let preview_tile = target.unwrap_or(hovered_tile);
     let cost_index = sow_core::game::BuildingKind::ALL
         .iter()
@@ -1107,7 +1122,8 @@ fn render_building_placement_preview(
     let cost = ui.app.hud_state.building_costs[cost_index];
     let has_gold = ui.app.hud_state.gold >= cost;
     let can_place = target.is_ok() && has_gold;
-    let (preview_x, preview_y) = crate::render::world::movers::tile_to_world(preview_tile, sim.map_w);
+    let (preview_x, preview_y) =
+        crate::render::world::movers::tile_to_world(preview_tile, sim.map_w);
     let center = world_to_screen_values(
         preview_x,
         preview_y,
@@ -1171,7 +1187,10 @@ fn render_building_placement_preview(
     let balance = if has_gold {
         crate::utils::format_number(ui.app.hud_state.gold - cost)
     } else {
-        format!("-{}", crate::utils::format_number(cost - ui.app.hud_state.gold))
+        format!(
+            "-{}",
+            crate::utils::format_number(cost - ui.app.hud_state.gold)
+        )
     };
     render_building_gold_badge(
         text,
@@ -1196,20 +1215,20 @@ fn render_building_preview_badge(
     let padding = 8.0 * sf;
     let width = measure.width + padding * 2.0;
     let height = (measure.height + padding).max(22.0 * sf);
+    let top = center[1] - height - 8.0 * sf;
     text.push_rect(
-        [center[0] - width * 0.5, center[1] - height - 8.0 * sf],
+        [center[0] - width * 0.5, top],
         [width, height],
-        [0.06, 0.09, 0.16, 0.88],
-    );
-    text.push_ring(
-        [center[0], center[1] - height * 0.5 - 8.0 * sf],
-        (width.max(height) * 0.5).max(1.0),
         [color[0], color[1], color[2], 0.8],
-        (1.0 * sf).max(1.0),
+    );
+    text.push_rect(
+        [center[0] - width * 0.5 + sf, top + sf],
+        [(width - 2.0 * sf).max(1.0), (height - 2.0 * sf).max(1.0)],
+        [0.06, 0.09, 0.16, 0.92],
     );
     text.push_string(
         label,
-        [center[0], center[1] - height * 0.5 - 8.0 * sf + font_size * 0.3],
+        [center[0], top + height * 0.5 + font_size * 0.3],
         font_size,
         [1.0; 4],
         crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
@@ -1231,10 +1250,18 @@ fn render_building_gold_badge(
     let gap = 4.0 * sf;
     let width = icon_size + gap + measure.width + 12.0 * sf;
     let height = (measure.height.max(icon_size) + 8.0 * sf).max(20.0 * sf);
+    let top = center[1] - height * 0.5;
+    let left_edge = center[0] - width * 0.5;
+    let border = if positive {
+        [0.29, 0.87, 0.49, 0.8]
+    } else {
+        [0.97, 0.44, 0.44, 0.8]
+    };
+    text.push_rect([left_edge, top], [width, height], border);
     text.push_rect(
-        [center[0] - width * 0.5, center[1] - height * 0.5],
-        [width, height],
-        [0.06, 0.09, 0.16, 0.88],
+        [left_edge + sf, top + sf],
+        [(width - 2.0 * sf).max(1.0), (height - 2.0 * sf).max(1.0)],
+        [0.06, 0.09, 0.16, 0.92],
     );
     let left = center[0] - width * 0.5 + 6.0 * sf;
     let _ = text.push_emoji(
@@ -1298,7 +1325,10 @@ fn render_city_modules(
             let font_size = (diameter * 0.48).clamp(8.0, 14.0) * dev.font_size_scale.max(0.1) * sf;
             text.push_string(
                 &level_label,
-                [module_center[0] + diameter * sf * 0.22, module_center[1] + font_size * 0.3],
+                [
+                    module_center[0] + diameter * sf * 0.22,
+                    module_center[1] + font_size * 0.3,
+                ],
                 font_size,
                 [1.0; 4],
                 crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
@@ -1450,6 +1480,26 @@ mod tests {
         assert_eq!(human.avatar_diameter, 14.0 * HUMAN_AVATAR_SCALE);
         assert_eq!(bot.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
         assert_eq!(nation.avatar_diameter, 14.0 * NATION_AVATAR_SCALE);
+    }
+
+    #[test]
+    fn nameplate_position_smooths_small_updates_and_snaps_teleports() {
+        let mut current = [0.0, 0.0];
+        smooth_nameplate_position(&mut current, [1.0, 0.0], 1.0, 1.0, 0.1);
+        assert!(current[0] > 0.0 && current[0] < 1.0);
+
+        smooth_nameplate_position(&mut current, [100.0, 0.0], 1.0, 1.0, 0.1);
+        assert_eq!(current, [100.0, 0.0]);
+    }
+
+    #[test]
+    fn nameplate_size_uses_deadzone_and_rate_limited_motion() {
+        let mut size = 10.0;
+        smooth_nameplate_size(&mut size, 10.1, 0.1);
+        assert_eq!(size, 10.1);
+
+        smooth_nameplate_size(&mut size, 20.0, 0.1);
+        assert!(size > 10.1 && size < 20.0);
     }
 
     #[test]

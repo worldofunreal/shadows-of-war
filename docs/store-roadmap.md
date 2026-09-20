@@ -1,11 +1,29 @@
 # Shadows of War — store decision log
 
+## Decided 2026-09: two earned currencies (owner decision)
+
+- **Crowns** are the free spendable currency: earned from matches and campaign
+  episodes, spent on leader unlocks (500) alongside gems.
+- **Laurels** are achievement points: earned from matches and campaign
+  episodes, never spent. The Google Play "Laurel Hoard" achievement tracks
+  them. Gems remain the premium currency.
+- Campaign episodes and the teaching intro grant both (100 crowns + 100
+  laurels each).
+- Migration: profiles stored before the split keep the spendable balance under
+  the legacy `"laurels"` key; the server (`parse_account_with_migration`) and
+  the client (`migrate_legacy_currency_json`) move it to `"crowns"` lazily on
+  load, so no stored balance is lost and points start at 0. Do not rename the
+  stored keys back: commit b4db247 previously reverted this decision and
+  re-confused the two currencies.
+- UI: crown icon + "Crowns" for the currency; laurel icon + "Laurels" for the
+  points (end-of-match panel and profile).
+
 ## Decided for the first Android slice
 
 - Main menu entry: `Store`.
 - Eight leaders are free in a deterministic weekly rotation.
 - A new player receives one random leader from that rotation.
-- Leaders outside the rotation are locked until the player unlocks them with 500 laurels or 1,500 gems.
+- Leaders outside the rotation are locked until the player unlocks them with 500 crowns or 1,500 gems.
 - Leader unlocks offer either currency; the server owns both balances and validates the selected spend.
 - The server resolves the selected leader before a match, so a client cannot use a locked leader by editing local state.
 - The purchase surface is universal: in-game store → platform checkout/RevenueCat → server grant. It is not tied to CrazyGames or Poki.

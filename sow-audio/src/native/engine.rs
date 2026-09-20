@@ -109,7 +109,10 @@ impl AudioMixer {
         self.voices.retain(|voice| voice.current.is_some());
 
         let master = MASTER_VOLUME.load(Ordering::Relaxed) as f32 / 1000.0;
-        ((left * master).clamp(-1.0, 1.0), (right * master).clamp(-1.0, 1.0))
+        (
+            (left * master).clamp(-1.0, 1.0),
+            (right * master).clamp(-1.0, 1.0),
+        )
     }
 }
 

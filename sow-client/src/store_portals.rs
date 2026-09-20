@@ -178,7 +178,9 @@ pub fn load_portal_progress() -> Option<crate::player_progress::PlayerProgress> 
                             .flatten()
                     })
             })?;
-        serde_json::from_str(&json).ok()
+        let mut value: serde_json::Value = serde_json::from_str(&json).ok()?;
+        crate::player_progress::migrate_legacy_currency_json(&mut value);
+        serde_json::from_value(value).ok()
     }
 }
 

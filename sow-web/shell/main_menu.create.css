@@ -1,0 +1,405 @@
+/* Create domain: custom game and solo practice setup. */
+
+/* ─────────────────────────────────────────────────────────────
+   CUSTOM GAME CREATOR
+   ───────────────────────────────────────────────────────────── */
+.sow-menu__main--custom {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+    overflow: hidden;
+}
+
+.sow-menu__mode-switcher {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 16px 0;
+}
+
+.sow-menu__mode-tab {
+    padding: 10px 14px;
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    font-size: 11px;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    text-align: start;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sow-menu__mode-tab:hover {
+    filter: brightness(1.08);
+}
+
+.sow-menu__mode-tab.active {
+    border-color: var(--sow-gold);
+    background: rgba(243, 177, 43, 0.15);
+    color: var(--sow-gold-bright);
+    box-shadow: 0 0 12px rgba(243, 177, 43, 0.2);
+}
+
+.sow-create__workspace {
+    align-items: stretch;
+    justify-content: stretch;
+    overflow: hidden;
+}
+
+.sow-create__rail {
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 22px 20px;
+}
+
+.sow-create__form {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    gap: 12px;
+}
+
+.sow-create__scroll {
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1px 4px 2px 0;
+    scrollbar-gutter: stable;
+}
+
+.sow-create__columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(250px, 0.88fr);
+    gap: 16px;
+    width: 100%;
+    align-items: start;
+}
+
+.sow-create__column {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.sow-menu__custom-card {
+    position: relative;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(12, 14, 18, 0.85);
+    backdrop-filter: blur(12px);
+    box-sizing: border-box;
+}
+
+.sow-menu__map-preview-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
+    border-radius: 6px;
+    background-position: center;
+    background-size: cover;
+    border: 1px solid var(--sow-line);
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+}
+
+.sow-menu__map-preview-meta {
+    width: 100%;
+    padding: 0 10px 10px;
+    background: transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.sow-menu__map-preview-meta strong {
+    color: #fff;
+    font-size: 15px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+    background: rgba(8, 10, 14, 0.82);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+.sow-menu__map-preview-meta small {
+    color: var(--sow-gold-bright);
+    font-size: 9px;
+    font-weight: 800;
+    padding: 4px 6px;
+    border: 1px solid rgba(255, 193, 7, 0.35);
+    border-radius: 3px;
+    background: rgba(8, 10, 14, 0.78);
+    white-space: nowrap;
+}
+
+.sow-menu__pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.sow-menu__pill {
+    padding: 6px 12px;
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    font-size: 10px;
+    font-weight: var(--sow-button-weight);
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sow-menu__pill:hover {
+    filter: brightness(1.08);
+}
+
+.sow-menu__pill.active {
+    border-color: var(--sow-cyan);
+    background: var(--sow-cyan);
+    color: #080a0e;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.sow-menu__slider-field {
+    margin-bottom: 12px;
+}
+
+.sow-menu__slider-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    color: var(--sow-muted);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.sow-menu__slider-label b {
+    color: #fff;
+    font-size: 13px;
+}
+
+.sow-menu__range {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    outline: none;
+}
+
+.sow-menu__range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--sow-gold);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(243, 177, 43, 0.8);
+}
+
+.sow-menu__slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sow-menu__ghost-mini {
+    padding: 4px 8px;
+    border-radius: var(--sow-button-radius);
+    border: 1px solid var(--sow-button-dark-border);
+    background: var(--sow-button-dark-bg);
+    box-shadow: var(--sow-button-dark-shadow);
+    color: var(--sow-button-dark-text);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: var(--sow-button-weight);
+}
+
+.sow-menu__custom-launch-btn {
+    height: 52px;
+    font-size: 15px;
+}
+
+.sow-create__map-panel {
+    z-index: 3;
+    overflow: visible;
+}
+
+.sow-create__map-select {
+    margin-top: 12px;
+}
+
+.sow-create__rules-row {
+    margin-top: 12px;
+}
+
+.sow-create__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.34fr);
+    gap: 10px;
+    min-width: 0;
+}
+
+.sow-create__actions button {
+    width: 100%;
+    min-height: 52px;
+    height: 52px;
+    margin: 0;
+}
+
+.sow-create__cancel-btn {
+    justify-content: center;
+    padding: 0 16px;
+    text-align: center;
+}
+
+.sow-menu__form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* Custom game owns its content scroll; the menu viewport never scrolls. */
+#sow-menu[data-screen="create"] .sow-menu__main {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#sow-menu[data-screen="create"] .sow-create__workspace {
+    min-height: 0;
+}
+
+#sow-menu[data-screen="create"] .sow-create__map-panel {
+    isolation: isolate;
+}
+
+#sow-menu[data-screen="create"] .sow-create__map-panel .sow-control-dropdown__menu {
+    z-index: 20;
+}
+
+@media (max-width: 1000px) and (min-width: 681px) {
+    #sow-menu[data-screen="create"] .sow-menu__main--custom {
+        grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 680px), (orientation: portrait) {
+    #sow-menu[data-screen="create"] .sow-menu__main--custom {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 8px;
+        overflow: hidden;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rail {
+        flex: 0 0 auto;
+        padding: 12px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rail h1 {
+        font-size: clamp(25px, 8vw, 36px);
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rail .sow-menu__tagline {
+        max-width: none;
+        margin: 8px 0 10px;
+        font-size: 11px;
+        line-height: 1.35;
+    }
+
+    #sow-menu[data-screen="create"] .sow-menu__mode-switcher {
+        flex-direction: row;
+        margin: 0;
+    }
+
+    #sow-menu[data-screen="create"] .sow-menu__mode-tab {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 9px 6px;
+        font-size: 9px;
+        text-align: center;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__workspace {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        width: 100%;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__form {
+        min-height: 0;
+        gap: 8px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__scroll {
+        padding: 0 1px 2px 0;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__columns {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__column {
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-menu__custom-card {
+        padding: 12px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__rules-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        flex: 0 0 auto;
+    }
+
+    #sow-menu[data-screen="create"] .sow-create__actions button {
+        min-height: 50px;
+        height: 50px;
+        padding: 0 8px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-align: center;
+        white-space: normal;
+    }
+}
+
