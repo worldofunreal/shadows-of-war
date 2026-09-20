@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::sync::{Mutex, OnceLock};
 use web_time::{Duration, Instant};
 
@@ -130,22 +129,8 @@ impl Iterator for BuildingPlacementSource {
 }
 
 impl AudioSource for BuildingPlacementSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -191,22 +176,8 @@ impl Iterator for BuildingCompletionSource {
 }
 
 impl AudioSource for BuildingCompletionSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -248,22 +219,8 @@ impl Iterator for NukeLaunchSource {
 }
 
 impl AudioSource for NukeLaunchSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -314,22 +271,8 @@ impl Iterator for NukeImpactSource {
 }
 
 impl AudioSource for NukeImpactSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -381,22 +324,8 @@ impl Iterator for BunkerDefenseSource {
 }
 
 impl AudioSource for BunkerDefenseSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 

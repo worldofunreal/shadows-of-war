@@ -102,10 +102,6 @@ enum WebMenuCommand {
         ratio: f32,
     },
     SpawnTroops,
-    BuildStructure {
-        kind: String,
-    },
-    CancelPlacement,
     ToggleInbox,
     AcceptAlliance {
         target_player_id: u16,
@@ -213,9 +209,6 @@ struct HudPublishKey {
     troop_rate: u64,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
-    selected_building: u8,
-    selected_nuke: u8,
-    building_costs: [u64; 9],
     settings_mute: bool,
     settings_music_volume: u32,
     settings_reduced_motion: bool,
@@ -624,20 +617,6 @@ impl SowApp {
                         }
                     }
                 }
-                WebMenuCommand::BuildStructure { kind } => {
-                    let structure_kind = match kind.to_lowercase().as_str() {
-                        "city" => sow_core::game::BuildingKind::City,
-                        "factory" => sow_core::game::BuildingKind::Factory,
-                        "port" => sow_core::game::BuildingKind::Port,
-                        "bunker" => sow_core::game::BuildingKind::Bunker,
-                        _ => sow_core::game::BuildingKind::City,
-                    };
-                    self.ui.app.hud_state.selected_building_kind = Some(structure_kind);
-                }
-                WebMenuCommand::CancelPlacement => {
-                    self.ui.app.hud_state.selected_building_kind = None;
-                    self.ui.app.hud_state.selected_nuke_kind = None;
-                }
                 WebMenuCommand::ToggleInbox => {
                     self.ui.app.hud_state.show_alliance_inbox =
                         !self.ui.app.hud_state.show_alliance_inbox;
@@ -901,15 +880,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .spawn_timer_secs
             .map(|secs| (secs.max(0.0) * 10.0).round() as i32)
             .unwrap_or(-1),
-        selected_building: hud
-            .selected_building_kind
-            .map(|kind| kind as u8)
-            .unwrap_or(u8::MAX),
-        selected_nuke: hud
-            .selected_nuke_kind
-            .map(|kind| kind as u8)
-            .unwrap_or(u8::MAX),
-        building_costs: std::array::from_fn(|index| hud.building_costs[index].to_bits()),
         settings_mute: app.ui.app.settings_state.mute_all,
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
@@ -1412,13 +1382,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .map(|player| player.name.clone())
         .unwrap_or_default();
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
-    let selected_building = hud.selected_building_kind.map(|kind| match kind {
-        sow_core::game::BuildingKind::City => "City",
-        sow_core::game::BuildingKind::Factory => "Factory",
-        sow_core::game::BuildingKind::Port => "Port",
-        sow_core::game::BuildingKind::Bunker => "Bunker",
-    });
-    let costs = &hud.building_costs;
     // The store is only shown after a match. Keep its catalog out of the hot HUD path,
     // and use the browser clock because SystemTime::now() panics on wasm32.
     let featured_skin = if match_over {
@@ -1444,15 +1407,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "troop_rate": hud.troop_rate,
         "attack_ratio": hud.attack_ratio,
         "spawn_timer_secs": hud.spawn_timer_secs,
-        "selected_building": selected_building,
-        "selected_nuke": hud.selected_nuke_kind.is_some(),
         "pin_emoji": hud.pin_emoji,
-        "building_costs": {
-            "city": costs[0],
-            "bunker": costs[1],
-            "factory": costs[2],
-            "port": costs[3],
-        },
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
         "ping": app.net.current_ping_ms,
         "hovered_tile": if hovered_tile == u32::MAX { serde_json::Value::Null } else { serde_json::json!(hovered_tile) },

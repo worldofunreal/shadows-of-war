@@ -94,5 +94,3 @@ pub fn set_master_volume(volume: f32) {
 }
 
 mod native;
-
-pub use native::play_spatial;

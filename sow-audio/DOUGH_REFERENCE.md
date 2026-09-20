@@ -625,11 +625,11 @@ audio engine, worklet, or target-specific no-op path is needed.
 3. Crossfade between musical states
 4. Hook into `SowApp::update()`
 
-### Phase 7: WASM Output (2–3 days)
-1. `web-sys` AudioContext construction
-2. ScriptProcessorNode or AudioWorklet for sample output
-3. Shared ring buffer between Rust (WASM) and Web Audio
-4. COOP/COEP headers (or use AudioWorklet which avoids SharedArrayBuffer requirement)
+### Phase 7: WASM Output (completed)
+The current implementation uses CPAL's Web Audio backend. The same Rust
+mixer used by the native client feeds the browser `AudioContext`; no separate
+`web-sys` bridge, worklet, shared ring buffer, or special WASM output path is
+needed.
 
 ---
 

@@ -1,6 +1,3 @@
-use std::num::NonZero;
-use web_time::Duration;
-
 use super::death::PulseSource;
 use super::engine::{
     ArpeggioSource, AudioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial,
@@ -47,21 +44,8 @@ impl Iterator for DoublePulseSource {
 }
 
 impl AudioSource for DoublePulseSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-    fn total_duration(&self) -> Option<Duration> {
-        let total_samples =
-            self.pulse1.duration_samples + self.silence_samples + self.pulse2.duration_samples;
-        Some(Duration::from_secs_f32(
-            total_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -108,19 +92,8 @@ impl Iterator for WarHornSource {
 }
 
 impl AudioSource for WarHornSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -170,19 +143,8 @@ impl Iterator for SweepSource {
 }
 
 impl AudioSource for SweepSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -215,19 +177,8 @@ impl Iterator for DualSweepSource {
 }
 
 impl AudioSource for DualSweepSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-    fn total_duration(&self) -> Option<Duration> {
-        let d1 = self.sweep1.total_duration().unwrap_or(Duration::ZERO);
-        let d2 = self.sweep2.total_duration().unwrap_or(Duration::ZERO);
-        Some(d1.max(d2))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -270,22 +221,8 @@ impl Iterator for DeploySource {
 }
 
 impl AudioSource for DeploySource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -314,27 +251,8 @@ impl Iterator for ProceduralSound {
 }
 
 impl AudioSource for ProceduralSound {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        match self {
-            Self::Pulse(s) => s.total_duration(),
-            Self::Arpeggio(s) => s.total_duration(),
-            Self::DoublePulse(s) => s.total_duration(),
-            Self::WarHorn(s) => s.total_duration(),
-            Self::Sweep(s) => s.total_duration(),
-            Self::DualSweep(s) => s.total_duration(),
-        }
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 

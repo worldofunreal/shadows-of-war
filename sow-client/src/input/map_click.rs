@@ -90,7 +90,12 @@ impl MapTarget {
         self.owner == 0 || self.is_enemy()
     }
 
-    fn menu_actions(self, spawning: bool, can_attack: bool) -> Vec<MapMenuAction> {
+    fn menu_actions(
+        self,
+        spawning: bool,
+        can_attack: bool,
+        can_fleet: bool,
+    ) -> Vec<MapMenuAction> {
         if spawning {
             return self
                 .is_land
@@ -107,22 +112,24 @@ impl MapTarget {
             ];
         }
         if self.owner == 0 {
-            return (self.is_land && can_attack)
-                .then_some(MapMenuAction::Attack)
-                .into_iter()
-                .collect();
+            let mut actions = Vec::new();
+            if self.is_land && can_attack {
+                actions.push(MapMenuAction::Attack);
+            }
+            if can_fleet {
+                actions.push(MapMenuAction::Fleet);
+            }
+            return actions;
         }
         if !self.is_player() {
             return Vec::new();
         }
 
         let mut actions = Vec::new();
+        actions.push(MapMenuAction::Transfer);
         if self.is_friendly() {
             if self.is_allied && self.is_land {
                 actions.push(MapMenuAction::Attack);
-            }
-            if self.is_allied {
-                actions.push(MapMenuAction::Transfer);
             }
             if !self.is_teammate {
                 actions.push(MapMenuAction::Fleet);
@@ -246,6 +253,7 @@ impl SowApp {
         };
         let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
         if self.map_menu_actions(tile_idx).is_empty() {
+            self.show_map_menu_unavailable(tile_idx, (x, y));
             self.close_map_context_menu();
             return;
         }
@@ -263,16 +271,116 @@ impl SowApp {
         self.input.map_context_menu = None;
     }
 
-    pub(crate) fn map_menu_actions(&self, tile_idx: u32) -> Vec<MapMenuAction> {
+    fn fleet_route_check(
+        &mut self,
+        tile_idx: u32,
+        target_owner: u16,
+    ) -> Result<(), sow_core::warp_fleet::FleetLaunchError> {
+        let player_id = self.sim.my_player_id.unwrap_or(0);
+        let Some(engine) = self.sim.engine.as_mut() else {
+            return Err(sow_core::warp_fleet::FleetLaunchError::NoWaterAccess);
+        };
+        let border_tiles = engine
+            .state
+            .player(player_id)
+            .map(|player| &player.border_tiles)
+            .ok_or(sow_core::warp_fleet::FleetLaunchError::NoWaterAccess)?;
+        let target_border = if target_owner == 0 {
+            None
+        } else {
+            Some(
+                engine
+                    .state
+                    .player(target_owner)
+                    .map(|player| &player.border_tiles)
+                    .ok_or(sow_core::warp_fleet::FleetLaunchError::TargetPlayerNotFound {
+                        target_owner,
+                    })?,
+            )
+        };
+        sow_core::warp_fleet::resolve_fleet_route(
+            &engine.state.map,
+            &engine.water,
+            &mut engine.path_scratch,
+            player_id,
+            (target_owner, tile_idx),
+            border_tiles,
+            target_border,
+        )
+        .map(|_| ())
+    }
+
+    fn show_fleet_unavailable(
+        &mut self,
+        error: sow_core::warp_fleet::FleetLaunchError,
+        anchor: (f64, f64),
+    ) {
+        self.add_notice_at_screen(
+            format!("Fleet unavailable: {error}."),
+            anchor.0,
+            anchor.1,
+            2000,
+            crate::rgb(248, 113, 113),
+        );
+    }
+
+    fn show_map_menu_unavailable(&mut self, tile_idx: u32, anchor: (f64, f64)) {
+        let message = match self.map_target(tile_idx) {
+            Some(target) if target.owner == 0 => match self.fleet_route_check(tile_idx, 0) {
+                Err(error) => format!("Fleet unavailable: {error}."),
+                Ok(()) => "No action is available here.".to_string(),
+            },
+            Some(target) if target.is_teammate => {
+                "Teammates cannot be targeted. 🤝".to_string()
+            }
+            Some(target) if target.owner == target.my_id && !target.is_land => {
+                "Buildings require owned land. 🗺️".to_string()
+            }
+            Some(target) if target.owner == target.my_id => {
+                let building = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                    snapshot
+                        .buildings
+                        .iter()
+                        .find(|building| building.tile_idx == tile_idx)
+                });
+                match building {
+                    Some(building) if building.under_construction => {
+                        "Building under construction. 🏗️".to_string()
+                    }
+                    Some(building) => format!(
+                        "{} level {} has no available action.",
+                        building.kind.as_str(),
+                        building.level
+                    ),
+                    None => "No construction action is available here.".to_string(),
+                }
+            }
+            Some(_) => "No action is available here.".to_string(),
+            None => "No action is available here.".to_string(),
+        };
+        self.add_notice_at_screen(
+            message,
+            anchor.0,
+            anchor.1,
+            2000,
+            crate::rgb(248, 113, 113),
+        );
+    }
+
+    pub(crate) fn map_menu_actions(&mut self, tile_idx: u32) -> Vec<MapMenuAction> {
         let Some(target) = self.map_target(tile_idx) else {
             return Vec::new();
         };
         let spawning = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
             matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
         });
+        let can_fleet = !spawning
+            && target.owner == 0
+            && self.fleet_route_check(tile_idx, target.owner).is_ok();
         let mut actions = target.menu_actions(
             spawning,
             target.is_land && self.can_attack(tile_idx, target.owner),
+            can_fleet,
         );
         if target.owner != target.my_id || !target.is_land || spawning {
             return actions;
@@ -330,7 +438,7 @@ impl SowApp {
         actions
     }
 
-    pub(crate) fn map_menu_items(&self, tile_idx: u32) -> Vec<MapMenuItem> {
+    pub(crate) fn map_menu_items(&mut self, tile_idx: u32) -> Vec<MapMenuItem> {
         self.map_menu_actions(tile_idx)
             .into_iter()
             .map(|action| {
@@ -359,10 +467,30 @@ impl SowApp {
         if menu.session != session || menu.tile_idx != tile_idx {
             return;
         }
+        let anchor = (menu.x as f64, menu.y as f64);
         if !self.map_menu_actions(tile_idx).contains(&action) {
+            self.show_map_menu_unavailable(tile_idx, anchor);
+            self.close_map_context_menu();
             return;
         }
-        let anchor = (menu.x as f64, menu.y as f64);
+        if let Some(cost) = self.map_menu_cost(action, tile_idx).0
+            && (!cost.is_finite() || self.ui.app.hud_state.gold < cost)
+        {
+            let message = if cost.is_finite() {
+                format!("Need {} gold.", crate::utils::format_number(cost))
+            } else {
+                "Action unavailable here.".to_string()
+            };
+            self.add_notice_at_screen(
+                message,
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
+            self.close_map_context_menu();
+            return;
+        }
 
         match action {
             MapMenuAction::Spawn => {
@@ -844,6 +972,13 @@ impl SowApp {
             return false;
         };
         if target.is_teammate {
+            self.add_notice_at_screen(
+                "Teammates cannot be targeted. 🤝",
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
             return false;
         }
         if target.is_allied {
@@ -856,10 +991,34 @@ impl SowApp {
             );
             return false;
         }
-        if !target.is_enemy() {
+        if target.owner != 0 && !target.is_enemy() {
+            self.add_notice_at_screen(
+                "A fleet cannot target your own territory. 🛡️",
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
+            return false;
+        }
+        if let Err(error) = self.fleet_route_check(tile_idx, target.owner) {
+            self.show_fleet_unavailable(error, anchor);
             return false;
         }
         let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
+        if troops < self.sim.config.attack_cost_neutral {
+            self.add_notice_at_screen(
+                format!(
+                    "Need at least {} troops for a fleet. 🚢",
+                    crate::utils::format_number(self.sim.config.attack_cost_neutral)
+                ),
+                anchor.0,
+                anchor.1,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
+            return false;
+        }
         self.send_intent(sow_core::protocol::GameplayIntent::LaunchFleet {
             target_tile: tile_idx,
             troops: Some(troops),
@@ -872,10 +1031,17 @@ impl SowApp {
             return false;
         };
         if !target.is_friendly() {
+            self.add_notice_at_screen(
+                "Resources can only be sent to allies. ⚖️",
+                self.input.last_mouse_x,
+                self.input.last_mouse_y,
+                2000,
+                crate::rgb(248, 113, 113),
+            );
             return false;
         }
         self.ui.app.hud_state.show_ask_panel = Some(target.owner);
-        if target.is_allied {
+        if target.is_allied || target.is_teammate {
             if let Some(player) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
                 snapshot
                     .players
@@ -1192,8 +1358,12 @@ mod tests {
         };
         assert!(neutral.is_attackable());
         assert_eq!(
-            neutral.menu_actions(false, true),
+            neutral.menu_actions(false, true, false),
             vec![MapMenuAction::Attack]
+        );
+        assert_eq!(
+            neutral.menu_actions(false, true, true),
+            vec![MapMenuAction::Attack, MapMenuAction::Fleet]
         );
     }
 
@@ -1210,8 +1380,9 @@ mod tests {
             is_in_renewal_window: false,
         };
         assert_eq!(
-            enemy.menu_actions(false, true),
+            enemy.menu_actions(false, true, false),
             vec![
+                MapMenuAction::Transfer,
                 MapMenuAction::Attack,
                 MapMenuAction::Fleet,
                 MapMenuAction::Nuke,
@@ -1219,8 +1390,9 @@ mod tests {
             ]
         );
         assert_eq!(
-            enemy.menu_actions(false, false),
+            enemy.menu_actions(false, false, false),
             vec![
+                MapMenuAction::Transfer,
                 MapMenuAction::Fleet,
                 MapMenuAction::Nuke,
                 MapMenuAction::Alliance
@@ -1232,10 +1404,10 @@ mod tests {
             ..enemy
         };
         assert_eq!(
-            ally.menu_actions(false, true),
+            ally.menu_actions(false, true, false),
             vec![
-                MapMenuAction::Attack,
                 MapMenuAction::Transfer,
+                MapMenuAction::Attack,
                 MapMenuAction::Fleet,
                 MapMenuAction::Alliance,
             ]
@@ -1245,11 +1417,14 @@ mod tests {
             is_teammate: true,
             ..enemy
         };
-        assert!(teammate.menu_actions(false, true).is_empty());
+        assert_eq!(
+            teammate.menu_actions(false, true, false),
+            vec![MapMenuAction::Transfer]
+        );
 
         let own_land = MapTarget { owner: 1, ..enemy };
         assert_eq!(
-            own_land.menu_actions(false, false),
+            own_land.menu_actions(false, false, false),
             vec![
                 MapMenuAction::BuildCity,
                 MapMenuAction::BuildFactory,
@@ -1258,6 +1433,9 @@ mod tests {
             ]
         );
 
-        assert_eq!(enemy.menu_actions(true, false), vec![MapMenuAction::Spawn]);
+        assert_eq!(
+            enemy.menu_actions(true, false, false),
+            vec![MapMenuAction::Spawn]
+        );
     }
 }

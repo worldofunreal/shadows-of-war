@@ -1,6 +1,3 @@
-use std::num::NonZero;
-use web_time::Duration;
-
 use super::engine::{
     ArpeggioSource, AudioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial,
 };
@@ -91,22 +88,8 @@ impl Iterator for PulseSource {
 }
 
 impl AudioSource for PulseSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.duration_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 

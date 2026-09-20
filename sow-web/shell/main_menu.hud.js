@@ -144,29 +144,6 @@
             + '        <span class="sow-hud__deploy-title">' + SOW_t("hud.choose_spawn") + '</span>'
             + '        <b class="sow-hud__deploy-timer" id="sow-hud-deploy-timer">' + SOW_t("hud.ready") + '</b>'
             + '      </div>'
-            + '      <div class="sow-hud__buildings-strip" id="sow-hud-buildings-strip">'
-            + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="City" id="sow-hud-bld-city">'
-            + '          <span class="sow-hud__bld-icon">🏛️</span>'
-            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_city") + '</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-city">' + SOW_t("hud.cost", { amount: 100 }) + '</small>'
-            + '        </button>'
-            + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="Factory" id="sow-hud-bld-factory">'
-            + '          <span class="sow-hud__bld-icon">🏭</span>'
-            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_factory") + '</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-factory">' + SOW_t("hud.cost", { amount: 200 }) + '</small>'
-            + '        </button>'
-            + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="Port" id="sow-hud-bld-port">'
-            + '          <span class="sow-hud__bld-icon">⚓</span>'
-            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_port") + '</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-port">' + SOW_t("hud.cost", { amount: 150 }) + '</small>'
-            + '        </button>'
-            + '        <button type="button" class="sow-hud__bld-btn" data-command="build_structure" data-kind="Bunker" id="sow-hud-bld-bunker">'
-            + '          <span class="sow-hud__bld-icon">🛡️</span>'
-            + '          <b class="sow-hud__bld-name">' + SOW_t("hud.building_bunker") + '</b>'
-            + '          <small class="sow-hud__bld-cost" id="sow-hud-cost-bunker">' + SOW_t("hud.cost", { amount: 75 }) + '</small>'
-            + '        </button>'
-            + '        <button type="button" class="sow-hud__cancel-btn hidden" data-command="cancel_placement" id="sow-hud-cancel-placement">✕ ' + SOW_t("hud.cancel_placement") + '</button>'
-            + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
             + '      <div class="sow-hud__res-rate" id="sow-hud-res-rate" title="' + SOW_t("hud.troop_production_rate") + '">'
@@ -286,20 +263,9 @@
             devSidebar: document.getElementById("sow-hud-dev-sidebar"),
             devBtn: document.getElementById("sow-hud-dev-btn"),
             settings: document.getElementById("sow-hud-settings"),
-            dockInner: document.getElementById("sow-hud-dock-inner"),
             deployBtn: document.getElementById("sow-hud-deploy-btn"),
             deployTimer: document.getElementById("sow-hud-deploy-timer"),
             troopFill: document.getElementById("sow-hud-troop-fill"),
-            bldStrip: document.getElementById("sow-hud-buildings-strip"),
-            bldCity: document.getElementById("sow-hud-bld-city"),
-            bldFactory: document.getElementById("sow-hud-bld-factory"),
-            bldPort: document.getElementById("sow-hud-bld-port"),
-            bldBunker: document.getElementById("sow-hud-bld-bunker"),
-            costCity: document.getElementById("sow-hud-cost-city"),
-            costFactory: document.getElementById("sow-hud-cost-factory"),
-            costPort: document.getElementById("sow-hud-cost-port"),
-            costBunker: document.getElementById("sow-hud-cost-bunker"),
-            cancelPlacement: document.getElementById("sow-hud-cancel-placement"),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
             inbox: document.getElementById("sow-hud-inbox"),
@@ -487,6 +453,21 @@
         radial.appendChild(button);
     }
 
+    function mapDisabledSector(radial, index, count, kind, icon, label) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.disabled = true;
+        button.className = "sow-hud__map-sector sow-hud__map-sector--" + kind;
+        button.setAttribute("aria-label", label);
+        button.setAttribute("aria-disabled", "true");
+        var title = document.createElement("span");
+        title.className = "sow-hud__map-action-title";
+        title.textContent = icon;
+        button.appendChild(title);
+        radialSectorGeometry(button, index, count);
+        radial.appendChild(button);
+    }
+
     function mapGroupSector(radial, items, index, count, group, icon, text) {
         var button = document.createElement("button");
         button.type = "button";
@@ -542,28 +523,33 @@
                     center.querySelector(".sow-hud__map-action-title").textContent = "⚔";
                     if (centerItem.action === "spawn") center.querySelector(".sow-hud__map-action-title").textContent = "🌱";
                     radial.appendChild(center);
+                } else {
+                    var disabledCenter = mapActionButton({ action: "attack", disabled: true }, "sow-hud__map-center is-attack", false);
+                    disabledCenter.querySelector(".sow-hud__map-action-title").textContent = "⚔";
+                    radial.appendChild(disabledCenter);
                 }
                 var transfer = items.find(function (item) { return item.action === "transfer"; });
                 var fleet = items.find(function (item) { return item.action === "fleet"; });
                 var alliance = items.find(function (item) { return item.action === "alliance"; });
-                var rootNodes = [];
-                if (transfer) rootNodes.push({ kind: "transfer", item: transfer });
-                if (fleet) rootNodes.push({ kind: "fleet", item: fleet });
-                if (alliance) rootNodes.push({ kind: "alliance", item: alliance });
+                var radialCount = 4;
+                if (transfer) mapSector(radial, transfer, 0, radialCount, "transfer");
+                else mapDisabledSector(radial, 0, radialCount, "transfer", "⚖️", mapLabel("transfer"));
+                if (fleet) mapSector(radial, fleet, 1, radialCount, "fleet");
+                else mapDisabledSector(radial, 1, radialCount, "fleet", "⛵", mapLabel("fleet"));
+                if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance");
+                else mapDisabledSector(radial, 2, radialCount, "alliance", "🤝", mapLabel("alliance"));
                 if (buildItems.length) {
-                    rootNodes.push({ kind: "build", group: "build", icon: "🔧", label: "Build", items: buildItems });
+                    var buildIcon = buildItems.some(function (item) {
+                        return item.action === "build_warship" || item.action === "build_trade_ship";
+                    }) ? "⚓" : "🔧";
+                    mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, "Build");
                 } else if (nukeItems.length === 1) {
-                    rootNodes.push({ kind: "nuke", item: nukeItems[0] });
+                    mapSector(radial, nukeItems[0], 3, radialCount, "nuke");
                 } else if (nukeItems.length > 1) {
-                    rootNodes.push({ kind: "nuke", group: "nuke", icon: "🚀", label: mapLabel("nuke"), items: nukeItems });
+                    mapGroupSector(radial, nukeItems, 3, radialCount, "nuke", "🚀", mapLabel("nuke"));
+                } else {
+                    mapDisabledSector(radial, 3, radialCount, "build", "🔧", "Build");
                 }
-                rootNodes.forEach(function (node, index) {
-                    if (node.item) {
-                        mapSector(radial, node.item, index, rootNodes.length, node.kind);
-                    } else {
-                        mapGroupSector(radial, node.items, index, rootNodes.length, node.group, node.icon, node.label);
-                    }
-                });
                 menu.appendChild(radial);
             } else {
                 var panel = document.createElement("div");
@@ -857,27 +843,6 @@
                 hudRefs.deployTimer.textContent = spawnSecs.toFixed(1) + 's';
             }
         }
-        if (hudRefs.bldStrip) {
-            hudRefs.bldStrip.style.display = isDeploying ? "none" : "flex";
-            var selBld = hud.selected_building;
-            if (hudRefs.bldCity) hudRefs.bldCity.classList.toggle("active", selBld === "City");
-            if (hudRefs.bldFactory) hudRefs.bldFactory.classList.toggle("active", selBld === "Factory");
-            if (hudRefs.bldPort) hudRefs.bldPort.classList.toggle("active", selBld === "Port");
-            if (hudRefs.bldBunker) hudRefs.bldBunker.classList.toggle("active", selBld === "Bunker");
-            var hasSelection = Boolean(selBld || hud.selected_nuke);
-            if (hudRefs.cancelPlacement) {
-                hudRefs.cancelPlacement.classList.toggle("hidden", !hasSelection);
-            }
-            if (hudRefs.dockInner) {
-                hudRefs.dockInner.classList.toggle("has-selection", hasSelection);
-            }
-            if (hud.building_costs) {
-                if (hudRefs.costCity) hudRefs.costCity.textContent = Math.floor(hud.building_costs.city) + 'g';
-                if (hudRefs.costFactory) hudRefs.costFactory.textContent = Math.floor(hud.building_costs.factory) + 'g';
-                if (hudRefs.costPort) hudRefs.costPort.textContent = Math.floor(hud.building_costs.port) + 'g';
-                if (hudRefs.costBunker) hudRefs.costBunker.textContent = Math.floor(hud.building_costs.bunker) + 'g';
-            }
-        }
 
         // Emoji Popout
         if (hudRefs.emojiPopout) {
@@ -1129,8 +1094,6 @@
                 send("zoom_out");
             } else if (cmd === "center_camera") {
                 send("center_camera");
-            } else if (cmd === "cancel_placement") {
-                send("cancel_placement");
             } else if (cmd === "focus_player") {
                 var pid = parseInt(btn.dataset.playerId, 10);
                 if (!isNaN(pid)) {
@@ -1138,9 +1101,6 @@
                 }
             } else if (cmd === "spawn_troops") {
                 send("spawn_troops");
-            } else if (cmd === "build_structure") {
-                var kind = btn.dataset.kind || "City";
-                send("build_structure", { kind: kind });
             } else if (cmd === "confirm_endgame_leave") {
                 send("leave_lobby");
             } else if (cmd === "open_store") {

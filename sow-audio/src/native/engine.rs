@@ -1,4 +1,3 @@
-use std::num::NonZero;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -35,16 +34,8 @@ pub(super) enum SoundPriority {
     Foreground,
 }
 
-pub trait AudioSource: Iterator<Item = f32> + Send {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn channels(&self) -> NonZero<u16>;
-
-    fn sample_rate(&self) -> NonZero<u32>;
-
-    fn total_duration(&self) -> Option<Duration>;
+pub(super) trait AudioSource: Iterator<Item = f32> + Send {
+    fn sample_rate(&self) -> u32;
 }
 
 struct Voice {
@@ -59,7 +50,7 @@ struct Voice {
 
 impl Voice {
     fn new(source: Box<dyn AudioSource>, left_gain: f32, right_gain: f32) -> Self {
-        let source_rate = source.sample_rate().get() as f32;
+        let source_rate = source.sample_rate() as f32;
         let mut source = source;
         let current = source.next();
         let next = source.next();
@@ -243,22 +234,8 @@ impl Iterator for ArpeggioSource {
 }
 
 impl AudioSource for ArpeggioSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn sample_rate(&self) -> NonZero<u32> {
-        NonZero::new(SAMPLE_RATE).unwrap()
-    }
-
-    fn channels(&self) -> NonZero<u16> {
-        NonZero::new(1).unwrap()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        Some(Duration::from_secs_f32(
-            self.total_samples as f32 / SAMPLE_RATE as f32,
-        ))
+    fn sample_rate(&self) -> u32 {
+        SAMPLE_RATE
     }
 }
 
@@ -470,13 +447,7 @@ pub(super) fn queue_spatial<S>(
     }
 }
 
-pub fn play_spatial<S>(source: S, spatial: crate::SpatialSoundParams)
-where
-    S: AudioSource + 'static,
-{
-    queue_spatial(source, spatial, SoundPriority::Normal);
-}
-pub fn play_ui<S>(source: S)
+pub(super) fn play_ui<S>(source: S)
 where
     S: AudioSource + 'static,
 {

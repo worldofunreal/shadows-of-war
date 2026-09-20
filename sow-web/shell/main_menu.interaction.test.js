@@ -64,7 +64,11 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
 test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hud, /sow-hud__map-radial/);
     assert.match(hud, /function radialSectorGeometry/);
-    assert.match(hud, /rootNodes\.forEach/);
+    assert.match(hud, /function mapDisabledSector/);
+    assert.match(hud, /var radialCount = 4/);
+    assert.match(hud, /mapSector\(radial, transfer, 0, radialCount/);
+    assert.match(hud, /mapSector\(radial, fleet, 1, radialCount/);
+    assert.match(hud, /mapSector\(radial, alliance, 2, radialCount/);
     assert.match(hud, /dataset\.mapGroup = group/);
     assert.match(hud, /upgrade_arsenal/);
     assert.match(hud, /build_warship/);
@@ -76,6 +80,8 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hudCss, /@keyframes sow-map-menu-in/);
     assert.match(hud, /title\.textContent = label\.icon/);
     assert.match(hud, /parts\.push\(item\.level/);
+    assert.doesNotMatch(hud, /sow-hud__buildings-strip|build_structure|cancel_placement/);
+    assert.doesNotMatch(hudCss, /sow-hud__buildings-strip|sow-hud__bld-btn|sow-hud__cancel-btn/);
     assert.doesNotMatch(hud, /mapClose|data-map-close|close_map_menu|STRATEGIC STRIKE|CONSTRUCT/);
     assert.doesNotMatch(hudCss, /sow-hud__map-sector-caption|sow-hud__map-close/);
 });

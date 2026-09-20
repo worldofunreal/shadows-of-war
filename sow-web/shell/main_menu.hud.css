@@ -427,11 +427,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.sow-hud__dock-inner.has-selection {
-    border-color: var(--sow-cyan);
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.35), 0 12px 36px rgba(0, 0, 0, 0.8);
-}
-
 .sow-hud__dock-actions {
     display: flex;
     align-items: center;
@@ -630,80 +625,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     font-weight: var(--sow-button-weight);
     letter-spacing: var(--sow-button-tracking);
     cursor: pointer;
-}
-
-.sow-hud__cancel-btn.hidden {
-    display: none !important;
-}
-
-.sow-hud__buildings-strip {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-}
-
-.sow-hud__bld-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    padding: 6px 12px;
-    border-radius: var(--sow-button-radius);
-    border: 1px solid var(--sow-button-dark-border);
-    background: var(--sow-button-dark-bg);
-    box-shadow: var(--sow-button-dark-shadow);
-    color: var(--sow-button-dark-text);
-    font-weight: var(--sow-button-weight);
-    cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.sow-hud__bld-btn:hover {
-    background: rgba(255, 255, 255, 0.14);
-    border-color: var(--sow-gold);
-    transform: translateY(-2px);
-}
-
-.sow-hud__bld-btn.active {
-    border-color: var(--sow-cyan);
-    background: rgba(56, 189, 248, 0.15);
-    box-shadow: 0 0 14px rgba(56, 189, 248, 0.6);
-}
-
-.sow-hud__bld-icon {
-    font-size: 20px;
-}
-
-.sow-hud__bld-name {
-    font-size: 11px;
-    font-weight: var(--sow-button-weight);
-}
-
-.sow-hud__bld-cost {
-    font-size: 10px;
-    font-weight: 800;
-    color: var(--sow-gold);
-}
-
-.sow-hud__cancel-btn {
-    padding: 8px 14px;
-    border-radius: var(--sow-button-radius);
-    border: 1px solid var(--sow-red);
-    background: var(--sow-button-dark-bg);
-    box-shadow: var(--sow-button-dark-shadow);
-    color: var(--sow-red);
-    font-size: 11px;
-    font-weight: var(--sow-button-weight);
-    letter-spacing: var(--sow-button-tracking);
-    cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.sow-hud__cancel-btn:hover {
-    background: var(--sow-red);
-    color: #fff;
 }
 
 /* Leaderboard Drawer */
@@ -1722,25 +1643,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
         padding: 4px 12px;
     }
 
-    .sow-hud__buildings-strip {
-        width: 100%;
-        justify-content: space-around;
-        gap: 4px;
-    }
-
-    .sow-hud__bld-btn {
-        padding: 4px 6px;
-        flex: 1;
-    }
-
-    .sow-hud__bld-name {
-        font-size: 9px;
-    }
-
-    .sow-hud__bld-cost {
-        font-size: 8px;
-    }
-
     .sow-hud__hover-card {
         top: max(56px, calc(var(--sow-sat) + 48px));
         max-width: calc(100vw - 32px);
@@ -1851,16 +1753,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     .sow-hud__deploy-timer {
         font-size: 14px;
     }
-    .sow-hud__buildings-strip {
-        justify-content: flex-start;
-        width: 100%;
-        overflow-x: auto;
-        overscroll-behavior-x: contain;
-        scroll-snap-type: x mandatory;
-        padding-bottom: 2px;
-    }
-    .sow-hud__bld-btn { flex: 0 0 68px; min-height: 52px; scroll-snap-align: start; }
-    .sow-hud__cancel-btn { flex: 0 0 auto; min-height: 52px; }
     .sow-hud__res-rate,
     .sow-hud__res-gold {
         padding: 2px 6px;
@@ -1973,10 +1865,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     .sow-hud__deploy-panel { min-height: 38px; padding: 2px 8px; }
     .sow-hud__deploy-title { font-size: 11px; }
     .sow-hud__deploy-timer { font-size: 13px; }
-    .sow-hud__bld-btn { min-width: 56px; padding: 3px 6px; gap: 1px; }
-    .sow-hud__bld-icon { font-size: 15px; }
-    .sow-hud__bld-name { font-size: 9px; }
-    .sow-hud__bld-cost { font-size: 8px; }
     .sow-hud__res-rate,
     .sow-hud__res-gold { height: 18px; padding: 1px 5px; font-size: 9px; }
     .sow-hud__res-bar-wrap { height: 18px; }
@@ -1995,6 +1883,5 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     #sow-hud button { touch-action: manipulation; }
     #sow-hud button:hover,
     .sow-hud__icon-btn:hover,
-    .sow-hud__bld-btn:hover,
     .sow-hud__player-card:hover { transform: none; }
 }
