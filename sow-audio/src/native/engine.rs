@@ -1,15 +1,16 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample, Stream, StreamConfig};
-use web_time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use web_time::{Duration, Instant};
 
 use super::tone::{note_envelope, warm_at};
 
 pub(super) const SAMPLE_RATE: u32 = 22050;
 pub(super) const OPEN_BACKOFF: Duration = Duration::from_secs(2);
-pub(super) const MAX_VOICES: u8 = 3; // ponytail: reduced to 3 for stability and less clutter
+pub(super) const MAX_VOICES: u8 = 3;
+const MAX_TOTAL_VOICES: u8 = MAX_VOICES + 2;
 
 pub(super) static MASTER_VOLUME: AtomicU32 = AtomicU32::new(800);
 
@@ -18,15 +19,6 @@ pub fn set_master_volume(volume: f32) {
     MASTER_VOLUME.store(vol_u32, Ordering::Relaxed);
 }
 
-pub(super) static LAST_BUNKER_SOUND_MS: AtomicU64 = AtomicU64::new(0);
-pub(super) static LAST_COMBAT_SOUND_MS: AtomicU64 = AtomicU64::new(0);
-
-pub(super) fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SoundPriority {
     Background,
@@ -117,7 +109,7 @@ impl AudioMixer {
         self.voices.retain(|voice| voice.current.is_some());
 
         let master = MASTER_VOLUME.load(Ordering::Relaxed) as f32 / 1000.0;
-        (left * master, right * master)
+        ((left * master).clamp(-1.0, 1.0), (right * master).clamp(-1.0, 1.0))
     }
 }
 
@@ -227,7 +219,7 @@ impl Iterator for ArpeggioSource {
         let val = warm_at(freq, note_t);
 
         let note_dur_secs = self.note_durations[note_idx] as f32 / SAMPLE_RATE as f32;
-        let envelope = note_envelope(note_t, note_dur_secs, self.decay_rate, 0.005, 0.015);
+        let envelope = note_envelope(note_t, note_dur_secs, self.decay_rate, 0.008, 0.015);
 
         Some(val * envelope * self.amplitude)
     }
@@ -247,7 +239,7 @@ fn should_play(priority: SoundPriority, active: u8) -> bool {
     match priority {
         SoundPriority::Background => active < MAX_VOICES,
         SoundPriority::Normal => active < MAX_VOICES + 1,
-        SoundPriority::Foreground => true,
+        SoundPriority::Foreground => active < MAX_TOTAL_VOICES,
     }
 }
 

@@ -521,9 +521,10 @@ impl SowApp {
                     MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
                     _ => unreachable!(),
                 };
-                if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    self.build_structure_at(kind, col, row, anchor);
-                }
+                self.ui.app.hud_state.selected_building_kind = Some(kind);
+                self.ui.app.hud_state.selected_nuke_kind = None;
+                self.input.hold_build_active = false;
+                self.input.hold_build_accum = 0.0;
             }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);

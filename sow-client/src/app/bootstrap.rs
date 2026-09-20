@@ -270,6 +270,7 @@ impl SowApp {
                 nameplate_order_tick: None,
                 nameplate_order_my_id: None,
                 nameplate_order: Vec::new(),
+                nameplate_visuals: std::collections::HashMap::new(),
                 building_render_cache: crate::render::world::BuildingRenderCache::default(),
                 last_resource_notice_tick: None,
                 border_flashes: Vec::new(),
@@ -278,6 +279,7 @@ impl SowApp {
                 last_player_attack_flash_time: std::collections::HashMap::new(),
                 viewport_alert: None,
             },
+            sfx: crate::app::sfx::SfxDirector::default(),
             time: TimeState {
                 interp,
                 start_time,

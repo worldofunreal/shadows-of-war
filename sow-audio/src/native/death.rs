@@ -1,55 +1,8 @@
 use super::engine::{
     ArpeggioSource, AudioSource, SAMPLE_RATE, SimpleRng, SoundPriority, queue_spatial,
 };
-use super::music::{
-    MusicSession, degrees_to_freqs, music_session, note_dur_samples, pick_base_degree, tile_hash,
-};
 use super::tone::{sweep_envelope, warm_at};
 use crate::{PlayerSoundType, SpatialSoundParams};
-
-pub(super) fn build_death_sound(
-    session: &mut MusicSession,
-    player_type: PlayerSoundType,
-    seed: u32,
-    wx: f32,
-    wy: f32,
-) -> ArpeggioSource {
-    let mut rng = SimpleRng::new(seed ^ tile_hash(wx, wy));
-    let base_degree = pick_base_degree(session, wx, wy, &mut rng);
-    let note_count = match player_type {
-        PlayerSoundType::Human => 4,
-        PlayerSoundType::Nation => 3,
-        PlayerSoundType::Bot => 3,
-    };
-    let octave = session.root_octave.saturating_sub(1).max(2);
-    let mut degrees = [0u8; 4];
-    for (i, degree) in degrees.iter_mut().enumerate().take(note_count) {
-        *degree = base_degree.saturating_sub(i as u8);
-    }
-    let note_freqs = degrees_to_freqs(octave, &degrees);
-    let base_dur = match player_type {
-        PlayerSoundType::Human => 0.10,
-        PlayerSoundType::Nation => 0.14,
-        PlayerSoundType::Bot => 0.08,
-    };
-    let note_dur_secs = base_dur * rng.range(0.9, 1.1);
-    let note_dur_samples = note_dur_samples(note_dur_secs);
-    let note_durations = [
-        note_dur_samples,
-        note_dur_samples,
-        note_dur_samples,
-        if note_count >= 4 { note_dur_samples } else { 0 },
-    ];
-    let decay_rate = match player_type {
-        PlayerSoundType::Human => 6.0,
-        PlayerSoundType::Nation => 4.5,
-        PlayerSoundType::Bot => 8.0,
-    } * rng.range(0.9, 1.1);
-    let amplitude = 0.12 * rng.range(0.9, 1.1);
-    session.last_degree = base_degree;
-    session.phrase_step = session.phrase_step.wrapping_add(1);
-    ArpeggioSource::new(note_freqs, note_durations, decay_rate, amplitude)
-}
 
 pub(super) struct PulseSource {
     sample_idx: u64,
@@ -81,7 +34,7 @@ impl Iterator for PulseSource {
         let t = self.sample_idx as f32 / SAMPLE_RATE as f32;
         let duration = self.duration_samples as f32 / SAMPLE_RATE as f32;
         let val = warm_at(self.freq, t);
-        let envelope = sweep_envelope(t, duration, self.decay_rate, 0.005, 0.02);
+        let envelope = sweep_envelope(t, duration, self.decay_rate, 0.008, 0.02);
         self.sample_idx += 1;
         Some(val * envelope * self.amplitude)
     }
@@ -93,11 +46,35 @@ impl AudioSource for PulseSource {
     }
 }
 
+fn note_samples(secs: f32) -> u32 {
+    (SAMPLE_RATE as f32 * secs) as u32
+}
+
+fn build_death_sound(player_type: PlayerSoundType, seed: u32, wx: f32, wy: f32) -> ArpeggioSource {
+    let mut rng = SimpleRng::new(seed ^ wx.to_bits().rotate_left(7) ^ wy.to_bits().rotate_left(19));
+    let jitter = rng.range(0.985, 1.015);
+    let (freqs, note_count, note_duration, decay) = match player_type {
+        PlayerSoundType::Human => ([392.0, 330.0, 277.0, 0.0], 3, 0.11, 6.5),
+        PlayerSoundType::Nation => ([330.0, 277.0, 220.0, 0.0], 3, 0.12, 6.0),
+        PlayerSoundType::Bot => ([294.0, 247.0, 0.0, 0.0], 2, 0.10, 7.5),
+    };
+    let note_duration = note_samples(note_duration);
+    let mut note_freqs = freqs;
+    for freq in note_freqs.iter_mut().take(note_count) {
+        *freq *= jitter;
+    }
+    let mut note_durations = [0; 4];
+    for duration in note_durations.iter_mut().take(note_count) {
+        *duration = note_duration;
+    }
+    ArpeggioSource::new(note_freqs, note_durations, decay, 0.095)
+}
+
 pub fn play_death_sound(player_type: PlayerSoundType, seed: u32, spatial: SpatialSoundParams) {
     let SpatialSoundParams { wx, wy, .. } = spatial;
-    let source = {
-        let mut session = music_session().lock().unwrap_or_else(|e| e.into_inner());
-        build_death_sound(&mut session, player_type, seed, wx, wy)
-    };
-    queue_spatial(source, spatial, SoundPriority::Foreground);
+    queue_spatial(
+        build_death_sound(player_type, seed, wx, wy),
+        spatial,
+        SoundPriority::Foreground,
+    );
 }

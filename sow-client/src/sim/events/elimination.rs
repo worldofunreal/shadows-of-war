@@ -61,8 +61,7 @@ impl SowApp {
             .wrapping_add(elimination_x.wrapping_mul(1597334977))
             .wrapping_add(elimination_y.wrapping_mul(3512401961));
 
-        // Play retro synthesized death sound spatially
-        sow_audio::play_death_sound(
+        self.sfx.queue_elimination(
             crate::player_sound_type(victim_type),
             seed,
             self.spatial_sound_params(wx, wy),

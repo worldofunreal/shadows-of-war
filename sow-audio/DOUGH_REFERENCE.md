@@ -488,13 +488,11 @@ And dough handles the voice allocation, synthesis, and mixing.
 - ✅ Warm harmonic oscillator (sine + 2nd + 3rd harmonics)
 - ✅ ADSR-like envelopes (attack, decay, tail fade)
 - ✅ Pitch bends / frequency sweeps
-- ✅ Vibrato (in WarHorn source)
-- ✅ Multi-voice mixing (3 voices, priority system)
+- ✅ Multi-voice mixing (3 ordinary voices + 2 critical voices)
 - ✅ Spatial stereo panning + distance attenuation
-- ✅ Volume ducking per voice count
-- ✅ Pentatonic scale system + per-tile melodic context
+- ✅ Priority-based admission and output clamping
 - ✅ Simple arpeggiator (ArpeggioSource)
-- ✅ Pulse / sweep / noise sources for SFX
+- ✅ Pulse / sweep / low-impact sources for SFX
 - ✅ Sample-rate: 22050 Hz (low, mobile-friendly)
 - ✅ CPAL output callback with a shared native/Web Audio mixer
 
@@ -519,9 +517,8 @@ And dough handles the voice allocation, synthesis, and mixing.
 
 ### What sow-audio has that dough DOESN'T:
 - ✅ Spatial 3D panning + distance attenuation
-- ✅ Priority-based voice stealing
+- ✅ Priority-based voice admission
 - ✅ Game-event-driven triggering (combat, building, nuke, death)
-- ✅ Per-tile melodic context (pentatonic scale from map position)
 - ✅ Troops→amplitude mapping
 - ✅ Rate limiting (combat + bunker sound spam prevention)
 

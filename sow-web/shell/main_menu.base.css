@@ -1,12 +1,8 @@
 #sow-menu {
     --sow-gold: #f3b12b;
     --sow-gold-bright: #ffd36a;
-    --sow-laurel: #c084fc;
     --sow-laurel-bright: #e9d5ff;
     --sow-cyan: #38bdf8;
-    --sow-ink: #0d0f13;
-    --sow-panel: rgba(13, 15, 19, 0.84);
-    --sow-panel-soft: rgba(22, 24, 29, 0.72);
     --sow-line: rgba(255, 221, 153, 0.22);
     --sow-muted: rgba(235, 231, 220, 0.62);
     --sow-menu-nav-rail: 0;
@@ -1645,31 +1641,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     margin-top: 0;
 }
 
-.sow-menu__auth-modal {
-    width: min(100%, 440px);
-}
-
-.sow-menu__auth-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.sow-menu__auth-provider {
-    justify-content: flex-start;
-    gap: 10px;
-}
-
-.sow-menu__auth-provider b {
-    display: grid;
-    width: 24px;
-    height: 24px;
-    place-items: center;
-    border: 1px solid currentColor;
-    border-radius: 50%;
-    font-size: 12px;
-}
-
 .sow-menu__form-field {
     display: flex;
     flex-direction: column;
@@ -1679,10 +1650,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     font-weight: 900;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-}
-
-.sow-menu__form-field--wide {
-    grid-column: 1 / -1;
 }
 
 .sow-menu__form-row {
@@ -1852,14 +1819,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
         width: 100%;
         max-height: calc(100dvh - 24px);
         padding: 18px;
-    }
-
-    .sow-menu__form-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .sow-menu__form-field--wide {
-        grid-column: auto;
     }
 
     .sow-menu__teams-roster {

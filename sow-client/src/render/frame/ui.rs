@@ -91,7 +91,9 @@ impl SowApp {
                     &self.sim,
                     &mut self.ui,
                     &self.input,
+                    self.gfx.map_renderer.as_ref(),
                     sf,
+                    dt,
                     self.time.start_time.elapsed().as_secs_f32() % 1000.0,
                     now,
                 );

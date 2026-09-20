@@ -32,6 +32,7 @@
     var activeLocale = defaultLocale;
     var activeStrings = {};
     var englishStrings = {};
+    var englishReady = false;
 
     function normalizeLocale(value) {
         var locale = String(value || "").toLowerCase().replace(/_/g, "-");
@@ -158,6 +159,7 @@
         var value = lookup(activeStrings, key);
         if (typeof value !== "string") {
             value = lookup(englishStrings, key);
+            if (!englishReady) return "[" + key + "]";
             report(key);
         }
         if (typeof value !== "string") return "[" + key + "]";
@@ -228,6 +230,7 @@
         return load(defaultLocale);
     }).then(function (strings) {
         englishStrings = strings;
+        englishReady = true;
         if (initialLocale === defaultLocale) return activate(defaultLocale, strings, false);
         return load(initialLocale).then(function (selected) {
             return activate(initialLocale, selected, false);

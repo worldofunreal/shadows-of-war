@@ -260,6 +260,18 @@ pub struct AttackBadgeLabel {
     pub last_update: web_time::Instant,
 }
 
+#[derive(Clone, Debug)]
+pub struct NameplateVisualState {
+    pub world_center: [f32; 2],
+    pub world_size: f32,
+    pub source_name: String,
+    pub player_type: sow_core::player::PlayerType,
+    pub display_name: String,
+    pub troops_bits: u64,
+    pub troops_text: String,
+    pub troops_updated_at: web_time::Instant,
+}
+
 pub struct UiState {
     pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
@@ -298,6 +310,7 @@ pub struct UiState {
     pub nameplate_order_tick: Option<u64>,
     pub nameplate_order_my_id: Option<u16>,
     pub nameplate_order: Vec<usize>,
+    pub nameplate_visuals: std::collections::HashMap<u16, NameplateVisualState>,
     pub(crate) building_render_cache: crate::render::world::BuildingRenderCache,
     pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
@@ -468,6 +481,7 @@ pub struct SowApp {
     pub sim: SimState,
     pub input: InputState,
     pub ui: UiState,
+    pub(crate) sfx: crate::app::sfx::SfxDirector,
     pub time: TimeState,
     pub tasks: TaskState,
 

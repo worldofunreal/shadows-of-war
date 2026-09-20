@@ -105,7 +105,8 @@ impl SowApp {
                     let current_time = web_time::Instant::now();
                     for &(dx, dy, kind) in &self.ui.detonation_scratch {
                         if let sow_core::game::ProjectileKind::Nuke { level } = kind {
-                            sow_audio::play_nuke_impact_sound(
+                            self.sfx.play_nuke_impact(
+                                current_time,
                                 level,
                                 spatial_audio.params(dx + 0.5, dy + 0.5),
                             );
@@ -131,7 +132,8 @@ impl SowApp {
                             {
                                 let src_x = (proj.src_tile % self.sim.map_w) as f32 + 0.5;
                                 let src_y = (proj.src_tile / self.sim.map_w) as f32 + 0.5;
-                                sow_audio::play_nuke_launch_sound(
+                                self.sfx.play_nuke_launch(
+                                    current_time,
                                     spatial_audio.params(src_x, src_y),
                                 );
 

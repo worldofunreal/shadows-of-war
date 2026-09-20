@@ -21,14 +21,10 @@ impl SowApp {
                     world_y: wy,
                     start_time: web_time::Instant::now(),
                 });
-                sow_audio::play_deploy_sound(self.spatial_sound_params(wx, wy));
-                let seed = self
-                    .sim
-                    .engine
-                    .as_ref()
-                    .map(|e| e.state.seed as u32)
-                    .unwrap_or(0);
-                sow_audio::set_music_context(seed, wx, wy);
+                self.sfx.play_deploy(
+                    web_time::Instant::now(),
+                    self.spatial_sound_params(wx, wy),
+                );
             }
             sow_core::protocol::GameplayIntent::BuildStructure { kind, target_tile } => {
                 let wx = (*target_tile % self.sim.map_w) as f32 + 0.5;
@@ -38,7 +34,8 @@ impl SowApp {
                     world_y: wy,
                     start_time: web_time::Instant::now(),
                 });
-                sow_audio::play_building_placement_sound(
+                self.sfx.play_placement(
+                    web_time::Instant::now(),
                     crate::building_sound_kind(*kind),
                     self.spatial_sound_params(wx, wy),
                 );

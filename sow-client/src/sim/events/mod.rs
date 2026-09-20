@@ -1,6 +1,5 @@
 mod combat;
 mod elimination;
-mod structures;
 
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
@@ -15,6 +14,8 @@ impl SowApp {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
         let now_instant = web_time::Instant::now();
+        self.sfx.sync_server_phase(&snap.phase);
+        self.sfx.begin_tick();
         for event in events {
             match event {
                 sow_core::game::GameEvent::PlayerEliminated {
@@ -63,17 +64,10 @@ impl SowApp {
                         },
                     );
                 }
-                sow_core::game::GameEvent::StructureSpawned {
-                    tile_idx,
-                    kind,
-                    owner_id,
-                    ..
-                } => {
-                    self.handle_structure_spawned(my_id, tile_idx, kind, owner_id);
-                }
                 _ => {}
             }
         }
+        self.sfx.flush_tick(now_instant);
         turn_defeats
     }
 }

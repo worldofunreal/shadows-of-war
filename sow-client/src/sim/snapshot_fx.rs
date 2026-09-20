@@ -1,10 +1,11 @@
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 impl SowApp {
     pub(crate) fn apply_snapshot_fx(&mut self, snap: &mut SimSnapshot, my_id: u16) {
         let mut being_attacked_triggered = false;
+        let mut under_attack_sound_triggered = false;
         if let Some(mut existing) = self.sim.current_snapshot.take() {
             let old_attack_troops: HashMap<u64, f64> = existing
                 .attacks
@@ -15,6 +16,18 @@ impl SowApp {
                 .buildings
                 .iter()
                 .map(|building| (building.id, (building.level, building.under_construction)))
+                .collect();
+            let old_attackers: HashSet<u16> = existing
+                .attacks
+                .iter()
+                .filter(|attack| attack.target_owner == my_id && attack.troops > 0.0)
+                .map(|attack| attack.owner_id)
+                .collect();
+            let new_attackers: HashSet<u16> = snap
+                .attacks
+                .iter()
+                .filter(|attack| attack.target_owner == my_id && attack.troops > 0.0)
+                .map(|attack| attack.owner_id)
                 .collect();
             if my_id != 0 {
                 // 1. Detect incoming attacks (UnderAttack)
@@ -28,6 +41,9 @@ impl SowApp {
                         }
                     }
                 }
+                under_attack_sound_triggered = new_attackers
+                    .iter()
+                    .any(|attacker| !old_attackers.contains(attacker));
 
                 // 2. Detect new alliance requests targeting us
                 if let Some(my_info_new) = snap.players.iter().find(|p| p.id == my_id)
@@ -60,19 +76,15 @@ impl SowApp {
                 }
             }
             // Count unique attackers targeting us in the new snapshot
-            let unique_attackers = if my_id != 0 {
-                snap.attacks
-                    .iter()
-                    .filter(|a| a.target_owner == my_id && a.troops > 0.0)
-                    .map(|a| a.owner_id)
-                    .collect::<std::collections::HashSet<_>>()
-                    .len()
-            } else {
-                0
-            };
+            let unique_attackers = new_attackers.len();
+            let now = web_time::Instant::now();
+            let under_attack_spatial = snap
+                .attacks
+                .iter()
+                .find(|attack| attack.target_owner == my_id && attack.troops > 0.0)
+                .map(|attack| self.spatial_sound_params(attack.front_cx, attack.front_cy));
 
             if unique_attackers > 0 {
-                let now = web_time::Instant::now();
                 let should_flash = self
                     .ui
                     .last_player_attack_flash_time
@@ -101,6 +113,12 @@ impl SowApp {
                 self.ui
                     .trigger_viewport_alert(crate::app::ViewportAlertKind::UnderAttack);
             }
+            self.sfx.update_under_attack(
+                now,
+                unique_attackers > 0,
+                under_attack_sound_triggered,
+                under_attack_spatial,
+            );
 
             // Detect building level upgrades and completions
             for b_new in &snap.buildings {
@@ -118,7 +136,8 @@ impl SowApp {
                     {
                         let wx = (b_new.tile_idx % self.sim.map_w) as f32 + 0.5;
                         let wy = (b_new.tile_idx / self.sim.map_w) as f32 + 0.5;
-                        sow_audio::play_building_completed_sound(
+                        self.sfx.play_completion(
+                            now,
                             crate::building_sound_kind(b_new.kind),
                             self.spatial_sound_params(wx, wy),
                         );

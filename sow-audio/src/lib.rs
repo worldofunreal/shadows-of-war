@@ -2,7 +2,7 @@
 //! Uses CPAL's native and Web Audio backends through one shared mixer.
 
 /// Combat / expansion sound category for procedural synthesis.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CombatSoundKind {
     WildernessExpansion,
     AttackHuman,
@@ -57,6 +57,10 @@ pub fn play_combat_sound(
     native::play_combat_sound(kind, troops, seed, spatial);
 }
 
+pub fn play_under_attack_sound(spatial: SpatialSoundParams) {
+    native::play_under_attack_sound(spatial);
+}
+
 pub fn play_building_placement_sound(kind: BuildingSoundKind, spatial: SpatialSoundParams) {
     native::play_building_placement_sound(kind, spatial);
 }
@@ -71,14 +75,6 @@ pub fn play_nuke_launch_sound(spatial: SpatialSoundParams) {
 
 pub fn play_nuke_impact_sound(level: u8, spatial: SpatialSoundParams) {
     native::play_nuke_impact_sound(level, spatial);
-}
-
-pub fn play_bunker_defense_sound(seed: u32, spatial: SpatialSoundParams) {
-    native::play_bunker_defense_sound(seed, spatial);
-}
-
-pub fn set_music_context(seed: u32, anchor_wx: f32, anchor_wy: f32) {
-    native::set_music_context(seed, anchor_wx, anchor_wy);
 }
 
 pub fn play_victory_sound() {

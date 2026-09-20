@@ -73,6 +73,7 @@ impl SowApp {
             new_engine.state.config.bot_count,
         );
         let snap = new_engine.build_snapshot();
+        let phase = snap.phase.clone();
         self.sim.current_snapshot = Some(snap);
         self.sim.engine = Some(new_engine);
         self.sim.tile_upgrades = vec![0; (map_w * map_h) as usize];
@@ -97,6 +98,7 @@ impl SowApp {
         self.ui.is_spectating = false;
         self.ui.observing = false;
         self.ui.endgame_cache = None;
-        sow_audio::set_music_context(seed as u32, map_w as f32 * 0.5, map_h as f32 * 0.5);
+        self.sfx.reset_for_match();
+        self.sfx.sync_server_phase(&phase);
     }
 }

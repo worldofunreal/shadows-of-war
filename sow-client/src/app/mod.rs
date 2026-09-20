@@ -3,6 +3,7 @@ pub(crate) mod audio;
 mod bootstrap;
 mod gpu;
 mod progress;
+pub(crate) mod sfx;
 mod state;
 
 pub use state::*;
@@ -12,6 +13,8 @@ impl SowApp {
         self.check_surface();
 
         let now = web_time::Instant::now();
+        self.sfx
+            .set_client_active(self.ui.app.phase == crate::ClientPhase::Playing);
         #[cfg(target_arch = "wasm32")]
         self.process_web_menu_commands();
         self.update_net(now);

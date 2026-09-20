@@ -28,7 +28,7 @@ impl SowApp {
         }
         *played_combat_this_tick = true;
 
-        use sow_audio::{CombatSoundKind, play_combat_sound};
+        use sow_audio::CombatSoundKind;
         use sow_core::player::PlayerType;
 
         let kind = if previous_owner == my_id {
@@ -53,7 +53,8 @@ impl SowApp {
             .wrapping_add(y.wrapping_mul(3512401961))
             .wrapping_add((troops as u32).wrapping_mul(7243));
 
-        play_combat_sound(
+        self.sfx.play_combat(
+            web_time::Instant::now(),
             kind,
             troops as f32,
             seed,
