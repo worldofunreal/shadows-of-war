@@ -131,65 +131,58 @@ impl SowApp {
                         if self.ui.app.main_menu_state.is_waiting {
                             self.ui.app.main_menu_state.wait_timer_secs = sync_msg.time_remaining;
 
-                            // All clients ready: go to loader immediately
+                            // SyncState only reports readiness. ServerStartMessage owns the transition.
                             if sync_msg.is_starting {
                                 log::info!(
-                                    "[LOBBY] All ready (is_starting), entering loader screen"
+                                    "[LOBBY] All ready (is_starting); keeping queue visible until ServerStartMessage"
                                 );
-                                if self.ui.app.phase != crate::ClientPhase::Splash {
-                                    self.ui.app.phase = crate::ClientPhase::Splash;
-                                    self.ui.app.splash_state.reset_anim(
-                                        crate::ui::loading_screen::SplashJob::EnterGame,
-                                    );
-                                }
-                                self.ui.app.main_menu_state.is_waiting = false;
-                            } else {
-                                // Update lobby player list in UI
-                                let key = self
-                                    .sim
-                                    .my_lobby_id
-                                    .or(self.ui.app.main_menu_state.joined_lobby_id)
-                                    .or(self.ui.app.main_menu_state.pending_join_lobby_id);
-                                if let Some(id) = key {
-                                    if let Some(lobby) = self
-                                        .ui
-                                        .app
-                                        .main_menu_state
-                                        .lobbies
-                                        .iter_mut()
-                                        .find(|l| l.id == id)
-                                    {
-                                        lobby.timer_secs = sync_msg.time_remaining;
-                                        lobby.is_counting_down = sync_msg.time_remaining > 0.0
-                                            && sync_msg.time_remaining < 30.0;
-                                        lobby.num_players = sync_msg.players.len() as u32;
-                                        lobby.players = sync_msg.players.clone();
+                            }
+
+                            // Update lobby player list in UI
+                            let key = self
+                                .sim
+                                .my_lobby_id
+                                .or(self.ui.app.main_menu_state.joined_lobby_id)
+                                .or(self.ui.app.main_menu_state.pending_join_lobby_id);
+                            if let Some(id) = key {
+                                if let Some(lobby) = self
+                                    .ui
+                                    .app
+                                    .main_menu_state
+                                    .lobbies
+                                    .iter_mut()
+                                    .find(|l| l.id == id)
+                                {
+                                    lobby.timer_secs = sync_msg.time_remaining;
+                                    lobby.is_counting_down = sync_msg.time_remaining > 0.0
+                                        && sync_msg.time_remaining < 30.0;
+                                    lobby.num_players = sync_msg.players.len() as u32;
+                                    lobby.players = sync_msg.players.clone();
+                                } else {
+                                    let kind = if self.ui.app.main_menu_state.in_private_match {
+                                        sow_core::protocol::LobbyKind::Custom
                                     } else {
-                                        let kind = if self.ui.app.main_menu_state.in_private_match {
-                                            sow_core::protocol::LobbyKind::Custom
-                                        } else {
-                                            sow_core::protocol::LobbyKind::Matchmaking
-                                        };
-                                        self.ui.app.main_menu_state.lobbies.push(
-                                            sow_core::protocol::LobbyInfo {
-                                                id,
-                                                kind,
-                                                num_players: sync_msg.players.len() as u32,
-                                                max_players: 0, // unknown until the server broadcast arrives
-                                                is_counting_down: sync_msg.time_remaining > 0.0
-                                                    && sync_msg.time_remaining < 30.0,
-                                                timer_secs: sync_msg.time_remaining,
-                                                map_name: "Loading...".to_string(),
-                                                game_mode: "FFA".to_string(),
-                                                players: sync_msg.players.clone(),
-                                                has_password: false,
-                                                host_name: String::new(),
-                                                bot_count: 0,
-                                                nation_count: 0,
-                                                bot_difficulty: Default::default(),
-                                            },
-                                        );
-                                    }
+                                        sow_core::protocol::LobbyKind::Matchmaking
+                                    };
+                                    self.ui.app.main_menu_state.lobbies.push(
+                                        sow_core::protocol::LobbyInfo {
+                                            id,
+                                            kind,
+                                            num_players: sync_msg.players.len() as u32,
+                                            max_players: 0, // unknown until the server broadcast arrives
+                                            is_counting_down: sync_msg.time_remaining > 0.0
+                                                && sync_msg.time_remaining < 30.0,
+                                            timer_secs: sync_msg.time_remaining,
+                                            map_name: "Loading...".to_string(),
+                                            game_mode: "FFA".to_string(),
+                                            players: sync_msg.players.clone(),
+                                            has_password: false,
+                                            host_name: String::new(),
+                                            bot_count: 0,
+                                            nation_count: 0,
+                                            bot_difficulty: Default::default(),
+                                        },
+                                    );
                                 }
                             }
                         }

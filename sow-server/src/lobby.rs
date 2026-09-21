@@ -191,9 +191,11 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
 /// so over time a single slot cycles through FFA / Teams with a fresh map and
 /// derived capacity each cycle.
 fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
-    let has_joinable = games
-        .iter()
-        .any(|g| g.joinable() && g.kind == LobbyKind::Matchmaking);
+    let has_joinable = games.iter().any(|g| {
+        g.joinable()
+            && g.kind == LobbyKind::Matchmaking
+            && g.players.len() < g.config.max_players as usize
+    });
     if has_joinable {
         return;
     }
@@ -805,8 +807,7 @@ pub fn master_tick(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
                 LobbyPhase::Waiting => false,
                 LobbyPhase::CountingDown => {
                     lobby.countdown_secs -= TICK_SECS;
-                    let cap = lobby.config.max_players as usize;
-                    if lobby.countdown_secs <= 0.0 || lobby.players.len() >= cap {
+                    if lobby.countdown_secs <= 0.0 {
                         start_match(lobby);
                     }
                     false
@@ -1037,7 +1038,7 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
         .filter(|g| {
             g.joinable()
                 && match g.kind {
-                    LobbyKind::Matchmaking => true,
+                    LobbyKind::Matchmaking => g.players.len() < g.config.max_players as usize,
                     LobbyKind::Custom => !g.is_private,
                 }
         })
@@ -1051,8 +1052,8 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
 mod name_tests {
     use super::{
         JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby,
-        build_lobby_broadcast, join_player, kick_player, normalize_player_name,
-        resolve_join_target, set_player_team,
+        build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
+        normalize_player_name, resolve_join_target, set_player_team,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::player::{Civilization, Leader};
@@ -1175,6 +1176,48 @@ mod name_tests {
         assert_eq!(result.0, 20);
         assert_eq!(games[0].players.len(), 8);
         assert_eq!(games[1].players.len(), 1);
+    }
+
+    #[test]
+    fn full_matchmaking_lobby_does_not_start_before_countdown() {
+        let mut full = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        full.phase = LobbyPhase::CountingDown;
+        full.countdown_secs = 0.2;
+        let roster_sender = channel_sender();
+        full.players = (1..=8)
+            .map(|player_id| lobby_player(player_id, roster_sender.clone(), None))
+            .collect();
+        let mut games = vec![full];
+
+        master_tick(&mut games, &mut 20);
+
+        assert_eq!(games[0].phase, LobbyPhase::CountingDown);
+        assert!(games[0].countdown_secs > 0.0);
+
+        master_tick(&mut games, &mut 20);
+
+        assert_eq!(games[0].phase, LobbyPhase::Loading);
+    }
+
+    #[test]
+    fn full_matchmaking_lobby_is_hidden_and_does_not_block_queue() {
+        let mut full = queue_lobby(10, LobbyKind::Matchmaking, "FFA");
+        full.phase = LobbyPhase::CountingDown;
+        let roster_sender = channel_sender();
+        full.players = (1..=8)
+            .map(|player_id| lobby_player(player_id, roster_sender.clone(), None))
+            .collect();
+        let mut games = vec![full];
+
+        ensure_queue_depth(&mut games, &mut 20);
+
+        assert_eq!(games.len(), 2);
+        assert_eq!(games[1].kind, LobbyKind::Matchmaking);
+        assert_eq!(games[1].phase, LobbyPhase::Waiting);
+
+        let infos = build_lobby_broadcast(&games);
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].id, 20);
     }
 
     #[test]

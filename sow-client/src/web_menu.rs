@@ -7,7 +7,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use serde::Deserialize;
 use wasm_bindgen::JsCast;
@@ -1157,7 +1157,18 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
         players.truncate(LEADERBOARD_LIMIT);
     }
     players.sort_unstable_by(leaderboard_cmp);
-    let has_my_player = players.iter().any(|player| player.id == my_pid);
+
+    let mut included_ids: HashSet<u16> = players.iter().map(|player| player.id).collect();
+    let mut human_players: Vec<&sow_core::protocol::PlayerSnapshot> = snapshot
+        .players
+        .iter()
+        .filter(|player| {
+            player.player_type == sow_core::player::PlayerType::Human
+                && !included_ids.contains(&player.id)
+        })
+        .collect();
+    human_players.sort_unstable_by(leaderboard_cmp);
+
     let my_player = snapshot.players.iter().find(|player| player.id == my_pid);
     let mut payload = players
         .into_iter()
@@ -1166,7 +1177,24 @@ fn build_leaderboard(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) ->
             player_json(player, my_pid, snapshot.total_land_tiles, Some(index + 1))
         })
         .collect::<Vec<_>>();
-    if !has_my_player {
+
+    for player in human_players {
+        let rank = snapshot
+            .players
+            .iter()
+            .filter(|other| leaderboard_cmp(other, &player) == Ordering::Less)
+            .count()
+            + 1;
+        payload.push(player_json(
+            player,
+            my_pid,
+            snapshot.total_land_tiles,
+            Some(rank),
+        ));
+        included_ids.insert(player.id);
+    }
+
+    if !included_ids.contains(&my_pid) {
         if let Some(my_player) = my_player {
             let rank = snapshot
                 .players
@@ -1948,5 +1976,32 @@ mod tests {
         assert_eq!(rows[99]["rank"], serde_json::json!(100));
         assert_eq!(rows[100]["id"], serde_json::json!(149));
         assert_eq!(rows[100]["rank"], serde_json::json!(150));
+    }
+
+    #[test]
+    fn leaderboard_includes_humans_outside_the_top_100() {
+        let mut players: Vec<PlayerSnapshot> = (0..150)
+            .map(|id| test_player(id, 150 - id as u32, 0.0))
+            .collect();
+        players[140].player_type = PlayerType::Human;
+        players[141].player_type = PlayerType::Human;
+        let snapshot = test_snapshot(players);
+
+        let serde_json::Value::Array(rows) = build_leaderboard(&snapshot, 0) else {
+            panic!("leaderboard must be an array");
+        };
+
+        let human_rows: Vec<&serde_json::Value> = rows
+            .iter()
+            .filter(|row| {
+                matches!(
+                    row.get("id").and_then(serde_json::Value::as_u64),
+                    Some(140 | 141)
+                )
+            })
+            .collect();
+        assert_eq!(human_rows.len(), 2);
+        assert_eq!(human_rows[0]["rank"], serde_json::json!(141));
+        assert_eq!(human_rows[1]["rank"], serde_json::json!(142));
     }
 }

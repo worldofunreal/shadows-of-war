@@ -1036,10 +1036,12 @@ fn render_buildings(
             || building.count > 1
             || building.under_construction
         {
-            let label = if building.count > 1 {
+            let label = if building.under_construction {
+                "🔨".to_string()
+            } else if building.count > 1 {
                 format!("{} × {}", building.level, building.count)
             } else if building.queued_level > building.level {
-                format!("{}→{}", building.level, building.queued_level)
+                format!("{} -> {}", building.level, building.queued_level)
             } else {
                 building.level.to_string()
             };
@@ -1159,8 +1161,10 @@ fn render_building_placement_preview(
             (3.0 * sf).max(1.0),
         );
         let active = building.active_level();
-        let label = if building.level > active {
-            format!("{}→{}", active, building.level)
+        let label = if building.under_construction {
+            "🔨".to_string()
+        } else if building.level > active {
+            format!("{} -> {}", active, building.level)
         } else {
             format!("{}", active)
         };
