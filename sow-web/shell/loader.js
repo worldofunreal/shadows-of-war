@@ -7,6 +7,8 @@
     const FADEOUT_MS = 250;
     const BAR_ASPECT = 2064 / 512;
     const MOBILE_BREAKPOINT = 600;
+    const BOOT_SPLASH_MEDIA = '(max-width: 599px)';
+    const LEADER_ART_MEDIA = '(orientation: portrait)';
 
     const LAYOUT = {
         portrait: {
@@ -27,16 +29,18 @@
         },
     };
 
-    function assetPathVariants(file) {
+    function assetPathVariants(file, folder) {
+        folder = folder || 'loader';
         const bootBase = window.SOW_BOOT_UI_BASE;
         if (bootBase && typeof bootBase === 'string') {
             const root = bootBase.replace(/\/$/, '');
-            return [root + '/' + file];
+            if (folder === 'loader') return [root + '/' + file];
+            return [root.replace(/\/loader$/, '') + '/' + folder + '/' + file];
         }
         const base = window.SOW_ASSETS_URL;
         if (base && typeof base === 'string') {
             const root = base.replace(/\/$/, '');
-            return [root + '/shell/loader/' + file];
+            return [root + '/shell/' + folder + '/' + file];
         }
         // Strict endpoints: a missing SOW_ASSETS_URL is a packaging bug —
         // fail loudly instead of guessing a CDN URL (guessing once loaded
@@ -85,6 +89,67 @@
         img.src = url;
     }
 
+    function splashMobileSource() {
+        return document.getElementById('splash-mobile')
+            || document.querySelector('#web-loader .splash-picture source');
+    }
+
+    function applySplashArt() {
+        const image = document.getElementById('splash-bg');
+        if (!image) return;
+        const mobileSource = splashMobileSource();
+        const desktopSplash = assetUrl(assetPathVariants('sow-splash-desktop.webp')[0]);
+        const mobileSplash = assetUrl(assetPathVariants('sow-splash-mobile.webp')[0]);
+        if (mobileSource) {
+            mobileSource.media = BOOT_SPLASH_MEDIA;
+            mobileSource.srcset = mobileSplash;
+        }
+        wireAssetFallback(image, isMobile() ? 'sow-splash-mobile.webp' : 'sow-splash-desktop.webp');
+        setImgSrc(image, isMobile() ? mobileSplash : desktopSplash);
+        loaderArtKey = 'boot';
+    }
+
+    function leaderSlugForState(state) {
+        const selected = String(state && state.selected_leader || '');
+        const leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
+        const leader = leaders.find((entry) =>
+            String(entry && entry.id || '') === selected
+            || String(entry && entry.slug || '') === selected,
+        );
+        const slug = leader && typeof leader.slug === 'string' ? leader.slug : '';
+        return /^[a-z0-9_]+$/.test(slug) ? slug : null;
+    }
+
+    function syncLoaderArt(state) {
+        const transition = state && (state.loader_job === 'EnterGame' || state.loader_job === 'ExitGame');
+        const slug = transition ? leaderSlugForState(state) : null;
+        if (!slug) {
+            if (loaderArtKey !== 'boot') applySplashArt();
+            return;
+        }
+
+        const key = state.loader_job + ':' + slug;
+        if (loaderArtKey === key || loaderArtKey === key + ':fallback') return;
+
+        const image = document.getElementById('splash-bg');
+        const mobileSource = splashMobileSource();
+        if (!image) return;
+        const desktopArt = assetUrl(assetPathVariants(slug + '_desktop.webp', 'leaders')[0]);
+        const mobileArt = assetUrl(assetPathVariants(slug + '_mobile.webp', 'leaders')[0]);
+        loaderArtKey = key;
+        if (mobileSource) {
+            mobileSource.media = LEADER_ART_MEDIA;
+            mobileSource.srcset = mobileArt;
+        }
+        image.onerror = function () {
+            if (loaderArtKey === key) {
+                applySplashArt();
+                loaderArtKey = key + ':fallback';
+            }
+        };
+        setImgSrc(image, desktopArt);
+    }
+
     let root = null;
     let barFill = null;
     let barFull = null;
@@ -97,6 +162,7 @@
     let listenersBound = false;
     let loaderVisible = false;
     let loaderReadyDispatched = false;
+    let loaderArtKey = null;
 
     function isMobile() {
         return window.innerWidth < MOBILE_BREAKPOINT;
@@ -228,13 +294,6 @@
             `;
             document.body.appendChild(root);
 
-            const desktopSplash = assetUrl(assetPathVariants('sow-splash-desktop.webp')[0]);
-            const mobileSplash = assetUrl(assetPathVariants('sow-splash-mobile.webp')[0]);
-            const mobileSource = document.getElementById('splash-mobile');
-            if (mobileSource) mobileSource.srcset = mobileSplash;
-            setImgSrc(document.getElementById('splash-bg'), isMobile() ? mobileSplash : desktopSplash);
-            setImgSrc(document.getElementById('loader-bar-empty'), assetUrl(assetPathVariants('loader_empty.webp')[0]));
-            setImgSrc(document.getElementById('loader-bar-full'), assetUrl(assetPathVariants('loader_full.webp')[0]));
         }
 
         barFill = document.getElementById('loader-bar-fill');
@@ -242,14 +301,11 @@
         loaderText = document.getElementById('loader-text');
 
         if (!initialized) {
-            for (const [id, file] of [
-                ['splash-bg', isMobile() ? 'sow-splash-mobile.webp' : 'sow-splash-desktop.webp'],
-                ['loader-bar-empty', 'loader_empty.webp'],
-                ['loader-bar-full', 'loader_full.webp'],
-            ]) {
-                const img = document.getElementById(id);
-                if (img) wireAssetFallback(img, file);
-            }
+            applySplashArt();
+            setImgSrc(document.getElementById('loader-bar-empty'), assetUrl(assetPathVariants('loader_empty.webp')[0]));
+            setImgSrc(document.getElementById('loader-bar-full'), assetUrl(assetPathVariants('loader_full.webp')[0]));
+            wireAssetFallback(document.getElementById('loader-bar-empty'), 'loader_empty.webp');
+            wireAssetFallback(document.getElementById('loader-bar-full'), 'loader_full.webp');
         }
 
         layout();
@@ -370,6 +426,7 @@
             loaderVisible = true;
             startProgress();
         }
+        syncLoaderArt(state);
         const progress = Number(state.loader_progress);
         if (Number.isFinite(progress)) {
             const nextProgress = Math.max(0, Math.min(1, progress));
