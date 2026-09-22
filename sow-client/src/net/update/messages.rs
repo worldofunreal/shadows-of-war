@@ -96,6 +96,12 @@ impl SowApp {
                                 .splash_state
                                 .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
                         }
+                        if let Some(player_id) = start_msg.my_player_id
+                            && let Some(player) =
+                                start_msg.players.iter().find(|p| p.id == player_id)
+                        {
+                            self.ui.app.main_menu_state.selected_leader = player.leader;
+                        }
                         self.ui.app.main_menu_state.is_waiting = false;
                         self.ui.app.main_menu_state.pending_join_lobby_id = None;
                         self.ui.app.main_menu_state.joined_lobby_id = None;

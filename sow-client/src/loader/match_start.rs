@@ -158,6 +158,7 @@ impl SowApp {
         self.sim.tutorial_observation.reset();
         self.net.client = None;
         self.net.current_ping_ms = None;
+        self.ui.app.main_menu_state.selected_leader = config.player_leader;
         self.begin_enter_game_loader();
         self.sim.my_player_id = Some(1);
         self.sim.my_lobby_id = Some(0);

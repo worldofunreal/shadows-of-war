@@ -154,6 +154,15 @@ impl SowApp {
             }
         }
         if was_playing {
+            if let Some(player_id) = self.sim.my_player_id
+                && let Some(player) = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| snapshot.players.iter().find(|p| p.id == player_id))
+            {
+                self.ui.app.main_menu_state.selected_leader = player.leader;
+            }
             if !self.progress_match_recorded {
                 crate::store_portals::measure("match", "round", "abandon");
             }
