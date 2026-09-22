@@ -2,9 +2,9 @@ use crate::context::RenderContext;
 use crate::text::msdf::FontAtlas;
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_CROSS, KIND_DISC, KIND_EMOJI,
-    KIND_GLYPH, KIND_RECT, KIND_RING, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals,
-    TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_CROSS, KIND_DISC,
+    KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle,
+    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -22,6 +22,15 @@ pub fn emoji_uv_opt(emoji: &str) -> Option<[f32; 4]> {
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
 const RING_AA_MARGIN: f32 = 1.5;
 const CROSS_AA_MARGIN: f32 = 1.0;
+
+#[inline]
+fn clamp_arc_progress(progress: f32) -> f32 {
+    if progress.is_finite() {
+        progress.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
 
 /// Layout bounds returned by the same atlas-aware measurement used by the GPU text path.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -528,6 +537,32 @@ impl TextRenderer {
         });
     }
 
+    /// Push an anti-aliased clockwise progress arc. `progress` is normalized to 0..1 and is
+    /// packed into the otherwise unused shape `uv_rect`, preserving the existing instance layout.
+    pub fn push_arc(
+        &mut self,
+        center: [f32; 2],
+        radius: f32,
+        progress: f32,
+        color: [f32; 4],
+        thickness: f32,
+    ) {
+        let (screen_pos, size, content_rect) = ring_geometry(center, radius);
+        self.push_inst(TextInstanceGpu {
+            screen_pos,
+            size,
+            uv_rect: [0.0, 0.0, clamp_arc_progress(progress), 1.0],
+            content_rect,
+            color,
+            outline_color: [0.0; 4],
+            face_dilate: 0.0,
+            outline_thickness: thickness,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_ARC,
+        });
+    }
+
     /// Push an anti-aliased diagonal cross. All dimensions are physical pixels.
     pub fn push_cross(
         &mut self,
@@ -783,6 +818,14 @@ mod tests {
         assert!((min[1] - 46.0).abs() < 1e-5);
         assert!((max[0] - 104.0).abs() < 1e-5);
         assert!((max[1] - 54.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn arc_progress_is_finite_and_clamped() {
+        assert_eq!(clamp_arc_progress(-1.0), 0.0);
+        assert_eq!(clamp_arc_progress(0.35), 0.35);
+        assert_eq!(clamp_arc_progress(2.0), 1.0);
+        assert_eq!(clamp_arc_progress(f32::NAN), 0.0);
     }
 
     #[test]

@@ -120,6 +120,34 @@ fn shade_shape(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb, a);
 }
 
+// Progress arc (KIND_ARC). The CPU packs normalized progress in uv_rect.z because arcs do not
+// sample a texture. The arc starts at 12 o'clock and advances clockwise.
+fn shade_arc(in: VertexOutput) -> vec4<f32> {
+    let shape_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-5));
+    let shape_uv = (in.local_uv - in.content_rect.xy) / shape_span;
+    let p = shape_uv - vec2<f32>(0.5, 0.5);
+    let dist = length(p);
+    let aa = max(fwidth(dist), 1e-5);
+    let tw = max(in.outline_thickness * fwidth(shape_uv).x, aa);
+    let outer = 1.0 - smoothstep(0.5 - aa, 0.5, dist);
+    let inner = 1.0 - smoothstep(0.5 - tw - aa, 0.5 - tw, dist);
+    let ring_alpha = clamp(outer - inner, 0.0, 1.0);
+
+    let tau = 6.28318530718;
+    var angle = atan2(p.y, p.x) + 1.57079632679 + tau;
+    if (angle >= tau) {
+        angle -= tau;
+    }
+    let normalized_angle = angle / tau;
+    let progress = clamp(in.uv_rect.z, 0.0, 1.0);
+    var arc_alpha = 1.0;
+    if (progress < 1.0) {
+        let angular_aa = max(fwidth(normalized_angle), 1e-5);
+        arc_alpha = 1.0 - smoothstep(progress, progress + angular_aa, normalized_angle);
+    }
+    return vec4<f32>(in.color.rgb, ring_alpha * arc_alpha * in.color.a);
+}
+
 // Circle-clipped image sprite (KIND_SPRITE) sampled from the avatar atlas. `in.uv` is the
 // atlas uv; deriving local 0..1 from uv_rect gives the disc mask. `color` tints the texels.
 fn shade_sprite(in: VertexOutput) -> vec4<f32> {
@@ -171,6 +199,9 @@ fn shade_cross(in: VertexOutput) -> vec4<f32> {
 }
 
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 7.5) {
+        return shade_arc(in);
+    }
     if (in.kind > 6.5) {
         return shade_cross(in);
     }

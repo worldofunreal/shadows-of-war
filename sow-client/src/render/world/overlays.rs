@@ -930,7 +930,14 @@ impl BuildingLod {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug, PartialEq)]
+struct BuildingVisualStatus {
+    progress: f32,
+    label: String,
+    color: [f32; 4],
+}
+
+#[derive(Clone)]
 struct RenderedBuilding {
     bx: f32,
     by: f32,
@@ -942,6 +949,7 @@ struct RenderedBuilding {
     count: usize,
     owner_id: u16,
     tile_idx: Option<u32>,
+    status: Option<BuildingVisualStatus>,
 }
 
 #[derive(Default)]
@@ -949,16 +957,124 @@ pub(crate) struct BuildingRenderCache {
     tick: Option<u64>,
     map_w: u32,
     cluster_cell_size_bits: u32,
+    player_id: u16,
+    tick_rate_ms_bits: u32,
     buildings: Vec<RenderedBuilding>,
 }
 
 impl BuildingRenderCache {
     #[inline]
-    fn matches(&self, tick: u64, map_w: u32, cluster_cell_size_bits: u32) -> bool {
+    fn matches(
+        &self,
+        tick: u64,
+        map_w: u32,
+        cluster_cell_size_bits: u32,
+        player_id: u16,
+        tick_rate_ms_bits: u32,
+    ) -> bool {
         self.tick == Some(tick)
             && self.map_w == map_w
             && self.cluster_cell_size_bits == cluster_cell_size_bits
+            && self.player_id == player_id
+            && self.tick_rate_ms_bits == tick_rate_ms_bits
     }
+}
+
+fn format_construction_time(ticks: u32, tick_rate_ms: f32) -> String {
+    let tick_rate_ms = if tick_rate_ms.is_finite() && tick_rate_ms > 0.0 {
+        tick_rate_ms
+    } else {
+        100.0
+    };
+    let tenths = ((ticks as f32 * tick_rate_ms / 100.0).ceil() as u32).max(0);
+    if tenths < 600 {
+        let seconds = tenths / 10;
+        let fraction = tenths % 10;
+        if fraction == 0 {
+            format!("{}s", seconds)
+        } else {
+            format!("{}.{}s", seconds, fraction)
+        }
+    } else {
+        let total_seconds = (tenths + 9) / 10;
+        format!("{}m {:02}s", total_seconds / 60, total_seconds % 60)
+    }
+}
+
+fn construction_progress(
+    kind: BuildingKind,
+    active_level: u8,
+    target_level: u8,
+    ticks_until_complete: u32,
+) -> Option<f32> {
+    if ticks_until_complete == 0 {
+        return None;
+    }
+
+    if active_level == 0 {
+        let total_ticks = kind.construction_duration_ticks();
+        return (total_ticks > 0)
+            .then(|| 1.0 - (ticks_until_complete as f32 / total_ticks as f32).clamp(0.0, 1.0));
+    }
+
+    if target_level <= active_level {
+        return None;
+    }
+
+    let first_queued_level = active_level.saturating_add(2);
+    let queued_above_ticks = if first_queued_level <= target_level {
+        (first_queued_level..=target_level)
+            .map(|level| sow_core::building::core::upgrade_duration_ticks(kind, level))
+            .sum()
+    } else {
+        0
+    };
+    let ticks_current = ticks_until_complete.saturating_sub(queued_above_ticks);
+    let duration_current =
+        sow_core::building::core::upgrade_duration_ticks(kind, active_level.saturating_add(1));
+    Some(1.0 - (ticks_current as f32 / duration_current as f32).clamp(0.0, 1.0))
+}
+
+fn building_visual_status(
+    building: &sow_core::protocol::BuildingSnapshot,
+    active_level: u8,
+    my_id: u16,
+    tick_rate_ms: f32,
+) -> Option<BuildingVisualStatus> {
+    if building.owner_id != my_id || !building.under_construction {
+        return None;
+    }
+    let progress = construction_progress(
+        building.kind,
+        active_level,
+        building.level,
+        building.ticks_until_complete,
+    )?;
+    let time = format_construction_time(building.ticks_until_complete, tick_rate_ms);
+
+    if active_level == 0 {
+        return Some(BuildingVisualStatus {
+            progress,
+            label: format!("🏗️ {}", time),
+            color: [0.0, 0.86, 1.0, 1.0],
+        });
+    }
+
+    let next_level = active_level.saturating_add(1);
+    let queued_after_current = building.level.saturating_sub(next_level);
+    let label = if queued_after_current > 0 {
+        format!(
+            "Lvl {} -> {} {} +{}",
+            active_level, next_level, time, queued_after_current
+        )
+    } else {
+        format!("Lvl {} -> {} {}", active_level, next_level, time)
+    };
+    Some(BuildingVisualStatus {
+        progress,
+        label,
+        color: [1.0, 0.82, 0.22, 1.0],
+    })
 }
 
 fn render_buildings(
@@ -975,11 +1091,10 @@ fn render_buildings(
         return;
     }
     let lod = BuildingLod::for_zoom(zoom_scaled);
-    let buildings = cached_buildings(ui, snapshot, sim.map_w, lod);
-
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let my_id = sim.my_player_id.unwrap_or(0);
+    let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
 
     for building in buildings {
@@ -1014,6 +1129,27 @@ fn render_buildings(
         } else {
             natural_size
         };
+
+        if let Some(status) = &building.status {
+            let center_px = [center[0] * sf, center[1] * sf];
+            let radius = marker_size * sf * 0.58;
+            text.push_ring(
+                center_px,
+                radius,
+                [0.0, 0.0, 0.0, 0.65],
+                (2.0 * sf).max(1.0),
+            );
+            if status.progress > 0.0 {
+                text.push_arc(
+                    center_px,
+                    radius,
+                    status.progress,
+                    status.color,
+                    (2.5 * sf).max(1.0),
+                );
+            }
+        }
+
         let alpha = if building.under_construction {
             0.5
         } else {
@@ -1063,6 +1199,17 @@ fn render_buildings(
                 [1.0; 4],
                 text_style,
                 (0.5, dev.font_char_spacing.max(0.1), INLINE_EMOJI_SCALE),
+            );
+        }
+
+        if let Some(status) = &building.status {
+            render_building_preview_badge(
+                text,
+                [center[0] * sf, center[1] * sf],
+                &status.label,
+                status.color,
+                dev,
+                sf,
             );
         }
     }
@@ -1150,25 +1297,44 @@ fn render_building_placement_preview(
 
     let marker_size = building_icon_size(zoom_scaled).max(20.0) * sf;
     if let Some(building) = stack_building {
+        let active = building.active_level();
+        let status = building_visual_status(building, active, my_id, sim.config.tick_rate_ms);
         text.push_ring(
             center_px,
             marker_size * 0.58,
-            if has_gold {
+            if let Some(status) = &status {
+                status.color
+            } else if has_gold {
                 [1.0, 0.82, 0.22, 1.0]
             } else {
                 color
             },
             (3.0 * sf).max(1.0),
         );
-        let active = building.active_level();
-        let label = if building.under_construction {
-            "🔨".to_string()
-        } else if building.level > active {
-            format!("{} -> {}", active, building.level)
+        if let Some(status) = status {
+            if status.progress > 0.0 {
+                text.push_arc(
+                    center_px,
+                    marker_size * 0.58,
+                    status.progress,
+                    status.color,
+                    (3.5 * sf).max(1.0),
+                );
+            }
+            render_building_preview_badge(text, center_px, &status.label, status.color, dev, sf);
         } else {
-            format!("{}", active)
-        };
-        render_building_preview_badge(text, center_px, &label, color, dev, sf);
+            let next_level = active.saturating_add(1);
+            let label = format!(
+                "Lvl {} -> {} {}",
+                active,
+                next_level,
+                format_construction_time(
+                    sow_core::building::core::upgrade_duration_ticks(kind, next_level),
+                    sim.config.tick_rate_ms,
+                )
+            );
+            render_building_preview_badge(text, center_px, &label, color, dev, sf);
+        }
     } else {
         let _ = text.push_emoji(
             building_kind_emoji(kind),
@@ -1177,6 +1343,11 @@ fn render_building_placement_preview(
             [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
             crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
         );
+        let label = format!(
+            "🏗️ {}",
+            format_construction_time(kind.construction_duration_ticks(), sim.config.tick_rate_ms)
+        );
+        render_building_preview_badge(text, center_px, &label, color, dev, sf);
     }
 
     if kind == BuildingKind::Bunker {
@@ -1347,12 +1518,21 @@ fn cached_buildings<'a>(
     snapshot: &SimSnapshot,
     map_w: u32,
     lod: BuildingLod,
+    my_id: u16,
+    tick_rate_ms: f32,
 ) -> &'a [RenderedBuilding] {
     let map_w = map_w.max(1);
     let cluster_cell_size_bits = lod.cluster_cell_size.to_bits();
+    let tick_rate_ms_bits = tick_rate_ms.to_bits();
     let cache = &mut ui.building_render_cache;
-    if !cache.matches(snapshot.tick, map_w, cluster_cell_size_bits) {
-        let mut buildings = collect_buildings(snapshot, map_w, lod);
+    if !cache.matches(
+        snapshot.tick,
+        map_w,
+        cluster_cell_size_bits,
+        my_id,
+        tick_rate_ms_bits,
+    ) {
+        let mut buildings = collect_buildings(snapshot, map_w, lod, my_id, tick_rate_ms);
         buildings.sort_unstable_by(|a, b| {
             a.by.partial_cmp(&b.by)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -1362,6 +1542,8 @@ fn cached_buildings<'a>(
         cache.tick = Some(snapshot.tick);
         cache.map_w = map_w;
         cache.cluster_cell_size_bits = cluster_cell_size_bits;
+        cache.player_id = my_id;
+        cache.tick_rate_ms_bits = tick_rate_ms_bits;
         cache.buildings = buildings;
     }
     &cache.buildings
@@ -1371,6 +1553,8 @@ fn collect_buildings(
     snapshot: &SimSnapshot,
     map_w: u32,
     lod: BuildingLod,
+    my_id: u16,
+    tick_rate_ms: f32,
 ) -> Vec<RenderedBuilding> {
     let map_w = map_w.max(1);
     if lod.cluster_cell_size <= 1.0 {
@@ -1380,17 +1564,19 @@ fn collect_buildings(
             .map(|building| {
                 let (bx, by) =
                     crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
+                let active_level = building.active_level();
                 RenderedBuilding {
                     bx,
                     by,
                     kind: building.kind,
-                    level: building.active_level(),
+                    level: active_level,
                     queued_level: building.level,
                     modules: building.modules,
                     under_construction: building.under_construction,
                     count: 1,
                     owner_id: building.owner_id,
                     tile_idx: Some(building.tile_idx),
+                    status: building_visual_status(building, active_level, my_id, tick_rate_ms),
                 }
             })
             .collect();
@@ -1436,6 +1622,7 @@ fn collect_buildings(
             count,
             owner_id: key.owner_id,
             tile_idx: None,
+            status: None,
         })
         .collect()
 }
@@ -1521,14 +1708,101 @@ mod tests {
         cache.map_w = 800;
         cache.cluster_cell_size_bits = lod.cluster_cell_size.to_bits();
 
-        assert!(cache.matches(4, 800, lod.cluster_cell_size.to_bits()));
-        assert!(!cache.matches(5, 800, lod.cluster_cell_size.to_bits()));
-        assert!(!cache.matches(4, 801, lod.cluster_cell_size.to_bits()));
+        cache.player_id = 7;
+        cache.tick_rate_ms_bits = 100.0f32.to_bits();
+
+        assert!(cache.matches(
+            4,
+            800,
+            lod.cluster_cell_size.to_bits(),
+            7,
+            100.0f32.to_bits()
+        ));
+        assert!(!cache.matches(
+            5,
+            800,
+            lod.cluster_cell_size.to_bits(),
+            7,
+            100.0f32.to_bits()
+        ));
+        assert!(!cache.matches(
+            4,
+            801,
+            lod.cluster_cell_size.to_bits(),
+            7,
+            100.0f32.to_bits()
+        ));
         assert!(!cache.matches(
             4,
             800,
-            BuildingLod::for_zoom(2.0).cluster_cell_size.to_bits()
+            BuildingLod::for_zoom(2.0).cluster_cell_size.to_bits(),
+            7,
+            100.0f32.to_bits()
         ));
+    }
+
+    fn building_snapshot(
+        kind: BuildingKind,
+        level: u8,
+        under_construction: bool,
+        ticks_until_complete: u32,
+    ) -> sow_core::protocol::BuildingSnapshot {
+        sow_core::protocol::BuildingSnapshot {
+            id: 1,
+            tile_idx: 0,
+            owner_id: 7,
+            kind,
+            level,
+            under_construction,
+            ticks_until_complete,
+            modules: sow_core::building::CityModules::default(),
+        }
+    }
+
+    #[test]
+    fn building_status_distinguishes_new_construction_from_upgrade() {
+        let new_build = building_snapshot(BuildingKind::City, 1, true, 20);
+        let status = building_visual_status(&new_build, new_build.active_level(), 7, 100.0)
+            .expect("new construction status");
+        assert_eq!(status.label, "🏗️ 2s");
+        assert_eq!(status.color, [0.0, 0.86, 1.0, 1.0]);
+        assert_eq!(status.progress, 0.0);
+
+        let upgrade_ticks = sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 2);
+        let upgrade = building_snapshot(BuildingKind::City, 2, true, upgrade_ticks);
+        let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0)
+            .expect("upgrade status");
+        assert_eq!(status.label, "Lvl 1 -> 2 2.2s");
+        assert_eq!(status.color, [1.0, 0.82, 0.22, 1.0]);
+        assert_eq!(status.progress, 0.0);
+    }
+
+    #[test]
+    fn building_status_reports_progress_and_queued_upgrades() {
+        let duration_two = sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 2);
+        let duration_three =
+            sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 3);
+        let queued = building_snapshot(
+            BuildingKind::City,
+            3,
+            true,
+            duration_two + duration_three - duration_two / 2,
+        );
+        let status = building_visual_status(&queued, queued.active_level(), 7, 100.0)
+            .expect("queued upgrade status");
+        assert!(status.label.ends_with("+1"));
+        assert!((status.progress - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn building_status_uses_configured_tick_rate_and_disappears_when_ready() {
+        let building = building_snapshot(BuildingKind::City, 1, true, 20);
+        let status = building_visual_status(&building, building.active_level(), 7, 250.0)
+            .expect("construction status");
+        assert_eq!(status.label, "🏗️ 5s");
+
+        let ready = building_snapshot(BuildingKind::City, 1, false, 0);
+        assert!(building_visual_status(&ready, ready.active_level(), 7, 100.0).is_none());
     }
 
     #[test]

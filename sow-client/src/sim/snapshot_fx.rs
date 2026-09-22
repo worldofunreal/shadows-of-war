@@ -12,10 +12,10 @@ impl SowApp {
                 .iter()
                 .map(|attack| (attack.id, attack.troops))
                 .collect();
-            let old_buildings: HashMap<u64, (u8, bool)> = existing
+            let old_buildings: HashMap<u64, bool> = existing
                 .buildings
                 .iter()
-                .map(|building| (building.id, (building.level, building.under_construction)))
+                .map(|building| (building.id, building.under_construction))
                 .collect();
             let old_attackers: HashSet<u16> = existing
                 .attacks
@@ -120,14 +120,9 @@ impl SowApp {
                 under_attack_spatial,
             );
 
-            // Detect building level upgrades and completions
+            // Play completion feedback for local structures.
             for b_new in &snap.buildings {
-                if let Some((old_level, old_under_construction)) = old_buildings.get(&b_new.id) {
-                    if b_new.level > *old_level
-                        || (*old_under_construction && !b_new.under_construction)
-                    {
-                        // ponytail: active_upgrades animations removed as they were dead code
-                    }
+                if let Some(old_under_construction) = old_buildings.get(&b_new.id) {
                     // ponytail: only play building completion sound for the local player
                     if *old_under_construction
                         && !b_new.under_construction
