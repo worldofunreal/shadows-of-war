@@ -59,6 +59,9 @@ struct PlayGamesSession {
 pub(crate) struct VerifiedIdentity {
     pub account_id: String,
     pub leader: sow_core::player::Leader,
+    /// World of Unreal account id when the player signed in through wou;
+    /// used to report highlight activity to the wou-id feed.
+    pub wou_account_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -409,6 +412,7 @@ impl IdentityState {
                 .ok_or_else(|| "anonymous verification missing authorized leader".to_string())?;
             return Ok(VerifiedIdentity {
                 account_id: body.account_id,
+                wou_account_id: None,
                 leader,
             });
         }
@@ -435,9 +439,14 @@ impl IdentityState {
             .as_deref()
             .and_then(sow_core::commerce::leader_from_id)
             .ok_or_else(|| "identity verification missing authorized leader".to_string())?;
+        let wou_account_id = match auth.provider.trim() {
+            "wou" | "wou_id" | "world_of_unreal" => identity.account_id.clone(),
+            _ => None,
+        };
         Ok(VerifiedIdentity {
             account_id: body.account_id,
             leader,
+            wou_account_id,
         })
     }
 
@@ -708,6 +717,45 @@ impl IdentityState {
             avatar_url: session.avatar_url.clone(),
         })
     }
+}
+
+/// Report a highlight event (e.g. a ranked victory) to the wou-id social feed.
+/// Same trust channel as identity resolution: Bearer + shared bridge secret.
+pub(crate) async fn record_wou_activity(
+    wou_account_id: &str,
+    activity_type: &str,
+    title: &str,
+    description: &str,
+) -> Result<(), String> {
+    let secret = match std::env::var("WOU_SOW_IDENTITY_SECRET") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return Ok(()), // bridge not configured: recording is best-effort
+    };
+    let (client, wou_url) = wou_client()?;
+    let response = client
+        .post(format!(
+            "{}/api/v1/internal/activity/record",
+            wou_url.trim_end_matches('/')
+        ))
+        .header("Authorization", format!("Bearer {secret}"))
+        .json(&serde_json::json!({
+            "account_id": wou_account_id,
+            "activity_type": activity_type,
+            "title": title,
+            "description": description,
+            "game": "shadows_of_war",
+        }))
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|error| format!("WOU-ID activity record failed: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "WOU-ID activity record returned HTTP {}",
+            response.status()
+        ));
+    }
+    Ok(())
 }
 
 fn wou_client() -> Result<(reqwest::Client, String), String> {

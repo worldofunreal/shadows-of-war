@@ -1281,6 +1281,8 @@ async fn main() {
 
             let mut my_lobby_id: Option<u64> = None;
             let mut my_player_id: Option<u16> = None;
+            let mut my_wou_account_id: Option<String> = None;
+            let mut victory_recorded = false;
 
             loop {
                 tokio::select! {
@@ -1312,6 +1314,8 @@ async fn main() {
                                                             auth.provider,
                                                             identity.account_id
                                                         );
+                                                        my_wou_account_id = identity.wou_account_id.clone();
+                                                        victory_recorded = false;
                                                         (Some(identity.account_id), identity.leader)
                                                     }
                                                     Err(e) => {
@@ -1447,7 +1451,26 @@ async fn main() {
                                                 let _ = direct_tx.try_send(json);
                                             }
                                             sow_core::protocol::ClientMessage::SubmitStatsWithLeader { .. } => {}
-                                            sow_core::protocol::ClientMessage::SubmitMatchReport { .. } => {}
+                                            sow_core::protocol::ClientMessage::SubmitMatchReport { winner_player_id, .. } => {
+                                                if !victory_recorded
+                                                    && winner_player_id.is_some()
+                                                    && winner_player_id == my_player_id
+                                                {
+                                                    victory_recorded = true;
+                                                    if let Some(wou_account_id) = my_wou_account_id.clone() {
+                                                        tokio::spawn(async move {
+                                                            if let Err(error) = identity::record_wou_activity(
+                                                                &wou_account_id,
+                                                                "sow_victory",
+                                                                "Ranked Victory in Shadows of War",
+                                                                "Won a ranked match in Shadows of War.",
+                                                            ).await {
+                                                                log::warn!("[WOU] activity record failed: {}", error);
+                                                            }
+                                                        });
+                                                    }
+                                                }
+                                            }
                                         }
                                         continue;
                                     }
@@ -1476,6 +1499,12 @@ async fn main() {
                                 sow_core::protocol::ServerMessage::Start(start) => {
                                     if let Some(pid) = start.my_player_id {
                                         my_player_id = Some(pid);
+                                    }
+                                }
+                                sow_core::protocol::ServerMessage::LobbyClosed(closed) => {
+                                    if my_lobby_id == Some(closed.lobby_id) {
+                                        my_lobby_id = None;
+                                        my_player_id = None;
                                     }
                                 }
                                 _ => {}
