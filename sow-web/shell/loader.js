@@ -110,7 +110,7 @@
     }
 
     function leaderSlugForState(state) {
-        const selected = String(state && state.selected_leader || '');
+        const selected = String(state && state.loader_leader || '');
         const leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
         const leader = leaders.find((entry) =>
             String(entry && entry.id || '') === selected

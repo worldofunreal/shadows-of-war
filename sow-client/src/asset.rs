@@ -126,11 +126,13 @@ impl SowApp {
                 MapDownloadEvent::Error(e) => {
                     log::error!("Map download aborted: {}", e);
                     self.ui.app.main_menu_state.is_downloading_map = false;
-                    self.ui.app.phase = ClientPhase::MainMenu;
-                    self.ui.app.main_menu_state.is_waiting = false;
-                    self.ui.app.main_menu_state.pending_join_lobby_id = None;
-                    self.ui.app.main_menu_state.joined_lobby_id = None;
                     self.tasks.engine_init_queued_msg = None;
+                    if self.ui.app.phase == crate::ClientPhase::MainMenu {
+                        self.leave_lobby_to_main_menu();
+                    } else {
+                        self.begin_exit_to_main_menu();
+                    }
+                    break;
                 }
             }
         }
@@ -465,7 +467,6 @@ impl SowApp {
                         continue;
                     }
                     self.progress = progress;
-                    self.apply_progress_preferences();
                     self.save_local_progress();
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message = None;

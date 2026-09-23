@@ -18,7 +18,9 @@
         flags: Object.create(null),
         loading: Object.create(null),
         startingEpisode: null,
-        bootEpisode: null
+        bootEpisode: null,
+        generation: 0,
+        lastPhase: null
     };
 
     var allowedTriggers = {
@@ -157,6 +159,30 @@
         if (node) node.remove();
     }
 
+    function resetRuntime() {
+        runtime.generation += 1;
+        runtime.episodeId = null;
+        runtime.definition = null;
+        runtime.roster = null;
+        runtime.active = false;
+        runtime.stepIndex = 0;
+        runtime.baselineTiles = null;
+        runtime.dialogOpen = true;
+        runtime.paused = null;
+        runtime.finalReady = false;
+        runtime.completionSent = false;
+        runtime.enteredSteps = Object.create(null);
+        runtime.completedSteps = Object.create(null);
+        runtime.flags = Object.create(null);
+        runtime.startingEpisode = null;
+        runtime.bootEpisode = null;
+        removeError();
+        if (hudRoot) {
+            var stale = hudRoot.querySelector("[data-tutorial-overlay]");
+            if (stale) stale.remove();
+        }
+    }
+
     function showError(error, episodeId) {
         console.error("[SOW TUTORIAL]", error);
         removeError();
@@ -174,10 +200,12 @@
 
     function startEpisode(episodeId, fromBoot) {
         if (!episodeId || runtime.startingEpisode === episodeId || (runtime.active && runtime.episodeId === episodeId)) return;
+        var generation = runtime.generation;
         runtime.startingEpisode = episodeId;
         runtime.bootEpisode = fromBoot ? episodeId : runtime.bootEpisode;
         removeError();
         loadEpisode(episodeId).then(function (data) {
+            if (generation !== runtime.generation) return;
             runtime.episodeId = episodeId;
             runtime.roster = data.roster;
             runtime.definition = data.definition;
@@ -198,9 +226,10 @@
                 throw new Error("menu bridge unavailable");
             }
         }).catch(function (error) {
+            if (generation !== runtime.generation) return;
             showError(error, episodeId);
         }).then(function () {
-            runtime.startingEpisode = null;
+            if (generation === runtime.generation) runtime.startingEpisode = null;
         });
     }
 
@@ -342,6 +371,10 @@
     };
 
     window.SOW_tutorial_menu_state_update = function (state) {
+        var phase = state && state.phase;
+        var enteringMenu = phase === "MainMenu" && runtime.lastPhase !== "MainMenu";
+        runtime.lastPhase = phase;
+        if (enteringMenu && (!state || !state.boot_campaign)) resetRuntime();
         if (!state || !state.boot_campaign || runtime.bootEpisode === state.boot_campaign) return;
         startEpisode(String(state.boot_campaign), true);
     };
@@ -353,7 +386,9 @@
             return;
         }
         if (runtime.episodeId !== hud.tutorial.episode_id) {
+            var generation = runtime.generation;
             loadEpisode(hud.tutorial.episode_id).then(function (data) {
+                if (generation !== runtime.generation) return;
                 runtime.episodeId = hud.tutorial.episode_id;
                 runtime.roster = data.roster;
                 runtime.definition = data.definition;
@@ -367,6 +402,7 @@
                 runtime.dialogOpen = true;
                 render(hud);
             }).catch(function (error) {
+                if (generation !== runtime.generation) return;
                 showError(error, hud.tutorial.episode_id);
             });
             return;

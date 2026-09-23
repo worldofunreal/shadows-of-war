@@ -84,6 +84,77 @@ impl DenseBitSet {
         })
     }
 
+    /// Collect at most `limit` set indices, starting at `start_idx` and
+    /// wrapping once through the bitset. The result stays deterministic while
+    /// avoiding a full materialization when callers only need a small sample.
+    pub fn sample_ones(&self, start_idx: u32, limit: usize, out: &mut Vec<u32>) {
+        out.clear();
+        if limit == 0 || self.blocks.is_empty() {
+            return;
+        }
+
+        let block_count = self.blocks.len();
+        let start_block = (start_idx as usize / 64) % block_count;
+        let start_bit = start_idx as usize % 64;
+
+        for offset in 0..block_count {
+            let block_idx = (start_block + offset) % block_count;
+            let mut bits = self.blocks[block_idx];
+            if offset == 0 && start_bit > 0 {
+                bits &= u64::MAX << start_bit;
+            }
+            while bits != 0 {
+                let bit = bits.trailing_zeros() as usize;
+                out.push((block_idx * 64 + bit) as u32);
+                if out.len() == limit {
+                    return;
+                }
+                bits &= bits - 1;
+            }
+        }
+
+        if start_bit > 0 && out.len() < limit {
+            let mut bits = self.blocks[start_block] & ((1u64 << start_bit) - 1);
+            while bits != 0 {
+                let bit = bits.trailing_zeros() as usize;
+                out.push((start_block * 64 + bit) as u32);
+                if out.len() == limit {
+                    return;
+                }
+                bits &= bits - 1;
+            }
+        }
+    }
+
+    /// Return the first set index at or after `start_idx`, wrapping once.
+    pub fn first_one_from(&self, start_idx: u32) -> Option<u32> {
+        if self.blocks.is_empty() {
+            return None;
+        }
+
+        let block_count = self.blocks.len();
+        let start_block = (start_idx as usize / 64) % block_count;
+        let start_bit = start_idx as usize % 64;
+        for offset in 0..block_count {
+            let block_idx = (start_block + offset) % block_count;
+            let mut bits = self.blocks[block_idx];
+            if offset == 0 && start_bit > 0 {
+                bits &= u64::MAX << start_bit;
+            }
+            if bits != 0 {
+                return Some((block_idx * 64 + bits.trailing_zeros() as usize) as u32);
+            }
+        }
+
+        if start_bit > 0 {
+            let bits = self.blocks[start_block] & ((1u64 << start_bit) - 1);
+            if bits != 0 {
+                return Some((start_block * 64 + bits.trailing_zeros() as usize) as u32);
+            }
+        }
+        None
+    }
+
     /// Counts total set bits.
     pub fn count_ones(&self) -> usize {
         self.blocks.iter().map(|b| b.count_ones() as usize).sum()
@@ -92,6 +163,39 @@ impl DenseBitSet {
     /// Returns true if no bits are set.
     pub fn is_empty(&self) -> bool {
         self.blocks.iter().all(|&b| b == 0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DenseBitSet;
+
+    #[test]
+    fn bounded_sampling_wraps_without_exceeding_limit() {
+        let mut bits = DenseBitSet::new();
+        bits.insert(1);
+        bits.insert(65);
+        bits.insert(130);
+
+        let mut out = Vec::new();
+        bits.sample_ones(65, 2, &mut out);
+        assert_eq!(out, [65, 130]);
+
+        bits.sample_ones(130, 3, &mut out);
+        assert_eq!(out, [130, 1, 65]);
+
+        bits.sample_ones(0, 1, &mut out);
+        assert_eq!(out, [1]);
+    }
+
+    #[test]
+    fn first_one_from_wraps_and_empty_is_none() {
+        let mut bits = DenseBitSet::new();
+        bits.insert(9);
+        bits.insert(70);
+        assert_eq!(bits.first_one_from(70), Some(70));
+        assert_eq!(bits.first_one_from(71), Some(9));
+        assert_eq!(DenseBitSet::new().first_one_from(0), None);
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::ClientPhase;
 use crate::app::SowApp;
+use crate::net::lobby::clear_lobby_snapshot;
 use crate::spawn_sow_client_connect;
 use web_time::{Duration, Instant};
 
@@ -198,14 +199,20 @@ impl SowApp {
             mut ws_disconnected,
             switch_to_relay,
             exit_to_menu_after_net,
+            lobby_exit_to_menu,
             pending_rematch,
         } = self.process_ws_messages();
 
         if let Some(rematch_id) = pending_rematch {
             crate::store_portals::gameplay_stop();
             self.reset_game_session();
+            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
             self.net.pending_lobby_rejoin = true;
+            self.ui.app.main_menu_state.joined_lobby_id = None;
             self.ui.app.main_menu_state.pending_join_lobby_id = Some(rematch_id);
+            self.ui.app.main_menu_state.in_private_match = false;
+            self.ui.app.main_menu_state.is_lobby_host = false;
+            self.ui.app.main_menu_state.my_player_id = None;
             self.ui.app.phase = ClientPhase::MainMenu;
             self.ui.app.main_menu_state.is_waiting = true;
 
@@ -215,6 +222,11 @@ impl SowApp {
             self.net.ws_url = self.net.orchestrator_url.clone();
             self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
             self.net.ws_connect_not_before = now;
+            self.net.relay_handoff_done = false;
+        }
+
+        if lobby_exit_to_menu {
+            self.finish_lobby_exit_to_main_menu();
         }
 
         if exit_to_menu_after_net {

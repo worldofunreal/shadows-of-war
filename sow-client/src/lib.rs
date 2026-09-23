@@ -15,7 +15,10 @@ pub enum UiAction {
     ConnectToServer(String),
     RetryConnection,
     JoinLobby(u64),
+    /// Queue-only exit; keep the live orchestrator connection.
     LeaveLobby,
+    /// Active-match exit; tear down the current game connection.
+    ReturnToMenu,
     HostPrivateLobby,
     StartSinglePlayer(Box<sow_core::game_config::GameConfig>),
     SetAttackRatio(f32),

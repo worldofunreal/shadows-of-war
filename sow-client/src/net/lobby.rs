@@ -1,8 +1,8 @@
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
 use crate::ui::main_menu::MainMenuState;
-use std::collections::HashSet;
 use sow_core::protocol::{LobbyInfo, LobbyKind, ServerSyncStateMessage};
+use std::collections::HashSet;
 
 pub(crate) fn clear_lobby_snapshot(state: &mut MainMenuState) {
     state.lobbies.clear();
@@ -92,9 +92,7 @@ pub(crate) fn apply_lobbies_broadcast(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        apply_lobby_sync_state, apply_lobbies_broadcast, clear_lobby_snapshot,
-    };
+    use super::{apply_lobbies_broadcast, apply_lobby_sync_state, clear_lobby_snapshot};
     use crate::ui::main_menu::MainMenuState;
     use sow_core::protocol::{
         LobbyInfo, LobbyKind, ServerLobbiesBroadcastMessage, ServerSyncStateMessage,
@@ -130,12 +128,18 @@ mod tests {
         state.joined_lobby_id = Some(1);
         state.lobbies = vec![lobby(1, 4.0)];
         apply_lobbies_broadcast(&mut state, &broadcast(vec![lobby(2, 0.0)]));
-        assert_eq!(state.lobbies.iter().map(|l| l.id).collect::<Vec<_>>(), vec![2, 1]);
+        assert_eq!(
+            state.lobbies.iter().map(|l| l.id).collect::<Vec<_>>(),
+            vec![2, 1]
+        );
 
         state.is_waiting = false;
         state.joined_lobby_id = None;
         apply_lobbies_broadcast(&mut state, &broadcast(vec![lobby(3, 0.0)]));
-        assert_eq!(state.lobbies.iter().map(|l| l.id).collect::<Vec<_>>(), vec![3]);
+        assert_eq!(
+            state.lobbies.iter().map(|l| l.id).collect::<Vec<_>>(),
+            vec![3]
+        );
     }
 
     #[test]
@@ -163,10 +167,7 @@ mod tests {
     #[test]
     fn broadcast_deduplicates_lobby_ids() {
         let mut state = MainMenuState::default();
-        apply_lobbies_broadcast(
-            &mut state,
-            &broadcast(vec![lobby(1, 4.0), lobby(1, 3.0)]),
-        );
+        apply_lobbies_broadcast(&mut state, &broadcast(vec![lobby(1, 4.0), lobby(1, 3.0)]));
         assert_eq!(state.lobbies.len(), 1);
         assert_eq!(state.lobbies[0].timer_secs, 4.0);
     }

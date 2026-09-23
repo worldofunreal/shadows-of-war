@@ -96,6 +96,13 @@ The browser shell owns menus, HUD, panels, tutorial, and input. Rust keeps the
 simulation, networking, and Blade GPU world renderer; there is no native UI or
 native launcher to maintain.
 
+### Lobby state invariant
+
+- `MainMenuState.lobbies` is the current unique-by-ID lobby snapshot; local updates use the shared lobby helpers.
+- A real lobby exit uses `begin_exit_to_main_menu()`, which clears the snapshot before clearing membership IDs; do not clear only IDs or keep the old socket/list alive.
+- If that exit drops the socket, it must wake the event loop so the orchestrator reconnect cannot be stranded in an idle menu.
+- `apply_lobbies_broadcast` preserves the joined lobby only while `is_waiting` is true. Keep that guard because countdown/loading needs the joined snapshot, while a real exit must not carry it into the next screen.
+
 ## Platform-specific workflows
 
 - Desktop uses the Tauri shell around the existing JavaScript/WASM client;

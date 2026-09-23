@@ -7,6 +7,21 @@ use wyrand::WyRand;
 
 use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
 
+#[inline]
+pub(super) fn nation_target_allowed(
+    target_id: u16,
+    target_is_human: bool,
+    has_neutral: bool,
+    has_tribe_target: bool,
+    defender_target: Option<u16>,
+) -> bool {
+    if let Some(defender_id) = defender_target {
+        target_id == defender_id
+    } else {
+        !target_is_human || (!has_neutral && !has_tribe_target)
+    }
+}
+
 impl SowEngine {
     pub(super) fn nation_run_combat_for_slot(
         &mut self,
@@ -139,19 +154,31 @@ impl SowEngine {
                 let can_fleet = is_mfo || slot.tier == AiTier::Ghost;
                 let has_port =
                     crate::building::cost::player_has_completed_port(&self.buildings, bot_id);
-                let mut revenge_choice = None;
-                if is_mfo {
-                    let mut max_attacker_troops = -1.0;
-                    for att in &self.attacks {
+                let has_tribe_target = is_mfo
+                    && targets.iter().any(|&target_id| {
+                        self.state
+                            .player(target_id)
+                            .is_some_and(|p| p.player_type == crate::player::PlayerType::Bot)
+                    });
+
+                let mut defender_target = None;
+                if bot_iq >= 100 {
+                    let mut largest_attack = 0.0;
+                    let inbound_attacks = self
+                        .ai_attack_index
+                        .get(bot_id as usize)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]);
+                    for &attack_index in inbound_attacks {
+                        let Some(att) = self.attacks.get(attack_index) else {
+                            continue;
+                        };
                         if att.target_owner == bot_id
                             && targets.contains(&att.owner_id)
-                            && let Some(p_att) = self.state.player(att.owner_id)
-                            && let Some(p_me) = self.state.player(bot_id)
-                            && p_me.troops > p_att.troops
-                            && p_att.troops > max_attacker_troops
+                            && att.troops > largest_attack
                         {
-                            max_attacker_troops = p_att.troops;
-                            revenge_choice = Some(att.owner_id);
+                            largest_attack = att.troops;
+                            defender_target = Some(att.owner_id);
                         }
                     }
                 }
@@ -182,7 +209,15 @@ impl SowEngine {
                                 p_me.alliances.contains(&p.id)
                                     || (p_me.team.is_some() && p_me.team == p.team)
                             };
-                            if !is_friendly && !p.border_tiles.is_empty() {
+                            let target_allowed = !is_mfo
+                                || nation_target_allowed(
+                                    p.id,
+                                    p.is_human(),
+                                    has_neutral,
+                                    has_tribe_target,
+                                    defender_target,
+                                );
+                            if !is_friendly && target_allowed && !p.border_tiles.is_empty() {
                                 if p.troops < min_overall {
                                     min_overall = p.troops;
                                     best_overall_p_id = Some(p.id);
@@ -214,26 +249,23 @@ impl SowEngine {
                         let mut target_tile_opt = None;
                         {
                             let target_p = self.state.player(target_p_id).unwrap();
-                            let border_len = target_p.border_tiles.count_ones();
-                            if border_len > 0 {
-                                let pick_idx = (self.state.tick as usize) % border_len;
-                                if let Some(t_tile) = target_p.border_tiles.ones().nth(pick_idx) {
-                                    let border_tiles =
-                                        &self.state.player(bot_id).unwrap().border_tiles;
-                                    if crate::warp_fleet::resolve_fleet_route(
-                                        &self.state.map,
-                                        &self.water,
-                                        &mut self.path_scratch,
-                                        bot_id,
-                                        (target_p_id, t_tile),
-                                        border_tiles,
-                                        Some(&target_p.border_tiles),
-                                    )
-                                    .is_ok()
-                                    {
-                                        route_resolved = true;
-                                        target_tile_opt = Some(t_tile);
-                                    }
+                            let start = self.state.tick.wrapping_add(bot_id as u64) as u32;
+                            if let Some(t_tile) = target_p.border_tiles.first_one_from(start) {
+                                let border_tiles = &self.state.player(bot_id).unwrap().border_tiles;
+                                self.bot_work.naval_routes_calculated += 1;
+                                if crate::warp_fleet::resolve_fleet_route(
+                                    &self.state.map,
+                                    &self.water,
+                                    &mut self.path_scratch,
+                                    bot_id,
+                                    (target_p_id, t_tile),
+                                    border_tiles,
+                                    Some(&target_p.border_tiles),
+                                )
+                                .is_ok()
+                                {
+                                    route_resolved = true;
+                                    target_tile_opt = Some(t_tile);
                                 }
                             }
                         }
@@ -261,48 +293,48 @@ impl SowEngine {
                     return;
                 }
 
-                let mut defender_target = None;
-                if bot_iq >= 100 {
-                    let mut largest_attack = 0.0;
-                    for att in &self.attacks {
-                        // targets already excludes allies and teammates
-                        if att.target_owner == bot_id
-                            && targets.contains(&att.owner_id)
-                            && att.troops > largest_attack
-                        {
-                            largest_attack = att.troops;
-                            defender_target = Some(att.owner_id);
-                        }
-                    }
-                }
-
                 // Target precedence:
                 //   1. Defend the biggest inbound attack.
-                //   2. Nations: revenge / weakest bordering player.
-                //   3. Attack-armed tiers with a player on their border keep
-                //      pressing it — leftover neutral pockets must never stall
-                //      a war, but they must also never block expansion when no
-                //      player is reachable (that regression froze whole lobbies).
-                //   4. Everyone: expand into neutral land.
+                //   2. Nations: eat tribes or expand into wilderness.
+                //      Tribes remain valid food even while free land exists.
+                //   3. Nations: only use Human targets after the food chain is
+                //      exhausted; other AI players remain valid fallback.
+                //   4. Other tiers keep their existing player/neutral behavior.
                 let (target_owner, is_neutral) = if let Some(attacker_id) = defender_target {
                     (attacker_id, false)
-                } else if is_mfo && !targets.is_empty() {
-                    let chosen_target = if let Some(att_id) = revenge_choice {
-                        att_id
-                    } else {
-                        let mut best_target = targets[0];
-                        let mut min_troops = f64::MAX;
-                        for &t_id in &targets {
-                            if let Some(p_t) = self.state.player(t_id)
-                                && p_t.troops < min_troops
-                            {
-                                min_troops = p_t.troops;
-                                best_target = t_id;
-                            }
+                } else if is_mfo && !targets.is_empty() && (!has_neutral || has_tribe_target) {
+                    let mut chosen_target = None;
+                    let mut min_troops = f64::MAX;
+                    for &t_id in &targets {
+                        let Some(p_t) = self.state.player(t_id) else {
+                            continue;
+                        };
+                        if has_tribe_target && p_t.player_type != crate::player::PlayerType::Bot {
+                            continue;
                         }
-                        best_target
-                    };
-                    (chosen_target, false)
+                        if !nation_target_allowed(
+                            t_id,
+                            p_t.is_human(),
+                            has_neutral,
+                            has_tribe_target,
+                            defender_target,
+                        ) {
+                            continue;
+                        }
+                        if p_t.troops < min_troops {
+                            min_troops = p_t.troops;
+                            chosen_target = Some(t_id);
+                        }
+                    }
+                    if let Some(chosen_target) = chosen_target {
+                        (chosen_target, false)
+                    } else if has_neutral {
+                        (0, true)
+                    } else {
+                        return;
+                    }
+                } else if is_mfo && has_neutral {
+                    (0, true)
                 } else if slot.profile.attacks_players
                     && !targets.is_empty()
                     && troops >= max_troops * trigger_ratio
@@ -361,7 +393,14 @@ impl SowEngine {
                     (0, true)
                 } else if targets.is_empty() {
                     if slot.tier == AiTier::Nation {
-                        self.maybe_launch_nuke(bot_id, decisions, bot_iq, &targets);
+                        self.maybe_launch_nuke(
+                            bot_id,
+                            decisions,
+                            bot_iq,
+                            &targets,
+                            has_neutral,
+                            defender_target,
+                        );
                     }
                     return;
                 } else {
@@ -508,15 +547,22 @@ impl SowEngine {
                     }
                 }
                 if slot.tier == AiTier::Nation {
-                    self.maybe_launch_nuke(bot_id, decisions, bot_iq, &targets);
+                    self.maybe_launch_nuke(
+                        bot_id,
+                        decisions,
+                        bot_iq,
+                        &targets,
+                        has_neutral,
+                        defender_target,
+                    );
                 }
             }
         }
     }
 
-    /// OpenFront `sendBoatAttackToNearbyTerraNullius` parity: probe random
-    /// neutral land tiles and sail an expansion wave to the first reachable
-    /// one. No port, no player target, no iq cost — pure growth.
+    /// OpenFront `sendBoatAttackToNearbyTerraNullius` parity: probe one
+    /// deterministic neutral land tile and sail one expansion wave. No port,
+    /// no player target, no iq cost — pure growth.
     pub(super) fn try_expansion_boat(
         &mut self,
         bot_id: u16,
@@ -539,7 +585,6 @@ impl SowEngine {
         if std::env::var("SOW_AI_DEBUG").is_ok() {
             eprintln!("TNBOAT enter id={bot_id} troops={troops:.0}");
         }
-        let border = p0.border_tiles.clone();
         let mut rng = WyRand::new(
             self.state
                 .seed
@@ -547,57 +592,47 @@ impl SowEngine {
                 .wrapping_mul(0x9E3779B97F4A7C15)
                 .wrapping_add(self.state.tick),
         );
-        for sample in 0..8 {
-            let tx = rng.next_int(0, width as i32).max(0) as u32;
-            let ty = rng.next_int(0, height as i32).max(0) as u32;
-            let owner = self.state.map.owner_id(tx, ty);
-            let is_land = self.state.map.terrain[self.state.map.ref_id(tx, ty)].is_land();
-            if std::env::var("SOW_AI_DEBUG").is_ok() {
-                eprintln!(
-                    "SMP id={bot_id} tick={} s={sample} t=({tx},{ty}) owner={owner} land={is_land}",
-                    self.state.tick
-                );
-            }
-            if owner != 0 {
-                continue;
-            }
-            if !is_land {
-                continue;
-            }
-            if std::env::var("SOW_AI_DEBUG").is_ok() {
-                eprintln!("TNBOAT sample hit t={}", self.state.tick);
-            }
-            let route = resolve_fleet_route(
-                &self.state.map,
-                &self.water,
-                &mut self.path_scratch,
-                bot_id,
-                (0, ty * width + tx),
-                &border,
-                None,
+        let tx = rng.next_int(0, width as i32).max(0) as u32;
+        let ty = rng.next_int(0, height as i32).max(0) as u32;
+        let owner = self.state.map.owner_id(tx, ty);
+        let is_land = self.state.map.terrain[self.state.map.ref_id(tx, ty)].is_land();
+        if std::env::var("SOW_AI_DEBUG").is_ok() {
+            eprintln!(
+                "SMP id={bot_id} tick={} t=({tx},{ty}) owner={owner} land={is_land}",
+                self.state.tick
             );
-            if std::env::var("SOW_AI_DEBUG").is_ok() {
-                eprintln!(
-                    "ROUTE t={} target=({tx},{ty}) ok={} err={:?}",
-                    self.state.tick,
-                    route.is_ok(),
-                    route.as_ref().err()
-                );
-            }
-            if route.is_ok() {
-                if let Some(p) = self.state.player_mut(bot_id) {
-                    p.troops -= send;
-                }
-                decisions.push(BotDecision {
-                    bot_id,
-                    kind: BotDecisionKind::Attack,
-                    intent: GameplayIntent::LaunchFleet {
-                        target_tile: ty * width + tx,
-                        troops: Some(send),
-                    },
-                });
-                return true;
-            }
+        }
+        if owner != 0 || !is_land {
+            return false;
+        }
+        self.bot_work.naval_routes_calculated += 1;
+        let route = resolve_fleet_route(
+            &self.state.map,
+            &self.water,
+            &mut self.path_scratch,
+            bot_id,
+            (0, ty * width + tx),
+            &p0.border_tiles,
+            None,
+        );
+        if std::env::var("SOW_AI_DEBUG").is_ok() {
+            eprintln!(
+                "ROUTE t={} target=({tx},{ty}) ok={} err={:?}",
+                self.state.tick,
+                route.is_ok(),
+                route.as_ref().err()
+            );
+        }
+        if route.is_ok() {
+            decisions.push(BotDecision {
+                bot_id,
+                kind: BotDecisionKind::Attack,
+                intent: GameplayIntent::LaunchFleet {
+                    target_tile: ty * width + tx,
+                    troops: Some(send),
+                },
+            });
+            return true;
         }
         false
     }
@@ -608,6 +643,8 @@ impl SowEngine {
         decisions: &mut Vec<BotDecision>,
         bot_iq: u32,
         targets: &[u16],
+        has_neutral: bool,
+        defender_target: Option<u16>,
     ) {
         if bot_iq < 100 {
             return;
@@ -666,14 +703,56 @@ impl SowEngine {
             }
         }
 
-        let mut primary_target = targets.first().copied().unwrap_or(0);
-        if targets.contains(&leader) {
-            primary_target = leader;
-        }
+        let has_tribe_target = targets.iter().any(|&target_id| {
+            self.state
+                .player(target_id)
+                .is_some_and(|p| p.player_type == crate::player::PlayerType::Bot)
+        });
+        let target_allowed = |target_id: u16| {
+            self.state.player(target_id).is_some_and(|p| {
+                nation_target_allowed(
+                    target_id,
+                    p.is_human(),
+                    has_neutral,
+                    has_tribe_target,
+                    defender_target,
+                )
+            })
+        };
 
-        if primary_target == 0 || primary_target == bot_id {
+        let primary_target = defender_target
+            .filter(|target_id| targets.contains(target_id))
+            .or_else(|| {
+                if targets.contains(&leader) && target_allowed(leader) {
+                    Some(leader)
+                } else {
+                    targets
+                        .iter()
+                        .copied()
+                        .find(|&target_id| target_allowed(target_id))
+                }
+            });
+        let Some(primary_target) = primary_target else {
             return;
-        }
+        };
+
+        let bot_alliances = self
+            .state
+            .player(bot_id)
+            .map(|p| p.alliances.clone())
+            .unwrap_or_default();
+        let sam_tiles: Vec<u32> = self
+            .buildings
+            .iter()
+            .filter(|b| {
+                b.kind == BuildingKind::City
+                    && b.modules.shield > 0
+                    && !b.under_construction
+                    && b.owner_id != bot_id
+                    && !bot_alliances.contains(&b.owner_id)
+            })
+            .map(|b| b.tile_idx)
+            .collect();
 
         // Find best structure to nuke
         let mut best_score = -1.0;
@@ -703,31 +782,13 @@ impl SowEngine {
             let by = b.tile_idx / self.state.map.width;
 
             // SAM avoidance
-            let mut sam_covered = false;
-            for b2 in &self.buildings {
-                if b2.kind == crate::game::BuildingKind::City
-                    && b2.modules.shield > 0
-                    && !b2.under_construction
-                    && b2.owner_id != bot_id
-                {
-                    let mut is_ally = false;
-                    if let Some(p1) = self.state.player(bot_id)
-                        && p1.alliances.contains(&b2.owner_id)
-                    {
-                        is_ally = true;
-                    }
-                    if !is_ally {
-                        let (sx, sy) = (
-                            b2.tile_idx % self.state.map.width,
-                            b2.tile_idx / self.state.map.width,
-                        );
-                        if (bx as i32 - sx as i32).abs() + (by as i32 - sy as i32).abs() <= 48 {
-                            sam_covered = true;
-                            break;
-                        }
-                    }
-                }
-            }
+            let sam_covered = sam_tiles.iter().any(|&sam_tile| {
+                let (sx, sy) = (
+                    sam_tile % self.state.map.width,
+                    sam_tile / self.state.map.width,
+                );
+                (bx as i32 - sx as i32).abs() + (by as i32 - sy as i32).abs() <= 48
+            });
             if sam_covered {
                 score -= 100000.0;
             }

@@ -76,7 +76,8 @@ impl SowApp {
         self.ui.attack_badge_style_key = None;
         self.ui.attack_badge_cache_tick = None;
         self.ui.attack_badge_active_ids.clear();
-        self.ui.nameplate_order_tick = None;
+        self.ui.nameplate_sample_tick = None;
+        self.ui.nameplate_sample_at = None;
         self.ui.nameplate_order_my_id = None;
         self.ui.nameplate_order.clear();
         self.ui.nameplate_visuals.clear();

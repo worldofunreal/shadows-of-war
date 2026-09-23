@@ -1,14 +1,6 @@
 use sow_core::protocol::LobbyInfo;
 use std::collections::BTreeSet;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum GameModeFilter {
-    #[default]
-    All,
-    Ffa,
-    Teams,
-    HumansVsNations,
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LobbyNotice {
     HostLeft,
@@ -68,8 +60,6 @@ pub struct MainMenuState {
     pub wait_timer_secs: f32,
     pub server_address: String,
     pub lobbies: Vec<LobbyInfo>,
-    pub last_matchmaking_lobby: Option<LobbyInfo>,
-    pub matchmaking_countdown_anchor: Option<(u64, f32, f64)>,
     pub player_name: String,
     pub host_private_pending: bool,
     pub in_private_match: bool,
@@ -78,7 +68,6 @@ pub struct MainMenuState {
     pub custom_game_is_sp: bool,
     pub custom_game_config: Box<sow_core::game_config::GameConfig>,
     pub custom_game_password: String,
-    pub join_mode_filter: GameModeFilter,
     pub join_lobby_code: String,
     pub join_password_input: String,
     pub join_password_for_lobby: Option<u64>,
@@ -93,6 +82,7 @@ pub struct MainMenuState {
     pub clan_tag: String,
     pub selected_leader: sow_core::player::Leader,
     pub selected_civilization: sow_core::player::Civilization,
+    leader_selection_dirty: bool,
     pub error_message: Option<crate::ui::UiText>,
     pub my_player_id: Option<u16>,
     pub notice: Option<LobbyNotice>,
@@ -137,8 +127,6 @@ impl Default for MainMenuState {
             server_address: std::env::var("SOW_WS_URL")
                 .unwrap_or_else(|_| "wss://ws.shadowsofwar.io/ws/".into()),
             lobbies: Vec::new(),
-            last_matchmaking_lobby: None,
-            matchmaking_countdown_anchor: None,
             player_name: format!("ANON{:03}", ms % 1000),
             host_private_pending: false,
             in_private_match: false,
@@ -147,10 +135,11 @@ impl Default for MainMenuState {
             custom_game_is_sp: true,
             custom_game_config: Box::new(sow_core::game_config::GameConfig {
                 seed: ms as u64,
+                player_leader: leader,
+                player_civilization: leader.civilization(),
                 ..Default::default()
             }),
             custom_game_password: String::new(),
-            join_mode_filter: GameModeFilter::All,
             join_lobby_code: String::new(),
             join_password_input: String::new(),
             join_password_for_lobby: None,
@@ -165,6 +154,7 @@ impl Default for MainMenuState {
             clan_tag: String::new(),
             selected_leader: leader,
             selected_civilization: leader.civilization(),
+            leader_selection_dirty: false,
             error_message: None,
             my_player_id: None,
             notice: None,
@@ -237,13 +227,26 @@ impl MainMenuState {
             &mut cfg.map_height,
         );
     }
-}
 
-pub fn primary_lobby_for_browser(lobbies: &[LobbyInfo]) -> Option<LobbyInfo> {
-    let mut choices: Vec<&LobbyInfo> = lobbies.iter().filter(|l| l.is_counting_down).collect();
-    if choices.is_empty() {
-        choices = lobbies.iter().collect();
+    pub(crate) fn set_selected_leader(
+        &mut self,
+        leader: sow_core::player::Leader,
+        explicit_user_choice: bool,
+    ) {
+        self.selected_leader = leader;
+        self.selected_civilization = leader.civilization();
+        self.custom_game_config.player_leader = leader;
+        self.custom_game_config.player_civilization = leader.civilization();
+        if explicit_user_choice {
+            self.leader_selection_dirty = true;
+        }
     }
-    choices.sort_by_key(|l| l.id);
-    choices.first().cloned().cloned()
+
+    pub(crate) fn reset_leader_selection_override(&mut self) {
+        self.leader_selection_dirty = false;
+    }
+
+    pub(crate) fn has_explicit_leader_selection(&self) -> bool {
+        self.leader_selection_dirty
+    }
 }

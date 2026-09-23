@@ -20,6 +20,9 @@ impl SowApp {
 
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn finish_boot_route(&mut self) {
+        if self.progress.is_first_game() && self.boot_campaign_pending.is_some() {
+            return;
+        }
         crate::store_portals::load_stop();
         if !self.progress.is_first_game() {
             log::info!("Portal boot: returning player -> main menu");
@@ -44,11 +47,7 @@ impl SowApp {
                     .episode_id()
                     .to_string(),
             );
-            hide_web_loader();
-            self.web_loader_hidden = true;
             crate::store_portals::gameplay_stop();
-            self.ui.app.splash_state.done = true;
-            self.ui.app.phase = ClientPhase::MainMenu;
         }
     }
 
@@ -120,8 +119,10 @@ impl SowApp {
                 sow_core::player::Civilization::Maya,
             ),
         };
-        self.ui.app.main_menu_state.selected_leader = leader;
-        self.ui.app.main_menu_state.selected_civilization = civilization;
+        self.ui
+            .app
+            .main_menu_state
+            .set_selected_leader(leader, false);
         self.ui.tutorial_campaign = campaign;
         crate::campaign::log_plan_for(
             campaign.menu_title(),
@@ -151,6 +152,13 @@ impl SowApp {
     }
 
     pub(crate) fn start_offline_match(&mut self, mut config: GameConfig, tutorial: bool) {
+        let leader = if tutorial {
+            config.player_leader
+        } else {
+            self.ui.app.main_menu_state.selected_leader
+        };
+        config.player_leader = leader;
+        config.player_civilization = leader.civilization();
         self.net.is_offline = true;
         self.sim.offline_tick_timer = 0.0;
         self.sim.offline_last_update = web_time::Instant::now();
@@ -158,8 +166,11 @@ impl SowApp {
         self.sim.tutorial_observation.reset();
         self.net.client = None;
         self.net.current_ping_ms = None;
-        self.ui.app.main_menu_state.selected_leader = config.player_leader;
-        self.begin_enter_game_loader();
+        self.ui
+            .app
+            .main_menu_state
+            .set_selected_leader(leader, false);
+        self.begin_enter_game_loader(leader);
         self.sim.my_player_id = Some(1);
         self.sim.my_lobby_id = Some(0);
         // Ride the tutorial signal in the match config. Engine initialization derives the active

@@ -262,14 +262,18 @@ pub struct AttackBadgeLabel {
 
 #[derive(Clone, Debug)]
 pub struct NameplateVisualState {
-    pub world_center: [f32; 2],
-    pub world_size: f32,
+    pub from_center: [f32; 2],
+    pub to_center: [f32; 2],
+    pub from_size: f32,
+    pub to_size: f32,
     pub source_name: String,
     pub player_type: sow_core::player::PlayerType,
     pub display_name: String,
     pub troops_bits: u64,
     pub troops_text: String,
-    pub troops_updated_at: web_time::Instant,
+    pub name_measure_unit: [f32; 2],
+    pub troops_measure_unit: [f32; 2],
+    pub metrics_style_key: Option<[u32; 2]>,
 }
 
 pub struct UiState {
@@ -307,7 +311,8 @@ pub struct UiState {
     pub attack_badge_style_key: Option<[u32; 2]>,
     pub attack_badge_cache_tick: Option<u64>,
     pub attack_badge_active_ids: std::collections::HashSet<u64>,
-    pub nameplate_order_tick: Option<u64>,
+    pub nameplate_sample_tick: Option<u64>,
+    pub nameplate_sample_at: Option<web_time::Instant>,
     pub nameplate_order_my_id: Option<u16>,
     pub nameplate_order: Vec<usize>,
     pub nameplate_visuals: std::collections::HashMap<u16, NameplateVisualState>,

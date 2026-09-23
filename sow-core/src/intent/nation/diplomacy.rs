@@ -13,25 +13,28 @@ use super::profile::{BotDecision, BotDecisionKind};
 impl SowEngine {
     pub(super) fn nation_scan_neighbors(&mut self, bot_id: u16) -> (Vec<u16>, bool) {
         self.placement_scratch.border_scratch.clear();
+        let map_width = self.state.map.width;
+        let start_idx = self
+            .state
+            .player_mut(bot_id)
+            .map(|p| p.bot_rng.rand() as u32)
+            .unwrap_or(0);
         if let Some(player) = self.state.player(bot_id) {
-            self.placement_scratch
-                .border_scratch
-                .extend(player.border_coords(self.state.map.width));
+            player.border_tiles.sample_ones(
+                start_idx,
+                256,
+                &mut self.placement_scratch.border_scratch,
+            );
         }
 
         let mut neighbor_players = Vec::new();
         let mut has_neutral = false;
+        self.bot_work.border_cells_examined += self.placement_scratch.border_scratch.len() as u64;
 
         if !self.placement_scratch.border_scratch.is_empty() {
-            let border_len = self.placement_scratch.border_scratch.len();
-            let max_scan = border_len.min(256);
-            let start_idx = {
-                let p_mut = self.state.player_mut(bot_id).unwrap();
-                p_mut.bot_rng.next_int(0, border_len as i32) as usize
-            };
-            for si in 0..max_scan {
-                let b_idx = (start_idx + si) % border_len;
-                let (bx, by) = self.placement_scratch.border_scratch[b_idx];
+            for border_tile in self.placement_scratch.border_scratch.iter().copied() {
+                let bx = border_tile % map_width;
+                let by = border_tile / map_width;
                 self.state.map.for_each_neighbor(bx, by, |nx, ny| {
                     let owner = self.state.map.owner_id(nx, ny);
                     if owner != bot_id {
@@ -58,6 +61,7 @@ impl SowEngine {
         costs: (f64, f64),
         neighbor_players: &[u16],
         has_neutral: bool,
+        is_under_attack: bool,
         decisions: &mut Vec<BotDecision>,
     ) {
         let (bot_id, bot_iq) = bot;
@@ -346,14 +350,6 @@ impl SowEngine {
 
         // ── Propose Alliances ──────────────────────────────────────────
         let current_points = self.state.player(bot_id).unwrap().iq_points;
-        let is_under_attack = self.attacks.iter().any(|att| {
-            att.target_owner == bot_id
-                && self
-                    .state
-                    .player(bot_id)
-                    .map(|p| !p.alliances.contains(&att.owner_id))
-                    .unwrap_or(true)
-        });
         let expand_first = has_neutral && !is_under_attack;
 
         if current_points >= alliance_cost && !neighbor_players.is_empty() && !expand_first {

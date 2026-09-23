@@ -590,10 +590,15 @@
         var lobby = joinedLobby();
         if (timer && lobby) timer.textContent = lobby.is_counting_down ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs) }) : SOW_t("lobbies.waiting_for_players");
         updateQueueRoster(lobby);
-        var cardTimers = panel.querySelectorAll("[data-timer-for]");
-        for (var i = 0; i < cardTimers.length; i++) {
-            var cardLobby = findLobby(Number(cardTimers[i].dataset.timerFor));
-            cardTimers[i].textContent = cardLobby ? lobbyTimerText(cardLobby) : "";
+        var cardStatuses = panel.querySelectorAll("[data-lobby-status-for]");
+        for (var i = 0; i < cardStatuses.length; i++) {
+            var status = cardStatuses[i];
+            var cardLobby = findLobby(Number(status.dataset.lobbyStatusFor));
+            status.textContent = cardLobby ? lobbyStatusText(cardLobby) : "";
+            var card = status.closest("[data-lobby-card]");
+            var count = card && card.querySelector("[data-lobby-count]");
+            if (count) count.textContent = cardLobby ? lobbyPlayerCount(cardLobby) : "";
+            if (cardLobby && card) card.setAttribute("aria-label", lobbyLabel(cardLobby));
         }
     }
 

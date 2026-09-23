@@ -86,19 +86,18 @@ impl SowApp {
                     self.ui.app.main_menu_state.join_password_input.clear();
                 }
                 UiAction::LeaveLobby => {
-                    if let Some(c) = self.net.client.as_ref() {
-                        let leave = sow_core::protocol::ClientMessage::Leave {};
-                        if let Ok(json) = bincode::serialize(&leave) {
-                            c.send(json);
-                        }
-                    }
-                    self.ui.app.main_menu_state.in_private_match = false;
-                    self.ui.app.main_menu_state.is_lobby_host = false;
-                    self.ui.app.main_menu_state.my_player_id = None;
                     self.input.camera_x = 0.0;
                     self.input.camera_y = 0.0;
                     self.input.camera_zoom = 2.0;
                     self.input.target_zoom = 2.0;
+                    self.leave_lobby_to_main_menu();
+                }
+                UiAction::ReturnToMenu => {
+                    self.input.camera_x = 0.0;
+                    self.input.camera_y = 0.0;
+                    self.input.camera_zoom = 2.0;
+                    self.input.target_zoom = 2.0;
+                    self.send_leave_message();
                     self.begin_exit_to_main_menu();
                 }
                 UiAction::SetAttackRatio(r) => {
@@ -330,6 +329,11 @@ impl SowApp {
         if let Some(cfg) = config {
             self.ui.app.main_menu_state.custom_game_config = cfg;
         }
+        let selected_leader = self.ui.app.main_menu_state.selected_leader;
+        self.ui
+            .app
+            .main_menu_state
+            .set_selected_leader(selected_leader, false);
         self.ui.app.main_menu_state.custom_game_is_private = is_private;
         self.ui.app.main_menu_state.custom_game_password = password.clone().unwrap_or_default();
         self.ui.app.main_menu_state.pending_join_lobby_id = lobby_id;

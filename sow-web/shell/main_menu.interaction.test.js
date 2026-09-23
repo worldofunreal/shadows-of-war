@@ -11,6 +11,9 @@ const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const windowInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/window.rs"), "utf8");
+const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
+const actionsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
+const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
 const worldOverlays = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
@@ -49,6 +52,39 @@ test("menu CSS keeps shared layout separate from live screen domains", () => {
     assert.doesNotMatch(menuCss["main_menu.layout.css"], /\.sow-menu__queue(?![-\w])/);
     assert.match(lobbiesSource, /modeClass = "sow-menu__mode-chip--"/);
     assert.match(shellSource, /sow-auth__provider-icon--/);
+});
+
+test("lobby cards keep live counts and one DOM card per lobby id", () => {
+    assert.match(lobbiesSource, /function lobbyPlayerCount\(lobby\)/);
+    assert.match(lobbiesSource, /function lobbyStatusText\(lobby\)/);
+    assert.match(lobbiesSource, /data-lobby-status-for/);
+    assert.match(lobbiesSource, /data-lobby-count/);
+    assert.match(lobbiesSource, /var seen = Object\.create\(null\)/);
+    assert.match(lobbiesSource, /card\.remove\(\)/);
+    assert.doesNotMatch(lobbiesSource, /sow-menu__lobby-join/);
+    assert.doesNotMatch(shellSource, /cardTimers|data-timer-for|lobbyTimerText/);
+    assert.match(lobbiesSource, /data-command='join_lobby'/);
+    assert.match(lobbiesSource, /menu\.join/);
+    assert.match(menuCss["main_menu.lobbies.css"], /\.sow-menu__lobby-count/);
+    assert.doesNotMatch(menuCss["main_menu.lobbies.css"], /\.sow-menu__lobby-join/);
+});
+
+test("lobby exit keeps the live connection and match exit owns teardown", () => {
+    assert.match(sessionSource, /fn leave_lobby_to_main_menu\(&mut self\)/);
+    assert.match(sessionSource, /fn finish_lobby_exit_to_main_menu\(&mut self\)/);
+    const lobbyActionStart = actionsSource.indexOf("UiAction::LeaveLobby =>");
+    const matchActionStart = actionsSource.indexOf("UiAction::ReturnToMenu =>");
+    assert.ok(lobbyActionStart >= 0 && matchActionStart > lobbyActionStart);
+    const lobbyAction = actionsSource.slice(lobbyActionStart, matchActionStart);
+    assert.match(lobbyAction, /leave_lobby_to_main_menu\(\)/);
+    assert.doesNotMatch(lobbyAction, /begin_exit_to_main_menu|client = None|reconnect_now/);
+    const matchAction = actionsSource.slice(matchActionStart);
+    assert.match(matchAction, /send_leave_message\(\);[\s\S]*begin_exit_to_main_menu\(\);/);
+    assert.match(webMenu, /WebMenuCommand::ReturnToMenu[\s\S]*UiAction::ReturnToMenu/);
+    assert.doesNotMatch(hud, /send\("leave_lobby"\)/);
+    assert.match(hud, /send\("return_to_menu"\)/);
+    assert.doesNotMatch(sessionSource, /reconnect_now/);
+    assert.doesNotMatch(netUpdateSource, /reconnect_now/);
 });
 
 test("settings panel keeps only useful controls and real account state", () => {

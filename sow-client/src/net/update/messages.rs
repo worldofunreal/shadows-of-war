@@ -1,12 +1,15 @@
 use crate::ClientPhase;
 use crate::MapDownloadEvent;
 use crate::app::SowApp;
-use crate::net::lobby::{apply_lobbies_broadcast, seed_joined_lobby_entry};
+use crate::net::lobby::{
+    apply_lobbies_broadcast, apply_lobby_sync_state, clear_lobby_snapshot, seed_joined_lobby_entry,
+};
 
 pub(super) struct ProcessWsResult {
     pub(super) ws_disconnected: bool,
     pub(super) switch_to_relay: Option<(u16, Option<String>)>,
     pub(super) exit_to_menu_after_net: bool,
+    pub(super) lobby_exit_to_menu: bool,
     pub(super) pending_rematch: Option<u64>,
 }
 
@@ -22,6 +25,7 @@ impl SowApp {
 
         let mut switch_to_relay: Option<(u16, Option<String>)> = None;
         let mut exit_to_menu_after_net = false;
+        let mut lobby_exit_to_menu = false;
         let mut pending_rematch: Option<u64> = None;
 
         // Process network messages
@@ -85,6 +89,15 @@ impl SowApp {
                             start_msg.relay_host
                         );
                         self.sync_portal_room(false);
+                        let loader_leader = start_msg
+                            .my_player_id
+                            .and_then(|player_id| {
+                                start_msg
+                                    .players
+                                    .iter()
+                                    .find(|player| player.id == player_id)
+                            })
+                            .map(|player| player.leader);
                         let not_splash = self.ui.app.phase != crate::ClientPhase::Splash;
                         let wrong_job = self.ui.app.splash_state.job
                             != crate::ui::loading_screen::SplashJob::EnterGame;
@@ -96,11 +109,15 @@ impl SowApp {
                                 .splash_state
                                 .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
                         }
+                        self.ui.app.splash_state.loader_leader = loader_leader;
                         if let Some(player_id) = start_msg.my_player_id
                             && let Some(player) =
                                 start_msg.players.iter().find(|p| p.id == player_id)
                         {
-                            self.ui.app.main_menu_state.selected_leader = player.leader;
+                            self.ui
+                                .app
+                                .main_menu_state
+                                .set_selected_leader(player.leader, false);
                         }
                         self.ui.app.main_menu_state.is_waiting = false;
                         self.ui.app.main_menu_state.pending_join_lobby_id = None;
@@ -151,45 +168,17 @@ impl SowApp {
                                 .or(self.ui.app.main_menu_state.joined_lobby_id)
                                 .or(self.ui.app.main_menu_state.pending_join_lobby_id);
                             if let Some(id) = key {
-                                if let Some(lobby) = self
-                                    .ui
-                                    .app
-                                    .main_menu_state
-                                    .lobbies
-                                    .iter_mut()
-                                    .find(|l| l.id == id)
-                                {
-                                    lobby.timer_secs = sync_msg.time_remaining;
-                                    lobby.is_counting_down = sync_msg.time_remaining > 0.0
-                                        && sync_msg.time_remaining < 30.0;
-                                    lobby.num_players = sync_msg.players.len() as u32;
-                                    lobby.players = sync_msg.players.clone();
+                                let kind = if self.ui.app.main_menu_state.in_private_match {
+                                    sow_core::protocol::LobbyKind::Custom
                                 } else {
-                                    let kind = if self.ui.app.main_menu_state.in_private_match {
-                                        sow_core::protocol::LobbyKind::Custom
-                                    } else {
-                                        sow_core::protocol::LobbyKind::Matchmaking
-                                    };
-                                    self.ui.app.main_menu_state.lobbies.push(
-                                        sow_core::protocol::LobbyInfo {
-                                            id,
-                                            kind,
-                                            num_players: sync_msg.players.len() as u32,
-                                            max_players: 0, // unknown until the server broadcast arrives
-                                            is_counting_down: sync_msg.time_remaining > 0.0
-                                                && sync_msg.time_remaining < 30.0,
-                                            timer_secs: sync_msg.time_remaining,
-                                            map_name: "Loading...".to_string(),
-                                            game_mode: "FFA".to_string(),
-                                            players: sync_msg.players.clone(),
-                                            has_password: false,
-                                            host_name: String::new(),
-                                            bot_count: 0,
-                                            nation_count: 0,
-                                            bot_difficulty: Default::default(),
-                                        },
-                                    );
-                                }
+                                    sow_core::protocol::LobbyKind::Matchmaking
+                                };
+                                apply_lobby_sync_state(
+                                    &mut self.ui.app.main_menu_state,
+                                    id,
+                                    kind,
+                                    &sync_msg,
+                                );
                             }
                         }
                     }
@@ -288,9 +277,16 @@ impl SowApp {
 
                         if let Some(rematch_id) = closed.rematch_lobby_id {
                             log::info!("Rematch lobby {} offered", rematch_id);
+                            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
                             pending_rematch = Some(rematch_id);
                         } else if closed.reason.contains("Requeueing") {
                             log::info!("Auto-requeueing to a new lobby...");
+                            clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
+                            self.ui.app.main_menu_state.joined_lobby_id = None;
+                            self.ui.app.main_menu_state.pending_join_lobby_id = None;
+                            self.ui.app.main_menu_state.in_private_match = false;
+                            self.ui.app.main_menu_state.is_lobby_host = false;
+                            self.ui.app.main_menu_state.my_player_id = None;
                             self.ui.app.phase = ClientPhase::MainMenu;
                             self.ui.app.main_menu_state.is_waiting = true;
                             let join_msg = self.make_join_message(None, false, None, None);
@@ -306,27 +302,25 @@ impl SowApp {
                             closed.reason.as_str(),
                             "HOST_LEFT" | "KICKED" | "BANNED"
                         ) {
-                            // Lobby-stage removal: keep the orchestrator connection so the
-                            // browser stays live, drop straight back to the menu (no exit
-                            // splash — they were only waiting), and surface a brief notice.
-                            crate::store_portals::left_room();
+                            let preserve_lobby_socket = self.ui.app.phase == ClientPhase::MainMenu;
                             let mm = &mut self.ui.app.main_menu_state;
-                            mm.is_waiting = false;
-                            mm.joined_lobby_id = None;
-                            mm.pending_join_lobby_id = None;
-                            mm.in_private_match = false;
-                            mm.is_lobby_host = false;
-                            mm.my_player_id = None;
                             mm.notice = Some(match closed.reason.as_str() {
                                 "KICKED" => crate::LobbyNotice::Kicked,
                                 "BANNED" => crate::LobbyNotice::Banned,
                                 _ => crate::LobbyNotice::HostLeft,
                             });
                             mm.notice_at = None;
-                            self.ui.app.phase = ClientPhase::MainMenu;
+                            if preserve_lobby_socket {
+                                lobby_exit_to_menu = true;
+                            } else {
+                                exit_to_menu_after_net = true;
+                            }
                         } else {
-                            crate::store_portals::left_room();
-                            exit_to_menu_after_net = true;
+                            if self.ui.app.phase == ClientPhase::MainMenu {
+                                lobby_exit_to_menu = true;
+                            } else {
+                                exit_to_menu_after_net = true;
+                            }
                         }
                     }
                     ServerMessage::JoinFailed(fail) => {
@@ -532,6 +526,7 @@ impl SowApp {
             ws_disconnected,
             switch_to_relay,
             exit_to_menu_after_net,
+            lobby_exit_to_menu,
             pending_rematch,
         }
     }

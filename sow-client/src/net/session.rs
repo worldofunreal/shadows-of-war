@@ -1,6 +1,7 @@
 use crate::ClientPhase;
 use crate::app::SowApp;
 use crate::get_build_version;
+use crate::net::lobby::clear_lobby_snapshot;
 use crate::ui::loading_screen::SplashJob;
 
 fn should_complete_boudica_intro_on_exit(
@@ -65,14 +66,21 @@ impl SowApp {
         host_config: Option<Box<sow_core::game_config::GameConfig>>,
         password: Option<String>,
     ) -> Option<sow_core::protocol::ClientMessage> {
+        let selected_leader = self.ui.app.main_menu_state.selected_leader;
+        let selected_civilization = self.ui.app.main_menu_state.selected_civilization;
+        let host_config = host_config.map(|mut config| {
+            config.player_leader = selected_leader;
+            config.player_civilization = selected_civilization;
+            config
+        });
         let payload = sow_core::protocol::JoinPayload {
             name: self.ui.app.main_menu_state.player_name.clone(),
             target_lobby_id,
             host_private,
             build_version: get_build_version(),
             clan_tag: self.ui.app.main_menu_state.clan_tag.clone(),
-            civilization: self.ui.app.main_menu_state.selected_civilization,
-            leader: self.ui.app.main_menu_state.selected_leader,
+            civilization: selected_civilization,
+            leader: selected_leader,
             host_config,
             password,
         };
@@ -132,6 +140,54 @@ impl SowApp {
         }
     }
 
+    pub(crate) fn send_leave_message(&self) {
+        if let Some(client) = self.net.client.as_ref() {
+            let leave = sow_core::protocol::ClientMessage::Leave {};
+            if let Ok(json) = bincode::serialize(&leave) {
+                client.send(json);
+            }
+        }
+    }
+
+    /// Leave a waiting lobby without replacing the live orchestrator connection.
+    pub(crate) fn leave_lobby_to_main_menu(&mut self) {
+        self.send_leave_message();
+        self.finish_lobby_exit_to_main_menu();
+    }
+
+    /// Apply the local half of a lobby exit after the server has already closed it.
+    pub(crate) fn finish_lobby_exit_to_main_menu(&mut self) {
+        crate::store_portals::left_room();
+        self.net.is_offline = false;
+        self.net.ws_url = self.net.orchestrator_url.clone();
+        self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
+        self.net.relay_handoff_done = false;
+        self.clear_lobby_exit_state();
+        self.ui.app.phase = ClientPhase::MainMenu;
+        self.ui.is_spectating = false;
+        self.ui.endgame_cache = None;
+    }
+
+    fn clear_lobby_exit_state(&mut self) {
+        self.ui.app.main_menu_state.is_waiting = false;
+        clear_lobby_snapshot(&mut self.ui.app.main_menu_state);
+        self.ui.app.main_menu_state.go_home();
+        self.ui.app.main_menu_state.pending_join_lobby_id = None;
+        self.ui.app.main_menu_state.joined_lobby_id = None;
+        self.ui.app.main_menu_state.host_private_pending = false;
+        self.ui.app.main_menu_state.in_private_match = false;
+        self.ui.app.main_menu_state.is_lobby_host = false;
+        self.ui.app.main_menu_state.my_player_id = None;
+        self.join_waiting_for_identity = false;
+        self.join_matchmaking = false;
+        self.net.pending_lobby_rejoin = false;
+        self.ui.app.hud_state.sync_state = None;
+        self.sim.my_lobby_id = None;
+        self.sim.my_player_id = None;
+        self.sim.relay_ticket = None;
+        self.sim.relay_reconnect_ticket = None;
+    }
+
     /// Tear down the current match and use ExitGame only for an active game.
     pub(crate) fn begin_exit_to_main_menu(&mut self) {
         let phase = self.ui.app.phase;
@@ -139,6 +195,7 @@ impl SowApp {
             && matches!(&self.ui.app.splash_state.job, SplashJob::EnterGame);
         let use_loader = should_use_exit_game_loader(phase);
         let was_playing = phase == crate::ClientPhase::Playing;
+        let mut exit_leader = self.ui.app.splash_state.loader_leader;
         let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
             self.ui.tutorial_active,
             self.net.is_offline,
@@ -161,7 +218,11 @@ impl SowApp {
                     .as_ref()
                     .and_then(|snapshot| snapshot.players.iter().find(|p| p.id == player_id))
             {
-                self.ui.app.main_menu_state.selected_leader = player.leader;
+                exit_leader = Some(player.leader);
+                self.ui
+                    .app
+                    .main_menu_state
+                    .set_selected_leader(player.leader, false);
             }
             if !self.progress_match_recorded {
                 crate::store_portals::measure("match", "round", "abandon");
@@ -172,6 +233,7 @@ impl SowApp {
         self.net.is_offline = false;
         self.net.ws_url = self.net.orchestrator_url.clone();
         self.ui.app.main_menu_state.server_address = self.net.ws_url.clone();
+        self.net.relay_handoff_done = false;
 
         // Drop relay connection and force orchestrator reconnect
         self.net.client = None;
@@ -187,21 +249,13 @@ impl SowApp {
         }
         while self.net.connect_rx.try_recv().is_ok() {}
         self.net.ws_connect_not_before = web_time::Instant::now();
+        crate::web_menu::wake_event_loop();
 
-        self.ui.app.main_menu_state.is_waiting = false;
-        self.ui.app.main_menu_state.go_home();
-        self.ui.app.main_menu_state.pending_join_lobby_id = None;
-        self.ui.app.main_menu_state.joined_lobby_id = None;
-        self.join_waiting_for_identity = false;
-        self.join_matchmaking = false;
-        self.ui.app.hud_state.sync_state = None;
-        self.sim.my_lobby_id = None;
-        self.sim.my_player_id = None;
-        self.sim.relay_ticket = None;
-        self.sim.relay_reconnect_ticket = None;
+        self.clear_lobby_exit_state();
         if use_loader {
             self.ui.app.phase = ClientPhase::Splash;
             self.ui.app.splash_state.reset_anim(SplashJob::ExitGame);
+            self.ui.app.splash_state.loader_leader = exit_leader;
         } else {
             self.ui.app.phase = ClientPhase::MainMenu;
         }
@@ -218,12 +272,23 @@ impl SowApp {
     }
 
     /// Enter the EnterGame splash (fade-in, progress bar, fade-out to Playing).
-    pub(crate) fn begin_enter_game_loader(&mut self) {
+    pub(crate) fn begin_enter_game_loader(&mut self, leader: sow_core::player::Leader) {
+        let reuse_boot_loader = self.ui.app.phase == ClientPhase::Splash
+            && self.ui.app.splash_state.job == SplashJob::Boot
+            && !self.ui.app.splash_state.done;
         self.ui.app.phase = crate::ClientPhase::Splash;
-        self.ui
-            .app
-            .splash_state
-            .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
+        if reuse_boot_loader {
+            self.ui
+                .app
+                .splash_state
+                .transition_anim(crate::ui::loading_screen::SplashJob::EnterGame, leader);
+        } else {
+            self.ui
+                .app
+                .splash_state
+                .reset_anim(crate::ui::loading_screen::SplashJob::EnterGame);
+            self.ui.app.splash_state.loader_leader = Some(leader);
+        }
     }
 
     /// Whether the map/mover GPU path should paint this frame (hidden during splash loads).

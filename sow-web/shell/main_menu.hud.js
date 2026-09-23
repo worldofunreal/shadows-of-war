@@ -1108,7 +1108,7 @@
             } else if (cmd === "confirm_surrender") {
                 surrenderModalOpen = false;
                 surrenderMessage = null;
-                send("leave_lobby");
+                send("return_to_menu");
                 renderHud();
             } else if (cmd === "toggle_emoji") {
                 emojiPickerOpen = !emojiPickerOpen;
@@ -1135,11 +1135,11 @@
             } else if (cmd === "select_building") {
                 send("select_building", { kind: btn.dataset.kind });
             } else if (cmd === "confirm_endgame_leave") {
-                send("leave_lobby");
+                send("return_to_menu");
             } else if (cmd === "open_store") {
                 if (window.SOW_PORTAL === "poki") return;
                 window.SOW_open_store_after_match = true;
-                send("leave_lobby");
+                send("return_to_menu");
             } else if (cmd === "continue_observing") {
                 send("continue_observing");
             }

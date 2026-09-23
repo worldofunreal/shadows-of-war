@@ -62,13 +62,10 @@ impl SowEngine {
                         let mut target_count =
                             bot_structure_target_count(kind, city_equivalent, bot_iq);
                         if kind == BuildingKind::Bunker && bot_iq >= 110 {
-                            let mut under_attack = false;
-                            for att in &self.attacks {
-                                if att.target_owner == bot_id {
-                                    under_attack = true;
-                                    break;
-                                }
-                            }
+                            let under_attack = self
+                                .ai_attack_index
+                                .get(bot_id as usize)
+                                .is_some_and(|attacks| !attacks.is_empty());
                             if under_attack {
                                 target_count += 3;
                             }
@@ -112,15 +109,12 @@ impl SowEngine {
                         }
                         let (border_candidates, interior_candidates) = {
                             let p = self.state.player_mut(bot_id).unwrap();
-                            let mut border = Vec::new();
-                            let border_tiles_vec: Vec<u32> = p.border_tiles.ones().collect();
-                            let border_len = border_tiles_vec.len();
-                            for _ in 0..PLACEMENT_ATTEMPTS {
-                                if border_len > 0 {
-                                    let pick = p.bot_rng.next_int(0, border_len as i32) as usize;
-                                    border.push(border_tiles_vec[pick]);
-                                }
-                            }
+                            let mut border = Vec::with_capacity(PLACEMENT_ATTEMPTS as usize);
+                            p.border_tiles.sample_ones(
+                                p.bot_rng.rand() as u32,
+                                PLACEMENT_ATTEMPTS as usize,
+                                &mut border,
+                            );
                             let mut interior = Vec::new();
                             if p.tile_count > 500 {
                                 let cx = (p.sum_x / p.tile_count as u64) as i32;

@@ -14,6 +14,36 @@ use profile::{AiSlot, BotDecision, ai_profile_for, ai_tier};
 use structures::{cheapest_gold_cost, iq_build_interval_base};
 
 impl SowEngine {
+    fn rebuild_ai_attack_index(&mut self) {
+        self.bot_work.attack_entries_scanned_last_update = self.attacks.len() as u64;
+        self.ai_attack_index
+            .resize_with(self.state.player_lookup.len(), Vec::new);
+        for attacks in &mut self.ai_attack_index {
+            attacks.clear();
+        }
+        for (attack_index, attack) in self.attacks.iter().enumerate() {
+            if let Some(attacks) = self.ai_attack_index.get_mut(attack.target_owner as usize) {
+                attacks.push(attack_index);
+            }
+        }
+    }
+
+    fn ai_is_under_attack(&self, bot_id: u16) -> bool {
+        let Some(player) = self.state.player(bot_id) else {
+            return false;
+        };
+        self.ai_attack_index
+            .get(bot_id as usize)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+            .iter()
+            .any(|&attack_index| {
+                self.attacks
+                    .get(attack_index)
+                    .is_some_and(|attack| !player.alliances.contains(&attack.owner_id))
+            })
+    }
+
     /// Unified AI pipeline for both Tribes (`Bot`) and Nations.
     ///
     /// - Builds one combined schedule of all AI entities.
@@ -26,6 +56,7 @@ impl SowEngine {
         }
 
         let tick = self.state.tick;
+        self.rebuild_ai_attack_index();
 
         // ── Build unified schedule ──────────────────────────────────────────
         let mut schedule: Vec<AiSlot> = Vec::new();
@@ -47,11 +78,7 @@ impl SowEngine {
             // `ai_tier(player_type, is_ai_controlled)` — the single source of
             // truth. IQ (assigned per-tier at spawn) drives cadence; RNG is
             // WyRand(seed, bot_id, interval) → lockstep-safe across clients.
-            let is_under_attack = p.iq >= 100
-                && self
-                    .attacks
-                    .iter()
-                    .any(|att| att.target_owner == bot_id && !p.alliances.contains(&att.owner_id));
+            let is_under_attack = p.iq >= 100 && self.ai_is_under_attack(bot_id);
 
             let interval_base = if is_under_attack {
                 if p.iq >= 130 {
@@ -119,7 +146,9 @@ impl SowEngine {
             let mut neutral_probe: Vec<(u16, bool)> = Vec::new();
             for p in &self.state.players {
                 let mut has = false;
-                for raw in p.border_tiles.ones() {
+                let mut border_sample = Vec::new();
+                p.border_tiles.sample_ones(0, 256, &mut border_sample);
+                for raw in border_sample {
                     let bx = raw % self.state.map.width;
                     let by = raw / self.state.map.width;
                     self.state.map.for_each_neighbor(bx, by, |nx, ny| {
@@ -184,6 +213,8 @@ impl SowEngine {
                 (10.0, 10.0, 10.0, 999.0)
             };
 
+            let is_under_attack = self.ai_is_under_attack(bot_id);
+
             let (neighbor_players, has_neutral) = self.nation_scan_neighbors(bot_id);
 
             self.nation_run_diplomacy_for_slot(
@@ -191,6 +222,7 @@ impl SowEngine {
                 (alliance_cost, send_cost),
                 &neighbor_players,
                 has_neutral,
+                is_under_attack,
                 &mut decisions,
             );
 

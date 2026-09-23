@@ -2,8 +2,12 @@
 mod bot_iq_alliance_tests {
     use crate::engine::SowEngine;
     use crate::game::{BuildingKind, GamePhase, GameState};
+    use crate::game_config::BotDifficulty;
+    use crate::intent::nation::combat::nation_target_allowed;
+    use crate::intent::nation::profile::{AiSlot, AiTier, ai_profile_for};
     use crate::intent::nation::structures::bot_structure_target_count;
-    use crate::player::Player;
+    use crate::player::{Player, PlayerType};
+    use crate::protocol::GameplayIntent;
     use crate::water_components::WaterComponents;
 
     fn test_engine_two_players(seed: u64) -> SowEngine {
@@ -55,6 +59,117 @@ mod bot_iq_alliance_tests {
         game.map.terrain[idx1] = crate::map::MapTile::from_byte(0b1000_0000);
 
         SowEngine::new(game, WaterComponents::default())
+    }
+
+    fn run_nation_attack(
+        engine: &mut SowEngine,
+        neighbors: &[u16],
+        has_neutral: bool,
+    ) -> Vec<crate::intent::nation::profile::BotDecision> {
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Nation,
+            do_attack: true,
+            do_structures: false,
+            profile: ai_profile_for(AiTier::Nation, BotDifficulty::Vanilla),
+        };
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (1, 135),
+            (5.0, 5.0),
+            neighbors,
+            has_neutral,
+            &mut decisions,
+        );
+        decisions
+    }
+
+    fn attack_targets(decisions: &[crate::intent::nation::profile::BotDecision]) -> Vec<u16> {
+        decisions
+            .iter()
+            .filter_map(|decision| match &decision.intent {
+                GameplayIntent::Attack(attack) => Some(attack.target_owner),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_nation_food_chain_protects_humans_until_fallback() {
+        for is_ghost in [false, true] {
+            let mut engine = test_engine_two_players(42);
+            engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+            let human = engine.state.player_mut(2).unwrap();
+            human.player_type = PlayerType::Human;
+            human.is_ai_controlled = is_ghost;
+
+            let decisions = run_nation_attack(&mut engine, &[2], true);
+            assert!(
+                !attack_targets(&decisions).contains(&2),
+                "Nation must expand wilderness before attacking Human/ghost"
+            );
+        }
+
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        let decisions = run_nation_attack(&mut engine, &[2], false);
+        assert_eq!(attack_targets(&decisions), vec![2]);
+    }
+
+    #[test]
+    fn test_nation_prefers_tribe_before_human() {
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Bot;
+        engine.state.player_mut(2).unwrap().troops = 100.0;
+
+        let mut human = Player::new_human(
+            3,
+            "Human".into(),
+            [0.0, 0.0, 1.0],
+            &crate::game_config::GameConfig::default(),
+        );
+        human.troops = 1.0;
+        human.max_troops = 2.0;
+        engine.state.players.push(human);
+        engine.state.player_lookup.push(Some(2));
+
+        let decisions = run_nation_attack(&mut engine, &[2, 3], false);
+        assert_eq!(attack_targets(&decisions), vec![2]);
+    }
+
+    #[test]
+    fn test_nation_defends_human_attacker_before_wilderness() {
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 1,
+            owner_id: 2,
+            target_owner: 1,
+            troops: 5000.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(42),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+
+        let decisions = run_nation_attack(&mut engine, &[2], true);
+        assert_eq!(attack_targets(&decisions), vec![2]);
+    }
+
+    #[test]
+    fn test_nation_human_gate_is_shared_by_fleet_and_nuke() {
+        assert!(!nation_target_allowed(2, true, true, false, None));
+        assert!(!nation_target_allowed(2, true, false, true, None));
+        assert!(nation_target_allowed(2, true, false, false, None));
+        assert!(nation_target_allowed(2, true, true, true, Some(2)));
+        assert!(!nation_target_allowed(3, true, true, true, Some(2)));
+        assert!(nation_target_allowed(2, false, true, true, None));
     }
 
     #[test]
@@ -325,9 +440,55 @@ mod bot_iq_alliance_tests {
 
         engine.refresh_building_grid();
         let mut decisions = Vec::new();
-        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2]);
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], false, None);
         assert!(!decisions.is_empty());
         assert_eq!(engine.recent_nuke_targets[0].1, 1);
+    }
+
+    #[test]
+    fn test_nation_nuke_respects_human_fallback_and_defense() {
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(1).unwrap().iq_points = 500.0;
+        engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+
+        engine.buildings.push(crate::building::Building {
+            id: 100,
+            owner_id: 1,
+            tile_idx: 0,
+            kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: crate::building::CityModules {
+                arsenal: 1,
+                ..Default::default()
+            },
+        });
+        engine.buildings.push(crate::building::Building {
+            id: 101,
+            owner_id: 2,
+            tile_idx: 1,
+            kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: Default::default(),
+        });
+
+        engine.refresh_building_grid();
+        let mut decisions = Vec::new();
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], true, None);
+        assert!(decisions.is_empty());
+
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], false, None);
+        assert!(!decisions.is_empty());
+
+        decisions.clear();
+        engine.recent_nuke_targets.clear();
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], true, Some(2));
+        assert!(!decisions.is_empty());
     }
 
     #[test]
@@ -758,7 +919,14 @@ mod bot_iq_alliance_tests {
             });
 
         let mut decisions = Vec::new();
-        engine.nation_run_diplomacy_for_slot((1, 160), (5.0, 5.0), &[], false, &mut decisions);
+        engine.nation_run_diplomacy_for_slot(
+            (1, 160),
+            (5.0, 5.0),
+            &[],
+            false,
+            false,
+            &mut decisions,
+        );
 
         assert!(decisions.iter().any(|d| matches!(
             d.intent,

@@ -105,7 +105,7 @@
 }
 
 .sow-menu__lobby-chip,
-.sow-menu__lobby-join {
+.sow-menu__lobby-count {
     padding: 5px 8px;
     border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 4px;
@@ -124,7 +124,7 @@
 }
 
 .sow-menu__lobby-chip--status,
-.sow-menu__lobby-join {
+.sow-menu__lobby-count {
     border-color: rgba(243, 177, 43, 0.62);
     color: var(--sow-gold-bright);
 }

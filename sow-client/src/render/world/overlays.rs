@@ -6,16 +6,13 @@ use sow_core::game::BuildingKind;
 use sow_core::player::{Leader, PlayerType};
 use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use std::collections::{HashMap, HashSet};
-use web_time::Instant;
+use web_time::{Duration, Instant};
 
 const NAMEPLATE_WORLD_SCALE: f32 = 0.05;
 const NAMEPLATE_MAX_FONT: f32 = 32.0;
 const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
-const NAMEPLATE_POSITION_RATE: f32 = 10.0;
-const NAMEPLATE_SIZE_GROW_RATE: f32 = 12.0;
-const NAMEPLATE_SIZE_SHRINK_RATE: f32 = 10.0;
-const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
-const NAMEPLATE_TROOPS_REFRESH_SECS: f32 = 0.5;
+const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
+const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
 const LOD_DOT_RADIUS: f32 = 2.0;
 
 const HUMAN_AVATAR_SCALE: f32 = 4.0;
@@ -102,7 +99,20 @@ fn tutorial_avatar_geometry(
         return None;
     }
     let center = nameplate_screen_center(player, input, sf);
-    let layout = compute_nameplate_layout(text, player, center, scaled_size, dev, sf);
+    let char_spacing = dev.font_char_spacing.max(0.1);
+    let display_name = sow_core::player::display_name(player.id, &player.name, player.player_type);
+    let name_measure_unit = text_measure(text, &display_name, 1.0, char_spacing, sf);
+    let troops_text = crate::utils::format_number(player.troops);
+    let troops_measure_unit = text_measure(text, &troops_text, 1.0, char_spacing, sf);
+    let layout = compute_nameplate_layout(
+        player.player_type,
+        center,
+        scaled_size,
+        name_measure_unit,
+        troops_measure_unit,
+        dev,
+        sf,
+    );
     (layout.avatar_radius > 0.0).then_some(TutorialAvatarGeometry {
         x: layout.avatar_center[0],
         y: layout.avatar_center[1],
@@ -117,7 +127,6 @@ pub(crate) fn render_overlays(
     input: &InputState,
     map_renderer: Option<&crate::render::gpu::MapRenderer>,
     sf: f32,
-    dt: f32,
     time_secs: f32,
     now: Instant,
 ) {
@@ -151,7 +160,6 @@ pub(crate) fn render_overlays(
         &dev,
         sf,
         zoom_scaled,
-        dt,
         now,
     );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
@@ -211,47 +219,21 @@ fn render_nameplates(
     dev: &DevConfig,
     sf: f32,
     zoom_scaled: f32,
-    dt: f32,
     now: Instant,
 ) {
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    if ui.nameplate_order_tick != Some(snapshot.tick) || ui.nameplate_order_my_id != Some(my_id) {
-        let mut order: Vec<usize> = snapshot
-            .players
-            .iter()
-            .enumerate()
-            .filter(|(_, player)| player.alive && player.tile_count > 0)
-            .map(|(index, _)| index)
-            .collect();
-        order.sort_unstable_by(|a, b| {
-            let a = &snapshot.players[*a];
-            let b = &snapshot.players[*b];
-            let precedence = |player: &PlayerSnapshot| match player.player_type {
-                PlayerType::Human if player.id == my_id => 1,
-                PlayerType::Human => 2,
-                _ => 0,
-            };
-            precedence(a)
-                .cmp(&precedence(b))
-                .then_with(|| b.tile_count.cmp(&a.tile_count))
-                .then_with(|| a.id.cmp(&b.id))
-        });
-        let active_ids: HashSet<u16> = order
-            .iter()
-            .map(|index| snapshot.players[*index].id)
-            .collect();
-        ui.nameplate_visuals
-            .retain(|player_id, _| active_ids.contains(player_id));
-        ui.nameplate_order = order;
-        ui.nameplate_order_tick = Some(snapshot.tick);
-        ui.nameplate_order_my_id = Some(my_id);
-    }
+    sample_nameplates(text, snapshot, sim, ui, dev, sf, my_id, now);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let fog_hidden = matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. });
+    let alpha = nameplate_sample_alpha(
+        ui.nameplate_sample_at,
+        now,
+        nameplate_sample_duration(sim),
+    );
 
     for &player_index in &ui.nameplate_order {
         let player = &snapshot.players[player_index];
@@ -261,76 +243,28 @@ fn render_nameplates(
             continue;
         }
 
-        let target_center = [player.centroid_x + 0.5, player.centroid_y + 0.5];
-        let target_screen = world_to_screen_values(
-            target_center[0],
-            target_center[1],
+        let Some(state) = ui.nameplate_visuals.get(&player.id) else {
+            continue;
+        };
+        let center_world = lerp_point(state.from_center, state.to_center, alpha);
+        let world_size = lerp(state.from_size, state.to_size, alpha);
+        let center = world_to_screen_values(
+            center_world[0],
+            center_world[1],
             input.camera_x,
             input.camera_y,
             input.camera_zoom,
             sf,
         );
-        if target_screen[0] < -160.0
-            || target_screen[0] > screen_w + 160.0
-            || target_screen[1] < -160.0
-            || target_screen[1] > screen_h + 160.0
+        if center[0] < -160.0
+            || center[0] > screen_w + 160.0
+            || center[1] < -160.0
+            || center[1] > screen_h + 160.0
         {
             continue;
         }
 
-        let target_size = nameplate_world_size(player.tile_count);
-        let state = ui.nameplate_visuals.entry(player.id).or_insert_with(|| {
-            crate::app::NameplateVisualState {
-                world_center: target_center,
-                world_size: target_size,
-                source_name: player.name.clone(),
-                player_type: player.player_type,
-                display_name: sow_core::player::display_name(
-                    player.id,
-                    &player.name,
-                    player.player_type,
-                ),
-                troops_bits: player.troops.to_bits(),
-                troops_text: crate::utils::format_number(player.troops),
-                troops_updated_at: now,
-            }
-        });
-
-        smooth_nameplate_position(
-            &mut state.world_center,
-            target_center,
-            input.camera_zoom,
-            sf,
-            dt,
-        );
-        smooth_nameplate_size(&mut state.world_size, target_size, dt);
-
-        if state.source_name != player.name || state.player_type != player.player_type {
-            state.source_name = player.name.clone();
-            state.player_type = player.player_type;
-            state.display_name =
-                sow_core::player::display_name(player.id, &player.name, player.player_type);
-        }
-        if now.duration_since(state.troops_updated_at).as_secs_f32()
-            >= NAMEPLATE_TROOPS_REFRESH_SECS
-        {
-            let troops_bits = player.troops.to_bits();
-            if troops_bits != state.troops_bits {
-                state.troops_bits = troops_bits;
-                state.troops_text = crate::utils::format_number(player.troops);
-            }
-            state.troops_updated_at = now;
-        }
-
-        let center = world_to_screen_values(
-            state.world_center[0],
-            state.world_center[1],
-            input.camera_x,
-            input.camera_y,
-            input.camera_zoom,
-            sf,
-        );
-        let scaled_size = nameplate_font_px(state.world_size, zoom_scaled, is_human);
+        let scaled_size = nameplate_font_px(world_size, zoom_scaled, is_human);
         if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
             paint_lod_dot(text, center, player_color(player), sf);
             continue;
@@ -364,6 +298,8 @@ fn render_nameplates(
             scaled_size,
             &state.display_name,
             &state.troops_text,
+            state.name_measure_unit,
+            state.troops_measure_unit,
             is_me,
             is_allied,
             has_request,
@@ -372,6 +308,192 @@ fn render_nameplates(
             sf,
         );
     }
+}
+
+fn sample_nameplates(
+    text: &TextRenderer,
+    snapshot: &SimSnapshot,
+    sim: &SimState,
+    ui: &mut UiState,
+    dev: &DevConfig,
+    sf: f32,
+    my_id: u16,
+    now: Instant,
+) {
+    let my_id_changed = ui.nameplate_order_my_id != Some(my_id);
+    if !nameplate_sample_due(ui.nameplate_sample_tick, snapshot.tick, my_id_changed) {
+        return;
+    }
+    let tick_gap = ui
+        .nameplate_sample_tick
+        .map(|tick| snapshot.tick.saturating_sub(tick))
+        .unwrap_or(NAMEPLATE_SAMPLE_TICKS);
+
+    let force_snap = tick_gap > NAMEPLATE_MAX_CATCHUP_TICKS;
+    let sample_alpha = if force_snap {
+        1.0
+    } else {
+        nameplate_sample_alpha(ui.nameplate_sample_at, now, nameplate_sample_duration(sim))
+    };
+    let style_key = nameplate_metrics_style_key(dev, sf);
+    let mut order: Vec<usize> = snapshot
+        .players
+        .iter()
+        .enumerate()
+        .filter(|(_, player)| player.alive && player.tile_count > 0)
+        .map(|(index, _)| index)
+        .collect();
+    order.sort_unstable_by(|a, b| {
+        let a = &snapshot.players[*a];
+        let b = &snapshot.players[*b];
+        let precedence = |player: &PlayerSnapshot| match player.player_type {
+            PlayerType::Human if player.id == my_id => 1,
+            PlayerType::Human => 2,
+            _ => 0,
+        };
+        precedence(a)
+            .cmp(&precedence(b))
+            .then_with(|| b.tile_count.cmp(&a.tile_count))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    let active_ids: HashSet<u16> = order
+        .iter()
+        .map(|index| snapshot.players[*index].id)
+        .collect();
+    ui.nameplate_visuals
+        .retain(|player_id, _| active_ids.contains(player_id));
+
+    for player in snapshot
+        .players
+        .iter()
+        .filter(|player| player.alive && player.tile_count > 0)
+    {
+        let target_center = [player.centroid_x + 0.5, player.centroid_y + 0.5];
+        let target_size = nameplate_world_size(player.tile_count);
+        if let Some(state) = ui.nameplate_visuals.get_mut(&player.id) {
+            let current_center = lerp_point(state.from_center, state.to_center, sample_alpha);
+            let current_size = lerp(state.from_size, state.to_size, sample_alpha);
+            state.from_center = if force_snap {
+                target_center
+            } else {
+                current_center
+            };
+            state.from_size = if force_snap { target_size } else { current_size };
+            state.to_center = target_center;
+            state.to_size = target_size;
+            refresh_nameplate_text_cache(text, state, player, style_key, dev, sf);
+        } else {
+            let mut state = new_nameplate_visual_state(player, target_center, target_size);
+            refresh_nameplate_text_cache(text, &mut state, player, style_key, dev, sf);
+            ui.nameplate_visuals.insert(player.id, state);
+        }
+    }
+
+    ui.nameplate_order = order;
+    ui.nameplate_sample_tick = Some(snapshot.tick);
+    ui.nameplate_sample_at = Some(now);
+    ui.nameplate_order_my_id = Some(my_id);
+}
+
+fn new_nameplate_visual_state(
+    player: &PlayerSnapshot,
+    center: [f32; 2],
+    size: f32,
+) -> crate::app::NameplateVisualState {
+    crate::app::NameplateVisualState {
+        from_center: center,
+        to_center: center,
+        from_size: size,
+        to_size: size,
+        source_name: String::new(),
+        player_type: player.player_type,
+        display_name: String::new(),
+        troops_bits: u64::MAX,
+        troops_text: String::new(),
+        name_measure_unit: [0.0; 2],
+        troops_measure_unit: [0.0; 2],
+        metrics_style_key: None,
+    }
+}
+
+fn refresh_nameplate_text_cache(
+    text: &TextRenderer,
+    state: &mut crate::app::NameplateVisualState,
+    player: &PlayerSnapshot,
+    style_key: [u32; 2],
+    dev: &DevConfig,
+    sf: f32,
+) {
+    let identity_changed = state.source_name != player.name || state.player_type != player.player_type;
+    if identity_changed {
+        state.source_name = player.name.clone();
+        state.player_type = player.player_type;
+        state.display_name =
+            sow_core::player::display_name(player.id, &player.name, player.player_type);
+    }
+    let troops_bits = player.troops.to_bits();
+    let troops_changed = troops_bits != state.troops_bits;
+    if troops_changed {
+        state.troops_bits = troops_bits;
+        state.troops_text = crate::utils::format_number(player.troops);
+    }
+    if identity_changed || state.metrics_style_key != Some(style_key) {
+        state.name_measure_unit = text_measure(
+            text,
+            &state.display_name,
+            1.0,
+            dev.font_char_spacing.max(0.1),
+            sf,
+        );
+    }
+    if troops_changed || state.metrics_style_key != Some(style_key) {
+        state.troops_measure_unit = text_measure(
+            text,
+            &state.troops_text,
+            1.0,
+            dev.font_char_spacing.max(0.1),
+            sf,
+        );
+    }
+    state.metrics_style_key = Some(style_key);
+}
+
+fn nameplate_metrics_style_key(dev: &DevConfig, sf: f32) -> [u32; 2] {
+    [dev.font_char_spacing.max(0.1).to_bits(), sf.to_bits()]
+}
+
+fn nameplate_sample_duration(sim: &SimState) -> Duration {
+    Duration::from_secs_f32(
+        (sim.config.tick_rate_ms.max(1.0) / 1000.0) * NAMEPLATE_SAMPLE_TICKS as f32,
+    )
+}
+
+#[inline]
+fn nameplate_sample_due(last_tick: Option<u64>, current_tick: u64, my_id_changed: bool) -> bool {
+    my_id_changed
+        || last_tick.is_none_or(|last_tick| {
+            current_tick.saturating_sub(last_tick) >= NAMEPLATE_SAMPLE_TICKS
+        })
+}
+
+fn nameplate_sample_alpha(sample_at: Option<Instant>, now: Instant, duration: Duration) -> f32 {
+    let Some(sample_at) = sample_at else {
+        return 1.0;
+    };
+    let duration_secs = duration.as_secs_f32().max(0.001);
+    let t = (now.duration_since(sample_at).as_secs_f32() / duration_secs).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+#[inline]
+fn lerp(from: f32, to: f32, amount: f32) -> f32 {
+    from + (to - from) * amount
+}
+
+#[inline]
+fn lerp_point(from: [f32; 2], to: [f32; 2], amount: f32) -> [f32; 2] {
+    [lerp(from[0], to[0], amount), lerp(from[1], to[1], amount)]
 }
 
 fn player_at_explored_tile(player: &PlayerSnapshot, sim: &SimState) -> bool {
@@ -395,45 +517,6 @@ fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
     } else {
         world_px
     }
-}
-
-fn smooth_nameplate_position(
-    current: &mut [f32; 2],
-    target: [f32; 2],
-    camera_zoom: f32,
-    sf: f32,
-    dt: f32,
-) {
-    let dx = target[0] - current[0];
-    let dy = target[1] - current[1];
-    let distance = (dx * dx + dy * dy).sqrt();
-    if distance > 50.0 {
-        *current = target;
-        return;
-    }
-    let screen_distance = distance * camera_zoom / sf.max(0.01);
-    if screen_distance > 0.5 && distance > 0.05 {
-        let factor = 1.0 - (-NAMEPLATE_POSITION_RATE * dt.max(0.0)).exp();
-        current[0] += dx * factor;
-        current[1] += dy * factor;
-    } else {
-        *current = target;
-    }
-}
-
-fn smooth_nameplate_size(current: &mut f32, target: f32, dt: f32) {
-    let delta = target - *current;
-    if delta.abs() <= NAMEPLATE_SIZE_DEADZONE {
-        *current = target;
-        return;
-    }
-    let rate = if delta > 0.0 {
-        NAMEPLATE_SIZE_GROW_RATE
-    } else {
-        NAMEPLATE_SIZE_SHRINK_RATE
-    };
-    let factor = 1.0 - (-rate * dt.max(0.0)).exp();
-    *current += delta * factor;
 }
 
 #[derive(Clone, Copy)]
@@ -556,32 +639,25 @@ impl NameplateLayout {
 }
 
 fn compute_nameplate_layout(
-    text: &TextRenderer,
-    player: &PlayerSnapshot,
+    player_type: PlayerType,
     center: [f32; 2],
     scaled_size: f32,
+    name_measure_unit: [f32; 2],
+    troops_measure_unit: [f32; 2],
     dev: &DevConfig,
     sf: f32,
 ) -> NameplateLayout {
-    let metrics = NameplateMetrics::compute(scaled_size, player.player_type, dev.vfx_bot_avatars);
+    let metrics = NameplateMetrics::compute(scaled_size, player_type, dev.vfx_bot_avatars);
     let font_scale = dev.font_size_scale.max(0.1);
-    let char_spacing = dev.font_char_spacing.max(0.1);
     let name_font_size = metrics.render_size * font_scale;
     let troops_font_size = metrics.troops_render_size * font_scale;
-    let troops_measure = text_measure(
-        text,
-        &crate::utils::format_number(player.troops),
-        troops_font_size,
-        char_spacing,
-        sf,
-    );
+    let name_measure = scale_text_measure(name_measure_unit, name_font_size);
+    let troops_measure = scale_text_measure(troops_measure_unit, troops_font_size);
     let troops_icon_size = troops_font_size;
     let troops_size = [
         troops_icon_size + 3.0 + troops_measure[0],
         troops_icon_size.max(troops_measure[1]),
     ];
-    let display_name = sow_core::player::display_name(player.id, &player.name, player.player_type);
-    let name_measure = text_measure(text, &display_name, name_font_size, char_spacing, sf);
     let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
     let badge_padding = outline
         .scaled_for_emoji(metrics.badge_size * sf)
@@ -605,6 +681,8 @@ fn paint_nameplate(
     scaled_size: f32,
     display_name: &str,
     troops: &str,
+    name_measure_unit: [f32; 2],
+    troops_measure_unit: [f32; 2],
     is_me: bool,
     is_allied: bool,
     has_request: bool,
@@ -619,7 +697,15 @@ fn paint_nameplate(
     let troops_font_size = metrics.troops_render_size * font_scale;
     let troops_icon_size = troops_font_size;
     let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let layout = compute_nameplate_layout(text, player, center, scaled_size, dev, sf);
+    let layout = compute_nameplate_layout(
+        player.player_type,
+        center,
+        scaled_size,
+        name_measure_unit,
+        troops_measure_unit,
+        dev,
+        sf,
+    );
     let color = player_color(player);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
 
@@ -789,6 +875,11 @@ fn text_measure(
 ) -> [f32; 2] {
     let measure = text.measure_string(value, font_size * sf, char_spacing, INLINE_EMOJI_SCALE);
     [measure.width / sf, measure.height / sf]
+}
+
+#[inline]
+fn scale_text_measure(unit: [f32; 2], font_size: f32) -> [f32; 2] {
+    [unit[0] * font_size, unit[1] * font_size]
 }
 
 fn draw_avatar(
@@ -1674,23 +1765,31 @@ mod tests {
     }
 
     #[test]
-    fn nameplate_position_smooths_small_updates_and_snaps_teleports() {
-        let mut current = [0.0, 0.0];
-        smooth_nameplate_position(&mut current, [1.0, 0.0], 1.0, 1.0, 0.1);
-        assert!(current[0] > 0.0 && current[0] < 1.0);
-
-        smooth_nameplate_position(&mut current, [100.0, 0.0], 1.0, 1.0, 0.1);
-        assert_eq!(current, [100.0, 0.0]);
+    fn nameplate_sampling_coalesces_four_ticks() {
+        assert!(nameplate_sample_due(None, 0, false));
+        assert!(!nameplate_sample_due(Some(0), 1, false));
+        assert!(!nameplate_sample_due(Some(0), 3, false));
+        assert!(nameplate_sample_due(Some(0), 4, false));
+        assert!(nameplate_sample_due(Some(4), 4, true));
     }
 
     #[test]
-    fn nameplate_size_uses_deadzone_and_rate_limited_motion() {
-        let mut size = 10.0;
-        smooth_nameplate_size(&mut size, 10.1, 0.1);
-        assert_eq!(size, 10.1);
-
-        smooth_nameplate_size(&mut size, 20.0, 0.1);
-        assert!(size > 10.1 && size < 20.0);
+    fn nameplate_interpolation_is_bounded_and_reaches_target() {
+        let duration = Duration::from_millis(400);
+        let start = Instant::now();
+        let halfway = nameplate_sample_alpha(
+            Some(start),
+            start + Duration::from_millis(200),
+            duration,
+        );
+        let complete = nameplate_sample_alpha(
+            Some(start),
+            start + Duration::from_millis(400),
+            duration,
+        );
+        assert!(halfway > 0.0 && halfway < 1.0);
+        assert_eq!(complete, 1.0);
+        assert_eq!(lerp_point([0.0, 4.0], [10.0, 14.0], complete), [10.0, 14.0]);
     }
 
     #[test]

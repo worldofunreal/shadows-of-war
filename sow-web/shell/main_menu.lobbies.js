@@ -11,9 +11,12 @@
         });
     }
 
-    function lobbyTimerText(lobby) {
-        return lobby.is_counting_down ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs || 0) }) :
-            (lobby.max_players ? SOW_t("lobbies.players_capacity", { players: lobby.num_players, max: lobby.max_players }) : SOW_t("lobbies.players_count", { players: lobby.num_players }));
+    function lobbyPlayerCount(lobby) {
+        return Math.max(0, Number(lobby.num_players) || 0) + "/" + Math.max(0, Number(lobby.max_players) || 0);
+    }
+
+    function lobbyStatusText(lobby) {
+        return lobby.is_counting_down ? SOW_t("lobbies.starting_in", { seconds: Math.ceil(lobby.timer_secs || 0) }) : SOW_t("lobbies.waiting_for_players");
     }
 
     function gameModeLabel(mode) {
@@ -47,19 +50,19 @@
     }
 
     function lobbyLabel(lobby) {
-        return gameModeLabel(lobby.game_mode || "FFA") + " " + formatMapName(lobby);
+        return gameModeLabel(lobby.game_mode || "FFA") + " " + formatMapName(lobby) + " " + lobbyPlayerCount(lobby);
     }
 
     function renderLobbyCard(lobby) {
         var lock = lobby.has_password ? "<span class='sow-menu__lobby-lock' aria-label='" + esc(SOW_t("lobbies.password_protected")) + "'>🔒</span>" : "";
-        var label = gameModeLabel(lobby.game_mode) + " " + formatMapName(lobby);
+        var label = lobbyLabel(lobby);
         preloadLobbyThumbnail(lobby).catch(function () {});
         return "" +
             "<article class='sow-menu__lobby' role='button' tabindex='0' aria-label='" + esc(label) + "' data-lobby-card data-command='join_lobby' data-lobby-id='" + lobby.id +
                 "'>" +
                 "<img class='sow-menu__lobby-art' src='" + esc(lobbyThumb(lobby)) + "' alt='' loading='eager' decoding='async'>" +
-                "<div class='sow-menu__lobby-top'><span class='sow-menu__lobby-chip' data-lobby-mode>" + esc(gameModeLabel(lobby.game_mode)) + "</span><span class='sow-menu__lobby-chip sow-menu__lobby-chip--status' data-timer-for='" + lobby.id + "'>" + esc(lobbyTimerText(lobby)) + "</span>" + lock + "</div>" +
-                "<div class='sow-menu__lobby-bottom'><h3 data-lobby-map>" + esc(formatMapName(lobby)) + "</h3><span class='sow-menu__lobby-join'>" + esc(SOW_t("menu.join")) + " ↗</span></div>" +
+                "<div class='sow-menu__lobby-top'><span class='sow-menu__lobby-chip' data-lobby-mode>" + esc(gameModeLabel(lobby.game_mode)) + "</span><span class='sow-menu__lobby-chip sow-menu__lobby-chip--status' data-lobby-status-for='" + lobby.id + "'>" + esc(lobbyStatusText(lobby)) + "</span>" + lock + "</div>" +
+                "<div class='sow-menu__lobby-bottom'><h3 data-lobby-map>" + esc(formatMapName(lobby)) + "</h3><span class='sow-menu__lobby-count' data-lobby-count>" + esc(lobbyPlayerCount(lobby)) + "</span></div>" +
             "</article>";
     }
 
@@ -87,13 +90,15 @@
         var art = card.querySelector(".sow-menu__lobby-art");
         var mode = card.querySelector("[data-lobby-mode]");
         var map = card.querySelector("[data-lobby-map]");
-        var timer = card.querySelector("[data-timer-for]");
+        var status = card.querySelector("[data-lobby-status-for]");
+        var count = card.querySelector("[data-lobby-count]");
         var lock = card.querySelector(".sow-menu__lobby-lock");
         card.dataset.mapName = nextMap;
         card.setAttribute("aria-label", lobbyLabel(lobby));
         if (mode) mode.textContent = gameModeLabel(lobby.game_mode);
         if (map) map.textContent = formatMapName(lobby);
-        if (timer) timer.textContent = lobbyTimerText(lobby);
+        if (status) status.textContent = lobbyStatusText(lobby);
+        if (count) count.textContent = lobbyPlayerCount(lobby);
         if (lobby.has_password && !lock) {
             card.querySelector(".sow-menu__lobby-top").insertAdjacentHTML("beforeend", "<span class='sow-menu__lobby-lock' aria-label='" + esc(SOW_t("lobbies.password_protected")) + "'>🔒</span>");
         } else if (!lobby.has_password && lock) {
@@ -122,7 +127,12 @@
     function syncLobbyList(container, lobbies, emptyMessage) {
         var cards = Object.create(null);
         container.querySelectorAll("[data-lobby-card]").forEach(function (card) {
-            cards[String(card.dataset.lobbyId)] = card;
+            var id = String(card.dataset.lobbyId);
+            if (cards[id]) {
+                card.remove();
+                return;
+            }
+            cards[id] = card;
         });
         if (!lobbies.length) {
             Object.keys(cards).forEach(function (id) { cards[id].remove(); });
@@ -137,12 +147,16 @@
         }
         var empty = container.querySelector(".sow-menu__empty");
         if (empty) empty.remove();
+        var seen = Object.create(null);
         lobbies.forEach(function (lobby) {
-            var card = cards[String(lobby.id)];
+            var id = String(lobby.id);
+            if (seen[id]) return;
+            seen[id] = true;
+            var card = cards[id];
             if (!card) card = makeLobbyCard(lobby);
             updateLobbyCard(card, lobby);
             container.appendChild(card);
-            delete cards[String(lobby.id)];
+            delete cards[id];
         });
         Object.keys(cards).forEach(function (id) { cards[id].remove(); });
     }

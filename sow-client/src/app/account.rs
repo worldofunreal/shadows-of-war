@@ -454,9 +454,14 @@ impl SowApp {
     }
 
     pub(crate) fn apply_progress_preferences(&mut self) {
+        if self.ui.app.main_menu_state.has_explicit_leader_selection() {
+            return;
+        }
         if let Some(leader) = self.progress.preferred_leader {
-            self.ui.app.main_menu_state.selected_leader = leader;
-            self.ui.app.main_menu_state.selected_civilization = leader.civilization();
+            self.ui
+                .app
+                .main_menu_state
+                .set_selected_leader(leader, false);
         }
     }
 
@@ -467,6 +472,8 @@ impl SowApp {
         display_name: String,
         provider: String,
     ) {
+        let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
+        let account_switch = account_changed && self.progress_account_id.is_some();
         let retry_tutorial = provider == "anonymous"
             && self.progress.intro_completed.unwrap_or(false)
             && !cloud.intro_completed.unwrap_or(false);
@@ -476,13 +483,15 @@ impl SowApp {
         } else {
             self.progress.merge_boot_profile(cloud);
         }
-        if self
-            .progress_account_id
-            .as_deref()
-            .is_some_and(|current| current != account_id)
-        {
+        if account_switch {
             self.pending_display_name = None;
             crate::anonymous_identity::clear_pending_display_name();
+        }
+        if account_switch {
+            self.ui
+                .app
+                .main_menu_state
+                .reset_leader_selection_override();
         }
         self.progress_account_id = Some(account_id.clone());
         self.progress_provider = provider;
@@ -513,7 +522,9 @@ impl SowApp {
         if !self.progress.has_history() && portal.has_history() {
             self.progress = portal;
         }
-        self.apply_progress_preferences();
+        if account_changed {
+            self.apply_progress_preferences();
+        }
         if retry_tutorial {
             log::info!(
                 "[tutorial] cloud profile is missing completion; retrying one-time reward sync"

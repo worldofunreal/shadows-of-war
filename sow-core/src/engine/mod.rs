@@ -16,7 +16,7 @@ pub struct PlacementScratch {
     pub visited_stamp: [u32; 1024],
     pub stamp: u32,
     pub queue: Vec<u32>,
-    pub border_scratch: Vec<(u32, u32)>,
+    pub border_scratch: Vec<u32>,
 }
 
 impl Default for PlacementScratch {
@@ -39,6 +39,13 @@ pub struct ResourceRequestProposed {
 }
 
 pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32, u32)>);
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct BotWorkCounters {
+    pub border_cells_examined: u64,
+    pub naval_routes_calculated: u64,
+    pub attack_entries_scanned_last_update: u64,
+}
 
 #[derive(Clone)]
 pub struct SowEngine {
@@ -72,6 +79,8 @@ pub struct SowEngine {
     pub mirv_launches: std::collections::HashMap<u16, u32>,
     pub recent_nuke_targets: Vec<(u16, u32, u64)>,
     pub mirv_cooldown_targets: std::collections::HashMap<u16, u64>,
+    pub(crate) ai_attack_index: Vec<Vec<usize>>,
+    pub(crate) bot_work: BotWorkCounters,
 }
 
 impl SowEngine {
@@ -89,7 +98,7 @@ impl SowEngine {
 
         let mut placement_scratch = PlacementScratch::default();
         placement_scratch.queue.reserve(1024);
-        placement_scratch.border_scratch.reserve(1024);
+        placement_scratch.border_scratch.reserve(256);
 
         Self {
             state,
@@ -119,6 +128,8 @@ impl SowEngine {
             mirv_launches: std::collections::HashMap::new(),
             recent_nuke_targets: Vec::new(),
             mirv_cooldown_targets: std::collections::HashMap::new(),
+            ai_attack_index: Vec::new(),
+            bot_work: BotWorkCounters::default(),
         }
     }
 

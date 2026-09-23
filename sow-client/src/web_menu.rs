@@ -516,15 +516,10 @@ impl SowApp {
                     let value = serde_json::Value::String(leader_id);
                     match serde_json::from_value::<sow_core::player::Leader>(value) {
                         Ok(leader) => {
-                            self.ui.app.main_menu_state.selected_leader = leader;
-                            self.ui.app.main_menu_state.selected_civilization =
-                                leader.civilization();
-                            self.ui.app.main_menu_state.custom_game_config.player_leader = leader;
                             self.ui
                                 .app
                                 .main_menu_state
-                                .custom_game_config
-                                .player_civilization = leader.civilization();
+                                .set_selected_leader(leader, true);
                         }
                         Err(error) => log::warn!("[WEB MENU] invalid leader: {error}"),
                     }
@@ -731,7 +726,7 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::ReturnToMenu => {
-                    self.process_ui_actions(Some(UiAction::LeaveLobby));
+                    self.process_ui_actions(Some(UiAction::ReturnToMenu));
                 }
                 WebMenuCommand::ContinueObserving => {
                     self.ui.is_spectating = true;
@@ -1773,6 +1768,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         serde_json::json!({
             "phase": phase_name(app.ui.app.phase),
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
+            "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
             "loader_status": "",
             "loader_done": app.ui.app.splash_state.done,
