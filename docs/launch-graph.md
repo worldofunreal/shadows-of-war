@@ -72,7 +72,7 @@ official packaging and deployment path includes them.
 | Conversion path | `sow-web/site/index.html` | `/` → `/how-to-play/` or `/play/`; current site lists the browser build as live. |
 | Roster | `sow-web/site/app.js` | Twelve leaders are wired into the landing page and leader selector. |
 | Matchmaking | `sow-server/src/lobby.rs` | One rolling matchmaking lobby rotates through `FFA`, `Teams`, and `HumansVsNations`. |
-| Maps | `sow-server/src/map_playlist.rs` | Weighted map playlists derive lobby capacity and avoid recent repeats. |
+| Maps | `sow-server/src/map_playlist.rs` | Weighted map playlists choose maps and avoid recent repeats. |
 | Simulation | `sow-core/src/game_config.rs`, `sow-core/src/engine/` | Default mode is FFA; map-control threshold is 60%; elimination is also an end condition. |
 | Distribution | `sow-dist/src/main.rs` | The package includes the root site, `/how-to-play/`, media, and `/play/`; sitemap includes the onboarding route. |
 | External listings | `sow-web/site/index.html` | Other platform listings are explicitly not claimed as live. |

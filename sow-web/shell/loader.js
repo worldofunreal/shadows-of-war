@@ -401,6 +401,7 @@
                 loaderReadyDispatched = true;
                 window.dispatchEvent(new Event('sow:loader-ready'));
             }
+            window.dispatchEvent(new Event('sow:loader-cycle-ready'));
         }, 160);
     }
 

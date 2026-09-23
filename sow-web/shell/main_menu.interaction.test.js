@@ -4,7 +4,9 @@ const path = require("node:path");
 const test = require("node:test");
 
 const shell = __dirname;
+const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
+const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.js"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
@@ -85,6 +87,25 @@ test("lobby exit keeps the live connection and match exit owns teardown", () => 
     assert.match(hud, /send\("return_to_menu"\)/);
     assert.doesNotMatch(sessionSource, /reconnect_now/);
     assert.doesNotMatch(netUpdateSource, /reconnect_now/);
+});
+
+test("game exit resets Battle and replays the screen entrance after the loader", () => {
+    assert.match(coreSource, /var lastMenuPhase = null/);
+    assert.match(coreSource, /var pendingExitScreenIntro = false/);
+    const resetStart = shellSource.indexOf("if (returnedFromGame) {");
+    const resetEnd = shellSource.indexOf("if (typeof window.SOW_tutorial_menu_state_update", resetStart);
+    assert.ok(resetStart >= 0 && resetEnd > resetStart);
+    const resetBlock = shellSource.slice(resetStart, resetEnd);
+    for (const flag of ["profileOpen", "heroesOpen", "campaignOpen", "storeOpen"]) {
+        assert.match(resetBlock, new RegExp(flag + " = false"));
+    }
+    assert.match(resetBlock, /pendingExitScreenIntro = true/);
+    assert.match(shellSource, /sow:loader-cycle-ready/);
+    assert.match(shellSource, /previousScreen = null;[\s\S]*render\(\);/);
+    assert.match(loaderSource, /sow:loader-cycle-ready/);
+    assert.match(loaderSource, /if \(!loaderReadyDispatched\)/);
+    assert.ok(shellSource.indexOf("if (returnedFromGame)") < shellSource.indexOf("SOW_open_store_after_match"));
+    assert.match(menuCss["main_menu.layout.css"], /sow-screen-panel-enter 240ms/);
 });
 
 test("settings panel keeps only useful controls and real account state", () => {

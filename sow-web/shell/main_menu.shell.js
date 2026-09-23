@@ -907,7 +907,8 @@
         }
         if (command === "confirm_leader") {
             var leaderId = target.dataset.leaderId || tempSelectedLeader;
-            if (leaderId) {
+            var leader = leaderById(leaderId);
+            if (leaderId && leader.available !== false) {
                 send("set_leader", { leader_id: leaderId });
                 heroesOpen = false;
                 heroesSearchQuery = "";
@@ -921,57 +922,16 @@
         if (command === "unlock_leader") {
             var unlockLeaderId = target.dataset.leaderId;
             var unlockCurrency = target.dataset.currency || "crowns";
-            var unlockAccountId = state && state.account_id;
-            var unlockAuth = storeAuth();
-            if (!unlockLeaderId || !unlockAccountId || !unlockAuth.available) {
-                state.error = SOW_t("menu.account_setup_required");
-                render();
-                return;
+            if (unlockLeaderId && !(state && state.store_busy)) {
+                send("unlock_leader", { leader_id: unlockLeaderId, currency: unlockCurrency });
             }
-            target.disabled = true;
-            fetch(profileApi("/store/leaders/unlock"), {
-                method: "POST",
-                headers: unlockAuth.headers,
-                body: JSON.stringify({
-                    account_id: unlockAccountId,
-                    auth_secret: unlockAuth.authSecret,
-                    leader_id: unlockLeaderId,
-                    currency: unlockCurrency
-                })
-            }).then(function (response) {
-                if (!response.ok) throw new Error("unlock failed");
-                window.location.reload();
-            }).catch(function () {
-                state.error = SOW_t("menu.leader_unlock_unavailable");
-                render();
-            });
             return;
         }
         if (command === "unlock_skin" || command === "equip_skin") {
             var skinId = target.dataset.skinId;
-            var skinAccountId = state && state.account_id;
-            var skinAuth = storeAuth();
-            if (!skinId || !skinAccountId || !skinAuth.available) {
-                state.error = SOW_t("menu.skin_change_setup_required");
-                render();
-                return;
+            if (skinId && !(state && state.store_busy)) {
+                send(command, { skin_id: skinId });
             }
-            target.disabled = true;
-            fetch(profileApi(command === "unlock_skin" ? "/store/skins/unlock" : "/store/skins/equip"), {
-                method: "POST",
-                headers: skinAuth.headers,
-                body: JSON.stringify({
-                    account_id: skinAccountId,
-                    auth_secret: skinAuth.authSecret,
-                    skin_id: skinId
-                })
-            }).then(function (response) {
-                if (!response.ok) throw new Error("skin action failed");
-                window.location.reload();
-            }).catch(function () {
-                state.error = command === "unlock_skin" ? SOW_t("menu.skin_unlock_unavailable") : SOW_t("menu.skin_equip_unavailable");
-                render();
-            });
             return;
         }
         /* POKI_SHARED_STORE_UNLOCK_END */
@@ -1465,6 +1425,13 @@
         });
     }
 
+    window.addEventListener("sow:loader-cycle-ready", function () {
+        if (!pendingExitScreenIntro || !state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
+        pendingExitScreenIntro = false;
+        previousScreen = null;
+        render();
+    });
+
     function handleMenuStateUpdate(raw) {
         if (typeof raw !== "string" || raw === lastRaw) {
             updateDynamic();
@@ -1476,6 +1443,18 @@
         } catch (error) {
             console.warn("[WEB MENU] invalid state:", error);
             return;
+        }
+        var returnedFromGame = lastMenuPhase !== null &&
+            lastMenuPhase !== "MainMenu" &&
+            state.phase === "MainMenu" &&
+            state.loader_job === "ExitGame";
+        lastMenuPhase = state.phase;
+        if (returnedFromGame) {
+            profileOpen = false;
+            heroesOpen = false;
+            campaignOpen = false;
+            storeOpen = false;
+            pendingExitScreenIntro = true;
         }
         if (typeof window.SOW_tutorial_menu_state_update === "function") {
             window.SOW_tutorial_menu_state_update(state);

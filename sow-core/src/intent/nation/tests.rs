@@ -96,7 +96,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn test_nation_food_chain_protects_humans_until_fallback() {
+    fn test_nation_food_chain_never_initiates_against_humans() {
         for is_ghost in [false, true] {
             let mut engine = test_engine_two_players(42);
             engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
@@ -115,7 +115,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         let decisions = run_nation_attack(&mut engine, &[2], false);
-        assert_eq!(attack_targets(&decisions), vec![2]);
+        assert!(attack_targets(&decisions).is_empty());
     }
 
     #[test]
@@ -164,12 +164,10 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn test_nation_human_gate_is_shared_by_fleet_and_nuke() {
-        assert!(!nation_target_allowed(2, true, true, false, None));
-        assert!(!nation_target_allowed(2, true, false, true, None));
-        assert!(nation_target_allowed(2, true, false, false, None));
-        assert!(nation_target_allowed(2, true, true, true, Some(2)));
-        assert!(!nation_target_allowed(3, true, true, true, Some(2)));
-        assert!(nation_target_allowed(2, false, true, true, None));
+        assert!(!nation_target_allowed(2, true, None));
+        assert!(nation_target_allowed(2, true, Some(2)));
+        assert!(!nation_target_allowed(3, true, Some(2)));
+        assert!(nation_target_allowed(2, false, None));
     }
 
     #[test]
@@ -440,13 +438,13 @@ mod bot_iq_alliance_tests {
 
         engine.refresh_building_grid();
         let mut decisions = Vec::new();
-        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], false, None);
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
         assert!(!decisions.is_empty());
         assert_eq!(engine.recent_nuke_targets[0].1, 1);
     }
 
     #[test]
-    fn test_nation_nuke_respects_human_fallback_and_defense() {
+    fn test_nation_nuke_ignores_human_except_defense() {
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
         engine.state.player_mut(1).unwrap().iq_points = 500.0;
@@ -479,15 +477,15 @@ mod bot_iq_alliance_tests {
 
         engine.refresh_building_grid();
         let mut decisions = Vec::new();
-        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], true, None);
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
         assert!(decisions.is_empty());
 
-        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], false, None);
-        assert!(!decisions.is_empty());
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
+        assert!(decisions.is_empty());
 
         decisions.clear();
         engine.recent_nuke_targets.clear();
-        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], true, Some(2));
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], Some(2));
         assert!(!decisions.is_empty());
     }
 

@@ -1791,6 +1791,17 @@
     object-position: center 24%;
 }
 
+.sow-heroes__featured.is-locked picture img,
+.sow-heroes__card.is-locked .sow-heroes__card-art {
+    filter: grayscale(1);
+    opacity: .52;
+}
+
+.sow-heroes__featured.is-locked .sow-heroes__confirm {
+    cursor: not-allowed;
+    opacity: .52;
+}
+
 .sow-heroes__featured::after {
     position: absolute;
     inset: 0;
@@ -1890,6 +1901,10 @@
 .sow-heroes__card.is-selected {
     border-color: var(--sow-gold);
     background: rgba(243, 177, 43, .13);
+}
+
+.sow-heroes__card.is-locked {
+    border-color: rgba(255, 255, 255, .1);
 }
 
 .sow-heroes__card-art {

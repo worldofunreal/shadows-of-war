@@ -250,8 +250,10 @@ impl Default for GameConfig {
         Self {
             // Lobby & Match Setup
             max_players: 128,
-            bot_count: 420,    // Tribes (Simple, static filler AI)
-            nation_count: 128, // Nations (Dynamic expanding AI)
+            // Explicit Custom/offline defaults. Matchmaking replaces these
+            // with its lobby-specific capacity and AI population draw.
+            bot_count: 420,
+            nation_count: 128,
             bot_difficulty: BotDifficulty::Vanilla,
             seed: 42,
 

@@ -51,13 +51,19 @@ Source of truth is code. Update this table when behavior changes.
 | `reserve_ratio` | 0.02 | 0.20 | 0.50 |
 | `expand_ratio` | 0.02 | 0.15 | 0.10 |
 | IQ costs (war/build/alliance/send) | 5/5/5/5 | 5/5/5/999 | 10/10/10/999 |
-| Real counts | ~83–118 | 128 | 420 |
 
 - Neutral expansion is free; war costs `attack_cost`, clamped at zero.
 - `max_troops = 10 + tiles^0.625 × 350 + 5000×city_levels`; tribes divide it by 1.5.
 - Troop income is `250 + 25×cities + tiles/16` per second; tribes receive 0.75× that value.
 - Ghost fill is 65–92% of `max_players` (`SOW_BOT_FILL_MIN/MAX`).
-- Faces: `spawn_ai(nation_count=128, bot_count=420)` plus scripted map spawns.
+- Matchmaking human capacity is randomized from 12–256; smaller rooms are more
+  common, and Teams capacities are always even.
+- Matchmaking neutral AI is `num_land_tiles / 1,200`, varied by ±15% and
+  clamped to 64–640. FFA/Teams allocate 12–20% of that budget to nations;
+  the remainder is tribes.
+- Matchmaking resolves the map-scaled neutral population on the server before
+  the match starts; HvN sets nations to the final human + ghost roster and
+  keeps tribes as the separate neutral population.
 - Tribes never initiate against non-tribes; tribe-versus-tribe combat is allowed at `troops/4`.
 
 ## Behavior regression Lab

@@ -9,6 +9,8 @@ pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 // achievement points and are never a price.
 pub const LEADER_UNLOCK_COST_CROWNS: u64 = 500;
 pub const LEADER_UNLOCK_COST_GEMS: u64 = 1_500;
+pub const ANONYMOUS_WELCOME_GEMS: u64 = 1_600;
+pub const ANONYMOUS_WELCOME_GRANT_ID: &str = "anonymous_welcome_gems_v1";
 
 const GEM_BUNDLES: [(&str, u64); 3] = [
     ("sow_gems_500", 500),
@@ -413,6 +415,7 @@ mod tests {
     fn leader_has_dual_currency_price() {
         assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
         assert_eq!(LEADER_UNLOCK_COST_GEMS, 1_500);
+        assert_eq!(ANONYMOUS_WELCOME_GEMS, 1_600);
         assert!(skins().iter().map(|skin| skin.cost_gems).sum::<u64>() > GEM_BUNDLES[2].1);
     }
 
@@ -423,6 +426,36 @@ mod tests {
         let value = serde_json::to_value(&catalog).unwrap();
         assert_eq!(value["crowns"], 725);
         assert_eq!(value["leaders"][0]["cost_crowns"], 500);
+    }
+
+    #[test]
+    fn catalog_distinguishes_free_owned_and_locked_leaders() {
+        let empty = BTreeSet::new();
+        let catalog = catalog_for_profile(&empty, &empty, 0, 1_600, 7);
+        let free = catalog
+            .leaders
+            .iter()
+            .find(|leader| leader.free_rotation)
+            .unwrap();
+        let locked = catalog
+            .leaders
+            .iter()
+            .find(|leader| !leader.free_rotation)
+            .unwrap();
+        assert!(free.available);
+        assert!(!free.owned);
+        assert!(!locked.available);
+        assert!(!locked.owned);
+
+        let owned = BTreeSet::from([locked.id.clone()]);
+        let owned_catalog = catalog_for_profile(&owned, &empty, 0, 0, 7);
+        let owned_offer = owned_catalog
+            .leaders
+            .iter()
+            .find(|leader| leader.id == locked.id)
+            .unwrap();
+        assert!(owned_offer.available);
+        assert!(owned_offer.owned);
     }
 
 }

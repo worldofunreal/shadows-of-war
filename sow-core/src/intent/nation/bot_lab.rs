@@ -1559,7 +1559,7 @@ fn s17_spawning_phase_team_ghosts_in_zone() {
 
 // ──────────────────────────────────────────────────────────────────────────
 // S18 — WORLD-MAP SPAWN ZONES, the no-excuses repro: real terrain, real geo
-// roster (spawn_ai 128/420), teamed ghosts registered WITHOUT position,
+// roster (explicit lab fixture: spawn_ai 128/420), teamed ghosts registered WITHOUT position,
 // real Spawning-phase drive. If a team balls up here, the lab sees it.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
@@ -1604,7 +1604,7 @@ fn s18_world_map_team_spawn_zones() {
 
     let water = WaterComponents::compute(&game.map, |_| {});
     let mut engine = SowEngine::new(game, water);
-    engine.spawn_ai(128, 420); // the real geo roster, placed before ghosts fire
+    engine.spawn_ai(128, 420); // explicit lab fixture, not matchmaking defaults
 
     for _ in 0..500 {
         if engine.state.phase == GamePhase::Playing {
@@ -1704,7 +1704,7 @@ fn s18_probe_area_seeds() {
         .collect();
     let water = crate::water_components::WaterComponents::default();
     let mut engine = SowEngine::new(game, water);
-    engine.spawn_ai(128, 420);
+    engine.spawn_ai(128, 420); // explicit lab fixture, not matchmaking defaults
 
     let area = engine.team_spawn_area(&Team::Red);
     eprintln!("S18PROBE red area={area:?} map={mw}x{mh}");

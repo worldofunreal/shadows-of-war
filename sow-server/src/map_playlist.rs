@@ -7,17 +7,12 @@
 //! within the last `NON_CONSECUTIVE` picks. When the deck is exhausted it is
 //! rebuilt. Frequency 0 keeps a map out of the rotation entirely.
 //!
-//! Lobby capacity is derived per map from `num_land_tiles` (OpenFront formula):
-//! 50 players per 1M land tiles, three tiers (100% / 75% / 50%), a 30/30/40
-//! weighted roll, ×1.5 for Teams, capped at `MAX_PLAYER_CAP`.
-//!
 //! MENTAL MODEL (organic): the weighted shuffle is DELIBERATE randomness —
 //! the same map must never show up on a predictable cadence, and every deck
 //! rebuild reshuffles. Do not "fix" the randomness into a fixed order or a
 //! deterministic cycle: predictable rotation is a regression.
 
-use rand::Rng;
-use sow_core::map_file::{MAX_PLAYER_CAP, MapCatalogEntry};
+use sow_core::map_file::MapCatalogEntry;
 use std::sync::{Mutex, OnceLock};
 
 /// No map repeats within the last N drawn picks (OpenFront `nonConsecutiveNum`).
@@ -120,46 +115,9 @@ pub fn next_map_for_mode(mode: &str, catalog: &[MapCatalogEntry]) -> Option<Stri
     }
 }
 
-/// OpenFront lobby capacity derived from land tiles (MapPlaylist.ts
-/// `calculateMapPlayerCounts` + `lobbyMaxPlayers`): `base = round5(lt/1M × 50)`
-/// (min 5), tiers `[base, round5(base×0.75), round5(base×0.5)]`, weighted roll
-/// 30% large / 30% mid / 40% small, Teams ceil(×1.5) capped at large, absolute
-/// cap `MAX_PLAYER_CAP`, then rounded down to a multiple of 2 (Red/Blue teams).
-pub fn lobby_max_players(entry: &MapCatalogEntry, game_mode: &str, rng: &mut impl Rng) -> u32 {
-    if entry.num_land_tiles == 0 {
-        // Unknown capacity (stale v1 catalog) — fall back to the global cap.
-        return MAX_PLAYER_CAP;
-    }
-    let round5 = |n: f64| (n / 5.0).round() as u32 * 5;
-    let base = round5(entry.num_land_tiles as f64 / 1_000_000.0 * 50.0).max(5);
-    let large = base;
-    let mid = round5(base as f64 * 0.75);
-    let small = round5(base as f64 * 0.5);
-
-    let roll = rng.gen_range(0.0..1.0);
-    let mut players = if roll < 0.3 {
-        large
-    } else if roll < 0.6 {
-        mid
-    } else {
-        small
-    };
-
-    if game_mode == "Teams" {
-        players = ((players as f64) * 1.5).ceil() as u32;
-        players = players.min(large);
-        // Red/Blue teams only — keep the lobby even.
-        players -= players % 2;
-    }
-
-    players.clamp(2, MAX_PLAYER_CAP)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
 
     fn entry(key: &str, tiles: u32, freq: u32) -> MapCatalogEntry {
         MapCatalogEntry {
@@ -207,31 +165,5 @@ mod tests {
                 last.remove(0);
             }
         }
-    }
-
-    #[test]
-    fn capacity_follows_openfront_formula() {
-        let mut rng = StdRng::seed_from_u64(7);
-        // world: 651,569 tiles → base 35 → L/M/S = 35/25/20
-        let world = entry("world", 651_569, 20);
-        let mut caps = std::collections::HashSet::new();
-        for _ in 0..200 {
-            caps.insert(lobby_max_players(&world, "FFA", &mut rng));
-        }
-        for tier in [20u32, 25, 35] {
-            assert!(caps.contains(&tier), "missing tier {tier} in {caps:?}");
-        }
-        // Teams ×1.5 rounded even, never above large (35 → up to 34)
-        let mut team_caps = std::collections::HashSet::new();
-        for _ in 0..200 {
-            team_caps.insert(lobby_max_players(&world, "Teams", &mut rng));
-        }
-        for cap in &team_caps {
-            assert!(*cap % 2 == 0, "odd team cap {cap}");
-            assert!(*cap <= 35, "team cap {cap} above large tier");
-        }
-        // Unknown tiles → global cap
-        let unknown = entry("x", 0, 1);
-        assert_eq!(lobby_max_players(&unknown, "FFA", &mut rng), MAX_PLAYER_CAP);
     }
 }

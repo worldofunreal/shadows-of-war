@@ -11,8 +11,8 @@ pub struct HumanSpawn {
 }
 
 impl SowEngine {
-    pub fn spawn_ai(&mut self, city_state_count: u32, tribe_count: u32) {
-        let mut spawned_city_states = 0;
+    pub fn spawn_ai(&mut self, nation_count: u32, tribe_count: u32) {
+        let mut spawned_nations = 0;
         let mut spawned_tribes = 0;
         use crate::player::Player;
         use wyrand::WyRand;
@@ -21,24 +21,22 @@ impl SowEngine {
         let config = self.state.config.clone();
 
         let anchor_count = self.state.map_spawns.len();
-        if anchor_count > 0 || city_state_count > 0 || tribe_count > 0 {
+        if anchor_count > 0 || nation_count > 0 || tribe_count > 0 {
             log::info!(
-                "spawn_ai: map='{}' city_state_anchors={} city_state_count={} tribe_count={}",
+                "spawn_ai: map='{}' map_spawn_anchors={} nation_count={} tribe_count={}",
                 self.state.config.map_name,
                 anchor_count,
-                city_state_count,
+                nation_count,
                 tribe_count
             );
         }
-
-        let total_city_states_to_spawn = city_state_count;
 
         // Keep track of names already used to prevent duplicates
         let mut used_names = std::collections::HashSet::new();
 
         let map_spawns_snapshot: Vec<crate::map_file::MapSpawn> = self.state.map_spawns.clone();
 
-        // Prepare the fallback historical civilizations pool for extra city-states
+        // Prepare the fallback historical civilizations pool for extra nations.
         let extra_nations_pool = crate::tribes::HISTORICAL_CIVILIZATIONS;
         let mut extra_nations_indices: Vec<usize> = (0..extra_nations_pool.len()).collect();
 
@@ -81,8 +79,11 @@ impl SowEngine {
         let mut geo_nation_indices: Vec<usize> = (0..geo_nations.len()).collect();
         let mut geo_tribe_indices: Vec<usize> = (0..geo_tribes.len()).collect();
 
-        for i in 0..total_city_states_to_spawn {
-            let bot_id = 104 + i as u16;
+        for i in 0..nation_count {
+            let Some(bot_id) = self.state.next_free_player_id() else {
+                log::error!("spawn_ai: player ID space exhausted while spawning nations");
+                break;
+            };
 
             let anchored = map_spawns_snapshot.get(i as usize);
             let mut spawn_point = None;
@@ -181,7 +182,7 @@ impl SowEngine {
 
             if i < 5 {
                 log::info!(
-                    "spawn_ai city_state[{}]: name='{}' anchored={}",
+                    "spawn_ai nation[{}]: name='{}' anchored={}",
                     i,
                     name,
                     anchored.is_some()
@@ -206,20 +207,22 @@ impl SowEngine {
                 let mut player = Player::new_nation(bot_id, name, color, &config);
                 player.team = team;
                 self.state.spawn_player(player, sx, sy);
-                spawned_city_states += 1;
+                spawned_nations += 1;
             }
         }
 
-        // Spawn tribes (IDs above city-states).
+        // Spawn tribes after nations.
         // Tribes use historical/geo names for flavor, but spawn dynamically
         // across all available land tiles with distance separation (OpenFront-style)
         // rather than clustering on historical centroids.
-        let tribe_start_id = 104 + total_city_states_to_spawn as u16;
         let fallback_pool = crate::tribes::FALLBACK_TRIBES;
         let mut fallback_indices: Vec<usize> = (0..fallback_pool.len()).collect();
 
-        for i in 0..tribe_count {
-            let bot_id = tribe_start_id + i as u16;
+        for _ in 0..tribe_count {
+            let Some(bot_id) = self.state.next_free_player_id() else {
+                log::error!("spawn_ai: player ID space exhausted while spawning tribes");
+                break;
+            };
 
             let mut name = String::new();
             let mut found_name = false;
@@ -270,10 +273,10 @@ impl SowEngine {
             }
         }
 
-        if total_city_states_to_spawn > 0 || tribe_count > 0 {
+        if nation_count > 0 || tribe_count > 0 {
             log::info!(
-                "Spawned {} city-states and {} tribes successfully.",
-                spawned_city_states,
+                "Spawned {} nations and {} tribes successfully.",
+                spawned_nations,
                 spawned_tribes
             );
         }
@@ -458,8 +461,11 @@ impl SowEngine {
         }
         let config = self.state.config.clone();
         let mut placed = 0;
-        for (i, s) in spawns.iter().enumerate() {
-            let bot_id = 104 + i as u16;
+        for s in &spawns {
+            let Some(bot_id) = self.state.next_free_player_id() else {
+                log::error!("spawn_scripted: player ID space exhausted");
+                break;
+            };
             let Some((sx, sy)) = self.nearest_free_land(s.x, s.y) else {
                 log::warn!(
                     "spawn_scripted: no land near '{}' ({},{})",

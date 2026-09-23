@@ -14,11 +14,9 @@ const GEO_TAG_EQUIRECT: u8 = 1;
 
 pub const CATALOG_MAGIC: &[u8; 4] = b"SOWC";
 /// v2 adds `num_land_tiles` + `multiplayer_frequency` per entry (source-map
-/// weighted rotation and per-map lobby capacity). v1 entries are still parsed
+/// weighted rotation and neutral AI population). v1 entries are still parsed
 /// (fields default to 0 / 1) so stale caches never brick a boot.
 pub const CATALOG_VERSION: u16 = 2;
-/// Maximum players a lobby can hold, mirroring the source-map player limit.
-pub const MAX_PLAYER_CAP: u32 = 125;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MapSpawn {
@@ -127,7 +125,7 @@ pub struct MapCatalogEntry {
     pub display_name: String,
     pub width: u32,
     pub height: u32,
-    /// Number of land tiles — drives per-lobby capacity (source-map formula).
+    /// Number of land tiles — drives matchmaking's neutral AI population.
     pub num_land_tiles: u32,
     /// Weighted-rotation tickets (`multiplayer_frequency`); 0 = out of rotation.
     pub multiplayer_frequency: u32,

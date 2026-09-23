@@ -53,11 +53,12 @@
 
     function renderLeaderPurchase(leader) {
         var offer = storeLeaderById(leader.id);
-        if (!offer || offer.owned) return "";
+        if (!offer || offer.owned || offer.free_rotation || offer.available) return "";
         var crowns = offer.cost_crowns;
+        var disabled = state && state.store_busy ? " disabled" : "";
         return "<div class='sow-heroes__purchase-actions'><span>" + esc(SOW_t("store.unlock")) + "</span>" +
-            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='crowns' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(crowns, "crown") + "</button>" +
-            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='gems' data-leader-id='" + esc(offer.id) + "'>" + renderCurrencyAmount(offer.cost_gems, "gem") + "</button>" +
+            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='crowns' data-leader-id='" + esc(offer.id) + "'" + disabled + ">" + renderCurrencyAmount(crowns, "crown") + "</button>" +
+            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='gems' data-leader-id='" + esc(offer.id) + "'" + disabled + ">" + renderCurrencyAmount(offer.cost_gems, "gem") + "</button>" +
             (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy")) : "") +
             "</div>";
     }
@@ -70,12 +71,13 @@
 
     function renderStoreSkinPromo(skin) {
         var action;
+        var disabled = state && state.store_busy ? " disabled" : "";
         if (skin.owned) {
             action = state.selected_skin === skin.id
                 ? "<span class='sow-store__offer-state'>" + esc(SOW_t("store.equipped")) + "</span>"
-                : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'>" + esc(SOW_t("store.equip")) + "</button>";
+                : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + esc(SOW_t("store.equip")) + "</button>";
         } else {
-            action = "<div class='sow-store__buy-row'><button class='sow-store__buy' type='button' data-command='unlock_skin' data-skin-id='" + esc(skin.id) + "'>" + renderCurrencyAmount(skin.cost_gems, "gem") + "</button>" +
+            action = "<div class='sow-store__buy-row'><button class='sow-store__buy' type='button' data-command='unlock_skin' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + renderCurrencyAmount(skin.cost_gems, "gem") + "</button>" +
                 (canRenderDirectPurchase(skin.direct_product_id) ? storeProductButton(skin.direct_product_id, SOW_t("store.buy")) : "") + "</div>";
         }
         return "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) + "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" + esc(skin.name) + "</h3><p>" + esc(SOW_t("store.territory_pattern")) + "</p>" + action + "</div></article>";
@@ -228,7 +230,11 @@
                     var local = localLeaders.find(function (item) {
                         return String(item.id).replace(/[^a-z0-9]/gi, "").toLowerCase() === String(leader.id).replace(/[^a-z0-9]/gi, "").toLowerCase();
                     });
-                    return Object.assign({}, leader, local && { owned: local.owned, free_rotation: local.free_rotation });
+                    return Object.assign({}, leader, local && {
+                        owned: local.owned,
+                        free_rotation: local.free_rotation,
+                        available: local.available
+                    });
                 });
                 catalog.skins = (catalog.skins || []).map(function (skin) {
                     var local = localSkins.find(function (item) { return item.id === skin.id; });

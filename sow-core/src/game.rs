@@ -268,6 +268,10 @@ impl GameState {
     }
     pub fn register_player(&mut self, player: Player) {
         let pid = player.id;
+        assert!(
+            !self.players.iter().any(|existing| existing.id == pid),
+            "duplicate player id {pid}"
+        );
         let index = self.players.len();
         self.players.push(player);
         let pid_usize = pid as usize;
@@ -275,6 +279,26 @@ impl GameState {
             self.player_lookup.resize(pid_usize + 1, None);
         }
         self.player_lookup[pid_usize] = Some(index);
+    }
+
+    /// Allocate the next deterministic ID after every player already present.
+    /// The map stores owners in 12 bits, so never hand out an unrepresentable ID.
+    pub fn next_free_player_id(&self) -> Option<PlayerId> {
+        let mut candidate = self
+            .players
+            .iter()
+            .map(|player| player.id)
+            .max()
+            .unwrap_or(0) as u32
+            + 1;
+        while candidate <= GameMap::PLAYER_ID_MASK as u32 {
+            let id = candidate as PlayerId;
+            if !self.players.iter().any(|player| player.id == id) {
+                return Some(id);
+            }
+            candidate += 1;
+        }
+        None
     }
 
     pub fn place_spawn(&mut self, pid: u16, cx: u32, cy: u32) {

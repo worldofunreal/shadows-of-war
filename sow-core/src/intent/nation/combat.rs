@@ -11,14 +11,12 @@ use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
 pub(super) fn nation_target_allowed(
     target_id: u16,
     target_is_human: bool,
-    has_neutral: bool,
-    has_tribe_target: bool,
     defender_target: Option<u16>,
 ) -> bool {
     if let Some(defender_id) = defender_target {
         target_id == defender_id
     } else {
-        !target_is_human || (!has_neutral && !has_tribe_target)
+        !target_is_human
     }
 }
 
@@ -34,6 +32,7 @@ impl SowEngine {
     ) {
         let (bot_id, bot_iq) = bot;
         let (attack_cost, alliance_cost) = costs;
+        let is_mfo = slot.tier == AiTier::Nation;
         // ── Attack logic (both Bots and Nations) ────────────────────
         if slot.do_attack {
             // War still spends iq_points (clamped at zero below); growth and
@@ -57,6 +56,9 @@ impl SowEngine {
                         let Some(p_ally) = self.state.player(ally_id) else {
                             continue;
                         };
+                        if is_mfo && p_ally.is_human() {
+                            continue;
+                        }
                         let mut rng = WyRand::new(
                             self.state
                                 .seed
@@ -150,7 +152,6 @@ impl SowEngine {
                 // (is_ai_controlled humans) get the same naval breakout so a
                 // teammate fully enclosed by allies keeps advancing instead
                 // of idling when its border has no enemy contact.
-                let is_mfo = slot.tier == AiTier::Nation;
                 let can_fleet = is_mfo || slot.tier == AiTier::Ghost;
                 let has_port =
                     crate::building::cost::player_has_completed_port(&self.buildings, bot_id);
@@ -213,8 +214,6 @@ impl SowEngine {
                                 || nation_target_allowed(
                                     p.id,
                                     p.is_human(),
-                                    has_neutral,
-                                    has_tribe_target,
                                     defender_target,
                                 );
                             if !is_friendly && target_allowed && !p.border_tiles.is_empty() {
@@ -297,8 +296,8 @@ impl SowEngine {
                 //   1. Defend the biggest inbound attack.
                 //   2. Nations: eat tribes or expand into wilderness.
                 //      Tribes remain valid food even while free land exists.
-                //   3. Nations: only use Human targets after the food chain is
-                //      exhausted; other AI players remain valid fallback.
+                //   3. Nations: never initiate against Humans; other AI
+                //      players remain valid fallback.
                 //   4. Other tiers keep their existing player/neutral behavior.
                 let (target_owner, is_neutral) = if let Some(attacker_id) = defender_target {
                     (attacker_id, false)
@@ -315,8 +314,6 @@ impl SowEngine {
                         if !nation_target_allowed(
                             t_id,
                             p_t.is_human(),
-                            has_neutral,
-                            has_tribe_target,
                             defender_target,
                         ) {
                             continue;
@@ -398,7 +395,6 @@ impl SowEngine {
                             decisions,
                             bot_iq,
                             &targets,
-                            has_neutral,
                             defender_target,
                         );
                     }
@@ -552,7 +548,6 @@ impl SowEngine {
                         decisions,
                         bot_iq,
                         &targets,
-                        has_neutral,
                         defender_target,
                     );
                 }
@@ -643,7 +638,6 @@ impl SowEngine {
         decisions: &mut Vec<BotDecision>,
         bot_iq: u32,
         targets: &[u16],
-        has_neutral: bool,
         defender_target: Option<u16>,
     ) {
         if bot_iq < 100 {
@@ -703,20 +697,9 @@ impl SowEngine {
             }
         }
 
-        let has_tribe_target = targets.iter().any(|&target_id| {
-            self.state
-                .player(target_id)
-                .is_some_and(|p| p.player_type == crate::player::PlayerType::Bot)
-        });
         let target_allowed = |target_id: u16| {
             self.state.player(target_id).is_some_and(|p| {
-                nation_target_allowed(
-                    target_id,
-                    p.is_human(),
-                    has_neutral,
-                    has_tribe_target,
-                    defender_target,
-                )
+                nation_target_allowed(target_id, p.is_human(), defender_target)
             })
         };
 

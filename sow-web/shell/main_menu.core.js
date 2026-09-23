@@ -8,6 +8,8 @@
     var lastRaw = "";
     var lastRenderKey = "";
     var previousScreen = null;
+    var lastMenuPhase = null;
+    var pendingExitScreenIntro = false;
     var tempSelectedLeader = null;
     var browserSearchQuery = "";
     var heroesSearchQuery = "";
@@ -261,6 +263,7 @@
             crowns: state.crowns,
             laurels: state.laurels,
             selected_skin: state.selected_skin,
+            store_busy: state.store_busy,
             skins: (state.store && state.store.skins || []).map(function (skin) {
                 return [skin.id, skin.owned, skin.cost_gems];
             }),
@@ -268,7 +271,7 @@
                 gems: state.store.gems,
                 crowns: state.store.crowns,
                 leaders: (state.store.leaders || []).map(function (leader) {
-                return [leader.id, leader.owned, leader.free_rotation, leader.cost_crowns, leader.cost_gems];
+                    return [leader.id, leader.owned, leader.free_rotation, leader.available, leader.cost_crowns, leader.cost_gems];
                 }),
                 skins: (state.store.skins || []).map(function (skin) {
                     return [skin.id, skin.owned, skin.cost_gems];

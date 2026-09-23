@@ -3,6 +3,7 @@ mod identity;
 mod lobby;
 mod map_catalog;
 mod map_playlist;
+mod matchmaking_population;
 
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
@@ -944,14 +945,13 @@ async fn main() {
                                     validated_external_count,
                                     player_tickets.len()
                                 );
-                                // HumansVsNations autobalance: the AI nation side
-                                // must match the human side so the match is fair.
-                                // nation_count is set here (server-authoritative)
-                                // so every client's deterministic engine spawns
-                                // exactly that many Blue nations.
-                                if lobby.config.game_mode == "HumansVsNations" {
-                                    let human_side_players = lobby.players.len() as u32;
-                                    lobby.config.nation_count = human_side_players;
+                                // Resolve the final HvN opponent after ghosts and humans
+                                // are known. Every client receives this same config.
+                                let human_side_players = roster_total as u32;
+                                if crate::matchmaking_population::finalize_for_start(
+                                    &mut lobby.config,
+                                    human_side_players,
+                                ) {
                                     log::info!(
                                         "[HVN] Lobby {} autobalanced: human_side_players={} vs nations={}",
                                         lobby.id, human_side_players, human_side_players

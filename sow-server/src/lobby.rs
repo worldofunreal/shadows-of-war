@@ -121,39 +121,42 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
     let host_name = opts.host_name;
     let id = *next_id;
     *next_id += 1;
-    let mut config = if let Some(mut c) = config_override {
+    let (mut config, map_entry) = if let Some(mut c) = config_override {
         // Resolve map dimensions from catalog when host provides a config.
-        // Capacity is derived from the chosen map (OpenFront model) — the host
-        // picks the map, the map picks the lobby size.
-        if let Some(entry) = crate::map_catalog::lookup(&c.map_name) {
+        // Custom lobbies keep the host's population settings.
+        let entry = crate::map_catalog::lookup(&c.map_name);
+        if let Some(entry) = entry.as_ref() {
             c.map_width = entry.width;
             c.map_height = entry.height;
             c.map_name = entry.key.clone();
-            let mut rng = rand::thread_rng();
-            c.max_players = crate::map_playlist::lobby_max_players(&entry, &game_mode, &mut rng);
         }
-        c
+        (c, entry)
     } else {
-        // Matchmaking: draw the next map from the mode's weighted playlist and
-        // derive the lobby capacity from it.
+        // Matchmaking: draw the next map from the mode's weighted playlist.
         let mut c = GameConfig::default();
         let pool = crate::map_catalog::entries();
-        if let Some(key) = crate::map_playlist::next_map_for_mode(&game_mode, pool) {
-            if let Some(entry) = crate::map_catalog::lookup(&key) {
-                c.map_name = entry.key.clone();
-                c.map_width = entry.width;
-                c.map_height = entry.height;
-                let mut rng = rand::thread_rng();
-                c.max_players =
-                    crate::map_playlist::lobby_max_players(&entry, &game_mode, &mut rng);
-            }
+        let entry = crate::map_playlist::next_map_for_mode(&game_mode, pool)
+            .and_then(|key| crate::map_catalog::lookup(&key));
+        if let Some(entry) = entry.as_ref() {
+            c.map_name = entry.key.clone();
+            c.map_width = entry.width;
+            c.map_height = entry.height;
         } else {
             log::error!("spawn_waiting_lobby: no maps in catalog for lobby {}", id);
         }
-        c
+        (c, entry)
     };
 
     config.game_mode = game_mode.to_string();
+
+    if kind == LobbyKind::Matchmaking {
+        let mut rng = rand::thread_rng();
+        let population =
+            crate::matchmaking_population::roll(map_entry.as_ref(), &game_mode, &mut rng);
+        config.max_players = population.max_players;
+        config.bot_count = population.bot_count;
+        config.nation_count = population.nation_count;
+    }
 
     log::info!(
         "[LOBBY] Spawned lobby {} kind={:?} mode={} map={} private={}",
@@ -189,7 +192,7 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
 /// Matchmaking queue depth: exactly ONE joinable lobby at a time. When it
 /// launches (or dies), the next one spawns and rotates to the next game mode,
 /// so over time a single slot cycles through FFA / Teams with a fresh map and
-/// derived capacity each cycle.
+/// fresh randomized capacity and map-scaled neutral population each cycle.
 fn ensure_queue_depth(games: &mut Vec<ServerLobby>, next_id: &mut u64) {
     let has_joinable = games.iter().any(|g| {
         g.joinable()
@@ -1051,9 +1054,9 @@ pub fn build_lobby_broadcast(games: &[ServerLobby]) -> Vec<LobbyInfo> {
 #[cfg(test)]
 mod name_tests {
     use super::{
-        JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby,
+        JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby, SpawnLobbyOpts,
         build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
-        normalize_player_name, resolve_join_target, set_player_team,
+        normalize_player_name, resolve_join_target, set_player_team, spawn_waiting_lobby,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::player::{Civilization, Leader};
@@ -1127,6 +1130,60 @@ mod name_tests {
     fn quick_match_follows_rotating_matchmaking_mode() {
         let games = vec![queue_lobby(10, LobbyKind::Matchmaking, "Teams")];
         assert_eq!(resolve_join_target(None, &games), Some(10));
+    }
+
+    #[test]
+    fn matchmaking_capacity_stays_between_12_and_256() {
+        let mut games = Vec::new();
+        let mut next_id = 1;
+        for mode in ["FFA", "Teams", "HumansVsNations"] {
+            spawn_waiting_lobby(
+                &mut games,
+                &mut next_id,
+                SpawnLobbyOpts {
+                    game_mode: mode.to_string(),
+                    kind: LobbyKind::Matchmaking,
+                    is_private: false,
+                    config_override: None,
+                    password: None,
+                    host_name: String::new(),
+                },
+            );
+        }
+
+        assert!(
+            games
+                .iter()
+                .all(|lobby| (12..=256).contains(&lobby.config.max_players))
+        );
+        assert_eq!(games[1].config.max_players % 2, 0);
+    }
+
+    #[test]
+    fn custom_lobby_keeps_host_population_settings() {
+        let config = GameConfig {
+            max_players: 37,
+            bot_count: 11,
+            nation_count: 19,
+            ..Default::default()
+        };
+        let mut games = Vec::new();
+        spawn_waiting_lobby(
+            &mut games,
+            &mut 1,
+            SpawnLobbyOpts {
+                game_mode: "FFA".to_string(),
+                kind: LobbyKind::Custom,
+                is_private: false,
+                config_override: Some(config),
+                password: None,
+                host_name: "Host".to_string(),
+            },
+        );
+
+        assert_eq!(games[0].config.max_players, 37);
+        assert_eq!(games[0].config.bot_count, 11);
+        assert_eq!(games[0].config.nation_count, 19);
     }
 
     #[test]

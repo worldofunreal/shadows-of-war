@@ -64,6 +64,16 @@ enum WebMenuCommand {
     SetLeader {
         leader_id: String,
     },
+    UnlockLeader {
+        leader_id: String,
+        currency: String,
+    },
+    UnlockSkin {
+        skin_id: String,
+    },
+    EquipSkin {
+        skin_id: String,
+    },
     SaveDisplayName {
         name: String,
     },
@@ -523,6 +533,21 @@ impl SowApp {
                         }
                         Err(error) => log::warn!("[WEB MENU] invalid leader: {error}"),
                     }
+                }
+                WebMenuCommand::UnlockLeader {
+                    leader_id,
+                    currency,
+                } => {
+                    self.process_ui_actions(Some(UiAction::UnlockLeader {
+                        leader_id,
+                        currency,
+                    }));
+                }
+                WebMenuCommand::UnlockSkin { skin_id } => {
+                    self.process_ui_actions(Some(UiAction::UnlockSkin(skin_id)));
+                }
+                WebMenuCommand::EquipSkin { skin_id } => {
+                    self.process_ui_actions(Some(UiAction::EquipSkin(skin_id)));
                 }
                 WebMenuCommand::SaveDisplayName { name } => {
                     self.process_ui_actions(Some(UiAction::SaveDisplayName(name)));
@@ -1709,8 +1734,11 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                     sow_core::player::Leader::RichardTheLionheart => "richard".to_string(),
                     _ => slug.replace('_', ""),
                 };
-                let free_rotation = store_catalog.free_leaders.iter().any(|id| id == slug);
-                let owned = progress.owned_leaders.contains(slug);
+                let offer = store_catalog
+                    .leaders
+                    .iter()
+                    .find(|offer| offer.id.as_str() == slug)
+                    .expect("leader catalog must contain every leader");
                 serde_json::json!({
                     "id": leader_id(leader),
                     "name": leader.name(),
@@ -1736,11 +1764,11 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                         perk_slug
                     ),
                     "slug": slug,
-                    "free_rotation": free_rotation,
-                    "owned": owned,
-                    "available": free_rotation || owned,
-                    "cost_crowns": sow_data::commerce::LEADER_UNLOCK_COST_CROWNS,
-                    "cost_gems": sow_data::commerce::LEADER_UNLOCK_COST_GEMS,
+                    "free_rotation": offer.free_rotation,
+                    "owned": offer.owned,
+                    "available": offer.available,
+                    "cost_crowns": offer.cost_crowns,
+                    "cost_gems": offer.cost_gems,
                 })
             })
             .collect();
@@ -1805,6 +1833,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "gems": progress.gems,
             "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,
+            "store_busy": state.store_busy,
             "store": store_catalog,
             "native_purchase_scheme": "sow://purchase",
             "native_restore_scheme": "sow://restore",

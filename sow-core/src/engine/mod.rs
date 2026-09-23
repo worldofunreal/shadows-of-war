@@ -386,7 +386,7 @@ mod tests {
     use crate::game_config::GameConfig;
     use crate::water_components::WaterComponents;
     #[test]
-    fn test_spawn_ai_city_states() {
+    fn test_spawn_ai_nations() {
         let config = GameConfig {
             map_name: crate::maps::DEFAULT_MAP_KEY.to_string(),
             map_width: 1000,
@@ -435,6 +435,52 @@ mod tests {
         let mut engine = SowEngine::new(state, WaterComponents::default());
         engine.spawn_ai(3, 0);
         assert_eq!(engine.state.players.len(), 3);
+    }
+
+    #[test]
+    fn test_ai_ids_follow_a_256_player_human_roster() {
+        use crate::player::{Player, PlayerType};
+
+        let config = GameConfig {
+            map_name: crate::maps::DEFAULT_MAP_KEY.to_string(),
+            map_width: 1000,
+            map_height: 800,
+            ..Default::default()
+        };
+        let mut state = GameState::new(42, 1000, 800, config.clone());
+        for tile in &mut state.map.terrain {
+            *tile = crate::map::MapTile::from_byte(0b1000_0000);
+        }
+        for id in 1..=256u16 {
+            state.register_player(Player::new_human(
+                id,
+                format!("Human{id}"),
+                [1.0, 1.0, 1.0],
+                &config,
+            ));
+        }
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.spawn_ai(2, 2);
+
+        let ids: std::collections::HashSet<u16> = engine
+            .state
+            .players
+            .iter()
+            .map(|player| player.id)
+            .collect();
+        assert_eq!(ids.len(), 260);
+        assert!(
+            engine.state.players[256..]
+                .iter()
+                .all(|player| player.id > 256)
+        );
+        assert!(
+            engine.state.players[256..]
+                .iter()
+                .any(|player| player.player_type == PlayerType::Nation)
+        );
+        assert_eq!(engine.state.player(256).map(|player| player.id), Some(256));
     }
 
     /// Regression: nations must NEVER carry a team in "Teams" mode (teams are

@@ -13,6 +13,16 @@ const NAMEPLATE_MAX_FONT: f32 = 32.0;
 const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
 const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
 const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
+const NAMEPLATE_WORLD_MOVE_THRESHOLD: f32 = 0.1;
+const NAMEPLATE_SCREEN_MOVE_THRESHOLD: f32 = 1.0;
+const NAMEPLATE_TELEPORT_THRESHOLD: f32 = 50.0;
+const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
+const NAMEPLATE_WORLD_MOVE_THRESHOLD_SQ: f32 =
+    NAMEPLATE_WORLD_MOVE_THRESHOLD * NAMEPLATE_WORLD_MOVE_THRESHOLD;
+const NAMEPLATE_SCREEN_MOVE_THRESHOLD_SQ: f32 =
+    NAMEPLATE_SCREEN_MOVE_THRESHOLD * NAMEPLATE_SCREEN_MOVE_THRESHOLD;
+const NAMEPLATE_TELEPORT_THRESHOLD_SQ: f32 =
+    NAMEPLATE_TELEPORT_THRESHOLD * NAMEPLATE_TELEPORT_THRESHOLD;
 const LOD_DOT_RADIUS: f32 = 2.0;
 
 const HUMAN_AVATAR_SCALE: f32 = 4.0;
@@ -151,17 +161,7 @@ pub(crate) fn render_overlays(
         sf,
         zoom_scaled,
     );
-    render_nameplates(
-        text,
-        snapshot,
-        sim,
-        ui,
-        input,
-        &dev,
-        sf,
-        zoom_scaled,
-        now,
-    );
+    render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 
     if !ui.tutorial_active {
@@ -222,18 +222,15 @@ fn render_nameplates(
     now: Instant,
 ) {
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    sample_nameplates(text, snapshot, sim, ui, dev, sf, my_id, now);
+    sample_nameplates(text, snapshot, sim, ui, dev, sf, zoom_scaled, my_id, now);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let fog_hidden = matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. });
-    let alpha = nameplate_sample_alpha(
-        ui.nameplate_sample_at,
-        now,
-        nameplate_sample_duration(sim),
-    );
+    let alpha = nameplate_sample_alpha(ui.nameplate_sample_at, now, nameplate_sample_duration(sim));
+    let inverse_alpha = 1.0 - alpha;
 
     for &player_index in &ui.nameplate_order {
         let player = &snapshot.players[player_index];
@@ -246,8 +243,16 @@ fn render_nameplates(
         let Some(state) = ui.nameplate_visuals.get(&player.id) else {
             continue;
         };
-        let center_world = lerp_point(state.from_center, state.to_center, alpha);
-        let world_size = lerp(state.from_size, state.to_size, alpha);
+        let center_world = if state.from_center == state.to_center {
+            state.to_center
+        } else {
+            lerp_point(state.from_center, state.to_center, inverse_alpha)
+        };
+        let world_size = if state.from_size == state.to_size {
+            state.to_size
+        } else {
+            lerp(state.from_size, state.to_size, inverse_alpha)
+        };
         let center = world_to_screen_values(
             center_world[0],
             center_world[1],
@@ -317,6 +322,7 @@ fn sample_nameplates(
     ui: &mut UiState,
     dev: &DevConfig,
     sf: f32,
+    zoom_scaled: f32,
     my_id: u16,
     now: Instant,
 ) {
@@ -335,6 +341,7 @@ fn sample_nameplates(
     } else {
         nameplate_sample_alpha(ui.nameplate_sample_at, now, nameplate_sample_duration(sim))
     };
+    let inverse_sample_alpha = 1.0 - sample_alpha;
     let style_key = nameplate_metrics_style_key(dev, sf);
     let mut order: Vec<usize> = snapshot
         .players
@@ -372,14 +379,32 @@ fn sample_nameplates(
         let target_center = [player.centroid_x + 0.5, player.centroid_y + 0.5];
         let target_size = nameplate_world_size(player.tile_count);
         if let Some(state) = ui.nameplate_visuals.get_mut(&player.id) {
-            let current_center = lerp_point(state.from_center, state.to_center, sample_alpha);
-            let current_size = lerp(state.from_size, state.to_size, sample_alpha);
-            state.from_center = if force_snap {
+            let current_center = if state.from_center == state.to_center {
+                state.to_center
+            } else {
+                lerp_point(state.from_center, state.to_center, inverse_sample_alpha)
+            };
+            let current_size = if state.from_size == state.to_size {
+                state.to_size
+            } else {
+                lerp(state.from_size, state.to_size, inverse_sample_alpha)
+            };
+            state.from_center = if force_snap
+                || !nameplate_position_needs_interpolation(
+                    current_center,
+                    target_center,
+                    zoom_scaled,
+                ) {
                 target_center
             } else {
                 current_center
             };
-            state.from_size = if force_snap { target_size } else { current_size };
+            state.from_size =
+                if force_snap || !nameplate_size_needs_interpolation(current_size, target_size) {
+                    target_size
+                } else {
+                    current_size
+                };
             state.to_center = target_center;
             state.to_size = target_size;
             refresh_nameplate_text_cache(text, state, player, style_key, dev, sf);
@@ -425,7 +450,8 @@ fn refresh_nameplate_text_cache(
     dev: &DevConfig,
     sf: f32,
 ) {
-    let identity_changed = state.source_name != player.name || state.player_type != player.player_type;
+    let identity_changed =
+        state.source_name != player.name || state.player_type != player.player_type;
     if identity_changed {
         state.source_name = player.name.clone();
         state.player_type = player.player_type;
@@ -487,13 +513,35 @@ fn nameplate_sample_alpha(sample_at: Option<Instant>, now: Instant, duration: Du
 }
 
 #[inline]
-fn lerp(from: f32, to: f32, amount: f32) -> f32 {
-    from + (to - from) * amount
+fn nameplate_position_needs_interpolation(from: [f32; 2], to: [f32; 2], zoom_scaled: f32) -> bool {
+    let dx = to[0] - from[0];
+    let dy = to[1] - from[1];
+    let world_distance_sq = dx * dx + dy * dy;
+    if world_distance_sq > NAMEPLATE_TELEPORT_THRESHOLD_SQ {
+        return false;
+    }
+    let screen_scale = zoom_scaled.max(0.0);
+    let screen_distance_sq = world_distance_sq * screen_scale * screen_scale;
+    world_distance_sq > NAMEPLATE_WORLD_MOVE_THRESHOLD_SQ
+        && screen_distance_sq > NAMEPLATE_SCREEN_MOVE_THRESHOLD_SQ
 }
 
 #[inline]
-fn lerp_point(from: [f32; 2], to: [f32; 2], amount: f32) -> [f32; 2] {
-    [lerp(from[0], to[0], amount), lerp(from[1], to[1], amount)]
+fn nameplate_size_needs_interpolation(from: f32, to: f32) -> bool {
+    (to - from).abs() > NAMEPLATE_SIZE_DEADZONE
+}
+
+#[inline]
+fn lerp(from: f32, to: f32, inverse_amount: f32) -> f32 {
+    to - (to - from) * inverse_amount
+}
+
+#[inline]
+fn lerp_point(from: [f32; 2], to: [f32; 2], inverse_amount: f32) -> [f32; 2] {
+    [
+        lerp(from[0], to[0], inverse_amount),
+        lerp(from[1], to[1], inverse_amount),
+    ]
 }
 
 fn player_at_explored_tile(player: &PlayerSnapshot, sim: &SimState) -> bool {
@@ -1774,22 +1822,49 @@ mod tests {
     }
 
     #[test]
+    fn nameplate_position_threshold_skips_noise_and_teleports() {
+        assert!(!nameplate_position_needs_interpolation(
+            [0.0, 0.0],
+            [0.099, 0.0],
+            20.0
+        ));
+        assert!(!nameplate_position_needs_interpolation(
+            [0.0, 0.0],
+            [0.2, 0.0],
+            4.0
+        ));
+        assert!(nameplate_position_needs_interpolation(
+            [0.0, 0.0],
+            [0.2, 0.0],
+            6.0
+        ));
+        assert!(!nameplate_position_needs_interpolation(
+            [0.0, 0.0],
+            [60.0, 0.0],
+            20.0
+        ));
+    }
+
+    #[test]
+    fn nameplate_size_deadzone_skips_small_growth() {
+        assert!(!nameplate_size_needs_interpolation(10.0, 10.2));
+        assert!(nameplate_size_needs_interpolation(10.0, 10.21));
+    }
+
+    #[test]
     fn nameplate_interpolation_is_bounded_and_reaches_target() {
         let duration = Duration::from_millis(400);
         let start = Instant::now();
-        let halfway = nameplate_sample_alpha(
-            Some(start),
-            start + Duration::from_millis(200),
-            duration,
-        );
-        let complete = nameplate_sample_alpha(
-            Some(start),
-            start + Duration::from_millis(400),
-            duration,
-        );
+        let halfway =
+            nameplate_sample_alpha(Some(start), start + Duration::from_millis(200), duration);
+        let complete =
+            nameplate_sample_alpha(Some(start), start + Duration::from_millis(400), duration);
         assert!(halfway > 0.0 && halfway < 1.0);
         assert_eq!(complete, 1.0);
-        assert_eq!(lerp_point([0.0, 4.0], [10.0, 14.0], complete), [10.0, 14.0]);
+        assert_eq!(
+            lerp_point([0.0, 4.0], [10.0, 14.0], 1.0 - complete),
+            [10.0, 14.0]
+        );
     }
 
     #[test]

@@ -1212,7 +1212,7 @@ impl PlayerDb {
             let Some(expected_json): Option<String> = con.get(acc_key).await? else {
                 return Err("Account not found".into());
             };
-            let mut account: PlayerAccount = serde_json::from_str(&expected_json)?;
+            let mut account = parse_account_with_migration(expected_json.as_bytes())?;
             mutate(&mut account);
             let updated_json = serde_json::to_string(&account)?;
             let replaced: i32 = compare_and_set
@@ -1226,6 +1226,61 @@ impl PlayerDb {
             }
         }
         Err("concurrent account update; retry".into())
+    }
+
+    async fn ensure_anonymous_welcome_grant(
+        &self,
+        account: PlayerAccount,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        if account.kind != AccountKind::Human || !account.linked_identities.is_empty() {
+            return Ok(account);
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut granted = false;
+        let mut con = self.get_connection().await?;
+        let updated = Self::update_account_atomic(
+            &mut con,
+            &Self::account_key(&account.id),
+            |account| {
+                if account.kind != AccountKind::Human || !account.linked_identities.is_empty() {
+                    return;
+                }
+                if account
+                    .profile
+                    .purchase_history
+                    .contains_key(crate::commerce::ANONYMOUS_WELCOME_GRANT_ID)
+                {
+                    return;
+                }
+                account.profile.gems = account
+                    .profile
+                    .gems
+                    .saturating_add(crate::commerce::ANONYMOUS_WELCOME_GEMS);
+                account.profile.purchase_history.insert(
+                    crate::commerce::ANONYMOUS_WELCOME_GRANT_ID.to_string(),
+                    PurchaseRecord {
+                        id: crate::commerce::ANONYMOUS_WELCOME_GRANT_ID.to_string(),
+                        provider: "system".to_string(),
+                        environment: "anonymous".to_string(),
+                        product_id: "sow_welcome_gems_1600".to_string(),
+                        transaction_id: None,
+                        status: "granted".to_string(),
+                        acquired_at: now,
+                        updated_at: now,
+                    },
+                );
+                account.updated_at = now;
+                granted = true;
+            },
+        )
+        .await?;
+        if granted {
+            self.save_player_account_to_redb(&updated);
+        }
+        Ok(updated)
     }
 
     async fn record_analytics(
@@ -2227,6 +2282,7 @@ impl PlayerDb {
                 return Err("invalid secret".into());
             }
             let account = self.ensure_starting_leader(account).await?;
+            let account = self.ensure_anonymous_welcome_grant(account).await?;
             if account.display_name.trim().is_empty() {
                 let display_name = requested_display_name
                     .map(normalize_display_name)
@@ -2279,6 +2335,7 @@ impl PlayerDb {
             // SETNX makes the canonical account key collision-safe without a
             // second identity mapping or a distributed lock.
             if con.set_nx::<_, _, bool>(&acc_key, acc_json).await? {
+                let account = self.ensure_anonymous_welcome_grant(account).await?;
                 let _: () = Self::record_analytics(&mut con, &random_id, true).await?;
                 self.save_player_account_to_redb(&account);
                 info!("Created anonymous account {}", account.id);
@@ -2700,6 +2757,11 @@ impl PlayerDb {
             _ => return Err("invalid leader unlock currency".into()),
         };
         let period = crate::commerce::current_rotation_period();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let purchase_id = format!("in_game:leader:{leader_id}");
         let mut con = self.get_connection().await?;
         let mut failure = None;
         let account =
@@ -2730,10 +2792,20 @@ impl PlayerDb {
                         account.profile.crowns -= cost;
                     }
                     account.profile.owned_leaders.insert(leader_id.clone());
-                    account.updated_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
+                    account.profile.purchase_history.insert(
+                        purchase_id.clone(),
+                        PurchaseRecord {
+                            id: purchase_id.clone(),
+                            provider: "in_game".to_string(),
+                            environment: "local".to_string(),
+                            product_id: format!("sow_leader_unlock_{leader_id}"),
+                            transaction_id: None,
+                            status: "granted".to_string(),
+                            acquired_at: now,
+                            updated_at: now,
+                        },
+                    );
+                    account.updated_at = now;
                 }
             })
             .await?;
@@ -2750,6 +2822,11 @@ impl PlayerDb {
         requested_skin: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let skin = crate::commerce::skin_by_id(requested_skin).ok_or("unknown skin")?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let purchase_id = format!("in_game:skin:{}", skin.id);
         let mut failure = None;
         let mut con = self.get_connection().await?;
         let account =
@@ -2761,10 +2838,20 @@ impl PlayerDb {
                 } else {
                     account.profile.gems -= skin.cost_gems;
                     account.profile.owned_skins.insert(skin.id.clone());
-                    account.updated_at = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
+                    account.profile.purchase_history.insert(
+                        purchase_id.clone(),
+                        PurchaseRecord {
+                            id: purchase_id.clone(),
+                            provider: "in_game".to_string(),
+                            environment: "local".to_string(),
+                            product_id: format!("sow_skin_unlock_{}", skin.id),
+                            transaction_id: None,
+                            status: "granted".to_string(),
+                            acquired_at: now,
+                            updated_at: now,
+                        },
+                    );
+                    account.updated_at = now;
                 }
             })
             .await?;
