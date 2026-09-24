@@ -15,9 +15,10 @@
 //!      exists. KNOWN-LIMIT (needs design GO): fully inland enclosed ghosts
 //!      have no legal action and stay idle.
 
-use super::profile::{ai_profile_for, ai_tier};
+use super::profile::{AiTier, ai_profile_for, ai_tier};
 use crate::engine::SowEngine;
 use crate::game::{GameEvent, GamePhase, GameState};
+use crate::game_config::BotDifficulty;
 use crate::player::{Player, PlayerType};
 use crate::protocol::{AttackIntent, GameplayIntent, Team};
 use crate::water_components::WaterComponents;
@@ -194,6 +195,7 @@ struct S16Scenario {
     ghost_id: u16,
     first_tribe: u16,
     last_tribe: u16,
+    tribe_homes: Vec<(u32, u32)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -310,10 +312,16 @@ impl S16Scenario {
     }
 
     fn tribe_tiles(&self) -> u32 {
-        self.tribe_ids()
-            .filter_map(|id| self.engine.state.player(id))
-            .map(|p| p.tile_count)
-            .sum()
+        let map = &self.engine.state.map;
+        let mut count = 0;
+        for y in 0..map.height {
+            for x in 0..map.width {
+                if self.is_tribe(map.owner_id(x, y)) {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 
     fn nation_counts(&self) -> (u32, u32) {
@@ -378,6 +386,80 @@ impl S16Scenario {
     }
 
     fn assert_setup(&self) {
+        assert_eq!(self.engine.state.seed, 7, "S16 SETUP FAIL: seed changed");
+        assert_eq!(
+            (self.engine.state.map.width, self.engine.state.map.height),
+            (80, 80),
+            "S16 SETUP FAIL: map dimensions changed"
+        );
+        assert_eq!(
+            self.engine.state.phase,
+            GamePhase::Playing,
+            "S16 SETUP FAIL: wrong initial phase"
+        );
+        assert_eq!(
+            self.engine.state.config.game_mode, "FFA",
+            "S16 SETUP FAIL: game mode changed"
+        );
+        let map = &self.engine.state.map;
+        assert_eq!(
+            map.terrain.len(),
+            80 * 80,
+            "S16 SETUP FAIL: terrain size changed"
+        );
+        assert!(
+            map.terrain.iter().all(|tile| tile.is_land()),
+            "S16 SETUP FAIL: map is not all land"
+        );
+        let mut owner_counts = [0u32; 62];
+        for y in 0..map.height {
+            for x in 0..map.width {
+                let owner = map.owner_id(x, y) as usize;
+                assert!(
+                    owner < owner_counts.len(),
+                    "S16 SETUP FAIL: invalid map owner {owner}"
+                );
+                owner_counts[owner] += 1;
+            }
+        }
+        assert_eq!(
+            owner_counts[0], 5_379,
+            "S16 SETUP FAIL: neutral land changed"
+        );
+        let profile_signature = |tier| {
+            let profile = ai_profile_for(tier, BotDifficulty::Vanilla);
+            (
+                profile.trigger_ratio,
+                profile.reserve_ratio,
+                profile.expand_ratio,
+                profile.refuse_human_chance,
+                profile.attacks_players,
+            )
+        };
+        assert_eq!(
+            profile_signature(AiTier::Ghost),
+            (0.05, 0.02, 0.02, 0, true),
+            "S16 SETUP FAIL: Ghost profile changed"
+        );
+        assert_eq!(
+            profile_signature(AiTier::Nation),
+            (0.45, 0.20, 0.15, 20, true),
+            "S16 SETUP FAIL: Nation profile changed"
+        );
+        assert_eq!(
+            profile_signature(AiTier::Tribe),
+            (0.75, 0.50, 0.10, 100, false),
+            "S16 SETUP FAIL: Vanilla Tribe profile changed"
+        );
+        assert_eq!(super::structures::iq_build_interval_base(AiTier::Ghost), 5);
+        assert_eq!(
+            super::structures::iq_build_interval_base(AiTier::Nation),
+            30
+        );
+        assert_eq!(
+            super::structures::iq_build_interval_base(AiTier::Tribe),
+            100
+        );
         assert_eq!(
             self.nation_ids().count(),
             20,
@@ -414,6 +496,33 @@ impl S16Scenario {
                 p.tile_count, 1,
                 "S16 SETUP FAIL: Nation {id} territory changed"
             );
+            assert_eq!(
+                owner_counts[id as usize], 1,
+                "S16 SETUP FAIL: Nation {id} map territory changed"
+            );
+            assert_eq!(
+                ai_tier(p.player_type, p.is_ai_controlled),
+                Some(AiTier::Nation),
+                "S16 SETUP FAIL: Nation {id} tier changed"
+            );
+            let index = id - self.first_nation;
+            let home_x = 6 + (index % 4) as u32 * 18;
+            let home_y = 6 + (index / 4) as u32 * 18;
+            assert_eq!(
+                self.engine.state.map.owner_id(home_x, home_y),
+                id,
+                "S16 SETUP FAIL: Nation {id} home moved or changed owner"
+            );
+            assert_eq!(p.iq, 150, "S16 SETUP FAIL: Nation {id} IQ changed");
+            assert_eq!(
+                p.troops, 4_000.0,
+                "S16 SETUP FAIL: Nation {id} troops changed"
+            );
+            assert_eq!(
+                p.max_troops, 6_000.0,
+                "S16 SETUP FAIL: Nation {id} cap changed"
+            );
+            assert_eq!(p.gold, 50_000.0, "S16 SETUP FAIL: Nation {id} gold changed");
         }
 
         let ghost = self
@@ -435,7 +544,35 @@ impl S16Scenario {
             ghost.tile_count, 1,
             "S16 SETUP FAIL: Ghost territory changed"
         );
+        assert_eq!(
+            owner_counts[self.ghost_id as usize], 1,
+            "S16 SETUP FAIL: Ghost map territory changed"
+        );
+        assert_eq!(
+            ai_tier(ghost.player_type, ghost.is_ai_controlled),
+            Some(AiTier::Ghost),
+            "S16 SETUP FAIL: Ghost tier changed"
+        );
+        assert_eq!(
+            self.engine.state.map.owner_id(40, 40),
+            self.ghost_id,
+            "S16 SETUP FAIL: Ghost home moved or changed owner"
+        );
+        assert_eq!(ghost.iq, 170, "S16 SETUP FAIL: Ghost IQ changed");
+        assert_eq!(
+            ghost.troops, 20_000.0,
+            "S16 SETUP FAIL: Ghost troops changed"
+        );
+        assert_eq!(
+            ghost.max_troops, 40_000.0,
+            "S16 SETUP FAIL: Ghost cap changed"
+        );
 
+        assert_eq!(
+            self.tribe_homes.len(),
+            40,
+            "S16 SETUP FAIL: Tribe homes changed"
+        );
         for id in self.tribe_ids() {
             let p = self
                 .engine
@@ -450,9 +587,36 @@ impl S16Scenario {
             assert!(p.alive, "S16 SETUP FAIL: Tribe {id} starts dead");
             assert!(!p.is_ai_controlled, "S16 SETUP FAIL: Tribe {id} is a Ghost");
             assert_eq!(
-                p.tile_count, 26,
+                p.tile_count, 25,
                 "S16 SETUP FAIL: Tribe {id} initial block changed"
             );
+            assert_eq!(
+                owner_counts[id as usize], 25,
+                "S16 SETUP FAIL: Tribe {id} map territory changed"
+            );
+            assert_eq!(
+                ai_tier(p.player_type, p.is_ai_controlled),
+                Some(AiTier::Tribe),
+                "S16 SETUP FAIL: Tribe {id} tier changed"
+            );
+            assert_eq!(p.iq, 60, "S16 SETUP FAIL: Tribe {id} IQ changed");
+            assert_eq!(p.troops, 500.0, "S16 SETUP FAIL: Tribe {id} troops changed");
+            assert_eq!(
+                p.max_troops, 5_000.0,
+                "S16 SETUP FAIL: Tribe {id} cap changed"
+            );
+            let (home_x, home_y) = self.tribe_homes[(id - self.first_tribe) as usize];
+            let block_x = home_x.saturating_sub(2);
+            let block_y = home_y.saturating_sub(2);
+            for y in block_y..block_y + 5 {
+                for x in block_x..block_x + 5 {
+                    assert_eq!(
+                        self.engine.state.map.owner_id(x, y),
+                        id,
+                        "S16 SETUP FAIL: Tribe {id} initial block changed at ({x}, {y})"
+                    );
+                }
+            }
         }
     }
 
@@ -472,27 +636,32 @@ impl S16Scenario {
             self.engine.tick();
             let next_attack_id = self.engine.state.next_attack_id;
 
-            for attack in &self.engine.attacks {
-                if attack.id >= first_new_attack_id
-                    && attack.id < next_attack_id
-                    && self.is_nation_or_ghost(attack.owner_id)
-                    && self.is_tribe(attack.target_owner)
-                {
-                    stats.new_tribe_attacks += 1;
-                    let target_troops = self
-                        .engine
-                        .state
-                        .player(attack.target_owner)
-                        .map(|p| p.troops)
-                        .unwrap_or(0.0);
-                    stats.last_progress = Some(S16Progress::Attack {
-                        tick: self.engine.state.tick,
-                        owner_id: attack.owner_id,
-                        target_owner: attack.target_owner,
-                        troops: attack.troops,
-                        target_troops,
-                    });
+            let first_new_attack = self
+                .engine
+                .attacks
+                .partition_point(|attack| attack.id < first_new_attack_id);
+            for attack in &self.engine.attacks[first_new_attack..] {
+                if attack.id >= next_attack_id {
+                    break;
                 }
+                if !self.is_nation_or_ghost(attack.owner_id) || !self.is_tribe(attack.target_owner)
+                {
+                    continue;
+                }
+                stats.new_tribe_attacks += 1;
+                let target_troops = self
+                    .engine
+                    .state
+                    .player(attack.target_owner)
+                    .map(|p| p.troops)
+                    .unwrap_or(0.0);
+                stats.last_progress = Some(S16Progress::Attack {
+                    tick: self.engine.state.tick,
+                    owner_id: attack.owner_id,
+                    target_owner: attack.target_owner,
+                    troops: attack.troops,
+                    target_troops,
+                });
             }
 
             for event in &self.engine.state.events {
@@ -554,6 +723,10 @@ impl S16Scenario {
                     _ => {}
                 }
             }
+
+            if self.nation_counts().0 == 0 {
+                break;
+            }
         }
 
         stats.end_tick = self.engine.state.tick;
@@ -593,11 +766,37 @@ fn s16_replay_trace() -> String {
                     p.troops.to_bits(),
                     p.max_troops.to_bits(),
                     p.gold.to_bits(),
+                    p.iq_points.to_bits(),
+                    p.sum_x,
+                    p.sum_y,
+                )
+            })
+            .collect();
+        let mut map_owners = Vec::with_capacity(
+            (scenario.engine.state.map.width * scenario.engine.state.map.height) as usize,
+        );
+        for y in 0..scenario.engine.state.map.height {
+            for x in 0..scenario.engine.state.map.width {
+                map_owners.push(scenario.engine.state.map.owner_id(x, y));
+            }
+        }
+        let attacks: Vec<_> = scenario
+            .engine
+            .attacks
+            .iter()
+            .map(|a| {
+                (
+                    a.id,
+                    a.owner_id,
+                    a.target_owner,
+                    a.troops.to_bits(),
+                    a.to_conquer.len(),
+                    a.retreating,
                 )
             })
             .collect();
         trace.push_str(&format!(
-            "window={window} tick={} phase={:?} next_attack_id={} alive={alive_nations} functioning={functioning_nations} stats={stats:?} players={players:?}\n",
+            "window={window} tick={} phase={:?} next_attack_id={} alive={alive_nations} functioning={functioning_nations} stats={stats:?} players={players:?} map_owners={map_owners:?} attacks={attacks:?}\n",
             scenario.engine.state.tick,
             scenario.engine.state.phase,
             scenario.engine.state.next_attack_id,
@@ -624,6 +823,7 @@ fn build_s16_scenario() -> S16Scenario {
     let ghost_id = id - 1;
     let first_tribe = id;
     let mut tribes = 0;
+    let mut tribe_homes = Vec::with_capacity(40);
     for row in 0..5 {
         for col in 0..8 {
             if tribes >= 40 {
@@ -638,6 +838,7 @@ fn build_s16_scenario() -> S16Scenario {
                 continue;
             }
             specs.push(LabPlayer::tribe(id, x as u32, y as u32));
+            tribe_homes.push((x as u32, y as u32));
             id += 1;
             tribes += 1;
         }
@@ -657,6 +858,7 @@ fn build_s16_scenario() -> S16Scenario {
                 continue;
             }
             specs.push(LabPlayer::tribe(id, x, y));
+            tribe_homes.push((x, y));
             id += 1;
             tribes += 1;
         }
@@ -679,6 +881,11 @@ fn build_s16_scenario() -> S16Scenario {
                 5,
                 5,
             );
+            // The 5x5 block includes the already-owned home tile. Count each
+            // map tile once so the lab starts with the actual 25-tile area.
+            if let Some(player) = engine.state.player_mut(s.id) {
+                player.tile_count -= 1;
+            }
         }
     }
 
@@ -689,6 +896,7 @@ fn build_s16_scenario() -> S16Scenario {
         ghost_id,
         first_tribe,
         last_tribe,
+        tribe_homes,
     }
 }
 
@@ -1893,16 +2101,11 @@ fn s16_long_horizon_wars_keep_flowing() {
 
         if alive_nations == 0 {
             panic!(
-                "S16 SURVIVAL FAIL: all Nations eliminated by tick {}; functioning={functioning_nations}; stats={stats:?}",
-                stats.end_tick
+                "S16 ELIMINATION FAIL: last Nation eliminated at tick {}; functioning={functioning_nations}; last_elimination={:?}; stats={stats:?}",
+                stats.end_tick,
+                stats.last_elimination.map(S16Elimination::summary)
             );
         }
-        assert_eq!(
-            scenario.engine.state.phase,
-            GamePhase::Playing,
-            "S16 SURVIVAL FAIL: match ended at tick {}; stats={stats:?}",
-            stats.end_tick
-        );
     }
 
     let total_land = 80u32 * 80;

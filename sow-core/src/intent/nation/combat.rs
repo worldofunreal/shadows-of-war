@@ -8,6 +8,11 @@ use wyrand::WyRand;
 use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
 
 #[inline]
+fn is_real_human(player: &crate::player::Player) -> bool {
+    player.is_human() && !player.is_ai_controlled
+}
+
+#[inline]
 pub(super) fn nation_target_allowed(
     target_id: u16,
     target_is_human: bool,
@@ -211,7 +216,7 @@ impl SowEngine {
                                     || (p_me.team.is_some() && p_me.team == p.team)
                             };
                             let target_allowed = !is_mfo
-                                || nation_target_allowed(p.id, p.is_human(), defender_target);
+                                || nation_target_allowed(p.id, is_real_human(p), defender_target);
                             if !is_friendly && target_allowed && !p.border_tiles.is_empty() {
                                 if p.troops < min_overall {
                                     min_overall = p.troops;
@@ -304,7 +309,7 @@ impl SowEngine {
                         if has_tribe_target && p_t.player_type != crate::player::PlayerType::Bot {
                             continue;
                         }
-                        if !nation_target_allowed(t_id, p_t.is_human(), defender_target) {
+                        if !nation_target_allowed(t_id, is_real_human(p_t), defender_target) {
                             continue;
                         }
                         if p_t.troops < min_troops {
@@ -362,7 +367,7 @@ impl SowEngine {
                     let is_target_human = self
                         .state
                         .player(target_owner)
-                        .map(|pl| pl.is_human())
+                        .map(is_real_human)
                         .unwrap_or(false);
                     let refuse_roll = self
                         .state
@@ -630,9 +635,9 @@ impl SowEngine {
         }
 
         let target_allowed = |target_id: u16| {
-            self.state
-                .player(target_id)
-                .is_some_and(|p| nation_target_allowed(target_id, p.is_human(), defender_target))
+            self.state.player(target_id).is_some_and(|p| {
+                nation_target_allowed(target_id, is_real_human(p), defender_target)
+            })
         };
         let has_legal_target = defender_target
             .is_some_and(|target_id| targets.contains(&target_id))

@@ -89,4 +89,7 @@ pub fn set_master_volume(volume: f32) {
     native::set_master_volume(volume);
 }
 
+#[cfg(feature = "preview")]
+pub use native::export_sfx_preview;
+
 mod native;

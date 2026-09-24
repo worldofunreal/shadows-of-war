@@ -5,6 +5,14 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Procedural spatial audio for Shadows of War"
 
+[features]
+preview = []
+
+[[example]]
+name = "sfx-preview"
+path = "examples/sfx-preview.rs"
+required-features = ["preview"]
+
 [dependencies]
 cpal = { workspace = true }
 log = { workspace = true }

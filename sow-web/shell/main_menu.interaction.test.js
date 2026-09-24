@@ -7,6 +7,8 @@ const shell = __dirname;
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
 const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.js"), "utf8");
+const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
+const profileCss = fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.js"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
@@ -134,13 +136,31 @@ test("settings panel keeps only useful controls and real account state", () => {
 });
 
 test("hero purchase stays server-backed, direct, and visually honest", () => {
-    assert.match(storeSource, /offer\.owned \|\| offer\.free_rotation \|\| offer\.available/);
+    assert.match(storeSource, /if \(!offer \|\| offer\.owned\) return ""/);
+    assert.doesNotMatch(storeSource, /offer\.free_rotation \|\| offer\.available/);
     assert.match(storeSource, /data-command='unlock_leader'/);
+    assert.match(storeSource, /data-command='open_skin_purchase'/);
     assert.match(storeSource, /sow-store__currency-amount--insufficient/);
     assert.match(storeSource, /command = confirm \? "open_product_purchase" : "buy_product"/);
+    assert.match(storeSource, /skin\.direct_product_id, SOW_t\("store\.buy"\), true/);
     assert.match(shellSource, /data-menu-overlay='purchase'/);
     assert.match(shellSource, /openLeaderPurchase/);
     assert.match(shellSource, /send\("unlock_leader", \{ leader_id: purchaseModal\.leaderId, currency: purchaseModal\.currency \}\)/);
+    assert.match(shellSource, /send\("unlock_skin", \{ skin_id: purchaseModal\.skinId \}\)/);
+    assert.match(storeSource, /purchaseModal\.phase = "success"/);
+    assert.match(storeSource, /purchaseItemOwned/);
+    assert.match(storeSource, /sow-purchase-modal__visual/);
+    assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal__layout/);
+    assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal-pop/);
+});
+
+test("weekly free rotation is a splash-only status", () => {
+    const cardStart = heroesSource.indexOf("function renderHeroesCard");
+    const cardEnd = heroesSource.indexOf("function heroesRoster", cardStart);
+    assert.ok(cardStart >= 0 && cardEnd > cardStart);
+    assert.doesNotMatch(heroesSource.slice(cardStart, cardEnd), /data-hero-status|weekly_free_rotation/);
+    assert.match(heroesSource, /activeLeader\.free_rotation === true && activeLeader\.owned === false/);
+    assert.match(profileCss, /\.sow-heroes__rotation/);
 });
 
 test("header exposes server progress currencies and keeps the real XP remainder", () => {

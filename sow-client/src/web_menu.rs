@@ -508,7 +508,7 @@ impl SowApp {
                         continue;
                     }
                     if campaign == CampaignId::Boudica {
-                        if self.progress.complete_tutorial_with_reward() {
+                        if self.progress.mark_tutorial_completed() {
                             self.save_local_progress();
                             self.persist_tutorial_completion();
                         }

@@ -56,6 +56,7 @@
     var storeCheckoutBusy = false;
     var storeCheckoutInstance = null;
     var purchaseModal = null;
+    var purchaseIntent = null;
     /* POKI_STRIPE_STATE_BEGIN */
     var stripePromise = null;
     /* POKI_STRIPE_STATE_END */

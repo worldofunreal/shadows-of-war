@@ -36,11 +36,12 @@
         return Math.max(0, Number(state && state[currency]) || 0);
     }
 
-    function storeProductButton(productId, label, confirm, priceLabel, leaderId) {
+    function storeProductButton(productId, label, confirm, priceLabel, leaderId, skinId) {
         var command = confirm ? "open_product_purchase" : "buy_product";
         var price = priceLabel ? " data-price-label='" + esc(priceLabel) + "'" : "";
         var leader = leaderId ? " data-leader-id='" + esc(leaderId) + "'" : "";
-        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='" + command + "' data-product-id='" + esc(productId) + "'" + price + leader + ">" + esc(label || SOW_t("store.buy")) + "</button>";
+        var skin = skinId ? " data-skin-id='" + esc(skinId) + "'" : "";
+        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='" + command + "' data-product-id='" + esc(productId) + "'" + price + leader + skin + ">" + esc(label || SOW_t("store.buy")) + "</button>";
     }
 
     function canRenderDirectPurchase(productId) {
@@ -59,6 +60,10 @@
         return (state.store && state.store.leaders || []).find(function (leader) { return normalize(leader.id) === target; }) || null;
     }
 
+    function storeSkinById(id) {
+        return (state.store && state.store.skins || []).find(function (skin) { return String(skin.id) === String(id); }) || null;
+    }
+
     function renderLeaderCurrencyButton(offer, currency) {
         var isGems = currency === "gems";
         var cost = Math.max(0, Number(isGems ? offer.cost_gems : offer.cost_crowns) || 0);
@@ -70,7 +75,7 @@
 
     function renderLeaderPurchase(leader) {
         var offer = storeLeaderById(leader.id);
-        if (!offer || offer.owned || offer.free_rotation || offer.available) return "";
+        if (!offer || offer.owned) return "";
         return "<div class='sow-heroes__purchase-actions'>" +
             renderLeaderCurrencyButton(offer, "crowns") +
             renderLeaderCurrencyButton(offer, "gems") +
@@ -82,17 +87,29 @@
         var offer = storeLeaderById(leaderId);
         var isGems = currency === "gems";
         var cost = offer && (isGems ? offer.cost_gems : offer.cost_crowns);
-        if (!offer || offer.owned || offer.free_rotation || offer.available ||
-            (state && state.store_busy) || storeBalance(currency) < Number(cost || 0)) return;
+        if (!offer || offer.owned || (state && state.store_busy) ||
+            storeBalance(currency) < Number(cost || 0)) return;
         state.error = null;
-        purchaseModal = { type: "leader", leaderId: offer.id, currency: currency, submitted: false };
+        purchaseIntent = { type: "leader", leaderId: offer.id };
+        purchaseModal = { type: "leader", leaderId: offer.id, currency: currency, phase: "confirm", submitted: false };
         render();
     }
 
-    function openProductPurchase(productId, leaderId, priceLabel) {
+    function openSkinPurchase(skinId) {
+        var skin = storeSkinById(skinId);
+        if (!skin || skin.owned || (state && state.store_busy) ||
+            storeBalance("gems") < Number(skin.cost_gems || 0)) return;
+        state.error = null;
+        purchaseIntent = { type: "skin", skinId: skin.id };
+        purchaseModal = { type: "skin", skinId: skin.id, currency: "gems", phase: "confirm", submitted: false };
+        render();
+    }
+
+    function openProductPurchase(productId, leaderId, priceLabel, skinId) {
         if (!productId || storeCheckoutBusy || (state && state.store_busy)) return;
         state.error = null;
-        purchaseModal = { type: "product", productId: productId, leaderId: leaderId, priceLabel: priceLabel || "", submitted: false };
+        purchaseIntent = leaderId ? { type: "leader", leaderId: leaderId, productId: productId } : { type: "skin", skinId: skinId, productId: productId };
+        purchaseModal = { type: "product", productId: productId, leaderId: leaderId, skinId: skinId, priceLabel: priceLabel || "", phase: "confirm", submitted: false };
         render();
     }
 
@@ -104,14 +121,18 @@
 
     function renderStoreSkinPromo(skin) {
         var action;
-        var disabled = state && state.store_busy ? " disabled" : "";
+        var cost = Math.max(0, Number(skin.cost_gems) || 0);
+        var insufficient = storeBalance("gems") < cost;
+        var disabled = insufficient || (state && state.store_busy) ? " disabled" : "";
+        var busyDisabled = state && state.store_busy ? " disabled" : "";
         if (skin.owned) {
             action = state.selected_skin === skin.id
                 ? "<span class='sow-store__offer-state'>" + esc(SOW_t("store.equipped")) + "</span>"
-                : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + esc(SOW_t("store.equip")) + "</button>";
+                : "<button class='sow-store__buy' type='button' data-command='equip_skin' data-skin-id='" + esc(skin.id) + "'" + busyDisabled + ">" + esc(SOW_t("store.equip")) + "</button>";
         } else {
-            action = "<div class='sow-store__buy-row'><button class='sow-store__buy' type='button' data-command='unlock_skin' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + renderCurrencyAmount(skin.cost_gems, "gem") + "</button>" +
-                (canRenderDirectPurchase(skin.direct_product_id) ? storeProductButton(skin.direct_product_id, SOW_t("store.buy")) : "") + "</div>";
+            var amountClass = insufficient ? "sow-store__currency-amount--insufficient" : "";
+            action = "<div class='sow-store__buy-row'><button class='sow-store__buy" + (insufficient ? " sow-store__buy--insufficient" : "") + "' type='button' data-command='open_skin_purchase' data-skin-id='" + esc(skin.id) + "'" + disabled + ">" + esc(SOW_t("store.buy")) + " " + renderCurrencyAmount(cost, "gem", amountClass) + "</button>" +
+                (canRenderDirectPurchase(skin.direct_product_id) ? storeProductButton(skin.direct_product_id, SOW_t("store.buy"), true, skin.direct_price_label, null, skin.id) : "") + "</div>";
         }
         return "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) + "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" + esc(skin.name) + "</h3><p>" + esc(SOW_t("store.territory_pattern")) + "</p>" + action + "</div></article>";
     }
@@ -122,32 +143,71 @@
             : "";
     }
 
+    function purchaseItemOwned() {
+        if (!purchaseIntent) return false;
+        if (purchaseIntent.skinId) {
+            var skin = storeSkinById(purchaseIntent.skinId);
+            return !!skin && !!skin.owned;
+        }
+        var offer = storeLeaderById(purchaseIntent.leaderId);
+        return !!offer && !!offer.owned;
+    }
+
+    function renderPurchaseArt(leader, skin, success) {
+        var art = skin
+            ? "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' src='" + esc(asset(skin.asset_path)) + "' alt='" + esc(skin.name) + "' width='256' height='256'>"
+            : "<picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(asset("shell/leaders/" + leader.slug + "_mobile.webp")) + "'><img class='sow-purchase-modal__art-image' src='" + esc(asset("shell/leaders/" + leader.slug + "_desktop.webp")) + "' alt='" + esc(leaderDisplayName(leader)) + "' width='1080' height='1920'></picture>";
+        var effects = success
+            ? "<div class='sow-purchase-modal__effects' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>"
+            : "";
+        return "<div class='sow-purchase-modal__visual" + (skin ? " sow-purchase-modal__visual--skin" : "") + "'>" + art + effects + "</div>";
+    }
+
     function renderPurchaseModal() {
         if (!purchaseModal) return "";
-        var leader = leaderById(purchaseModal.leaderId);
-        var offer = storeLeaderById(purchaseModal.leaderId);
-        if (!leader || !offer) return "";
+        var leader = purchaseModal.leaderId ? leaderById(purchaseModal.leaderId) : null;
+        var offer = purchaseModal.leaderId ? storeLeaderById(purchaseModal.leaderId) : null;
+        var skin = purchaseModal.skinId ? storeSkinById(purchaseModal.skinId) : null;
+        if ((purchaseModal.leaderId && (!leader || !offer)) || (purchaseModal.skinId && !skin)) return "";
         var isProduct = purchaseModal.type === "product";
-        var checkout = isProduct && storeCheckoutProduct === purchaseModal.productId;
+        var success = purchaseModal.phase === "success";
+        var checkout = !success && isProduct && storeCheckoutProduct === purchaseModal.productId;
         var busy = purchaseModal.submitted || storeCheckoutBusy || (state && state.store_busy);
+        var itemName = skin ? skin.name : leaderDisplayName(leader);
         var summary = isProduct
             ? (purchaseModal.priceLabel || SOW_t("store.buy"))
             : renderCurrencyAmount(
-                purchaseModal.currency === "gems" ? offer.cost_gems : offer.cost_crowns,
+                purchaseModal.currency === "gems" ? (skin ? skin.cost_gems : offer.cost_gems) : offer.cost_crowns,
                 purchaseModal.currency === "gems" ? "gem" : "crown"
             );
-        var error = state && state.error ? "<div class='sow-menu__status sow-menu__status--error' role='alert'>" + esc(localizedText(state.error)) + "</div>" : "";
-        var body = checkout
-            ? renderStoreCheckout()
-            : "<div class='sow-menu__modal-actions'><button class='sow-menu__ghost-button' type='button' data-command='cancel_purchase'>" + esc(SOW_t("lobbies.cancel")) + "</button><button class='sow-menu__primary' type='button' data-command='confirm_purchase'" + (busy ? " disabled" : "") + ">" + esc(SOW_t("store.buy")) + "</button></div>";
-        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal' role='dialog' aria-modal='true' aria-label='" + esc(leaderDisplayName(leader)) + "'><div class='sow-menu__modal-head'><h2>" + esc(leaderDisplayName(leader)) + "</h2><button class='sow-menu__icon-button' type='button' data-command='cancel_purchase' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div><strong>" + summary + "</strong>" + error + body + "</section></div>";
+        var error = !success && state && state.error ? "<div class='sow-menu__status sow-menu__status--error' role='alert'>" + esc(localizedText(state.error)) + "</div>" : "";
+        var body = success
+            ? "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='cancel_purchase'>" + esc(SOW_t("tutorial.continue")) + "</button></div>"
+            : checkout
+                ? renderStoreCheckout()
+                : "<div class='sow-menu__modal-actions'><button class='sow-menu__ghost-button' type='button' data-command='cancel_purchase'>" + esc(SOW_t("lobbies.cancel")) + "</button><button class='sow-menu__primary' type='button' data-command='confirm_purchase'" + (busy ? " disabled" : "") + ">" + esc(SOW_t("store.buy")) + "</button></div>";
+        var close = success ? "" : "<button class='sow-menu__icon-button' type='button' data-command='cancel_purchase' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button>";
+        var eyebrow = success ? SOW_t("store.unlocked") : SOW_t("store.purchase");
+        var price = success ? "" : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
+        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" + (success ? " is-success" : "") + "' role='dialog' aria-modal='true' aria-live='polite' aria-label='" + esc(itemName) + "'><div class='sow-purchase-modal__layout'>" + renderPurchaseArt(leader, skin, success) + "<div class='sow-purchase-modal__copy'><div class='sow-menu__modal-head'><div><p class='sow-purchase-modal__eyebrow'>" + esc(eyebrow) + "</p><h2>" + esc(itemName) + "</h2></div>" + close + "</div>" + price + error + body + "</div></div></section></div>";
     }
 
     function resolvePurchaseModal() {
-        if (!purchaseModal || purchaseModal.type !== "leader" || !purchaseModal.submitted) return;
-        var offer = storeLeaderById(purchaseModal.leaderId);
-        if (offer && offer.owned) purchaseModal = null;
-        else if (state && !state.store_busy && state.error) purchaseModal.submitted = false;
+        if (!purchaseModal || purchaseModal.phase === "success" || !purchaseModal.submitted || !purchaseIntent) return;
+        if (purchaseItemOwned()) {
+            if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") storeCheckoutInstance.destroy();
+            storeCheckoutInstance = null;
+            storeCheckoutProduct = null;
+            storeCheckoutRequestId = null;
+            storeCheckoutBusy = false;
+            purchaseModal.phase = "success";
+            purchaseModal.submitted = false;
+            purchaseIntent = null;
+            if (state) state.error = null;
+        } else if (state && !state.store_busy && state.error && purchaseModal.type !== "product") {
+            purchaseModal.submitted = false;
+            purchaseIntent = null;
+        }
     }
 
     function renderStore() {
@@ -232,7 +292,14 @@
             return loadStripeJs().then(function (Stripe) {
                 if (!data.publishable_key || !data.client_secret) throw new Error("Checkout is not configured");
                 var stripe = Stripe(data.publishable_key);
-                return stripe.initEmbeddedCheckout({ clientSecret: data.client_secret });
+                return stripe.initEmbeddedCheckout({
+                    clientSecret: data.client_secret,
+                    onComplete: function () {
+                        if (purchaseModal && purchaseModal.type === "product" && purchaseModal.productId === productId) {
+                            send("refresh_profile");
+                        }
+                    }
+                });
             });
         }).then(function (checkout) {
             if (!storeCheckoutProduct || storeCheckoutProduct !== productId) {
@@ -248,7 +315,10 @@
         }).catch(function (error) {
             state.error = error.message === "Checkout is not configured" ? SOW_t("store.checkout_not_configured") : SOW_t("store.checkout_unavailable");
             storeCheckoutProduct = null;
-            if (purchaseModal && purchaseModal.type === "product" && purchaseModal.productId === productId) purchaseModal.submitted = false;
+            if (purchaseModal && purchaseModal.type === "product" && purchaseModal.productId === productId) {
+                purchaseModal.submitted = false;
+                purchaseIntent = null;
+            }
             render();
         }).finally(function () {
             storeCheckoutBusy = false;
@@ -280,6 +350,7 @@
         storeCheckoutRequestId = null;
         storeCheckoutBusy = false;
         purchaseModal = null;
+        purchaseIntent = null;
         render();
     }
 

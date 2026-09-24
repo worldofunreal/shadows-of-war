@@ -1,3 +1,5 @@
+#[cfg(feature = "preview")]
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -123,6 +125,11 @@ struct AudioState {
 }
 
 static AUDIO_STATE: OnceLock<Mutex<AudioState>> = OnceLock::new();
+
+#[cfg(feature = "preview")]
+std::thread_local! {
+    static PREVIEW_CAPTURE: RefCell<Option<Vec<[f32; 2]>>> = const { RefCell::new(None) };
+}
 
 fn audio_state() -> &'static Mutex<AudioState> {
     AUDIO_STATE.get_or_init(|| {
@@ -359,6 +366,17 @@ fn queue_source<S>(source: S, left: f32, right: f32, priority: SoundPriority)
 where
     S: AudioSource + 'static,
 {
+    #[cfg(feature = "preview")]
+    if PREVIEW_CAPTURE.with(|capture| capture.borrow().is_some()) {
+        let frames = render_preview_source(source, left, right, priority);
+        PREVIEW_CAPTURE.with(|capture| {
+            if let Some(output) = capture.borrow_mut().as_mut() {
+                output.extend(frames);
+            }
+        });
+        return;
+    }
+
     let state_lock = audio_state();
     let mut state = state_lock.lock().unwrap_or_else(|e| e.into_inner());
     let active = {
@@ -377,6 +395,43 @@ where
         left * gain,
         right * gain,
     );
+}
+
+#[cfg(feature = "preview")]
+pub(super) fn capture_preview_output(play: impl FnOnce()) -> Vec<[f32; 2]> {
+    PREVIEW_CAPTURE.with(|capture| {
+        assert!(capture.borrow().is_none(), "nested SFX preview capture");
+        *capture.borrow_mut() = Some(Vec::new());
+    });
+    play();
+    PREVIEW_CAPTURE.with(|capture| capture.borrow_mut().take().unwrap_or_default())
+}
+
+#[cfg(feature = "preview")]
+fn render_preview_source<S>(
+    source: S,
+    left: f32,
+    right: f32,
+    priority: SoundPriority,
+) -> Vec<[f32; 2]>
+where
+    S: AudioSource + 'static,
+{
+    let output_rate = source.sample_rate().max(1);
+    let gain = priority_gain(priority, 0);
+    let master = MASTER_VOLUME.load(Ordering::Relaxed) as f32 / 1000.0;
+    let mut voice = Voice::new(Box::new(source), left * gain, right * gain);
+    let mut frames = Vec::new();
+    while voice.current.is_some() {
+        let Some((left, right)) = voice.next_frame(output_rate) else {
+            break;
+        };
+        frames.push([
+            (left * master).clamp(-1.0, 1.0),
+            (right * master).clamp(-1.0, 1.0),
+        ]);
+    }
+    frames
 }
 
 pub(super) fn spatial_gains(spatial: crate::SpatialSoundParams) -> (f32, f32, f32) {

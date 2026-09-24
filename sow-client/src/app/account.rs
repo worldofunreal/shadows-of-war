@@ -1,4 +1,7 @@
 use super::state::SowApp;
+use web_time::{Duration, Instant};
+
+const REWARD_PROFILE_MAX_RETRIES: u8 = 6;
 
 fn account_hint(account_id: Option<&str>) -> String {
     account_id
@@ -151,6 +154,56 @@ impl SowApp {
                     .headers
                     .insert("X-Platform-Provider", identity.provider);
             }
+        }
+    }
+
+    fn track_reward_receipt_sync(&mut self, receipt_id: impl Into<String>) {
+        if self.pending_reward_receipt_ids.insert(receipt_id.into()) {
+            self.reward_profile_retry_attempts = 0;
+        }
+    }
+
+    pub(crate) fn begin_reward_profile_sync(&mut self, receipt_id: impl ToString) {
+        self.track_reward_receipt_sync(receipt_id.to_string());
+        self.reward_profile_retry_at = Some(Instant::now());
+        self.fetch_cloud_progress();
+    }
+
+    pub(crate) fn poll_reward_profile_sync(&mut self, now: Instant) {
+        if self.pending_reward_receipt_ids.is_empty() {
+            return;
+        }
+        if self.profile_request_in_flight
+            || self.display_name_save_request_id.is_some()
+            || self
+                .reward_profile_retry_at
+                .is_none_or(|retry_at| retry_at > now)
+        {
+            return;
+        }
+        if self.reward_profile_retry_attempts >= REWARD_PROFILE_MAX_RETRIES {
+            log::warn!("[rewards] profile receipt retry window expired");
+            if self.pending_reward_receipt_ids.contains("tutorial") {
+                self.tutorial_completion_retry_exhausted = true;
+            }
+            self.pending_reward_receipt_ids.clear();
+            self.reward_profile_retry_at = None;
+            return;
+        }
+        self.reward_profile_retry_attempts = self.reward_profile_retry_attempts.saturating_add(1);
+        self.reward_profile_retry_at =
+            Some(now + Duration::from_millis(250 * u64::from(self.reward_profile_retry_attempts)));
+        self.fetch_cloud_progress();
+    }
+
+    pub(crate) fn schedule_reward_profile_retry(&mut self) {
+        if !self.pending_reward_receipt_ids.is_empty() {
+            self.reward_profile_retry_at = Some(
+                Instant::now()
+                    + Duration::from_millis(
+                        250 * u64::from(self.reward_profile_retry_attempts.max(1)),
+                    ),
+            );
         }
     }
 
@@ -474,9 +527,20 @@ impl SowApp {
     ) {
         let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
         let account_switch = account_changed && self.progress_account_id.is_some();
-        let retry_tutorial = provider == "anonymous"
+        let cloud_intro_completed = cloud.intro_completed.unwrap_or(false);
+        let ready_receipts = if account_changed {
+            Vec::new()
+        } else {
+            self.pending_reward_receipt_ids
+                .iter()
+                .filter(|id| cloud.reward_receipts.contains_key(*id))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let retry_tutorial = !account_changed
             && self.progress.intro_completed.unwrap_or(false)
-            && !cloud.intro_completed.unwrap_or(false);
+            && !cloud_intro_completed
+            && !self.tutorial_completion_retry_exhausted;
         let portal = self.progress.clone();
         if retry_tutorial {
             self.progress = portal.clone();
@@ -486,6 +550,10 @@ impl SowApp {
         if account_switch {
             self.pending_display_name = None;
             crate::anonymous_identity::clear_pending_display_name();
+            self.pending_reward_receipt_ids.clear();
+            self.reward_profile_retry_attempts = 0;
+            self.reward_profile_retry_at = None;
+            self.tutorial_completion_retry_exhausted = false;
         }
         if account_switch {
             self.ui
@@ -530,6 +598,19 @@ impl SowApp {
                 "[tutorial] cloud profile is missing completion; retrying one-time reward sync"
             );
             self.persist_tutorial_completion();
+        }
+        if cloud_intro_completed {
+            self.tutorial_completion_retry_exhausted = false;
+        }
+        for receipt_id in &ready_receipts {
+            self.pending_reward_receipt_ids.remove(receipt_id);
+        }
+        if !ready_receipts.is_empty() {
+            log::info!("[rewards] receipt is visible in the main-menu profile");
+        }
+        if self.pending_reward_receipt_ids.is_empty() {
+            self.reward_profile_retry_attempts = 0;
+            self.reward_profile_retry_at = None;
         }
     }
 
@@ -633,49 +714,64 @@ impl SowApp {
         let Some(account_id) = self.progress_account_id.clone() else {
             return;
         };
-        let mut fields = serde_json::Map::new();
-        fields.insert("account_id".into(), serde_json::Value::String(account_id.clone()));
-        fields.insert(
-            "receipt_ids".into(),
-            serde_json::Value::Array(
-                receipt_ids
-                    .iter()
-                    .map(|id| serde_json::Value::String(id.clone()))
-                    .collect(),
-            ),
-        );
-        if self.progress_provider == "anonymous" {
-            let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
+        let auth_secret = if self.progress_provider == "anonymous" {
+            let Some(secret) = crate::anonymous_identity::load_account_secret() else {
                 return;
             };
-            fields.insert("auth_secret".into(), serde_json::Value::String(auth_secret));
-        }
-        let Ok(body) = serde_json::to_vec(&serde_json::Value::Object(fields)) else {
-            return;
+            Some(secret)
+        } else {
+            None
         };
         let url = format!(
             "{}/profile/reward-receipts/ack",
             self.asset_config.database_base.trim_end_matches('/')
         );
-        let tx = self.tasks.db_tx.clone();
-        let mut request = ehttp::Request::post(&url, body);
-        request.headers.insert("Content-Type", "application/json");
-        Self::apply_platform_auth(&mut request);
-        ehttp::fetch(request, move |result| match result {
-            Ok(response) if response.ok => {
-                let _ = tx.send(crate::player_progress::DbEvent::RewardReceiptsAcked {
-                    account_id,
-                    receipt_ids,
-                });
-            }
-            Ok(response) => {
-                log::warn!(
-                    "[rewards] receipt acknowledgement failed status={}",
-                    response.status
+        for batch in receipt_ids.chunks(32) {
+            let batch = batch.to_vec();
+            let mut fields = serde_json::Map::new();
+            fields.insert(
+                "account_id".into(),
+                serde_json::Value::String(account_id.clone()),
+            );
+            fields.insert(
+                "receipt_ids".into(),
+                serde_json::Value::Array(
+                    batch
+                        .iter()
+                        .map(|id| serde_json::Value::String(id.clone()))
+                        .collect(),
+                ),
+            );
+            if let Some(secret) = &auth_secret {
+                fields.insert(
+                    "auth_secret".into(),
+                    serde_json::Value::String(secret.clone()),
                 );
             }
-            Err(error) => log::warn!("[rewards] receipt acknowledgement failed: {error}"),
-        });
+            let Ok(body) = serde_json::to_vec(&serde_json::Value::Object(fields)) else {
+                return;
+            };
+            let tx = self.tasks.db_tx.clone();
+            let account_id = account_id.clone();
+            let mut request = ehttp::Request::post(&url, body);
+            request.headers.insert("Content-Type", "application/json");
+            Self::apply_platform_auth(&mut request);
+            ehttp::fetch(request, move |result| match result {
+                Ok(response) if response.ok => {
+                    let _ = tx.send(crate::player_progress::DbEvent::RewardReceiptsAcked {
+                        account_id,
+                        receipt_ids: batch,
+                    });
+                }
+                Ok(response) => {
+                    log::warn!(
+                        "[rewards] receipt acknowledgement failed status={}",
+                        response.status
+                    );
+                }
+                Err(error) => log::warn!("[rewards] receipt acknowledgement failed: {error}"),
+            });
+        }
     }
 
     pub(crate) fn unlock_leader(&mut self, leader_id: String, currency: String) {
@@ -1009,26 +1105,47 @@ impl SowApp {
         });
     }
 
-    /// Persist the tutorial completion through the anonymous account proof.
-    /// The server owns the one-time reward; local storage remains the offline
-    /// fallback when the account has not been minted or the request fails.
+    /// Persist tutorial completion through the current platform proof. The
+    /// server owns the one-time reward; local storage is only the retry signal.
     pub(crate) fn persist_tutorial_completion(&mut self) {
+        if self.tutorial_completion_retry_exhausted {
+            return;
+        }
         let Some(account_id) = self.progress_account_id.clone() else {
             return;
         };
-        let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
-            return;
+        let identity = crate::store_portals::load_identity("Player");
+        let use_platform_identity = matches!(identity.provider, "wou" | "crazygames" | "playgames")
+            && identity
+                .external_id
+                .as_ref()
+                .is_some_and(|id| !id.is_empty())
+            && identity
+                .auth_token
+                .as_ref()
+                .is_some_and(|token| !token.is_empty());
+        let auth_secret = if use_platform_identity {
+            None
+        } else {
+            crate::anonymous_identity::load_account_secret()
         };
+        if !use_platform_identity && auth_secret.is_none() {
+            return;
+        }
+        self.track_reward_receipt_sync("tutorial");
+        if self.profile_request_in_flight {
+            return;
+        }
         let request_id = self.next_identity_request_id();
         self.profile_request_in_flight = true;
         let url = format!(
-            "{}/profile/anonymous/tutorial-complete",
+            "{}/profile/tutorial-complete",
             self.asset_config.database_base.trim_end_matches('/')
         );
         #[derive(serde::Serialize)]
         struct TutorialCompleteRequest {
             account_id: String,
-            auth_secret: String,
+            auth_secret: Option<String>,
         }
         let body = match serde_json::to_vec(&TutorialCompleteRequest {
             account_id,
@@ -1044,9 +1161,17 @@ impl SowApp {
         let tx = self.tasks.db_tx.clone();
         let mut request = ehttp::Request::post(&url, body);
         request.headers.insert("Content-Type", "application/json");
+        if use_platform_identity {
+            Self::apply_platform_auth(&mut request);
+        }
         request
             .headers
             .insert("X-SOW-Identity-Request", request_id.to_string());
+        let response_provider = if use_platform_identity {
+            identity.provider.to_string()
+        } else {
+            "anonymous".to_string()
+        };
         ehttp::fetch(request, move |result| match result {
             Ok(response) if response.ok => {
                 #[derive(serde::Deserialize)]
@@ -1062,7 +1187,7 @@ impl SowApp {
                             progress: account.profile,
                             account_id: account.account_id,
                             display_name: account.display_name,
-                            provider: "anonymous".to_string(),
+                            provider: response_provider,
                             request_id,
                         });
                     }

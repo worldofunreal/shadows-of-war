@@ -8,14 +8,12 @@ pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 // Crowns are the free spendable currency (owner decision 2026-09); laurels are
 // achievement points and are never a price.
 pub const LEADER_UNLOCK_COST_CROWNS: u64 = 500;
-pub const LEADER_UNLOCK_COST_GEMS: u64 = 1_500;
+pub const LEADER_UNLOCK_COST_GEMS: u64 = 450;
 /// One-time starter grant for every human account, regardless of identity
 /// provider. Bots never receive it.
-pub const WELCOME_GEMS: u64 = 1_600;
-pub const WELCOME_GRANT_ID: &str = "welcome_gems_v1";
-/// The old anonymous-only marker is recognized during migration so existing
-/// accounts are never paid twice.
-pub const LEGACY_ANONYMOUS_WELCOME_GRANT_ID: &str = "anonymous_welcome_gems_v1";
+pub const WELCOME_GEMS: u64 = 475;
+/// New receipt version intentionally tops up accounts that already have v1.
+pub const WELCOME_GRANT_ID: &str = "welcome_gems_v2";
 
 const GEM_BUNDLES: [(&str, u64); 3] = [
     ("sow_gems_500", 500),
@@ -419,8 +417,8 @@ mod tests {
     #[test]
     fn leader_has_dual_currency_price() {
         assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
-        assert_eq!(LEADER_UNLOCK_COST_GEMS, 1_500);
-        assert_eq!(WELCOME_GEMS, 1_600);
+        assert_eq!(LEADER_UNLOCK_COST_GEMS, 450);
+        assert_eq!(WELCOME_GEMS, 475);
         assert!(skins().iter().map(|skin| skin.cost_gems).sum::<u64>() > GEM_BUNDLES[2].1);
     }
 
@@ -436,7 +434,10 @@ mod tests {
     #[test]
     fn catalog_distinguishes_free_owned_and_locked_leaders() {
         let empty = BTreeSet::new();
-        let catalog = catalog_for_profile(&empty, &empty, 0, 1_600, 7);
+        let catalog = catalog_for_profile(&empty, &empty, 0, 475, 7);
+        assert!(catalog.leaders.iter().all(|leader| {
+            leader.cost_gems == 450 && leader.cost_crowns == LEADER_UNLOCK_COST_CROWNS
+        }));
         let free = catalog
             .leaders
             .iter()

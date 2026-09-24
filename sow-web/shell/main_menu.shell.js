@@ -605,6 +605,10 @@
             rewardToast.classList.add("is-visible");
             rewardToast.dataset.ackSent = "true";
             window.setTimeout(function () {
+                if (root.hidden || document.visibilityState !== "visible" || !root.contains(rewardToast)) {
+                    rewardToast.dataset.ackSent = "false";
+                    return;
+                }
                 if (receiptIds.length) send("acknowledge_reward_receipts", { receipt_ids: receiptIds });
             }, 1200);
         }
@@ -635,6 +639,7 @@
         var purchaseOverlay = event.target.closest("[data-menu-overlay='purchase']");
         if (purchaseOverlay && event.target === purchaseOverlay) {
             purchaseModal = null;
+            purchaseIntent = null;
             render();
             return;
         }
@@ -676,7 +681,7 @@
         }
         /* POKI_SHARED_STORE_ACTIONS_BEGIN */
         if (command === "open_product_purchase") {
-            openProductPurchase(target.dataset.productId, target.dataset.leaderId, target.dataset.priceLabel);
+            openProductPurchase(target.dataset.productId, target.dataset.leaderId, target.dataset.priceLabel, target.dataset.skinId);
             return;
         }
         if (command === "buy_product") {
@@ -702,6 +707,7 @@
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
             purchaseModal = null;
+            purchaseIntent = null;
             settingsOpen = false;
             signOutConfirmOpen = false;
             campaignOpen = false;
@@ -967,11 +973,18 @@
             if (unlockLeaderId) openLeaderPurchase(unlockLeaderId, unlockCurrency);
             return;
         }
+        if (command === "open_skin_purchase") {
+            var purchaseSkinId = target.dataset.skinId;
+            if (purchaseSkinId) openSkinPurchase(purchaseSkinId);
+            return;
+        }
         if (command === "confirm_purchase") {
             if (!purchaseModal || purchaseModal.submitted) return;
             purchaseModal.submitted = true;
             if (purchaseModal.type === "leader") {
                 if (!(state && state.store_busy)) send("unlock_leader", { leader_id: purchaseModal.leaderId, currency: purchaseModal.currency });
+            } else if (purchaseModal.type === "skin") {
+                if (!(state && state.store_busy)) send("unlock_skin", { skin_id: purchaseModal.skinId });
             } else if (purchaseModal.type === "product") {
                 if (!beginStorePurchase(purchaseModal.productId)) purchaseModal.submitted = false;
             }
@@ -982,6 +995,7 @@
             if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
             else {
                 purchaseModal = null;
+                purchaseIntent = null;
                 render();
             }
             return;
@@ -1194,13 +1208,15 @@
         storeCheckoutRequestId = null;
         if (result.status === "success" || result.status === "restored") {
             state.error = null;
-            purchaseModal = null;
+            if (!purchaseModal || purchaseModal.type !== "product") purchaseIntent = null;
             send("refresh_profile");
         } else if (result.status === "cancelled") {
             purchaseModal = null;
+            purchaseIntent = null;
             state.error = SOW_t("menu.purchase_cancelled");
         } else {
             purchaseModal = null;
+            purchaseIntent = null;
             state.error = SOW_t("menu.purchase_failed");
         }
         render();
@@ -1264,6 +1280,7 @@
             if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
             else {
                 purchaseModal = null;
+                purchaseIntent = null;
                 render();
             }
             return;

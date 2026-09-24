@@ -92,7 +92,8 @@ struct DisplayNameRequest {
 #[derive(Deserialize)]
 struct TutorialCompleteRequest {
     account_id: String,
-    auth_secret: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -108,6 +109,14 @@ struct MatchFinalizeRequest {
     lobby_json: Option<String>,
     #[serde(default)]
     replay_data: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize)]
+struct MatchParticipantSettleRequest {
+    match_id: String,
+    account_id: String,
+    #[serde(default)]
+    lobby_json: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -232,6 +241,22 @@ struct ProfileDeleteResponse {
     keys_removed: u64,
     redb_rows_removed: u32,
     analytics_sets_scrubbed: u64,
+}
+
+#[derive(Deserialize)]
+struct ManualGemGrantRequest {
+    account_id: String,
+    gems: u64,
+    request_id: String,
+}
+
+#[derive(Serialize)]
+struct ManualGemGrantResponse {
+    account_id: String,
+    requested_gems: u64,
+    balance: u64,
+    request_id: String,
+    granted: bool,
 }
 
 #[derive(Deserialize)]
@@ -1777,6 +1802,73 @@ async fn handle_internal_profile_delete(
     }
 }
 
+async fn handle_internal_profile_grant_gems(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<ManualGemGrantRequest>,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        warn!("Unauthorized access attempt to /internal/profile/grant-gems");
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    match state
+        .db
+        .grant_manual_gems(&payload.account_id, payload.gems, &payload.request_id)
+        .await
+    {
+        Ok((account, granted)) => {
+            info!(
+                "[operator] gem grant account={} gems={} granted={}",
+                account_hint(Some(&account.id)),
+                payload.gems,
+                granted
+            );
+            (
+                StatusCode::OK,
+                Json(ManualGemGrantResponse {
+                    account_id: account.id,
+                    requested_gems: payload.gems,
+                    balance: account.profile.gems,
+                    request_id: payload.request_id,
+                    granted,
+                }),
+            )
+                .into_response()
+        }
+        Err(error) => {
+            let message = error.to_string();
+            let status = match message.as_str() {
+                "invalid account_id" | "gem amount must be greater than zero" | "invalid request_id" => {
+                    StatusCode::BAD_REQUEST
+                }
+                "Account not found" => StatusCode::NOT_FOUND,
+                "account is not a human player"
+                | "request_id already used for a different grant"
+                | "gem balance overflow" => StatusCode::CONFLICT,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            warn!("[operator] gem grant failed: {message}");
+            (
+                status,
+                Json(ErrorResponse {
+                    error: if status == StatusCode::INTERNAL_SERVER_ERROR {
+                        "gem grant failed".to_string()
+                    } else {
+                        message
+                    },
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
 async fn handle_internal_profile_reset_test_data(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1937,13 +2029,19 @@ async fn main() {
         crazygames_api_key,
         Some(Arc::clone(&redb_db_arc)),
     );
+    // Open the single shared multiplexed connection now, so connectivity
+    // problems fail loudly at boot instead of as first-request latency.
+    if let Err(error) = player_db.warm_connection().await {
+        error!("Failed to establish the shared Valkey connection at startup: {error}");
+    }
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");
-    match player_db.migrate_welcome_gems_to_existing_humans().await {
-        Ok(count) => info!("Welcome gem migration checked existing human accounts: {count}"),
-        Err(error) => error!("Welcome gem migration failed: {error}"),
-    }
+    let migrated = player_db
+        .migrate_welcome_gems_to_existing_humans()
+        .await
+        .expect("Failed to apply starter gem grants to every existing human account");
+    info!("Starter gem grant applied to {migrated} existing human accounts");
 
     let default_analytics_dir = std::path::Path::new(&redb_path)
         .parent()
@@ -1969,6 +2067,14 @@ async fn main() {
         playgames_handoffs: std::sync::Mutex::new(HashMap::new()),
         playgames_sessions: std::sync::Mutex::new(HashMap::new()),
         playgames_access_tokens: std::sync::Mutex::new(HashMap::new()),
+    });
+
+    let sync_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        loop {
+            sync_state.retry_active_playgames_sync().await;
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        }
     });
 
     // Configure CORS for web portal compatibility
@@ -2034,12 +2140,17 @@ async fn main() {
         .route("/profile/name", post(handle_display_name))
         .route(
             "/profile/anonymous/tutorial-complete",
-            post(handle_anonymous_tutorial_complete),
+            post(handle_tutorial_complete),
         )
+        .route("/profile/tutorial-complete", post(handle_tutorial_complete))
         .route("/profile/anonymous/report", post(handle_report_player))
         .route("/profile/anonymous/blocks", post(handle_blocks))
         .route("/profile/anonymous/delete", post(handle_self_delete))
         .route("/match/start", post(handle_match_start))
+        .route(
+            "/internal/match-participant-settle",
+            post(handle_match_participant_settle),
+        )
         .route("/internal/match-finalize", post(handle_match_finalize))
         .route("/internal/save", post(handle_direct_save))
         .route("/internal/stats", get(handle_internal_stats))
@@ -2051,6 +2162,10 @@ async fn main() {
         .route(
             "/internal/profile/delete",
             post(handle_internal_profile_delete),
+        )
+        .route(
+            "/internal/profile/grant-gems",
+            post(handle_internal_profile_grant_gems),
         )
         .route(
             "/internal/profile/reset-test-data",
@@ -2681,31 +2796,45 @@ async fn handle_display_name(
     }
 }
 
-/// POST /profile/anonymous/tutorial-complete — authenticate the anonymous
-/// account and grant the onboarding reward exactly once.
-async fn handle_anonymous_tutorial_complete(
+/// POST /profile/tutorial-complete — authenticate the canonical account through
+/// its current identity and grant the onboarding reward exactly once.
+/// The old anonymous path is an alias to this same handler.
+async fn handle_tutorial_complete(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(payload): Json<TutorialCompleteRequest>,
 ) -> impl IntoResponse {
     let request_id = identity_request_hint(&headers);
-    let account_id = match state
-        .db
-        .verify_anonymous_secret(&payload.account_id, &payload.auth_secret)
-        .await
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
     {
         Ok(account_id) => account_id,
-        Err(error) => {
+        Err(response) => {
             warn!(
-                "[tutorial] completion rejected id={request_id} account={} error={error}",
+                "[tutorial] completion rejected id={request_id} account={}",
                 account_hint(Some(&payload.account_id))
             );
-            return (StatusCode::UNAUTHORIZED, Json(ErrorResponse { error })).into_response();
+            return response.into_response();
         }
     };
 
-    match state.db.complete_anonymous_tutorial(&account_id).await {
+    match state.db.complete_tutorial(&account_id).await {
         Ok(account) => {
+            let sync_state = Arc::clone(&state);
+            let sync_account_id = account.id.clone();
+            tokio::spawn(async move {
+                if let Err(error) = sync_state.sync_playgames_profile(&sync_account_id).await {
+                    warn!(
+                        "Play Games tutorial sync failed for account={}: {error}",
+                        account_hint(Some(&sync_account_id))
+                    );
+                }
+            });
             info!(
                 "[tutorial] completion accepted id={request_id} account={} completed={}",
                 account_hint(Some(&account.id)),
@@ -2720,6 +2849,108 @@ async fn handle_anonymous_tutorial_complete(
             }),
         )
             .into_response(),
+    }
+}
+
+/// POST /internal/match-participant-settle — the relay is the only caller.
+/// The client never supplies a reward amount, outcome, or statistics.
+async fn handle_match_participant_settle(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<MatchParticipantSettleRequest>,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        warn!("Unauthorized access attempt to /internal/match-participant-settle");
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    if payload.match_id.trim().is_empty() || payload.account_id.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "match_id and account_id are required".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    if payload
+        .lobby_json
+        .as_deref()
+        .is_some_and(|json| json.len() > 2 * 1024 * 1024)
+    {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(ErrorResponse {
+                error: "lobby metadata is too large".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
+    match state
+        .db
+        .settle_match_participant(
+            payload.match_id.trim(),
+            payload.account_id.trim(),
+            payload.lobby_json.as_deref(),
+        )
+        .await
+    {
+        Ok(Some(account)) => {
+            state.db.submit_crazygames_score(&account).await;
+            let outcome = PlayGamesMatchOutcome {
+                account_id: account.id.clone(),
+                won: false,
+                wins: account.profile.wins,
+                sync_revision: account.profile.playgames_sync_revision,
+                unlocked_achievements: account
+                    .profile
+                    .unlocked_achievements
+                    .iter()
+                    .cloned()
+                    .collect(),
+            };
+            if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
+                warn!(
+                    "Play Games participant sync failed for account={}: {error}",
+                    account_hint(Some(&account.id))
+                );
+            }
+            info!(
+                "[rewards] participant settled match={} account={}",
+                payload.match_id,
+                account_hint(Some(&account.id))
+            );
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "status": "settled" })),
+            )
+                .into_response()
+        }
+        Ok(None) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "ignored" })),
+        )
+            .into_response(),
+        Err(error) => {
+            warn!(
+                "[rewards] participant settlement rejected match={} account={} error={error}",
+                payload.match_id,
+                account_hint(Some(&payload.account_id))
+            );
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: error.to_string(),
+                }),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -3222,7 +3453,9 @@ impl AppState {
                 "veteran_commander" => {
                     add_unlock(&mut actions, &veteran_commander, "Veteran Commander")
                 }
-                "banner_collector" => add_unlock(&mut actions, &banner_collector, "Banner Collector"),
+                "banner_collector" => {
+                    add_unlock(&mut actions, &banner_collector, "Banner Collector")
+                }
                 "leader_path" => add_unlock(&mut actions, &leader_path, "Leader Path"),
                 _ => {}
             }
@@ -3239,7 +3472,7 @@ impl AppState {
             ));
         }
         if actions.is_empty() {
-            return Ok(false);
+            return Ok(true);
         }
 
         let mut first_error = None;
@@ -3280,11 +3513,11 @@ impl AppState {
     ) -> Result<(), String> {
         if self
             .sync_playgames_progress(
-            &outcome.account_id,
-            &outcome.unlocked_achievements,
-            outcome.won.then_some(outcome.wins),
-        )
-        .await?
+                &outcome.account_id,
+                &outcome.unlocked_achievements,
+                outcome.won.then_some(outcome.wins),
+            )
+            .await?
         {
             self.db
                 .mark_playgames_sync(&outcome.account_id, outcome.sync_revision)
@@ -3294,9 +3527,8 @@ impl AppState {
         Ok(())
     }
 
-    /// Reconcile the canonical server profile whenever a Play Games token is
-    /// refreshed. Unlocks are set operations and the leaderboard receives the
-    /// cumulative victory count, so retries cannot duplicate progress.
+    /// Reconcile server-owned achievements when a Play Games token is active.
+    /// Victory scores remain blocked until replay verification exists.
     async fn sync_playgames_profile(&self, account_id: &str) -> Result<(), String> {
         let snapshot = self
             .db
@@ -3310,11 +3542,7 @@ impl AppState {
             return Ok(());
         }
         if self
-            .sync_playgames_progress(
-                account_id,
-                &snapshot.unlocked_achievements,
-                Some(snapshot.wins),
-            )
+            .sync_playgames_progress(account_id, &snapshot.unlocked_achievements, None)
             .await?
         {
             self.db
@@ -3323,6 +3551,29 @@ impl AppState {
                 .map_err(|error| format!("mark Play Games sync: {error}"))?;
         }
         Ok(())
+    }
+
+    async fn retry_active_playgames_sync(&self) {
+        let account_ids = match self.playgames_access_tokens.lock() {
+            Ok(mut tokens) => {
+                let now = Instant::now();
+                tokens.retain(|_, value| value.expires_at > now);
+                tokens.keys().cloned().collect::<Vec<_>>()
+            }
+            Err(_) => {
+                error!("Play Games access-token store is poisoned; sync retry skipped");
+                return;
+            }
+        };
+
+        for account_id in account_ids {
+            if let Err(error) = self.sync_playgames_profile(&account_id).await {
+                warn!(
+                    "Play Games pending profile sync failed for account={}: {error}",
+                    account_hint(Some(&account_id))
+                );
+            }
+        }
     }
 
     fn verify_playgames_session(
@@ -3691,7 +3942,11 @@ async fn handle_match_finalize(
 
     // Capture the roster/exit order before finalize deletes the Valkey keys,
     // so the analytics sink can record an aggregate match_ended event.
-    let (participants, exits) = match state.db.match_participants(&payload.match_id).await {
+    let (participants, exits) = match state
+        .db
+        .match_participants_with_lobby(&payload.match_id, payload.lobby_json.as_deref())
+        .await
+    {
         Ok(value) => value,
         Err(error) => {
             error!(

@@ -347,6 +347,13 @@ impl SowApp {
                 }
                 crate::player_progress::DbEvent::LoadFailed { request_id, status } => {
                     self.profile_request_in_flight = false;
+                    if !self.pending_reward_receipt_ids.is_empty() {
+                        log::warn!(
+                            "[rewards] profile refresh id={request_id} failed status={status:?}; keeping retry window"
+                        );
+                        self.schedule_reward_profile_retry();
+                        continue;
+                    }
                     self.profile_refresh_pending = false;
                     // No fallback: continuing without an identity once masked a
                     // 403 from a misrouted endpoint and booted the wrong mode.
@@ -361,8 +368,9 @@ impl SowApp {
                 } => {
                     self.profile_request_in_flight = false;
                     log::warn!(
-                        "[tutorial] completion request id={request_id} failed status={status:?}; local reward retained"
+                        "[tutorial] completion request id={request_id} failed status={status:?}; local completion marker retained"
                     );
+                    self.schedule_reward_profile_retry();
                     if self.profile_refresh_pending {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
@@ -466,11 +474,9 @@ impl SowApp {
                         .unwrap_or_default()
                         .as_secs();
                     for receipt_id in receipt_ids {
-                        if let Some(receipt) = self.progress.reward_receipts.get_mut(&receipt_id)
-                        {
+                        if let Some(receipt) = self.progress.reward_receipts.get_mut(&receipt_id) {
                             receipt.presented_at = Some(presented_at);
-                            receipt.status =
-                                sow_data::profile::RewardSettlementStatus::Presented;
+                            receipt.status = sow_data::profile::RewardSettlementStatus::Presented;
                         }
                     }
                     self.save_local_progress();

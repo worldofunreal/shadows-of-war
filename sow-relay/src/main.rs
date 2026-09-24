@@ -42,7 +42,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
 use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
@@ -694,6 +694,13 @@ struct ReplayFinalizePayload<'a> {
     replay_data: &'a [u8],
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ParticipantSettlementPayload {
+    match_id: String,
+    account_id: String,
+    lobby_json: String,
+}
+
 struct ReplayJournal {
     live: Arc<Mutex<VecDeque<Turn>>>,
     tx: mpsc::Sender<ReplayCommand>,
@@ -904,8 +911,8 @@ async fn post_replay_finalize(
     replay_data: &[u8],
 ) -> Result<(), String> {
     let db_url = configured_db_url()?;
-    let secret = std::env::var("SOW_DB_SECRET")
-        .map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
+    let secret =
+        std::env::var("SOW_DB_SECRET").map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
     let url = format!("{}/internal/match-finalize", db_url.trim_end_matches('/'));
     let payload = ReplayFinalizePayload {
         match_id,
@@ -948,6 +955,186 @@ async fn post_replay_finalize(
     Err(format!(
         "database did not accept match {match_id} after 5 attempts"
     ))
+}
+
+fn participant_spool_path(match_id: &str, account_id: &str) -> PathBuf {
+    let safe_account = account_id
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_hexdigit() || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    replay_spool_dir().join(format!("{match_id}-{safe_account}.participant"))
+}
+
+fn persist_participant_spool(
+    path: &Path,
+    payload: &ParticipantSettlementPayload,
+) -> Result<(), String> {
+    let Some(parent) = path.parent() else {
+        return Err("participant spool has no parent directory".to_string());
+    };
+    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let temp_path = path.with_extension("participant.tmp");
+    let bytes = serde_json::to_vec(payload).map_err(|error| error.to_string())?;
+    // ponytail: one small fsync per exit closes the crash window; network I/O
+    // remains asynchronous and never blocks the match loop.
+    let mut file = std::fs::File::create(&temp_path).map_err(|error| error.to_string())?;
+    std::io::Write::write_all(&mut file, &bytes).map_err(|error| error.to_string())?;
+    file.sync_all().map_err(|error| error.to_string())?;
+    drop(file);
+    std::fs::rename(&temp_path, path).map_err(|error| error.to_string())?;
+    std::fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+async fn post_participant_settle(payload: &ParticipantSettlementPayload) -> Result<(), String> {
+    let db_url = configured_db_url()?;
+    let secret =
+        std::env::var("SOW_DB_SECRET").map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
+    let url = format!(
+        "{}/internal/match-participant-settle",
+        db_url.trim_end_matches('/')
+    );
+    let client = db_client(&db_url)?;
+    for attempt in 1..=5 {
+        match client
+            .post(&url)
+            .header("Authorization", format!("Bearer {secret}"))
+            .json(payload)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) => warn!(
+                "[rewards] participant settle attempt {attempt}/5 returned HTTP {} match={} account={}",
+                response.status(),
+                payload.match_id,
+                payload.account_id
+            ),
+            Err(error) => warn!(
+                "[rewards] participant settle attempt {attempt}/5 failed match={} account={}: {error}",
+                payload.match_id, payload.account_id
+            ),
+        }
+        if attempt < 5 {
+            tokio::time::sleep(Duration::from_secs(2u64.pow(attempt as u32))).await;
+        }
+    }
+    Err(format!(
+        "database did not accept participant settlement match={} account={}",
+        payload.match_id, payload.account_id
+    ))
+}
+
+async fn cleanup_participant_spool(path: &Path) {
+    if let Err(error) = tokio::fs::remove_file(path).await
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        warn!(
+            "[rewards] cleanup participant spool {:?} failed: {error}",
+            path
+        );
+    }
+}
+
+async fn recover_participant_spool() {
+    let spool_dir = replay_spool_dir();
+    let mut entries = match tokio::fs::read_dir(&spool_dir).await {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(error) => {
+            warn!("[rewards] scan {:?} failed: {error}", spool_dir);
+            return;
+        }
+    };
+    loop {
+        let entry = match entries.next_entry().await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => break,
+            Err(error) => {
+                warn!("[rewards] scan {:?} failed: {error}", spool_dir);
+                break;
+            }
+        };
+        let path = entry.path();
+        let file_name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        if path.extension().and_then(|value| value.to_str()) != Some("participant")
+            && !file_name.ends_with(".participant.tmp")
+        {
+            continue;
+        }
+        let payload = match tokio::fs::read(&path).await {
+            Ok(bytes) => match serde_json::from_slice::<ParticipantSettlementPayload>(&bytes) {
+                Ok(payload) => payload,
+                Err(error) => {
+                    warn!("[rewards] invalid participant spool {:?}: {error}", path);
+                    continue;
+                }
+            },
+            Err(error) => {
+                warn!(
+                    "[rewards] read participant spool {:?} failed: {error}",
+                    path
+                );
+                continue;
+            }
+        };
+        let _permit = match finalize_gate().acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => return,
+        };
+        if let Err(error) = post_participant_settle(&payload).await {
+            warn!("[rewards] keeping participant spool {:?}: {error}", path);
+        } else {
+            cleanup_participant_spool(&path).await;
+        }
+    }
+}
+
+fn trigger_participant_settlement(match_id: u64, account_id: String, lobby_json: String) {
+    let payload = ParticipantSettlementPayload {
+        match_id: match_id.to_string(),
+        account_id,
+        lobby_json,
+    };
+    let path = participant_spool_path(&payload.match_id, &payload.account_id);
+    if let Err(error) = persist_participant_spool(&path, &payload) {
+        error!(
+            "[rewards] participant spool write failed match={} account={}: {error}",
+            payload.match_id, payload.account_id
+        );
+        return;
+    }
+    tokio::spawn(async move {
+        let _permit = match finalize_gate().acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => return,
+        };
+        if let Err(error) = post_participant_settle(&payload).await {
+            warn!(
+                "[rewards] keeping participant spool match={} account={}: {error}",
+                payload.match_id, payload.account_id
+            );
+        } else {
+            cleanup_participant_spool(&path).await;
+        }
+    });
+}
+
+fn trigger_participant_settlements(match_id: u64, lobby_json: &str, account_ids: Vec<String>) {
+    for account_id in account_ids {
+        trigger_participant_settlement(match_id, account_id, lobby_json.to_string());
+    }
 }
 
 async fn cleanup_replay_spool(replay_path: &PathBuf, metadata_path: &PathBuf) {
@@ -998,8 +1185,9 @@ async fn recover_replay_spool() {
             tokio::fs::read_to_string(&metadata_path).await,
         ) {
             (Ok(replay_data), Ok(lobby_json)) => (replay_data, lobby_json),
-            (Err(error), _) | (_, Err(error))
-                if error.kind() == std::io::ErrorKind::NotFound => continue,
+            (Err(error), _) | (_, Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                continue;
+            }
             (Err(error), _) | (_, Err(error)) => {
                 warn!("[replay] read spool match {match_id} failed: {error}");
                 continue;
@@ -1022,6 +1210,7 @@ async fn recover_replay_spool() {
 async fn replay_spool_worker() {
     loop {
         recover_replay_spool().await;
+        recover_participant_spool().await;
         tokio::time::sleep(Duration::from_secs(REPLAY_SPOOL_RETRY_SECS)).await;
     }
 }
@@ -1059,11 +1248,10 @@ fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<Replay
         }
 
         let match_id_string = match_id.to_string();
-        if let Err(error) = post_replay_finalize(&match_id_string, &lobby_json, &artifact.bytes).await
+        if let Err(error) =
+            post_replay_finalize(&match_id_string, &lobby_json, &artifact.bytes).await
         {
-            error!(
-                "[CRITICAL] Keeping pending match {match_id} in local replay spool: {error}"
-            );
+            error!("[CRITICAL] Keeping pending match {match_id} in local replay spool: {error}");
             return;
         }
         cleanup_replay_spool(&replay_path, &metadata_path).await;
@@ -1073,6 +1261,7 @@ fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<Replay
 struct MatchTracker {
     lobby_id: u64,
     player_accounts: HashMap<u16, String>,
+    human_accounts: HashSet<String>,
     in_match: HashSet<u16>,
     logged_exits: HashSet<String>,
     finalized: bool,
@@ -1082,41 +1271,49 @@ struct MatchTracker {
 }
 
 impl MatchTracker {
-    fn record_exit(&mut self, player_id: u16) {
+    fn record_exit(&mut self, player_id: u16) -> Vec<String> {
+        let mut settlements = Vec::new();
         if !self.tracked || self.finalized {
             self.in_match.remove(&player_id);
-            return;
+            return settlements;
         }
         self.in_match.remove(&player_id);
-        if let Some(account_id) = self.player_accounts.get(&player_id) {
+        if let Some(account_id) = self.player_accounts.get(&player_id).cloned() {
             if self.logged_exits.insert(account_id.clone()) {
                 let mut guard = self.redis_con.lock().unwrap();
                 if let Some(ref mut con) = *guard {
-                    log_player_exit(con, self.lobby_id, account_id);
+                    log_player_exit(con, self.lobby_id, &account_id);
                     info!(
                         "Logged exit for player {player_id} (account {account_id}) in match {}",
                         self.lobby_id
                     );
                 }
+                if self.human_accounts.contains(&account_id) {
+                    settlements.push(account_id);
+                }
             }
         }
         if self.in_match.len() <= 1 {
             if let Some(winner_id) = self.in_match.iter().copied().next() {
-                if let Some(winner_acc) = self.player_accounts.get(&winner_id) {
+                if let Some(winner_acc) = self.player_accounts.get(&winner_id).cloned() {
                     if self.logged_exits.insert(winner_acc.clone()) {
                         let mut guard = self.redis_con.lock().unwrap();
                         if let Some(ref mut con) = *guard {
-                            log_player_exit(con, self.lobby_id, winner_acc);
+                            log_player_exit(con, self.lobby_id, &winner_acc);
                             info!(
                                 "Logged winner player {winner_id} (account {winner_acc}) in match {}",
                                 self.lobby_id
                             );
+                        }
+                        if self.human_accounts.contains(&winner_acc) {
+                            settlements.push(winner_acc);
                         }
                     }
                 }
             }
             self.finalized = true;
         }
+        settlements
     }
 }
 
@@ -1768,8 +1965,13 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState>
     let mut session_ids: HashMap<u16, u64> = HashMap::new();
     let mut ticket_digests: HashMap<u16, [u8; 32]> = HashMap::new();
     let mut player_accounts: HashMap<u16, String> = HashMap::new();
+    let mut human_accounts = HashSet::new();
+    let mut external_player_ids = HashSet::new();
     for p in &body.players {
         valid_players.insert(p.player_id, p.name.clone());
+        if !p.is_internal {
+            external_player_ids.insert(p.player_id);
+        }
         if let Some(session_id) = p.session_id {
             session_ids.insert(p.player_id, session_id);
         }
@@ -1782,6 +1984,9 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState>
         }
         if let Some(acc) = &p.database_account_id {
             player_accounts.insert(p.player_id, acc.clone());
+            if !p.is_internal {
+                human_accounts.insert(acc.clone());
+            }
         }
     }
 
@@ -1789,11 +1994,12 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState>
     let journal = ReplayJournal::new(body.lobby_id);
     let (ev_tx, ev_rx) = mpsc::channel::<RelayEvent>(EVENT_CHANNEL);
     let redis_con = redis_shared();
-    let tracked = !player_accounts.is_empty();
+    let tracked = !human_accounts.is_empty();
     let tracker = Arc::new(std::sync::Mutex::new(MatchTracker {
         lobby_id: body.lobby_id,
         player_accounts,
-        in_match: valid_players.keys().copied().collect(),
+        human_accounts,
+        in_match: external_player_ids,
         logged_exits: HashSet::new(),
         finalized: false,
         tracked,
@@ -1998,9 +2204,13 @@ async fn tick_task(
 
                 if !dropped_players.is_empty() {
                     let mut tracker = state.tracker.lock().unwrap();
+                    let mut settlements = Vec::new();
                     for pid in dropped_players {
-                        tracker.record_exit(pid);
+                        settlements.extend(tracker.record_exit(pid));
                     }
+                    let lobby_json = tracker.lobby_json.clone();
+                    drop(tracker);
+                    trigger_participant_settlements(state.id, &lobby_json, settlements);
                 }
 
                 if last_status.elapsed().as_secs() >= 10 {
@@ -2035,7 +2245,16 @@ async fn tick_task(
                 match event {
                     RelayEvent::Gameplay { player_id, intent } => {
                         if matches!(intent, GameplayIntent::Resign) {
-                            state.tracker.lock().unwrap().record_exit(player_id);
+                            let (settlements, lobby_json) = {
+                                let mut tracker = state.tracker.lock().unwrap();
+                                let settlements = tracker.record_exit(player_id);
+                                (settlements, tracker.lobby_json.clone())
+                            };
+                            trigger_participant_settlements(
+                                state.id,
+                                &lobby_json,
+                                settlements,
+                            );
                         }
                         pending_intents.push(StampedIntent { player_id, intent });
                     }
@@ -2061,7 +2280,16 @@ async fn tick_task(
                             !removed
                         );
                         if removed {
-                            state.tracker.lock().unwrap().record_exit(player_id);
+                            let (settlements, lobby_json) = {
+                                let mut tracker = state.tracker.lock().unwrap();
+                                let settlements = tracker.record_exit(player_id);
+                                (settlements, tracker.lobby_json.clone())
+                            };
+                            trigger_participant_settlements(
+                                state.id,
+                                &lobby_json,
+                                settlements,
+                            );
                             pending_intents.push(StampedIntent {
                                 player_id,
                                 intent: GameplayIntent::MarkDisconnected { is_disconnected: true },
@@ -2865,10 +3093,13 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 
 #[cfg(test)]
 mod dispatcher_tests {
-    use super::{AdmissionState, IpAdmissionState, RelayAdmissionPolicy, ticket_matches};
+    use super::{
+        AdmissionState, IpAdmissionState, MatchTracker, RelayAdmissionPolicy, ticket_matches,
+    };
     use sha2::{Digest, Sha256};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::net::SocketAddr;
+    use std::sync::Arc;
     use std::sync::Mutex as StdMutex;
 
     fn policy(
@@ -2922,5 +3153,30 @@ mod dispatcher_tests {
         assert!(policy.try_accept("198.51.100.2:1000".parse().unwrap()));
         assert!(!policy.try_accept("198.51.100.3:1000".parse().unwrap()));
         assert_eq!(policy.metrics()["rejected_global"], 1);
+    }
+
+    #[test]
+    fn participant_exit_is_reported_once_for_humans() {
+        let human = "0123456789abcdef0123456789abcdef".to_string();
+        let other = "fedcba9876543210fedcba9876543210".to_string();
+        let third = "00112233445566778899aabbccddeeff".to_string();
+        let mut tracker = MatchTracker {
+            lobby_id: 7,
+            player_accounts: HashMap::from([
+                (1, human.clone()),
+                (2, other.clone()),
+                (3, third.clone()),
+            ]),
+            human_accounts: HashSet::from([human.clone(), other, third]),
+            in_match: HashSet::from([1, 2, 3]),
+            logged_exits: HashSet::new(),
+            finalized: false,
+            tracked: true,
+            redis_con: Arc::new(StdMutex::new(None)),
+            lobby_json: "{}".to_string(),
+        };
+        assert_eq!(tracker.record_exit(1), vec![human.clone()]);
+        assert!(tracker.record_exit(1).is_empty());
+        assert!(tracker.logged_exits.contains(&human));
     }
 }

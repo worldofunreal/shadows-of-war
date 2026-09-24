@@ -195,6 +195,9 @@ impl SowApp {
             && matches!(&self.ui.app.splash_state.job, SplashJob::EnterGame);
         let use_loader = should_use_exit_game_loader(phase);
         let was_playing = phase == crate::ClientPhase::Playing;
+        let reward_match_id = (was_playing && !self.net.is_offline)
+            .then(|| self.sim.my_lobby_id)
+            .flatten();
         let mut exit_leader = self.ui.app.splash_state.loader_leader;
         let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
             self.ui.tutorial_active,
@@ -204,7 +207,7 @@ impl SowApp {
         );
         if exiting_boudica_intro {
             crate::analytics::track("tutorial_exit_early");
-            if self.progress.complete_tutorial_with_reward() {
+            if self.progress.mark_tutorial_completed() {
                 self.save_local_progress();
                 self.persist_tutorial_completion();
                 log::info!("tutorial: intro completed on early exit");
@@ -267,7 +270,11 @@ impl SowApp {
             && self.progress_account_id.is_some()
             && crate::store_portals::should_fetch_cloud_profile()
         {
-            self.fetch_cloud_progress();
+            if let Some(match_id) = reward_match_id {
+                self.begin_reward_profile_sync(match_id);
+            } else {
+                self.fetch_cloud_progress();
+            }
         }
     }
 

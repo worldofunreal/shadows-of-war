@@ -98,25 +98,23 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn test_nation_food_chain_never_initiates_against_humans() {
-        for is_ghost in [false, true] {
-            let mut engine = test_engine_two_players(42);
-            engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
-            let human = engine.state.player_mut(2).unwrap();
-            human.player_type = PlayerType::Human;
-            human.is_ai_controlled = is_ghost;
-
-            let decisions = run_nation_attack(&mut engine, &[2], true);
-            assert!(
-                !attack_targets(&decisions).contains(&2),
-                "Nation must expand wilderness before attacking Human/ghost"
-            );
-        }
-
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        let decisions = run_nation_attack(&mut engine, &[2], true);
+        assert!(!attack_targets(&decisions).contains(&2));
         let decisions = run_nation_attack(&mut engine, &[2], false);
         assert!(attack_targets(&decisions).is_empty());
+
+        let mut ghost_engine = test_engine_two_players(42);
+        ghost_engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        let ghost = ghost_engine.state.player_mut(2).unwrap();
+        ghost.player_type = PlayerType::Human;
+        ghost.is_ai_controlled = true;
+        let decisions = run_nation_attack(&mut ghost_engine, &[2], true);
+        assert!(!attack_targets(&decisions).contains(&2));
+        let decisions = run_nation_attack(&mut ghost_engine, &[2], false);
+        assert!(attack_targets(&decisions).contains(&2));
     }
 
     #[test]
@@ -165,6 +163,8 @@ mod bot_iq_alliance_tests {
 
     #[test]
     fn test_nation_human_gate_is_shared_by_fleet_and_nuke() {
+        // `target_is_human` means a person-controlled Human. Ghosts are AI
+        // opponents, not protected human players.
         assert!(!nation_target_allowed(2, true, None));
         assert!(nation_target_allowed(2, true, Some(2)));
         assert!(!nation_target_allowed(3, true, Some(2)));

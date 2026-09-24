@@ -33,7 +33,7 @@ pub struct RewardReceipt {
     pub laurels: u64,
     pub created_at: u64,
     /// Applied is written atomically with the balance update. Pending lives
-    /// in the relay's durable replay spool until the server accepts it.
+    /// in the relay's durable participant/replay spool until the server accepts it.
     #[serde(default)]
     pub status: RewardSettlementStatus,
     /// Presentation acknowledgement only. It never controls whether the

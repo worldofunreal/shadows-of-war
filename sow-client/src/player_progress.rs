@@ -71,8 +71,7 @@ pub struct PlayerProgress {
     pub completed_episodes: std::collections::BTreeSet<String>,
     /// Server-created match receipts used only for main-menu presentation.
     #[serde(default)]
-    pub reward_receipts:
-        std::collections::BTreeMap<String, sow_data::profile::RewardReceipt>,
+    pub reward_receipts: std::collections::BTreeMap<String, sow_data::profile::RewardReceipt>,
     #[serde(default)]
     pub unlocked_achievements: std::collections::BTreeSet<String>,
 }
@@ -178,18 +177,11 @@ impl PlayerProgress {
         self.laurels = self.laurels.saturating_add(reward.laurels);
     }
 
-    pub fn complete_tutorial_with_reward(&mut self) -> bool {
+    pub fn mark_tutorial_completed(&mut self) -> bool {
         if self.intro_completed.unwrap_or(false) {
             return false;
         }
         self.complete_intro();
-        self.apply_reward(
-            Leader::Boudica,
-            sow_data::rewards::calculate(sow_data::rewards::RewardInput {
-                tutorial: true,
-                ..Default::default()
-            }),
-        );
         true
     }
 
@@ -296,15 +288,15 @@ mod tests {
     use sow_core::player::Leader;
 
     #[test]
-    fn tutorial_completion_is_idempotent_and_persists_reward() {
+    fn tutorial_completion_only_marks_local_completion() {
         let mut progress = PlayerProgress::default();
-        assert!(progress.complete_tutorial_with_reward());
-        assert!(!progress.complete_tutorial_with_reward());
+        assert!(progress.mark_tutorial_completed());
+        assert!(!progress.mark_tutorial_completed());
         assert_eq!(progress.intro_completed, Some(true));
-        assert_eq!(progress.xp, 100);
-        assert_eq!(progress.crowns, 100);
+        assert_eq!(progress.xp, 0);
+        assert_eq!(progress.crowns, 0);
         assert_eq!(progress.laurels, 0);
-        assert_eq!(progress.leader_xp.get("Boudica"), Some(&100));
+        assert!(progress.leader_xp.is_empty());
     }
 
     #[test]

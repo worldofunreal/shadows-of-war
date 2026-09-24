@@ -120,11 +120,20 @@ impl SowApp {
                 "kills": kills,
             }),
         );
-        let server_owned_match = self.progress_account_id.is_some() && !self.net.is_offline;
-        self.ui.reward_cache = Some(sow_data::rewards::calculate(if server_owned_match {
+        let server_owned_tutorial = self.progress_account_id.is_some()
+            && self.net.is_offline
+            && self.sim.config.tutorial
+            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica;
+        let server_owned_match =
+            self.progress_account_id.is_some() && (!self.net.is_offline || server_owned_tutorial);
+        self.ui.reward_cache = Some(sow_data::rewards::calculate(if server_owned_tutorial {
+            sow_data::rewards::RewardInput {
+                tutorial: true,
+                ..Default::default()
+            }
+        } else if server_owned_match {
             // Online rewards are participation-only until the replay is
-            // verified by the deterministic server engine. The preview must
-            // use the same safe formula as finalization.
+            // verified by the deterministic server engine.
             sow_data::rewards::RewardInput::default()
         } else {
             sow_data::rewards::RewardInput {
@@ -138,10 +147,11 @@ impl SowApp {
             }
         }));
 
-        // Online ranked matches: relay + sow-database own the outcome; client only reads profile later.
+        // The relay/database own online results; the database owns the one-time
+        // Boudica tutorial reward. Both previews are informational only.
         if server_owned_match {
             log::info!(
-                "Online match ended (winner={winner_id}); stats will sync from sow-database on menu return"
+                "Server-owned match ended (winner={winner_id}); profile will sync from sow-database on menu return"
             );
             return;
         }

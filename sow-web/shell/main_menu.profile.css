@@ -1811,14 +1811,6 @@
     margin: 0 auto;
 }
 
-.sow-heroes__featured-label {
-    margin: 0 0 5px;
-    color: var(--sow-gold);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .18em;
-}
-
 .sow-heroes__workspace {
     display: grid;
     flex: 1 1 auto;
@@ -1880,6 +1872,21 @@
     position: relative;
     z-index: 1;
     padding: 24px;
+}
+
+.sow-heroes__rotation {
+    display: inline-flex;
+    width: fit-content;
+    margin: 0 0 10px;
+    padding: 5px 8px;
+    border: 1px solid rgba(243, 177, 43, .58);
+    border-radius: 4px;
+    background: rgba(8, 10, 14, .72);
+    color: var(--sow-gold-bright);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    line-height: 1;
 }
 
 .sow-heroes__featured-copy h2 {
@@ -2029,16 +2036,6 @@
     line-height: 1.35;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-}
-
-.sow-heroes__card-state {
-    position: absolute;
-    top: 8px;
-    inset-inline-end: 8px;
-    color: var(--sow-gold-bright);
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: .1em;
 }
 
 @media (max-width: 900px) {
