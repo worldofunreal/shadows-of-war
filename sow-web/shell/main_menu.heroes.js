@@ -1,5 +1,9 @@
 // Hero selection, filtering, dropdowns, and preview updates.
 
+    function isWeeklyFreeRotation(leader) {
+        return !!leader && leader.available === true && leader.free_rotation === true && leader.owned === false;
+    }
+
     function renderHeroesCard(leader, activeId) {
         var selected = leader.id === activeId;
         var locked = leader.available === false;
@@ -78,9 +82,9 @@
         featured.classList.toggle("is-locked", locked);
         var selectedAsset = asset("shell/leaders/" + activeLeader.slug + "_mobile.webp");
         var landscapeAsset = asset("shell/leaders/" + activeLeader.slug + "_desktop.webp");
-        if (source) source.srcset = selectedAsset;
+        if (source) source.srcset = landscapeAsset;
         if (image) {
-            image.src = landscapeAsset;
+            image.src = selectedAsset;
             image.alt = leaderDisplayName(activeLeader);
         }
         if (title) title.textContent = leaderDisplayName(activeLeader);
@@ -92,7 +96,7 @@
         if (civilization) civilization.textContent = leaderCivilization(activeLeader);
         if (perk) perk.textContent = leaderPerk(activeLeader);
         if (status) {
-            var inWeeklyRotation = activeLeader.free_rotation === true && activeLeader.owned === false;
+            var inWeeklyRotation = isWeeklyFreeRotation(activeLeader);
             status.textContent = SOW_t("heroes.weekly_free_rotation");
             status.hidden = !inWeeklyRotation;
         }
@@ -231,7 +235,7 @@
         var landscapeAsset = asset("shell/leaders/" + activeLeader.slug + "_desktop.webp");
         return "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" + esc(SOW_t("menu.heroes")) + "'>" +
                     "<div class='sow-heroes__workspace'>" +
-                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(portraitAsset) + "'><img src='" + esc(landscapeAsset) + "' alt='" + esc(leaderDisplayName(activeLeader)) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (activeLeader.free_rotation === true && activeLeader.owned === false ? "" : " hidden") + ">" + esc(SOW_t("heroes.weekly_free_rotation")) + "</p><h2 id='sow-heroes-selected'>" + esc(leaderDisplayName(activeLeader)) + "</h2>" + (leaderHistoricalName(activeLeader) ? "<p class='sow-heroes__historical-name'>" + esc(leaderHistoricalName(activeLeader)) + "</p>" : "") + "<p class='sow-heroes__civilization'>" + esc(leaderCivilization(activeLeader)) + "</p><p class='sow-heroes__perk'>" + esc(leaderPerk(activeLeader)) + "</p><div data-hero-purchase>" + renderLeaderPurchase(activeLeader) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t("heroes.confirm_leader", { name: leaderDisplayName(activeLeader).toUpperCase() })) + " <span>✓</span></button></div></section>" +
+                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(landscapeAsset) + "'><img src='" + esc(portraitAsset) + "' alt='" + esc(leaderDisplayName(activeLeader)) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (isWeeklyFreeRotation(activeLeader) ? "" : " hidden") + ">" + esc(SOW_t("heroes.weekly_free_rotation")) + "</p><h2 id='sow-heroes-selected'>" + esc(leaderDisplayName(activeLeader)) + "</h2>" + (leaderHistoricalName(activeLeader) ? "<p class='sow-heroes__historical-name'>" + esc(leaderHistoricalName(activeLeader)) + "</p>" : "") + "<p class='sow-heroes__civilization'>" + esc(leaderCivilization(activeLeader)) + "</p><p class='sow-heroes__perk'>" + esc(leaderPerk(activeLeader)) + "</p><div data-hero-purchase>" + renderLeaderPurchase(activeLeader) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t("heroes.confirm_leader", { name: leaderDisplayName(activeLeader).toUpperCase() })) + " <span>✓</span></button></div></section>" +
                         "<section class='sow-heroes__roster' aria-label='" + esc(SOW_t("heroes.leader_list")) + "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" + esc(SOW_t("heroes.search_leaders")) + "</span><input data-role='heroes-search' type='search' placeholder='" + esc(SOW_t("heroes.search_leader_civilization")) + "' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId) + "</div></section>" +
                     "</div>" +
         "</section></main>";

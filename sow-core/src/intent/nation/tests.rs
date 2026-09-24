@@ -441,7 +441,61 @@ mod bot_iq_alliance_tests {
         let mut decisions = Vec::new();
         engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
         assert!(!decisions.is_empty());
-        assert_eq!(engine.recent_nuke_targets[0].1, 1);
+        assert_eq!(engine.recent_nuke_targets.get(&(2, 1)), Some(&1));
+    }
+
+    #[test]
+    fn test_nuke_history_count_skips_repeated_tile() {
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().iq_points = 500.0;
+        engine.state.player_mut(1).unwrap().gold = 100_000_000.0;
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.recent_nuke_targets.insert((2, 1), 2);
+        engine.recent_nuke_targets.insert((3, 2), 90);
+
+        engine.buildings.extend([
+            crate::building::Building {
+                id: 100,
+                owner_id: 1,
+                tile_idx: 0,
+                kind: BuildingKind::City,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: crate::building::CityModules {
+                    arsenal: 1,
+                    ..Default::default()
+                },
+            },
+            crate::building::Building {
+                id: 101,
+                owner_id: 2,
+                tile_idx: 1,
+                kind: BuildingKind::City,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: Default::default(),
+            },
+            crate::building::Building {
+                id: 102,
+                owner_id: 2,
+                tile_idx: 2,
+                kind: BuildingKind::Factory,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: Default::default(),
+            },
+        ]);
+
+        let mut decisions = Vec::new();
+        engine.maybe_launch_nuke(1, &mut decisions, 135, &[2], None);
+        assert!(matches!(
+            decisions.first().map(|decision| &decision.intent),
+            Some(GameplayIntent::LaunchNuke { target_tile: 2, .. })
+        ));
+        assert_eq!(engine.recent_nuke_targets.get(&(2, 2)), Some(&1));
     }
 
     #[test]
@@ -850,6 +904,7 @@ mod bot_iq_alliance_tests {
             team: None,
             civilization: crate::player::Civilization::ALL[0],
             leader: crate::player::Leader::ALL[0],
+            skin_style: 0,
             is_ai_controlled: true,
         });
         let ghost_iq = g.state.player(5).unwrap().iq;

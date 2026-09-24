@@ -5,6 +5,8 @@
 use crate::game::BuildingKind;
 use serde::{Deserialize, Serialize};
 
+pub use sow_data::MAX_MATCH_PARTICIPANTS;
+
 // ─── Intents (Client → Server) ─────────────────────────────────────────────
 
 /// A player wants to attack/expand toward a tile owner.
@@ -188,8 +190,8 @@ pub enum ClientMessage {
         join: Box<JoinPayload>,
         auth: AuthProof,
     },
-    /// Stats submission carrying the leader used for authoritative mastery
-    /// and reward accounting.
+    /// Deprecated client report. Kept in place to preserve bincode indexes;
+    /// servers and relays ignore it.
     SubmitStatsWithLeader {
         kills: u32,
         deaths: u32,
@@ -202,7 +204,8 @@ pub enum ClientMessage {
         tribes_defeated: u32,
         leader: String,
     },
-    /// Final deterministic snapshot used to verify a durable match result.
+    /// Deprecated client report. Kept in place to preserve bincode indexes;
+    /// servers and relays ignore it.
     SubmitMatchReport {
         kills: u32,
         deaths: u32,
@@ -381,6 +384,8 @@ pub struct PlayerInfo {
     #[serde(default)]
     pub leader: crate::player::Leader,
     #[serde(default)]
+    pub skin_style: u8,
+    #[serde(default)]
     pub is_ai_controlled: bool,
 }
 
@@ -464,6 +469,8 @@ pub struct PlayerSnapshot {
     pub traitor: bool,
     pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
+    #[serde(default)]
+    pub skin_style: u8,
     #[serde(default)]
     pub kills: u32,
     #[serde(default)]

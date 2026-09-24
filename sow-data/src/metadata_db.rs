@@ -15,6 +15,12 @@ pub const SEASON_RATINGS_TABLE: TableDefinition<&str, &[u8]> =
 pub const SEASONS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("seasons");
 pub const PUBLIC_PROFILES_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("public_profiles");
+pub const MATCH_STARTS_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("match_starts");
+pub const PENDING_REPLAY_VERIFICATIONS_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("pending_replay_verifications");
+pub const VERIFIED_VICTORY_BOARD_TABLE: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("verified_victory_board");
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LeaderRecord {
@@ -96,6 +102,9 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
     write_txn.open_table(SEASON_RATINGS_TABLE)?;
     write_txn.open_table(SEASONS_TABLE)?;
     write_txn.open_table(PUBLIC_PROFILES_TABLE)?;
+    write_txn.open_table(MATCH_STARTS_TABLE)?;
+    write_txn.open_table(PENDING_REPLAY_VERIFICATIONS_TABLE)?;
+    write_txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
     write_txn.commit()?;
     Ok(db)
 }

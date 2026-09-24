@@ -7,6 +7,7 @@ pub struct HumanSpawn {
     pub team: Option<crate::protocol::Team>,
     pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
+    pub skin_style: u8,
     pub is_ai_controlled: bool,
 }
 
@@ -290,6 +291,7 @@ impl SowEngine {
             team,
             civilization,
             leader,
+            skin_style,
             is_ai_controlled,
         } = spawn;
         use crate::player::Player;
@@ -323,6 +325,7 @@ impl SowEngine {
                 player.team = team;
                 player.civilization = civilization;
                 player.leader = leader;
+                player.skin_style = skin_style;
                 player.is_ai_controlled = is_ai_controlled;
                 if let Some(iq) = ghost_iq {
                     player.iq = iq;
@@ -339,6 +342,7 @@ impl SowEngine {
             player.team = team;
             player.civilization = civilization;
             player.leader = leader;
+            player.skin_style = skin_style;
             player.is_ai_controlled = is_ai_controlled;
             if let Some(iq) = ghost_iq {
                 player.iq = iq;
@@ -367,6 +371,7 @@ impl SowEngine {
             player.team = team;
             player.civilization = civilization;
             player.leader = leader;
+            player.skin_style = skin_style;
             player.is_ai_controlled = is_ai_controlled;
             if let Some(iq) = ghost_iq {
                 player.iq = iq;

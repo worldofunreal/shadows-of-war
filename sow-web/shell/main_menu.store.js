@@ -75,12 +75,20 @@
 
     function renderLeaderPurchase(leader) {
         var offer = storeLeaderById(leader.id);
-        if (!offer || offer.owned) return "";
-        return "<div class='sow-heroes__purchase-actions'>" +
+        var leaderActions = !offer || offer.owned ? "" :
             renderLeaderCurrencyButton(offer, "crowns") +
             renderLeaderCurrencyButton(offer, "gems") +
-            (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy"), true, offer.direct_price_label, offer.id) : "") +
+            (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy"), true, offer.direct_price_label, offer.id) : "");
+        return "<div class='sow-heroes__purchase-actions'>" +
+            leaderActions +
+            "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='open_skin_picker'>" + esc(SOW_t("store.skins")) + "</button>" +
             "</div>";
+    }
+
+    function renderSkinPickerModal() {
+        if (!skinPickerOpen) return "";
+        var skins = Array.isArray(state.store && state.store.skins) ? state.store.skins : [];
+        return "<div class='sow-menu__overlay' data-menu-overlay='skin-picker'><section class='sow-menu__modal sow-skin-picker' role='dialog' aria-modal='true' aria-label='" + esc(SOW_t("store.skins")) + "'><div class='sow-menu__modal-head'><h2>" + esc(SOW_t("store.skins")) + "</h2><button class='sow-menu__icon-button' type='button' data-command='close_skin_picker' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div><div class='sow-store__skin-grid'>" + (skins.map(renderStoreSkinPromo).join("") || "<p class='sow-menu__empty'>" + esc(SOW_t("store.offers_unavailable")) + "</p>") + "</div></section></div>";
     }
 
     function openLeaderPurchase(leaderId, currency) {

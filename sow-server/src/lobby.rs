@@ -24,6 +24,7 @@ pub struct PlayerConnection {
     pub download_progress: u8,
     pub civilization: sow_core::player::Civilization,
     pub leader: sow_core::player::Leader,
+    pub skin_style: u8,
     pub database_account_id: Option<String>,
     /// Lobby-stage team (Teams mode only; `None` in FFA). Carried into the match start.
     pub team: Option<Team>,
@@ -315,6 +316,7 @@ pub struct JoinPlayerOpts {
     pub clan_tag: String,
     pub civilization: sow_core::player::Civilization,
     pub leader: sow_core::player::Leader,
+    pub skin_style: u8,
     pub client_tx: mpsc::Sender<Vec<u8>>,
     pub target_lobby_id: Option<u64>,
     pub host_private: bool,
@@ -333,6 +335,7 @@ pub fn join_player(
     let name = normalize_player_name(&opts.name);
     let clan_tag = opts.clan_tag;
     let civilization = opts.civilization;
+    let skin_style = opts.skin_style;
     let leader = opts.leader;
     let client_tx = opts.client_tx;
     let target_lobby_id = opts.target_lobby_id;
@@ -554,6 +557,7 @@ pub fn join_player(
         download_progress: 0,
         civilization,
         leader,
+        skin_style,
         database_account_id,
         team,
         ip,
@@ -1098,6 +1102,7 @@ mod name_tests {
             clan_tag: String::new(),
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            skin_style: 0,
             client_tx,
             target_lobby_id,
             host_private: false,
@@ -1355,6 +1360,7 @@ mod name_tests {
                 clan_tag: String::new(),
                 civilization: sow_core::player::Civilization::Rome,
                 leader: sow_core::player::Leader::Caesar,
+                skin_style: 0,
                 client_tx,
                 target_lobby_id: Some(10),
                 host_private: false,
@@ -1383,6 +1389,7 @@ mod name_tests {
             download_progress: 0,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            skin_style: 0,
             database_account_id: None,
             team,
             ip: "127.0.0.1".to_string(),

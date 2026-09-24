@@ -130,7 +130,7 @@ fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>) -> vec3<f32>
     let style = u32(round(player_skin_styles.styles[owner_id].x));
     if style == 1u {
         let stripe = smoothstep(0.42, 0.50, abs(fract((world_pos.x + world_pos.y) * 0.22) - 0.5));
-        return mix(base, min(base * vec3<f32>(1.45, 0.78, 0.38), vec3<f32>(1.0)), stripe * 0.35);
+        return mix(base, min(base * vec3<f32>(1.45, 0.78, 0.38), vec3<f32>(1.0)), stripe * 0.7);
     } else if style == 2u {
         let grid_x = smoothstep(0.43, 0.50, abs(fract(world_pos.x * 0.20) - 0.5));
         let grid_y = smoothstep(0.43, 0.50, abs(fract(world_pos.y * 0.20) - 0.5));

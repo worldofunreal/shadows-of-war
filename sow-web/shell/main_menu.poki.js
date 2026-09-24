@@ -13,63 +13,6 @@ function renderFeedback() {
     return error + notice;
 }
 
-function renderTopbar() {
-    var leader = leaderById(state.selected_leader);
-    var name = state.player_name || SOW_t("menu.anonymous");
-    var accountXp = Math.max(0, Number(state.xp) || 0);
-    var crowns = state.crowns || 0;
-    var gems = state.gems || 0;
-    var pendingRewards = (state.reward_receipts || []).filter(function (receipt) { return receipt.status !== "presented" && !receipt.presented_at; });
-    var rewardXp = pendingRewards.reduce(function (sum, receipt) { return sum + Math.max(0, Number(receipt.xp) || 0); }, 0);
-    var rewardCrowns = pendingRewards.reduce(function (sum, receipt) { return sum + Math.max(0, Number(receipt.crowns) || 0); }, 0);
-    var rewardLaurels = pendingRewards.reduce(function (sum, receipt) { return sum + Math.max(0, Number(receipt.laurels) || 0); }, 0);
-    return "" +
-        "<header class='sow-menu__topbar'>" +
-            "<div class='sow-menu__identity'>" +
-                "<button class='sow-menu__avatar' type='button' data-command='open_leader_picker' " +
-                    "aria-label='" + esc(SOW_t("menu.select_leader")) + "' style=\"background-image:url('" + esc(avatarImage()) + "')\"></button>" +
-                "<div class='sow-menu__profile'>" +
-                    "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='16' aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
-                    "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leaderDisplayName(leader)) + " · " + esc(leaderCivilization(leader)) + "</button>" +
-                "</div>" +
-            "</div>" +
-            "<div class='sow-menu__top-actions'>" +
-                "<div class='sow-menu__progress' data-progression data-command='open_profile' role='button' tabindex='0' title='" + esc(SOW_t("menu.open_profile")) + "' aria-label='" + esc(SOW_t("menu.open_profile")) + "'>" +
-                    "<span class='sow-menu__progress-cell sow-menu__level'><small>" + esc(SOW_t("menu.level_short")) + "</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
-                    "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " " + esc(SOW_t("menu.xp")) + "</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
-                    "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
-                    "<span class='sow-menu__progress-cell sow-menu__gems'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("gem")) + "' alt='' aria-hidden='true'><strong data-progression-gems-value>" + esc(gems) + "</strong></span>" +
-                "</div>" +
-                "<div class='sow-menu__reward-toast" + (pendingRewards.length ? " is-visible" : "") + "' data-reward-toast aria-live='polite'" + (pendingRewards.length ? "" : " hidden") + ">+" + esc(rewardXp) + " XP · +" + esc(rewardCrowns) + " crowns · +" + esc(rewardLaurels) + " laurels</div>" +
-                "<span class='sow-menu__account-label'>" + esc(SOW_t("menu.anonymous")) + "</span>" +
-                "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>⚙</button>" +
-            "</div>" +
-            "</header>";
-}
-
-// The shared shell's updater can add a sign-in button after every state tick.
-// Keep the Poki top bar anonymous on updates as well as on the first render.
-function updateTopbar() {
-    var topbar = root && root.querySelector ? root.querySelector(".sow-menu__topbar") : null;
-    if (!topbar || !state) return;
-    var leader = leaderById(state.selected_leader);
-    var nameInput = topbar.querySelector("[data-role='display-name']");
-    var name = state.player_name || SOW_t("menu.anonymous");
-    if (nameInput && document.activeElement !== nameInput) nameInput.value = name;
-    var avatar = topbar.querySelector(".sow-menu__avatar");
-    if (avatar) avatar.style.backgroundImage = "url(" + JSON.stringify(avatarImage()) + ")";
-    var leaderLink = topbar.querySelector(".sow-menu__profile-link");
-    if (leaderLink) leaderLink.textContent = leaderDisplayName(leader) + " · " + leaderCivilization(leader);
-    var level = topbar.querySelector("[data-progression-level-value]");
-    if (level) level.textContent = String(state.level == null ? 1 : state.level);
-    var xp = topbar.querySelector("[data-progression-xp-value]");
-    if (xp) xp.textContent = Math.floor(Number(state.xp) || 0) + " " + SOW_t("menu.xp");
-    var crowns = topbar.querySelector("[data-progression-crowns-value]");
-    if (crowns) crowns.textContent = String(state.crowns || 0);
-    var gems = topbar.querySelector("[data-progression-gems-value]");
-    if (gems) gems.textContent = String(state.gems || 0);
-}
-
 function renderCommandPanel() {
     return "" +
         "<section class='sow-menu__command'>" +

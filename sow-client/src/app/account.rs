@@ -1,7 +1,7 @@
 use super::state::SowApp;
 use web_time::{Duration, Instant};
 
-const REWARD_PROFILE_MAX_RETRIES: u8 = 6;
+const REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 
 fn account_hint(account_id: Option<&str>) -> String {
     account_id
@@ -158,8 +158,12 @@ impl SowApp {
     }
 
     fn track_reward_receipt_sync(&mut self, receipt_id: impl Into<String>) {
-        if self.pending_reward_receipt_ids.insert(receipt_id.into()) {
-            self.reward_profile_retry_attempts = 0;
+        self.pending_reward_receipt_ids.insert(receipt_id.into());
+        if let Some(account_id) = self.progress_account_id.as_deref() {
+            crate::anonymous_identity::save_pending_reward_receipt_ids(
+                account_id,
+                &self.pending_reward_receipt_ids,
+            );
         }
     }
 
@@ -173,6 +177,13 @@ impl SowApp {
         if self.pending_reward_receipt_ids.is_empty() {
             return;
         }
+        if self.ui.app.phase != crate::ClientPhase::MainMenu {
+            return;
+        }
+        #[cfg(target_arch = "wasm32")]
+        if !self.wasm_doc_was_visible {
+            return;
+        }
         if self.profile_request_in_flight
             || self.display_name_save_request_id.is_some()
             || self
@@ -181,29 +192,13 @@ impl SowApp {
         {
             return;
         }
-        if self.reward_profile_retry_attempts >= REWARD_PROFILE_MAX_RETRIES {
-            log::warn!("[rewards] profile receipt retry window expired");
-            if self.pending_reward_receipt_ids.contains("tutorial") {
-                self.tutorial_completion_retry_exhausted = true;
-            }
-            self.pending_reward_receipt_ids.clear();
-            self.reward_profile_retry_at = None;
-            return;
-        }
-        self.reward_profile_retry_attempts = self.reward_profile_retry_attempts.saturating_add(1);
-        self.reward_profile_retry_at =
-            Some(now + Duration::from_millis(250 * u64::from(self.reward_profile_retry_attempts)));
+        self.reward_profile_retry_at = Some(now + REWARD_PROFILE_RETRY_INTERVAL);
         self.fetch_cloud_progress();
     }
 
     pub(crate) fn schedule_reward_profile_retry(&mut self) {
         if !self.pending_reward_receipt_ids.is_empty() {
-            self.reward_profile_retry_at = Some(
-                Instant::now()
-                    + Duration::from_millis(
-                        250 * u64::from(self.reward_profile_retry_attempts.max(1)),
-                    ),
-            );
+            self.reward_profile_retry_at = Some(Instant::now() + REWARD_PROFILE_RETRY_INTERVAL);
         }
     }
 
@@ -528,32 +523,41 @@ impl SowApp {
         let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
         let account_switch = account_changed && self.progress_account_id.is_some();
         let cloud_intro_completed = cloud.intro_completed.unwrap_or(false);
-        let ready_receipts = if account_changed {
-            Vec::new()
-        } else {
-            self.pending_reward_receipt_ids
-                .iter()
-                .filter(|id| cloud.reward_receipts.contains_key(*id))
-                .cloned()
-                .collect::<Vec<_>>()
-        };
         let retry_tutorial = !account_changed
             && self.progress.intro_completed.unwrap_or(false)
-            && !cloud_intro_completed
-            && !self.tutorial_completion_retry_exhausted;
-        let portal = self.progress.clone();
-        if retry_tutorial {
-            self.progress = portal.clone();
-        } else {
-            self.progress.merge_boot_profile(cloud);
+            && !cloud_intro_completed;
+        if account_changed {
+            self.exit_reward_preview = None;
+            self.progress.reward_receipts.clear();
+            self.progress.unlocked_achievements.clear();
         }
         if account_switch {
             self.pending_display_name = None;
             crate::anonymous_identity::clear_pending_display_name();
             self.pending_reward_receipt_ids.clear();
-            self.reward_profile_retry_attempts = 0;
             self.reward_profile_retry_at = None;
-            self.tutorial_completion_retry_exhausted = false;
+        }
+        self.pending_reward_receipt_ids.extend(
+            crate::anonymous_identity::load_pending_reward_receipt_ids(&account_id),
+        );
+        let ready_receipts = self
+            .pending_reward_receipt_ids
+            .iter()
+            .filter(|id| {
+                cloud.reward_receipts.get(*id).is_some_and(|receipt| {
+                    receipt.verification_status
+                        != Some(sow_data::profile::ReplayVerificationStatus::Pending)
+                })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let portal = self.progress.clone();
+        if account_switch {
+            self.progress.replace_account_profile(cloud);
+        } else if retry_tutorial {
+            self.progress = portal.clone();
+        } else {
+            self.progress.merge_boot_profile(cloud);
         }
         if account_switch {
             self.ui
@@ -587,7 +591,7 @@ impl SowApp {
         {
             self.save_display_name(pending_display_name);
         }
-        if !self.progress.has_history() && portal.has_history() {
+        if !account_switch && !self.progress.has_history() && portal.has_history() {
             self.progress = portal;
         }
         if account_changed {
@@ -599,18 +603,28 @@ impl SowApp {
             );
             self.persist_tutorial_completion();
         }
-        if cloud_intro_completed {
-            self.tutorial_completion_retry_exhausted = false;
-        }
         for receipt_id in &ready_receipts {
             self.pending_reward_receipt_ids.remove(receipt_id);
         }
+        for receipt in self.progress.reward_receipts.values() {
+            if receipt.verification_status
+                == Some(sow_data::profile::ReplayVerificationStatus::Pending)
+            {
+                self.pending_reward_receipt_ids
+                    .insert(receipt.id.clone());
+            }
+        }
+        crate::anonymous_identity::save_pending_reward_receipt_ids(
+            &account_id,
+            &self.pending_reward_receipt_ids,
+        );
         if !ready_receipts.is_empty() {
             log::info!("[rewards] receipt is visible in the main-menu profile");
         }
         if self.pending_reward_receipt_ids.is_empty() {
-            self.reward_profile_retry_attempts = 0;
             self.reward_profile_retry_at = None;
+        } else {
+            self.reward_profile_retry_at = Some(Instant::now() + REWARD_PROFILE_RETRY_INTERVAL);
         }
     }
 
@@ -1108,9 +1122,6 @@ impl SowApp {
     /// Persist tutorial completion through the current platform proof. The
     /// server owns the one-time reward; local storage is only the retry signal.
     pub(crate) fn persist_tutorial_completion(&mut self) {
-        if self.tutorial_completion_retry_exhausted {
-            return;
-        }
         let Some(account_id) = self.progress_account_id.clone() else {
             return;
         };

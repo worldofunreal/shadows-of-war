@@ -73,6 +73,10 @@ impl SowApp {
 
         let stored_account_id = crate::anonymous_identity::load_account_id();
         let has_stored_account = stored_account_id.is_some();
+        let pending_reward_receipt_ids = stored_account_id
+            .as_deref()
+            .map(crate::anonymous_identity::load_pending_reward_receipt_ids)
+            .unwrap_or_default();
         let pending_display_name = match crate::anonymous_identity::load_pending_display_name() {
             Some((pending_account_id, name))
                 if pending_account_id.is_none()
@@ -258,11 +262,11 @@ impl SowApp {
                 last_projectile_snapshot_tick: None,
                 detonation_scratch: Vec::new(),
                 endgame_cache: None,
-                reward_cache: None,
                 silo_cooldowns: std::collections::HashMap::new(),
                 mover_scene: crate::render::world::movers::MoverScene::new(),
                 click_markers: Vec::new(),
                 floating_notices: Vec::new(),
+                death_nameplates: Vec::with_capacity(crate::app::MAX_DEATH_NAMEPLATES),
                 attack_badge_labels: std::collections::HashMap::new(),
                 attack_badge_style_key: None,
                 attack_badge_cache_tick: None,
@@ -310,6 +314,7 @@ impl SowApp {
             web_exit_lobbies_ready: false,
             gpu_init_failed: false,
             progress: crate::player_progress::PlayerProgress::default(),
+            exit_reward_preview: None,
             progress_account_id: stored_account_id,
             profile_account_id: None,
             progress_provider: if has_stored_account {
@@ -321,17 +326,13 @@ impl SowApp {
             display_name_save_request_id: None,
             profile_request_in_flight: false,
             profile_refresh_pending: false,
-            pending_reward_receipt_ids: std::collections::BTreeSet::new(),
-            reward_profile_retry_attempts: 0,
+            pending_reward_receipt_ids,
             reward_profile_retry_at: None,
-            tutorial_completion_retry_exhausted: false,
             identity_request_seq: 0,
             profile_last_applied_request: 0,
             join_waiting_for_identity: false,
             join_matchmaking: false,
             progress_match_recorded: false,
-            progress_stats_submitted: false,
-            progress_result_submitted: false,
             progress_session_defeats: crate::player_progress::SessionDefeats::default(),
             #[cfg(target_arch = "wasm32")]
             boot_db_settled: false,

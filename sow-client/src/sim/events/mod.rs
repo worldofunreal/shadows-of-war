@@ -25,7 +25,7 @@ impl SowApp {
                     elimination_x,
                     elimination_y,
                     assists,
-                    by_nuke: _,
+                    by_nuke,
                 } => {
                     self.handle_player_eliminated(
                         snap,
@@ -38,6 +38,7 @@ impl SowApp {
                             pos: (elimination_x, elimination_y),
                             gold_bounty,
                             assists: &assists,
+                            by_nuke,
                         },
                     );
                     if conqueror_id == my_id && my_id != 0 {

@@ -4,18 +4,6 @@ use crate::get_build_version;
 use crate::net::lobby::clear_lobby_snapshot;
 use crate::ui::loading_screen::SplashJob;
 
-fn should_complete_boudica_intro_on_exit(
-    tutorial_active: bool,
-    is_offline: bool,
-    campaign: crate::campaign::CampaignId,
-    intro_completed: Option<bool>,
-) -> bool {
-    tutorial_active
-        && is_offline
-        && campaign == crate::campaign::CampaignId::Boudica
-        && !intro_completed.unwrap_or(false)
-}
-
 fn should_use_exit_game_loader(phase: ClientPhase) -> bool {
     matches!(phase, ClientPhase::Playing)
 }
@@ -140,7 +128,7 @@ impl SowApp {
         }
     }
 
-    pub(crate) fn send_leave_message(&self) {
+    pub(crate) fn send_leave_message(&mut self) {
         if let Some(client) = self.net.client.as_ref() {
             let leave = sow_core::protocol::ClientMessage::Leave {};
             if let Ok(json) = bincode::serialize(&leave) {
@@ -195,23 +183,17 @@ impl SowApp {
             && matches!(&self.ui.app.splash_state.job, SplashJob::EnterGame);
         let use_loader = should_use_exit_game_loader(phase);
         let was_playing = phase == crate::ClientPhase::Playing;
+        let was_offline = self.net.is_offline;
         let reward_match_id = (was_playing && !self.net.is_offline)
             .then(|| self.sim.my_lobby_id)
             .flatten();
         let mut exit_leader = self.ui.app.splash_state.loader_leader;
-        let exiting_boudica_intro = should_complete_boudica_intro_on_exit(
-            self.ui.tutorial_active,
-            self.net.is_offline,
-            self.ui.tutorial_campaign,
-            self.progress.intro_completed,
-        );
-        if exiting_boudica_intro {
+        let leaving_unfinished_boudica_intro = self.ui.tutorial_active
+            && was_offline
+            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
+            && !self.progress.intro_completed.unwrap_or(false);
+        if leaving_unfinished_boudica_intro {
             crate::analytics::track("tutorial_exit_early");
-            if self.progress.mark_tutorial_completed() {
-                self.save_local_progress();
-                self.persist_tutorial_completion();
-                log::info!("tutorial: intro completed on early exit");
-            }
         }
         if was_playing {
             if let Some(player_id) = self.sim.my_player_id
@@ -231,6 +213,14 @@ impl SowApp {
                 crate::store_portals::measure("match", "round", "abandon");
             }
             crate::store_portals::gameplay_stop();
+            if !was_offline
+                && let Some(match_id) = reward_match_id
+            {
+                self.capture_online_reward_preview(
+                    match_id,
+                    exit_leader.unwrap_or(self.ui.app.main_menu_state.selected_leader),
+                );
+            }
         }
         crate::store_portals::left_room();
         self.net.is_offline = false;
@@ -324,9 +314,8 @@ impl SowApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{should_complete_boudica_intro_on_exit, should_use_exit_game_loader};
+    use super::should_use_exit_game_loader;
     use crate::ClientPhase;
-    use crate::campaign::CampaignId;
 
     #[test]
     fn exit_loader_only_runs_for_active_game() {
@@ -335,37 +324,4 @@ mod tests {
         assert!(!should_use_exit_game_loader(ClientPhase::Splash));
     }
 
-    #[test]
-    fn only_unfinished_offline_boudica_tutorial_exit_completes_intro() {
-        assert!(should_complete_boudica_intro_on_exit(
-            true,
-            true,
-            CampaignId::Boudica,
-            None
-        ));
-        assert!(!should_complete_boudica_intro_on_exit(
-            true,
-            false,
-            CampaignId::Boudica,
-            None
-        ));
-        assert!(!should_complete_boudica_intro_on_exit(
-            false,
-            true,
-            CampaignId::Boudica,
-            None
-        ));
-        assert!(!should_complete_boudica_intro_on_exit(
-            true,
-            true,
-            CampaignId::SixSkyEp1,
-            None
-        ));
-        assert!(!should_complete_boudica_intro_on_exit(
-            true,
-            true,
-            CampaignId::Boudica,
-            Some(true)
-        ));
-    }
 }

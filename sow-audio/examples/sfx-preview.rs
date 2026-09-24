@@ -7,6 +7,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("target/sfx-preview"));
     let count = sow_audio::export_sfx_preview(&output_dir)?;
-    println!("Exported {count} SFX previews to {}", output_dir.display());
+    println!(
+        "Exported {count} runtime SFX previews to {}",
+        output_dir.display()
+    );
     Ok(())
 }

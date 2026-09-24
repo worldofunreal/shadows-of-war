@@ -1,82 +1,49 @@
-use super::state::SowApp;
+use super::state::{ExitRewardPreview, SowApp};
 
 impl SowApp {
-    pub(crate) fn reset_progress_session(&mut self) {
-        self.progress_match_recorded = false;
-        self.progress_stats_submitted = false;
-        self.progress_result_submitted = false;
-        self.progress_session_defeats = crate::player_progress::SessionDefeats::default();
-        self.ui.reward_cache = None;
+    fn store_exit_reward_preview(
+        &mut self,
+        receipt_id: impl Into<String>,
+        reward: sow_data::rewards::MatchReward,
+    ) {
+        let Some(account_id) = self.progress_account_id.clone() else {
+            return;
+        };
+        self.exit_reward_preview = Some(ExitRewardPreview {
+            receipt_id: receipt_id.into(),
+            account_id,
+            reward,
+            base_xp: self.progress.xp,
+            base_level: self.progress.level.max(1),
+            base_crowns: self.progress.crowns,
+            base_laurels: self.progress.laurels,
+        });
     }
 
-    pub(crate) fn maybe_submit_online_stats(&mut self, snap: &sow_core::protocol::SimSnapshot) {
-        if self.progress_account_id.is_none() || self.net.is_offline {
-            return;
-        }
-        let my_id = self.sim.my_player_id.unwrap_or(0);
-        if my_id == 0 {
-            return;
-        }
-        let Some(me) = snap.players.iter().find(|p| p.id == my_id) else {
-            return;
-        };
-        let game_over = snap.winner.is_some();
-        let eliminated = !me.alive && me.has_spawned;
-        if game_over {
-            if self.progress_result_submitted {
-                return;
-            }
-        } else if self.progress_stats_submitted {
-            return;
-        }
-        if !game_over && !eliminated {
-            return;
-        }
+    pub(crate) fn capture_online_reward_preview(
+        &mut self,
+        match_id: u64,
+        leader: sow_core::player::Leader,
+    ) {
+        let mut reward =
+            sow_data::rewards::calculate(sow_data::rewards::RewardInput::default());
+        reward.laurels = self.progress.preview_participation_laurels(leader, reward);
+        self.store_exit_reward_preview(match_id.to_string(), reward);
+    }
 
-        let leader = self
-            .ui
-            .app
-            .main_menu_state
-            .selected_leader
-            .name()
-            .to_string();
-        let msg = if game_over {
-            self.progress_result_submitted = true;
-            sow_core::protocol::ClientMessage::SubmitMatchReport {
-                kills: me.kills,
-                deaths: me.deaths,
-                assists: me.assists,
-                players_defeated: self.progress_session_defeats.players,
-                empires_defeated: self.progress_session_defeats.empires,
-                tribes_defeated: self.progress_session_defeats.tribes,
-                leader,
-                winner_player_id: snap.winner,
-                winning_team: snap.winning_team,
-                tick: snap.tick,
-            }
-        } else {
-            self.progress_stats_submitted = true;
-            sow_core::protocol::ClientMessage::SubmitStatsWithLeader {
-                kills: me.kills,
-                deaths: me.deaths,
-                assists: me.assists,
-                players_defeated: self.progress_session_defeats.players,
-                empires_defeated: self.progress_session_defeats.empires,
-                tribes_defeated: self.progress_session_defeats.tribes,
-                leader,
-            }
-        };
-        if let Ok(json) = bincode::serialize(&msg)
-            && let Some(c) = self.net.client.as_ref()
-        {
-            c.send(json);
-            log::info!(
-                "Submitted online stats: K/D/A {}/{}/{}",
-                me.kills,
-                me.deaths,
-                me.assists
-            );
-        }
+    pub(crate) fn capture_tutorial_reward_preview(&mut self) {
+        self.store_exit_reward_preview(
+            "tutorial",
+            sow_data::rewards::calculate(sow_data::rewards::RewardInput {
+                tutorial: true,
+                ..Default::default()
+            }),
+        );
+    }
+
+    pub(crate) fn reset_progress_session(&mut self) {
+        self.progress_match_recorded = false;
+        self.progress_session_defeats = crate::player_progress::SessionDefeats::default();
     }
 
     pub(crate) fn maybe_record_match_progress(
@@ -126,29 +93,8 @@ impl SowApp {
             && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica;
         let server_owned_match =
             self.progress_account_id.is_some() && (!self.net.is_offline || server_owned_tutorial);
-        self.ui.reward_cache = Some(sow_data::rewards::calculate(if server_owned_tutorial {
-            sow_data::rewards::RewardInput {
-                tutorial: true,
-                ..Default::default()
-            }
-        } else if server_owned_match {
-            // Online rewards are participation-only until the replay is
-            // verified by the deterministic server engine.
-            sow_data::rewards::RewardInput::default()
-        } else {
-            sow_data::rewards::RewardInput {
-                won,
-                players_defeated: defeats.players,
-                empires_defeated: defeats.empires,
-                tribes_defeated: defeats.tribes,
-                kills,
-                assists,
-                ..Default::default()
-            }
-        }));
-
         // The relay/database own online results; the database owns the one-time
-        // Boudica tutorial reward. Both previews are informational only.
+        // Boudica tutorial reward.
         if server_owned_match {
             log::info!(
                 "Server-owned match ended (winner={winner_id}); profile will sync from sow-database on menu return"

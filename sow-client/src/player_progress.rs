@@ -50,6 +50,8 @@ pub struct PlayerProgress {
     pub assists: u32,
     #[serde(default)]
     pub leader_xp: std::collections::BTreeMap<String, u32>,
+    #[serde(default)]
+    pub leader_stats: std::collections::BTreeMap<String, sow_data::profile::LeaderCareerStats>,
     /// Free spendable currency (legacy local saves stored it under "laurels";
     /// [`migrate_legacy_currency_json`] moves it here on load).
     #[serde(default)]
@@ -177,6 +179,41 @@ impl PlayerProgress {
         self.laurels = self.laurels.saturating_add(reward.laurels);
     }
 
+    pub fn preview_participation_laurels(
+        &self,
+        leader: Leader,
+        reward: sow_data::rewards::MatchReward,
+    ) -> u64 {
+        let leader = leader.name().to_string();
+        let leader_stats = self.leader_stats.get(&leader);
+        let mut leader_xp = self.leader_xp.clone();
+        let xp = leader_xp.entry(leader.clone()).or_default();
+        *xp = xp.saturating_add(reward.leader_xp);
+        let totals = sow_data::rewards::AchievementTotals {
+            matches_played: u64::from(self.matches_played.saturating_add(1)),
+            wins: u64::from(self.wins),
+            laurels: self.laurels.saturating_add(reward.laurels),
+            leader_matches_played: self
+                .leader_stats
+                .values()
+                .map(|stats| u64::from(stats.matches_played))
+                .sum::<u64>()
+                .saturating_add(1),
+            leader_wins: self
+                .leader_stats
+                .values()
+                .map(|stats| u64::from(stats.wins))
+                .sum(),
+            distinct_leaders: self.leader_stats.len() as u64
+                + u64::from(leader_stats.is_none()),
+            best_leader_xp: leader_xp.values().copied().max().unwrap_or_default() as u64,
+        };
+        sow_data::rewards::newly_unlocked_achievements(totals, &self.unlocked_achievements)
+            .into_iter()
+            .map(|achievement| achievement.points)
+            .sum()
+    }
+
     pub fn mark_tutorial_completed(&mut self) -> bool {
         if self.intro_completed.unwrap_or(false) {
             return false;
@@ -239,6 +276,12 @@ impl PlayerProgress {
             self.reward_receipts.entry(id).or_insert(receipt);
         }
         self.unlocked_achievements.extend(local_achievements);
+    }
+
+    pub fn replace_account_profile(&mut self, cloud: PlayerProgress) {
+        let local_episodes = std::mem::take(&mut self.completed_episodes);
+        *self = cloud;
+        self.completed_episodes.extend(local_episodes);
     }
 
     pub fn sync_level(&mut self) {
@@ -385,5 +428,27 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(local.intro_completed, Some(true));
+    }
+
+    #[test]
+    fn switching_accounts_does_not_carry_currency_or_tutorial_state() {
+        let mut old = PlayerProgress {
+            xp: 900,
+            crowns: 700,
+            gems: 200,
+            intro_completed: Some(true),
+            completed_episodes: ["six_sky_ep1".to_string()].into(),
+            ..Default::default()
+        };
+        old.replace_account_profile(PlayerProgress {
+            gems: 475,
+            intro_completed: Some(false),
+            ..Default::default()
+        });
+        assert_eq!(old.xp, 0);
+        assert_eq!(old.crowns, 0);
+        assert_eq!(old.gems, 475);
+        assert_eq!(old.intro_completed, Some(false));
+        assert!(old.completed_episodes.contains("six_sky_ep1"));
     }
 }

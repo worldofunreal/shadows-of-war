@@ -63,6 +63,78 @@ mod tests {
     }
 
     #[test]
+    fn direct_structure_choice_matches_sorted_candidate_list() {
+        let (w, h) = (48u32, 40u32);
+        let mut map = GameMap::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                map.set_owner_id(x, y, if x < 40 { 1 } else { 0 });
+            }
+        }
+        for y in 0..h {
+            let idx = map.ref_id(24, y);
+            map.terrain[idx] = MapTile::from_byte(0);
+        }
+        let existing = [
+            Building {
+                id: 1,
+                owner_id: 1,
+                tile_idx: xy_idx(8, 8, w),
+                kind: BuildingKind::City,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: Default::default(),
+            },
+            Building {
+                id: 2,
+                owner_id: 1,
+                tile_idx: xy_idx(14, 8, w),
+                kind: BuildingKind::Factory,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: Default::default(),
+            },
+        ];
+        let mut grid = BuildingGrid::default();
+        grid.rebuild(existing.iter(), w, h);
+
+        for kind in BuildingKind::ALL {
+            for &(x, y) in &[
+                (2, 2),
+                (8, 8),
+                (20, 10),
+                (23, 20),
+                (30, 30),
+                (39, 39),
+                (42, 10),
+            ] {
+                let click = xy_idx(x, y, w);
+                let expected = valid_land_structure_indices(
+                    &map,
+                    1,
+                    click,
+                    kind,
+                    &grid,
+                    &mut crate::engine::PlacementScratch::default(),
+                )
+                .first()
+                .copied();
+                let actual = resolve_structure_spawn_tile(
+                    &map,
+                    1,
+                    kind,
+                    click,
+                    &grid,
+                    &mut crate::engine::PlacementScratch::default(),
+                );
+                assert_eq!(actual, expected, "kind={kind:?} click=({x},{y})");
+            }
+        }
+    }
+
+    #[test]
     fn upgrade_closest_by_manhattan() {
         let w = 20u32;
         let mut b1 = Building {

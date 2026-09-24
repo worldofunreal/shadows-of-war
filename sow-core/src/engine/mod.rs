@@ -11,6 +11,65 @@ use crate::warp_fleet::WarpFleet;
 use crate::water_components::WaterComponents;
 use serde::{Deserialize, Serialize};
 
+/// Build the deterministic match state used by lockstep clients and replay verification.
+pub fn initialize_match_engine(
+    config: crate::game_config::GameConfig,
+    seed: u64,
+    map_bytes: &[u8],
+    players: Vec<crate::protocol::PlayerInfo>,
+    fallback_spawns: Vec<crate::map_file::MapSpawn>,
+    fallback_geo_bounds: Option<crate::map_file::GeoBounds>,
+    fallback_land_tiles: u32,
+) -> SowEngine {
+    let mut state = GameState::new(seed, config.map_width, config.map_height, config);
+    state.map_spawns = fallback_spawns;
+    state.geo_bounds = fallback_geo_bounds;
+    state.total_land_tiles = fallback_land_tiles;
+
+    if let Ok(map_file) = crate::maps::load_map_from_payload(map_bytes) {
+        state.total_land_tiles = map_file.num_land_tiles;
+        state.map_spawns = map_file.spawns;
+        state.geo_bounds = map_file.geo_bounds;
+        if map_file.terrain.len() == state.map.terrain.len() {
+            for (tile, byte) in state
+                .map
+                .terrain
+                .iter_mut()
+                .zip(map_file.terrain.iter().copied())
+            {
+                *tile = crate::map::MapTile::from_byte(byte);
+            }
+        }
+    } else if map_bytes.len() == state.map.terrain.len() {
+        for (tile, byte) in state.map.terrain.iter_mut().zip(map_bytes.iter().copied()) {
+            *tile = crate::map::MapTile::from_byte(byte);
+        }
+    }
+
+    let water = WaterComponents::compute(&state.map, |_| {});
+    let mut engine = SowEngine::new(state, water);
+    for player in players {
+        if player.player_type == crate::player::PlayerType::Human {
+            engine.spawn_human(crate::engine::HumanSpawn {
+                player_id: player.id,
+                name: player.name,
+                color: player.color,
+                team: player.team,
+                civilization: player.civilization,
+                leader: player.leader,
+                skin_style: player.skin_style,
+                is_ai_controlled: player.is_ai_controlled,
+            });
+        }
+    }
+    engine.spawn_scripted();
+    engine.spawn_ai(
+        engine.state.config.nation_count,
+        engine.state.config.bot_count,
+    );
+    engine
+}
+
 #[derive(Clone)]
 pub struct PlacementScratch {
     pub visited_stamp: [u32; 1024],
@@ -19,7 +78,9 @@ pub struct PlacementScratch {
     pub border_scratch: Vec<u32>,
     pub interior_scratch: Vec<(i32, i32)>,
     pub neighbor_scratch: Vec<u16>,
+    #[cfg(feature = "ai-metrics")]
     pub candidates_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub building_checks: u64,
 }
 
@@ -32,7 +93,9 @@ impl Default for PlacementScratch {
             border_scratch: Vec::new(),
             interior_scratch: Vec::new(),
             neighbor_scratch: Vec::new(),
+            #[cfg(feature = "ai-metrics")]
             candidates_examined: 0,
+            #[cfg(feature = "ai-metrics")]
             building_checks: 0,
         }
     }
@@ -50,15 +113,34 @@ pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct BotWorkCounters {
+    #[cfg(feature = "ai-metrics")]
     pub border_cells_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub border_blocks_examined: u64,
+    #[cfg(feature = "ai-metrics")]
+    pub border_directory_words_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub neighbor_cells_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub placement_candidates_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub placement_building_checks: u64,
+    #[cfg(feature = "ai-metrics")]
     pub naval_routes_calculated: u64,
+    #[cfg(feature = "ai-metrics")]
+    pub shoreline_candidates_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub attack_entries_scanned_last_update: u64,
+    #[cfg(feature = "ai-metrics")]
+    pub diplomacy_proposals_examined: u64,
+    #[cfg(feature = "ai-metrics")]
+    pub diplomacy_resource_requests_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub nuke_buildings_examined: u64,
+    #[cfg(feature = "ai-metrics")]
     pub nuke_sam_checks: u64,
+    #[cfg(feature = "ai-metrics")]
+    pub nuke_history_lookups: u64,
 }
 
 #[derive(Clone)]
@@ -91,7 +173,8 @@ pub struct SowEngine {
     pub projectiles: Vec<crate::game::Projectile>,
     pub silo_cooldowns: std::collections::HashMap<u64, u32>,
     pub mirv_launches: std::collections::HashMap<u16, u32>,
-    pub recent_nuke_targets: Vec<(u16, u32, u64)>,
+    /// Launch count by `(target player, tile)`; lookup-only during scoring.
+    pub recent_nuke_targets: std::collections::HashMap<(u16, u32), u64>,
     pub mirv_cooldown_targets: std::collections::HashMap<u16, u64>,
     pub(crate) bot_route_cache: Vec<(PlayerId, u32, crate::warp_fleet::FleetRoute)>,
     pub(crate) bot_sam_tiles_cache: Option<Vec<(u32, u16)>>,
@@ -99,6 +182,8 @@ pub struct SowEngine {
     pub(crate) ai_attack_index: Vec<Vec<usize>>,
     pub(crate) ai_attack_index_dirty: bool,
     pub(crate) bot_work: BotWorkCounters,
+    #[cfg(test)]
+    pub(crate) test_last_ai_intents: Vec<crate::protocol::StampedIntent>,
 }
 
 impl SowEngine {
@@ -144,7 +229,7 @@ impl SowEngine {
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
             mirv_launches: std::collections::HashMap::new(),
-            recent_nuke_targets: Vec::new(),
+            recent_nuke_targets: std::collections::HashMap::new(),
             mirv_cooldown_targets: std::collections::HashMap::new(),
             bot_route_cache: Vec::with_capacity(16),
             bot_sam_tiles_cache: None,
@@ -152,6 +237,8 @@ impl SowEngine {
             ai_attack_index: Vec::new(),
             ai_attack_index_dirty: true,
             bot_work: BotWorkCounters::default(),
+            #[cfg(test)]
+            test_last_ai_intents: Vec::new(),
         }
     }
 

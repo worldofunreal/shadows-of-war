@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const shell = __dirname;
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8");
@@ -20,6 +21,15 @@ const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net
 const actionsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
 const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
+const progressSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/progress.rs"), "utf8");
+const dataDbSource = fs.readFileSync(path.join(shell, "../../sow-data/src/db.rs"), "utf8");
+const dataMainSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
+const accountSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/account.rs"), "utf8");
+const bootstrapSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/bootstrap.rs"), "utf8");
+const identitySource = fs.readFileSync(path.join(shell, "../../sow-client/src/anonymous_identity.rs"), "utf8");
+const assetSource = fs.readFileSync(path.join(shell, "../../sow-client/src/asset.rs"), "utf8");
+const relaySource = fs.readFileSync(path.join(shell, "../../sow-relay/src/main.rs"), "utf8");
+const serverSource = fs.readFileSync(path.join(shell, "../../sow-server/src/main.rs"), "utf8");
 const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
 const worldOverlays = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
 const menuCssFiles = [
@@ -57,6 +67,69 @@ test("menu CSS keeps shared layout separate from live screen domains", () => {
     assert.doesNotMatch(menuCss["main_menu.layout.css"], /\.sow-menu__queue(?![-\w])/);
     assert.match(lobbiesSource, /modeClass = "sow-menu__mode-chip--"/);
     assert.match(shellSource, /sow-auth__provider-icon--/);
+});
+
+test("match rewards present in the main menu, while endgame keeps only match stats", () => {
+    assert.match(hud, /id="sow-hud-endgame-modal"/);
+    assert.match(hud, /endgame\.classList\.toggle\("hidden", !isOver\)/);
+    assert.match(webMenu, /endgame_active,[\s\S]*endgame_winner:[\s\S]*endgame_team:/);
+    assert.match(hud, /id="sow-hud-surrender-kda"/);
+    assert.doesNotMatch(hud, /sow-hud-endgame-(xp|leader-xp|crowns|laurels|rewards)/);
+    assert.doesNotMatch(sessionSource, /submit_online_stats_on_exit/);
+    assert.doesNotMatch(progressSource, /submit_online_stats|SubmitMatchReport|SubmitStatsWithLeader/);
+    assert.match(progressSource, /capture_online_reward_preview[\s\S]*RewardInput::default\(\)[\s\S]*preview_participation_laurels/);
+    assert.doesNotMatch(progressSource, /reward_cache/);
+    assert.match(dataDbSource, /pub async fn record_match_participation/);
+    assert.match(dataDbSource, /reward_receipts\.contains_key/);
+    assert.doesNotMatch(shellSource, /data-reward-summary|reward-toast/);
+    assert.match(shellSource, /sow:loader-cycle-ready/);
+    assert.match(shellSource, /runRewardPresentation/);
+    assert.match(shellSource, /getComputedStyle\(root\)\.getPropertyValue\("--sow-gold-bright"\)/);
+    assert.match(shellSource, /acknowledge_reward_receipts/);
+    assert.match(shellSource, /acknowledge_reward_presentation/);
+    assert.match(shellSource, /send\("acknowledge_reward_receipts", \{ account_id: accountId, receipt_ids: ids \}\)/);
+    assert.match(shellSource, /send\("acknowledge_reward_presentation", \{ account_id: accountId, receipt_id: preview\.receipt_id \}\)/);
+    assert.match(webMenu, /AcknowledgeRewardReceipts \{[\s\S]*account_id,[\s\S]*receipt_ids,[\s\S]*progress_account_id\.as_deref\(\) == Some\(account_id\.as_str\(\)\)/);
+    assert.match(webMenu, /AcknowledgeRewardPresentation \{[\s\S]*account_id,[\s\S]*receipt_id,[\s\S]*progress_account_id\.as_deref\(\) == Some\(account_id\.as_str\(\)\)/);
+    assert.match(shellSource, /if \(!shown\) \{\s*if \(document\.visibilityState === "visible"\) maybePresentRewards\(\);/);
+    assert.doesNotMatch(relaySource, /record_client_stats|record_match_report|SubmitStatsWithLeader|SubmitMatchReport/);
+    assert.match(serverSource, /SubmitStatsWithLeader \{ \.\. \}[\s\S]*SubmitMatchReport \{ \.\. \} => \{\}/);
+    assert.doesNotMatch(webMenu, /hud\.rewards/);
+    assert.match(coreSource, /receipt\.leader_xp/);
+    assert.match(heroesSource, /var portraitAsset = asset\([\s\S]*_mobile\.webp[\s\S]*var landscapeAsset = asset\([\s\S]*_desktop\.webp[\s\S]*srcset='" \+ esc\(landscapeAsset\)[\s\S]*img src='" \+ esc\(portraitAsset\)/);
+});
+
+test("participation receipt stays synced until replay verification resolves", () => {
+    assert.match(dataDbSource, /pub async fn mark_match_reward_verification_status/);
+    assert.match(dataDbSource, /receipt\.verification_status = Some\(ReplayVerificationStatus::Verified\)/);
+    assert.match(dataMainSource, /async fn reject_queued_replay/);
+    assert.match(dataMainSource, /else if let Err\(error\) = reject_queued_replay\(&state, &payload\.match_id\)\.await/);
+    assert.match(accountSource, /receipt\.verification_status\s*!=\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
+    assert.match(accountSource, /receipt\.verification_status\s*==\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
+    assert.match(coreSource, /receipt\.verification_status/);
+});
+
+test("pending reward lookups survive reload without crossing accounts", () => {
+    assert.match(identitySource, /PENDING_REWARD_RECEIPTS_STORAGE_PREFIX/);
+    assert.match(identitySource, /load_pending_reward_receipt_ids\(account_id: &str\)/);
+    assert.match(accountSource, /track_reward_receipt_sync[\s\S]*save_pending_reward_receipt_ids/);
+    assert.match(accountSource, /load_pending_reward_receipt_ids\(&account_id\)/);
+    assert.match(accountSource, /save_pending_reward_receipt_ids\([\s\S]*&account_id,[\s\S]*&self\.pending_reward_receipt_ids/);
+    assert.match(bootstrapSource, /stored_account_id[\s\S]*load_pending_reward_receipt_ids/);
+});
+
+test("queued identity refresh is applied before an older profile response", () => {
+    const profileStart = assetSource.indexOf("DbEvent::ProfileLoaded {");
+    const profileEnd = assetSource.indexOf("DbEvent::DisplayNameSaved", profileStart);
+    assert.ok(profileStart >= 0 && profileEnd > profileStart);
+    const profileEvent = assetSource.slice(profileStart, profileEnd);
+    assert.match(profileEvent, /profile_refresh_pending[\s\S]*fetch_cloud_progress\(\);[\s\S]*continue;/);
+    assert.ok(profileEvent.indexOf("continue;") < profileEvent.indexOf("profile_last_applied_request = request_id"));
+
+    const failedStart = assetSource.indexOf("DbEvent::LoadFailed { request_id, status }");
+    const failedEnd = assetSource.indexOf("DbEvent::TutorialCompletionFailed", failedStart);
+    assert.ok(failedStart >= 0 && failedEnd > failedStart);
+    assert.match(assetSource.slice(failedStart, failedEnd), /profile_refresh_pending[\s\S]*fetch_cloud_progress\(\);[\s\S]*continue;/);
 });
 
 test("lobby cards keep live counts and one DOM card per lobby id", () => {
@@ -136,7 +209,7 @@ test("settings panel keeps only useful controls and real account state", () => {
 });
 
 test("hero purchase stays server-backed, direct, and visually honest", () => {
-    assert.match(storeSource, /if \(!offer \|\| offer\.owned\) return ""/);
+    assert.match(storeSource, /var leaderActions = !offer \|\| offer\.owned \? ""/);
     assert.doesNotMatch(storeSource, /offer\.free_rotation \|\| offer\.available/);
     assert.match(storeSource, /data-command='unlock_leader'/);
     assert.match(storeSource, /data-command='open_skin_purchase'/);
@@ -154,19 +227,43 @@ test("hero purchase stays server-backed, direct, and visually honest", () => {
     assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal-pop/);
 });
 
+test("hero selection opens the shared catalog for equipped and purchasable skins", () => {
+    const rowStart = storeSource.indexOf("function renderLeaderPurchase");
+    const rowEnd = storeSource.indexOf("function renderSkinPickerModal", rowStart);
+    assert.ok(rowStart >= 0 && rowEnd > rowStart);
+    assert.match(storeSource.slice(rowStart, rowEnd), /data-command='open_skin_picker'/);
+    assert.doesNotMatch(storeSource.slice(rowStart, rowEnd), /if \(!offer \|\| offer\.owned\) return/);
+    assert.match(storeSource, /function renderSkinPickerModal\(\)[\s\S]*skins\.map\(renderStoreSkinPromo\)/);
+    assert.match(storeSource, /data-menu-overlay='skin-picker'/);
+    assert.match(storeSource, /data-command='equip_skin'/);
+    assert.match(storeSource, /data-command='open_skin_purchase'/);
+    assert.match(shellSource, /command === "open_skin_picker"[\s\S]*loadStoreCatalog\(\)/);
+    assert.match(shellSource, /command === "close_skin_picker"/);
+    assert.match(shellSource, /syncOverlay\("skin-picker"[\s\S]*syncOverlay\("purchase"/);
+    assert.match(profileCss, /\.sow-menu__modal\.sow-skin-picker/);
+});
+
 test("weekly free rotation is a splash-only status", () => {
     const cardStart = heroesSource.indexOf("function renderHeroesCard");
     const cardEnd = heroesSource.indexOf("function heroesRoster", cardStart);
     assert.ok(cardStart >= 0 && cardEnd > cardStart);
     assert.doesNotMatch(heroesSource.slice(cardStart, cardEnd), /data-hero-status|weekly_free_rotation/);
-    assert.match(heroesSource, /activeLeader\.free_rotation === true && activeLeader\.owned === false/);
+    const predicateStart = heroesSource.indexOf("function isWeeklyFreeRotation");
+    const predicateEnd = heroesSource.indexOf("function renderHeroesCard", predicateStart);
+    assert.ok(predicateStart >= 0 && predicateEnd > predicateStart);
+    const context = {};
+    vm.runInNewContext(heroesSource.slice(predicateStart, predicateEnd) + "this.isWeeklyFreeRotation = isWeeklyFreeRotation;", context);
+    assert.equal(context.isWeeklyFreeRotation({ available: false, free_rotation: true, owned: false }), false);
+    assert.equal(context.isWeeklyFreeRotation({ available: true, free_rotation: true, owned: false }), true);
+    assert.equal((heroesSource.match(/isWeeklyFreeRotation\(activeLeader\)/g) || []).length, 2);
     assert.match(profileCss, /\.sow-heroes__rotation/);
 });
 
 test("header exposes server progress currencies and keeps the real XP remainder", () => {
     assert.match(shellSource, /data-progression-gems-value/);
-    assert.match(pokiSource, /data-progression-gems-value/);
-    assert.match(shellSource, /progressionXp % 100/);
+    assert.match(shellSource, /data-progression-laurels-value/);
+    assert.doesNotMatch(pokiSource, /function renderTopbar|data-progression-gems-value/);
+    assert.match(shellSource, /accountXp % 100/);
     assert.match(shellSource, /state\.gems/);
     assert.match(webMenu, /"gems": progress\.gems/);
 });
@@ -186,6 +283,30 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hud, /menu\.dataset\.renderKey/);
     assert.match(hud, /Math\.min\(Math\.max\(x, minX\), maxX\)/);
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
+});
+
+test("canvas right-click is routed to the Rust map-menu handler", () => {
+    assert.match(hud, /gameCanvas\.addEventListener\("contextmenu"/);
+    assert.match(hud, /if \(event\.button !== 2\) return/);
+    assert.match(hud, /send\("open_map_context_menu", \{/);
+    assert.match(webMenu, /OpenMapContextMenu\s*\{\s*x: f64,\s*y: f64/);
+    assert.match(webMenu, /WebMenuCommand::OpenMapContextMenu\s*\{ x, y \} =>\s*\{\s*self\.handle_secondary_click\(x, y\);/);
+    assert.match(mapClick, /pub\(crate\) fn handle_secondary_click/);
+    assert.doesNotMatch(windowInput, /else if right && !pressed/);
+});
+
+test("map menu stays visible with disabled sectors when no action is available", () => {
+    const openStart = mapClick.indexOf("pub(crate) fn open_map_context_menu");
+    const openEnd = mapClick.indexOf("pub(crate) fn close_map_context_menu", openStart);
+    const openBody = mapClick.slice(openStart, openEnd);
+    assert.match(openBody, /if self\.map_menu_actions\(tile_idx\)\.is_empty\(\) \{\s*self\.show_map_menu_unavailable\(tile_idx, \(x, y\)\);\s*\}/);
+    assert.match(openBody, /self\.input\.map_context_menu = Some\(MapContextMenu/);
+
+    const renderStart = hud.indexOf("function renderMapMenu(mapMenu)");
+    const renderEnd = hud.indexOf("function updateLeaderboard", renderStart);
+    const renderBody = hud.slice(renderStart, renderEnd);
+    assert.doesNotMatch(renderBody, /if \(!items\.length\)/);
+    assert.match(renderBody, /mapDisabledSector\(radial, 1, radialCount, "fleet"/);
 });
 
 test("map menu keeps the radial sectors and recovered submenu actions", () => {

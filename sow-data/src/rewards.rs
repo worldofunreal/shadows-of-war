@@ -36,6 +36,48 @@ pub struct AchievementDefinition {
     pub target: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AchievementTotals {
+    pub matches_played: u64,
+    pub wins: u64,
+    pub laurels: u64,
+    pub leader_matches_played: u64,
+    pub leader_wins: u64,
+    pub distinct_leaders: u64,
+    pub best_leader_xp: u64,
+}
+
+pub fn achievement_progress(id: &str, totals: AchievementTotals) -> u64 {
+    match id {
+        "first_command" | "battle_hardened" => totals.matches_played,
+        "first_victory" | "victory_march" => totals.wins,
+        "laurel_hoard" => totals.laurels,
+        "commander_victorious" => totals.leader_wins,
+        "veteran_commander" => totals.leader_matches_played,
+        "banner_collector" => totals.distinct_leaders,
+        "leader_path" => totals.best_leader_xp,
+        _ => 0,
+    }
+}
+
+/// Project server achievement awards without changing the caller's profile.
+pub fn newly_unlocked_achievements(
+    mut totals: AchievementTotals,
+    already_unlocked: &std::collections::BTreeSet<String>,
+) -> Vec<AchievementDefinition> {
+    let mut unlocked = already_unlocked.clone();
+    let mut newly_unlocked = Vec::new();
+    for achievement in ACHIEVEMENTS {
+        if achievement_progress(achievement.id, totals) >= achievement.target
+            && unlocked.insert(achievement.id.to_string())
+        {
+            newly_unlocked.push(*achievement);
+            totals.laurels = totals.laurels.saturating_add(achievement.points);
+        }
+    }
+    newly_unlocked
+}
+
 pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     AchievementDefinition {
         id: "first_command",
@@ -161,7 +203,10 @@ pub fn canonical_leader_name(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RewardInput, calculate, canonical_leader_name};
+    use super::{
+        AchievementTotals, RewardInput, calculate, canonical_leader_name,
+        newly_unlocked_achievements,
+    };
 
     #[test]
     fn reward_math_is_deterministic_for_win_and_loss() {
@@ -204,5 +249,18 @@ mod tests {
         );
         assert_eq!(canonical_leader_name("Boudica").as_deref(), Some("Boudica"));
         assert!(canonical_leader_name("not-a-leader").is_none());
+    }
+
+    #[test]
+    fn achievement_projection_is_shared_and_does_not_repeat_awards() {
+        let totals = AchievementTotals {
+            matches_played: 1,
+            leader_matches_played: 1,
+            ..Default::default()
+        };
+        let unlocked = newly_unlocked_achievements(totals, &Default::default());
+        assert_eq!(unlocked.iter().map(|item| item.points).sum::<u64>(), 10);
+        let already_unlocked = ["first_command".to_string()].into_iter().collect();
+        assert!(newly_unlocked_achievements(totals, &already_unlocked).is_empty());
     }
 }

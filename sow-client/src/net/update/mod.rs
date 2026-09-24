@@ -19,6 +19,12 @@ impl SowApp {
                 .unwrap_or(true);
             if doc_visible && !self.wasm_doc_was_visible {
                 self.net.ws_reconnect_after_resume = true;
+                if self.ui.app.phase == crate::ClientPhase::MainMenu
+                    && !self.pending_reward_receipt_ids.is_empty()
+                {
+                    self.reward_profile_retry_at = Some(now);
+                    self.fetch_cloud_progress();
+                }
             }
             self.wasm_doc_was_visible = doc_visible;
         }

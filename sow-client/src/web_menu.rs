@@ -51,6 +51,10 @@ enum WebMenuCommand {
         tile_idx: u32,
         action: crate::input::map_click::MapMenuAction,
     },
+    OpenMapContextMenu {
+        x: f64,
+        y: f64,
+    },
     CompleteCampaignEpisode {
         episode_id: String,
     },
@@ -78,7 +82,12 @@ enum WebMenuCommand {
         name: String,
     },
     AcknowledgeRewardReceipts {
+        account_id: String,
         receipt_ids: Vec<String>,
+    },
+    AcknowledgeRewardPresentation {
+        account_id: String,
+        receipt_id: String,
     },
     OpenBrowser,
     OpenCreate,
@@ -246,6 +255,10 @@ struct HudPublishKey {
     inbox_count: usize,
     notification_revision: u64,
     is_spectating: bool,
+    endgame_active: bool,
+    endgame_winner: Option<u16>,
+    endgame_team: Option<sow_core::protocol::Team>,
+    player_kda: [u32; 3],
     snapshot_tick: u64,
     hovered_tile: u32,
     hovered_owner: u16,
@@ -492,6 +505,9 @@ impl SowApp {
                 } => {
                     self.handle_map_menu_action(session, tile_idx, action);
                 }
+                WebMenuCommand::OpenMapContextMenu { x, y } => {
+                    self.handle_secondary_click(x, y);
+                }
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
@@ -509,6 +525,7 @@ impl SowApp {
                     }
                     if campaign == CampaignId::Boudica {
                         if self.progress.mark_tutorial_completed() {
+                            self.capture_tutorial_reward_preview();
                             self.save_local_progress();
                             self.persist_tutorial_completion();
                         }
@@ -555,8 +572,29 @@ impl SowApp {
                 WebMenuCommand::SaveDisplayName { name } => {
                     self.process_ui_actions(Some(UiAction::SaveDisplayName(name)));
                 }
-                WebMenuCommand::AcknowledgeRewardReceipts { receipt_ids } => {
-                    self.acknowledge_reward_receipts(receipt_ids);
+                WebMenuCommand::AcknowledgeRewardReceipts {
+                    account_id,
+                    receipt_ids,
+                } => {
+                    if self.progress_account_id.as_deref() == Some(account_id.as_str()) {
+                        self.acknowledge_reward_receipts(receipt_ids);
+                    }
+                }
+                WebMenuCommand::AcknowledgeRewardPresentation {
+                    account_id,
+                    receipt_id,
+                } => {
+                    if self.progress_account_id.as_deref() == Some(account_id.as_str())
+                        && self
+                            .exit_reward_preview
+                            .as_ref()
+                            .is_some_and(|preview| {
+                                preview.account_id == account_id
+                                    && preview.receipt_id == receipt_id
+                            })
+                    {
+                        self.exit_reward_preview = None;
+                    }
                 }
                 WebMenuCommand::OpenBrowser => {
                     self.process_ui_actions(Some(UiAction::OpenJoinBrowser));
@@ -898,9 +936,14 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         || tutorial_active
         || map_menu.is_some();
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
-    let inbox_count = my_player_summary(app, snapshot_tick, my_pid)
-        .map(|player| player.inbox_count)
-        .unwrap_or(0);
+    let me = my_player_summary(app, snapshot_tick, my_pid);
+    let snapshot = app.sim.current_snapshot.as_ref();
+    let endgame_active = !app.ui.is_spectating
+        && snapshot.is_some_and(|snapshot| {
+            snapshot.winner.is_some()
+                || me.is_some_and(|player| !player.alive && player.has_spawned)
+        });
+    let inbox_count = me.map(|player| player.inbox_count).unwrap_or(0);
 
     HudPublishKey {
         fps: app.time.current_fps,
@@ -931,6 +974,12 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         inbox_count,
         notification_revision: hud.notification_revision,
         is_spectating: app.ui.is_spectating,
+        endgame_active,
+        endgame_winner: snapshot.and_then(|snapshot| snapshot.winner),
+        endgame_team: snapshot.and_then(|snapshot| snapshot.winning_team),
+        player_kda: me
+            .map(|player| [player.kills, player.deaths, player.assists])
+            .unwrap_or_default(),
         tutorial_active,
         dev_sidebar_open,
         dev_thickness: dev_config_key[0],
@@ -1568,33 +1617,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             .map(|notice| localized_text_payload(&notice.text))
             .collect(),
     );
-    if match_over {
-        let reward = app.ui.reward_cache.or_else(|| {
-            me.map(|player| {
-                if app.progress_account_id.is_some() && !app.net.is_offline {
-                    sow_data::rewards::calculate(sow_data::rewards::RewardInput::default())
-                } else {
-                    sow_data::rewards::calculate(sow_data::rewards::RewardInput {
-                        won: is_winner,
-                        players_defeated: app.progress_session_defeats.players,
-                        empires_defeated: app.progress_session_defeats.empires,
-                        tribes_defeated: app.progress_session_defeats.tribes,
-                        kills: player.kills,
-                        assists: player.assists,
-                        tutorial: app.sim.config.tutorial,
-                    })
-                }
-            })
-        });
-        if let Some(reward) = reward {
-            payload["rewards"] = serde_json::json!({
-                "xp": reward.xp,
-                "leader_xp": reward.leader_xp,
-                "crowns": reward.crowns,
-                "laurels": reward.laurels,
-            });
-        }
-    }
     payload
 }
 
@@ -1842,6 +1864,20 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "laurels": progress.laurels,
             "gems": progress.gems,
             "reward_receipts": progress.reward_receipts.values().collect::<Vec<_>>(),
+            "exit_reward_preview": app.exit_reward_preview.as_ref().map(|preview| {
+                serde_json::json!({
+                    "receipt_id": preview.receipt_id,
+                    "account_id": preview.account_id,
+                    "xp": preview.reward.xp,
+                    "leader_xp": preview.reward.leader_xp,
+                    "crowns": preview.reward.crowns,
+                    "laurels": preview.reward.laurels,
+                    "base_xp": preview.base_xp,
+                    "base_level": preview.base_level,
+                    "base_crowns": preview.base_crowns,
+                    "base_laurels": preview.base_laurels,
+                })
+            }),
             "achievements": progress.unlocked_achievements,
             "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,
@@ -1937,6 +1973,7 @@ mod tests {
             traitor: false,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            skin_style: 0,
             kills: 0,
             deaths: 0,
             assists: 0,

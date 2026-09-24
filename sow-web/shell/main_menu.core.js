@@ -43,6 +43,7 @@
     var profileOwnId = null;
     var profileLastPhase = null;
     var storeOpen = false;
+    var skinPickerOpen = false;
     var heroesOpen = false;
     var campaignOpen = false;
     var createDraft = null;
@@ -288,7 +289,7 @@
             crowns: state.crowns,
             laurels: state.laurels,
             reward_receipts: (state.reward_receipts || []).map(function (receipt) {
-                return [receipt.id, receipt.crowns, receipt.laurels, receipt.status, receipt.presented_at];
+                return [receipt.id, receipt.xp, receipt.leader_xp, receipt.crowns, receipt.laurels, receipt.status, receipt.presented_at, receipt.verification_status];
             }),
             selected_skin: state.selected_skin,
             store_busy: state.store_busy,

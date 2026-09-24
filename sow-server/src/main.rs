@@ -5,6 +5,8 @@ mod map_catalog;
 mod map_playlist;
 mod matchmaking_population;
 
+use axum::body::Bytes;
+use bincode::Options as _;
 use futures_util::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
 use lobby::{
@@ -21,6 +23,7 @@ use sow_core::protocol::{
 use std::collections::HashSet;
 use std::env;
 use std::net::{IpAddr, SocketAddr};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -35,6 +38,10 @@ const RELAY_TICKET_TTL_SECS: u64 = 900;
 const RELAY_HANDOFF_SEND_TIMEOUT_SECS: u64 = 10;
 const DEFAULT_MAX_CONNECTIONS: usize = 32_768;
 const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
+const MAX_REPLAY_BYTES: usize = 16 * 1024 * 1024;
+const MAX_REPLAY_TURNS: usize = 50_000;
+const MAX_REPLAY_INTENTS: usize = 1_000_000;
+const MAX_REPLAY_INTENTS_PER_TURN: usize = 4_096;
 type HmacSha256 = Hmac<Sha256>;
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
@@ -400,9 +407,33 @@ async fn register_match_start(rc: &RelayCandidate) -> Result<(), String> {
     let secret_token = std::env::var("SOW_DB_SECRET")
         .map_err(|_| "SOW_DB_SECRET missing while registering match".to_string())?;
     let url = format!("{}/match/start", db_base_url.trim_end_matches('/'));
+    let trusted_players = rc
+        .relay_players_json
+        .iter()
+        .map(|player| {
+            serde_json::json!({
+                "player_id": player.get("player_id"),
+                "database_account_id": player.get("database_account_id"),
+                "leader": player.get("leader"),
+                "team": player.get("team"),
+                "is_internal": player.get("is_internal"),
+            })
+        })
+        .collect::<Vec<_>>();
     let payload = serde_json::json!({
         "match_id": rc.lobby_id.to_string(),
         "player_ids": rc.player_ids,
+        "metadata": {
+            "seed": rc.seed,
+            "config": rc.config,
+            "kind": rc.kind,
+            "players": rc.start_players,
+            "relay_players": trusted_players,
+            "started_at": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        },
     });
     let client = reqwest::Client::new();
 
@@ -556,6 +587,7 @@ enum ServerEvent {
         clan_tag: String,
         civilization: sow_core::player::Civilization,
         leader: sow_core::player::Leader,
+        skin_style: u8,
         target_lobby_id: Option<u64>,
         host_private: bool,
         build_version: String,
@@ -640,7 +672,7 @@ async fn main() {
     let db_url =
         std::env::var("SOW_DB_URL").unwrap_or_else(|_| "http://127.0.0.1:25585".to_string());
     let db_secret = std::env::var("SOW_DB_SECRET").expect("SOW_DB_SECRET was validated above");
-    let identity_state = identity::IdentityState::from_env(db_url, db_secret);
+    let identity_state = identity::IdentityState::from_env(db_url.clone(), db_secret.clone());
 
     let redis_url =
         std::env::var("SOW_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string());
@@ -903,6 +935,7 @@ async fn main() {
                                         spawn_y: 0,
                                         civilization: p.civilization,
                                         leader: p.leader,
+                                        skin_style: p.skin_style,
                                         is_ai_controlled: p.is_internal_bot,
                                     });
                                     let relay_ticket_digest = if p.is_internal_bot {
@@ -1019,13 +1052,14 @@ async fn main() {
                     let mut games = games_clone.lock().await;
                     let mut nid = next_id_clone.lock().await;
                     match event {
-                        ServerEvent::Join { client_tx, name, clan_tag, civilization, leader, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id } => {
+                        ServerEvent::Join { client_tx, name, clan_tag, civilization, leader, skin_style, target_lobby_id, host_private, build_version, database_account_id, host_config, password, ip, session_id } => {
                             log::info!("Player {} (clan: {}, ip: {}, session_id: {}) joining with version: {}", name, clan_tag, ip, session_id, build_version);
                             match join_player(&mut games, &mut nid, JoinPlayerOpts {
                                 name,
                                 clan_tag,
                                 civilization,
                                 leader,
+                                skin_style,
                                 client_tx: client_tx.clone(),
                                 target_lobby_id,
                                 host_private,
@@ -1149,14 +1183,30 @@ async fn main() {
     let games_for_axum = Arc::clone(&games_state);
     let redis_client_for_axum = redis_client.clone();
     let identity_state_http = identity_state.clone();
+    let db_url_http = db_url.clone();
+    let db_secret_http = db_secret.clone();
+    let replay_http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .expect("failed to create replay verifier HTTP client");
     tokio::spawn(async move {
         let root = maps_root.clone();
         let state = AppState {
             games: games_for_axum,
             redis_client: redis_client_for_axum,
             identity: identity_state_http,
+            maps_root: root.clone(),
+            db_url: db_url_http,
+            db_secret: db_secret_http,
+            replay_verification: Arc::new(Semaphore::new(1)),
+            replay_http,
         };
         let catalog_route = axum::Router::new()
+            .route(
+                "/internal/replay/verify/{match_id}",
+                axum::routing::post(verify_match_replay_handler)
+                    .layer(axum::extract::DefaultBodyLimit::max(MAX_REPLAY_BYTES)),
+            )
             .route(
                 "/maps/catalog.bin",
                 axum::routing::get(|| async {
@@ -1281,8 +1331,6 @@ async fn main() {
 
             let mut my_lobby_id: Option<u64> = None;
             let mut my_player_id: Option<u16> = None;
-            let mut my_wou_account_id: Option<String> = None;
-            let mut victory_recorded = false;
 
             loop {
                 tokio::select! {
@@ -1307,16 +1355,14 @@ async fn main() {
                                                     continue;
                                                 }
 
-                                                let (database_account_id, leader) = match verify_identity(&identity_state_conn, &auth, payload.leader).await {
+                                                let (database_account_id, leader, skin_style) = match verify_identity(&identity_state_conn, &auth, payload.leader).await {
                                                     Ok(identity) => {
                                                         log::info!(
                                                             "[AUTH] join verified provider={} account={}",
                                                             auth.provider,
                                                             identity.account_id
                                                         );
-                                                        my_wou_account_id = identity.wou_account_id.clone();
-                                                        victory_recorded = false;
-                                                        (Some(identity.account_id), identity.leader)
+                                                        (Some(identity.account_id), identity.leader, identity.skin_style)
                                                     }
                                                     Err(e) => {
                                                         log::warn!(
@@ -1341,6 +1387,7 @@ async fn main() {
                                                     clan_tag: payload.clan_tag,
                                                     civilization: payload.civilization,
                                                     leader,
+                                                    skin_style,
                                                     client_tx: direct_tx.clone(),
                                                     target_lobby_id: payload.target_lobby_id,
                                                     host_private: payload.host_private,
@@ -1450,27 +1497,8 @@ async fn main() {
                                                 let json = bincode::serialize(&pong).unwrap();
                                                 let _ = direct_tx.try_send(json);
                                             }
-                                            sow_core::protocol::ClientMessage::SubmitStatsWithLeader { .. } => {}
-                                            sow_core::protocol::ClientMessage::SubmitMatchReport { winner_player_id, .. } => {
-                                                if !victory_recorded
-                                                    && winner_player_id.is_some()
-                                                    && winner_player_id == my_player_id
-                                                {
-                                                    victory_recorded = true;
-                                                    if let Some(wou_account_id) = my_wou_account_id.clone() {
-                                                        tokio::spawn(async move {
-                                                            if let Err(error) = identity::record_wou_activity(
-                                                                &wou_account_id,
-                                                                "sow_victory",
-                                                                "Ranked Victory in Shadows of War",
-                                                                "Won a ranked match in Shadows of War.",
-                                                            ).await {
-                                                                log::warn!("[WOU] activity record failed: {}", error);
-                                                            }
-                                                        });
-                                                    }
-                                                }
-                                            }
+                                            sow_core::protocol::ClientMessage::SubmitStatsWithLeader { .. }
+                                            | sow_core::protocol::ClientMessage::SubmitMatchReport { .. } => {}
                                         }
                                         continue;
                                     }
@@ -1538,6 +1566,362 @@ struct AppState {
     games: Arc<Mutex<Vec<lobby::ServerLobby>>>,
     redis_client: redis::Client,
     identity: identity::IdentityState,
+    maps_root: PathBuf,
+    db_url: String,
+    db_secret: String,
+    replay_verification: Arc<Semaphore>,
+    replay_http: reqwest::Client,
+}
+
+#[derive(serde::Deserialize)]
+struct ReplayStartPlayer {
+    player_id: u16,
+    #[serde(default)]
+    database_account_id: Option<String>,
+    #[serde(default)]
+    leader: sow_core::player::Leader,
+    #[serde(default)]
+    team: Option<sow_core::protocol::Team>,
+    #[serde(default)]
+    is_internal: bool,
+}
+
+enum ReplayVerificationError {
+    Invalid(String),
+    Unavailable(String),
+}
+
+async fn verify_match_replay_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    axum::extract::Path(match_id): axum::extract::Path<String>,
+    headers: axum::http::HeaderMap,
+    body: Bytes,
+) -> axum::response::Response {
+    let presented = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::trim);
+    if state.db_secret.is_empty() || presented != Some(state.db_secret.as_str()) {
+        return axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::UNAUTHORIZED,
+            axum::response::Json(serde_json::json!({"error": "Unauthorized"})),
+        ));
+    }
+    if match_id.parse::<u64>().is_err() || body.is_empty() || body.len() > MAX_REPLAY_BYTES {
+        return axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            axum::response::Json(serde_json::json!({"error": "invalid replay request"})),
+        ));
+    }
+    let permit = match Arc::clone(&state.replay_verification).try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            return axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::response::Json(serde_json::json!({"error": "replay verifier busy"})),
+            ));
+        }
+    };
+
+    let metadata_url = format!(
+        "{}/internal/match-start/{match_id}",
+        state.db_url.trim_end_matches('/')
+    );
+    let start = match state
+        .replay_http
+        .get(metadata_url)
+        .bearer_auth(&state.db_secret)
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => {
+            match response.json::<sow_data::profile::MatchStartRecord>().await {
+                Ok(start) if start.match_id == match_id => start,
+                Ok(_) => {
+                    return axum::response::IntoResponse::into_response((
+                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                        axum::response::Json(serde_json::json!({"error": "match metadata mismatch"})),
+                    ));
+                }
+                Err(error) => {
+                    log::error!("replay {match_id} metadata decode failed: {error}");
+                    return axum::response::IntoResponse::into_response((
+                        axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                        axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
+                    ));
+                }
+            }
+        }
+        Ok(response) => {
+            log::warn!("replay {match_id} metadata request returned {}", response.status());
+            return axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
+            ));
+        }
+        Err(error) => {
+            log::warn!("replay {match_id} metadata request failed: {error}");
+            return axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
+            ));
+        }
+    };
+    if start.replay_status != sow_data::profile::ReplayVerificationStatus::Pending {
+        return axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::CONFLICT,
+            axum::response::Json(serde_json::json!({"error": "replay is not pending"})),
+        ));
+    }
+
+    let map_root = state.maps_root.clone();
+    let match_id_for_task = match_id.clone();
+    let replay = body.to_vec();
+    match tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        verify_replay(&match_id_for_task, &replay, &start, &map_root)
+    })
+    .await
+    {
+        Ok(Ok(result)) => axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::OK,
+            axum::response::Json(result),
+        )),
+        Ok(Err(ReplayVerificationError::Invalid(error))) => {
+            log::warn!("match {match_id} replay rejected: {error}");
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                axum::response::Json(serde_json::json!({"error": "replay rejected"})),
+            ))
+        }
+        Ok(Err(ReplayVerificationError::Unavailable(error))) => {
+            log::error!("match {match_id} replay verification unavailable: {error}");
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::response::Json(serde_json::json!({"error": "replay verifier unavailable"})),
+            ))
+        }
+        Err(error) => {
+            log::error!("match {match_id} replay verifier task failed: {error}");
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::response::Json(serde_json::json!({"error": "replay verifier unavailable"})),
+            ))
+        }
+    }
+}
+
+fn verify_replay(
+    match_id: &str,
+    replay_bytes: &[u8],
+    start: &sow_data::profile::MatchStartRecord,
+    maps_root: &Path,
+) -> Result<sow_data::profile::VerifiedMatchResult, ReplayVerificationError> {
+    if replay_bytes.len() > MAX_REPLAY_BYTES {
+        return Err(ReplayVerificationError::Invalid("replay exceeds size limit".to_string()));
+    }
+    let turns: Vec<sow_core::protocol::Turn> = bincode::DefaultOptions::new()
+        .with_fixint_encoding()
+        .with_limit(MAX_REPLAY_BYTES as u64)
+        .reject_trailing_bytes()
+        .deserialize(replay_bytes)
+        .map_err(|error| ReplayVerificationError::Invalid(format!("replay decode failed: {error}")))?;
+    if turns.len() > MAX_REPLAY_TURNS {
+        return Err(ReplayVerificationError::Invalid("replay has too many turns".to_string()));
+    }
+
+    let metadata = &start.metadata;
+    let seed = metadata
+        .get("seed")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| ReplayVerificationError::Unavailable("trusted seed missing".to_string()))?;
+    let config: GameConfig = serde_json::from_value(
+        metadata
+            .get("config")
+            .cloned()
+            .ok_or_else(|| ReplayVerificationError::Unavailable("trusted config missing".to_string()))?,
+    )
+    .map_err(|error| ReplayVerificationError::Unavailable(format!("trusted config invalid: {error}")))?;
+    if config.map_width == 0
+        || config.map_height == 0
+        || config.map_width > sow_core::maps::MAX_MAP_AXIS
+        || config.map_height > sow_core::maps::MAX_MAP_AXIS
+        || u64::from(config.map_width) * u64::from(config.map_height)
+            > u64::from(sow_core::maps::MAX_MAP_PIXELS)
+        || !config.tick_rate_ms.is_finite()
+        || config.tick_rate_ms <= 0.0
+    {
+        return Err(ReplayVerificationError::Unavailable("trusted game settings are invalid".to_string()));
+    }
+    let players: Vec<PlayerInfo> = serde_json::from_value(
+        metadata
+            .get("players")
+            .cloned()
+            .ok_or_else(|| ReplayVerificationError::Unavailable("trusted players missing".to_string()))?,
+    )
+    .map_err(|error| ReplayVerificationError::Unavailable(format!("trusted players invalid: {error}")))?;
+    let relay_players: Vec<ReplayStartPlayer> = serde_json::from_value(
+        metadata
+            .get("relay_players")
+            .cloned()
+            .ok_or_else(|| ReplayVerificationError::Unavailable("trusted roster missing".to_string()))?,
+    )
+    .map_err(|error| ReplayVerificationError::Unavailable(format!("trusted roster invalid: {error}")))?;
+    if relay_players.is_empty()
+        || relay_players.len() > sow_core::protocol::MAX_MATCH_PARTICIPANTS
+        || players.is_empty()
+        || players.len() > sow_core::protocol::MAX_MATCH_PARTICIPANTS
+    {
+        return Err(ReplayVerificationError::Unavailable("trusted roster is empty".to_string()));
+    }
+    let registered_accounts = relay_players
+        .iter()
+        .filter_map(|player| player.database_account_id.as_deref())
+        .collect::<std::collections::BTreeSet<_>>();
+    let expected_accounts = start.player_ids.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
+    if registered_accounts != expected_accounts {
+        return Err(ReplayVerificationError::Unavailable("trusted account roster mismatch".to_string()));
+    }
+    let mut player_ids = std::collections::BTreeSet::new();
+    let mut external_player_ids = std::collections::BTreeSet::new();
+    for player in &relay_players {
+        if !player_ids.insert(player.player_id) {
+            return Err(ReplayVerificationError::Unavailable("duplicate trusted player id".to_string()));
+        }
+        if !player.is_internal {
+            external_player_ids.insert(player.player_id);
+        }
+    }
+    if players.iter().any(|player| !player_ids.contains(&player.id)) {
+        return Err(ReplayVerificationError::Unavailable("trusted engine roster mismatch".to_string()));
+    }
+
+    let map_key = sow_core::maps::map_key(&config.map_name);
+    if map_key.is_empty() {
+        return Err(ReplayVerificationError::Unavailable("trusted map name is invalid".to_string()));
+    }
+    let map_dir = maps_root.join(map_key);
+    let map_path = map_dir.join("map.bin");
+    let compressed_path = map_dir.join("map.bin.br");
+    let map_path = if map_path.is_file() { map_path } else { compressed_path };
+    let map_len = std::fs::metadata(&map_path)
+        .map_err(|error| ReplayVerificationError::Unavailable(format!("map read failed: {error}")))?
+        .len();
+    if map_len > 32 * 1024 * 1024 {
+        return Err(ReplayVerificationError::Unavailable("map file exceeds size limit".to_string()));
+    }
+    let map_bytes = std::fs::read(&map_path)
+        .map_err(|error| ReplayVerificationError::Unavailable(format!("map read failed: {error}")))?;
+    let map_file = sow_core::maps::load_map_from_payload(&map_bytes)
+        .map_err(|error| ReplayVerificationError::Unavailable(format!("map parse failed: {error}")))?;
+    if map_file.width != config.map_width || map_file.height != config.map_height {
+        return Err(ReplayVerificationError::Unavailable("map dimensions do not match match config".to_string()));
+    }
+    let mut engine = sow_core::engine::initialize_match_engine(
+        config.clone(),
+        seed,
+        &map_bytes,
+        players,
+        map_file.spawns.clone(),
+        map_file.geo_bounds.clone(),
+        map_file.num_land_tiles,
+    );
+
+    let mut defeats = std::collections::HashMap::<u16, [u32; 3]>::new();
+    let mut total_intents = 0usize;
+    for (index, turn) in turns.iter().enumerate() {
+        if turn.turn_number != index as u64 {
+            return Err(ReplayVerificationError::Invalid("replay turn sequence is broken".to_string()));
+        }
+        if turn.intents.len() > MAX_REPLAY_INTENTS_PER_TURN {
+            return Err(ReplayVerificationError::Invalid("too many intents in one turn".to_string()));
+        }
+        total_intents = total_intents.saturating_add(turn.intents.len());
+        if total_intents > MAX_REPLAY_INTENTS {
+            return Err(ReplayVerificationError::Invalid("replay has too many intents".to_string()));
+        }
+        if engine.state.phase == sow_core::game::GamePhase::GameOver {
+            if !turn.intents.is_empty() {
+                return Err(ReplayVerificationError::Invalid("gameplay continued after game over".to_string()));
+            }
+            continue;
+        }
+        if turn
+            .intents
+            .iter()
+            .any(|intent| !external_player_ids.contains(&intent.player_id))
+        {
+            return Err(ReplayVerificationError::Invalid("replay contains an unregistered sender".to_string()));
+        }
+        engine.apply_intents(&turn.intents);
+        engine.tick();
+        for event in &engine.state.events {
+            let sow_core::game::GameEvent::PlayerEliminated {
+                player_id,
+                conqueror_id,
+                ..
+            } = event
+            else {
+                continue;
+            };
+            if !external_player_ids.contains(conqueror_id) {
+                continue;
+            }
+            if let Some(victim) = engine.state.players.iter().find(|player| player.id == *player_id) {
+                let counts = defeats.entry(*conqueror_id).or_default();
+                match victim.player_type {
+                    sow_core::player::PlayerType::Human => counts[0] = counts[0].saturating_add(1),
+                    sow_core::player::PlayerType::Nation => counts[1] = counts[1].saturating_add(1),
+                    sow_core::player::PlayerType::Bot => counts[2] = counts[2].saturating_add(1),
+                }
+            }
+        }
+    }
+
+    let winner_player_id = engine.state.winner;
+    let winning_team = engine.state.winning_team.map(|team| format!("{team:?}"));
+    let mut participants = Vec::with_capacity(relay_players.len());
+    for relay_player in relay_players {
+        let Some(account_id) = relay_player.database_account_id else {
+            continue;
+        };
+        let player = engine
+            .state
+            .players
+            .iter()
+            .find(|player| player.id == relay_player.player_id)
+            .ok_or_else(|| ReplayVerificationError::Unavailable("verified player missing from engine".to_string()))?;
+        let counts = defeats.get(&relay_player.player_id).copied().unwrap_or_default();
+        let won = match winning_team.as_deref() {
+            Some(team) => relay_player.team.is_some_and(|value| format!("{value:?}") == team),
+            None => winner_player_id == Some(relay_player.player_id),
+        };
+        participants.push(sow_data::profile::VerifiedMatchParticipant {
+            player_id: relay_player.player_id,
+            account_id,
+            leader: Some(relay_player.leader.name().to_string()),
+            team: relay_player.team.map(|team| format!("{team:?}")),
+            won,
+            kills: player.kills,
+            deaths: player.deaths,
+            assists: player.assists,
+            players_defeated: counts[0],
+            empires_defeated: counts[1],
+            tribes_defeated: counts[2],
+        });
+    }
+    participants.sort_by_key(|participant| participant.player_id);
+    let duration_seconds = ((engine.state.tick as f64 * f64::from(config.tick_rate_ms)) / 1000.0)
+        .round()
+        .clamp(0.0, f64::from(u32::MAX)) as u32;
+    Ok(sow_data::profile::VerifiedMatchResult {
+        match_id: match_id.to_string(),
+        duration_seconds,
+        winner_player_id,
+        winning_team,
+        participants,
+    })
 }
 
 async fn admin_status(

@@ -20,7 +20,10 @@ impl SowEngine {
         {
             return;
         }
-        self.bot_work.attack_entries_scanned_last_update = self.attacks.len() as u64;
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.bot_work.attack_entries_scanned_last_update += self.attacks.len() as u64;
+        }
         self.ai_attack_index
             .resize_with(self.state.player_lookup.len(), Vec::new);
         for attacks in &mut self.ai_attack_index {
@@ -34,20 +37,31 @@ impl SowEngine {
         self.ai_attack_index_dirty = false;
     }
 
-    fn ai_is_under_attack(&self, bot_id: u16) -> bool {
+    fn ai_is_under_attack(&self, bot_id: u16) -> (bool, u64) {
         let Some(player) = self.state.player(bot_id) else {
-            return false;
+            return (false, 0);
         };
-        self.ai_attack_index
+        #[cfg(feature = "ai-metrics")]
+        let mut entries_examined = 0;
+        let under_attack = self
+            .ai_attack_index
             .get(bot_id as usize)
             .map(Vec::as_slice)
             .unwrap_or(&[])
             .iter()
             .any(|&attack_index| {
+                #[cfg(feature = "ai-metrics")]
+                {
+                    entries_examined += 1;
+                }
                 self.attacks
                     .get(attack_index)
                     .is_some_and(|attack| !player.alliances.contains(&attack.owner_id))
-            })
+            });
+        #[cfg(feature = "ai-metrics")]
+        return (under_attack, entries_examined);
+        #[cfg(not(feature = "ai-metrics"))]
+        (under_attack, 0)
     }
 
     /// Unified AI pipeline for both Tribes (`Bot`) and Nations.
@@ -61,13 +75,22 @@ impl SowEngine {
             return;
         }
 
+        #[cfg(test)]
+        self.test_last_ai_intents.clear();
+
         let tick = self.state.tick;
         self.bot_work = Default::default();
         self.bot_route_cache.clear();
         self.bot_sam_tiles_cache = None;
         self.bot_crown_leader = None;
-        self.placement_scratch.candidates_examined = 0;
-        self.placement_scratch.building_checks = 0;
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.placement_scratch.candidates_examined = 0;
+        }
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.placement_scratch.building_checks = 0;
+        }
         self.rebuild_ai_attack_index();
 
         // ── Build unified schedule ──────────────────────────────────────────
@@ -90,7 +113,11 @@ impl SowEngine {
             // `ai_tier(player_type, is_ai_controlled)` — the single source of
             // truth. IQ (assigned per-tier at spawn) drives cadence; RNG is
             // WyRand(seed, bot_id, interval) → lockstep-safe across clients.
-            let is_under_attack = self.ai_is_under_attack(bot_id);
+            let (is_under_attack, _attack_entries_examined) = self.ai_is_under_attack(bot_id);
+            #[cfg(feature = "ai-metrics")]
+            {
+                self.bot_work.attack_entries_scanned_last_update += _attack_entries_examined;
+            }
             let reacts_to_attack = p.iq >= 100 && is_under_attack;
 
             let interval_base = if reacts_to_attack {
@@ -125,7 +152,7 @@ impl SowEngine {
                 do_attack
             };
 
-            #[cfg(test)]
+            #[cfg(feature = "ai-metrics")]
             if std::env::var("SOW_AI_DEBUG").is_ok() && bot_id == 1 && tick < 250 {
                 eprintln!(
                     "SCHED id={bot_id} tick={tick} interval={interval} offset={offset} phase={phase} do_attack={do_attack}"
@@ -150,6 +177,7 @@ impl SowEngine {
         }
 
         schedule.sort_unstable_by_key(|s| s.bot_id);
+        #[cfg(feature = "ai-metrics")]
         if std::env::var("SOW_AI_DEBUG").is_ok() {
             let probes: Vec<(u16, usize)> = self
                 .state
@@ -258,28 +286,54 @@ impl SowEngine {
             self.placement_scratch.neighbor_scratch = neighbor_players;
         }
 
-        self.bot_work.placement_candidates_examined += self.placement_scratch.candidates_examined;
-        self.bot_work.placement_building_checks += self.placement_scratch.building_checks;
-        self.placement_scratch.candidates_examined = 0;
-        self.placement_scratch.building_checks = 0;
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.bot_work.placement_candidates_examined +=
+                self.placement_scratch.candidates_examined;
+            self.bot_work.placement_building_checks += self.placement_scratch.building_checks;
+        }
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.placement_scratch.candidates_examined = 0;
+        }
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.placement_scratch.building_checks = 0;
+        }
+        #[cfg(feature = "ai-metrics")]
         if std::env::var("SOW_AI_DEBUG").is_ok() {
             eprintln!(
-                "AIWORK tick={} attack_entries={} border_cells={} border_blocks={} neighbor_cells={} placement_candidates={} placement_building_checks={} naval_routes={} nuke_buildings={} nuke_sam_checks={}",
+                "AIWORK tick={} attack_entries={} border_cells={} border_blocks={} border_directory_words={} neighbor_cells={} placement_candidates={} placement_building_checks={} naval_routes={} shoreline_candidates={} diplomacy_proposals={} diplomacy_resource_requests={} nuke_buildings={} nuke_sam_checks={} nuke_history_lookups={}",
                 self.state.tick,
                 self.bot_work.attack_entries_scanned_last_update,
                 self.bot_work.border_cells_examined,
                 self.bot_work.border_blocks_examined,
+                self.bot_work.border_directory_words_examined,
                 self.bot_work.neighbor_cells_examined,
                 self.bot_work.placement_candidates_examined,
                 self.bot_work.placement_building_checks,
                 self.bot_work.naval_routes_calculated,
+                self.bot_work.shoreline_candidates_examined,
+                self.bot_work.diplomacy_proposals_examined,
+                self.bot_work.diplomacy_resource_requests_examined,
                 self.bot_work.nuke_buildings_examined,
                 self.bot_work.nuke_sam_checks,
+                self.bot_work.nuke_history_lookups,
             );
         }
 
         // ── Apply decisions deterministically ───────────────────────────────
         decisions.sort_by_key(|d| (d.bot_id, d.kind));
+        #[cfg(test)]
+        {
+            self.test_last_ai_intents = decisions
+                .iter()
+                .map(|d| StampedIntent {
+                    player_id: d.bot_id,
+                    intent: d.intent.clone(),
+                })
+                .collect();
+        }
         for (intent_index, d) in decisions.into_iter().enumerate() {
             let fleet = match &d.intent {
                 crate::protocol::GameplayIntent::LaunchFleet {

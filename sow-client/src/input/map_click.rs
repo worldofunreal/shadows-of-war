@@ -151,6 +151,22 @@ impl MapTarget {
 }
 
 impl SowApp {
+    pub(crate) fn handle_secondary_click(&mut self, x: f64, y: f64) {
+        if self.ui.app.phase != crate::ClientPhase::Playing {
+            return;
+        }
+        if self.ui.app.hud_state.selected_building_kind.is_some()
+            || self.ui.app.hud_state.selected_nuke_kind.is_some()
+        {
+            self.clear_placement();
+            self.close_map_context_menu();
+        } else if !self.move_selected_warships(x, y) {
+            self.open_map_context_menu(x, y);
+        } else {
+            self.close_map_context_menu();
+        }
+    }
+
     fn show_observer_notice(&mut self, x: f64, y: f64) {
         const MESSAGES: [&str; 8] = [
             "Enjoying the view? 🍿",
@@ -254,8 +270,6 @@ impl SowApp {
         let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
         if self.map_menu_actions(tile_idx).is_empty() {
             self.show_map_menu_unavailable(tile_idx, (x, y));
-            self.close_map_context_menu();
-            return;
         }
         let session = self.input.map_context_menu_session.wrapping_add(1);
         self.input.map_context_menu_session = session;

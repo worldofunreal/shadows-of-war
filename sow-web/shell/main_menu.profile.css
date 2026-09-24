@@ -1553,6 +1553,18 @@
     gap: 10px;
 }
 
+.sow-menu__modal.sow-skin-picker {
+    width: min(100%, 980px);
+}
+
+.sow-skin-picker .sow-store__skin-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+
+.sow-skin-picker .sow-store__buy-row {
+    grid-template-columns: 1fr;
+}
+
 .sow-store__skin,
 .sow-store__bundle {
     display: flex;

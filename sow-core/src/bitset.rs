@@ -106,70 +106,137 @@ impl DenseBitSet {
     /// wrapping once through the bitset. The result stays deterministic while
     /// avoiding a full materialization when callers only need a small sample.
     pub fn sample_ones(&self, start_idx: u32, limit: usize, out: &mut Vec<u32>) {
-        self.sample_ones_with_work(start_idx, limit, out);
+        self.sample_ones_scan::<false, false>(start_idx, limit, out);
     }
 
     /// Same as [`Self::sample_ones`], returning the number of non-empty data
     /// blocks considered. The count is for local diagnostics only.
     pub fn sample_ones_with_work(&self, start_idx: u32, limit: usize, out: &mut Vec<u32>) -> u64 {
+        self.sample_ones_scan::<true, false>(start_idx, limit, out)
+            .0
+    }
+
+    /// Same as [`Self::sample_ones_with_work`], also counting directory words.
+    /// Available only in opt-in diagnostics builds.
+    #[cfg(feature = "ai-metrics")]
+    pub fn sample_ones_with_metrics(
+        &self,
+        start_idx: u32,
+        limit: usize,
+        out: &mut Vec<u32>,
+    ) -> (u64, u64) {
+        self.sample_ones_scan::<true, true>(start_idx, limit, out)
+    }
+
+    // Compile-time flags remove diagnostic increments from ordinary samples.
+    fn sample_ones_scan<const COUNT_BLOCKS: bool, const COUNT_DIRECTORY: bool>(
+        &self,
+        start_idx: u32,
+        limit: usize,
+        out: &mut Vec<u32>,
+    ) -> (u64, u64) {
         out.clear();
         if limit == 0 || self.blocks.is_empty() {
-            return 0;
+            return (0, 0);
         }
 
         let block_count = self.blocks.len();
         let start_block = (start_idx as usize / 64) % block_count;
         let start_bit = start_idx as usize % 64;
+        let start_directory = start_block / 64;
         let mut examined = 0;
+        let mut directory_words = 0;
+        let mut wrapped_start_blocks = 0u64;
 
-        for block_idx in self.non_empty_block_indices() {
-            if block_idx < start_block {
-                continue;
+        for directory_idx in start_directory..self.non_empty_blocks.len() {
+            if COUNT_DIRECTORY {
+                directory_words += 1;
             }
-            examined += 1;
-            let mut bits = self.blocks[block_idx];
-            if block_idx == start_block && start_bit > 0 {
-                bits &= u64::MAX << start_bit;
+            let mut blocks = self.non_empty_blocks[directory_idx];
+            if directory_idx == start_directory {
+                wrapped_start_blocks = blocks & ((1u64 << (start_block % 64)) - 1);
+                blocks &= u64::MAX << (start_block % 64);
             }
-            while bits != 0 {
-                let bit = bits.trailing_zeros() as usize;
-                out.push((block_idx * 64 + bit) as u32);
-                if out.len() == limit {
-                    return examined;
+            while blocks != 0 {
+                let offset = blocks.trailing_zeros() as usize;
+                blocks &= blocks - 1;
+                let block_idx = directory_idx * 64 + offset;
+                if COUNT_BLOCKS {
+                    examined += 1;
                 }
-                bits &= bits - 1;
+                let mut bits = self.blocks[block_idx];
+                if block_idx == start_block && start_bit > 0 {
+                    bits &= u64::MAX << start_bit;
+                }
+                while bits != 0 {
+                    let bit = bits.trailing_zeros() as usize;
+                    out.push((block_idx * 64 + bit) as u32);
+                    if out.len() == limit {
+                        return (examined, directory_words);
+                    }
+                    bits &= bits - 1;
+                }
             }
         }
 
-        for block_idx in self.non_empty_block_indices() {
-            if block_idx >= start_block {
-                break;
+        for directory_idx in 0..start_directory {
+            if COUNT_DIRECTORY {
+                directory_words += 1;
             }
-            examined += 1;
+            let mut blocks = self.non_empty_blocks[directory_idx];
+            while blocks != 0 {
+                let offset = blocks.trailing_zeros() as usize;
+                blocks &= blocks - 1;
+                let block_idx = directory_idx * 64 + offset;
+                if COUNT_BLOCKS {
+                    examined += 1;
+                }
+                let mut bits = self.blocks[block_idx];
+                while bits != 0 {
+                    let bit = bits.trailing_zeros() as usize;
+                    out.push((block_idx * 64 + bit) as u32);
+                    if out.len() == limit {
+                        return (examined, directory_words);
+                    }
+                    bits &= bits - 1;
+                }
+            }
+        }
+
+        let mut blocks = wrapped_start_blocks;
+        while blocks != 0 {
+            let offset = blocks.trailing_zeros() as usize;
+            blocks &= blocks - 1;
+            let block_idx = start_directory * 64 + offset;
+            if COUNT_BLOCKS {
+                examined += 1;
+            }
             let mut bits = self.blocks[block_idx];
             while bits != 0 {
                 let bit = bits.trailing_zeros() as usize;
                 out.push((block_idx * 64 + bit) as u32);
                 if out.len() == limit {
-                    return examined;
+                    return (examined, directory_words);
                 }
                 bits &= bits - 1;
             }
         }
 
         if start_bit > 0 && out.len() < limit && self.blocks[start_block] != 0 {
-            examined += 1;
+            if COUNT_BLOCKS {
+                examined += 1;
+            }
             let mut bits = self.blocks[start_block] & ((1u64 << start_bit) - 1);
             while bits != 0 {
                 let bit = bits.trailing_zeros() as usize;
                 out.push((start_block * 64 + bit) as u32);
                 if out.len() == limit {
-                    return examined;
+                    return (examined, directory_words);
                 }
                 bits &= bits - 1;
             }
         }
-        examined
+        (examined, directory_words)
     }
 
     /// Return the first set index at or after `start_idx`, wrapping once.
@@ -286,6 +353,22 @@ impl DenseBitSet {
 mod tests {
     use super::DenseBitSet;
 
+    fn reference_sample(bits: &DenseBitSet, start: u32, limit: usize) -> Vec<u32> {
+        if limit == 0 || bits.blocks.is_empty() {
+            return Vec::new();
+        }
+        let all: Vec<_> = bits.ones().collect();
+        let start_block = (start as usize / 64) % bits.blocks.len();
+        let normalized = start_block * 64 + start as usize % 64;
+        let split = all.partition_point(|&idx| (idx as usize) < normalized);
+        all[split..]
+            .iter()
+            .chain(all[..split].iter())
+            .copied()
+            .take(limit)
+            .collect()
+    }
+
     #[test]
     fn bounded_sampling_wraps_without_exceeding_limit() {
         let mut bits = DenseBitSet::new();
@@ -302,6 +385,9 @@ mod tests {
 
         bits.sample_ones(0, 1, &mut out);
         assert_eq!(out, [1]);
+
+        bits.sample_ones(67, 3, &mut out);
+        assert_eq!(out, [130, 1, 65]);
     }
 
     #[test]
@@ -329,6 +415,100 @@ mod tests {
         bits.sample_ones(50_000, 3, &mut out);
         assert_eq!(out, [100_000, 1]);
         assert_eq!(bits.first_one_from(50_000), Some(100_000));
+    }
+
+    #[test]
+    fn directory_sampling_matches_wrapped_reference_order() {
+        let mut bits = DenseBitSet::new();
+        for idx in (0..1_000_000u32).step_by(997) {
+            bits.insert(idx);
+        }
+        for idx in [63, 64, 4095, 4096, 262_143, 262_144, 999_999] {
+            bits.insert(idx);
+        }
+
+        let starts = [
+            0,
+            1,
+            63,
+            64,
+            4095,
+            4096,
+            262_143,
+            262_144,
+            999_999,
+            1_000_000,
+            u32::MAX,
+        ];
+        let limits = [0, 1, 2, 17, 256, 2048];
+        let capacity = bits.blocks.len() * 64;
+        let mut actual = Vec::new();
+
+        for start in starts {
+            for limit in limits {
+                bits.sample_ones(start, limit, &mut actual);
+                let expected = reference_sample(&bits, start, limit);
+                assert!(
+                    actual == expected,
+                    "start={start} limit={limit} actual_len={} expected_len={} first_mismatch={:?}",
+                    actual.len(),
+                    expected.len(),
+                    actual
+                        .iter()
+                        .zip(&expected)
+                        .position(|(actual, expected)| actual != expected)
+                        .map(|index| (index, actual[index], expected[index]))
+                );
+            }
+        }
+        assert!(capacity >= 1_000_000);
+    }
+
+    #[test]
+    fn directory_sampling_matches_reference_for_empty_and_dense_sets() {
+        let empty = DenseBitSet::new();
+        let mut dense = DenseBitSet::new();
+        for idx in 0..=16_384 {
+            dense.insert(idx);
+        }
+
+        let starts = [0, 1, 63, 64, 4095, 4096, 16_383, 16_384, 16_385, u32::MAX];
+        let limits = [0, 1, 64, 256, 20_000];
+        let mut actual = Vec::new();
+
+        for bits in [&empty, &dense] {
+            for start in starts {
+                for limit in limits {
+                    bits.sample_ones(start, limit, &mut actual);
+                    let expected = reference_sample(bits, start, limit);
+                    assert_eq!(actual, expected, "start={start} limit={limit}");
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "ai-metrics")]
+    #[test]
+    fn directory_work_wraps_from_cursor_instead_of_scanning_every_word() {
+        let mut bits = DenseBitSet::new();
+        bits.insert(7);
+        bits.insert(999_999);
+        let mut out = Vec::new();
+
+        let (blocks, directory_words) = bits.sample_ones_with_metrics(999_999, 1, &mut out);
+        assert_eq!(out, [999_999]);
+        assert_eq!(blocks, 1);
+        assert_eq!(directory_words, 1);
+
+        let (blocks, directory_words) = bits.sample_ones_with_metrics(999_998, 1, &mut out);
+        assert_eq!(out, [999_999]);
+        assert_eq!(blocks, 1);
+        assert_eq!(directory_words, 1);
+
+        let (blocks, directory_words) = bits.sample_ones_with_metrics(999_999, 2, &mut out);
+        assert_eq!(out, [999_999, 7]);
+        assert_eq!(blocks, 2);
+        assert_eq!(directory_words, 2);
     }
 }
 

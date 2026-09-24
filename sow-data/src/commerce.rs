@@ -288,6 +288,13 @@ pub fn skin_style_for_id(skin_id: Option<&str>) -> u8 {
         .unwrap_or(0)
 }
 
+pub fn skin_style_for_profile(owned_skins: &BTreeSet<String>, selected_skin: Option<&str>) -> u8 {
+    match selected_skin {
+        Some(id) if owned_skins.contains(id) => skin_style_for_id(Some(id)),
+        _ => 0,
+    }
+}
+
 pub fn resolve_leader(
     requested: Option<&str>,
     account_id: &str,
@@ -412,6 +419,10 @@ mod tests {
         );
         assert_eq!(skin_style_for_id(Some("royal_lattice")), 3);
         assert_eq!(skin_style_for_id(Some("missing")), 0);
+        let mut owned = BTreeSet::new();
+        owned.insert("royal_lattice".to_string());
+        assert_eq!(skin_style_for_profile(&owned, Some("royal_lattice")), 3);
+        assert_eq!(skin_style_for_profile(&BTreeSet::new(), Some("royal_lattice")), 0);
     }
 
     #[test]

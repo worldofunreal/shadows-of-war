@@ -36,6 +36,8 @@ struct AppState {
     playgames_handoffs: std::sync::Mutex<HashMap<String, PlayGamesHandoff>>,
     playgames_sessions: std::sync::Mutex<HashMap<String, PlayGamesSession>>,
     playgames_access_tokens: std::sync::Mutex<HashMap<String, PlayGamesAccessToken>>,
+    replay_verification_tx: tokio::sync::mpsc::Sender<String>,
+    replay_verification_client: reqwest::Client,
 }
 
 const PLAYGAMES_HANDOFF_TTL: Duration = Duration::from_secs(60);
@@ -100,6 +102,7 @@ struct TutorialCompleteRequest {
 struct MatchStartRequest {
     match_id: String,
     player_ids: Vec<String>,
+    metadata: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -173,6 +176,8 @@ struct VerifyResponse {
     account_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     leader: Option<String>,
+    #[serde(default)]
+    skin_style: u8,
 }
 
 #[derive(Deserialize)]
@@ -195,6 +200,7 @@ struct VerifiedIdentityResponse {
     account_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     leader: Option<String>,
+    skin_style: u8,
     account: sow_data::db::PlayerAccount,
 }
 
@@ -1634,11 +1640,24 @@ async fn handle_internal_verify(
                 },
                 None => None,
             };
+            let skin_style = match state.db.selected_skin_style_for_account(&account_id).await {
+                Ok(style) => style,
+                Err(error) => {
+                    error!("[identity] skin resolution failed account={} error={error}", account_hint(Some(&account_id)));
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "skin resolution unavailable".to_string(),
+                        }),
+                    )
+                        .into_response();
+                }
+            };
             info!(
                 "[identity] verify ok provider={provider} account={}",
                 account_hint(Some(&account_id))
             );
-            (StatusCode::OK, Json(VerifyResponse { account_id, leader })).into_response()
+            (StatusCode::OK, Json(VerifyResponse { account_id, leader, skin_style })).into_response()
         }
         Err(e) => {
             warn!("[identity] verify failed provider={provider}: {e}");
@@ -1732,6 +1751,10 @@ async fn handle_internal_identity_resolve(
         },
         None => None,
     };
+    let skin_style = sow_data::commerce::skin_style_for_profile(
+        &account.profile.owned_skins,
+        account.profile.selected_skin.as_deref(),
+    );
     // These are deliberately accepted at the boundary for future profile
     // enrichment. PlayerAccount currently owns only its display name.
     let _ = (payload.display_name, payload.avatar_url);
@@ -1740,6 +1763,7 @@ async fn handle_internal_identity_resolve(
         Json(VerifiedIdentityResponse {
             account_id: account.id.clone(),
             leader,
+            skin_style,
             account: account.without_auth_secret(),
         }),
     )
@@ -2054,6 +2078,12 @@ async fn main() {
         panic!("Failed to initialize analytics event sink at {analytics_dir}: {error}");
     });
 
+    let (replay_verification_tx, replay_verification_rx) = tokio::sync::mpsc::channel(16);
+    let replay_verification_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .expect("failed to create replay verification client");
+
     let state = Arc::new(AppState {
         db: player_db,
         secret_token,
@@ -2067,7 +2097,14 @@ async fn main() {
         playgames_handoffs: std::sync::Mutex::new(HashMap::new()),
         playgames_sessions: std::sync::Mutex::new(HashMap::new()),
         playgames_access_tokens: std::sync::Mutex::new(HashMap::new()),
+        replay_verification_tx,
+        replay_verification_client,
     });
+
+    tokio::spawn(replay_verification_worker(
+        Arc::clone(&state),
+        replay_verification_rx,
+    ));
 
     let sync_state = Arc::clone(&state);
     tokio::spawn(async move {
@@ -2147,6 +2184,10 @@ async fn main() {
         .route("/profile/anonymous/blocks", post(handle_blocks))
         .route("/profile/anonymous/delete", post(handle_self_delete))
         .route("/match/start", post(handle_match_start))
+        .route(
+            "/internal/match-start/{match_id}",
+            get(handle_internal_match_start),
+        )
         .route(
             "/internal/match-participant-settle",
             post(handle_match_participant_settle),
@@ -2902,25 +2943,6 @@ async fn handle_match_participant_settle(
         .await
     {
         Ok(Some(account)) => {
-            state.db.submit_crazygames_score(&account).await;
-            let outcome = PlayGamesMatchOutcome {
-                account_id: account.id.clone(),
-                won: false,
-                wins: account.profile.wins,
-                sync_revision: account.profile.playgames_sync_revision,
-                unlocked_achievements: account
-                    .profile
-                    .unlocked_achievements
-                    .iter()
-                    .cloned()
-                    .collect(),
-            };
-            if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
-                warn!(
-                    "Play Games participant sync failed for account={}: {error}",
-                    account_hint(Some(&account.id))
-                );
-            }
             info!(
                 "[rewards] participant settled match={} account={}",
                 payload.match_id,
@@ -3527,8 +3549,7 @@ impl AppState {
         Ok(())
     }
 
-    /// Reconcile server-owned achievements when a Play Games token is active.
-    /// Victory scores remain blocked until replay verification exists.
+    /// Reconcile verified profile progress when a Play Games token is active.
     async fn sync_playgames_profile(&self, account_id: &str) -> Result<(), String> {
         let snapshot = self
             .db
@@ -3542,7 +3563,11 @@ impl AppState {
             return Ok(());
         }
         if self
-            .sync_playgames_progress(account_id, &snapshot.unlocked_achievements, None)
+            .sync_playgames_progress(
+                account_id,
+                &snapshot.unlocked_achievements,
+                Some(snapshot.wins),
+            )
             .await?
         {
             self.db
@@ -3785,7 +3810,11 @@ async fn handle_match_start(
 
     match state
         .db
-        .register_match_start(&payload.match_id, &payload.player_ids)
+        .register_match_start(
+            &payload.match_id,
+            &payload.player_ids,
+            payload.metadata,
+        )
         .await
     {
         Ok(()) => {
@@ -3815,7 +3844,43 @@ async fn handle_match_start(
     }
 }
 
-/// POST /internal/match-finalize (relay triggers after authoritative exit logging)
+async fn handle_internal_match_start(
+    State(state): State<Arc<AppState>>,
+    Path(match_id): Path<String>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    match state.db.match_start_record(&match_id) {
+        Ok(Some(record)) => (StatusCode::OK, Json(record)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "match registration not found".to_string(),
+            }),
+        )
+            .into_response(),
+        Err(error) => {
+            error!("match {} metadata read failed: {error}", match_id);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "match metadata unavailable".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// POST /internal/match-finalize (relay submits the completed replay)
 async fn handle_match_finalize(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -3940,14 +4005,13 @@ async fn handle_match_finalize(
         }
     }
 
-    // Capture the roster/exit order before finalize deletes the Valkey keys,
-    // so the analytics sink can record an aggregate match_ended event.
-    let (participants, exits) = match state
+    // Keep analytics and match history on the immutable roster registered before relay handoff.
+    let participants = match state
         .db
         .match_participants_with_lobby(&payload.match_id, payload.lobby_json.as_deref())
         .await
     {
-        Ok(value) => value,
+        Ok(participants) => participants,
         Err(error) => {
             error!(
                 "match {} participant snapshot failed before finalize: {error}",
@@ -3968,14 +4032,42 @@ async fn handle_match_finalize(
         .finalize_match_with_lobby(&payload.match_id, payload.lobby_json.as_deref())
         .await
     {
-        Ok(playgames_outcomes) => {
+        Ok(_playgames_outcomes) => {
+            if payload.replay_data.is_some() {
+                if let Err(error) = state.db.queue_replay_verification(&payload.match_id) {
+                    error!("match {} replay queueing failed: {error}", payload.match_id);
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(ErrorResponse {
+                            error: "replay verification queue unavailable".to_string(),
+                        }),
+                    )
+                        .into_response();
+                }
+                if let Err(error) = state
+                    .replay_verification_tx
+                    .try_send(payload.match_id.clone())
+                {
+                    warn!(
+                        "match {} replay verifier notification deferred: {error}",
+                        payload.match_id
+                    );
+                }
+            } else if let Err(error) = reject_queued_replay(&state, &payload.match_id).await {
+                error!(
+                    "match {} without replay could not close verification: {error}",
+                    payload.match_id
+                );
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: "match verification state unavailable".to_string(),
+                    }),
+                )
+                    .into_response();
+            }
             if !participants.is_empty() {
                 let humans = state.db.count_human_players(&participants).await;
-                let winner = participants
-                    .iter()
-                    .find(|p| !exits.contains(p))
-                    .cloned()
-                    .or_else(|| exits.last().cloned());
                 emit_event_line(
                     &state,
                     "match_ended",
@@ -3984,7 +4076,6 @@ async fn handle_match_finalize(
                         "match_id": payload.match_id,
                         "players": participants.len(),
                         "humans": humans,
-                        "winner_account_id": winner,
                     }),
                 );
                 if let Err(e) = state.db.record_product_event("match_ended", None).await {
@@ -3992,17 +4083,6 @@ async fn handle_match_finalize(
                 }
                 if let Err(e) = state.db.record_match_activation(&participants).await {
                     warn!("match activation analytics failed: {e}");
-                }
-                if let Err(error) = state.sync_playgames_match_event(&participants).await {
-                    error!("Play Games match event sync failed: {error}");
-                }
-                for outcome in playgames_outcomes {
-                    if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
-                        error!(
-                            "Play Games match outcome sync failed for account={}: {error}",
-                            account_hint(Some(&outcome.account_id))
-                        );
-                    }
                 }
             }
             (
@@ -4022,6 +4102,224 @@ async fn handle_match_finalize(
                 .into_response()
         }
     }
+}
+
+async fn replay_verification_worker(
+    state: Arc<AppState>,
+    mut notifications: tokio::sync::mpsc::Receiver<String>,
+) {
+    let mut retry = tokio::time::interval(Duration::from_secs(30));
+    loop {
+        tokio::select! {
+            Some(match_id) = notifications.recv() => {
+                verify_queued_replay(&state, &match_id).await;
+            }
+            _ = retry.tick() => {
+                match state.db.pending_replay_verifications(32) {
+                    Ok(match_ids) => {
+                        for match_id in match_ids {
+                            verify_queued_replay(&state, &match_id).await;
+                        }
+                    },
+                    Err(error) => error!("pending replay queue read failed: {error}"),
+                }
+            }
+            else => break,
+        }
+    }
+}
+
+async fn reject_queued_replay(
+    state: &AppState,
+    match_id: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let start = state
+        .db
+        .match_start_record(match_id)?
+        .ok_or("trusted match registration unavailable")?;
+    if start.replay_status == sow_data::profile::ReplayVerificationStatus::Verified {
+        state
+            .db
+            .finish_replay_verification(
+                match_id,
+                sow_data::profile::ReplayVerificationStatus::Verified,
+            )?;
+        return Ok(());
+    }
+    state
+        .db
+        .mark_match_reward_verification_status(
+            match_id,
+            sow_data::profile::ReplayVerificationStatus::Rejected,
+        )
+        .await?;
+    state.db.finish_replay_verification(
+        match_id,
+        sow_data::profile::ReplayVerificationStatus::Rejected,
+    )?;
+    Ok(())
+}
+
+async fn verify_queued_replay(state: &AppState, match_id: &str) {
+    let start = match state.db.match_start_record(match_id) {
+        Ok(Some(start)) => start,
+        Ok(None) => {
+            error!("queued replay {match_id} has no trusted match registration");
+            return;
+        }
+        Err(error) => {
+            error!("queued replay {match_id} registration read failed: {error}");
+            return;
+        }
+    };
+    if start.replay_status == sow_data::profile::ReplayVerificationStatus::Rejected {
+        if let Err(error) = reject_queued_replay(state, match_id).await {
+            error!("queued replay {match_id} receipt rejection failed: {error}");
+        }
+        return;
+    }
+    if start.replay_status == sow_data::profile::ReplayVerificationStatus::Verified {
+        if let Err(error) = state
+            .db
+            .mark_match_reward_verification_status(
+                match_id,
+                sow_data::profile::ReplayVerificationStatus::Verified,
+            )
+            .await
+        {
+            error!("queued replay {match_id} verified receipt sync failed: {error}");
+            return;
+        }
+        if let Err(error) = state
+            .db
+            .finish_replay_verification(match_id, start.replay_status)
+        {
+            error!("queued replay {match_id} cleanup failed: {error}");
+        }
+        return;
+    }
+    if match_id.parse::<u64>().is_err() {
+        error!("queued replay has an invalid match id");
+        if let Err(error) = reject_queued_replay(state, match_id).await {
+            error!("queued replay rejection could not be saved: {error}");
+        }
+        return;
+    }
+    let replay_dir = std::env::var("SOW_REPLAY_DIR").unwrap_or_else(|_| "replays".to_string());
+    let replay_path = std::path::Path::new(&replay_dir).join(format!("{match_id}.replay"));
+    let length = match tokio::fs::metadata(&replay_path).await {
+        Ok(metadata) => metadata.len(),
+        Err(error) => {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                warn!("queued replay {match_id} file is missing; rejecting bonuses");
+                if let Err(save_error) = reject_queued_replay(state, match_id).await {
+                    error!("replay {match_id} rejection could not be saved: {save_error}");
+                }
+            } else {
+                warn!("queued replay {match_id} file unavailable: {error}");
+            }
+            return;
+        }
+    };
+    if length == 0 || length > MAX_REPLAY_BYTES as u64 {
+        warn!("queued replay {match_id} rejected: replay file size is invalid");
+        if let Err(error) = reject_queued_replay(state, match_id).await {
+            error!("replay {match_id} rejection could not be saved: {error}");
+        }
+        return;
+    }
+    let replay = match tokio::fs::read(&replay_path).await {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            warn!("queued replay {match_id} read failed: {error}");
+            return;
+        }
+    };
+    let verifier_url = std::env::var("SOW_SERVER_HTTP_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:25566".to_string());
+    let url = format!(
+        "{}/internal/replay/verify/{match_id}",
+        verifier_url.trim_end_matches('/')
+    );
+    let response = match state
+        .replay_verification_client
+        .post(url)
+        .bearer_auth(&state.secret_token)
+        .header("Content-Type", "application/octet-stream")
+        .body(replay)
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(error) => {
+            warn!("replay {match_id} verifier request failed: {error}");
+            return;
+        }
+    };
+    if response.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+        warn!("replay {match_id} was rejected by the deterministic verifier");
+        if let Err(error) = reject_queued_replay(state, match_id).await {
+            error!("replay {match_id} rejection could not be saved: {error}");
+        }
+        return;
+    }
+    if !response.status().is_success() {
+        warn!("replay {match_id} verifier returned HTTP {}", response.status());
+        return;
+    }
+    let result = match response
+        .json::<sow_data::profile::VerifiedMatchResult>()
+        .await
+    {
+        Ok(result) if result.match_id == match_id => result,
+        Ok(_) => {
+            error!("replay {match_id} verifier returned a different match id");
+            if let Err(error) = reject_queued_replay(state, match_id).await {
+                error!("replay {match_id} rejection could not be saved: {error}");
+            }
+            return;
+        }
+        Err(error) => {
+            error!("replay {match_id} verifier response was invalid: {error}");
+            if let Err(save_error) = reject_queued_replay(state, match_id).await {
+                error!("replay {match_id} rejection could not be saved: {save_error}");
+            }
+            return;
+        }
+    };
+    let (outcomes, accounts) = match state.db.apply_verified_match_result(&result).await {
+        Ok(applied) => applied,
+        Err(error) => {
+            if error.to_string().starts_with("invalid verified result:") {
+                error!("replay {match_id} verifier result rejected: {error}");
+                if let Err(reject_error) = reject_queued_replay(state, match_id).await {
+                    error!("replay {match_id} rejection could not be saved: {reject_error}");
+                }
+            } else {
+                error!("replay {match_id} verified result apply failed: {error}");
+            }
+            return;
+        }
+    };
+    for account in &accounts {
+        state.db.submit_crazygames_score(account).await;
+    }
+    for outcome in outcomes {
+        if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
+            warn!(
+                "verified Play Games outcome sync failed account={}: {error}",
+                account_hint(Some(&outcome.account_id))
+            );
+        }
+    }
+    if let Err(error) = state.db.finish_replay_verification(
+        match_id,
+        sow_data::profile::ReplayVerificationStatus::Verified,
+    ) {
+        error!("verified replay {match_id} queue completion failed: {error}");
+        return;
+    }
+    info!("replay {match_id} verified and server rewards updated");
 }
 
 /// POST /internal/bot-pool/seed — resolve or create persistent bot accounts

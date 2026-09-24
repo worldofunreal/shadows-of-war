@@ -1,5 +1,7 @@
 //! Static game data, player database, and embedded REDB metadata.
 
+pub const MAX_MATCH_PARTICIPANTS: usize = 256;
+
 pub mod colors;
 pub mod commerce;
 #[cfg(feature = "server")]

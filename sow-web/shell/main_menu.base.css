@@ -138,6 +138,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 .sow-menu__topbar {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -340,6 +341,14 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.sow-menu__laurels {
+    color: var(--sow-laurel-bright);
+    font-weight: 800;
+    text-shadow: 0 0 8px rgba(192, 132, 252, 0.35);
+    gap: 6px;
+    border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .sow-menu__currency-icon {
     width: 19px;
     height: 19px;
@@ -347,27 +356,35 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     object-fit: contain;
 }
 
-.sow-menu__reward-toast {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    padding: 7px 11px;
-    border: 1px solid rgba(243, 177, 43, 0.45);
-    border-radius: 999px;
-    background: rgba(14, 17, 23, 0.94);
-    color: var(--sow-gold-bright);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    opacity: 0;
+.sow-menu__reward-flight {
+    position: fixed;
+    z-index: 1000;
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
     pointer-events: none;
-    transform: translateY(-5px);
-    transition: opacity 180ms ease, transform 180ms ease;
+    filter: drop-shadow(0 0 8px rgba(255, 211, 106, 0.8));
+    will-change: transform, opacity;
 }
 
-.sow-menu__reward-toast.is-visible {
-    opacity: 1;
-    transform: translateY(0);
+.sow-menu__reward-flight--xp {
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 900;
+    text-shadow: 0 0 8px rgba(255, 211, 106, 0.9);
+}
+
+.sow-menu__level [data-progression-level-value].is-reward-level-up {
+    animation: sow-reward-level-pulse 650ms ease-out;
+}
+
+@keyframes sow-reward-level-pulse {
+    45% { color: var(--sow-gold-bright); text-shadow: 0 0 14px rgba(255, 211, 106, 0.9); transform: scale(1.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sow-menu__level [data-progression-level-value].is-reward-level-up { animation: none; }
 }
 
 .sow-menu__signin,

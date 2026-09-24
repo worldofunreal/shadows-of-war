@@ -1,5 +1,7 @@
 use web_time::{Duration, Instant};
 
+pub const MAX_DEATH_NAMEPLATES: usize = 64;
+
 /// Subset of [`sow_core::protocol::ProjectileSnapshot`] for detonation / launch detection.
 #[derive(Clone, Copy, Debug)]
 pub struct TrackedProjectile {
@@ -252,6 +254,28 @@ pub struct FloatingNotice {
 }
 
 #[derive(Clone, Debug)]
+pub struct DeathNameplateAnimation {
+    pub name: String,
+    pub color: [f32; 3],
+    pub world_x: f32,
+    pub world_y: f32,
+    pub start_time: web_time::Instant,
+    pub by_nuke: bool,
+    pub drift_x: f32,
+    pub flight_distance: f32,
+    pub icon_scale: f32,
+}
+
+impl DeathNameplateAnimation {
+    pub fn enqueue(queue: &mut Vec<Self>, animation: Self) {
+        if queue.len() >= MAX_DEATH_NAMEPLATES {
+            queue.remove(0);
+        }
+        queue.push(animation);
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct AttackBadgeLabel {
     pub troops: f64,
     pub text: String,
@@ -298,15 +322,13 @@ pub struct UiState {
     pub detonation_scratch: Vec<(f32, f32, sow_core::game::ProjectileKind)>,
     /// Cached endgame copy for panel fade-out (is_victory, title, subtitle).
     pub endgame_cache: Option<(bool, String, String)>,
-    /// Deterministic reward preview for the current match, cached when the
-    /// outcome is first observed so the endgame panel does not double-award.
-    pub reward_cache: Option<sow_data::rewards::MatchReward>,
 
     /// Client-side nuke silo cooldown tracking: building id → tick when ready.
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,
     pub mover_scene: crate::render::world::movers::MoverScene,
     pub click_markers: Vec<ClickMarker>,
     pub floating_notices: Vec<FloatingNotice>,
+    pub death_nameplates: Vec<DeathNameplateAnimation>,
     pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,
     pub attack_badge_style_key: Option<[u32; 2]>,
     pub attack_badge_cache_tick: Option<u64>,
@@ -480,6 +502,17 @@ pub struct TaskState {
     pub engine_init_queued_msg: Option<sow_core::protocol::ServerStartMessage>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExitRewardPreview {
+    pub receipt_id: String,
+    pub account_id: String,
+    pub reward: sow_data::rewards::MatchReward,
+    pub base_xp: u32,
+    pub base_level: u32,
+    pub base_crowns: u64,
+    pub base_laurels: u64,
+}
+
 pub struct SowApp {
     pub gfx: GraphicsState,
     pub net: NetState,
@@ -500,6 +533,8 @@ pub struct SowApp {
     /// Set when Blade/Vulkan init fails; event loop exits on next tick.
     pub gpu_init_failed: bool,
     pub progress: crate::player_progress::PlayerProgress,
+    /// Temporary UI estimate only; never applied to `progress` or purchases.
+    pub exit_reward_preview: Option<ExitRewardPreview>,
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,
     pub progress_provider: String,
@@ -511,9 +546,7 @@ pub struct SowApp {
     pub profile_refresh_pending: bool,
     /// Receipts still being fetched before their menu presentation.
     pub pending_reward_receipt_ids: std::collections::BTreeSet<String>,
-    pub reward_profile_retry_attempts: u8,
     pub reward_profile_retry_at: Option<Instant>,
-    pub tutorial_completion_retry_exhausted: bool,
     /// Monotonic identity request sequence; used to reject stale async responses.
     pub identity_request_seq: u64,
     pub profile_last_applied_request: u64,
@@ -522,10 +555,39 @@ pub struct SowApp {
     /// A queued join with no target/config enters the server matchmaking pool.
     pub join_matchmaking: bool,
     pub progress_match_recorded: bool,
-    pub progress_stats_submitted: bool,
-    pub progress_result_submitted: bool,
     pub progress_session_defeats: crate::player_progress::SessionDefeats,
     #[cfg(target_arch = "wasm32")]
     pub boot_db_settled: bool,
     pub boot_campaign_pending: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn animation(name: impl Into<String>) -> DeathNameplateAnimation {
+        DeathNameplateAnimation {
+            name: name.into(),
+            color: [1.0; 3],
+            world_x: 0.0,
+            world_y: 0.0,
+            start_time: Instant::now(),
+            by_nuke: false,
+            drift_x: 0.0,
+            flight_distance: 15.0,
+            icon_scale: 1.0,
+        }
+    }
+
+    #[test]
+    fn death_nameplate_queue_caps_at_64_and_evicts_oldest() {
+        let mut queue = Vec::with_capacity(MAX_DEATH_NAMEPLATES);
+        for index in 0..=MAX_DEATH_NAMEPLATES {
+            DeathNameplateAnimation::enqueue(&mut queue, animation(index.to_string()));
+        }
+        assert_eq!(queue.len(), MAX_DEATH_NAMEPLATES);
+        assert_eq!(queue.first().unwrap().name, "1");
+        assert_eq!(queue.last().unwrap().name, MAX_DEATH_NAMEPLATES.to_string());
+        assert!(queue.capacity() >= MAX_DEATH_NAMEPLATES);
+    }
 }

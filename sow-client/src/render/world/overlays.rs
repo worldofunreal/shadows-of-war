@@ -1202,12 +1202,9 @@ fn building_visual_status(
     let next_level = active_level.saturating_add(1);
     let queued_after_current = building.level.saturating_sub(next_level);
     let label = if queued_after_current > 0 {
-        format!(
-            "Lvl {} -> {} {} +{}",
-            active_level, next_level, time, queued_after_current
-        )
+        format!("🏗️ Lvl {} · {} +{}", next_level, time, queued_after_current)
     } else {
-        format!("Lvl {} -> {} {}", active_level, next_level, time)
+        format!("🏗️ Lvl {} · {}", next_level, time)
     };
     Some(BuildingVisualStatus {
         progress,
@@ -1464,8 +1461,7 @@ fn render_building_placement_preview(
         } else {
             let next_level = active.saturating_add(1);
             let label = format!(
-                "Lvl {} -> {} {}",
-                active,
+                "🏗️ Lvl {} · {}",
                 next_level,
                 format_construction_time(
                     sow_core::building::core::upgrade_duration_ticks(kind, next_level),
@@ -1525,7 +1521,12 @@ fn render_building_preview_badge(
     sf: f32,
 ) {
     let font_size = 14.0 * dev.font_size_scale.max(0.1) * sf;
-    let measure = text.measure_string(label, font_size, dev.font_char_spacing.max(0.1), 1.0);
+    let measure = text.measure_string(
+        label,
+        font_size,
+        dev.font_char_spacing.max(0.1),
+        INLINE_EMOJI_SCALE,
+    );
     let padding = 8.0 * sf;
     let width = measure.width + padding * 2.0;
     let height = (measure.height + padding).max(22.0 * sf);
@@ -1946,7 +1947,7 @@ mod tests {
         let upgrade = building_snapshot(BuildingKind::City, 2, true, upgrade_ticks);
         let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0)
             .expect("upgrade status");
-        assert_eq!(status.label, "Lvl 1 -> 2 2.2s");
+        assert_eq!(status.label, "🏗️ Lvl 2 · 2.2s");
         assert_eq!(status.color, [1.0, 0.82, 0.22, 1.0]);
         assert_eq!(status.progress, 0.0);
     }
@@ -1964,6 +1965,7 @@ mod tests {
         );
         let status = building_visual_status(&queued, queued.active_level(), 7, 100.0)
             .expect("queued upgrade status");
+        assert!(status.label.starts_with("🏗️ Lvl 2 · "));
         assert!(status.label.ends_with("+1"));
         assert!((status.progress - 0.5).abs() < 0.001);
     }

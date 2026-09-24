@@ -38,7 +38,6 @@ impl SowApp {
             .iter()
             .find(|p| p.id == my_id)
             .and_then(|p| p.team);
-        self.maybe_submit_online_stats(&snap);
         self.maybe_record_match_progress(&snap, snap.winner, snap.winning_team, my_team);
 
         // Viewport Alerts and one-shot result sound: Victory / Defeat.

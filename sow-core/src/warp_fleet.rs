@@ -128,6 +128,49 @@ pub fn resolve_fleet_route(
     })
 }
 
+/// Diagnostic variant used by bot profiling builds; it calls the production resolver
+/// unchanged and counts the shore entries that its selection loop visits.
+#[cfg(feature = "ai-metrics")]
+pub fn resolve_fleet_route_with_metrics(
+    map: &GameMap,
+    water_components: &WaterComponents,
+    path_scratch: &mut WaterPathfinderScratch,
+    player_id: u16,
+    target: (u16, u32),
+    border_tiles: &crate::bitset::DenseBitSet,
+    target_border: Option<&crate::bitset::DenseBitSet>,
+    shoreline_candidates_examined: &mut u64,
+) -> Result<FleetRoute, FleetLaunchError> {
+    let result = resolve_fleet_route(
+        map,
+        water_components,
+        path_scratch,
+        player_id,
+        target,
+        border_tiles,
+        target_border,
+    );
+    if matches!(
+        &result,
+        Ok(_)
+            | Err(FleetLaunchError::NoLandingShore)
+            | Err(FleetLaunchError::NoLaunchShore { .. })
+            | Err(FleetLaunchError::NoWaterPath)
+    ) {
+        let my_comps = player_water_components(map, water_components, player_id, border_tiles);
+        if target.0 == 0 {
+            *shoreline_candidates_examined += my_comps
+                .iter()
+                .filter_map(|&component| water_components.shoreline_tiles.get(component as usize))
+                .map(|shores| shores.len() as u64)
+                .sum::<u64>();
+        } else if let Some(target_border) = target_border {
+            *shoreline_candidates_examined += target_border.count_ones() as u64;
+        }
+    }
+    result
+}
+
 /// Collect the set of water components this player can launch from (deduplicated,
 /// sorted ascending for determinism). Empty iff the player owns no shore adjacent
 /// to any water tile — the "cannot build transport" condition.
@@ -391,5 +434,53 @@ impl WarpFleet {
             retreating: false,
             flow_target: None,
         }
+    }
+}
+
+#[cfg(all(test, feature = "ai-metrics"))]
+mod metrics_tests {
+    use super::{resolve_fleet_route, resolve_fleet_route_with_metrics};
+    use crate::bitset::DenseBitSet;
+    use crate::map::{GameMap, MapTile};
+    use crate::pathfinding::WaterPathfinderScratch;
+    use crate::water_components::WaterComponents;
+
+    #[test]
+    fn route_metric_counts_only_the_candidates_scanned() {
+        let mut map = GameMap::new(3, 1);
+        map.terrain[0] = MapTile::from_byte(0xC0);
+        map.terrain[1] = MapTile::from_byte(0x20);
+        map.terrain[2] = MapTile::from_byte(0xC0);
+        map.set_owner_id(0, 0, 1);
+        map.compute_shorelines();
+        let components = WaterComponents::compute(&map, |_| {});
+        let mut border = DenseBitSet::new();
+        border.insert(0);
+        let mut regular_scratch = WaterPathfinderScratch::default();
+        let mut metric_scratch = WaterPathfinderScratch::default();
+        let mut examined = 0;
+
+        let regular = resolve_fleet_route(
+            &map,
+            &components,
+            &mut regular_scratch,
+            1,
+            (0, 2),
+            &border,
+            None,
+        );
+        let measured = resolve_fleet_route_with_metrics(
+            &map,
+            &components,
+            &mut metric_scratch,
+            1,
+            (0, 2),
+            &border,
+            None,
+            &mut examined,
+        );
+
+        assert_eq!(measured, regular);
+        assert_eq!(examined, 2);
     }
 }

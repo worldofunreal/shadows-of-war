@@ -6,10 +6,6 @@
             width: min(100% - 28px, 680px);
         }
     
-        .sow-menu__progress {
-            display: none;
-        }
-    
         .sow-menu__main {
             grid-template-columns: minmax(270px, 360px) minmax(0, 1fr);
             gap: 20px;
@@ -179,7 +175,6 @@
             backdrop-filter: none;
         }
     
-        .sow-menu__progress,
         .sow-menu__profile small { display: none; }
     
         .sow-menu__identity {
@@ -751,7 +746,6 @@
         }
     
         #sow-menu .sow-menu__profile small,
-        #sow-menu .sow-menu__progress,
         #sow-menu .sow-menu__footer {
             display: none;
         }
@@ -777,3 +771,47 @@
         }
 }
 
+@media (max-width: 900px) {
+    #sow-menu .sow-menu__progress {
+        display: inline-flex;
+        height: 36px;
+        max-width: 100%;
+    }
+
+    #sow-menu .sow-menu__progress-cell {
+        padding-inline: 5px;
+        font-size: 10px;
+    }
+
+    #sow-menu .sow-menu__currency-icon {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+@media (max-width: 599px) and (orientation: portrait) {
+    #sow-menu .sow-menu__topbar {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas: "identity signin settings" "progress progress progress";
+        min-height: 92px;
+    }
+
+    #sow-menu .sow-menu__identity { grid-area: identity; }
+    #sow-menu .sow-menu__top-actions { display: contents; }
+    #sow-menu .sow-menu__progress {
+        grid-area: progress;
+        width: 100%;
+        justify-content: space-between;
+    }
+    #sow-menu .sow-menu__signin,
+    #sow-menu .sow-menu__account-label { grid-area: signin; }
+    #sow-menu .sow-menu__top-actions > [data-command="toggle_settings"] { grid-area: settings; }
+    #sow-menu .sow-menu__progress-cell { padding-inline: 4px; }
+    #sow-menu .sow-menu__xp { flex: 1 1 auto; min-width: 54px; }
+}
+
+@media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
+    #sow-menu .sow-menu__progress { height: 32px; }
+    #sow-menu .sow-menu__progress-cell { padding-inline: 4px; font-size: 9px; }
+    #sow-menu .sow-menu__currency-icon { width: 14px; height: 14px; }
+}

@@ -20,25 +20,44 @@ impl SowEngine {
             .map(|p| p.bot_rng.rand() as u32)
             .unwrap_or(0);
         if let Some(player) = self.state.player(bot_id) {
-            let blocks_examined = player.border_tiles.sample_ones_with_work(
+            #[cfg(feature = "ai-metrics")]
+            let (blocks_examined, directory_words_examined) =
+                player.border_tiles.sample_ones_with_metrics(
+                    start_idx,
+                    256,
+                    &mut self.placement_scratch.border_scratch,
+                );
+            #[cfg(not(feature = "ai-metrics"))]
+            player.border_tiles.sample_ones(
                 start_idx,
                 256,
                 &mut self.placement_scratch.border_scratch,
             );
-            self.bot_work.border_blocks_examined += blocks_examined;
+            #[cfg(feature = "ai-metrics")]
+            {
+                self.bot_work.border_blocks_examined += blocks_examined;
+                self.bot_work.border_directory_words_examined += directory_words_examined;
+            }
         }
 
         let mut neighbor_players = std::mem::take(&mut self.placement_scratch.neighbor_scratch);
         neighbor_players.clear();
         let mut has_neutral = false;
-        self.bot_work.border_cells_examined += self.placement_scratch.border_scratch.len() as u64;
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.bot_work.border_cells_examined +=
+                self.placement_scratch.border_scratch.len() as u64;
+        }
 
         if !self.placement_scratch.border_scratch.is_empty() {
             for border_tile in self.placement_scratch.border_scratch.iter().copied() {
                 let bx = border_tile % map_width;
                 let by = border_tile / map_width;
                 self.state.map.for_each_neighbor(bx, by, |nx, ny| {
-                    self.bot_work.neighbor_cells_examined += 1;
+                    #[cfg(feature = "ai-metrics")]
+                    {
+                        self.bot_work.neighbor_cells_examined += 1;
+                    }
                     let owner = self.state.map.owner_id(nx, ny);
                     if owner != bot_id {
                         if owner == 0 {
@@ -70,6 +89,10 @@ impl SowEngine {
         let (bot_id, bot_iq) = bot;
         let (alliance_cost, send_cost) = costs;
         // ── Alliance Proposal Evaluation ───────────────────────────────
+        #[cfg(feature = "ai-metrics")]
+        {
+            self.bot_work.diplomacy_proposals_examined += self.alliances_proposed.len() as u64;
+        }
         let mut proposals_to_accept = Vec::new();
         for prop in &self.alliances_proposed {
             let proposer = prop.proposer;
@@ -162,6 +185,11 @@ impl SowEngine {
         // modulo window. Ghosts therefore answer teammates on their normal
         // top-tier cadence instead of appearing to ignore the request.
         {
+            #[cfg(feature = "ai-metrics")]
+            {
+                self.bot_work.diplomacy_resource_requests_examined +=
+                    self.resource_requests_proposed.len() as u64;
+            }
             for req in &self.resource_requests_proposed {
                 if req.target != bot_id {
                     continue;

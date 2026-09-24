@@ -19,58 +19,19 @@ impl SowApp {
         let map_spawns = opts.map_spawns;
         let geo_bounds = opts.geo_bounds;
         let num_land_tiles = opts.num_land_tiles;
+        self.exit_reward_preview = None;
         self.reset_progress_session();
         self.sim.config = (*config).clone();
         let map_w = config.map_width;
         let map_h = config.map_height;
-        let mut state = sow_core::game::GameState::new(seed, map_w, map_h, *config);
-        state.map_spawns = map_spawns;
-        state.geo_bounds = geo_bounds;
-        state.total_land_tiles = num_land_tiles;
-
-        if let Ok(map_file) = sow_core::maps::load_map_from_payload(&map_bytes) {
-            state.total_land_tiles = map_file.num_land_tiles;
-            state.map_spawns = map_file.spawns;
-            state.geo_bounds = map_file.geo_bounds;
-            if map_file.terrain.len() == state.map.terrain.len() {
-                let dest_ptr = state.map.terrain.as_mut_ptr() as *mut u8;
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        map_file.terrain.as_ptr(),
-                        dest_ptr,
-                        map_file.terrain.len(),
-                    );
-                }
-            }
-        } else if map_bytes.len() == state.map.terrain.len() {
-            let dest_ptr = state.map.terrain.as_mut_ptr() as *mut u8;
-            unsafe {
-                std::ptr::copy_nonoverlapping(map_bytes.as_ptr(), dest_ptr, map_bytes.len());
-            }
-        }
-
-        let water = sow_core::water_components::WaterComponents::compute(&state.map, |_| {});
-        let mut new_engine = sow_core::engine::SowEngine::new(state, water);
-
-        for p in players {
-            if p.player_type == sow_core::player::PlayerType::Human {
-                new_engine.spawn_human(sow_core::engine::HumanSpawn {
-                    player_id: p.id,
-                    name: p.name,
-                    color: p.color,
-                    team: p.team,
-                    civilization: p.civilization,
-                    leader: p.leader,
-                    is_ai_controlled: p.is_ai_controlled,
-                });
-            }
-        }
-
-        // Campaign roster first (fixed identities/tiles), then any random fill.
-        new_engine.spawn_scripted();
-        new_engine.spawn_ai(
-            new_engine.state.config.nation_count,
-            new_engine.state.config.bot_count,
+        let mut new_engine = sow_core::engine::initialize_match_engine(
+            (*config).clone(),
+            seed,
+            &map_bytes,
+            players,
+            map_spawns,
+            geo_bounds,
+            num_land_tiles,
         );
         let snap = new_engine.build_snapshot();
         let phase = snap.phase.clone();

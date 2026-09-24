@@ -237,6 +237,10 @@ impl SowApp {
                 spawn_y: 0,
                 civilization: self.ui.app.main_menu_state.selected_civilization,
                 leader: self.ui.app.main_menu_state.selected_leader,
+                skin_style: sow_data::commerce::skin_style_for_profile(
+                    &self.progress.owned_skins,
+                    self.progress.selected_skin.as_deref(),
+                ),
                 is_ai_controlled: false,
             }],
             missed_turns: vec![],

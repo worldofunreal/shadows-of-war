@@ -72,6 +72,7 @@ impl SowEngine {
                     traitor: p.traitor,
                     civilization: p.civilization,
                     leader: p.leader,
+                    skin_style: p.skin_style,
                     kills: p.kills,
                     deaths: p.deaths,
                     assists: p.assists,

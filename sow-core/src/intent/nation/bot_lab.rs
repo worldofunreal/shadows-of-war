@@ -809,6 +809,245 @@ fn s16_replay_trace() -> String {
     trace
 }
 
+struct S16TracePlayer<'a>(&'a Player);
+
+impl serde::Serialize for S16TracePlayer<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let p = self.0;
+        let mut state = serializer.serialize_struct("Player", 34)?;
+        macro_rules! field {
+            ($name:ident) => {
+                state.serialize_field(stringify!($name), &p.$name)?;
+            };
+        }
+        field!(id);
+        field!(name);
+        field!(player_type);
+        field!(troops);
+        field!(max_troops);
+        field!(max_troops_cap);
+        field!(gold);
+        field!(color);
+        field!(alive);
+        field!(has_spawned);
+        field!(sum_x);
+        field!(sum_y);
+        field!(tile_count);
+        field!(border_tiles);
+        field!(factories);
+        field!(cities);
+        field!(team);
+        field!(iq);
+        field!(iq_points);
+        field!(alliances);
+        field!(alliance_timers);
+        field!(disconnected);
+        field!(is_ai_controlled);
+        field!(active_emoji);
+        field!(emoji_timer);
+        field!(emoji_pinned);
+        field!(traitor);
+        field!(traitor_tick);
+        field!(civilization);
+        field!(leader);
+        field!(kills);
+        field!(deaths);
+        field!(assists);
+        field!(tile_conquests);
+        state.end()
+    }
+}
+
+struct S16TracePlayers<'a>(&'a [Player]);
+
+impl serde::Serialize for S16TracePlayers<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+
+        let mut players = serializer.serialize_seq(Some(self.0.len()))?;
+        for player in self.0 {
+            players.serialize_element(&S16TracePlayer(player))?;
+        }
+        players.end()
+    }
+}
+
+struct S16TraceGameState<'a>(&'a GameState);
+
+impl serde::Serialize for S16TraceGameState<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let state = self.0;
+        let mut trace = serializer.serialize_struct("GameState", 15)?;
+        trace.serialize_field("seed", &state.seed)?;
+        trace.serialize_field("config", &state.config)?;
+        trace.serialize_field("phase", &state.phase)?;
+        trace.serialize_field("map", &state.map)?;
+        trace.serialize_field("players", &S16TracePlayers(&state.players))?;
+        trace.serialize_field("tick", &state.tick)?;
+        trace.serialize_field("winner", &state.winner)?;
+        trace.serialize_field("winning_team", &state.winning_team)?;
+        trace.serialize_field("events", &state.events)?;
+        trace.serialize_field("next_fleet_id", &state.next_fleet_id)?;
+        trace.serialize_field("next_building_id", &state.next_building_id)?;
+        trace.serialize_field("next_attack_id", &state.next_attack_id)?;
+        trace.serialize_field("next_projectile_id", &state.next_projectile_id)?;
+        trace.serialize_field("total_land_tiles", &state.total_land_tiles)?;
+        trace.serialize_field("sea_lanes", &state.sea_lanes)?;
+        trace.end()
+    }
+}
+
+fn s16_engine_state_bytes(engine: &SowEngine) -> Vec<u8> {
+    let mut state = engine.state.clone();
+    let mut alliance_timers = Vec::with_capacity(state.players.len());
+    let mut player_rngs = Vec::with_capacity(state.players.len());
+    for player in &mut state.players {
+        let mut timers: Vec<_> = player
+            .alliance_timers
+            .iter()
+            .map(|(&id, &timer)| (id, timer))
+            .collect();
+        timers.sort_unstable();
+        alliance_timers.push((player.id, timers));
+        player.alliance_timers.clear();
+
+        let mut rng = player.bot_rng.clone();
+        player_rngs.push((player.id, rng.rand()));
+    }
+
+    let attacks: Vec<_> = engine
+        .attacks
+        .iter()
+        .map(|attack| {
+            let mut rng = attack.rng.clone();
+            (
+                attack.id,
+                attack.owner_id,
+                attack.target_owner,
+                attack.troops.to_bits(),
+                attack
+                    .to_conquer
+                    .as_slice()
+                    .iter()
+                    .map(|tile| (tile.priority, tile.insert_seq, tile.x, tile.y))
+                    .collect::<Vec<_>>(),
+                attack.insert_seq_counter,
+                rng.rand(),
+                attack.retreating,
+            )
+        })
+        .collect();
+    let fleets: Vec<_> = engine
+        .fleets
+        .iter()
+        .map(|fleet| {
+            (
+                fleet.id,
+                fleet.owner_id,
+                fleet.target_owner,
+                fleet.unit_type,
+                fleet.troops.to_bits(),
+                fleet.src_tile,
+                fleet.dst_tile,
+                fleet.retreat_dst,
+                fleet.path.as_slice(),
+                fleet.path_cursor,
+                fleet.current_tile,
+                fleet.retreating,
+                fleet.flow_target,
+            )
+        })
+        .collect();
+
+    let mut alliance_cooldowns: Vec<_> = engine
+        .alliance_request_cooldown_until
+        .iter()
+        .map(|(&(from, to), &tick)| (from, to, tick))
+        .collect();
+    alliance_cooldowns.sort_unstable();
+    let mut betrayal_cooldowns: Vec<_> = engine
+        .alliance_betray_cooldown_until
+        .iter()
+        .map(|(&player, &tick)| (player, tick))
+        .collect();
+    betrayal_cooldowns.sort_unstable();
+    let mut port_queues: Vec<_> = engine
+        .port_queues
+        .iter()
+        .map(|(&port, queue)| (port, queue.iter().cloned().collect::<Vec<_>>()))
+        .collect();
+    port_queues.sort_unstable_by_key(|(port, _)| *port);
+    let alliance_proposals: Vec<_> = engine
+        .alliances_proposed
+        .iter()
+        .map(|proposal| (proposal.proposer, proposal.target, proposal.created_tick))
+        .collect();
+    let mut silo_cooldowns: Vec<_> = engine
+        .silo_cooldowns
+        .iter()
+        .map(|(&id, &ticks)| (id, ticks))
+        .collect();
+    silo_cooldowns.sort_unstable();
+    let mut mirv_launches: Vec<_> = engine
+        .mirv_launches
+        .iter()
+        .map(|(&player, &count)| (player, count))
+        .collect();
+    mirv_launches.sort_unstable();
+    let mut mirv_cooldown_targets: Vec<_> = engine
+        .mirv_cooldown_targets
+        .iter()
+        .map(|(&player, &tick)| (player, tick))
+        .collect();
+    mirv_cooldown_targets.sort_unstable();
+    let mut recent_nuke_counts: Vec<_> = engine
+        .recent_nuke_targets
+        .iter()
+        .map(|(&(target, tile), &count)| (target, tile, count))
+        .collect();
+    recent_nuke_counts.sort_unstable();
+
+    bincode::serialize(&(
+        S16TraceGameState(&state),
+        alliance_timers,
+        player_rngs,
+        attacks,
+        fleets,
+        &engine.buildings,
+        &engine.projectiles,
+        alliance_proposals,
+        alliance_cooldowns,
+        betrayal_cooldowns,
+        &engine.resource_requests_proposed,
+        port_queues,
+        silo_cooldowns,
+        mirv_launches,
+        recent_nuke_counts,
+        mirv_cooldown_targets,
+    ))
+    .expect("S16 state trace must serialize")
+}
+
+fn s16_trace_hash_bytes(hash: &mut u64, bytes: &[u8]) {
+    for byte in bytes {
+        *hash ^= *byte as u64;
+        *hash = hash.wrapping_mul(0x100000001b3);
+    }
+}
+
 fn build_s16_scenario() -> S16Scenario {
     let mut specs: Vec<LabPlayer> = Vec::new();
     let mut id = 1u16;
@@ -1814,6 +2053,7 @@ fn s13_team_members_spawn_clustered() {
             team: Some(Team::Blue),
             civilization: crate::player::Leader::Caesar.civilization(),
             leader: crate::player::Leader::Caesar,
+            skin_style: 0,
             is_ai_controlled: false,
         });
     }
@@ -1825,6 +2065,7 @@ fn s13_team_members_spawn_clustered() {
             team: Some(Team::Red),
             civilization: crate::player::Leader::Boudica.civilization(),
             leader: crate::player::Leader::Boudica,
+            skin_style: 0,
             is_ai_controlled: false,
         });
     }
@@ -2059,6 +2300,48 @@ fn s16_seed_replays_same_checkpoints_and_first_failure() {
         s16_replay_trace(),
         s16_replay_trace(),
         "S16 DETERMINISM FAIL: same seed produced different checkpoints or first failure"
+    );
+}
+
+#[test]
+fn s16_per_tick_decision_and_state_reference() {
+    let mut scenario = build_s16_scenario();
+    scenario.assert_setup();
+    let mut hash = 0xcbf29ce484222325;
+    let mut ticks = 0u64;
+    let mut checkpoints = Vec::with_capacity(9);
+
+    while scenario.engine.state.phase == GamePhase::Playing {
+        scenario.engine.tick();
+        let state = s16_engine_state_bytes(&scenario.engine);
+        let tick_trace = bincode::serialize(&(
+            scenario.engine.state.tick,
+            &scenario.engine.test_last_ai_intents,
+            state,
+        ))
+        .expect("S16 tick trace must serialize");
+        s16_trace_hash_bytes(&mut hash, &tick_trace);
+        ticks += 1;
+        if ticks.is_multiple_of(250) {
+            checkpoints.push((ticks, hash));
+        }
+    }
+
+    checkpoints.push((ticks, hash));
+    const REFERENCE: &[(u64, u64)] = &[
+        (250, 0x9bdaf285000089ab),
+        (500, 0x2faf1e27711cf3c7),
+        (750, 0x98155c74b09287cf),
+        (1000, 0x22cb1eb36ae09abe),
+        (1250, 0x238f7226049af97a),
+        (1500, 0xae4a9f6bf2cdeffd),
+        (1750, 0x7be196f93f868b5b),
+        (2000, 0x6e3b1dd5c6842575),
+        (2102, 0x01a8e4b76ef70ceb),
+    ];
+    assert_eq!(
+        checkpoints, REFERENCE,
+        "S16 per-tick intent/state trace changed"
     );
 }
 

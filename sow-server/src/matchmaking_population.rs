@@ -3,7 +3,7 @@ use sow_core::game_config::GameConfig;
 use sow_core::map_file::MapCatalogEntry;
 
 pub const MIN_MATCHMAKING_PLAYERS: u32 = 12;
-pub const MAX_MATCHMAKING_PLAYERS: u32 = 256;
+pub const MAX_MATCHMAKING_PLAYERS: u32 = sow_core::protocol::MAX_MATCH_PARTICIPANTS as u32;
 
 const MIN_NEUTRAL_AI: u32 = 64;
 const MAX_NEUTRAL_AI: u32 = 640;

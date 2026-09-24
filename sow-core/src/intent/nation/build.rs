@@ -107,16 +107,26 @@ impl SowEngine {
                         if self.state.player(bot_id).is_none_or(|p| p.gold < cost) {
                             continue;
                         }
-                        let blocks_examined = {
+                        let (_blocks_examined, _directory_words_examined) = {
                             let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
                             let p = state.player_mut(bot_id).unwrap();
                             scratch.border_scratch.clear();
                             scratch.interior_scratch.clear();
-                            let blocks_examined = p.border_tiles.sample_ones_with_work(
+                            #[cfg(feature = "ai-metrics")]
+                            let blocks_examined = p.border_tiles.sample_ones_with_metrics(
                                 p.bot_rng.rand() as u32,
                                 PLACEMENT_ATTEMPTS as usize,
                                 &mut scratch.border_scratch,
                             );
+                            #[cfg(not(feature = "ai-metrics"))]
+                            let blocks_examined = {
+                                p.border_tiles.sample_ones(
+                                    p.bot_rng.rand() as u32,
+                                    PLACEMENT_ATTEMPTS as usize,
+                                    &mut scratch.border_scratch,
+                                );
+                                (0, 0)
+                            };
                             if p.tile_count > 500 {
                                 let cx = (p.sum_x / p.tile_count as u64) as i32;
                                 let cy = (p.sum_y / p.tile_count as u64) as i32;
@@ -128,7 +138,12 @@ impl SowEngine {
                             }
                             blocks_examined
                         };
-                        self.bot_work.border_blocks_examined += blocks_examined;
+                        #[cfg(feature = "ai-metrics")]
+                        {
+                            self.bot_work.border_blocks_examined += _blocks_examined;
+                            self.bot_work.border_directory_words_examined +=
+                                _directory_words_examined;
+                        }
                         let target_tile = {
                             let border_candidates =
                                 std::mem::take(&mut self.placement_scratch.border_scratch);

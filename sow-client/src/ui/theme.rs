@@ -57,7 +57,7 @@ pub mod dev_config {
                 vfx_border_breathe: true,
                 vfx_energy_flow: true,
                 vfx_heartbeat: true,
-                vfx_war_fog: false,
+                vfx_war_fog: true,
                 fog_of_war: false,
                 vfx_fallout: true,
                 vfx_ambient_grade: true,

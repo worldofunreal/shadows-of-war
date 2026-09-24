@@ -79,6 +79,9 @@ S18 real-world geography plus zones.
 **Rule:** Do not deploy an AI change without a green Lab. The Lab uses `WORLD_MAP_BYTES`, so it
 tests real geography rather than flat boxes.
 
+S16 also guards the ordered AI intents and simulation state on every tick. Optional workload
+counters and `SOW_AI_DEBUG` traces require the `ai-metrics` feature; normal builds omit them.
+
 ## Process lessons
 
 - A fix without a commit can disappear during a sibling refactor.

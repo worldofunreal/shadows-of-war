@@ -977,10 +977,6 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )?;
         for (begin, end) in [
             (
-                "/* POKI_SHARED_UPDATE_TOPBAR_BEGIN */",
-                "/* POKI_SHARED_UPDATE_TOPBAR_END */",
-            ),
-            (
                 "/* POKI_SHARED_STORE_ACTIONS_BEGIN */",
                 "/* POKI_SHARED_STORE_ACTIONS_END */",
             ),
@@ -1006,6 +1002,20 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             ),
         ] {
             menu_js = strip_marked_section(&menu_js, begin, end)?;
+        }
+        while menu_js.contains("/* POKI_SHARED_AUTH_LOOKUP_BEGIN */") {
+            menu_js = strip_marked_section(
+                &menu_js,
+                "/* POKI_SHARED_AUTH_LOOKUP_BEGIN */",
+                "/* POKI_SHARED_AUTH_LOOKUP_END */",
+            )?;
+        }
+        while menu_js.contains("/* POKI_SHARED_SIGNIN_MARKUP_BEGIN */") {
+            menu_js = strip_marked_section(
+                &menu_js,
+                "/* POKI_SHARED_SIGNIN_MARKUP_BEGIN */",
+                "/* POKI_SHARED_SIGNIN_MARKUP_END */",
+            )?;
         }
         for forbidden in [
             "https://id.worldofunreal.com",

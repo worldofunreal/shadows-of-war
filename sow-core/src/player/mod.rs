@@ -86,6 +86,8 @@ pub struct Player {
     #[serde(default)]
     pub leader: Leader,
     #[serde(default)]
+    pub skin_style: u8,
+    #[serde(default)]
     pub kills: u32,
     #[serde(default)]
     pub deaths: u32,
@@ -138,6 +140,7 @@ impl Player {
             traitor_tick: 0,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            skin_style: 0,
             kills: 0,
             deaths: 0,
             assists: 0,
@@ -197,6 +200,7 @@ impl Player {
             traitor_tick: 0,
             civilization: civ,
             leader,
+            skin_style: 0,
             kills: 0,
             deaths: 0,
             assists: 0,
@@ -248,6 +252,7 @@ impl Player {
             traitor_tick: 0,
             civilization: civ,
             leader,
+            skin_style: 0,
             kills: 0,
             deaths: 0,
             assists: 0,

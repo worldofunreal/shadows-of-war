@@ -4,17 +4,12 @@ use blade_graphics as gpu;
 
 mod ui;
 
-const ATTACK_THREAT_MIN_TROOPS: f32 = 1_000.0;
-const ATTACK_THREAT_MAX_TROOPS: f32 = 100_000.0;
-const ATTACK_THREAT_MIN_RADIUS: f32 = 10.0;
+const ATTACK_THREAT_MAX_TROOPS: f32 = 1_000.0;
 const ATTACK_THREAT_MAX_RADIUS: f32 = 100.0;
 
 #[inline]
 fn attack_threat_radius(troops: f32) -> f32 {
-    let progress = ((troops - ATTACK_THREAT_MIN_TROOPS)
-        / (ATTACK_THREAT_MAX_TROOPS - ATTACK_THREAT_MIN_TROOPS))
-        .clamp(0.0, 1.0);
-    ATTACK_THREAT_MIN_RADIUS + (ATTACK_THREAT_MAX_RADIUS - ATTACK_THREAT_MIN_RADIUS) * progress
+    (troops / ATTACK_THREAT_MAX_TROOPS).clamp(0.0, 1.0) * ATTACK_THREAT_MAX_RADIUS
 }
 
 impl SowApp {
@@ -244,12 +239,7 @@ impl SowApp {
                                 let rgb =
                                     p.team.map_or(p.color, sow_core::player::team_territory_rgb);
                                 player_colors[p.id as usize] = [rgb[0], rgb[1], rgb[2], 1.0];
-                                if Some(p.id) == self.sim.my_player_id {
-                                    player_skin_styles[p.id as usize][0] =
-                                        sow_data::commerce::skin_style_for_id(
-                                            self.progress.selected_skin.as_deref(),
-                                        ) as f32;
-                                }
+                                player_skin_styles[p.id as usize][0] = p.skin_style as f32;
                             }
                         }
                     }
@@ -594,11 +584,12 @@ mod tests {
     use super::attack_threat_radius;
 
     #[test]
-    fn attack_threat_radius_is_linear_and_bounded() {
-        assert_eq!(attack_threat_radius(0.0), 10.0);
-        assert_eq!(attack_threat_radius(1_000.0), 10.0);
-        assert!((attack_threat_radius(10_000.0) - 18.1818).abs() < 0.01);
-        assert!((attack_threat_radius(50_000.0) - 54.5454).abs() < 0.01);
+    fn attack_threat_radius_reaches_full_radius_at_one_thousand_troops() {
+        assert_eq!(attack_threat_radius(0.0), 0.0);
+        assert_eq!(attack_threat_radius(100.0), 10.0);
+        assert_eq!(attack_threat_radius(1_000.0), 100.0);
+        assert_eq!(attack_threat_radius(10_000.0), 100.0);
+        assert_eq!(attack_threat_radius(50_000.0), 100.0);
         assert_eq!(attack_threat_radius(100_000.0), 100.0);
         assert_eq!(attack_threat_radius(150_000.0), 100.0);
     }

@@ -144,23 +144,22 @@ fn is_land_structure_tile(map: &GameMap, x: u32, y: u32) -> bool {
     )
 }
 
-/// Tiles within Euclidean 12 of `click_idx`, 4-connected, owned by `owner_id`,
-/// excluding tiles too close to existing cities if building a City.
-pub fn valid_land_structure_indices(
+fn for_each_valid_land_structure_index(
     map: &GameMap,
     owner_id: u16,
     click_idx: u32,
     kind: BuildingKind,
     existing: &BuildingGrid,
     scratch: &mut crate::engine::PlacementScratch,
-) -> Vec<u32> {
+    mut visit: impl FnMut(u32),
+) {
     let w = map.width;
     let (cx, cy) = idx_xy(click_idx, w);
     if !is_land_structure_tile(map, cx, cy) {
-        return Vec::new();
+        return;
     }
     if map.owner_id(cx, cy) != owner_id {
-        return Vec::new();
+        return;
     }
 
     let cx_i = cx as i64;
@@ -179,8 +178,6 @@ pub fn valid_land_structure_indices(
     scratch.visited_stamp[480] = stamp;
     scratch.queue.push(click_idx);
 
-    let mut out: Vec<u32> = Vec::new();
-
     let mut qi = 0usize;
     while qi < scratch.queue.len() {
         let idx = scratch.queue[qi];
@@ -197,7 +194,10 @@ pub fn valid_land_structure_indices(
         if map.owner_id(x, y) != owner_id {
             continue;
         }
-        scratch.candidates_examined += 1;
+        #[cfg(feature = "ai-metrics")]
+        {
+            scratch.candidates_examined += 1;
+        }
 
         let city_min_d_sq = (CITY_MIN_DIST as i64) * (CITY_MIN_DIST as i64);
         let building_min_d_sq = (BUILDING_MIN_DIST as i64) * (BUILDING_MIN_DIST as i64);
@@ -205,26 +205,38 @@ pub fn valid_land_structure_indices(
             existing
                 .iter_in_range(x, y, CITY_MIN_DIST as u32)
                 .any(|(bx, by)| {
-                    scratch.building_checks += 1;
+                    #[cfg(feature = "ai-metrics")]
+                    {
+                        scratch.building_checks += 1;
+                    }
                     euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
                 })
                 || existing
                     .iter_non_city_in_range(x, y, CITY_MIN_DIST as u32)
                     .any(|(bx, by)| {
-                        scratch.building_checks += 1;
+                        #[cfg(feature = "ai-metrics")]
+                        {
+                            scratch.building_checks += 1;
+                        }
                         euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
                     })
         } else {
             existing
                 .iter_in_range(x, y, CITY_MIN_DIST as u32)
                 .any(|(bx, by)| {
-                    scratch.building_checks += 1;
+                    #[cfg(feature = "ai-metrics")]
+                    {
+                        scratch.building_checks += 1;
+                    }
                     euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
                 })
                 || existing
                     .iter_non_city_in_range(x, y, BUILDING_MIN_DIST as u32)
                     .any(|(bx, by)| {
-                        scratch.building_checks += 1;
+                        #[cfg(feature = "ai-metrics")]
+                        {
+                            scratch.building_checks += 1;
+                        }
                         euclid_sq(xi, yi, bx as i64, by as i64) < building_min_d_sq
                     })
         };
@@ -253,7 +265,7 @@ pub fn valid_land_structure_indices(
         }
 
         if !too_close {
-            out.push(idx);
+            visit(idx);
         }
 
         map.for_each_neighbor(x, y, |nx, ny| {
@@ -275,6 +287,26 @@ pub fn valid_land_structure_indices(
             scratch.queue.push(xy_idx(nx, ny, w));
         });
     }
+}
+
+/// Tiles within Euclidean 12 of `click_idx`, 4-connected, owned by `owner_id`,
+/// excluding tiles too close to existing cities if building a City.
+pub fn valid_land_structure_indices(
+    map: &GameMap,
+    owner_id: u16,
+    click_idx: u32,
+    kind: BuildingKind,
+    existing: &BuildingGrid,
+    scratch: &mut crate::engine::PlacementScratch,
+) -> Vec<u32> {
+    let w = map.width;
+    let (cx, cy) = idx_xy(click_idx, w);
+    let cx_i = cx as i64;
+    let cy_i = cy as i64;
+    let mut out = Vec::new();
+    for_each_valid_land_structure_index(map, owner_id, click_idx, kind, existing, scratch, |idx| {
+        out.push(idx)
+    });
 
     out.sort_by(|&a, &b| {
         let (ax, ay) = idx_xy(a, w);
@@ -284,6 +316,27 @@ pub fn valid_land_structure_indices(
         da.cmp(&db).then_with(|| a.cmp(&b))
     });
     out
+}
+
+fn best_valid_land_structure_index(
+    map: &GameMap,
+    owner_id: u16,
+    click_idx: u32,
+    kind: BuildingKind,
+    existing: &BuildingGrid,
+    scratch: &mut crate::engine::PlacementScratch,
+) -> Option<u32> {
+    let w = map.width;
+    let (cx, cy) = idx_xy(click_idx, w);
+    let mut best: Option<(i64, u32)> = None;
+    for_each_valid_land_structure_index(map, owner_id, click_idx, kind, existing, scratch, |idx| {
+        let (x, y) = idx_xy(idx, w);
+        let candidate = (euclid_sq(x as i64, y as i64, cx as i64, cy as i64), idx);
+        if best.is_none_or(|current| candidate < current) {
+            best = Some(candidate);
+        }
+    });
+    best.map(|(_, idx)| idx)
 }
 
 /// Resolve final spawn tile index for `kind` at `click_idx`, or `None` if illegal.
@@ -302,6 +355,5 @@ pub fn resolve_structure_spawn_tile(
         return None;
     }
 
-    let valid = valid_land_structure_indices(map, owner_id, click_idx, kind, existing, scratch);
-    valid.first().copied()
+    best_valid_land_structure_index(map, owner_id, click_idx, kind, existing, scratch)
 }

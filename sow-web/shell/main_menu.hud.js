@@ -49,6 +49,20 @@
         return true;
     }
 
+    var gameCanvas = document.getElementById("blade");
+    if (gameCanvas) {
+        gameCanvas.addEventListener("contextmenu", function (event) {
+            event.preventDefault();
+            if (event.button !== 2) return;
+            var rect = gameCanvas.getBoundingClientRect();
+            var scale = window.devicePixelRatio || 1;
+            send("open_map_context_menu", {
+                x: (event.clientX - rect.left) * scale,
+                y: (event.clientY - rect.top) * scale
+            });
+        });
+    }
+
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
@@ -197,6 +211,10 @@
             + '        <p class="sow-hud__endgame-desc" id="sow-hud-surrender-desc">' + SOW_t("endgame.your_battle_will_end") + '</p>'
             + '      </div>'
             + '    </div>'
+            + '    <div class="sow-hud__endgame-stats" id="sow-hud-surrender-stats">'
+            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true">⚔</span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-surrender-kda">0 / 0 / 0</b></div>'
+            + '    </div>'
+            + '    <p class="sow-hud__endgame-desc" id="sow-hud-surrender-save-note">' + SOW_t("endgame.leave_rewards_saved") + '</p>'
             + '    <div class="sow-hud__endgame-actions">'
             + '      <button class="sow-hud__endgame-secondary" type="button" data-command="close_surrender_modal" id="sow-hud-surrender-cancel">' + SOW_t("endgame.cancel") + '</button>'
             + '      <button class="sow-hud__endgame-primary" type="button" data-command="confirm_surrender"><span aria-hidden="true">⌂</span> <span id="sow-hud-surrender-action-label">' + SOW_t("endgame.leave_match") + '</span></button>'
@@ -218,10 +236,6 @@
             + '    </div>'
             + '    <div class="sow-hud__endgame-stats" id="sow-hud-endgame-stats">'
             + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 14M18 4L4 18M5 5l3 3M19 5l-3 3M5 19l3-3M19 19l-3-3"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("profile.kda") + '</span><b id="sow-hud-endgame-kda">0 / 0 / 0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.1 5.1L19 10l-4.9 1.9L12 17l-2.1-5.1L5 10l4.9-1.9z"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.xp") + '</span><b id="sow-hud-endgame-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 4 4 4-6 4 6 4-4-2 10H6zM6 20h12"/></svg></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.leader_xp") + '</span><b id="sow-hud-endgame-leader-xp">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("crown") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.crowns") + '</span><b id="sow-hud-endgame-crowns">+0</b></div>'
-            + '      <div class="sow-hud__endgame-stat"><span class="sow-hud__endgame-stat-icon" aria-hidden="true"><img src="' + currencyAsset("laurel") + '" alt=""></span><span class="sow-hud__endgame-stat-label">' + SOW_t("endgame.laurels") + '</span><b id="sow-hud-endgame-laurels">+0</b></div>'
             + '    </div>'
             + '    <div class="sow-hud__endgame-store" id="sow-hud-endgame-store" aria-label="' + SOW_t("store.featured_skin") + '">'
             + '      <span class="sow-hud__endgame-store-icon" aria-hidden="true">✦</span>'
@@ -288,6 +302,9 @@
             surrender: document.getElementById("sow-hud-surrender-modal"),
             surrenderBanner: document.getElementById("sow-hud-surrender-banner"),
             surrenderDesc: document.getElementById("sow-hud-surrender-desc"),
+            surrenderStats: document.getElementById("sow-hud-surrender-stats"),
+            surrenderKda: document.getElementById("sow-hud-surrender-kda"),
+            surrenderSaveNote: document.getElementById("sow-hud-surrender-save-note"),
             surrenderPortrait: document.getElementById("sow-hud-surrender-portrait"),
             surrenderCancel: document.getElementById("sow-hud-surrender-cancel"),
             surrenderActionLabel: document.getElementById("sow-hud-surrender-action-label"),
@@ -300,10 +317,6 @@
             endgamePortrait: document.getElementById("sow-hud-endgame-portrait"),
             endgameStats: document.getElementById("sow-hud-endgame-stats"),
             endgameKda: document.getElementById("sow-hud-endgame-kda"),
-            endgameXp: document.getElementById("sow-hud-endgame-xp"),
-            endgameLeaderXp: document.getElementById("sow-hud-endgame-leader-xp"),
-            endgameCrowns: document.getElementById("sow-hud-endgame-crowns"),
-            endgameLaurels: document.getElementById("sow-hud-endgame-laurels"),
             endgameStore: document.getElementById("sow-hud-endgame-store"),
             endgameStoreName: document.getElementById("sow-hud-endgame-store-name"),
             endgameStoreCopy: document.getElementById("sow-hud-endgame-store-copy"),
@@ -506,14 +519,6 @@
         }
         var items = mapItems(mapMenu);
         var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + JSON.stringify(items);
-        if (!items.length) {
-            menu.replaceChildren();
-            menu.dataset.renderKey = "";
-            menu.classList.add("hidden");
-            mapMenuStateKey = stateKey;
-            mapMenuView = "root";
-            return false;
-        }
         if (stateKey !== mapMenuStateKey) {
             mapMenuStateKey = stateKey;
             mapMenuView = "root";
@@ -958,6 +963,13 @@
             if (hudRefs.surrenderDesc) hudRefs.surrenderDesc.textContent = tutorialActive
                 ? SOW_t("endgame.tutorial_description")
                 : (surrenderMessage || SOW_t("endgame.your_battle_will_end"));
+            var surrenderKda = hud.player_kda || {};
+            if (hudRefs.surrenderStats) hudRefs.surrenderStats.classList.toggle("hidden", tutorialActive);
+            if (hudRefs.surrenderKda) hudRefs.surrenderKda.textContent = [surrenderKda.kills || 0, surrenderKda.deaths || 0, surrenderKda.assists || 0].join(" / ");
+            if (hudRefs.surrenderSaveNote) {
+                hudRefs.surrenderSaveNote.textContent = SOW_t("endgame.leave_rewards_saved");
+                hudRefs.surrenderSaveNote.classList.toggle("hidden", tutorialActive);
+            }
             if (hudRefs.surrenderPortrait) {
                 hudRefs.surrenderPortrait.src = asset("gameplay/avatars/" + surrenderLeader.slug + ".webp");
                 hudRefs.surrenderPortrait.alt = leaderDisplayName(surrenderLeader) || SOW_t("hud.leader_avatar");
@@ -975,7 +987,6 @@
             hudRefs.endgame.classList.toggle("hidden", !isOver);
             if (isOver) {
                 var kda = hud.player_kda || {};
-                var rewards = hud.rewards || {};
                 var result = isWinner ? "victory" : "defeat";
                 var kdaText = [kda.kills || 0, kda.deaths || 0, kda.assists || 0].join(" / ");
                 if (hudRefs.endgameCard) hudRefs.endgameCard.dataset.result = result;
@@ -992,10 +1003,6 @@
                     hudRefs.endgamePortrait.alt = leaderDisplayName(activeLeader) || SOW_t("hud.leader_avatar");
                 }
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
-                if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);
-                if (hudRefs.endgameLeaderXp) hudRefs.endgameLeaderXp.textContent = "+" + (rewards.leader_xp || 0);
-                if (hudRefs.endgameCrowns) hudRefs.endgameCrowns.textContent = "+" + (rewards.crowns || 0);
-                if (hudRefs.endgameLaurels) hudRefs.endgameLaurels.textContent = "+" + (rewards.laurels || 0);
                 var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {

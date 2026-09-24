@@ -9,6 +9,9 @@ use web_time::Instant;
 const CLICK_MARKER_DURATION: f32 = 0.16;
 const NOTICE_FONT_SIZE: f32 = 14.0;
 const NOTICE_RISE: f32 = 6.5;
+const DEATH_NAMEPLATE_DURATION: f32 = 0.3;
+const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
+const DEATH_NAMEPLATE_RISE: f32 = 2.5;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 
@@ -23,8 +26,106 @@ pub(crate) fn render(
     now: Instant,
 ) {
     render_click_markers(text, ui, input, dev, sf, now);
+    render_death_nameplates(text, ui, input, dev, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, sf, now);
     render_floating_notices(text, ui, input, dev, sf, now);
+}
+
+fn render_death_nameplates(
+    text: &mut TextRenderer,
+    ui: &mut UiState,
+    input: &InputState,
+    dev: &DevConfig,
+    sf: f32,
+    now: Instant,
+) {
+    let sf = sf.max(0.01);
+    let zoom_scale = (input.camera_zoom / sf).clamp(0.2, 3.0);
+    let screen_w = input.screen_w / sf;
+    let screen_h = input.screen_h / sf;
+    let font_scale = dev.font_size_scale.max(0.1);
+    let font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale;
+    let char_spacing = dev.font_char_spacing.max(0.1);
+
+    ui.death_nameplates.retain(|animation| {
+        let elapsed = now.duration_since(animation.start_time).as_secs_f32();
+        let Some((t, eased, alpha)) = death_animation(elapsed) else {
+            return false;
+        };
+        if alpha <= 0.0 {
+            return true;
+        }
+
+        let center = world_to_screen(
+            animation.world_x,
+            animation.world_y - DEATH_NAMEPLATE_RISE * eased,
+            input,
+            sf,
+        );
+        let measure = text.measure_string(
+            &animation.name,
+            font_size * sf,
+            char_spacing,
+            INLINE_EMOJI_SCALE,
+        );
+        let name_width = measure.width / sf;
+        let name_height = measure.height / sf;
+        let icon_size = DEATH_NAMEPLATE_FONT_SIZE * 2.2 * animation.icon_scale * (1.0 - t * 0.2);
+        let flight = animation.flight_distance * zoom_scale * eased;
+        let icon_center = [
+            center[0] + animation.drift_x * zoom_scale * eased,
+            center[1] - name_height * 0.5 - icon_size * 0.5 - 4.0 - flight,
+        ];
+        let margin_x = (name_width * 0.5).max(icon_size * 0.5) + 8.0;
+        let margin_y = name_height + icon_size + flight + 8.0;
+        if center[0] < -margin_x
+            || center[0] > screen_w + margin_x
+            || center[1] < -margin_y
+            || center[1] > screen_h + margin_y
+        {
+            return true;
+        }
+
+        let color = [animation.color[0], animation.color[1], animation.color[2], alpha];
+        let text_style = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
+        let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
+        text.push_string(
+            &animation.name,
+            [center[0] * sf, (center[1] + name_height * 0.35) * sf],
+            font_size * sf,
+            color,
+            text_style,
+            (0.5, char_spacing, INLINE_EMOJI_SCALE),
+        );
+        text.push_emoji(
+            death_emoji(animation.by_nuke),
+            [icon_center[0] * sf, icon_center[1] * sf],
+            icon_size * sf * 0.5,
+            [1.0, 1.0, 1.0, alpha],
+            emoji_outline,
+        );
+        true
+    });
+}
+
+fn death_animation(elapsed: f32) -> Option<(f32, f32, f32)> {
+    if !elapsed.is_finite() || elapsed < 0.0 || elapsed >= DEATH_NAMEPLATE_DURATION {
+        return None;
+    }
+    let t = elapsed / DEATH_NAMEPLATE_DURATION;
+    let eased = t * (2.0 - t);
+    let alpha = if t < 0.1 {
+        t / 0.1
+    } else if t > 0.6 {
+        ((1.0 - t) / 0.4).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    Some((t, eased, alpha))
+}
+
+fn death_emoji(by_nuke: bool) -> &'static str {
+    if by_nuke { "☢️" } else { "🕊️" }
 }
 
 fn render_click_markers(
@@ -303,5 +404,20 @@ mod tests {
     #[test]
     fn spring_starts_at_zero() {
         assert_eq!(spring_overshoot(0.0), 0.0);
+    }
+
+    #[test]
+    fn death_animation_eases_fades_and_expires_at_300ms() {
+        let start = death_animation(0.0).unwrap();
+        let middle = death_animation(0.15).unwrap();
+        assert_eq!(start, (0.0, 0.0, 0.0));
+        assert_eq!(middle, (0.5, 0.75, 1.0));
+        assert!(death_animation(0.3).is_none());
+    }
+
+    #[test]
+    fn death_animation_uses_dove_or_nuke_emoji() {
+        assert_eq!(death_emoji(false), "🕊️");
+        assert_eq!(death_emoji(true), "☢️");
     }
 }

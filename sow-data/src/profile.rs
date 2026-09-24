@@ -40,6 +40,9 @@ pub struct RewardReceipt {
     /// reward is applied.
     #[serde(default)]
     pub presented_at: Option<u64>,
+    /// Replay verification is independent of presentation and settlement.
+    #[serde(default)]
+    pub verification_status: Option<ReplayVerificationStatus>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -57,6 +60,8 @@ pub struct AchievementView {
 pub struct LeaderCareerStats {
     pub matches_played: u32,
     pub wins: u32,
+    #[serde(default)]
+    pub verified_wins: u32,
     pub kills: u32,
     pub deaths: u32,
     pub assists: u32,
@@ -106,6 +111,48 @@ pub struct MatchRecord {
     pub participants: Vec<MatchParticipantRecord>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplayVerificationStatus {
+    #[default]
+    Pending,
+    Verified,
+    Rejected,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct MatchStartRecord {
+    pub match_id: String,
+    pub player_ids: Vec<String>,
+    pub metadata: serde_json::Value,
+    #[serde(default)]
+    pub replay_status: ReplayVerificationStatus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct VerifiedMatchResult {
+    pub match_id: String,
+    pub duration_seconds: u32,
+    pub winner_player_id: Option<u16>,
+    pub winning_team: Option<String>,
+    pub participants: Vec<VerifiedMatchParticipant>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct VerifiedMatchParticipant {
+    pub player_id: u16,
+    pub account_id: String,
+    pub leader: Option<String>,
+    pub team: Option<String>,
+    pub won: bool,
+    pub kills: u32,
+    pub deaths: u32,
+    pub assists: u32,
+    pub players_defeated: u32,
+    pub empires_defeated: u32,
+    pub tribes_defeated: u32,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct SeasonRating {
     pub schema_version: u8,
@@ -139,6 +186,8 @@ pub struct PublicProfileIndex {
     pub account_id: String,
     pub display_name: String,
     pub kind: String,
+    #[serde(default)]
+    pub verified_wins: u32,
     pub updated_at: u64,
 }
 

@@ -562,119 +562,6 @@ fn redis_shared() -> Arc<std::sync::Mutex<Option<redis::Connection>>> {
         .clone()
 }
 
-fn log_player_exit(con: &mut redis::Connection, match_id: u64, account_id: &str) {
-    let key = format!("sow:match:{match_id}:exits");
-    let _: Result<(), _> = con
-        .rpush(&key, account_id)
-        .and_then(|()| con.expire(&key, 3600));
-}
-
-struct MatchPlayerStats {
-    kills: u32,
-    deaths: u32,
-    assists: u32,
-    players_defeated: u32,
-    empires_defeated: u32,
-    tribes_defeated: u32,
-    leader: Option<String>,
-}
-
-fn log_player_stats(
-    con: &mut redis::Connection,
-    match_id: u64,
-    account_id: &str,
-    stats: MatchPlayerStats,
-) {
-    let key = format!("sow:match:{match_id}:stats:{account_id}");
-    let mut fields = vec![
-        ("kills", stats.kills.to_string()),
-        ("deaths", stats.deaths.to_string()),
-        ("assists", stats.assists.to_string()),
-        ("players_defeated", stats.players_defeated.to_string()),
-        ("empires_defeated", stats.empires_defeated.to_string()),
-        ("tribes_defeated", stats.tribes_defeated.to_string()),
-    ];
-    if let Some(leader) = stats.leader {
-        fields.push(("leader", leader));
-    }
-    let _: Result<(), _> = con
-        .hset_multiple(&key, &fields)
-        .and_then(|()| con.expire(&key, 3600));
-}
-
-fn record_client_stats(lobby: &LobbyState, player_id: u16, stats: MatchPlayerStats) {
-    let Some(account_id) = lobby
-        .tracker
-        .lock()
-        .unwrap()
-        .player_accounts
-        .get(&player_id)
-        .cloned()
-    else {
-        return;
-    };
-    let guard = redis_shared();
-    let mut guard = guard.lock().unwrap();
-    if let Some(ref mut con) = *guard {
-        let kda = (stats.kills, stats.deaths, stats.assists);
-        log_player_stats(con, lobby.id, &account_id, stats);
-        info!(
-            "Logged stats for player {player_id} (account {account_id}): K/D/A {}/{}/{}",
-            kda.0, kda.1, kda.2
-        );
-    }
-}
-
-fn record_match_report(
-    lobby: &LobbyState,
-    player_id: u16,
-    winner_player_id: Option<u16>,
-    winning_team: Option<Team>,
-    tick: u64,
-) {
-    let Some(account_id) = lobby
-        .tracker
-        .lock()
-        .unwrap()
-        .player_accounts
-        .get(&player_id)
-        .cloned()
-    else {
-        return;
-    };
-    let key = format!("sow:match:{}:report:{}", lobby.id, account_id);
-    let fields = vec![
-        (
-            "winner_player_id",
-            winner_player_id
-                .map(|value| value.to_string())
-                .unwrap_or_default(),
-        ),
-        (
-            "winning_team",
-            winning_team
-                .map(|value| format!("{value:?}"))
-                .unwrap_or_default(),
-        ),
-        ("tick", tick.to_string()),
-    ];
-    let guard = redis_shared();
-    let mut guard = guard.lock().unwrap();
-    if let Some(ref mut con) = *guard {
-        let result: redis::RedisResult<()> = con.hset_multiple(&key, &fields);
-        if let Err(error) = result {
-            error!("[REDIS] match report write failed key={key}: {error}");
-        } else {
-            let expire_result: redis::RedisResult<()> = con.expire(&key, 3600);
-            if let Err(error) = expire_result {
-                error!("[REDIS] match report TTL failed key={key}: {error}");
-            }
-        }
-    } else {
-        error!("[REDIS] match report unavailable for lobby {}", lobby.id);
-    }
-}
-
 enum ReplayCommand {
     Append(Turn),
     Finalize {
@@ -1259,14 +1146,12 @@ fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<Replay
 }
 
 struct MatchTracker {
-    lobby_id: u64,
     player_accounts: HashMap<u16, String>,
     human_accounts: HashSet<String>,
     in_match: HashSet<u16>,
     logged_exits: HashSet<String>,
     finalized: bool,
     tracked: bool,
-    redis_con: Arc<std::sync::Mutex<Option<redis::Connection>>>,
     lobby_json: String,
 }
 
@@ -1280,14 +1165,7 @@ impl MatchTracker {
         self.in_match.remove(&player_id);
         if let Some(account_id) = self.player_accounts.get(&player_id).cloned() {
             if self.logged_exits.insert(account_id.clone()) {
-                let mut guard = self.redis_con.lock().unwrap();
-                if let Some(ref mut con) = *guard {
-                    log_player_exit(con, self.lobby_id, &account_id);
-                    info!(
-                        "Logged exit for player {player_id} (account {account_id}) in match {}",
-                        self.lobby_id
-                    );
-                }
+                info!("Recorded exit for player {player_id} (account {account_id})");
                 if self.human_accounts.contains(&account_id) {
                     settlements.push(account_id);
                 }
@@ -1297,14 +1175,7 @@ impl MatchTracker {
             if let Some(winner_id) = self.in_match.iter().copied().next() {
                 if let Some(winner_acc) = self.player_accounts.get(&winner_id).cloned() {
                     if self.logged_exits.insert(winner_acc.clone()) {
-                        let mut guard = self.redis_con.lock().unwrap();
-                        if let Some(ref mut con) = *guard {
-                            log_player_exit(con, self.lobby_id, &winner_acc);
-                            info!(
-                                "Logged winner player {winner_id} (account {winner_acc}) in match {}",
-                                self.lobby_id
-                            );
-                        }
+                        info!("Recorded remaining player {winner_id} (account {winner_acc})");
                         if self.human_accounts.contains(&winner_acc) {
                             settlements.push(winner_acc);
                         }
@@ -1993,17 +1864,14 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState>
     let clients = Arc::new(Mutex::new(HashMap::new()));
     let journal = ReplayJournal::new(body.lobby_id);
     let (ev_tx, ev_rx) = mpsc::channel::<RelayEvent>(EVENT_CHANNEL);
-    let redis_con = redis_shared();
     let tracked = !human_accounts.is_empty();
     let tracker = Arc::new(std::sync::Mutex::new(MatchTracker {
-        lobby_id: body.lobby_id,
         player_accounts,
         human_accounts,
         in_match: external_player_ids,
         logged_exits: HashSet::new(),
         finalized: false,
         tracked,
-        redis_con: redis_con.clone(),
         lobby_json: lobby_json.clone(),
     }));
 
@@ -2741,23 +2609,6 @@ async fn ws_task(
                                             let _ = direct_tx.try_send(Arc::new(json));
                                         }
                                     }
-                                    ClientMessage::SubmitStatsWithLeader { kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated, leader } => {
-                                        if let (Some(lobby), Some(pid)) = (&my_lobby, my_player_id) {
-                                            record_client_stats(lobby, pid, MatchPlayerStats {
-                                                kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated,
-                                                leader: Some(leader),
-                                            });
-                                        }
-                                    }
-                                    ClientMessage::SubmitMatchReport { kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated, leader, winner_player_id, winning_team, tick } => {
-                                        if let (Some(lobby), Some(pid)) = (&my_lobby, my_player_id) {
-                                            record_client_stats(lobby, pid, MatchPlayerStats {
-                                                kills, deaths, assists, players_defeated, empires_defeated, tribes_defeated,
-                                                leader: Some(leader),
-                                            });
-                                            record_match_report(lobby, pid, winner_player_id, winning_team, tick);
-                                        }
-                                    }
                                     _ => {}
                                 }
                             }
@@ -3161,7 +3012,6 @@ mod dispatcher_tests {
         let other = "fedcba9876543210fedcba9876543210".to_string();
         let third = "00112233445566778899aabbccddeeff".to_string();
         let mut tracker = MatchTracker {
-            lobby_id: 7,
             player_accounts: HashMap::from([
                 (1, human.clone()),
                 (2, other.clone()),
@@ -3172,7 +3022,6 @@ mod dispatcher_tests {
             logged_exits: HashSet::new(),
             finalized: false,
             tracked: true,
-            redis_con: Arc::new(StdMutex::new(None)),
             lobby_json: "{}".to_string(),
         };
         assert_eq!(tracker.record_exit(1), vec![human.clone()]);

@@ -7,6 +7,7 @@ pub(crate) struct EliminationEventInfo<'a> {
     pub pos: (u32, u32),
     pub gold_bounty: u32,
     pub assists: &'a [(u16, u32)],
+    pub by_nuke: bool,
 }
 
 impl SowApp {
@@ -20,6 +21,7 @@ impl SowApp {
     ) {
         let player_id = info.player_id;
         let conqueror_id = info.conqueror_id;
+        let victim = snap.players.iter().find(|p| p.id == player_id);
         let (elimination_x, elimination_y) = info.pos;
         let mut wx = 0.5;
         let mut wy = 0.5;
@@ -31,7 +33,7 @@ impl SowApp {
             tile_found = true;
         }
 
-        if let Some(target) = snap.players.iter().find(|p| p.id == player_id)
+        if let Some(target) = victim
             && !tile_found
             && (target.centroid_x > 0.001 || target.centroid_y > 0.001)
         {
@@ -49,17 +51,41 @@ impl SowApp {
             }
         }
 
-        let victim_type = snap
-            .players
-            .iter()
-            .find(|p| p.id == player_id)
+        let victim_type = victim
             .map(|p| p.player_type)
             .unwrap_or(sow_core::player::PlayerType::Bot);
+        let name = victim
+            .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
+            .unwrap_or_else(|| format!("Player {player_id}"));
+        let color = victim.map_or([1.0; 3], |p| {
+            readable_death_color(
+                p.team
+                    .map_or(p.color, sow_core::player::team_territory_rgb),
+            )
+        });
 
         let seed = (player_id as u32)
             .wrapping_mul(2654435761)
             .wrapping_add(elimination_x.wrapping_mul(1597334977))
             .wrapping_add(elimination_y.wrapping_mul(3512401961));
+
+        let drift_x = (((seed & 0xff) as f32 / 255.0) - 0.5) * 8.0;
+        let flight_distance = 15.0 + ((seed >> 8 & 0xff) as f32 / 255.0) * 15.0;
+        let icon_scale = 0.8 + ((seed >> 16 & 0xff) as f32 / 255.0) * 0.6;
+        crate::app::DeathNameplateAnimation::enqueue(
+            &mut self.ui.death_nameplates,
+            crate::app::DeathNameplateAnimation {
+                name,
+                color,
+                world_x: wx,
+                world_y: wy,
+                start_time: now_instant,
+                by_nuke: info.by_nuke,
+                drift_x,
+                flight_distance,
+                icon_scale,
+            },
+        );
 
         self.sfx.queue_elimination(
             crate::player_sound_type(victim_type),
@@ -69,7 +95,7 @@ impl SowApp {
 
         if conqueror_id == my_id
             && my_id != 0
-            && let Some(victim) = snap.players.iter().find(|p| p.id == player_id)
+            && let Some(victim) = victim
         {
             use sow_core::player::PlayerType;
             match victim.player_type {
@@ -108,4 +134,18 @@ impl SowApp {
             }
         }
     }
+}
+
+fn readable_death_color(rgb: [f32; 3]) -> [f32; 3] {
+    let luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    let factor = if luminance < 0.60 {
+        (0.60 - luminance) / (1.0 - luminance).max(0.001)
+    } else {
+        0.0
+    };
+    [
+        rgb[0] + (1.0 - rgb[0]) * factor,
+        rgb[1] + (1.0 - rgb[1]) * factor,
+        rgb[2] + (1.0 - rgb[2]) * factor,
+    ]
 }
