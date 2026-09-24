@@ -79,12 +79,12 @@
           <div class="hero-frame">
             <div class="hologram-scanlines" aria-hidden="true"></div>
             <div class="hologram-glitch" aria-hidden="true"></div>
-            <img data-hero-image src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar leader artwork"
+            <img data-hero-image src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar leader artwork" data-i18n="site.leader_artwork" data-i18n-values='{"name":"heroes.leader_caesar_name"}' data-i18n-attr="alt"
               fetchpriority="high" decoding="async">
             <div class="hero-frame-gradient"></div>
             <div class="hero-leader-caption">
-              <h2 data-hero-name>Julius Caesar</h2>
-              <p data-hero-civ>Roman Empire</p>
+              <h2 data-hero-name data-i18n="heroes.leader_caesar_name">Julius Caesar</h2>
+              <p data-hero-civ data-i18n="heroes.civilization_rome">Roman Empire</p>
             </div>
           </div>
           <div class="leader-rail" data-leader-rail aria-label="Choose a leader" data-i18n="site.choose_leader" data-i18n-attr="aria-label"></div>
@@ -149,132 +149,133 @@
         <div class="leaders-layout">
           <div class="leaders-grid" data-leaders-grid>
             <button class="leader-card is-active" type="button" aria-pressed="true" aria-label="Inspect Julius Caesar"
-              data-leader-id="caesar" data-name="Julius Caesar" data-civ="Roman Empire" data-code="ROM"
+              data-leader-id="caesar" data-name="Julius Caesar" data-civ="Roman Empire" data-civ-key="heroes.civilization_rome" data-code="ROM"
               data-ability-key="site.leader_caesar_ability" data-description-key="site.leader_caesar_description" data-image="caesar">
               <img src="/assets/shell/leaders/caesar_desktop.webp"
                 srcset="/assets/shell/leaders/caesar_mobile.webp 600w, /assets/shell/leaders/caesar_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Julius Caesar Roman Empire artwork"
                 loading="lazy">
-              <span class="leader-card-info"><b>Julius Caesar</b><span>Roman Empire</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_caesar_name">Julius Caesar</b><span data-i18n="heroes.civilization_rome">Roman Empire</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Cleopatra VII"
-              data-leader-id="cleopatra" data-name="Cleopatra VII" data-civ="Egyptian Empire" data-code="EGY"
+              data-leader-id="cleopatra" data-name="Cleopatra VII" data-civ="Egyptian Empire" data-civ-key="heroes.civilization_egypt" data-code="EGY"
               data-ability-key="site.leader_cleopatra_ability" data-description-key="site.leader_cleopatra_description"
               data-image="cleopatra">
               <img src="/assets/shell/leaders/cleopatra_desktop.webp"
                 srcset="/assets/shell/leaders/cleopatra_mobile.webp 600w, /assets/shell/leaders/cleopatra_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
                 alt="Cleopatra VII Egyptian Empire artwork" loading="lazy">
-              <span class="leader-card-info"><b>Cleopatra VII</b><span>Egyptian Empire</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_cleopatra_name">Cleopatra VII</b><span data-i18n="heroes.civilization_egypt">Egyptian Empire</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Ragnar Lothbrok"
-              data-leader-id="ragnar" data-name="Ragnar Lothbrok" data-civ="Norse Kingdom" data-code="NOR"
+              data-leader-id="ragnar" data-name="Ragnar Lothbrok" data-civ="Norse Kingdom" data-civ-key="heroes.civilization_vikings" data-code="NOR"
               data-ability-key="site.leader_ragnar_ability" data-description-key="site.leader_ragnar_description" data-image="ragnar">
               <img src="/assets/shell/leaders/ragnar_desktop.webp"
                 srcset="/assets/shell/leaders/ragnar_mobile.webp 600w, /assets/shell/leaders/ragnar_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
                 alt="Ragnar Lothbrok Norse Kingdom artwork" loading="lazy">
-              <span class="leader-card-info"><b>Ragnar Lothbrok</b><span>Norse Kingdom</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_ragnar_name">Ragnar Lothbrok</b><span data-i18n="heroes.civilization_vikings">Norse Kingdom</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Sun Tzu"
-              data-leader-id="suntzu" data-name="Sun Tzu" data-civ="Chinese Empire" data-code="CHN"
+              data-leader-id="suntzu" data-name="Sun Tzu" data-civ="Chinese Empire" data-civ-key="heroes.civilization_china" data-code="CHN"
               data-ability-key="site.leader_suntzu_ability" data-description-key="site.leader_suntzu_description"
               data-image="sun_tzu">
               <img src="/assets/shell/leaders/sun_tzu_desktop.webp"
                 srcset="/assets/shell/leaders/sun_tzu_mobile.webp 600w, /assets/shell/leaders/sun_tzu_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Sun Tzu Chinese Empire artwork"
                 loading="lazy">
-              <span class="leader-card-info"><b>Sun Tzu</b><span>Chinese Empire</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_suntzu_name">Sun Tzu</b><span data-i18n="heroes.civilization_china">Chinese Empire</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Alexander the Great"
-              data-leader-id="alexander" data-name="Alexander the Great" data-civ="Macedonian Empire" data-code="MAC"
+              data-leader-id="alexander" data-name="Alexander the Great" data-civ="Macedonian Empire" data-civ-key="heroes.civilization_macedon" data-code="MAC"
               data-ability-key="site.leader_alexander_ability" data-description-key="site.leader_alexander_description"
               data-image="alexander">
               <img src="/assets/shell/leaders/alexander_desktop.webp"
                 srcset="/assets/shell/leaders/alexander_mobile.webp 600w, /assets/shell/leaders/alexander_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
                 alt="Alexander the Great Macedonian Empire artwork" loading="lazy">
-              <span class="leader-card-info"><b>Alexander</b><span>Macedonian Empire</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_alexander_name">Alexander the Great</b><span data-i18n="heroes.civilization_macedon">Macedonian Empire</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Genghis Khan"
-              data-leader-id="genghiskhan" data-name="Genghis Khan" data-civ="Mongol Horde" data-code="MON"
+              data-leader-id="genghiskhan" data-name="Genghis Khan" data-civ="Mongol Horde" data-civ-key="heroes.civilization_mongols" data-code="MON"
               data-ability-key="site.leader_genghiskhan_ability" data-description-key="site.leader_genghiskhan_description"
               data-image="genghis_khan">
               <img src="/assets/shell/leaders/genghis_khan_desktop.webp"
                 srcset="/assets/shell/leaders/genghis_khan_mobile.webp 600w, /assets/shell/leaders/genghis_khan_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Genghis Khan Mongol Horde artwork"
                 loading="lazy">
-              <span class="leader-card-info"><b>Genghis Khan</b><span>Mongol Horde</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_genghiskhan_name">Genghis Khan</b><span data-i18n="heroes.civilization_mongols">Mongol Horde</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Richard the Lionheart"
-              data-leader-id="richard" data-name="Richard the Lionheart" data-civ="Angevin Empire" data-code="ENG"
+              data-leader-id="richard" data-name="Richard the Lionheart" data-civ="Angevin Empire" data-civ-key="heroes.civilization_angevin" data-code="ENG"
               data-ability-key="site.leader_richard_ability" data-description-key="site.leader_richard_description"
               data-image="richard_the_lionheart">
               <img src="/assets/shell/leaders/richard_the_lionheart_desktop.webp"
                 srcset="/assets/shell/leaders/richard_the_lionheart_mobile.webp 600w, /assets/shell/leaders/richard_the_lionheart_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
                 alt="Richard the Lionheart Angevin Empire artwork" loading="lazy">
-              <span class="leader-card-info"><b>Richard Lionheart</b><span>Angevin Empire</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_richard_name">Richard the Lionheart</b><span data-i18n="heroes.civilization_angevin">Angevin Empire</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Vercingetorix"
-              data-leader-id="vercingetorix" data-name="Vercingetorix" data-civ="Gallic Tribes" data-code="GAL"
+              data-leader-id="vercingetorix" data-name="Vercingetorix" data-civ="Gallic Tribes" data-civ-key="heroes.civilization_gallic" data-code="GAL"
               data-ability-key="site.leader_vercingetorix_ability" data-description-key="site.leader_vercingetorix_description"
               data-image="vercingetorix">
               <img src="/assets/shell/leaders/vercingetorix_desktop.webp"
                 srcset="/assets/shell/leaders/vercingetorix_mobile.webp 600w, /assets/shell/leaders/vercingetorix_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Vercingetorix Gallic Tribes artwork"
                 loading="lazy">
-              <span class="leader-card-info"><b>Vercingetorix</b><span>Gallic Tribes</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_vercingetorix_name">Vercingetorix</b><span data-i18n="heroes.civilization_gallic">Gallic Tribes</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Boudica"
-              data-leader-id="boudica" data-name="Boudica" data-civ="Iceni Kingdom" data-code="ICE"
+              data-leader-id="boudica" data-name="Boudica" data-civ="Iceni Kingdom" data-civ-key="heroes.civilization_iceni" data-code="ICE"
               data-ability-key="site.leader_boudica_ability" data-description-key="site.leader_boudica_description" data-image="boudica">
               <img src="/assets/shell/leaders/boudica_desktop.webp"
                 srcset="/assets/shell/leaders/boudica_mobile.webp 600w, /assets/shell/leaders/boudica_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="Boudica Iceni Kingdom artwork"
                 loading="lazy">
-              <span class="leader-card-info"><b>Boudica</b><span>Iceni Kingdom</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_boudica_name">Boudica</b><span data-i18n="heroes.civilization_iceni">Iceni Kingdom</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Lady Six Sky"
-              data-leader-id="ladysixsky" data-name="Lady Six Sky" data-civ="Maya Civilization" data-code="MAY"
+              data-leader-id="ladysixsky" data-name="Lady Six Sky" data-civ="Maya Civilization" data-civ-key="heroes.civilization_maya" data-code="MAY"
               data-ability-key="site.leader_ladysixsky_ability" data-description-key="site.leader_ladysixsky_description"
               data-image="lady_six_sky">
               <img src="/assets/shell/leaders/lady_six_sky_desktop.webp"
                 srcset="/assets/shell/leaders/lady_six_sky_mobile.webp 600w, /assets/shell/leaders/lady_six_sky_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
                 alt="Lady Six Sky Maya Civilization artwork" loading="lazy">
-              <span class="leader-card-info"><b>Lady Six Sky</b><span>Maya Civilization</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_ladysixsky_name">Lady Six Sky</b><span data-i18n="heroes.civilization_maya">Maya Civilization</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect King Leonidas"
-              data-leader-id="leonidas" data-name="King Leonidas" data-civ="Sparta" data-code="SPA"
+              data-leader-id="leonidas" data-name="King Leonidas" data-civ="Sparta" data-civ-key="heroes.civilization_sparta" data-code="SPA"
               data-ability-key="site.leader_leonidas_ability" data-description-key="site.leader_leonidas_description"
               data-image="leonidas">
               <img src="/assets/shell/leaders/leonidas_desktop.webp"
                 srcset="/assets/shell/leaders/leonidas_mobile.webp 600w, /assets/shell/leaders/leonidas_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw" alt="King Leonidas Sparta artwork"
                 loading="lazy">
-              <span class="leader-card-info"><b>King Leonidas</b><span>Sparta</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_leonidas_name">King Leonidas</b><span data-i18n="heroes.civilization_sparta">Sparta</span></span>
             </button>
             <button class="leader-card" type="button" aria-pressed="false" aria-label="Inspect Napoleon Bonaparte"
-              data-leader-id="napoleon" data-name="Napoleon Bonaparte" data-civ="Kingdom of France" data-code="FRA"
+              data-leader-id="napoleon" data-name="Napoleon Bonaparte" data-civ="Kingdom of France" data-civ-key="heroes.civilization_france" data-code="FRA"
               data-ability-key="site.leader_napoleon_ability" data-description-key="site.leader_napoleon_description"
               data-image="napoleon">
               <img src="/assets/shell/leaders/napoleon_desktop.webp"
                 srcset="/assets/shell/leaders/napoleon_mobile.webp 600w, /assets/shell/leaders/napoleon_desktop.webp 1200w"
                 sizes="(max-width: 479px) 45vw, (max-width: 700px) 30vw, 20vw"
                 alt="Napoleon Bonaparte Kingdom of France artwork" loading="lazy">
-              <span class="leader-card-info"><b>Napoleon</b><span>Kingdom of France</span></span>
+              <span class="leader-card-info"><b data-i18n="heroes.leader_napoleon_name">Napoleon Bonaparte</b><span data-i18n="heroes.civilization_france">Kingdom of France</span></span>
             </button>
           </div>
           <aside class="leader-detail" data-leader-detail aria-live="polite">
             <div class="detail-image"><img data-detail-image src="/assets/shell/leaders/caesar_desktop.webp"
                 srcset="/assets/shell/leaders/caesar_mobile.webp 600w, /assets/shell/leaders/caesar_desktop.webp 1200w"
-                sizes="(max-width: 700px) calc(100vw - 30px), 320px" alt="Julius Caesar artwork" loading="lazy"
+                sizes="(max-width: 700px) calc(100vw - 30px), 320px" alt="Julius Caesar artwork" data-i18n="site.leader_artwork" data-i18n-values='{"name":"heroes.leader_caesar_name"}' data-i18n-attr="alt" loading="lazy"
                 decoding="async"></div>
             <div class="detail-body">
               <p class="mono-label" data-detail-code>ROM · 01</p>
-              <h3 data-detail-name>Julius Caesar</h3>
-              <p data-detail-civ>Roman Empire</p>
+              <h3 data-detail-name data-i18n="heroes.leader_caesar_name">Julius Caesar</h3>
+              <p class="detail-historical" data-detail-historical hidden></p>
+              <p data-detail-civ data-i18n="heroes.civilization_rome">Roman Empire</p>
               <div class="detail-rule"></div>
               <p class="mono-label" data-i18n="site.command_trait">COMMAND TRAIT</p>
               <p class="detail-ability" data-detail-ability>Legions of Rome</p>

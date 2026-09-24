@@ -35,7 +35,7 @@ pub use metadata_db::{
 pub use profile::{
     MatchParticipantRecord, MatchRecord, PublicLeaderSummary, PublicLeaderboardEntry,
     PublicMatchDetail, PublicMatchSummary, PublicProfileIndex, PublicProfileSummary,
-    PublicProfileView, PublicRatingView, SeasonRating, SeasonRecord,
+    PublicProfileView, PublicRatingView, PublicVictoryLeaderboardEntry, SeasonRating, SeasonRecord,
 };
 pub use tribes::{
     EMPIRE_EMOJIS, FALLBACK_TRIBES, HISTORICAL_CIVILIZATIONS, TRIBE_ANIMALS, animal_for_id,

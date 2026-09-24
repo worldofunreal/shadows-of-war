@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 
-use crate::map::{CARDINAL_NEIGHBOR_DELTAS, GameMap};
+use crate::map::{CARDINAL_NEIGHBOR_DELTAS, GameMap, MapTile};
 
 #[inline]
 fn for_each_cardinal_neighbor(
@@ -36,9 +36,30 @@ fn for_each_cardinal_neighbor(
 pub struct WaterComponents {
     pub components: Vec<u32>,
     pub count: u32,
+    /// Land shoreline indices grouped by their connected water component.
+    /// Terrain is static, so this replaces a map-sized BFS for neutral targets.
+    pub(crate) shoreline_tiles: Vec<Vec<u32>>,
 }
 
 impl WaterComponents {
+    fn from_components(components: Vec<u32>, count: u32, terrain: &[MapTile]) -> Self {
+        let mut shoreline_tiles = vec![Vec::new(); count as usize + 1];
+        for (idx, &component) in components.iter().enumerate() {
+            if component == 0 {
+                continue;
+            }
+            let tile = terrain[idx];
+            if tile.is_land() && tile.is_shoreline() {
+                shoreline_tiles[component as usize].push(idx as u32);
+            }
+        }
+        Self {
+            components,
+            count,
+            shoreline_tiles,
+        }
+    }
+
     /// One-shot flood-fill (4-connectivity) over water tiles, followed by shore
     /// inheritance. `O(width * height)` time, `O(width * height)` memory.
     pub fn compute<F: FnMut(f32)>(map: &GameMap, mut on_progress: F) -> Self {
@@ -104,7 +125,7 @@ impl WaterComponents {
             components[idx] = best;
         }
 
-        Self { components, count }
+        Self::from_components(components, count, &map.terrain)
     }
 
     #[inline]
@@ -169,10 +190,11 @@ impl WaterComponentsBuilder {
             let components = std::mem::take(&mut self.components);
             return (
                 1.0,
-                Some(WaterComponents {
+                Some(WaterComponents::from_components(
                     components,
-                    count: self.count,
-                }),
+                    self.count,
+                    &self.terrain,
+                )),
             );
         }
 
@@ -220,10 +242,11 @@ impl WaterComponentsBuilder {
             let components = std::mem::take(&mut self.components);
             return (
                 1.0,
-                Some(WaterComponents {
+                Some(WaterComponents::from_components(
                     components,
-                    count: self.count,
-                }),
+                    self.count,
+                    &self.terrain,
+                )),
             );
         }
 
@@ -307,6 +330,10 @@ mod incremental_tests {
             };
             assert_eq!(actual.components, expected.components, "budget={budget}");
             assert_eq!(actual.count, expected.count, "budget={budget}");
+            assert_eq!(
+                actual.shoreline_tiles, expected.shoreline_tiles,
+                "budget={budget}"
+            );
         }
     }
 

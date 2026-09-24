@@ -240,6 +240,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 .sow-menu__top-actions {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -331,11 +332,42 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.sow-menu__gems {
+    color: #c084fc;
+    font-weight: 800;
+    text-shadow: 0 0 8px rgba(192, 132, 252, 0.35);
+    gap: 6px;
+    border-inline-start: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .sow-menu__currency-icon {
     width: 19px;
     height: 19px;
     flex: 0 0 auto;
     object-fit: contain;
+}
+
+.sow-menu__reward-toast {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    padding: 7px 11px;
+    border: 1px solid rgba(243, 177, 43, 0.45);
+    border-radius: 999px;
+    background: rgba(14, 17, 23, 0.94);
+    color: var(--sow-gold-bright);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-5px);
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.sow-menu__reward-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .sow-menu__signin,

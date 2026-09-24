@@ -183,9 +183,6 @@
         if (typeof window.CustomEvent === "function") {
             window.dispatchEvent(new CustomEvent("sow:locale-change", { detail: { locale: tag } }));
         }
-        if (typeof window.SOW_menu_locale_changed === "function") {
-            window.SOW_menu_locale_changed(tag);
-        }
     }
 
     function activate(locale, strings, notify) {

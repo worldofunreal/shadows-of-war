@@ -225,6 +225,7 @@ impl SowEngine {
         }
         if has_removals {
             self.attacks.sort_unstable_by_key(|a| a.id);
+            self.ai_attack_index_dirty = true;
         }
 
         if remaining < self.state.config.attack_cost_neutral {

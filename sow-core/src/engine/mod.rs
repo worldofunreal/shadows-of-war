@@ -17,6 +17,10 @@ pub struct PlacementScratch {
     pub stamp: u32,
     pub queue: Vec<u32>,
     pub border_scratch: Vec<u32>,
+    pub interior_scratch: Vec<(i32, i32)>,
+    pub neighbor_scratch: Vec<u16>,
+    pub candidates_examined: u64,
+    pub building_checks: u64,
 }
 
 impl Default for PlacementScratch {
@@ -26,6 +30,10 @@ impl Default for PlacementScratch {
             stamp: 0,
             queue: Vec::new(),
             border_scratch: Vec::new(),
+            interior_scratch: Vec::new(),
+            neighbor_scratch: Vec::new(),
+            candidates_examined: 0,
+            building_checks: 0,
         }
     }
 }
@@ -43,8 +51,14 @@ pub type SeaLaneCalcState = (usize, Vec<crate::sea_lane::SeaLane>, Vec<(u64, u32
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct BotWorkCounters {
     pub border_cells_examined: u64,
+    pub border_blocks_examined: u64,
+    pub neighbor_cells_examined: u64,
+    pub placement_candidates_examined: u64,
+    pub placement_building_checks: u64,
     pub naval_routes_calculated: u64,
     pub attack_entries_scanned_last_update: u64,
+    pub nuke_buildings_examined: u64,
+    pub nuke_sam_checks: u64,
 }
 
 #[derive(Clone)]
@@ -79,7 +93,11 @@ pub struct SowEngine {
     pub mirv_launches: std::collections::HashMap<u16, u32>,
     pub recent_nuke_targets: Vec<(u16, u32, u64)>,
     pub mirv_cooldown_targets: std::collections::HashMap<u16, u64>,
+    pub(crate) bot_route_cache: Vec<(PlayerId, u32, crate::warp_fleet::FleetRoute)>,
+    pub(crate) bot_sam_tiles_cache: Option<Vec<(u32, u16)>>,
+    pub(crate) bot_crown_leader: Option<u16>,
     pub(crate) ai_attack_index: Vec<Vec<usize>>,
+    pub(crate) ai_attack_index_dirty: bool,
     pub(crate) bot_work: BotWorkCounters,
 }
 
@@ -88,17 +106,17 @@ impl SowEngine {
         state.map.compute_shorelines();
         let w = state.map.width;
         let h = state.map.height;
-        let area = (w * h) as usize;
 
         let mut path_scratch = WaterPathfinderScratch::default();
         if w > 0 && h > 0 {
             path_scratch.astar.ensure_capacity(&state.map);
-            path_scratch.bfs_visited.resize(area, 0);
         }
 
         let mut placement_scratch = PlacementScratch::default();
         placement_scratch.queue.reserve(1024);
         placement_scratch.border_scratch.reserve(256);
+        placement_scratch.interior_scratch.reserve(8);
+        placement_scratch.neighbor_scratch.reserve(64);
 
         Self {
             state,
@@ -128,7 +146,11 @@ impl SowEngine {
             mirv_launches: std::collections::HashMap::new(),
             recent_nuke_targets: Vec::new(),
             mirv_cooldown_targets: std::collections::HashMap::new(),
+            bot_route_cache: Vec::with_capacity(16),
+            bot_sam_tiles_cache: None,
+            bot_crown_leader: None,
             ai_attack_index: Vec::new(),
+            ai_attack_index_dirty: true,
             bot_work: BotWorkCounters::default(),
         }
     }
@@ -233,6 +255,7 @@ impl SowEngine {
             self.state.set_tile_owner(x, y, 0);
         }
         self.attacks.retain(|a| a.owner_id != player_id);
+        self.ai_attack_index_dirty = true;
         self.fleets.retain(|f| f.owner_id != player_id);
     }
 
@@ -352,6 +375,7 @@ impl SowEngine {
         self.buildings.insert(pos, b);
         self.building_grid.mark_dirty();
         self.building_aggregates_dirty = true;
+        self.bot_sam_tiles_cache = None;
         if !b.under_construction && b.kind == crate::game::BuildingKind::City {
             self.sea_lanes_dirty = true;
         }
@@ -365,6 +389,28 @@ impl SowEngine {
     pub fn add_attack(&mut self, a: AttackExecution) {
         let pos = self.attacks.partition_point(|x| x.id < a.id);
         self.attacks.insert(pos, a);
+        self.ai_attack_index_dirty = true;
+    }
+
+    pub(crate) fn cache_bot_route(
+        &mut self,
+        player_id: PlayerId,
+        target_tile: u32,
+        route: crate::warp_fleet::FleetRoute,
+    ) {
+        self.bot_route_cache.push((player_id, target_tile, route));
+    }
+
+    pub(crate) fn take_bot_route(
+        &mut self,
+        player_id: PlayerId,
+        target_tile: u32,
+    ) -> Option<crate::warp_fleet::FleetRoute> {
+        let index = self
+            .bot_route_cache
+            .iter()
+            .position(|(pid, tile, _)| *pid == player_id && *tile == target_tile)?;
+        Some(self.bot_route_cache.swap_remove(index).2)
     }
 
     #[inline]

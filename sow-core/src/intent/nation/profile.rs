@@ -126,5 +126,6 @@ pub(super) struct AiSlot {
     pub(super) tier: AiTier,
     pub(super) do_attack: bool,
     pub(super) do_structures: bool,
+    pub(super) is_under_attack: bool,
     pub(super) profile: BotAiProfile,
 }

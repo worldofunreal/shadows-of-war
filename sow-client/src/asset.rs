@@ -454,6 +454,27 @@ impl SowApp {
                         Some(crate::ui::UiText::profile_operation(&operation));
                     log::error!("[profile] {operation} failed");
                 }
+                crate::player_progress::DbEvent::RewardReceiptsAcked {
+                    account_id,
+                    receipt_ids,
+                } => {
+                    if self.progress_account_id.as_deref() != Some(account_id.as_str()) {
+                        continue;
+                    }
+                    let presented_at = web_time::SystemTime::now()
+                        .duration_since(web_time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    for receipt_id in receipt_ids {
+                        if let Some(receipt) = self.progress.reward_receipts.get_mut(&receipt_id)
+                        {
+                            receipt.presented_at = Some(presented_at);
+                            receipt.status =
+                                sow_data::profile::RewardSettlementStatus::Presented;
+                        }
+                    }
+                    self.save_local_progress();
+                }
                 crate::player_progress::DbEvent::StoreProfileLoaded {
                     account_id,
                     progress,

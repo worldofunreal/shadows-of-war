@@ -27,6 +27,81 @@ pub struct MatchReward {
     pub laurels: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AchievementDefinition {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub description: &'static str,
+    pub points: u64,
+    pub target: u64,
+}
+
+pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
+    AchievementDefinition {
+        id: "first_command",
+        title: "First Command",
+        description: "Complete your first match.",
+        points: 10,
+        target: 1,
+    },
+    AchievementDefinition {
+        id: "first_victory",
+        title: "First Victory",
+        description: "Win an authoritative match.",
+        points: 25,
+        target: 1,
+    },
+    AchievementDefinition {
+        id: "battle_hardened",
+        title: "Battle Hardened",
+        description: "Complete 10 matches.",
+        points: 25,
+        target: 10,
+    },
+    AchievementDefinition {
+        id: "victory_march",
+        title: "Victory March",
+        description: "Win 10 authoritative matches.",
+        points: 50,
+        target: 10,
+    },
+    AchievementDefinition {
+        id: "laurel_hoard",
+        title: "Laurel Hoard",
+        description: "Earn 100 achievement points.",
+        points: 50,
+        target: 100,
+    },
+    AchievementDefinition {
+        id: "commander_victorious",
+        title: "Commander Victorious",
+        description: "Win with a commander.",
+        points: 25,
+        target: 1,
+    },
+    AchievementDefinition {
+        id: "veteran_commander",
+        title: "Veteran Commander",
+        description: "Complete 10 matches with commanders.",
+        points: 50,
+        target: 10,
+    },
+    AchievementDefinition {
+        id: "banner_collector",
+        title: "Banner Collector",
+        description: "Command three different leaders.",
+        points: 50,
+        target: 3,
+    },
+    AchievementDefinition {
+        id: "leader_path",
+        title: "Leader Path",
+        description: "Earn 1,000 leader experience.",
+        points: 100,
+        target: 1_000,
+    },
+];
+
 const XP_MATCH: u32 = 20;
 const XP_WIN: u32 = 100;
 const XP_PER_PLAYER: u32 = 15;
@@ -41,11 +116,6 @@ const CROWNS_PER_EMPIRE: u64 = 5;
 const CROWNS_PER_ASSIST: u64 = 2;
 const CROWNS_TUTORIAL: u64 = 100;
 
-const LAURELS_PARTICIPATION: u64 = 5;
-const LAURELS_WIN: u64 = 15;
-const LAURELS_PER_KILL: u64 = 1;
-const LAURELS_PER_EMPIRE: u64 = 2;
-const LAURELS_TUTORIAL: u64 = 100;
 
 pub fn calculate(input: RewardInput) -> MatchReward {
     if input.tutorial {
@@ -53,7 +123,7 @@ pub fn calculate(input: RewardInput) -> MatchReward {
             xp: 100,
             leader_xp: 100,
             crowns: CROWNS_TUTORIAL,
-            laurels: LAURELS_TUTORIAL,
+            laurels: 0,
         };
     }
 
@@ -75,19 +145,13 @@ pub fn calculate(input: RewardInput) -> MatchReward {
         crowns.saturating_add((input.empires_defeated as u64).saturating_mul(CROWNS_PER_EMPIRE));
     crowns = crowns.saturating_add((input.assists as u64).saturating_mul(CROWNS_PER_ASSIST));
 
-    let mut laurels = LAURELS_PARTICIPATION;
-    if input.won {
-        laurels = laurels.saturating_add(LAURELS_WIN);
-    }
-    laurels = laurels.saturating_add((input.kills as u64).saturating_mul(LAURELS_PER_KILL));
-    laurels =
-        laurels.saturating_add((input.empires_defeated as u64).saturating_mul(LAURELS_PER_EMPIRE));
-
     MatchReward {
         xp,
         leader_xp: xp,
         crowns,
-        laurels,
+        // Laurels are achievement points, never match currency. They are
+        // awarded only when the server unlocks an achievement.
+        laurels: 0,
     }
 }
 
@@ -109,7 +173,7 @@ mod tests {
         assert_eq!(loss.xp, 30);
         assert_eq!(loss.leader_xp, 30);
         assert_eq!(loss.crowns, 35);
-        assert_eq!(loss.laurels, 8);
+        assert_eq!(loss.laurels, 0);
 
         let win = calculate(RewardInput {
             won: true,
@@ -121,7 +185,7 @@ mod tests {
         assert_eq!(win.xp, 163);
         assert_eq!(win.leader_xp, 163);
         assert_eq!(win.crowns, 107);
-        assert_eq!(win.laurels, 22);
+        assert_eq!(win.laurels, 0);
     }
 
     #[test]
@@ -135,7 +199,7 @@ mod tests {
                 xp: 100,
                 leader_xp: 100,
                 crowns: 100,
-                laurels: 100,
+                laurels: 0,
             }
         );
         assert_eq!(canonical_leader_name("Boudica").as_deref(), Some("Boudica"));

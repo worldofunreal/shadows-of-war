@@ -4,6 +4,19 @@ use blade_graphics as gpu;
 
 mod ui;
 
+const ATTACK_THREAT_MIN_TROOPS: f32 = 1_000.0;
+const ATTACK_THREAT_MAX_TROOPS: f32 = 100_000.0;
+const ATTACK_THREAT_MIN_RADIUS: f32 = 10.0;
+const ATTACK_THREAT_MAX_RADIUS: f32 = 100.0;
+
+#[inline]
+fn attack_threat_radius(troops: f32) -> f32 {
+    let progress = ((troops - ATTACK_THREAT_MIN_TROOPS)
+        / (ATTACK_THREAT_MAX_TROOPS - ATTACK_THREAT_MIN_TROOPS))
+        .clamp(0.0, 1.0);
+    ATTACK_THREAT_MIN_RADIUS + (ATTACK_THREAT_MAX_RADIUS - ATTACK_THREAT_MIN_RADIUS) * progress
+}
+
 impl SowApp {
     pub fn render_frame(&mut self, _event_loop: &dyn winit::event_loop::ActiveEventLoop) {
         #[cfg(target_arch = "wasm32")]
@@ -257,9 +270,7 @@ impl SowApp {
                             if attack.front_cx == 0.0 && attack.front_cy == 0.0 {
                                 continue;
                             }
-                            let norm = (attack.troops as f32 / 100_000.0).clamp(0.0, 1.5);
-                            let intensity = norm.powi(2);
-                            let radius = 5.0 + intensity * 75.0;
+                            let radius = attack_threat_radius(attack.troops as f32);
                             threat_slots[slot] = [
                                 attack.front_cx,
                                 attack.front_cy,
@@ -575,5 +586,20 @@ impl SowApp {
 
             self.render_frame_ui_and_present(sf, frame);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::attack_threat_radius;
+
+    #[test]
+    fn attack_threat_radius_is_linear_and_bounded() {
+        assert_eq!(attack_threat_radius(0.0), 10.0);
+        assert_eq!(attack_threat_radius(1_000.0), 10.0);
+        assert!((attack_threat_radius(10_000.0) - 18.1818).abs() < 0.01);
+        assert!((attack_threat_radius(50_000.0) - 54.5454).abs() < 0.01);
+        assert_eq!(attack_threat_radius(100_000.0), 100.0);
+        assert_eq!(attack_threat_radius(150_000.0), 100.0);
     }
 }

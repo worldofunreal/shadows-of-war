@@ -1,5 +1,10 @@
 // Profile data, rendering, history, rankings, and match details.
 
+    var profileVictoryLeaderboard = null;
+    var profileVictoryLeaderboardLoading = false;
+    var profileVictoryLeaderboardError = "";
+    var profileVictoryLeaderboardRequest = null;
+
     function profileApi(path) {
         var base = String(window.SOW_DATABASE_URL || "/api").replace(/\/$/, "");
         return base + path;
@@ -243,6 +248,26 @@
         });
     }
 
+    function loadVictoryLeaderboard() {
+        if (profileVictoryLeaderboard !== null || profileVictoryLeaderboardRequest) return;
+        profileVictoryLeaderboardLoading = true;
+        profileVictoryLeaderboardError = "";
+        profileVictoryLeaderboardRequest = fetch(profileApi("/seasons/1/leaderboard?kind=victories&limit=25"), {
+            headers: { "Accept": "application/json" }
+        }).then(function (response) {
+            if (!response.ok) throw new Error("victories leaderboard failed");
+            return response.json();
+        }).then(function (data) {
+            profileVictoryLeaderboard = Array.isArray(data.items) ? data.items : [];
+        }).catch(function () {
+            profileVictoryLeaderboardError = SOW_t("profile.ranked_records_unavailable");
+        }).finally(function () {
+            profileVictoryLeaderboardRequest = null;
+            profileVictoryLeaderboardLoading = false;
+            if (profileOpen) syncProfileDom();
+        });
+    }
+
     function invalidateProfileCache(id) {
         var entry = profileCacheEntry(id);
         if (!entry) return;
@@ -351,7 +376,7 @@
         var leaderInfo = leaderById(summary.leader);
         return "<article class='sow-profile__leader'>" +
             "<img src='" + esc(asset("gameplay/avatars/" + leaderInfo.slug + ".webp")) + "' alt='' width='48' height='48' loading='lazy'>" +
-            "<div><strong>" + esc(summary.leader || leaderInfo.name) + "</strong>" +
+            "<div><strong>" + esc(leaderDisplayName(leaderInfo)) + "</strong>" +
             "<span>" + esc(SOW_t("profile.matches_wins", { matches: summary.matches_played || 0, wins: Math.round((summary.win_rate || 0) * 100) })) + "</span></div>" +
             "<b>" + esc(SOW_t("profile.level", { level: 1 + Math.floor((summary.xp || 0) / 100) })) + "</b>" +
             "</article>";
@@ -384,7 +409,7 @@
             var leader = entry.leader;
             var share = recent.length ? Math.round((entry.matches / recent.length) * 100) : 0;
             var unit = entry.matches === 1 ? SOW_t("profile.game_one") : SOW_t("profile.game_many");
-            return "<article class='sow-profile__favorite'><img src='" + esc(asset("gameplay/avatars/" + leader.slug + ".webp")) + "' alt='" + esc(SOW_t("hud.leader_avatar")) + "' width='64' height='64' loading='lazy'><div class='sow-profile__favorite-copy'><strong>" + esc(leader.name) + "</strong><span>" + esc(entry.matches) + " " + esc(unit) + " · " + esc(share) + "%</span></div></article>";
+            return "<article class='sow-profile__favorite'><img src='" + esc(asset("gameplay/avatars/" + leader.slug + ".webp")) + "' alt='" + esc(SOW_t("hud.leader_avatar")) + "' width='64' height='64' loading='lazy'><div class='sow-profile__favorite-copy'><strong>" + esc(leaderDisplayName(leader)) + "</strong>" + (leaderHistoricalName(leader) ? "<small class='sow-profile__historical-name'>" + esc(leaderHistoricalName(leader)) + "</small>" : "") + "<span>" + esc(entry.matches) + " " + esc(unit) + " · " + esc(share) + "%</span></div></article>";
         }).join("");
         return "<section class='sow-profile__favorites' data-profile-favorites aria-labelledby='sow-profile-favorites-title'><div class='sow-profile__favorites-head'><h2 id='sow-profile-favorites-title'>" + esc(SOW_t("profile.most_played_leaders")) + "</h2><span>" + esc(SOW_t("profile.last_matches", { count: recent.length })) + "</span></div>" +
             (cards ? "<div class='sow-profile__favorites-track' data-count='" + esc(favorites.length) + "'>" + cards + "</div>" : "<div class='sow-profile__favorites-track' data-count='0'><p class='sow-profile__favorites-empty'>" + esc(loading ? SOW_t("profile.loading_profile") : SOW_t("profile.no_leader_data")) + "</p></div>") +
@@ -399,7 +424,7 @@
         return "<button type='button' class='sow-profile__match' data-command='open_match' data-match-id='" + esc(match.match_id) + "'>" +
             "<span class='sow-profile__match-result " + (match.won ? "is-win" : "is-loss") + "'>" + result + "</span>" +
             "<span class='sow-profile__match-context'><strong>" + esc(mode) + "</strong><small>" + esc(map) + " · " + esc(match.queue || SOW_t("profile.matchmaking_queue")) + "</small></span>" +
-            "<span class='sow-profile__match-kda'><strong>" + esc(match.leader || "—") + "</strong><small>" + esc(SOW_t("profile.kda_value", { kills: match.kills || 0, deaths: match.deaths || 0, assists: match.assists || 0 })) + " " + esc(SOW_t("profile.kda")) + "</small></span>" +
+            "<span class='sow-profile__match-kda'><strong>" + esc(match.leader ? leaderDisplayName(leaderById(match.leader)) : "—") + "</strong><small>" + esc(SOW_t("profile.kda_value", { kills: match.kills || 0, deaths: match.deaths || 0, assists: match.assists || 0 })) + " " + esc(SOW_t("profile.kda")) + "</small></span>" +
             "<span class='sow-profile__match-rating'>" + (match.rating_delta == null ? "—" : esc(SOW_t("profile.rating", { value: (match.rating_delta >= 0 ? "+" : "") + match.rating_delta }))) + "</span>" +
             "</button>";
     }
@@ -428,15 +453,22 @@
             var leaders = complete
                 ? ((data.leaders || []).slice(0, 4).map(profileLeaderCard).join("") || "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_leader_history")) + "</p>")
                 : "<p class='sow-profile__empty'>" + esc(profileSnapshotError() || SOW_t("profile.loading_profile")) + "</p>";
+            var achievements = complete
+                ? ((data.achievements || []).map(function (achievement) {
+                    var progress = Math.max(0, Number(achievement.progress) || 0);
+                    var target = Math.max(1, Number(achievement.target) || 1);
+                    return "<article class='sow-profile__achievement" + (achievement.unlocked ? " is-unlocked" : "") + "'><strong>" + esc(achievement.title) + "</strong><span>" + esc(achievement.description) + "</span><b>" + esc(progress) + "/" + esc(target) + " · " + esc(achievement.points) + " " + esc(SOW_t("profile.laurels")) + "</b></article>";
+                }).join("") || "<p class='sow-profile__empty'>" + esc(SOW_t("profile.achievements")) + "</p>")
+                : "<p class='sow-profile__empty'>" + esc(profileSnapshotError() || SOW_t("profile.loading_profile")) + "</p>";
             content = "<div id='sow-profile-panel-overview' class='sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-overview'><div class='sow-profile__stats'>" +
                 "<div><strong>" + esc(data.matches_played) + "</strong><span>" + esc(SOW_t("profile.matches")) + "</span></div>" +
                 "<div><strong>" + esc(data.wins) + "</strong><span>" + esc(SOW_t("profile.wins")) + "</span></div>" +
                 "<div><strong>" + esc(Math.round((data.win_rate || 0) * 100)) + "%</strong><span>" + esc(SOW_t("profile.win_rate")) + "</span></div>" +
-                "<div class='sow-profile__stat-laurels'><strong>" + esc(state.laurels || 0) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
+                "<div class='sow-profile__stat-laurels'><strong>" + esc(data.laurels == null ? (state.laurels || 0) : data.laurels) + "</strong><span>" + esc(SOW_t("profile.laurels")) + "</span></div>" +
                 "<div class='sow-profile__stat-kda'><strong><i>" + esc(data.kills) + "</i><i>" + esc(data.deaths) + "</i><i>" + esc(data.assists) + "</i></strong><span>" + esc(SOW_t("profile.kda")) + "</span></div>" +
                 "</div><div class='sow-profile__columns'><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.recent_matches")) + "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='history'>" + esc(SOW_t("profile.view_all")) + "</button></div>" + recent +
                 "</section><section class='sow-profile__section'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.leaders")) + "</h2><button type='button' class='sow-profile__text-action' data-command='profile_tab' data-profile-tab='leaders'>" + esc(SOW_t("profile.view_all")) + "</button></div>" + leaders +
-                "</section></div></div>";
+                "</section></div><section class='sow-profile__section sow-profile__achievements'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.achievements")) + "</h2><span class='sow-profile__section-note'>" + esc(data.laurels == null ? 0 : data.laurels) + " " + esc(SOW_t("profile.laurels")) + "</span></div><div class='sow-profile__achievement-grid'>" + achievements + "</div></section></div>";
         } else if (data && profileTab === "leaders") {
             var leaderList = complete
                 ? ((data.leaders || []).map(profileLeaderCard).join("") || "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_leader_history")) + "</p>")
@@ -458,6 +490,13 @@
                     return "<article class='sow-profile__rating'><div><strong>" + esc(rating.season_name) + "</strong><span>" + esc(rating.queue) + " · " + esc(rating.mode) + "</span></div><b>" + esc(rating.tier) + (rating.division ? " " + esc(rating.division) : "") + "</b><strong>" + esc(rating.score) + " SR</strong><small>" + esc(SOW_t("profile.games_wins_peak", { games: rating.games_played, wins: rating.wins, peak: rating.peak_score })) + "</small></article>";
                 }).join("") || "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_ranked_records")) + "</p>");
             content = "<section id='sow-profile-panel-ranked' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-ranked'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.ranked")) + "</h2><span class='sow-profile__section-note'>" + esc(SOW_t("profile.season_records")) + "</span></div><div class='sow-profile__ratings'>" + ratings + "</div></section>";
+        } else if (profileTab === "victories") {
+            var victoryRows = profileVictoryLeaderboard === null
+                ? "<p class='sow-profile__empty'>" + esc(profileVictoryLeaderboardError || SOW_t("profile.ranked_records_loading")) + "</p>"
+                : (profileVictoryLeaderboard.map(function (entry) {
+                    return "<article class='sow-profile__victory-row'><b>#" + esc(entry.rank) + "</b><div><strong>" + esc(entry.handle || entry.account_id) + "</strong><span>" + esc(SOW_t("profile.level", { level: entry.level || 1 })) + "</span></div><strong>" + esc(entry.wins || 0) + " " + esc(SOW_t("profile.wins")) + "</strong><small>" + esc(entry.matches_played || 0) + " " + esc(SOW_t("profile.matches")) + "</small></article>";
+                }).join("") || "<p class='sow-profile__empty'>" + esc(SOW_t("profile.no_ranked_records")) + "</p>");
+            content = "<section id='sow-profile-panel-victories' class='sow-profile__section sow-profile__panel-content' role='tabpanel' aria-labelledby='sow-profile-tab-victories'><div class='sow-profile__section-head'><h2>" + esc(SOW_t("profile.leaderboards")) + "</h2><span class='sow-profile__section-note'>" + esc(SOW_t("profile.wins")) + "</span></div><div class='sow-profile__victory-list'>" + victoryRows + "</div></section>";
         } else if (!data) {
             content = "<section class='sow-profile__state' aria-live='polite'><strong>" + esc(profileSnapshotLoading ? SOW_t("profile.loading_profile") : SOW_t("profile.profile_unavailable")) + "</strong><span>" + esc(profileSnapshotError() || SOW_t("profile.return_to_menu")) + "</span>" + (profileSnapshotLoading ? "" : "<button type='button' class='sow-profile__load-more' data-command='retry_profile'>" + esc(SOW_t("profile.try_again")) + "</button>") + "</section>";
         }
@@ -468,9 +507,10 @@
         var data = profileData;
         var own = state && state.account_id === profileAccountId;
         var header = profileHeaderMarkup(data, own);
-        var tabs = ["overview", "leaders", "history", "ranked"].map(function (tab) {
+        var tabs = ["overview", "leaders", "history", "ranked", "victories"].map(function (tab) {
             var active = profileTab === tab;
-            return "<button type='button' role='tab' id='sow-profile-tab-" + tab + "' class='sow-profile__tab" + (active ? " is-active" : "") + "' aria-selected='" + active + "' aria-controls='sow-profile-panel-" + tab + "' data-command='profile_tab' data-profile-tab='" + tab + "'>" + esc(SOW_t("profile.tab_" + tab)) + "</button>";
+            var label = tab === "victories" ? SOW_t("profile.leaderboards") : SOW_t("profile.tab_" + tab);
+            return "<button type='button' role='tab' id='sow-profile-tab-" + tab + "' class='sow-profile__tab" + (active ? " is-active" : "") + "' aria-selected='" + active + "' aria-controls='sow-profile-panel-" + tab + "' data-command='profile_tab' data-profile-tab='" + tab + "'>" + esc(label) + "</button>";
         }).join("");
         var playGamesActions = "";
         if (typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa()) {

@@ -9,6 +9,26 @@ impl SowEngine {
         target_tile: u32,
         troops: Option<f64>,
     ) {
+        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, None);
+    }
+
+    pub(crate) fn apply_launch_fleet_intent_with_route(
+        &mut self,
+        player_id: u16,
+        target_tile: u32,
+        troops: Option<f64>,
+        route: crate::warp_fleet::FleetRoute,
+    ) {
+        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, Some(route));
+    }
+
+    fn apply_launch_fleet_intent_inner(
+        &mut self,
+        player_id: u16,
+        target_tile: u32,
+        troops: Option<f64>,
+        validated_route: Option<crate::warp_fleet::FleetRoute>,
+    ) {
         let Some(player) = self.state.player(player_id) else {
             log::debug!("apply_launch_fleet_intent: player {} not found", player_id);
             return;
@@ -43,46 +63,50 @@ impl SowEngine {
             return;
         }
 
-        let border_tiles = match self.state.player(player_id) {
-            Some(p) => &p.border_tiles,
-            None => return,
-        };
+        let route = if let Some(route) = validated_route {
+            route
+        } else {
+            let border_tiles = match self.state.player(player_id) {
+                Some(p) => &p.border_tiles,
+                None => return,
+            };
 
-        let target_border: Option<&crate::bitset::DenseBitSet> = if target_owner != 0 {
-            match self.state.player(target_owner) {
-                Some(p) => Some(&p.border_tiles),
-                None => {
+            let target_border: Option<&crate::bitset::DenseBitSet> = if target_owner != 0 {
+                match self.state.player(target_owner) {
+                    Some(p) => Some(&p.border_tiles),
+                    None => {
+                        log::debug!(
+                            "apply_launch_fleet_intent: target_owner={} not found (player {})",
+                            target_owner,
+                            player_id
+                        );
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
+
+            match resolve_fleet_route(
+                &self.state.map,
+                &self.water,
+                &mut self.path_scratch,
+                player_id,
+                (target_owner, target_tile),
+                border_tiles,
+                target_border,
+            ) {
+                Ok(r) => r,
+                Err(e) => {
                     log::debug!(
-                        "apply_launch_fleet_intent: target_owner={} not found (player {})",
+                        "apply_launch_fleet_intent: {} (player {}, target_owner={}, tile={})",
+                        e,
+                        player_id,
                         target_owner,
-                        player_id
+                        target_tile
                     );
                     return;
                 }
-            }
-        } else {
-            None
-        };
-
-        let route = match resolve_fleet_route(
-            &self.state.map,
-            &self.water,
-            &mut self.path_scratch,
-            player_id,
-            (target_owner, target_tile),
-            border_tiles,
-            target_border,
-        ) {
-            Ok(r) => r,
-            Err(e) => {
-                log::debug!(
-                    "apply_launch_fleet_intent: {} (player {}, target_owner={}, tile={})",
-                    e,
-                    player_id,
-                    target_owner,
-                    target_tile
-                );
-                return;
             }
         };
 

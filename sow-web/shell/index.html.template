@@ -220,7 +220,7 @@
                 <img id="loader-bar-full" class="loader-bar-full" alt="" decoding="async" fetchpriority="low"
                     src="__ASSETS_UI_BASE__loader_full.webp?v=__BUILD_TS__">
             </div>
-            <p id="loader-text" class="loader-text">Loading...</p>
+            <p id="loader-text" class="loader-text" data-i18n="menu.loading">Loading...</p>
         </div>
     </div>
 
@@ -372,6 +372,9 @@
 
             try {
                 await window.SOW_I18N_READY;
+                if (typeof window.SOW_refreshWebLoaderText === 'function') {
+                    window.SOW_refreshWebLoaderText();
+                }
             } catch (error) {
                 console.error("[SOW i18n] English catalog could not be loaded:", error);
                 return;

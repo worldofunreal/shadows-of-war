@@ -211,11 +211,7 @@ impl SowEngine {
                                     || (p_me.team.is_some() && p_me.team == p.team)
                             };
                             let target_allowed = !is_mfo
-                                || nation_target_allowed(
-                                    p.id,
-                                    p.is_human(),
-                                    defender_target,
-                                );
+                                || nation_target_allowed(p.id, p.is_human(), defender_target);
                             if !is_friendly && target_allowed && !p.border_tiles.is_empty() {
                                 if p.troops < min_overall {
                                     min_overall = p.troops;
@@ -244,15 +240,14 @@ impl SowEngine {
                         best_target_p_id = best_overall_p_id.filter(|_| enclosed);
                     }
                     if let Some(target_p_id) = best_target_p_id {
-                        let mut route_resolved = false;
-                        let mut target_tile_opt = None;
+                        let mut resolved_route = None;
                         {
                             let target_p = self.state.player(target_p_id).unwrap();
                             let start = self.state.tick.wrapping_add(bot_id as u64) as u32;
                             if let Some(t_tile) = target_p.border_tiles.first_one_from(start) {
                                 let border_tiles = &self.state.player(bot_id).unwrap().border_tiles;
                                 self.bot_work.naval_routes_calculated += 1;
-                                if crate::warp_fleet::resolve_fleet_route(
+                                if let Ok(route) = crate::warp_fleet::resolve_fleet_route(
                                     &self.state.map,
                                     &self.water,
                                     &mut self.path_scratch,
@@ -260,25 +255,23 @@ impl SowEngine {
                                     (target_p_id, t_tile),
                                     border_tiles,
                                     Some(&target_p.border_tiles),
-                                )
-                                .is_ok()
-                                {
-                                    route_resolved = true;
-                                    target_tile_opt = Some(t_tile);
+                                ) {
+                                    resolved_route = Some((t_tile, route));
                                 }
                             }
                         }
-                        if route_resolved {
+                        if let Some((target_tile, route)) = resolved_route {
                             let p_send = (troops - (max_troops * 0.05)).max(0.0);
                             if p_send >= self.state.config.attack_cost_neutral {
                                 if let Some(p_me) = self.state.player_mut(bot_id) {
                                     p_me.iq_points = (p_me.iq_points - attack_cost).max(0.0);
                                 }
+                                self.cache_bot_route(bot_id, target_tile, route);
                                 decisions.push(BotDecision {
                                     bot_id,
                                     kind: BotDecisionKind::Attack,
                                     intent: GameplayIntent::LaunchFleet {
-                                        target_tile: target_tile_opt.unwrap(),
+                                        target_tile,
                                         troops: Some(p_send),
                                     },
                                 });
@@ -311,11 +304,7 @@ impl SowEngine {
                         if has_tribe_target && p_t.player_type != crate::player::PlayerType::Bot {
                             continue;
                         }
-                        if !nation_target_allowed(
-                            t_id,
-                            p_t.is_human(),
-                            defender_target,
-                        ) {
+                        if !nation_target_allowed(t_id, p_t.is_human(), defender_target) {
                             continue;
                         }
                         if p_t.troops < min_troops {
@@ -543,13 +532,7 @@ impl SowEngine {
                     }
                 }
                 if slot.tier == AiTier::Nation {
-                    self.maybe_launch_nuke(
-                        bot_id,
-                        decisions,
-                        bot_iq,
-                        &targets,
-                        defender_target,
-                    );
+                    self.maybe_launch_nuke(bot_id, decisions, bot_iq, &targets, defender_target);
                 }
             }
         }
@@ -618,12 +601,14 @@ impl SowEngine {
                 route.as_ref().err()
             );
         }
-        if route.is_ok() {
+        if let Ok(route) = route {
+            let target_tile = ty * width + tx;
+            self.cache_bot_route(bot_id, target_tile, route);
             decisions.push(BotDecision {
                 bot_id,
                 kind: BotDecisionKind::Attack,
                 intent: GameplayIntent::LaunchFleet {
-                    target_tile: ty * width + tx,
+                    target_tile,
                     troops: Some(send),
                 },
             });
@@ -644,7 +629,20 @@ impl SowEngine {
             return;
         }
 
+        let target_allowed = |target_id: u16| {
+            self.state
+                .player(target_id)
+                .is_some_and(|p| nation_target_allowed(target_id, p.is_human(), defender_target))
+        };
+        let has_legal_target = defender_target
+            .is_some_and(|target_id| targets.contains(&target_id))
+            || targets.iter().copied().any(target_allowed);
+        if !has_legal_target {
+            return;
+        }
+
         if self.building_aggregates_dirty {
+            self.bot_sam_tiles_cache = None;
             self.building_aggregates = crate::building::core::aggregate_buildings_per_player(
                 self.buildings.iter().copied(),
                 self.state.players.len(),
@@ -662,6 +660,7 @@ impl SowEngine {
         }
 
         let mut has_silo = false;
+        self.bot_work.nuke_buildings_examined += self.buildings.len() as u64;
         for b in &self.buildings {
             if b.owner_id == bot_id
                 && b.kind == BuildingKind::City
@@ -687,20 +686,19 @@ impl SowEngine {
         }
         let kind = NukeKind::AtomBomb;
 
-        // Find crown leader
-        let mut leader = 0;
-        let mut leader_tiles = 0;
-        for p in &self.state.players {
-            if p.alive && p.tile_count > leader_tiles {
-                leader = p.id;
-                leader_tiles = p.tile_count;
+        let leader = if let Some(leader) = self.bot_crown_leader {
+            leader
+        } else {
+            let mut leader = 0;
+            let mut leader_tiles = 0;
+            for p in &self.state.players {
+                if p.alive && p.tile_count > leader_tiles {
+                    leader = p.id;
+                    leader_tiles = p.tile_count;
+                }
             }
-        }
-
-        let target_allowed = |target_id: u16| {
-            self.state.player(target_id).is_some_and(|p| {
-                nation_target_allowed(target_id, p.is_human(), defender_target)
-            })
+            self.bot_crown_leader = Some(leader);
+            leader
         };
 
         let primary_target = defender_target
@@ -724,22 +722,26 @@ impl SowEngine {
             .player(bot_id)
             .map(|p| p.alliances.clone())
             .unwrap_or_default();
-        let sam_tiles: Vec<u32> = self
-            .buildings
-            .iter()
-            .filter(|b| {
-                b.kind == BuildingKind::City
-                    && b.modules.shield > 0
-                    && !b.under_construction
-                    && b.owner_id != bot_id
-                    && !bot_alliances.contains(&b.owner_id)
-            })
-            .map(|b| b.tile_idx)
-            .collect();
+        if self.bot_sam_tiles_cache.is_none() {
+            self.bot_sam_tiles_cache = Some(
+                self.buildings
+                    .iter()
+                    .filter(|b| {
+                        b.kind == BuildingKind::City
+                            && b.modules.shield > 0
+                            && !b.under_construction
+                    })
+                    .map(|b| (b.tile_idx, b.owner_id))
+                    .collect(),
+            );
+        }
+        let shielded_cities = self.bot_sam_tiles_cache.as_ref().unwrap();
 
         // Find best structure to nuke
         let mut best_score = -1.0;
         let mut best_tile = 0;
+        self.bot_work.nuke_buildings_examined += self.buildings.len() as u64;
+        let mut sam_checks = 0u64;
 
         for b in &self.buildings {
             if b.owner_id != primary_target || b.under_construction {
@@ -765,7 +767,11 @@ impl SowEngine {
             let by = b.tile_idx / self.state.map.width;
 
             // SAM avoidance
-            let sam_covered = sam_tiles.iter().any(|&sam_tile| {
+            let sam_covered = shielded_cities.iter().any(|&(sam_tile, sam_owner)| {
+                sam_checks += 1;
+                if sam_owner == bot_id || bot_alliances.contains(&sam_owner) {
+                    return false;
+                }
                 let (sx, sy) = (
                     sam_tile % self.state.map.width,
                     sam_tile / self.state.map.width,
@@ -788,6 +794,7 @@ impl SowEngine {
                 best_tile = b.tile_idx;
             }
         }
+        self.bot_work.nuke_sam_checks += sam_checks;
 
         if best_score > 0.0 {
             self.recent_nuke_targets

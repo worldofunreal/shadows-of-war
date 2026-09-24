@@ -1366,6 +1366,9 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
             config.build_host, config.build_root
         );
         let destination = local.join(name);
+        if destination.exists() {
+            fs::remove_file(&destination)?;
+        }
         run(
             "scp",
             &[

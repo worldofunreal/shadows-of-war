@@ -1,4 +1,4 @@
-use super::core::{Building, BuildingGrid};
+use super::core::BuildingGrid;
 use crate::game::BuildingKind;
 use crate::map::{GameMap, TerrainType};
 
@@ -152,7 +152,6 @@ pub fn valid_land_structure_indices(
     click_idx: u32,
     kind: BuildingKind,
     existing: &BuildingGrid,
-    buildings: &[Building],
     scratch: &mut crate::engine::PlacementScratch,
 ) -> Vec<u32> {
     let w = map.width;
@@ -198,36 +197,37 @@ pub fn valid_land_structure_indices(
         if map.owner_id(x, y) != owner_id {
             continue;
         }
+        scratch.candidates_examined += 1;
 
-        let mut too_close = false;
-        for rule in kind.spacing_rules() {
-            let min_d = rule.min_distance;
-            let min_d_sq = (min_d as i64) * (min_d as i64);
-
-            if rule.target_kind == BuildingKind::City {
-                for (bx, by) in existing.iter_in_range(x, y, min_d as u32) {
-                    if euclid_sq(xi, yi, bx as i64, by as i64) < min_d_sq {
-                        too_close = true;
-                        break;
-                    }
-                }
-            } else {
-                for b in buildings {
-                    if b.kind == rule.target_kind {
-                        let bx = b.tile_idx % w;
-                        let by = b.tile_idx / w;
-                        if euclid_sq(xi, yi, bx as i64, by as i64) < min_d_sq {
-                            too_close = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if too_close {
-                break;
-            }
-        }
+        let city_min_d_sq = (CITY_MIN_DIST as i64) * (CITY_MIN_DIST as i64);
+        let building_min_d_sq = (BUILDING_MIN_DIST as i64) * (BUILDING_MIN_DIST as i64);
+        let mut too_close = if kind == BuildingKind::City {
+            existing
+                .iter_in_range(x, y, CITY_MIN_DIST as u32)
+                .any(|(bx, by)| {
+                    scratch.building_checks += 1;
+                    euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
+                })
+                || existing
+                    .iter_non_city_in_range(x, y, CITY_MIN_DIST as u32)
+                    .any(|(bx, by)| {
+                        scratch.building_checks += 1;
+                        euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
+                    })
+        } else {
+            existing
+                .iter_in_range(x, y, CITY_MIN_DIST as u32)
+                .any(|(bx, by)| {
+                    scratch.building_checks += 1;
+                    euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
+                })
+                || existing
+                    .iter_non_city_in_range(x, y, BUILDING_MIN_DIST as u32)
+                    .any(|(bx, by)| {
+                        scratch.building_checks += 1;
+                        euclid_sq(xi, yi, bx as i64, by as i64) < building_min_d_sq
+                    })
+        };
 
         if !too_close && kind == BuildingKind::Port {
             let mut near_water = false;
@@ -293,7 +293,6 @@ pub fn resolve_structure_spawn_tile(
     kind: BuildingKind,
     click_idx: u32,
     existing: &BuildingGrid,
-    buildings: &[Building],
     scratch: &mut crate::engine::PlacementScratch,
 ) -> Option<u32> {
     let w = map.width;
@@ -303,7 +302,6 @@ pub fn resolve_structure_spawn_tile(
         return None;
     }
 
-    let valid =
-        valid_land_structure_indices(map, owner_id, click_idx, kind, existing, buildings, scratch);
+    let valid = valid_land_structure_indices(map, owner_id, click_idx, kind, existing, scratch);
     valid.first().copied()
 }

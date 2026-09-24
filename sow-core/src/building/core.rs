@@ -338,7 +338,10 @@ pub const BUILDING_GRID_CELL_SIZE: u32 = 6;
 /// Spatial grid of structure tile coordinates `(x, y)` for O(local) minimum-distance checks during placement.
 #[derive(Clone)]
 pub struct BuildingGrid {
+    /// City positions, kept separate because cities use the larger spacing rule.
     pub cells: Vec<Vec<(u32, u32)>>,
+    /// Non-city positions, which share the smaller spacing rule.
+    pub non_city_cells: Vec<Vec<(u32, u32)>>,
     pub grid_w: u32,
     pub grid_h: u32,
     pub cell_size: u32,
@@ -350,6 +353,7 @@ impl Default for BuildingGrid {
     fn default() -> Self {
         Self {
             cells: Vec::new(),
+            non_city_cells: Vec::new(),
             grid_w: 0,
             grid_h: 0,
             cell_size: BUILDING_GRID_CELL_SIZE,
@@ -390,20 +394,28 @@ impl BuildingGrid {
         if self.cells.len() < num_cells {
             self.cells.resize(num_cells, Vec::new());
         }
+        if self.non_city_cells.len() < num_cells {
+            self.non_city_cells.resize(num_cells, Vec::new());
+        }
         for cell in self.cells.iter_mut() {
+            cell.clear();
+        }
+        for cell in self.non_city_cells.iter_mut() {
             cell.clear();
         }
 
         for b in buildings {
-            if b.kind != BuildingKind::City {
-                continue;
-            }
             let bx = b.tile_idx % map_w;
             let by = b.tile_idx / map_w;
             let cx = bx / cell_size;
             let cy = by / cell_size;
             if cx < grid_w && cy < grid_h {
-                self.cells[(cy * grid_w + cx) as usize].push((bx, by));
+                let cells = if b.kind == BuildingKind::City {
+                    &mut self.cells
+                } else {
+                    &mut self.non_city_cells
+                };
+                cells[(cy * grid_w + cx) as usize].push((bx, by));
             }
         }
         self.dirty = false;
@@ -421,7 +433,13 @@ impl BuildingGrid {
         if self.cells.len() < num_cells {
             self.cells.resize(num_cells, Vec::new());
         }
+        if self.non_city_cells.len() < num_cells {
+            self.non_city_cells.resize(num_cells, Vec::new());
+        }
         for cell in self.cells.iter_mut() {
+            cell.clear();
+        }
+        for cell in self.non_city_cells.iter_mut() {
             cell.clear();
         }
         for &(bx, by) in pairs {
@@ -452,6 +470,28 @@ impl BuildingGrid {
             (cx_min..=cx_max).flat_map(move |cx| {
                 let idx = (cy * self.grid_w + cx) as usize;
                 self.cells[idx].iter().copied()
+            })
+        })
+    }
+
+    /// All stored non-city positions in cells overlapping the Euclidean disk.
+    pub fn iter_non_city_in_range(
+        &self,
+        tile_x: u32,
+        tile_y: u32,
+        range: u32,
+    ) -> impl Iterator<Item = (u32, u32)> + '_ {
+        let cx_min = tile_x.saturating_sub(range) / self.cell_size;
+        let cx_max = (tile_x + range) / self.cell_size;
+        let cy_min = tile_y.saturating_sub(range) / self.cell_size;
+        let cy_max = (tile_y + range) / self.cell_size;
+        let cx_max = cx_max.min(self.grid_w.saturating_sub(1));
+        let cy_max = cy_max.min(self.grid_h.saturating_sub(1));
+
+        (cy_min..=cy_max).flat_map(move |cy| {
+            (cx_min..=cx_max).flat_map(move |cx| {
+                let idx = (cy * self.grid_w + cx) as usize;
+                self.non_city_cells[idx].iter().copied()
             })
         })
     }

@@ -109,13 +109,12 @@ pub(super) fn resolve_structure_from_candidates(
     kind: BuildingKind,
     candidates: StructureCandidates<'_>,
     existing: &crate::building::BuildingGrid,
-    buildings: &[crate::building::Building],
     scratch: &mut crate::engine::PlacementScratch,
 ) -> Option<u32> {
     let map_w = map.width;
     for &idx in candidates.border {
         if let Some(spawn) =
-            resolve_structure_spawn_tile(map, owner_id, kind, idx, existing, buildings, scratch)
+            resolve_structure_spawn_tile(map, owner_id, kind, idx, existing, scratch)
         {
             return Some(spawn);
         }
@@ -130,7 +129,7 @@ pub(super) fn resolve_structure_from_candidates(
         }
         let idx = uy * map_w + ux;
         if let Some(spawn) =
-            resolve_structure_spawn_tile(map, owner_id, kind, idx, existing, buildings, scratch)
+            resolve_structure_spawn_tile(map, owner_id, kind, idx, existing, scratch)
         {
             return Some(spawn);
         }

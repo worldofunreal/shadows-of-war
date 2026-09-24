@@ -9,8 +9,13 @@ pub const ROTATION_PERIOD_SECS: u64 = 7 * 24 * 60 * 60;
 // achievement points and are never a price.
 pub const LEADER_UNLOCK_COST_CROWNS: u64 = 500;
 pub const LEADER_UNLOCK_COST_GEMS: u64 = 1_500;
-pub const ANONYMOUS_WELCOME_GEMS: u64 = 1_600;
-pub const ANONYMOUS_WELCOME_GRANT_ID: &str = "anonymous_welcome_gems_v1";
+/// One-time starter grant for every human account, regardless of identity
+/// provider. Bots never receive it.
+pub const WELCOME_GEMS: u64 = 1_600;
+pub const WELCOME_GRANT_ID: &str = "welcome_gems_v1";
+/// The old anonymous-only marker is recognized during migration so existing
+/// accounts are never paid twice.
+pub const LEGACY_ANONYMOUS_WELCOME_GRANT_ID: &str = "anonymous_welcome_gems_v1";
 
 const GEM_BUNDLES: [(&str, u64); 3] = [
     ("sow_gems_500", 500),
@@ -415,7 +420,7 @@ mod tests {
     fn leader_has_dual_currency_price() {
         assert_eq!(LEADER_UNLOCK_COST_CROWNS, 500);
         assert_eq!(LEADER_UNLOCK_COST_GEMS, 1_500);
-        assert_eq!(ANONYMOUS_WELCOME_GEMS, 1_600);
+        assert_eq!(WELCOME_GEMS, 1_600);
         assert!(skins().iter().map(|skin| skin.cost_gems).sum::<u64>() > GEM_BUNDLES[2].1);
     }
 

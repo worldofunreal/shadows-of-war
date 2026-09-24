@@ -120,7 +120,13 @@ impl SowApp {
                 "kills": kills,
             }),
         );
-        self.ui.reward_cache = Some(sow_data::rewards::calculate(
+        let server_owned_match = self.progress_account_id.is_some() && !self.net.is_offline;
+        self.ui.reward_cache = Some(sow_data::rewards::calculate(if server_owned_match {
+            // Online rewards are participation-only until the replay is
+            // verified by the deterministic server engine. The preview must
+            // use the same safe formula as finalization.
+            sow_data::rewards::RewardInput::default()
+        } else {
             sow_data::rewards::RewardInput {
                 won,
                 players_defeated: defeats.players,
@@ -129,11 +135,11 @@ impl SowApp {
                 kills,
                 assists,
                 ..Default::default()
-            },
-        ));
+            }
+        }));
 
         // Online ranked matches: relay + sow-database own the outcome; client only reads profile later.
-        if self.progress_account_id.is_some() && !self.net.is_offline {
+        if server_owned_match {
             log::info!(
                 "Online match ended (winner={winner_id}); stats will sync from sow-database on menu return"
             );

@@ -61,6 +61,7 @@ impl SowEngine {
             b.under_construction = true;
             b.ticks_until_complete = b.ticks_until_complete.saturating_add(dur);
             self.building_aggregates_dirty = true;
+            self.bot_sam_tiles_cache = None;
 
             self.state.events.push(GameEvent::StructureUpgraded {
                 id: b.id,
@@ -79,7 +80,6 @@ impl SowEngine {
             kind,
             target_tile,
             &self.building_grid,
-            &self.buildings,
             &mut self.placement_scratch,
         ) else {
             return;
@@ -195,6 +195,7 @@ impl SowEngine {
         let b = &mut self.buildings[idx];
         b.modules.set_level(module, new_level);
         self.building_aggregates_dirty = true;
+        self.bot_sam_tiles_cache = None;
 
         if module == ModuleKind::Port {
             self.sea_lanes_dirty = true;

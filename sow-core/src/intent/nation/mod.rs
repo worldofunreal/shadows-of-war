@@ -15,6 +15,11 @@ use structures::{cheapest_gold_cost, iq_build_interval_base};
 
 impl SowEngine {
     fn rebuild_ai_attack_index(&mut self) {
+        if !self.ai_attack_index_dirty
+            && self.ai_attack_index.len() == self.state.player_lookup.len()
+        {
+            return;
+        }
         self.bot_work.attack_entries_scanned_last_update = self.attacks.len() as u64;
         self.ai_attack_index
             .resize_with(self.state.player_lookup.len(), Vec::new);
@@ -26,6 +31,7 @@ impl SowEngine {
                 attacks.push(attack_index);
             }
         }
+        self.ai_attack_index_dirty = false;
     }
 
     fn ai_is_under_attack(&self, bot_id: u16) -> bool {
@@ -56,6 +62,12 @@ impl SowEngine {
         }
 
         let tick = self.state.tick;
+        self.bot_work = Default::default();
+        self.bot_route_cache.clear();
+        self.bot_sam_tiles_cache = None;
+        self.bot_crown_leader = None;
+        self.placement_scratch.candidates_examined = 0;
+        self.placement_scratch.building_checks = 0;
         self.rebuild_ai_attack_index();
 
         // ── Build unified schedule ──────────────────────────────────────────
@@ -78,9 +90,10 @@ impl SowEngine {
             // `ai_tier(player_type, is_ai_controlled)` — the single source of
             // truth. IQ (assigned per-tier at spawn) drives cadence; RNG is
             // WyRand(seed, bot_id, interval) → lockstep-safe across clients.
-            let is_under_attack = p.iq >= 100 && self.ai_is_under_attack(bot_id);
+            let is_under_attack = self.ai_is_under_attack(bot_id);
+            let reacts_to_attack = p.iq >= 100 && is_under_attack;
 
-            let interval_base = if is_under_attack {
+            let interval_base = if reacts_to_attack {
                 if p.iq >= 130 {
                     5 // Top/smart: react in 0.5s - 1.0s (5 - 10 ticks)
                 } else {
@@ -131,6 +144,7 @@ impl SowEngine {
                 tier,
                 do_attack,
                 do_structures,
+                is_under_attack,
                 profile,
             });
         }
@@ -213,8 +227,6 @@ impl SowEngine {
                 (10.0, 10.0, 10.0, 999.0)
             };
 
-            let is_under_attack = self.ai_is_under_attack(bot_id);
-
             let (neighbor_players, has_neutral) = self.nation_scan_neighbors(bot_id);
 
             self.nation_run_diplomacy_for_slot(
@@ -222,7 +234,7 @@ impl SowEngine {
                 (alliance_cost, send_cost),
                 &neighbor_players,
                 has_neutral,
-                is_under_attack,
+                slot.is_under_attack,
                 &mut decisions,
             );
 
@@ -242,16 +254,51 @@ impl SowEngine {
                 has_neutral,
                 &mut decisions,
             );
+
+            self.placement_scratch.neighbor_scratch = neighbor_players;
+        }
+
+        self.bot_work.placement_candidates_examined += self.placement_scratch.candidates_examined;
+        self.bot_work.placement_building_checks += self.placement_scratch.building_checks;
+        self.placement_scratch.candidates_examined = 0;
+        self.placement_scratch.building_checks = 0;
+        if std::env::var("SOW_AI_DEBUG").is_ok() {
+            eprintln!(
+                "AIWORK tick={} attack_entries={} border_cells={} border_blocks={} neighbor_cells={} placement_candidates={} placement_building_checks={} naval_routes={} nuke_buildings={} nuke_sam_checks={}",
+                self.state.tick,
+                self.bot_work.attack_entries_scanned_last_update,
+                self.bot_work.border_cells_examined,
+                self.bot_work.border_blocks_examined,
+                self.bot_work.neighbor_cells_examined,
+                self.bot_work.placement_candidates_examined,
+                self.bot_work.placement_building_checks,
+                self.bot_work.naval_routes_calculated,
+                self.bot_work.nuke_buildings_examined,
+                self.bot_work.nuke_sam_checks,
+            );
         }
 
         // ── Apply decisions deterministically ───────────────────────────────
         decisions.sort_by_key(|d| (d.bot_id, d.kind));
         for (intent_index, d) in decisions.into_iter().enumerate() {
+            let fleet = match &d.intent {
+                crate::protocol::GameplayIntent::LaunchFleet {
+                    target_tile,
+                    troops,
+                } => Some((*target_tile, *troops)),
+                _ => None,
+            };
+            let route =
+                fleet.and_then(|(target_tile, _)| self.take_bot_route(d.bot_id, target_tile));
             let stamped = StampedIntent {
                 player_id: d.bot_id,
                 intent: d.intent,
             };
-            self.apply_stamped_intent(&stamped, intent_index as u32);
+            if let Some(route) = route {
+                self.apply_stamped_intent_with_fleet_route(&stamped, route, intent_index as u32);
+            } else {
+                self.apply_stamped_intent(&stamped, intent_index as u32);
+            }
         }
     }
 }

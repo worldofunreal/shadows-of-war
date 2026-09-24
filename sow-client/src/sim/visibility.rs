@@ -26,6 +26,8 @@ pub(crate) fn compute_visibility(
             fog_visible.blocks[i] = !0u64;
             fog_explored.blocks[i] = !0u64;
         }
+        fog_visible.rebuild_index();
+        fog_explored.rebuild_index();
         return;
     }
 
@@ -39,6 +41,8 @@ pub(crate) fn compute_visibility(
             fog_visible.blocks[i] = !0u64;
             fog_explored.blocks[i] = 0u64;
         }
+        fog_visible.rebuild_index();
+        fog_explored.rebuild_index();
         return;
     }
 
@@ -202,6 +206,7 @@ pub(crate) fn compute_visibility(
     for i in 0..total_blocks {
         fog_explored.blocks[i] |= fog_visible.blocks[i];
     }
+    fog_explored.rebuild_index();
 
     // Restore cached vectors to the thread-local storage
     TEMP_OWNERS_CACHE.with(|cache| {

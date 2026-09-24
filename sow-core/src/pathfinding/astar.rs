@@ -1,7 +1,7 @@
 //! Deterministic water A* for fleet routing. No HashMap iteration; integer costs only.
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, VecDeque};
+use std::collections::BinaryHeap;
 
 use crate::map::GameMap;
 
@@ -487,13 +487,10 @@ fn manhattan(x1: u32, y1: u32, x2: u32, y2: u32) -> u32 {
     dx.max(dy) as u32
 }
 
-/// Shared scratch buffers for water A* + closest-shore BFS (insert as `Resource` on the Bevy app).
+/// Shared scratch buffer for water A* (insert as `Resource` on the Bevy app).
 #[derive(Default, Clone)]
 pub struct WaterPathfinderScratch {
     pub astar: WaterAStar,
-    pub bfs_queue: VecDeque<u32>,
-    pub bfs_visited: Vec<u32>,
-    pub bfs_stamp: u32,
 }
 /// Bresenham line rasterization on an offset hex grid. Returns a Vec of tile
 /// indices from `src` to `dst` (inclusive). Pure integer math — used for

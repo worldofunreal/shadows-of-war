@@ -250,7 +250,7 @@ impl SowEngine {
             sea_lanes: self.state.sea_lanes.clone(),
             debug_mem_info: if cfg!(feature = "mem_profiler") {
                 format!(
-                    "Engine [Attacks: {}/{} | Fleets: {}/{} | Buildings: {}/{} | Events: {}/{} | Players: {}/{} | DirtyTilesCap: {}] Pathfinder [AStarHeapCap: {} | AStarCameCap: {} | BFSQueueCap: {} | BFSVisitedCap: {}] Placement [VisitedCap: {} | QueueCap: {} | BorderCap: {}]",
+                    "Engine [Attacks: {}/{} | Fleets: {}/{} | Buildings: {}/{} | Events: {}/{} | Players: {}/{} | DirtyTilesCap: {}] Pathfinder [AStarHeapCap: {} | AStarCameCap: {}] Placement [VisitedCap: {} | QueueCap: {} | BorderCap: {}]",
                     self.attacks.len(),
                     self.attacks.capacity(),
                     self.fleets.len(),
@@ -264,8 +264,6 @@ impl SowEngine {
                     self.state.map.dirty_tiles.capacity(),
                     self.path_scratch.astar.heap.capacity(),
                     self.path_scratch.astar.came_from.capacity(),
-                    self.path_scratch.bfs_queue.capacity(),
-                    self.path_scratch.bfs_visited.capacity(),
                     self.placement_scratch.visited_stamp.len(),
                     self.placement_scratch.queue.capacity(),
                     self.placement_scratch.border_scratch.capacity(),

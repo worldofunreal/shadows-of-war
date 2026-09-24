@@ -5,7 +5,6 @@
 //! target's shoreline. Uses connected-component queries to handle lakes, rivers,
 //! and disjoint oceans instead of relying on an arbitrary Manhattan radius.
 
-use std::collections::VecDeque;
 use std::fmt;
 
 use crate::map::{GameMap, TerrainType};
@@ -101,15 +100,7 @@ pub fn resolve_fleet_route(
             target_tile,
         )
     } else {
-        closest_neutral_shore_on_components(
-            map,
-            water_components,
-            &my_comps,
-            (target_tile, 200),
-            &mut path_scratch.bfs_queue,
-            &mut path_scratch.bfs_visited,
-            &mut path_scratch.bfs_stamp,
-        )
+        closest_neutral_shore_on_components(map, water_components, &my_comps, (target_tile, 200))
     };
     let landing = landing.ok_or(FleetLaunchError::NoLandingShore)?;
 
@@ -233,19 +224,14 @@ pub fn closest_target_shore_for_player(
     best.map(|(_, i)| i)
 }
 
-/// Resolve the landing tile for a neutral-owned target. We cannot iterate a player's
-/// perimeter so we BFS outward from the click over 4-connected tiles, bounded by
-/// `max_dist` Manhattan, accepting any neutral shoreline whose water component matches ours.
-///
-/// `max_dist = 200` is the Manhattan cap for neutral targets; scratch buffers are reused.
+/// Resolve the landing tile for a neutral-owned target from the static shoreline index.
+/// The component and Manhattan-distance filters match the old bounded BFS, including
+/// its smallest-index tie-break.
 pub fn closest_neutral_shore_on_components(
     map: &GameMap,
     components: &WaterComponents,
     my_water_comps: &[u32],
     target_params: (u32, u32),
-    queue: &mut VecDeque<u32>,
-    visited: &mut Vec<u32>,
-    visit_stamp: &mut u32,
 ) -> Option<u32> {
     let (click_tile, max_dist) = target_params;
     if my_water_comps.is_empty() {
@@ -261,72 +247,28 @@ pub fn closest_neutral_shore_on_components(
         return None;
     }
 
-    let need = area as usize;
-    if visited.len() < need {
-        visited.resize(need, 0);
-    }
-    *visit_stamp = visit_stamp.wrapping_add(1);
-    if *visit_stamp == 0 {
-        visited.fill(0);
-        *visit_stamp = 1;
-    }
-    let stamp = *visit_stamp;
-
     let cx = click_tile % w;
     let cy = click_tile / w;
-
-    queue.clear();
-    visited[click_tile as usize] = stamp;
-    queue.push_back(click_tile);
-
     let mut best: Option<(u32, u32)> = None;
 
-    while let Some(idx) = queue.pop_front() {
-        let x = idx % w;
-        let y = idx / w;
-        let t = map.terrain[idx as usize];
-        if t.is_land()
-            && t.is_shoreline()
-            && map.owner_id(x, y) == 0
-            && components_match(my_water_comps, components.component_of(idx))
-        {
+    for &component in my_water_comps {
+        let Some(shores) = components.shoreline_tiles.get(component as usize) else {
+            continue;
+        };
+        for &idx in shores {
+            let x = idx % w;
+            let y = idx / w;
+            if map.owner_id(x, y) != 0 || cx.abs_diff(x) + cy.abs_diff(y) > max_dist {
+                continue;
+            }
             let d = cx.abs_diff(x) + cy.abs_diff(y);
             match best {
                 None => best = Some((d, idx)),
-                Some((bd, bi)) => {
-                    if d < bd || (d == bd && idx < bi) {
-                        best = Some((d, idx));
-                    }
+                Some((bd, bi)) if d < bd || (d == bd && idx < bi) => {
+                    best = Some((d, idx));
                 }
+                Some(_) => {}
             }
-        }
-
-        let is_odd = !y.is_multiple_of(2);
-        let deltas: [(i32, i32); 6] = if is_odd {
-            [(1, 0), (-1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
-        } else {
-            [(1, 0), (-1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
-        };
-        let neighbors = deltas.iter().filter_map(|&(dx, dy)| {
-            let nx = x as i32 + dx;
-            let ny = y as i32 + dy;
-            if nx >= 0 && nx < w as i32 && ny >= 0 && ny < h as i32 {
-                Some((nx as u32, ny as u32))
-            } else {
-                None
-            }
-        });
-        for (nx, ny) in neighbors {
-            if cx.abs_diff(nx) + cy.abs_diff(ny) > max_dist {
-                continue;
-            }
-            let nidx = ny * w + nx;
-            let vi = nidx as usize;
-            if visited[vi] == stamp {
-                continue;
-            }
-            visited[vi] = stamp;
-            queue.push_back(nidx);
         }
     }
 

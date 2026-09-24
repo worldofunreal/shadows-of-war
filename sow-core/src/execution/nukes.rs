@@ -121,6 +121,7 @@ impl SowEngine {
         });
         self.building_grid.dirty = true;
         self.building_aggregates_dirty = true;
+        self.bot_sam_tiles_cache = None;
         self.defense_grid_dirty = true;
         self.sea_lanes_dirty = true;
 

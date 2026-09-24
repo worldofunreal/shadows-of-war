@@ -69,6 +69,12 @@ pub struct PlayerProgress {
     /// Local-first: merged (union) with any cloud profile, never overwritten.
     #[serde(default)]
     pub completed_episodes: std::collections::BTreeSet<String>,
+    /// Server-created match receipts used only for main-menu presentation.
+    #[serde(default)]
+    pub reward_receipts:
+        std::collections::BTreeMap<String, sow_data::profile::RewardReceipt>,
+    #[serde(default)]
+    pub unlocked_achievements: std::collections::BTreeSet<String>,
 }
 
 fn deserialize_leader<'de, D>(deserializer: D) -> Result<Option<Leader>, D::Error>
@@ -149,6 +155,10 @@ pub enum DbEvent {
         operation: String,
         status: Option<u16>,
     },
+    RewardReceiptsAcked {
+        account_id: String,
+        receipt_ids: Vec<String>,
+    },
 }
 
 impl PlayerProgress {
@@ -184,8 +194,9 @@ impl PlayerProgress {
     }
 
     /// Mark a campaign episode complete with the same reward weight as the
-    /// teaching intro (100 crowns + 100 laurels): finishing an episode is the retention
-    /// backbone, and a full saga lands near one free leader unlock.
+    /// teaching intro (100 crowns; laurels come only from server achievements):
+    /// finishing an episode is the retention backbone, and a full saga lands
+    /// near one free leader unlock.
     /// Idempotent per episode id.
     pub fn complete_episode(&mut self, episode_id: &str, leader: Leader) -> bool {
         if !self.completed_episodes.insert(episode_id.to_string()) {
@@ -213,6 +224,8 @@ impl PlayerProgress {
             || !self.owned_skins.is_empty()
             || !self.leader_xp.is_empty()
             || !self.completed_episodes.is_empty()
+            || !self.reward_receipts.is_empty()
+            || !self.unlocked_achievements.is_empty()
     }
 
     /// Prefer cloud profile when it has history; otherwise keep local/CG portal data.
@@ -221,6 +234,8 @@ impl PlayerProgress {
     pub fn merge_boot_profile(&mut self, cloud: PlayerProgress) {
         let local_intro_completed = self.intro_completed.unwrap_or(false);
         let local_episodes = std::mem::take(&mut self.completed_episodes);
+        let local_receipts = std::mem::take(&mut self.reward_receipts);
+        let local_achievements = std::mem::take(&mut self.unlocked_achievements);
         if cloud.has_history() || !self.has_history() {
             *self = cloud;
         }
@@ -228,6 +243,10 @@ impl PlayerProgress {
             self.intro_completed = Some(true);
         }
         self.completed_episodes.extend(local_episodes);
+        for (id, receipt) in local_receipts {
+            self.reward_receipts.entry(id).or_insert(receipt);
+        }
+        self.unlocked_achievements.extend(local_achievements);
     }
 
     pub fn sync_level(&mut self) {
@@ -284,7 +303,7 @@ mod tests {
         assert_eq!(progress.intro_completed, Some(true));
         assert_eq!(progress.xp, 100);
         assert_eq!(progress.crowns, 100);
-        assert_eq!(progress.laurels, 100);
+        assert_eq!(progress.laurels, 0);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&100));
     }
 
@@ -336,7 +355,7 @@ mod tests {
         assert_eq!(progress.matches_played, 1);
         assert_eq!(progress.leader_xp.get("Boudica"), Some(&140));
         assert_eq!(progress.crowns, 106);
-        assert_eq!(progress.laurels, 22);
+        assert_eq!(progress.laurels, 0);
     }
 
     #[test]

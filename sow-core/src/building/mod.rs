@@ -36,15 +36,8 @@ mod tests {
         let (map, owner) = tiny_owned_map();
         let grid = BuildingGrid::rebuild_empty(map.width, map.height);
         let mut scratch = crate::engine::PlacementScratch::default();
-        let v = valid_land_structure_indices(
-            &map,
-            owner,
-            2,
-            BuildingKind::City,
-            &grid,
-            &[],
-            &mut scratch,
-        );
+        let v =
+            valid_land_structure_indices(&map, owner, 2, BuildingKind::City, &grid, &mut scratch);
         assert!(v.contains(&2));
     }
 
@@ -63,15 +56,8 @@ mod tests {
         let mut grid = BuildingGrid::default();
         grid.rebuild_from_pairs(w, 1, &[(15u32, 0u32)]);
         let mut scratch = crate::engine::PlacementScratch::default();
-        let v = valid_land_structure_indices(
-            &m,
-            owner,
-            click,
-            BuildingKind::City,
-            &grid,
-            &[],
-            &mut scratch,
-        );
+        let v =
+            valid_land_structure_indices(&m, owner, click, BuildingKind::City, &grid, &mut scratch);
         assert!(!v.contains(&15));
         assert!(!v.is_empty());
     }

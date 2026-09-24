@@ -31,6 +31,11 @@
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() : { linked: false, pending: false };
         var accountXp = Math.max(0, Number(state.xp) || 0);
         var crowns = state.crowns || 0;
+        var gems = state.gems || 0;
+        var pendingRewards = (state.reward_receipts || []).filter(function (receipt) { return receipt.status !== "presented" && !receipt.presented_at; });
+        var rewardXp = pendingRewards.reduce(function (sum, receipt) { return sum + Math.max(0, Number(receipt.xp) || 0); }, 0);
+        var rewardCrowns = pendingRewards.reduce(function (sum, receipt) { return sum + Math.max(0, Number(receipt.crowns) || 0); }, 0);
+        var rewardLaurels = pendingRewards.reduce(function (sum, receipt) { return sum + Math.max(0, Number(receipt.laurels) || 0); }, 0);
         return "" +
             "<header class='sow-menu__topbar'>" +
                 "<div class='sow-menu__identity'>" +
@@ -38,7 +43,7 @@
                         "aria-label='" + esc(SOW_t("menu.select_leader")) + "' style=\"background-image:url('" + esc(avatarImage()) + "')\"></button>" +
                     "<div class='sow-menu__profile'>" +
                         "<input data-role='display-name' name='display_name' value=\"" + esc(name) + "\" maxlength='16' aria-label='" + esc(SOW_t("menu.display_name")) + "'>" +
-                        "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leader.name) + " · " + esc(leaderCivilization(leader)) + "</button>" +
+                        "<button class='sow-menu__profile-link' type='button' data-command='open_profile'>" + esc(leaderDisplayName(leader)) + " · " + esc(leaderCivilization(leader)) + "</button>" +
                     "</div>" +
                 "</div>" +
                 "<div class='sow-menu__top-actions'>" +
@@ -46,7 +51,9 @@
                         "<span class='sow-menu__progress-cell sow-menu__level'><small>" + esc(SOW_t("menu.level_short")) + "</small><strong data-progression-level-value>" + esc(state.level) + "</strong></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__xp'><span class='sow-menu__xp-value' data-progression-xp-value>" + esc(Math.floor(accountXp)) + " " + esc(SOW_t("menu.xp")) + "</span><span class='sow-menu__xp-track' aria-hidden='true'><i data-progression-xp-fill style='width:" + (accountXp % 100) + "%'></i></span></span>" +
                         "<span class='sow-menu__progress-cell sow-menu__crowns'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("crown")) + "' alt='' aria-hidden='true'><strong data-progression-crowns-value>" + esc(crowns) + "</strong></span>" +
+                        "<span class='sow-menu__progress-cell sow-menu__gems'><img class='sow-menu__currency-icon' src='" + esc(currencyAsset("gem")) + "' alt='' aria-hidden='true'><strong data-progression-gems-value>" + esc(gems) + "</strong></span>" +
                     "</div>" +
+                    "<div class='sow-menu__reward-toast" + (pendingRewards.length ? " is-visible" : "") + "' data-reward-toast aria-live='polite'" + (pendingRewards.length ? "" : " hidden") + ">+" + esc(rewardXp) + " XP · +" + esc(rewardCrowns) + " crowns · +" + esc(rewardLaurels) + " laurels</div>" +
                     (auth.linked || auth.pending ? "" : "<button class='sow-menu__signin' type='button' data-command='sign_in'>" + esc(SOW_t("menu.sign_in")) + "</button>") +
                     "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.settings")) + "'>⚙</button>" +
                 "</div>" +
@@ -403,7 +410,7 @@
             avatar.dataset.avatarUrl = avatarUrl;
         }
         var leaderLink = topbar.querySelector(".sow-menu__profile-link");
-        if (leaderLink) leaderLink.textContent = leader.name + " · " + leaderCivilization(leader);
+        if (leaderLink) leaderLink.textContent = leaderDisplayName(leader) + " · " + leaderCivilization(leader);
         var auth = typeof window.SOW_getAuthState === "function" ? window.SOW_getAuthState() || {} : {};
         var showSignIn = !(auth.linked || auth.pending);
         var actions = topbar.querySelector(".sow-menu__top-actions");
@@ -433,6 +440,13 @@
         if (shell && shell.className !== shellClass) shell.className = shellClass;
         root.querySelectorAll("[data-nav-screen]").forEach(function (item) {
             var active = item.dataset.navScreen === screenNav(screen);
+            var navItem = MAIN_NAV_ITEMS.find(function (candidate) {
+                return candidate[0] === item.dataset.navScreen;
+            });
+            var labelText = navItem ? SOW_t(navItem[2]) : "";
+            var labelNode = item.querySelector("small");
+            if (labelNode && labelText) labelNode.textContent = labelText;
+            if (labelText) item.setAttribute("aria-label", labelText);
             item.classList.toggle("is-active", active);
             if (active) item.setAttribute("aria-current", "page");
             else item.removeAttribute("aria-current");
@@ -531,6 +545,7 @@
         syncOverlay("settings", settingsOpen ? renderSettings() : "");
         syncOverlay("auth", authModalOpen ? renderAuthModal() : "");
         syncOverlay("profile-detail", profileOpen ? renderProfileDetail() : "");
+        syncOverlay("purchase", typeof renderPurchaseModal === "function" ? renderPurchaseModal() : "");
 
         if (sameScreen && isTyping) {
             var restored = null;
@@ -573,11 +588,25 @@
             var xpValue = progression.querySelector("[data-progression-xp-value]");
             var xpFill = progression.querySelector("[data-progression-xp-fill]");
             var crownsValue = progression.querySelector("[data-progression-crowns-value]");
+            var gemsValue = progression.querySelector("[data-progression-gems-value]");
             if (levelValue) levelValue.textContent = progressionLevel;
             if (xpValue) xpValue.textContent = Math.floor(progressionXp) + " " + SOW_t("menu.xp");
             if (xpFill) xpFill.style.width = (progressionXp % 100) + "%";
             var crowns = state.crowns || 0;
             if (crownsValue) crownsValue.textContent = Math.max(0, Number(crowns) || 0);
+            var gems = state.gems || 0;
+            if (gemsValue) gemsValue.textContent = Math.max(0, Number(gems) || 0);
+        }
+        var rewardToast = root.querySelector("[data-reward-toast]");
+        var pendingRewards = (state.reward_receipts || []).filter(function (receipt) { return receipt.status !== "presented" && !receipt.presented_at; });
+        if (rewardToast && pendingRewards.length && rewardToast.dataset.ackSent !== "true") {
+            var receiptIds = pendingRewards.map(function (receipt) { return receipt.id; }).filter(Boolean);
+            rewardToast.hidden = false;
+            rewardToast.classList.add("is-visible");
+            rewardToast.dataset.ackSent = "true";
+            window.setTimeout(function () {
+                if (receiptIds.length) send("acknowledge_reward_receipts", { receipt_ids: receiptIds });
+            }, 1200);
         }
         var settings = state.settings || {};
         var musicInput = root.querySelector("[data-setting='music_volume']");
@@ -603,6 +632,12 @@
     }
 
     root.addEventListener("click", function (event) {
+        var purchaseOverlay = event.target.closest("[data-menu-overlay='purchase']");
+        if (purchaseOverlay && event.target === purchaseOverlay) {
+            purchaseModal = null;
+            render();
+            return;
+        }
         var settingsOverlay = event.target.closest("[data-menu-overlay='settings']");
         if (settingsOverlay && event.target === settingsOverlay) {
             settingsOpen = false;
@@ -640,6 +675,10 @@
             return;
         }
         /* POKI_SHARED_STORE_ACTIONS_BEGIN */
+        if (command === "open_product_purchase") {
+            openProductPurchase(target.dataset.productId, target.dataset.leaderId, target.dataset.priceLabel);
+            return;
+        }
         if (command === "buy_product") {
             beginStorePurchase(target.dataset.productId);
             return;
@@ -662,6 +701,7 @@
             storeCheckoutProduct = null;
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
+            purchaseModal = null;
             settingsOpen = false;
             signOutConfirmOpen = false;
             campaignOpen = false;
@@ -742,6 +782,8 @@
                 if (historyEntry && (historyEntry.historyHasMore || historyEntry.historyError || !historyEntry.historyLoaded || historyEntry.stale)) loadMoreProfileHistory();
             } else if (profileTab === "ranked") {
                 loadProfileRatings();
+            } else if (profileTab === "victories") {
+                loadVictoryLeaderboard();
             }
             return;
         }
@@ -922,8 +964,25 @@
         if (command === "unlock_leader") {
             var unlockLeaderId = target.dataset.leaderId;
             var unlockCurrency = target.dataset.currency || "crowns";
-            if (unlockLeaderId && !(state && state.store_busy)) {
-                send("unlock_leader", { leader_id: unlockLeaderId, currency: unlockCurrency });
+            if (unlockLeaderId) openLeaderPurchase(unlockLeaderId, unlockCurrency);
+            return;
+        }
+        if (command === "confirm_purchase") {
+            if (!purchaseModal || purchaseModal.submitted) return;
+            purchaseModal.submitted = true;
+            if (purchaseModal.type === "leader") {
+                if (!(state && state.store_busy)) send("unlock_leader", { leader_id: purchaseModal.leaderId, currency: purchaseModal.currency });
+            } else if (purchaseModal.type === "product") {
+                if (!beginStorePurchase(purchaseModal.productId)) purchaseModal.submitted = false;
+            }
+            render();
+            return;
+        }
+        if (command === "cancel_purchase") {
+            if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
+            else {
+                purchaseModal = null;
+                render();
             }
             return;
         }
@@ -1135,10 +1194,13 @@
         storeCheckoutRequestId = null;
         if (result.status === "success" || result.status === "restored") {
             state.error = null;
+            purchaseModal = null;
             send("refresh_profile");
         } else if (result.status === "cancelled") {
+            purchaseModal = null;
             state.error = SOW_t("menu.purchase_cancelled");
         } else {
+            purchaseModal = null;
             state.error = SOW_t("menu.purchase_failed");
         }
         render();
@@ -1195,6 +1257,15 @@
             signOutConfirmOpen = false;
             dropdownOpenKey = null;
             render();
+            return;
+        }
+        if (event.key === "Escape" && purchaseModal) {
+            event.preventDefault();
+            if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
+            else {
+                purchaseModal = null;
+                render();
+            }
             return;
         }
         if (event.key === "Escape" && profileMatchDetail) {
@@ -1444,6 +1515,7 @@
             console.warn("[WEB MENU] invalid state:", error);
             return;
         }
+        if (typeof resolvePurchaseModal === "function") resolvePurchaseModal();
         var returnedFromGame = lastMenuPhase !== null &&
             lastMenuPhase !== "MainMenu" &&
             state.phase === "MainMenu" &&
@@ -1479,9 +1551,9 @@
         syncWebLoaderForState(state);
     }
 
-    window.SOW_menu_locale_changed = function () {
+    window.addEventListener("sow:locale-change", function () {
         if (state && !root.hidden) render();
-    };
+    });
 
     window.SOW_menu_state_update = handleMenuStateUpdate;
     root.hidden = true;

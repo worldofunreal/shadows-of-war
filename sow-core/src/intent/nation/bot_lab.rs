@@ -17,7 +17,7 @@
 
 use super::profile::{ai_profile_for, ai_tier};
 use crate::engine::SowEngine;
-use crate::game::{GamePhase, GameState};
+use crate::game::{GameEvent, GamePhase, GameState};
 use crate::player::{Player, PlayerType};
 use crate::protocol::{AttackIntent, GameplayIntent, Team};
 use crate::water_components::WaterComponents;
@@ -184,6 +184,511 @@ fn grant_block(engine: &mut SowEngine, owner: u16, x0: u32, y0: u32, w: u32, h: 
                 p.border_insert(y * map_w + x);
             }
         }
+    }
+}
+
+struct S16Scenario {
+    engine: SowEngine,
+    first_nation: u16,
+    last_nation: u16,
+    ghost_id: u16,
+    first_tribe: u16,
+    last_tribe: u16,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum S16Progress {
+    Attack {
+        tick: u64,
+        owner_id: u16,
+        target_owner: u16,
+        troops: f64,
+        target_troops: f64,
+    },
+    Capture {
+        tick: u64,
+        new_owner: u16,
+        previous_owner: u16,
+        troops: f64,
+    },
+}
+
+impl S16Progress {
+    fn summary(self) -> String {
+        match self {
+            Self::Attack {
+                tick,
+                owner_id,
+                target_owner,
+                troops,
+                target_troops,
+            } => format!(
+                "attack tick={tick} owner={owner_id} target={target_owner} troops={troops:.0} target_troops={target_troops:.0}"
+            ),
+            Self::Capture {
+                tick,
+                new_owner,
+                previous_owner,
+                troops,
+            } => format!(
+                "capture tick={tick} owner={new_owner} previous={previous_owner} troops={troops:.0}"
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct S16Elimination {
+    tick: u64,
+    victim_id: u16,
+    conqueror_id: u16,
+    x: u32,
+    y: u32,
+    by_nuke: bool,
+    victim_alive: bool,
+    victim_tiles: u32,
+    victim_troops: f64,
+    conqueror_alive: bool,
+    conqueror_tiles: u32,
+    conqueror_troops: f64,
+}
+
+impl S16Elimination {
+    fn summary(self) -> String {
+        format!(
+            "tick={} victim={} conqueror={} at=({}, {}) nuke={} victim={{alive={} tiles={} troops={:.0}}} conqueror={{alive={} tiles={} troops={:.0}}}",
+            self.tick,
+            self.victim_id,
+            self.conqueror_id,
+            self.x,
+            self.y,
+            self.by_nuke,
+            self.victim_alive,
+            self.victim_tiles,
+            self.victim_troops,
+            self.conqueror_alive,
+            self.conqueror_tiles,
+            self.conqueror_troops,
+        )
+    }
+}
+
+#[derive(Debug, Default)]
+struct S16WindowStats {
+    start_tick: u64,
+    end_tick: u64,
+    contacts: u32,
+    tribe_tiles_start: u32,
+    tribe_tiles_end: u32,
+    new_tribe_attacks: u32,
+    tribe_captures: u32,
+    eliminations: u32,
+    alive_nations_end: u32,
+    functioning_nations_end: u32,
+    nation_tiles_end: u32,
+    nation_troops_end: f64,
+    last_progress: Option<S16Progress>,
+    first_elimination: Option<S16Elimination>,
+    last_elimination: Option<S16Elimination>,
+}
+
+impl S16Scenario {
+    fn nation_ids(&self) -> std::ops::RangeInclusive<u16> {
+        self.first_nation..=self.last_nation
+    }
+
+    fn tribe_ids(&self) -> std::ops::RangeInclusive<u16> {
+        self.first_tribe..=self.last_tribe
+    }
+
+    fn is_nation_or_ghost(&self, id: u16) -> bool {
+        id <= self.ghost_id && id >= self.first_nation
+    }
+
+    fn is_tribe(&self, id: u16) -> bool {
+        id >= self.first_tribe && id <= self.last_tribe
+    }
+
+    fn tribe_tiles(&self) -> u32 {
+        self.tribe_ids()
+            .filter_map(|id| self.engine.state.player(id))
+            .map(|p| p.tile_count)
+            .sum()
+    }
+
+    fn nation_counts(&self) -> (u32, u32) {
+        let mut alive = 0;
+        let mut functioning = 0;
+        for id in self.nation_ids() {
+            if let Some(p) = self.engine.state.player(id)
+                && p.alive
+            {
+                alive += 1;
+                if p.tile_count > 50 {
+                    functioning += 1;
+                }
+            }
+        }
+        (alive, functioning)
+    }
+
+    fn nation_state(&self) -> (u32, u32, u32, f64) {
+        let mut tiles = 0;
+        let mut troops = 0.0;
+        for id in self.nation_ids() {
+            if let Some(p) = self.engine.state.player(id) {
+                tiles += p.tile_count;
+                troops += p.troops;
+            }
+        }
+        let (alive, functioning) = self.nation_counts();
+        (alive, functioning, tiles, troops)
+    }
+
+    fn tribe_contacts(&self) -> u32 {
+        let map_width = self.engine.state.map.width;
+        let mut contacts = 0;
+        for id in self.first_nation..=self.ghost_id {
+            let Some(player) = self.engine.state.player(id) else {
+                continue;
+            };
+            if !player.alive {
+                continue;
+            }
+            let touches = player.border_tiles.ones().any(|raw| {
+                let bx = raw % map_width;
+                let by = raw / map_width;
+                let mut hit = false;
+                self.engine.state.map.for_each_neighbor(bx, by, |nx, ny| {
+                    if hit {
+                        return;
+                    }
+                    let owner = self.engine.state.map.owner_id(nx, ny);
+                    if self.is_tribe(owner) {
+                        hit = true;
+                    }
+                });
+                hit
+            });
+            if touches {
+                contacts += 1;
+            }
+        }
+        contacts
+    }
+
+    fn assert_setup(&self) {
+        assert_eq!(
+            self.nation_ids().count(),
+            20,
+            "S16 SETUP FAIL: expected 20 Nations"
+        );
+        assert_eq!(
+            self.tribe_ids().count(),
+            40,
+            "S16 SETUP FAIL: expected 40 Tribes"
+        );
+        assert_eq!(
+            self.engine.state.players.len(),
+            61,
+            "S16 SETUP FAIL: wrong player count"
+        );
+
+        for id in self.nation_ids() {
+            let p = self
+                .engine
+                .state
+                .player(id)
+                .unwrap_or_else(|| panic!("S16 SETUP FAIL: missing Nation {id}"));
+            assert_eq!(
+                p.player_type,
+                PlayerType::Nation,
+                "S16 SETUP FAIL: player {id} is not a Nation"
+            );
+            assert!(p.alive, "S16 SETUP FAIL: Nation {id} starts dead");
+            assert!(
+                !p.is_ai_controlled,
+                "S16 SETUP FAIL: Nation {id} is a Ghost"
+            );
+            assert_eq!(
+                p.tile_count, 1,
+                "S16 SETUP FAIL: Nation {id} territory changed"
+            );
+        }
+
+        let ghost = self
+            .engine
+            .state
+            .player(self.ghost_id)
+            .unwrap_or_else(|| panic!("S16 SETUP FAIL: missing Ghost {}", self.ghost_id));
+        assert_eq!(
+            ghost.player_type,
+            PlayerType::Human,
+            "S16 SETUP FAIL: Ghost has wrong player type"
+        );
+        assert!(
+            ghost.is_ai_controlled,
+            "S16 SETUP FAIL: Ghost is not AI controlled"
+        );
+        assert!(ghost.alive, "S16 SETUP FAIL: Ghost starts dead");
+        assert_eq!(
+            ghost.tile_count, 1,
+            "S16 SETUP FAIL: Ghost territory changed"
+        );
+
+        for id in self.tribe_ids() {
+            let p = self
+                .engine
+                .state
+                .player(id)
+                .unwrap_or_else(|| panic!("S16 SETUP FAIL: missing Tribe {id}"));
+            assert_eq!(
+                p.player_type,
+                PlayerType::Bot,
+                "S16 SETUP FAIL: player {id} is not a Tribe"
+            );
+            assert!(p.alive, "S16 SETUP FAIL: Tribe {id} starts dead");
+            assert!(!p.is_ai_controlled, "S16 SETUP FAIL: Tribe {id} is a Ghost");
+            assert_eq!(
+                p.tile_count, 26,
+                "S16 SETUP FAIL: Tribe {id} initial block changed"
+            );
+        }
+    }
+
+    fn run_window(&mut self, ticks: u64) -> S16WindowStats {
+        let mut stats = S16WindowStats {
+            start_tick: self.engine.state.tick,
+            tribe_tiles_start: self.tribe_tiles(),
+            ..Default::default()
+        };
+
+        for _ in 0..ticks {
+            if self.engine.state.phase != GamePhase::Playing {
+                break;
+            }
+
+            let first_new_attack_id = self.engine.state.next_attack_id;
+            self.engine.tick();
+            let next_attack_id = self.engine.state.next_attack_id;
+
+            for attack in &self.engine.attacks {
+                if attack.id >= first_new_attack_id
+                    && attack.id < next_attack_id
+                    && self.is_nation_or_ghost(attack.owner_id)
+                    && self.is_tribe(attack.target_owner)
+                {
+                    stats.new_tribe_attacks += 1;
+                    let target_troops = self
+                        .engine
+                        .state
+                        .player(attack.target_owner)
+                        .map(|p| p.troops)
+                        .unwrap_or(0.0);
+                    stats.last_progress = Some(S16Progress::Attack {
+                        tick: self.engine.state.tick,
+                        owner_id: attack.owner_id,
+                        target_owner: attack.target_owner,
+                        troops: attack.troops,
+                        target_troops,
+                    });
+                }
+            }
+
+            for event in &self.engine.state.events {
+                match event {
+                    GameEvent::TileCaptured {
+                        new_owner,
+                        previous_owner,
+                        troops,
+                        ..
+                    } if self.is_nation_or_ghost(*new_owner) && self.is_tribe(*previous_owner) => {
+                        stats.tribe_captures += 1;
+                        stats.last_progress = Some(S16Progress::Capture {
+                            tick: self.engine.state.tick,
+                            new_owner: *new_owner,
+                            previous_owner: *previous_owner,
+                            troops: *troops,
+                        });
+                    }
+                    GameEvent::PlayerEliminated {
+                        player_id,
+                        conqueror_id,
+                        elimination_x,
+                        elimination_y,
+                        by_nuke,
+                        ..
+                    } => {
+                        stats.eliminations += 1;
+                        let (victim_alive, victim_tiles, victim_troops) = self
+                            .engine
+                            .state
+                            .player(*player_id)
+                            .map(|p| (p.alive, p.tile_count, p.troops))
+                            .unwrap_or((false, 0, 0.0));
+                        let (conqueror_alive, conqueror_tiles, conqueror_troops) = self
+                            .engine
+                            .state
+                            .player(*conqueror_id)
+                            .map(|p| (p.alive, p.tile_count, p.troops))
+                            .unwrap_or((false, 0, 0.0));
+                        let elimination = S16Elimination {
+                            tick: self.engine.state.tick,
+                            victim_id: *player_id,
+                            conqueror_id: *conqueror_id,
+                            x: *elimination_x,
+                            y: *elimination_y,
+                            by_nuke: *by_nuke,
+                            victim_alive,
+                            victim_tiles,
+                            victim_troops,
+                            conqueror_alive,
+                            conqueror_tiles,
+                            conqueror_troops,
+                        };
+                        if stats.first_elimination.is_none() {
+                            stats.first_elimination = Some(elimination);
+                        }
+                        stats.last_elimination = Some(elimination);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        stats.end_tick = self.engine.state.tick;
+        stats.tribe_tiles_end = self.tribe_tiles();
+        stats.contacts = self.tribe_contacts();
+        let (alive, functioning, tiles, troops) = self.nation_state();
+        stats.alive_nations_end = alive;
+        stats.functioning_nations_end = functioning;
+        stats.nation_tiles_end = tiles;
+        stats.nation_troops_end = troops;
+        stats
+    }
+
+    fn progress(&self, stats: &S16WindowStats) -> u32 {
+        stats.new_tribe_attacks + stats.tribe_captures
+    }
+}
+
+fn s16_replay_trace() -> String {
+    let mut scenario = build_s16_scenario();
+    scenario.assert_setup();
+    let mut trace = String::new();
+
+    for window in 0..8 {
+        let stats = scenario.run_window(500);
+        let (alive_nations, functioning_nations) = scenario.nation_counts();
+        let players: Vec<_> = scenario
+            .engine
+            .state
+            .players
+            .iter()
+            .map(|p| {
+                (
+                    p.id,
+                    p.alive,
+                    p.tile_count,
+                    p.troops.to_bits(),
+                    p.max_troops.to_bits(),
+                    p.gold.to_bits(),
+                )
+            })
+            .collect();
+        trace.push_str(&format!(
+            "window={window} tick={} phase={:?} next_attack_id={} alive={alive_nations} functioning={functioning_nations} stats={stats:?} players={players:?}\n",
+            scenario.engine.state.tick,
+            scenario.engine.state.phase,
+            scenario.engine.state.next_attack_id,
+        ));
+        if alive_nations == 0 || scenario.engine.state.phase != GamePhase::Playing {
+            break;
+        }
+    }
+
+    trace
+}
+
+fn build_s16_scenario() -> S16Scenario {
+    let mut specs: Vec<LabPlayer> = Vec::new();
+    let mut id = 1u16;
+    for row in 0..5 {
+        for col in 0..4 {
+            specs.push(LabPlayer::nation(id, 6 + col * 18, 6 + row * 18));
+            id += 1;
+        }
+    }
+    specs.push(LabPlayer::ghost(id, 40, 40));
+    id += 1;
+    let ghost_id = id - 1;
+    let first_tribe = id;
+    let mut tribes = 0;
+    for row in 0..5 {
+        for col in 0..8 {
+            if tribes >= 40 {
+                break;
+            }
+            let x = 2 + col * 9 + 4;
+            let y = 2 + row * 16 + 9;
+            let clash = specs
+                .iter()
+                .any(|s| (s.x as i32 - x).abs() < 4 && (s.y as i32 - y).abs() < 4);
+            if clash || (x, y) == (40, 40) {
+                continue;
+            }
+            specs.push(LabPlayer::tribe(id, x as u32, y as u32));
+            id += 1;
+            tribes += 1;
+        }
+    }
+    // Preserve the original grid above, then fill its skipped Nation-adjacent
+    // slots deterministically. The declared S16 ecosystem has 40 Tribes; the
+    // old five-row grid produced only 24 after its clash filter.
+    'extra_tribes: for y in (1..79).step_by(6) {
+        for x in (1..79).step_by(6) {
+            if tribes >= 40 {
+                break 'extra_tribes;
+            }
+            let clash = specs
+                .iter()
+                .any(|s| (s.x as i32 - x as i32).abs() < 6 && (s.y as i32 - y as i32).abs() < 6);
+            if clash || (x, y) == (40, 40) {
+                continue;
+            }
+            specs.push(LabPlayer::tribe(id, x, y));
+            id += 1;
+            tribes += 1;
+        }
+    }
+    assert_eq!(
+        tribes, 40,
+        "S16 SETUP FAIL: scenario generated {tribes} Tribes"
+    );
+    let last_tribe = id - 1;
+
+    let mut engine = build_lab(80, 80, "FFA", &specs);
+    engine.state.config.map_control_win_percentage = 95.0;
+    for s in &specs {
+        if s.kind == PlayerType::Bot {
+            grant_block(
+                &mut engine,
+                s.id,
+                s.x.saturating_sub(2),
+                s.y.saturating_sub(2),
+                5,
+                5,
+            );
+        }
+    }
+
+    S16Scenario {
+        engine,
+        first_nation: 1,
+        last_nation: 20,
+        ghost_id,
+        first_tribe,
+        last_tribe,
     }
 }
 
@@ -1297,171 +1802,122 @@ fn s15_no_suicide_against_dwarfing_player() {
 // total freeze (windows going quiet) and the gray-carpet win.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-fn s16_long_horizon_wars_keep_flowing() {
-    let mut specs: Vec<LabPlayer> = Vec::new();
-    let mut id = 1u16;
-    for row in 0..5 {
-        for col in 0..4 {
-            specs.push(LabPlayer::nation(id, 6 + col * 18, 6 + row * 18));
-            id += 1;
-        }
-    }
-    specs.push(LabPlayer::ghost(id, 40, 40));
-    id += 1;
-    let ghost_id = id - 1;
-    let first_tribe = id;
-    let mut tribes = 0;
-    for row in 0..5 {
-        for col in 0..8 {
-            if tribes >= 40 {
-                break;
-            }
-            let x = 2 + col * 9 + 4;
-            let y = 2 + row * 16 + 9;
-            let clash = specs
-                .iter()
-                .any(|s| (s.x as i32 - x).abs() < 4 && (s.y as i32 - y).abs() < 4);
-            if clash || (x, y) == (40, 40) {
-                continue;
-            }
-            specs.push(LabPlayer::tribe(id, x as u32, y as u32));
-            id += 1;
-            tribes += 1;
-        }
-    }
-    let last_tribe = id - 1;
+fn s16_setup_contract() {
+    let scenario = build_s16_scenario();
+    scenario.assert_setup();
+}
 
-    let mut engine = build_lab(80, 80, "FFA", &specs);
-    engine.state.config.map_control_win_percentage = 95.0; // never end early
-    for s in &specs {
-        if s.kind == crate::player::PlayerType::Bot {
-            grant_block(
-                &mut engine,
-                s.id,
-                s.x.saturating_sub(2),
-                s.y.saturating_sub(2),
-                5,
-                5,
-            );
-        }
-    }
+#[test]
+fn s16_early_ecosystem_contract() {
+    let mut scenario = build_s16_scenario();
+    scenario.assert_setup();
 
-    let windows = 8;
-    let mut tribe_war_ticks = Vec::new();
-    let mut contacts_log: Vec<u32> = Vec::new();
-    let mut tribe_mass_log: Vec<u32> = Vec::new();
-    for _ in 0..windows {
-        let mut hits = 0u32;
-        for _ in 0..500 {
-            if !run_window(&mut engine, 1) {
-                break;
-            }
-            if engine.attacks.iter().any(|a| {
-                a.owner_id <= ghost_id
-                    && engine
-                        .state
-                        .player(a.target_owner)
-                        .map(|p| p.player_type == crate::player::PlayerType::Bot)
-                        .unwrap_or(false)
-            }) {
-                hits += 1;
-            }
-        }
-        let mut tribes_alive = 0u32;
-        let mut tribe_tiles = 0u32;
-        let mut ai_alive = 0u32;
-        for t in first_tribe..=last_tribe {
-            if let Some(pl) = engine.state.player(t)
-                && pl.alive
-            {
-                tribes_alive += 1;
-                tribe_tiles += pl.tile_count;
-            }
-        }
-        for a in 1..=ghost_id {
-            if engine.state.player(a).map(|pl| pl.alive).unwrap_or(false) {
-                ai_alive += 1;
-            }
-        }
-        // count AI players with at least one Bot-type neighbor border
-        let mut contacts = 0u32;
-        for a in 1..=ghost_id {
-            let Some(pl) = engine.state.player(a) else {
-                continue;
-            };
-            if !pl.alive {
-                continue;
-            }
-            let touches = pl.border_tiles.ones().any(|raw| {
-                let bx = raw % engine.state.map.width;
-                let by = raw / engine.state.map.width;
-                let mut hit = false;
-                engine.state.map.for_each_neighbor(bx, by, |nx, ny| {
-                    if hit {
-                        return;
-                    }
-                    let o = engine.state.map.owner_id(nx, ny);
-                    if o != 0
-                        && o != pl.id
-                        && let Some(op) = engine.state.player(o)
-                        && op.player_type == crate::player::PlayerType::Bot
-                    {
-                        hit = true;
-                    }
-                });
-                hit
-            });
-            if touches {
-                contacts += 1;
-            }
-        }
-        contacts_log.push(contacts);
-        tribe_mass_log.push(tribe_tiles);
-        eprintln!(
-            "S16 W{}: hits={hits} ai_alive={ai_alive} tribes_alive={tribes_alive} tribe_tiles={tribe_tiles} ai-with-tribe-border={contacts}",
-            tribe_war_ticks.len()
+    let stats = scenario.run_window(500);
+    let (alive_nations, functioning_nations) = scenario.nation_counts();
+    assert_eq!(
+        scenario.engine.state.phase,
+        GamePhase::Playing,
+        "S16 EARLY FAIL: match ended at tick {} stats={stats:?}",
+        scenario.engine.state.tick
+    );
+
+    let grew = scenario.nation_ids().any(|id| {
+        scenario
+            .engine
+            .state
+            .player(id)
+            .is_some_and(|p| p.tile_count > 1)
+    });
+    assert!(
+        grew,
+        "S16 EARLY FAIL: no Nation expanded in 500 ticks; alive={alive_nations} functioning={functioning_nations} stats={stats:?}"
+    );
+
+    if stats.contacts > 0 && stats.tribe_tiles_end >= 500 {
+        let progress = scenario.progress(&stats);
+        assert!(
+            progress >= 3,
+            "S16 WAR FAIL: tick {} had {} AI contacts with {} Tribe tiles but only {progress} real progress; stats={stats:?}",
+            stats.end_tick,
+            stats.contacts,
+            stats.tribe_tiles_end
         );
-        tribe_war_ticks.push(hits);
     }
-    // The freeze signature: tribe borders exist AND tribes still hold real
-    // mass, yet zero wars. (Player-war preference is legitimate; a resolved
-    // map with tribes ground to stubs is not the regress.)
-    for (w, hits) in tribe_war_ticks.iter().enumerate() {
-        if contacts_log[w] > 0 && tribe_mass_log[w] >= 500 {
+}
+
+#[test]
+fn s16_seed_replays_same_checkpoints_and_first_failure() {
+    assert_eq!(
+        s16_replay_trace(),
+        s16_replay_trace(),
+        "S16 DETERMINISM FAIL: same seed produced different checkpoints or first failure"
+    );
+}
+
+#[test]
+fn s16_long_horizon_wars_keep_flowing() {
+    let mut scenario = build_s16_scenario();
+    scenario.assert_setup();
+
+    for window in 0..8 {
+        let stats = scenario.run_window(500);
+        let (alive_nations, functioning_nations) = scenario.nation_counts();
+        let progress = scenario.progress(&stats);
+        eprintln!(
+            "S16 W{window}: ticks={}..{} progress={progress} new_tribe_attacks={} tribe_captures={} eliminations={} alive_nations={alive_nations} functioning_nations={functioning_nations} nation_tiles={} nation_troops={:.0} tribe_tiles={}..{} contacts={} last_progress={:?} first_elimination={:?} last_elimination={:?}",
+            stats.start_tick,
+            stats.end_tick,
+            stats.new_tribe_attacks,
+            stats.tribe_captures,
+            stats.eliminations,
+            stats.nation_tiles_end,
+            stats.nation_troops_end,
+            stats.tribe_tiles_start,
+            stats.tribe_tiles_end,
+            stats.contacts,
+            stats.last_progress.map(S16Progress::summary),
+            stats.first_elimination.map(S16Elimination::summary),
+            stats.last_elimination.map(S16Elimination::summary)
+        );
+
+        if stats.contacts > 0 && stats.tribe_tiles_end >= 500 {
             assert!(
-                *hits >= 3,
-                "S16 FAIL: window {w} had {} AIs bordering tribes holding {} tiles but only {hits} tribe-war ticks — docility regress",
-                contacts_log[w],
-                tribe_mass_log[w]
+                progress >= 3,
+                "S16 WAR FAIL: window {window} ticks={}..{} had {} AI contacts with {} Tribe tiles but only {progress} real progress; stats={stats:?}",
+                stats.start_tick,
+                stats.end_tick,
+                stats.contacts,
+                stats.tribe_tiles_end
             );
         }
-    }
-    let total_land = 80u32 * 80;
-    let mut tribe_tiles_end = 0u32;
-    for t in first_tribe..=last_tribe {
-        if let Some(p) = engine.state.player(t) {
-            tribe_tiles_end += p.tile_count;
+
+        if alive_nations == 0 {
+            panic!(
+                "S16 SURVIVAL FAIL: all Nations eliminated by tick {}; functioning={functioning_nations}; stats={stats:?}",
+                stats.end_tick
+            );
         }
+        assert_eq!(
+            scenario.engine.state.phase,
+            GamePhase::Playing,
+            "S16 SURVIVAL FAIL: match ended at tick {}; stats={stats:?}",
+            stats.end_tick
+        );
     }
-    let functioning = (1..=20u16)
-        .filter(|id| {
-            engine
-                .state
-                .player(*id)
-                .map(|p| p.alive && p.tile_count > 50)
-                .unwrap_or(false)
-        })
-        .count();
+
+    let total_land = 80u32 * 80;
+    let tribe_tiles_end = scenario.tribe_tiles();
+    let (_, functioning) = scenario.nation_counts();
     eprintln!(
         "S16 final: tribe tiles={tribe_tiles_end}/{total_land} nations-functioning={functioning}"
     );
     assert!(
         tribe_tiles_end * 10 < total_land * 8,
-        "S16 FAIL: tribes own {tribe_tiles_end}/{total_land} tiles — gray carpet won"
+        "S16 SURVIVAL FAIL: Tribes own {tribe_tiles_end}/{total_land} tiles — gray carpet won"
     );
     assert!(
         functioning >= 1,
-        "S16 FAIL: no AI nation alive & functioning (>50 tiles)"
+        "S16 SURVIVAL FAIL: no Nation alive & functioning (>50 tiles)"
     );
 }
 

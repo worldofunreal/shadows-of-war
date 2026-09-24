@@ -13,6 +13,26 @@ impl SowEngine {
         }
     }
 
+    pub(crate) fn apply_stamped_intent_with_fleet_route(
+        &mut self,
+        stamped: &StampedIntent,
+        route: crate::warp_fleet::FleetRoute,
+        intent_index: u32,
+    ) {
+        match &stamped.intent {
+            GameplayIntent::LaunchFleet {
+                target_tile,
+                troops,
+            } => self.apply_launch_fleet_stamped(
+                stamped.player_id,
+                *target_tile,
+                *troops,
+                Some(route),
+            ),
+            _ => self.apply_stamped_intent(stamped, intent_index),
+        }
+    }
+
     pub fn retreat_mutual_aggression(&mut self, p1: u16, p2: u16) {
         for ex in &mut self.attacks {
             if (ex.owner_id == p1 && ex.target_owner == p2)
@@ -54,41 +74,7 @@ impl SowEngine {
             GameplayIntent::LaunchFleet {
                 target_tile,
                 troops,
-            } => {
-                let owner = self.state.map.state[*target_tile as usize];
-                let is_betrayer = self
-                    .state
-                    .player(owner)
-                    .map(|p| p.active_emoji.as_deref() == Some("🗡️"))
-                    .unwrap_or(false);
-                let is_allied_in_list = self
-                    .state
-                    .player(stamped.player_id)
-                    .map(|p| p.alliances.contains(&owner))
-                    .unwrap_or(false);
-
-                if is_allied_in_list && is_betrayer {
-                    // Silently break the alliance without any penalty for the attacker
-                    let attacker = stamped.player_id;
-                    if let Some(p1) = self.state.player_mut(attacker) {
-                        p1.alliances.retain(|&id| id != owner);
-                        p1.alliance_timers.remove(&owner);
-                    }
-                    if let Some(p2) = self.state.player_mut(owner) {
-                        p2.alliances.retain(|&id| id != attacker);
-                        p2.alliance_timers.remove(&attacker);
-                    }
-                }
-
-                let is_allied = self
-                    .state
-                    .player(stamped.player_id)
-                    .map(|p| p.alliances.contains(&owner))
-                    .unwrap_or(false);
-                if !is_allied {
-                    self.apply_launch_fleet_intent(stamped.player_id, *target_tile, *troops);
-                }
-            }
+            } => self.apply_launch_fleet_stamped(stamped.player_id, *target_tile, *troops, None),
             GameplayIntent::CancelAttack { attack_id } => {
                 let pid = stamped.player_id;
                 for ex in &mut self.attacks {
@@ -595,6 +581,52 @@ impl SowEngine {
                         });
                 }
             }
+        }
+    }
+
+    fn apply_launch_fleet_stamped(
+        &mut self,
+        player_id: u16,
+        target_tile: u32,
+        troops: Option<f64>,
+        route: Option<crate::warp_fleet::FleetRoute>,
+    ) {
+        let owner = self.state.map.state[target_tile as usize];
+        let is_betrayer = self
+            .state
+            .player(owner)
+            .map(|p| p.active_emoji.as_deref() == Some("🗡️"))
+            .unwrap_or(false);
+        let is_allied_in_list = self
+            .state
+            .player(player_id)
+            .map(|p| p.alliances.contains(&owner))
+            .unwrap_or(false);
+
+        if is_allied_in_list && is_betrayer {
+            // Silently break the alliance without any penalty for the attacker
+            if let Some(p1) = self.state.player_mut(player_id) {
+                p1.alliances.retain(|&id| id != owner);
+                p1.alliance_timers.remove(&owner);
+            }
+            if let Some(p2) = self.state.player_mut(owner) {
+                p2.alliances.retain(|&id| id != player_id);
+                p2.alliance_timers.remove(&player_id);
+            }
+        }
+
+        let is_allied = self
+            .state
+            .player(player_id)
+            .map(|p| p.alliances.contains(&owner))
+            .unwrap_or(false);
+        if is_allied {
+            return;
+        }
+        if let Some(route) = route {
+            self.apply_launch_fleet_intent_with_route(player_id, target_tile, troops, route);
+        } else {
+            self.apply_launch_fleet_intent(player_id, target_tile, troops);
         }
     }
 }

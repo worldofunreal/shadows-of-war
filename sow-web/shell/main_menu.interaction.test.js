@@ -6,6 +6,7 @@ const test = require("node:test");
 const shell = __dirname;
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
+const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.js"), "utf8");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.js"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
@@ -130,6 +131,24 @@ test("settings panel keeps only useful controls and real account state", () => {
     assert.match(shellSource, /event\.target === settingsOverlay/);
     assert.match(shellSource, /event\.key === "Escape" && settingsOpen/);
     assert.doesNotMatch(lobbiesSource, /lobbies\.connecting_server/);
+});
+
+test("hero purchase stays server-backed, direct, and visually honest", () => {
+    assert.match(storeSource, /offer\.owned \|\| offer\.free_rotation \|\| offer\.available/);
+    assert.match(storeSource, /data-command='unlock_leader'/);
+    assert.match(storeSource, /sow-store__currency-amount--insufficient/);
+    assert.match(storeSource, /command = confirm \? "open_product_purchase" : "buy_product"/);
+    assert.match(shellSource, /data-menu-overlay='purchase'/);
+    assert.match(shellSource, /openLeaderPurchase/);
+    assert.match(shellSource, /send\("unlock_leader", \{ leader_id: purchaseModal\.leaderId, currency: purchaseModal\.currency \}\)/);
+});
+
+test("header exposes server progress currencies and keeps the real XP remainder", () => {
+    assert.match(shellSource, /data-progression-gems-value/);
+    assert.match(pokiSource, /data-progression-gems-value/);
+    assert.match(shellSource, /progressionXp % 100/);
+    assert.match(shellSource, /state\.gems/);
+    assert.match(webMenu, /"gems": progress\.gems/);
 });
 
 test("tutorial Continue sends the Rust pause command and owns the dialog event", () => {

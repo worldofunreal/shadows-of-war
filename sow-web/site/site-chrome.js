@@ -10,6 +10,17 @@
     return value === key || value === `[${key}]` ? fallback : value;
   };
 
+  const translationValues = element => {
+    if (!element.dataset.i18nValues) return undefined;
+    try {
+      const keys = JSON.parse(element.dataset.i18nValues);
+      if (!keys || typeof keys !== 'object') return undefined;
+      return Object.fromEntries(Object.entries(keys).map(([name, key]) => [name, translate(key)]));
+    } catch (_) {
+      return undefined;
+    }
+  };
+
   function syncCurrentNavigation() {
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
     document.querySelectorAll('[data-site-nav]').forEach(link => {
@@ -84,7 +95,7 @@
       : locale;
     document.querySelectorAll('[data-i18n]').forEach(element => {
       const key = element.dataset.i18n;
-      const value = translate(key);
+      const value = translate(key, translationValues(element));
       const attribute = element.dataset.i18nAttr;
       if (attribute) element.setAttribute(attribute, value);
       else element.textContent = value;

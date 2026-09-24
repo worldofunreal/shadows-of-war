@@ -960,7 +960,7 @@
                 : (surrenderMessage || SOW_t("endgame.your_battle_will_end"));
             if (hudRefs.surrenderPortrait) {
                 hudRefs.surrenderPortrait.src = asset("gameplay/avatars/" + surrenderLeader.slug + ".webp");
-                hudRefs.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
+                hudRefs.surrenderPortrait.alt = leaderDisplayName(surrenderLeader) || SOW_t("hud.leader_avatar");
             }
             if (hudRefs.surrenderCancel) hudRefs.surrenderCancel.textContent = SOW_t("endgame.cancel");
             if (hudRefs.surrenderActionLabel) hudRefs.surrenderActionLabel.textContent = tutorialActive
@@ -989,7 +989,7 @@
                 var activeLeader = leaderById(activeLeaderId);
                 if (hudRefs.endgamePortrait) {
                     hudRefs.endgamePortrait.src = asset("gameplay/avatars/" + activeLeader.slug + ".webp");
-                    hudRefs.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
+                    hudRefs.endgamePortrait.alt = leaderDisplayName(activeLeader) || SOW_t("hud.leader_avatar");
                 }
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 if (hudRefs.endgameXp) hudRefs.endgameXp.textContent = "+" + (rewards.xp || 0);

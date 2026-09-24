@@ -55,6 +55,7 @@
     var storeCheckoutRequestId = null;
     var storeCheckoutBusy = false;
     var storeCheckoutInstance = null;
+    var purchaseModal = null;
     /* POKI_STRIPE_STATE_BEGIN */
     var stripePromise = null;
     /* POKI_STRIPE_STATE_END */
@@ -153,6 +154,29 @@
             if (value && value !== "[" + key + "]") return value;
         }
         return leader && leader.civilization ? leader.civilization : "";
+    }
+
+    function leaderDisplayName(leader) {
+        var slug = leader && leader.slug ? String(leader.slug).replace(/_/g, "") : "";
+        var key = slug ? "heroes.leader_" + slug + "_name" : "";
+        if (key) {
+            var value = SOW_t(key);
+            if (value && value !== "[" + key + "]") return value;
+        }
+        return leader && leader.name ? leader.name : "";
+    }
+
+    function leaderHistoricalName(leader) {
+        var slug = leader && leader.slug ? String(leader.slug).replace(/_/g, "") : "";
+        var key = slug ? "heroes.leader_" + slug + "_historical" : "";
+        if (key) {
+            var value = SOW_t(key);
+            if (value && value !== "[" + key + "]") {
+                var displayName = leaderDisplayName(leader);
+                return value === displayName ? "" : value;
+            }
+        }
+        return "";
     }
 
     function mapInfo(key) {
@@ -262,6 +286,9 @@
             gems: state.gems,
             crowns: state.crowns,
             laurels: state.laurels,
+            reward_receipts: (state.reward_receipts || []).map(function (receipt) {
+                return [receipt.id, receipt.crowns, receipt.laurels, receipt.status, receipt.presented_at];
+            }),
             selected_skin: state.selected_skin,
             store_busy: state.store_busy,
             skins: (state.store && state.store.skins || []).map(function (skin) {

@@ -71,6 +71,7 @@ mod bot_iq_alliance_tests {
             tier: AiTier::Nation,
             do_attack: true,
             do_structures: false,
+            is_under_attack: false,
             profile: ai_profile_for(AiTier::Nation, BotDifficulty::Vanilla),
         };
         let mut decisions = Vec::new();

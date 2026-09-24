@@ -9,6 +9,50 @@ use serde::{Deserialize, Serialize};
 pub const CURRENT_SEASON_ID: u32 = 1;
 pub const CURRENT_SEASON_NAME: &str = "Season 1";
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RewardSettlementStatus {
+    Pending,
+    Applied,
+    Presented,
+}
+
+impl Default for RewardSettlementStatus {
+    fn default() -> Self {
+        Self::Applied
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct RewardReceipt {
+    pub id: String,
+    pub match_id: String,
+    pub xp: u32,
+    pub leader_xp: u32,
+    pub crowns: u64,
+    pub laurels: u64,
+    pub created_at: u64,
+    /// Applied is written atomically with the balance update. Pending lives
+    /// in the relay's durable replay spool until the server accepts it.
+    #[serde(default)]
+    pub status: RewardSettlementStatus,
+    /// Presentation acknowledgement only. It never controls whether the
+    /// reward is applied.
+    #[serde(default)]
+    pub presented_at: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AchievementView {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub points: u64,
+    pub progress: u64,
+    pub target: u64,
+    pub unlocked: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct LeaderCareerStats {
     pub matches_played: u32,
@@ -191,6 +235,10 @@ pub struct PublicProfileView {
     pub empires_defeated: u32,
     pub tribes_defeated: u32,
     pub preferred_leader: Option<String>,
+    #[serde(default)]
+    pub laurels: u64,
+    #[serde(default)]
+    pub achievements: Vec<AchievementView>,
     pub leaders: Vec<PublicLeaderSummary>,
     pub recent_matches: Vec<PublicMatchSummary>,
 }
@@ -221,6 +269,16 @@ pub struct PublicLeaderboardEntry {
     pub tier: String,
     pub division: Option<String>,
     pub games_played: u32,
+    pub wins: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct PublicVictoryLeaderboardEntry {
+    pub rank: u32,
+    pub account_id: String,
+    pub handle: String,
+    pub level: u32,
+    pub matches_played: u32,
     pub wins: u32,
 }
 

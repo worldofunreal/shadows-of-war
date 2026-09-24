@@ -20,14 +20,16 @@ impl SowEngine {
             .map(|p| p.bot_rng.rand() as u32)
             .unwrap_or(0);
         if let Some(player) = self.state.player(bot_id) {
-            player.border_tiles.sample_ones(
+            let blocks_examined = player.border_tiles.sample_ones_with_work(
                 start_idx,
                 256,
                 &mut self.placement_scratch.border_scratch,
             );
+            self.bot_work.border_blocks_examined += blocks_examined;
         }
 
-        let mut neighbor_players = Vec::new();
+        let mut neighbor_players = std::mem::take(&mut self.placement_scratch.neighbor_scratch);
+        neighbor_players.clear();
         let mut has_neutral = false;
         self.bot_work.border_cells_examined += self.placement_scratch.border_scratch.len() as u64;
 
@@ -36,6 +38,7 @@ impl SowEngine {
                 let bx = border_tile % map_width;
                 let by = border_tile / map_width;
                 self.state.map.for_each_neighbor(bx, by, |nx, ny| {
+                    self.bot_work.neighbor_cells_examined += 1;
                     let owner = self.state.map.owner_id(nx, ny);
                     if owner != bot_id {
                         if owner == 0 {

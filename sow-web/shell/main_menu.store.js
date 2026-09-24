@@ -27,12 +27,20 @@
         }
     }
 
-    function renderCurrencyAmount(amount, kind) {
-        return esc(amount) + " <img class='sow-store__currency-icon' src='" + esc(currencyAsset(kind)) + "' alt='' aria-hidden='true'>";
+    function renderCurrencyAmount(amount, kind, amountClass) {
+        var className = amountClass ? " class='" + esc(amountClass) + "'" : "";
+        return "<span" + className + ">" + esc(amount) + "</span> <img class='sow-store__currency-icon' src='" + esc(currencyAsset(kind)) + "' alt='' aria-hidden='true'>";
     }
 
-    function storeProductButton(productId, label) {
-        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='buy_product' data-product-id='" + esc(productId) + "'>" + esc(label || SOW_t("store.buy")) + "</button>";
+    function storeBalance(currency) {
+        return Math.max(0, Number(state && state[currency]) || 0);
+    }
+
+    function storeProductButton(productId, label, confirm, priceLabel, leaderId) {
+        var command = confirm ? "open_product_purchase" : "buy_product";
+        var price = priceLabel ? " data-price-label='" + esc(priceLabel) + "'" : "";
+        var leader = leaderId ? " data-leader-id='" + esc(leaderId) + "'" : "";
+        return "<button class='sow-store__buy sow-store__buy--primary' type='button' data-command='" + command + "' data-product-id='" + esc(productId) + "'" + price + leader + ">" + esc(label || SOW_t("store.buy")) + "</button>";
     }
 
     function canRenderDirectPurchase(productId) {
@@ -51,16 +59,41 @@
         return (state.store && state.store.leaders || []).find(function (leader) { return normalize(leader.id) === target; }) || null;
     }
 
+    function renderLeaderCurrencyButton(offer, currency) {
+        var isGems = currency === "gems";
+        var cost = Math.max(0, Number(isGems ? offer.cost_gems : offer.cost_crowns) || 0);
+        var insufficient = storeBalance(currency) < cost;
+        var disabled = insufficient || (state && state.store_busy) ? " disabled" : "";
+        var amountClass = insufficient ? "sow-store__currency-amount--insufficient" : "";
+        return "<button class='sow-store__buy" + (insufficient ? " sow-store__buy--insufficient" : "") + "' type='button' data-command='unlock_leader' data-currency='" + currency + "' data-leader-id='" + esc(offer.id) + "'" + disabled + ">" + esc(SOW_t("store.buy")) + " " + renderCurrencyAmount(cost, isGems ? "gem" : "crown", amountClass) + "</button>";
+    }
+
     function renderLeaderPurchase(leader) {
         var offer = storeLeaderById(leader.id);
         if (!offer || offer.owned || offer.free_rotation || offer.available) return "";
-        var crowns = offer.cost_crowns;
-        var disabled = state && state.store_busy ? " disabled" : "";
-        return "<div class='sow-heroes__purchase-actions'><span>" + esc(SOW_t("store.unlock")) + "</span>" +
-            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='crowns' data-leader-id='" + esc(offer.id) + "'" + disabled + ">" + renderCurrencyAmount(crowns, "crown") + "</button>" +
-            "<button class='sow-store__buy' type='button' data-command='unlock_leader' data-currency='gems' data-leader-id='" + esc(offer.id) + "'" + disabled + ">" + renderCurrencyAmount(offer.cost_gems, "gem") + "</button>" +
-            (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy")) : "") +
+        return "<div class='sow-heroes__purchase-actions'>" +
+            renderLeaderCurrencyButton(offer, "crowns") +
+            renderLeaderCurrencyButton(offer, "gems") +
+            (canRenderDirectPurchase(offer.direct_product_id) ? storeProductButton(offer.direct_product_id, SOW_t("store.buy"), true, offer.direct_price_label, offer.id) : "") +
             "</div>";
+    }
+
+    function openLeaderPurchase(leaderId, currency) {
+        var offer = storeLeaderById(leaderId);
+        var isGems = currency === "gems";
+        var cost = offer && (isGems ? offer.cost_gems : offer.cost_crowns);
+        if (!offer || offer.owned || offer.free_rotation || offer.available ||
+            (state && state.store_busy) || storeBalance(currency) < Number(cost || 0)) return;
+        state.error = null;
+        purchaseModal = { type: "leader", leaderId: offer.id, currency: currency, submitted: false };
+        render();
+    }
+
+    function openProductPurchase(productId, leaderId, priceLabel) {
+        if (!productId || storeCheckoutBusy || (state && state.store_busy)) return;
+        state.error = null;
+        purchaseModal = { type: "product", productId: productId, leaderId: leaderId, priceLabel: priceLabel || "", submitted: false };
+        render();
     }
 
     function renderStoreBundle(bundle) {
@@ -83,6 +116,40 @@
         return "<article class='sow-store__skin'><div class='sow-store__skin-art'><img src='" + esc(asset(skin.asset_path)) + "' alt='' width='96' height='96' loading='lazy'></div><div class='sow-store__skin-body'><h3>" + esc(skin.name) + "</h3><p>" + esc(SOW_t("store.territory_pattern")) + "</p>" + action + "</div></article>";
     }
 
+    function renderStoreCheckout() {
+        return storeCheckoutProduct
+            ? "<section class='sow-store__checkout' data-store-checkout><div class='sow-store__section-head'><h2>" + esc(SOW_t("store.checkout")) + "</h2><button class='sow-store__close' type='button' data-command='close_store_checkout' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div><div class='sow-store__checkout-host' data-store-checkout-host><p>" + esc(SOW_t("store.loading_checkout")) + "</p></div></section>"
+            : "";
+    }
+
+    function renderPurchaseModal() {
+        if (!purchaseModal) return "";
+        var leader = leaderById(purchaseModal.leaderId);
+        var offer = storeLeaderById(purchaseModal.leaderId);
+        if (!leader || !offer) return "";
+        var isProduct = purchaseModal.type === "product";
+        var checkout = isProduct && storeCheckoutProduct === purchaseModal.productId;
+        var busy = purchaseModal.submitted || storeCheckoutBusy || (state && state.store_busy);
+        var summary = isProduct
+            ? (purchaseModal.priceLabel || SOW_t("store.buy"))
+            : renderCurrencyAmount(
+                purchaseModal.currency === "gems" ? offer.cost_gems : offer.cost_crowns,
+                purchaseModal.currency === "gems" ? "gem" : "crown"
+            );
+        var error = state && state.error ? "<div class='sow-menu__status sow-menu__status--error' role='alert'>" + esc(localizedText(state.error)) + "</div>" : "";
+        var body = checkout
+            ? renderStoreCheckout()
+            : "<div class='sow-menu__modal-actions'><button class='sow-menu__ghost-button' type='button' data-command='cancel_purchase'>" + esc(SOW_t("lobbies.cancel")) + "</button><button class='sow-menu__primary' type='button' data-command='confirm_purchase'" + (busy ? " disabled" : "") + ">" + esc(SOW_t("store.buy")) + "</button></div>";
+        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal' role='dialog' aria-modal='true' aria-label='" + esc(leaderDisplayName(leader)) + "'><div class='sow-menu__modal-head'><h2>" + esc(leaderDisplayName(leader)) + "</h2><button class='sow-menu__icon-button' type='button' data-command='cancel_purchase' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div><strong>" + summary + "</strong>" + error + body + "</section></div>";
+    }
+
+    function resolvePurchaseModal() {
+        if (!purchaseModal || purchaseModal.type !== "leader" || !purchaseModal.submitted) return;
+        var offer = storeLeaderById(purchaseModal.leaderId);
+        if (offer && offer.owned) purchaseModal = null;
+        else if (state && !state.store_busy && state.error) purchaseModal.submitted = false;
+    }
+
     function renderStore() {
         var store = state.store || {};
         var bundles = Array.isArray(store.gem_bundles) ? store.gem_bundles : [];
@@ -96,9 +163,7 @@
             window.SOW_isAndroidPurchaseBridgeReady()
             ? "<button class='sow-store__link' type='button' data-command='restore_purchases'>" + esc(SOW_t("store.restore_purchases")) + "</button>"
             : "";
-        var checkout = storeCheckoutProduct
-            ? "<section class='sow-store__checkout' data-store-checkout><div class='sow-store__section-head'><h2>" + esc(SOW_t("store.checkout")) + "</h2><button class='sow-store__close' type='button' data-command='close_store_checkout' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div><div class='sow-store__checkout-host' data-store-checkout-host><p>" + esc(SOW_t("store.loading_checkout")) + "</p></div></section>"
-            : "";
+        var checkout = renderStoreCheckout();
         return "<main class='sow-menu__main sow-menu__main--store' data-screen-panel='store'><section class='sow-menu__store-slot' data-store-slot aria-label='" + esc(SOW_t("store.shop")) + "'>" +
                     "<header class='sow-store__heading'><div><p class='sow-store__eyebrow'>" + esc(SOW_t("store.shop")) + "</p><h1>" + esc(SOW_t("store.featured_offers")) + "</h1></div><div class='sow-store__balances'><span class='sow-store__balance--gems' aria-label='" + esc(SOW_t("store.gems_count", { amount: store.gems || 0 })) + "'>" + renderCurrencyAmount(store.gems || 0, "gem") + "</span><span class='sow-store__balance--crowns' aria-label='" + esc(SOW_t("store.crowns_count", { amount: crowns })) + "'>" + renderCurrencyAmount(crowns, "crown") + "</span></div></header>" +
                     restoreAction +
@@ -126,12 +191,12 @@
     }
 
     function beginStorePurchase(productId) {
-        if (!productId || storeCheckoutBusy) return;
+        if (!productId || storeCheckoutBusy) return false;
         if (isAndroidTwa()) {
             if (!state.account_id || typeof window.SOW_requestAndroidPurchase !== "function") {
                 state.error = SOW_t("store.store_unavailable");
                 render();
-                return;
+                return false;
             }
             storeCheckoutBusy = true;
             var requestId = window.SOW_requestAndroidPurchase(productId, state.account_id);
@@ -143,13 +208,13 @@
                 storeCheckoutRequestId = requestId;
                 render();
             }
-            return;
+            return !!requestId;
         }
         var auth = storeAuth();
         if (!auth.available || !state.account_id) {
             state.error = SOW_t("store.store_unavailable");
             render();
-            return;
+            return false;
         }
         storeCheckoutProduct = productId;
         storeCheckoutBusy = true;
@@ -183,10 +248,13 @@
         }).catch(function (error) {
             state.error = error.message === "Checkout is not configured" ? SOW_t("store.checkout_not_configured") : SOW_t("store.checkout_unavailable");
             storeCheckoutProduct = null;
+            if (purchaseModal && purchaseModal.type === "product" && purchaseModal.productId === productId) purchaseModal.submitted = false;
             render();
         }).finally(function () {
             storeCheckoutBusy = false;
+            if (purchaseModal && purchaseModal.type === "product" && !storeCheckoutProduct) render();
         });
+        return true;
     }
 
     function beginStoreRestore() {
@@ -211,6 +279,7 @@
         storeCheckoutProduct = null;
         storeCheckoutRequestId = null;
         storeCheckoutBusy = false;
+        purchaseModal = null;
         render();
     }
 

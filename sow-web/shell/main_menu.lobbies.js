@@ -175,7 +175,7 @@
         return "<main class='sow-menu__main' data-screen-panel='home'>" +
             renderCommandPanel() +
             "<section class='sow-menu__battlefield'>" +
-                "<div class='sow-menu__leader-copy'><small>" + esc(leaderCivilization(leader)) + "</small><h2>" + esc(leader.name) +
+                "<div class='sow-menu__leader-copy'><small>" + esc(leaderCivilization(leader)) + "</small><h2>" + esc(leaderDisplayName(leader)) +
                     "</h2><p>" + esc(leaderPerk(leader)) + "</p></div>" +
             "</section>" +
         "</main>";

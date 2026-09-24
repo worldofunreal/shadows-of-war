@@ -67,6 +67,18 @@
         return path;
     }
 
+    function localizedLoaderText() {
+        if (typeof window.SOW_t === 'function') {
+            const value = window.SOW_t('menu.loading');
+            if (value && value !== '[menu.loading]') return value;
+        }
+        return 'Loading...';
+    }
+
+    function refreshLoaderText() {
+        if (loaderText) loaderText.textContent = localizedLoaderText();
+    }
+
     function isCrossOriginAssetUrl(url) {
         try {
             const resolved = new URL(url, window.location.href);
@@ -437,7 +449,7 @@
         }
         if (loaderText) {
             const status = typeof state.loader_status === 'string' ? state.loader_status.trim() : '';
-            loaderText.textContent = status || 'Loading...';
+            loaderText.textContent = status || localizedLoaderText();
         }
         if (root) root.setAttribute('aria-busy', 'true');
     }
@@ -448,6 +460,8 @@
 
     window.hideWebLoader = finish;
     window.SOW_initWebLoader = initWebLoader;
+    window.SOW_refreshWebLoaderText = refreshLoaderText;
+    window.addEventListener('sow:locale-change', refreshLoaderText);
     window.SOW_syncWebLoader = sync;
 
     // Game shell (play subdomain / portal): #web-loader in index.html auto-starts.

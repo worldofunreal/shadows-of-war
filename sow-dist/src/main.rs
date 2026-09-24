@@ -582,7 +582,7 @@ fn web_catalog_has_prefix(catalog: &serde_json::Value, prefix: &str) -> bool {
 }
 
 fn validate_web_bundle(bundle: &str) -> Result<()> {
-    let catalog = validate_web_catalogs()?;
+    let catalog = validate_web_catalogs(false)?;
     let mut offset = 0;
     while let Some(found) = bundle[offset..].find("SOW_t(") {
         let start = offset + found + "SOW_t(".len();
@@ -650,6 +650,8 @@ fn validate_source_localization_keys(
         "data-i18n='",
         "data-i18n-placeholder=\"",
         "data-i18n-placeholder='",
+        "data-i18n-values=\"",
+        "data-i18n-values='",
         "data-ability-key=\"",
         "data-ability-key='",
         "data-description-key=\"",
@@ -664,10 +666,55 @@ fn validate_source_localization_keys(
                 .find(quote)
                 .with_context(|| format!("unterminated localization attribute in {label}"))?;
             let key = &rest[..end];
-            if web_catalog_value(catalog, key).is_none() {
+            if needle.starts_with("data-i18n-values") {
+                let values = serde_json::from_str::<HashMap<String, String>>(key)
+                    .with_context(|| format!("invalid data-i18n-values in {label}"))?;
+                for value_key in values.values() {
+                    if web_catalog_value(catalog, value_key).is_none() {
+                        bail!("{label} uses unknown localization value key {value_key}");
+                    }
+                }
+            } else if web_catalog_value(catalog, key).is_none() {
                 bail!("{label} uses unknown localization key {key}");
             }
             offset = start + end;
+        }
+    }
+    validate_quoted_catalog_keys(source, label, catalog)?;
+    Ok(())
+}
+
+fn validate_quoted_catalog_keys(
+    source: &str,
+    label: &str,
+    catalog: &serde_json::Value,
+) -> Result<()> {
+    const DOMAINS: [&str; 10] = [
+        "menu", "auth", "lobbies", "heroes", "profile", "store", "hud", "endgame",
+        "tutorial", "site",
+    ];
+    for domain in DOMAINS {
+        for quote in ['"', '\''] {
+            let needle = format!("{quote}{domain}.");
+            let mut offset = 0;
+            while let Some(found) = source[offset..].find(&needle) {
+                let start = offset + found + 1;
+                let rest = &source[start..];
+                let end = rest
+                    .find(|c: char| {
+                        !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+                    })
+                    .unwrap_or(rest.len());
+                let key = &rest[..end];
+                if key.ends_with('_') {
+                    if !web_catalog_has_prefix(catalog, key) {
+                        bail!("{label} uses unknown localization key prefix {key}");
+                    }
+                } else if web_catalog_value(catalog, key).is_none() {
+                    bail!("{label} uses unknown localization key {key}");
+                }
+                offset = start + end;
+            }
         }
     }
     Ok(())
@@ -1127,21 +1174,39 @@ fn write_manifest(out: &Path, version: &str, js: &str, wasm: &str, ts: &str) -> 
     Ok(())
 }
 
-fn placeholder_names(value: &str) -> HashSet<String> {
-    let mut names = HashSet::new();
-    let mut remainder = value;
-    while let Some(start) = remainder.find('{') {
-        let after_start = &remainder[start + 1..];
-        let Some(end) = after_start.find('}') else {
-            break;
-        };
-        let name = after_start[..end].trim();
-        if !name.is_empty() {
-            names.insert(name.to_string());
+fn placeholder_names(value: &str) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    let mut offset = 0;
+    while offset < value.len() {
+        let remainder = &value[offset..];
+        let open = remainder.find('{');
+        let close = remainder.find('}');
+        match (open, close) {
+            (None, None) => break,
+            (None, Some(_)) => bail!("unmatched closing placeholder brace"),
+            (Some(open), Some(close)) if close < open => {
+                bail!("unmatched closing placeholder brace")
+            }
+            (Some(open), _) => {
+                let after_open = &remainder[open + 1..];
+                let end = after_open
+                    .find('}')
+                    .context("unterminated placeholder")?;
+                let name = after_open[..end].trim();
+                if name.is_empty()
+                    || !name
+                        .chars()
+                        .all(|character| character.is_ascii_alphanumeric() || character == '_')
+                {
+                    bail!("invalid placeholder {name:?}");
+                }
+                names.push(name.to_string());
+                offset += open + 1 + end + 1;
+            }
         }
-        remainder = &after_start[end + 1..];
     }
-    names
+    names.sort();
+    Ok(names)
 }
 
 fn validate_web_node(
@@ -1178,7 +1243,10 @@ fn validate_web_node(
             if actual.trim().is_empty() {
                 bail!("web catalog has an empty value at {path}");
             }
-            if placeholder_names(expected) != placeholder_names(actual) {
+            if placeholder_names(expected).with_context(|| format!("invalid placeholder at {path}"))?
+                != placeholder_names(actual)
+                    .with_context(|| format!("invalid placeholder at {path}"))?
+            {
                 bail!("web catalog placeholder mismatch at {path}");
             }
             Ok(())
@@ -1187,40 +1255,181 @@ fn validate_web_node(
     }
 }
 
-fn validate_web_catalogs() -> Result<serde_json::Value> {
+fn web_key_is_intentionally_english(key: &str) -> bool {
+    key.starts_with("menu.language_")
+        || matches!(
+            key,
+            "auth.discord_provider"
+                | "auth.email_placeholder"
+                | "auth.google"
+                | "auth.meta"
+                | "auth.x_provider"
+                | "endgame.xp"
+                | "heroes.africa"
+                | "heroes.americas"
+                | "heroes.asia"
+                | "heroes.civilization_sparta"
+                | "heroes.europe"
+                | "heroes.leader_alexander_historical"
+                | "heroes.leader_alexander_name"
+                | "heroes.leader_boudica_historical"
+                | "heroes.leader_boudica_name"
+                | "heroes.leader_caesar_historical"
+                | "heroes.leader_caesar_name"
+                | "heroes.leader_cleopatra_historical"
+                | "heroes.leader_cleopatra_name"
+                | "heroes.leader_genghiskhan_historical"
+                | "heroes.leader_genghiskhan_name"
+                | "heroes.leader_ladysixsky_historical"
+                | "heroes.leader_ladysixsky_name"
+                | "heroes.leader_leonidas_historical"
+                | "heroes.leader_leonidas_name"
+                | "heroes.leader_napoleon_historical"
+                | "heroes.leader_napoleon_name"
+                | "heroes.leader_ragnar_historical"
+                | "heroes.leader_ragnar_name"
+                | "heroes.leader_richard_historical"
+                | "heroes.leader_richard_name"
+                | "heroes.leader_suntzu_historical"
+                | "heroes.leader_suntzu_name"
+                | "heroes.leader_vercingetorix_historical"
+                | "heroes.leader_vercingetorix_name"
+                | "hud.fps"
+                | "hud.fps_ping"
+                | "hud.pin"
+                | "lobbies.hvn"
+                | "lobbies.terminator"
+                | "menu.brand"
+                | "menu.cookies"
+                | "menu.discord"
+                | "menu.github"
+                | "menu.google_play_games"
+                | "menu.level_short"
+                | "menu.telegram"
+                | "menu.xp"
+                | "profile.android"
+                | "profile.ffa"
+                | "profile.google_play_games"
+                | "profile.kda"
+                | "profile.kda_value"
+                | "profile.spam"
+                | "site.copyright"
+                | "site.cookies"
+                | "site.discord"
+                | "site.faq"
+                | "site.github"
+                | "site.leader_napoleon_ability"
+                | "site.privacy_hosting_body"
+                | "site.terms_general_title"
+                | "site.telegram"
+        )
+}
+
+const LEADER_SLUGS: [&str; 12] = [
+    "caesar",
+    "cleopatra",
+    "ragnar",
+    "suntzu",
+    "alexander",
+    "genghiskhan",
+    "richard",
+    "vercingetorix",
+    "boudica",
+    "ladysixsky",
+    "leonidas",
+    "napoleon",
+];
+
+fn validate_leader_display_names(catalog: &serde_json::Value) -> Result<()> {
+    for slug in LEADER_SLUGS {
+        let key = format!("heroes.leader_{slug}_name");
+        let value = web_catalog_value(catalog, &key)
+            .and_then(serde_json::Value::as_str)
+            .with_context(|| format!("dynamic localization key is missing: {key}"))?;
+        if [" / ", " · ", " | "].iter().any(|separator| value.contains(separator)) {
+            bail!("leader display name contains a compound separator: {key}");
+        }
+    }
+    Ok(())
+}
+
+fn collect_equal_web_values(
+    path: &str,
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+    values: &mut Vec<(String, String)>,
+) {
+    match (expected, actual) {
+        (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => {
+            for (key, expected_value) in expected {
+                if let Some(actual_value) = actual.get(key) {
+                    let child_path = if path.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    collect_equal_web_values(&child_path, expected_value, actual_value, values);
+                }
+            }
+        }
+        (serde_json::Value::String(expected), serde_json::Value::String(actual))
+            if expected == actual =>
+        {
+            values.push((path.to_string(), actual.clone()));
+        }
+        _ => {}
+    }
+}
+
+fn validate_web_catalogs(report_equal_values: bool) -> Result<serde_json::Value> {
     let english = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
+    let mut untranslated = Vec::new();
     for &(language, code, _, _) in sow_i18n::Language::registry() {
         let catalog = serde_json::to_value(&sow_i18n::web(language))?;
         validate_web_node(code, &english, &catalog)
             .with_context(|| format!("validate web catalog {code}"))?;
+        validate_leader_display_names(&catalog)
+            .with_context(|| format!("validate leader display names for {code}"))?;
         if code != "en" {
-            println!(
-                "i18n audit {code}: {} values remain equal to English",
-                count_equal_web_values(&english, &catalog)
+            let mut equal_values = Vec::new();
+            collect_equal_web_values("", &english, &catalog, &mut equal_values);
+            let intentional = equal_values
+                .iter()
+                .filter(|(key, _)| web_key_is_intentionally_english(key))
+                .count();
+            let pending = equal_values.len() - intentional;
+            if report_equal_values {
+                println!(
+                    "i18n audit {code}: {} equal values ({} intentional, {} require translation)",
+                    equal_values.len(),
+                    intentional,
+                    pending
+                );
+            }
+            untranslated.extend(
+                equal_values
+                    .into_iter()
+                    .filter(|(key, _)| !web_key_is_intentionally_english(key))
+                    .map(|(key, value)| format!("{code}: {key} = {value}")),
             );
         }
+    }
+    if !untranslated.is_empty() {
+        for value in &untranslated {
+            eprintln!("i18n untranslated: {value}");
+        }
+        bail!(
+            "{} visible localization values still equal English",
+            untranslated.len()
+        );
     }
     Ok(english)
 }
 
-fn count_equal_web_values(expected: &serde_json::Value, actual: &serde_json::Value) -> usize {
-    match (expected, actual) {
-        (serde_json::Value::Object(expected), serde_json::Value::Object(actual)) => expected
-            .iter()
-            .map(|(key, value)| {
-                actual
-                    .get(key)
-                    .map_or(0, |candidate| count_equal_web_values(value, candidate))
-            })
-            .sum(),
-        (serde_json::Value::String(expected), serde_json::Value::String(actual)) => {
-            if expected == actual { 1 } else { 0 }
-        }
-        _ => 0,
-    }
-}
-
 fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
+    if web_catalog_value(catalog, "menu.loading").is_none() {
+        bail!("dynamic localization key is missing: menu.loading");
+    }
     for &(_, code, _, _) in sow_i18n::Language::registry() {
         let token = code.to_ascii_lowercase().replace('-', "_");
         let key = format!("menu.language_{token}");
@@ -1234,6 +1443,14 @@ fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
             bail!("dynamic localization key is missing: {key}");
         }
     }
+    for slug in LEADER_SLUGS {
+        for suffix in ["name", "historical"] {
+            let key = format!("heroes.leader_{slug}_{suffix}");
+            if web_catalog_value(catalog, &key).is_none() {
+                bail!("dynamic localization key is missing: {key}");
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1243,7 +1460,7 @@ fn locale_folder(code: &str) -> String {
 
 fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
     let root = &paths.root;
-    let catalog = validate_web_catalogs()?;
+    let catalog = validate_web_catalogs(true)?;
     validate_dynamic_web_keys(&catalog)?;
     let strings_root = root.join("sow-i18n/strings");
     let registered = sow_i18n::Language::registry()
@@ -1326,22 +1543,25 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
             offset = key_start + end;
         }
     }
-    for relative in [
-        "sow-web/site/index.html",
-        "sow-web/site/app.js",
-        "sow-web/site/site-chrome.js",
-        "sow-web/site/site-header.html",
-        "sow-web/site/leaders/index.html",
-        "sow-web/site/how-to-play/index.html",
-        "sow-web/site/support/index.html",
-        "sow-web/site/privacy/index.html",
-        "sow-web/site/cookies/index.html",
-        "sow-web/site/terms/index.html",
-    ] {
-        let path = root.join(relative);
+    for entry in walkdir::WalkDir::new(root.join("sow-web/site")) {
+        let entry = entry?;
+        let path = entry.path();
+        if !entry.file_type().is_file()
+            || !matches!(
+                path.extension().and_then(|extension| extension.to_str()),
+                Some("html") | Some("js")
+            )
+        {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .display()
+            .to_string();
         let source = fs::read_to_string(&path)
             .with_context(|| format!("read public source {}", path.display()))?;
-        validate_source_localization_keys(&source, relative, &catalog)?;
+        validate_source_localization_keys(&source, &relative, &catalog)?;
     }
     let shell_root = root.join("sow-web/shell");
     for entry in walkdir::WalkDir::new(&shell_root) {
@@ -1352,15 +1572,23 @@ fn validate_current_ui_contract(paths: &Paths) -> Result<()> {
         {
             continue;
         }
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".test.js"))
+        {
+            continue;
+        }
         let source = fs::read_to_string(path)
             .with_context(|| format!("read shell source {}", path.display()))?;
         validate_source_localization_keys(&source, &path.display().to_string(), &catalog)?;
     }
+    validate_campaign_assets(paths, &catalog)?;
     Ok(())
 }
 
 fn verify_exported_locales(dir: &Path) -> Result<()> {
-    let expected = validate_web_catalogs()?;
+    let expected = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
     let expected_languages = serde_json::to_value(
         sow_i18n::Language::published_registry()
             .map(|(_, code, name)| serde_json::json!({ "code": code, "name": name }))
@@ -1402,7 +1630,7 @@ fn verify_exported_locales(dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn validate_campaign_assets(paths: &Paths) -> Result<()> {
+fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Result<()> {
     let dir = paths.root.join("assets/campaign");
     let mut rosters = HashMap::new();
     let mut triggers = HashMap::new();
@@ -1538,10 +1766,14 @@ fn validate_campaign_assets(paths: &Paths) -> Result<()> {
                 bail!("campaign trigger value is invalid: {id}");
             }
             for key in ["title_key", "body_key", "hint_key"] {
-                if !step
+                let Some(translation_key) = step
                     .get(key)
                     .and_then(serde_json::Value::as_str)
-                    .is_some_and(|value| value.starts_with("tutorial."))
+                else {
+                    bail!("campaign translation key is invalid: {id}.{key}");
+                };
+                if !translation_key.starts_with("tutorial.")
+                    || web_catalog_value(catalog, translation_key).is_none()
                 {
                     bail!("campaign translation key is invalid: {id}.{key}");
                 }
@@ -1580,7 +1812,7 @@ fn validate_campaign_assets(paths: &Paths) -> Result<()> {
 }
 
 fn export_locales(out: &Path) -> Result<()> {
-    validate_web_catalogs()?;
+    validate_web_catalogs(false)?;
     let d = out.join("locales");
     fs::create_dir_all(&d)?;
     let languages = sow_i18n::Language::published_registry()
@@ -1839,7 +2071,6 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
 
 fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Result<()> {
     validate_current_ui_contract(paths)?;
-    validate_campaign_assets(paths)?;
     let previous_artifacts = if !compile && out.is_dir() {
         let js = fs::read_dir(out)?.filter_map(Result::ok).find_map(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -2240,7 +2471,7 @@ fn package_poki(
 "##,
     )?;
     let loader_path = out.join("loader.js");
-    let loader = fs::read_to_string(&loader_path)?;
+    let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     fs::write(
         &loader_path,
         strip_marked_section(
@@ -3022,8 +3253,6 @@ mod tests {
             "app.js",
             "site-chrome.js",
             "site-header.html",
-            "sow-dropdown.js",
-            "sow-controls.css",
             "styles.css",
             "legal.css",
             "fonts/fonts.css",
@@ -3242,6 +3471,37 @@ mod tests {
         assert!(leaders_html.contains("Armory modules grant +50% max troop capacity."));
         assert!(!leaders_html.contains("Armory / Bunker districts"));
         assert!(!how_to_play.contains("raise garrison limits"));
+        Ok(())
+    }
+
+    #[test]
+    fn web_catalog_validation_preserves_placeholder_multiplicity() -> Result<()> {
+        let expected = serde_json::json!("{count} {count}");
+        let matching = serde_json::json!("{count} {count}");
+        let missing_duplicate = serde_json::json!("{count}");
+        let malformed = serde_json::json!("{count");
+
+        assert!(validate_web_node("test", &expected, &matching).is_ok());
+        assert!(validate_web_node("test", &expected, &missing_duplicate).is_err());
+        assert!(validate_web_node("test", &expected, &malformed).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn source_localization_audit_catches_unknown_quoted_keys() -> Result<()> {
+        let catalog = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
+        assert!(validate_quoted_catalog_keys(
+            "const key = 'profile.spam';",
+            "test",
+            &catalog
+        )
+        .is_ok());
+        assert!(validate_quoted_catalog_keys(
+            "const key = 'profile.not_real';",
+            "test",
+            &catalog
+        )
+        .is_err());
         Ok(())
     }
 

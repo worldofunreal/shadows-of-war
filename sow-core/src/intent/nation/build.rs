@@ -107,38 +107,49 @@ impl SowEngine {
                         if self.state.player(bot_id).is_none_or(|p| p.gold < cost) {
                             continue;
                         }
-                        let (border_candidates, interior_candidates) = {
-                            let p = self.state.player_mut(bot_id).unwrap();
-                            let mut border = Vec::with_capacity(PLACEMENT_ATTEMPTS as usize);
-                            p.border_tiles.sample_ones(
+                        let blocks_examined = {
+                            let (state, scratch) = (&mut self.state, &mut self.placement_scratch);
+                            let p = state.player_mut(bot_id).unwrap();
+                            scratch.border_scratch.clear();
+                            scratch.interior_scratch.clear();
+                            let blocks_examined = p.border_tiles.sample_ones_with_work(
                                 p.bot_rng.rand() as u32,
                                 PLACEMENT_ATTEMPTS as usize,
-                                &mut border,
+                                &mut scratch.border_scratch,
                             );
-                            let mut interior = Vec::new();
                             if p.tile_count > 500 {
                                 let cx = (p.sum_x / p.tile_count as u64) as i32;
                                 let cy = (p.sum_y / p.tile_count as u64) as i32;
                                 for _ in 0..PLACEMENT_ATTEMPTS {
                                     let dx = p.bot_rng.next_int(-40, 41);
                                     let dy = p.bot_rng.next_int(-40, 41);
-                                    interior.push((cx + dx, cy + dy));
+                                    scratch.interior_scratch.push((cx + dx, cy + dy));
                                 }
                             }
-                            (border, interior)
+                            blocks_examined
                         };
-                        if let Some(target_tile) = resolve_structure_from_candidates(
-                            &self.state.map,
-                            bot_id,
-                            kind,
-                            StructureCandidates {
-                                border: &border_candidates,
-                                interior: &interior_candidates,
-                            },
-                            &self.building_grid,
-                            &self.buildings,
-                            &mut self.placement_scratch,
-                        ) {
+                        self.bot_work.border_blocks_examined += blocks_examined;
+                        let target_tile = {
+                            let border_candidates =
+                                std::mem::take(&mut self.placement_scratch.border_scratch);
+                            let interior_candidates =
+                                std::mem::take(&mut self.placement_scratch.interior_scratch);
+                            let target_tile = resolve_structure_from_candidates(
+                                &self.state.map,
+                                bot_id,
+                                kind,
+                                StructureCandidates {
+                                    border: &border_candidates,
+                                    interior: &interior_candidates,
+                                },
+                                &self.building_grid,
+                                &mut self.placement_scratch,
+                            );
+                            self.placement_scratch.border_scratch = border_candidates;
+                            self.placement_scratch.interior_scratch = interior_candidates;
+                            target_tile
+                        };
+                        if let Some(target_tile) = target_tile {
                             if let Some(p_me) = self.state.player_mut(bot_id) {
                                 p_me.iq_points -= build_cost;
                             }

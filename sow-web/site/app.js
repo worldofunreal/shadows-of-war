@@ -50,6 +50,9 @@
     id: c.dataset.leaderId,
     name: c.dataset.name,
     civ: c.dataset.civ,
+    nameKey: `heroes.leader_${c.dataset.leaderId}_name`,
+    historicalKey: `heroes.leader_${c.dataset.leaderId}_historical`,
+    civKey: c.dataset.civKey,
     code: c.dataset.code,
     abilityKey: c.dataset.abilityKey,
     descriptionKey: c.dataset.descriptionKey,
@@ -59,11 +62,20 @@
   const asset = (leader, mobile = false) => `/assets/shell/leaders/${leader.image}_${mobile ? 'mobile' : 'desktop'}.webp`;
   const avatar = leader => `/assets/gameplay/avatars/${leader.image}.webp`;
   let activeLeaderIndex = 0;
+  const leaderName = leader => siteText(leader.nameKey, leader.name);
+  const leaderCiv = leader => siteText(leader.civKey, leader.civ);
+  const leaderHistorical = leader => {
+    const value = siteText(leader.historicalKey, '');
+    return value === leaderName(leader) ? '' : value;
+  };
 
   function updateLeader(index) {
     const leader = leaders[index];
     if (!leader) return;
     activeLeaderIndex = index;
+    const name = leaderName(leader);
+    const civ = leaderCiv(leader);
+    const historical = leaderHistorical(leader);
 
     // Trigger subtle glitch burst on hero frame
     const glitch = $('.hologram-glitch');
@@ -75,24 +87,29 @@
     const heroImage = $('[data-hero-image]');
     if (heroImage) {
       heroImage.src = asset(leader);
-      heroImage.alt = siteText('site.leader_artwork', `${leader.name} leader artwork`, { name: leader.name });
+      heroImage.alt = siteText('site.leader_artwork', `${name} leader artwork`, { name });
     }
     const heroName = $('[data-hero-name]');
-    if (heroName) heroName.textContent = leader.name;
+    if (heroName) heroName.textContent = name;
     const heroCiv = $('[data-hero-civ]');
-    if (heroCiv) heroCiv.textContent = leader.civ;
+    if (heroCiv) heroCiv.textContent = civ;
     const detailImage = $('[data-detail-image]');
     if (detailImage) {
       detailImage.src = asset(leader);
       detailImage.srcset = `${asset(leader, true)} 600w, ${asset(leader)} 1200w`;
-      detailImage.alt = siteText('site.leader_artwork', `${leader.name} artwork`, { name: leader.name });
+      detailImage.alt = siteText('site.leader_artwork', `${name} artwork`, { name });
     }
     const detailCode = $('[data-detail-code]');
     if (detailCode) detailCode.textContent = `${leader.code} · ${String(index + 1).padStart(2, '0')}`;
     const detailName = $('[data-detail-name]');
-    if (detailName) detailName.textContent = leader.name;
+    if (detailName) detailName.textContent = name;
     const detailCiv = $('[data-detail-civ]');
-    if (detailCiv) detailCiv.textContent = leader.civ;
+    if (detailCiv) detailCiv.textContent = civ;
+    const detailHistorical = $('[data-detail-historical]');
+    if (detailHistorical) {
+      detailHistorical.textContent = historical;
+      detailHistorical.hidden = !historical;
+    }
     const detailAbility = $('[data-detail-ability]');
     if (detailAbility) detailAbility.textContent = siteText(leader.abilityKey, '', {});
     const detailDesc = $('[data-detail-description]');
@@ -104,12 +121,20 @@
       const active = itemIndex === index;
       item.classList.toggle('is-active', active);
       item.setAttribute('aria-pressed', String(active));
-      item.setAttribute('aria-label', siteText('site.inspect_leader', `Inspect ${leaders[itemIndex].name}`, { name: leaders[itemIndex].name }));
+      item.setAttribute('aria-label', siteText('site.inspect_leader', `Inspect ${leaderName(leaders[itemIndex])}`, { name: leaderName(leaders[itemIndex]) }));
     });
     cards.forEach((item, itemIndex) => {
       const active = itemIndex === index;
+      const itemLeader = leaders[itemIndex];
       item.classList.toggle('is-active', active);
       item.setAttribute('aria-pressed', String(active));
+      item.setAttribute('aria-label', siteText('site.inspect_leader', `Inspect ${leaderName(itemLeader)}`, { name: leaderName(itemLeader) }));
+      const cardName = item.querySelector('.leader-card-info b');
+      const cardCiv = item.querySelector('.leader-card-info span');
+      const cardImage = item.querySelector('img');
+      if (cardName) cardName.textContent = leaderName(itemLeader);
+      if (cardCiv) cardCiv.textContent = leaderCiv(itemLeader);
+      if (cardImage) cardImage.alt = siteText('site.leader_artwork', `${leaderName(itemLeader)} artwork`, { name: leaderName(itemLeader) });
     });
   }
 
@@ -122,8 +147,8 @@
       button.className = `leader-chip${index === 0 ? ' is-active' : ''}`;
       button.type = 'button';
       button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
-      button.title = leader.name;
-      button.setAttribute('aria-label', siteText('site.select_leader', `Select ${leader.name}`, { name: leader.name }));
+      button.title = leaderName(leader);
+      button.setAttribute('aria-label', siteText('site.select_leader', `Select ${leaderName(leader)}`, { name: leaderName(leader) }));
       button.innerHTML = `<span class="sheen" aria-hidden="true"></span><img src="${avatar(leader)}" alt="" width="256" height="256" decoding="async">`;
       button.addEventListener('click', () => updateLeader(index));
       rail.appendChild(button);

@@ -77,6 +77,9 @@ enum WebMenuCommand {
     SaveDisplayName {
         name: String,
     },
+    AcknowledgeRewardReceipts {
+        receipt_ids: Vec<String>,
+    },
     OpenBrowser,
     OpenCreate,
     CloseOverlay,
@@ -551,6 +554,9 @@ impl SowApp {
                 }
                 WebMenuCommand::SaveDisplayName { name } => {
                     self.process_ui_actions(Some(UiAction::SaveDisplayName(name)));
+                }
+                WebMenuCommand::AcknowledgeRewardReceipts { receipt_ids } => {
+                    self.acknowledge_reward_receipts(receipt_ids);
                 }
                 WebMenuCommand::OpenBrowser => {
                     self.process_ui_actions(Some(UiAction::OpenJoinBrowser));
@@ -1565,15 +1571,19 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     if match_over {
         let reward = app.ui.reward_cache.or_else(|| {
             me.map(|player| {
-                sow_data::rewards::calculate(sow_data::rewards::RewardInput {
-                    won: is_winner,
-                    players_defeated: app.progress_session_defeats.players,
-                    empires_defeated: app.progress_session_defeats.empires,
-                    tribes_defeated: app.progress_session_defeats.tribes,
-                    kills: player.kills,
-                    assists: player.assists,
-                    tutorial: app.sim.config.tutorial,
-                })
+                if app.progress_account_id.is_some() && !app.net.is_offline {
+                    sow_data::rewards::calculate(sow_data::rewards::RewardInput::default())
+                } else {
+                    sow_data::rewards::calculate(sow_data::rewards::RewardInput {
+                        won: is_winner,
+                        players_defeated: app.progress_session_defeats.players,
+                        empires_defeated: app.progress_session_defeats.empires,
+                        tribes_defeated: app.progress_session_defeats.tribes,
+                        kills: player.kills,
+                        assists: player.assists,
+                        tutorial: app.sim.config.tutorial,
+                    })
+                }
             })
         });
         if let Some(reward) = reward {
@@ -1831,6 +1841,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "crowns": progress.crowns,
             "laurels": progress.laurels,
             "gems": progress.gems,
+            "reward_receipts": progress.reward_receipts.values().collect::<Vec<_>>(),
+            "achievements": progress.unlocked_achievements,
             "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,
             "store_busy": state.store_busy,

@@ -629,6 +629,55 @@ impl SowApp {
         });
     }
 
+    pub(crate) fn acknowledge_reward_receipts(&mut self, receipt_ids: Vec<String>) {
+        let Some(account_id) = self.progress_account_id.clone() else {
+            return;
+        };
+        let mut fields = serde_json::Map::new();
+        fields.insert("account_id".into(), serde_json::Value::String(account_id.clone()));
+        fields.insert(
+            "receipt_ids".into(),
+            serde_json::Value::Array(
+                receipt_ids
+                    .iter()
+                    .map(|id| serde_json::Value::String(id.clone()))
+                    .collect(),
+            ),
+        );
+        if self.progress_provider == "anonymous" {
+            let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
+                return;
+            };
+            fields.insert("auth_secret".into(), serde_json::Value::String(auth_secret));
+        }
+        let Ok(body) = serde_json::to_vec(&serde_json::Value::Object(fields)) else {
+            return;
+        };
+        let url = format!(
+            "{}/profile/reward-receipts/ack",
+            self.asset_config.database_base.trim_end_matches('/')
+        );
+        let tx = self.tasks.db_tx.clone();
+        let mut request = ehttp::Request::post(&url, body);
+        request.headers.insert("Content-Type", "application/json");
+        Self::apply_platform_auth(&mut request);
+        ehttp::fetch(request, move |result| match result {
+            Ok(response) if response.ok => {
+                let _ = tx.send(crate::player_progress::DbEvent::RewardReceiptsAcked {
+                    account_id,
+                    receipt_ids,
+                });
+            }
+            Ok(response) => {
+                log::warn!(
+                    "[rewards] receipt acknowledgement failed status={}",
+                    response.status
+                );
+            }
+            Err(error) => log::warn!("[rewards] receipt acknowledgement failed: {error}"),
+        });
+    }
+
     pub(crate) fn unlock_leader(&mut self, leader_id: String, currency: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("leader_id".into(), serde_json::Value::String(leader_id));

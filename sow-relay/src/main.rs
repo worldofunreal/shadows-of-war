@@ -69,6 +69,7 @@ const DEFAULT_MAX_CONNECTIONS_PER_IP: usize = 4_096;
 const DEFAULT_HANDSHAKES_PER_IP: u32 = 512;
 const MAX_ADMISSION_IPS: usize = 65_536;
 const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
+const REPLAY_SPOOL_RETRY_SECS: u64 = 30;
 type HmacSha256 = Hmac<Sha256>;
 
 struct IpAdmissionState {
@@ -700,12 +701,16 @@ struct ReplayJournal {
     failed: Arc<AtomicBool>,
 }
 
+fn replay_spool_dir() -> PathBuf {
+    std::env::var("SOW_REPLAY_SPOOL_DIR")
+        .or_else(|_| std::env::var("SOW_REPLAY_DIR"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("replays"))
+}
+
 impl ReplayJournal {
     fn new(match_id: u64) -> Arc<Self> {
-        let spool_dir = std::env::var("SOW_REPLAY_SPOOL_DIR")
-            .or_else(|_| std::env::var("SOW_REPLAY_DIR"))
-            .unwrap_or_else(|_| "replays".to_string());
-        let journal_path = PathBuf::from(spool_dir).join(format!("{match_id}.journal"));
+        let journal_path = replay_spool_dir().join(format!("{match_id}.journal"));
         let (tx, rx) = mpsc::channel(REPLAY_QUEUE_CAP);
         let failed = Arc::new(AtomicBool::new(false));
         let journal = Arc::new(Self {
@@ -893,6 +898,134 @@ fn finalize_gate() -> Arc<Semaphore> {
     GATE.get_or_init(|| Arc::new(Semaphore::new(1))).clone()
 }
 
+async fn post_replay_finalize(
+    match_id: &str,
+    lobby_json: &str,
+    replay_data: &[u8],
+) -> Result<(), String> {
+    let db_url = configured_db_url()?;
+    let secret = std::env::var("SOW_DB_SECRET")
+        .map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
+    let url = format!("{}/internal/match-finalize", db_url.trim_end_matches('/'));
+    let payload = ReplayFinalizePayload {
+        match_id,
+        lobby_json,
+        replay_data,
+    };
+    let client = db_client(&db_url)?;
+
+    for attempt in 1..=5 {
+        info!(
+            "Attempting raw upload/finalize to database for match {match_id} (Attempt {attempt}/5)..."
+        );
+        match client
+            .post(&url)
+            .header("Authorization", format!("Bearer {secret}"))
+            .json(&payload)
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                info!("Match {match_id} successfully finalized and archived!");
+                return Ok(());
+            }
+            Ok(response) => {
+                warn!(
+                    "Attempt {attempt}/5: database returned HTTP status {} for match {match_id}",
+                    response.status()
+                );
+            }
+            Err(error) => {
+                warn!("Attempt {attempt}/5: network error uploading match {match_id}: {error}");
+            }
+        }
+
+        if attempt < 5 {
+            tokio::time::sleep(Duration::from_secs(2u64.pow(attempt as u32))).await;
+        }
+    }
+
+    Err(format!(
+        "database did not accept match {match_id} after 5 attempts"
+    ))
+}
+
+async fn cleanup_replay_spool(replay_path: &PathBuf, metadata_path: &PathBuf) {
+    for path in [replay_path, metadata_path] {
+        if let Err(error) = tokio::fs::remove_file(path).await {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                warn!("[replay] cleanup {:?} failed: {}", path, error);
+            }
+        }
+    }
+}
+
+async fn recover_replay_spool() {
+    let spool_dir = replay_spool_dir();
+    let mut entries = match tokio::fs::read_dir(&spool_dir).await {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+        Err(error) => {
+            warn!("[replay] scan {:?} failed: {}", spool_dir, error);
+            return;
+        }
+    };
+
+    loop {
+        let entry = match entries.next_entry().await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => break,
+            Err(error) => {
+                warn!("[replay] scan {:?} failed: {}", spool_dir, error);
+                break;
+            }
+        };
+        let replay_path = entry.path();
+        if replay_path.extension().and_then(|value| value.to_str()) != Some("replay") {
+            continue;
+        }
+        let Some(match_id) = replay_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .and_then(|value| value.parse::<u64>().ok())
+        else {
+            warn!("[replay] ignoring unexpected spool file {:?}", replay_path);
+            continue;
+        };
+        let metadata_path = replay_path.with_extension("json");
+        let (replay_data, lobby_json) = match (
+            tokio::fs::read(&replay_path).await,
+            tokio::fs::read_to_string(&metadata_path).await,
+        ) {
+            (Ok(replay_data), Ok(lobby_json)) => (replay_data, lobby_json),
+            (Err(error), _) | (_, Err(error))
+                if error.kind() == std::io::ErrorKind::NotFound => continue,
+            (Err(error), _) | (_, Err(error)) => {
+                warn!("[replay] read spool match {match_id} failed: {error}");
+                continue;
+            }
+        };
+
+        let _permit = match finalize_gate().acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => return,
+        };
+        let match_id = match_id.to_string();
+        if let Err(error) = post_replay_finalize(&match_id, &lobby_json, &replay_data).await {
+            warn!("[replay] keeping pending match {match_id} for a later retry: {error}");
+            continue;
+        }
+        cleanup_replay_spool(&replay_path, &metadata_path).await;
+    }
+}
+
+async fn replay_spool_worker() {
+    loop {
+        recover_replay_spool().await;
+        tokio::time::sleep(Duration::from_secs(REPLAY_SPOOL_RETRY_SECS)).await;
+    }
+}
+
 fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<ReplayJournal>) {
     tokio::spawn(async move {
         let _permit = match finalize_gate().acquire_owned().await {
@@ -925,116 +1058,15 @@ fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<Replay
             return;
         }
 
-        let db_url = match configured_db_url() {
-            Ok(url) => url,
-            Err(e) => {
-                error!("Cannot finalize match {match_id}: {e}");
-                return;
-            }
-        };
-        let secret =
-            std::env::var("SOW_DB_SECRET").expect("SOW_DB_SECRET validated at relay startup");
-        let url = format!("{}/internal/match-finalize", db_url.trim_end_matches('/'));
-
         let match_id_string = match_id.to_string();
-        let payload = ReplayFinalizePayload {
-            match_id: &match_id_string,
-            lobby_json: &lobby_json,
-            replay_data: &artifact.bytes,
-        };
-
-        let mut success = false;
-        let client = match db_client(&db_url) {
-            Ok(client) => client,
-            Err(e) => {
-                error!("Cannot finalize match {match_id}: {e}");
-                return;
-            }
-        };
-
-        // ponytail: Resilient uploading with exponential backoff
-        for attempt in 1..=5 {
-            info!(
-                "Attempting raw upload/finalize to database for match {match_id} (Attempt {attempt}/5)..."
+        if let Err(error) = post_replay_finalize(&match_id_string, &lobby_json, &artifact.bytes).await
+        {
+            error!(
+                "[CRITICAL] Keeping pending match {match_id} in local replay spool: {error}"
             );
-            match client
-                .post(&url)
-                .header("Authorization", format!("Bearer {secret}"))
-                .json(&payload)
-                .send()
-                .await
-            {
-                Ok(res) if res.status().is_success() => {
-                    info!("Match {match_id} successfully finalized and archived!");
-                    success = true;
-                    break;
-                }
-                Ok(res) => {
-                    warn!(
-                        "Attempt {attempt}/5: database returned HTTP status {} for match {match_id}",
-                        res.status()
-                    );
-                }
-                Err(e) => {
-                    warn!("Attempt {attempt}/5: Network error uploading match {match_id}: {e}");
-                }
-            }
-
-            if attempt < 5 {
-                let delay = Duration::from_secs(2u64.pow(attempt as u32));
-                tokio::time::sleep(delay).await;
-            }
+            return;
         }
-
-        if success {
-            if let Err(e) = tokio::fs::remove_file(&replay_path).await {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    warn!("[replay] cleanup {:?} failed: {}", replay_path, e);
-                }
-            }
-            if let Err(e) = tokio::fs::remove_file(&metadata_path).await {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    warn!("[replay] cleanup {:?} failed: {}", metadata_path, e);
-                }
-            }
-        } else {
-            error!("[CRITICAL] Failed to upload match {match_id} to database after 5 attempts.");
-
-            // Keep only a small pointer in Valkey. The replay and metadata
-            // remain in the bounded local spool for recovery; placing the raw
-            // bytes in Valkey duplicates the payload in RAM and caused the
-            // historical relay OOM.
-            let url = std::env::var("SOW_VALKEY_URL")
-                .or_else(|_| std::env::var("SOW_REDIS_URL"))
-                .unwrap_or_else(|_| "redis://127.0.0.1/".to_string());
-
-            let mut valkey_success = false;
-            if let Ok(client) = redis::Client::open(url) {
-                if let Ok(mut con) = client.get_connection() {
-                    let key = "sow:match_history:dead_letter";
-                    let fallback_payload = serde_json::to_vec(&serde_json::json!({
-                        "match_id": match_id,
-                        "replay_path": replay_path.to_string_lossy(),
-                        "metadata_path": metadata_path.to_string_lossy(),
-                    }))
-                    .unwrap_or_default();
-                    if let Ok(()) = con.lpush::<_, _, ()>(key, fallback_payload) {
-                        warn!(
-                            "[FALLBACK] Saved replay pointer in local Valkey queue under key '{}' for match {match_id}",
-                            key
-                        );
-                        valkey_success = true;
-                    }
-                }
-            }
-
-            if !valkey_success {
-                error!(
-                    "[ALERT] Valkey fallback failed; replay remains at {:?} and metadata at {:?}",
-                    replay_path, metadata_path
-                );
-            }
-        }
+        cleanup_replay_spool(&replay_path, &metadata_path).await;
     });
 }
 
@@ -1308,6 +1340,7 @@ fn main() {
             .enable_all()
             .build()
             .expect("tokio runtime");
+        rt.spawn(replay_spool_worker());
         rt.spawn(mgmt_http(registry.clone(), mport));
         rt.spawn(bridge_worker(registry.clone()));
 

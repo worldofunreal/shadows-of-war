@@ -164,7 +164,6 @@ impl SowEngine {
                     crate::game::BuildingKind::City,
                     tile_idx,
                     &self.building_grid,
-                    &self.buildings,
                     &mut self.placement_scratch,
                 );
                 if let Some(spawn_idx) = spawn_ok {

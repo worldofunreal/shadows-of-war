@@ -467,6 +467,8 @@ html[data-theme="light"] .hero-wash { opacity: .35; filter: saturate(.8) contras
 .detail-body .mono-label { color: var(--orange); margin: 0; }
 .detail-body h3 { margin: 9px 0 3px; font: 800 28px/.95 var(--font-display); text-transform: uppercase; letter-spacing: -.03em; }
 .detail-body > p:nth-of-type(2) { margin: 0; color: var(--muted); font-size: 12px; }
+.detail-historical { margin: 0 0 3px; color: var(--muted); font-size: 11px; font-style: italic; }
+.compendium-historical { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; font-style: italic; }
 .detail-rule { height: 1px; margin: 22px 0; background: var(--line); }
 .detail-ability { margin: 8px 0 0; font: 700 17px/1.1 var(--font-display); text-transform: uppercase; }
 .detail-description { margin: 8px 0 0; color: var(--muted); font-size: 12px; }

@@ -384,6 +384,68 @@
     color: var(--sow-laurel-bright);
 }
 
+#sow-menu[data-screen="profile"] .sow-profile__achievement-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid var(--sow-line);
+    border-radius: 10px;
+    opacity: 0.48;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement.is-unlocked {
+    border-color: rgba(243, 177, 43, 0.5);
+    background: rgba(243, 177, 43, 0.08);
+    opacity: 1;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement span {
+    color: var(--sow-muted);
+    font-size: 12px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement b {
+    color: var(--sow-gold-bright);
+    font-size: 11px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__victory-list {
+    display: grid;
+    gap: 8px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__victory-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--sow-profile-line);
+    border-radius: 10px;
+    background: var(--sow-profile-surface);
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__victory-row > b:first-child {
+    color: var(--sow-gold-bright);
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__victory-row div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__victory-row span,
+#sow-menu[data-screen="profile"] .sow-profile__victory-row small {
+    color: var(--sow-muted);
+}
+
 #sow-menu[data-screen="profile"] .sow-profile__columns {
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.9fr);
@@ -1467,6 +1529,10 @@
     height: 18px;
 }
 
+.sow-store__currency-amount--insufficient {
+    color: #f87171;
+}
+
 .sow-store__buy:hover:not(:disabled),
 .sow-store__buy--primary {
     border-color: var(--sow-button-primary-border);
@@ -1822,6 +1888,16 @@
     font-size: clamp(28px, 4vw, 48px);
     line-height: .95;
     text-wrap: balance;
+}
+
+.sow-heroes__historical-name,
+.sow-profile__historical-name {
+    display: block;
+    margin: 4px 0 0;
+    color: var(--sow-muted);
+    font-size: 11px;
+    font-style: italic;
+    line-height: 1.2;
 }
 
 .sow-heroes__civilization {

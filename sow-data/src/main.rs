@@ -140,6 +140,7 @@ struct PublicHistoryQuery {
 struct PublicLeaderboardQuery {
     queue: Option<String>,
     mode: Option<String>,
+    kind: Option<String>,
     cursor: Option<usize>,
     limit: Option<usize>,
 }
@@ -313,6 +314,14 @@ struct StorePurchasesRequest {
     account_id: String,
     #[serde(default)]
     auth_secret: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RewardReceiptsAckRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    receipt_ids: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -785,6 +794,38 @@ async fn handle_store_purchase(
     }
 }
 
+async fn handle_reward_receipts_ack(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<RewardReceiptsAckRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    match state
+        .db
+        .acknowledge_reward_receipts(&account_id, &payload.receipt_ids)
+        .await
+    {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: error.to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
 fn valid_stripe_signature(payload: &[u8], signature: &str, secret: &str) -> bool {
     let mut timestamp = None;
     let mut signatures = Vec::new();
@@ -1016,8 +1057,7 @@ async fn handle_stripe_webhook(
     }
 }
 
-/// POST /store/leaders/unlock — spend authoritative crowns on a leader.
-/// The legacy currency alias "laurels" is still accepted and spends crowns.
+/// POST /store/leaders/unlock — spend authoritative crowns or gems on a leader.
 async fn handle_unlock_leader(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1900,6 +1940,10 @@ async fn main() {
     player_db
         .ensure_current_season()
         .expect("Failed to initialize current profile season");
+    match player_db.migrate_welcome_gems_to_existing_humans().await {
+        Ok(count) => info!("Welcome gem migration checked existing human accounts: {count}"),
+        Err(error) => error!("Welcome gem migration failed: {error}"),
+    }
 
     let default_analytics_dir = std::path::Path::new(&redb_path)
         .parent()
@@ -1950,6 +1994,10 @@ async fn main() {
         .route("/store/catalog", get(handle_store_catalog))
         .route("/store/checkout", post(handle_store_checkout))
         .route("/store/purchases", post(handle_store_purchases))
+        .route(
+            "/profile/reward-receipts/ack",
+            post(handle_reward_receipts_ack),
+        )
         .route(
             "/store/purchases/{purchase_id}",
             post(handle_store_purchase),
@@ -2243,6 +2291,35 @@ async fn handle_public_leaderboard(
             }),
         )
             .into_response();
+    }
+    if query.kind.as_deref() == Some("victories") {
+        let limit = query.limit.unwrap_or(100).clamp(1, 100);
+        let cursor = query.cursor.unwrap_or(0).min(10_000);
+        return match state.db.public_victory_leaderboard(cursor, limit).await {
+            Ok(items) => {
+                let next_cursor = (items.len() == limit).then_some(cursor + limit);
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({
+                        "season_id": season_id,
+                        "metric": "victories",
+                        "items": items,
+                        "next_cursor": next_cursor,
+                    })),
+                )
+                    .into_response()
+            }
+            Err(error) => {
+                error!("victories leaderboard lookup failed: {error}");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ErrorResponse {
+                        error: "leaderboard unavailable".to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+        };
     }
     let queue = query.queue.as_deref().unwrap_or("Matchmaking");
     let mode = query.mode.as_deref().unwrap_or("FFA");
@@ -2873,23 +2950,32 @@ async fn handle_playgames_exchange(
         .unwrap_or(3600)
         .saturating_sub(30)
         .max(60);
-    let Ok(mut access_tokens) = state.playgames_access_tokens.lock() else {
-        error!("Play Games access-token store is poisoned");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Play Games session unavailable".to_string(),
-            }),
-        )
-            .into_response();
-    };
-    access_tokens.insert(
-        account.id.clone(),
-        PlayGamesAccessToken {
-            access_token,
-            expires_at: Instant::now() + Duration::from_secs(token_ttl),
-        },
-    );
+    {
+        let Ok(mut access_tokens) = state.playgames_access_tokens.lock() else {
+            error!("Play Games access-token store is poisoned");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Play Games session unavailable".to_string(),
+                }),
+            )
+                .into_response();
+        };
+        access_tokens.insert(
+            account.id.clone(),
+            PlayGamesAccessToken {
+                access_token,
+                expires_at: Instant::now() + Duration::from_secs(token_ttl),
+            },
+        );
+    }
+
+    if let Err(error) = state.sync_playgames_profile(&account.id).await {
+        error!(
+            "Play Games profile reconciliation failed for account={}: {error}",
+            account_hint(Some(&account.id))
+        );
+    }
 
     let handoff_token = random_playgames_token();
     let handoff = PlayGamesHandoff {
@@ -3063,10 +3149,12 @@ impl AppState {
         first_error.map_or(Ok(()), Err)
     }
 
-    async fn sync_playgames_match_outcome(
+    async fn sync_playgames_progress(
         &self,
-        outcome: &PlayGamesMatchOutcome,
-    ) -> Result<(), String> {
+        account_id: &str,
+        unlocked_achievements: &[String],
+        victories: Option<u32>,
+    ) -> Result<bool, String> {
         let env_value = |name: &str| std::env::var(name).unwrap_or_default().trim().to_string();
         let first_victory = env_value("SOW_PLAY_GAMES_FIRST_VICTORY_ACHIEVEMENT_ID");
         let battle_hardened = env_value("SOW_PLAY_GAMES_BATTLE_HARDENED_ACHIEVEMENT_ID");
@@ -3089,7 +3177,7 @@ impl AppState {
             && leader_path.is_empty()
             && leaderboard_id.is_empty()
         {
-            return Ok(());
+            return Ok(false);
         }
 
         let access_token = {
@@ -3099,15 +3187,15 @@ impl AppState {
                 .map_err(|_| "Play Games access-token store is poisoned".to_string())?;
             access_tokens.retain(|_, value| value.expires_at > Instant::now());
             access_tokens
-                .get(&outcome.account_id)
+                .get(account_id)
                 .map(|value| value.access_token.clone())
         };
         let Some(access_token) = access_token else {
-            return Ok(());
+            return Ok(false);
         };
 
         let client = reqwest::Client::new();
-        let account_hint = account_hint(Some(&outcome.account_id));
+        let account_hint = account_hint(Some(account_id));
         let mut actions = Vec::new();
         let add_unlock =
             |actions: &mut Vec<(String, Option<(&'static str, String)>, &'static str)>,
@@ -3121,52 +3209,37 @@ impl AppState {
                     ));
                 }
             };
-        let add_increment =
-            |actions: &mut Vec<(String, Option<(&'static str, String)>, &'static str)>,
-             id: &str,
-             steps: u64,
-             label: &'static str| {
-                if !id.is_empty() && steps > 0 {
-                    actions.push((
-                        format!(
-                            "https://games.googleapis.com/games/v1/achievements/{id}/increment"
-                        ),
-                        Some(("steps", steps.to_string())),
-                        label,
-                    ));
+        for achievement in unlocked_achievements {
+            match achievement.as_str() {
+                "first_victory" => add_unlock(&mut actions, &first_victory, "First Victory"),
+                "battle_hardened" => add_unlock(&mut actions, &battle_hardened, "Battle Hardened"),
+                "victory_march" => add_unlock(&mut actions, &victory_march, "Victory March"),
+                "laurel_hoard" => add_unlock(&mut actions, &laurel_hoard, "Laurel Hoard"),
+                "first_command" => add_unlock(&mut actions, &first_command, "First Command"),
+                "commander_victorious" => {
+                    add_unlock(&mut actions, &commander_victorious, "Commander Victorious")
                 }
-            };
-
-        add_increment(&mut actions, &battle_hardened, 1, "Battle Hardened");
-        add_increment(&mut actions, &leader_path, 1, "Leader Path");
-        add_increment(
-            &mut actions,
-            &laurel_hoard,
-            outcome.laurels_earned,
-            "Laurel Hoard",
-        );
-        if outcome.leader_matches_played >= 1 {
-            add_unlock(&mut actions, &first_command, "First Command");
+                "veteran_commander" => {
+                    add_unlock(&mut actions, &veteran_commander, "Veteran Commander")
+                }
+                "banner_collector" => add_unlock(&mut actions, &banner_collector, "Banner Collector"),
+                "leader_path" => add_unlock(&mut actions, &leader_path, "Leader Path"),
+                _ => {}
+            }
         }
-        if outcome.won {
-            add_unlock(&mut actions, &first_victory, "First Victory");
-            add_unlock(&mut actions, &commander_victorious, "Commander Victorious");
-            add_increment(&mut actions, &victory_march, 1, "Victory March");
-        }
-        if outcome.leader_wins >= 10 {
-            add_unlock(&mut actions, &veteran_commander, "Veteran Commander");
-        }
-        if outcome.distinct_leaders >= 5 {
-            add_unlock(&mut actions, &banner_collector, "Banner Collector");
-        }
-        if outcome.won && !leaderboard_id.is_empty() {
+        if let Some(victories) = victories
+            && !leaderboard_id.is_empty()
+        {
             actions.push((
                 format!(
                     "https://games.googleapis.com/games/v1/leaderboards/{leaderboard_id}/scores"
                 ),
-                Some(("score", outcome.wins.to_string())),
+                Some(("score", victories.to_string())),
                 "Victories leaderboard",
             ));
+        }
+        if actions.is_empty() {
+            return Ok(false);
         }
 
         let mut first_error = None;
@@ -3198,7 +3271,58 @@ impl AppState {
             }
         }
 
-        first_error.map_or(Ok(()), Err)
+        first_error.map_or(Ok(true), Err)
+    }
+
+    async fn sync_playgames_match_outcome(
+        &self,
+        outcome: &PlayGamesMatchOutcome,
+    ) -> Result<(), String> {
+        if self
+            .sync_playgames_progress(
+            &outcome.account_id,
+            &outcome.unlocked_achievements,
+            outcome.won.then_some(outcome.wins),
+        )
+        .await?
+        {
+            self.db
+                .mark_playgames_sync(&outcome.account_id, outcome.sync_revision)
+                .await
+                .map_err(|error| format!("mark Play Games sync: {error}"))?;
+        }
+        Ok(())
+    }
+
+    /// Reconcile the canonical server profile whenever a Play Games token is
+    /// refreshed. Unlocks are set operations and the leaderboard receives the
+    /// cumulative victory count, so retries cannot duplicate progress.
+    async fn sync_playgames_profile(&self, account_id: &str) -> Result<(), String> {
+        let snapshot = self
+            .db
+            .playgames_sync_snapshot(account_id)
+            .await
+            .map_err(|error| format!("load profile for Play Games sync: {error}"))?;
+        let Some(snapshot) = snapshot else {
+            return Ok(());
+        };
+        if snapshot.revision <= snapshot.synced_revision {
+            return Ok(());
+        }
+        if self
+            .sync_playgames_progress(
+                account_id,
+                &snapshot.unlocked_achievements,
+                Some(snapshot.wins),
+            )
+            .await?
+        {
+            self.db
+                .mark_playgames_sync(account_id, snapshot.revision)
+                .await
+                .map_err(|error| format!("mark Play Games sync: {error}"))?;
+        }
+        Ok(())
     }
 
     fn verify_playgames_session(
