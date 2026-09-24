@@ -168,7 +168,7 @@
         var effects = success
             ? "<div class='sow-purchase-modal__effects' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>"
             : "";
-        return "<div class='sow-purchase-modal__visual" + (skin ? " sow-purchase-modal__visual--skin" : "") + "'>" + art + effects + "</div>";
+        return "<div class='sow-purchase-modal__visual" + (skin ? " sow-purchase-modal__visual--skin" : "") + "'>" + art + "</div>" + effects;
     }
 
     function renderPurchaseModal() {
@@ -197,7 +197,8 @@
         var close = success ? "" : "<button class='sow-menu__icon-button' type='button' data-command='cancel_purchase' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button>";
         var eyebrow = success ? SOW_t("store.unlocked") : SOW_t("store.purchase");
         var price = success ? "" : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
-        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" + (success ? " is-success" : "") + "' role='dialog' aria-modal='true' aria-live='polite' aria-label='" + esc(itemName) + "'><div class='sow-purchase-modal__layout'>" + renderPurchaseArt(leader, skin, success) + "<div class='sow-purchase-modal__copy'><div class='sow-menu__modal-head'><div><p class='sow-purchase-modal__eyebrow'>" + esc(eyebrow) + "</p><h2>" + esc(itemName) + "</h2></div>" + close + "</div>" + price + error + body + "</div></div></section></div>";
+        var successClass = success ? " is-success" + (reducedRewardMotion() ? " is-reduced-motion" : "") : "";
+        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" + successClass + "' role='dialog' aria-modal='true' aria-live='polite' aria-label='" + esc(itemName) + "'><div class='sow-purchase-modal__layout'>" + renderPurchaseArt(leader, skin, success) + "<div class='sow-purchase-modal__copy'><div class='sow-menu__modal-head'><div><p class='sow-purchase-modal__eyebrow'>" + esc(eyebrow) + "</p><h2>" + esc(itemName) + "</h2></div>" + close + "</div>" + price + error + body + "</div></div></section></div>";
     }
 
     function resolvePurchaseModal() {

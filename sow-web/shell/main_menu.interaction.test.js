@@ -16,6 +16,7 @@ const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), 
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
+const indexTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 const windowInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/window.rs"), "utf8");
 const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
 const actionsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
@@ -84,14 +85,23 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.doesNotMatch(shellSource, /data-reward-summary|reward-toast/);
     assert.match(shellSource, /sow:loader-cycle-ready/);
     assert.match(shellSource, /runRewardPresentation/);
-    assert.match(shellSource, /getComputedStyle\(root\)\.getPropertyValue\("--sow-gold-bright"\)/);
+    assert.match(shellSource, /createRewardStage\(stages/);
+    assert.match(shellSource, /revealRewardAmounts\(items, token\)/);
+    assert.match(shellSource, /flyRewardCard\(item, token\)\.then[\s\S]*animateProgressionTo\(nextValues, 380, token\)/);
+    assert.match(shellSource, /2 \* inverse \* t \* controlX \+ t \* t \* dx/);
+    assert.match(shellSource, /gems: from\.gems \+ \(target\.gems - from\.gems\) \* eased/);
+    assert.doesNotMatch(shellSource, /writeProgression\(Object\.assign\(\{\}, displayedProgression, \{ gems: Number\(state\.gems\)/);
+    assert.match(shellSource, /function pulseRewardCounter\(selector, levelUp\)/);
+    assert.match(menuCss["main_menu.base.css"], /\.sow-menu__reward-stage/);
+    assert.match(menuCss["main_menu.base.css"], /sow-reward-card-reveal/);
+    assert.match(menuCss["main_menu.base.css"], /sow-reward-value-impact/);
     assert.match(shellSource, /acknowledge_reward_receipts/);
     assert.match(shellSource, /acknowledge_reward_presentation/);
     assert.match(shellSource, /send\("acknowledge_reward_receipts", \{ account_id: accountId, receipt_ids: ids \}\)/);
     assert.match(shellSource, /send\("acknowledge_reward_presentation", \{ account_id: accountId, receipt_id: preview\.receipt_id \}\)/);
     assert.match(webMenu, /AcknowledgeRewardReceipts \{[\s\S]*account_id,[\s\S]*receipt_ids,[\s\S]*progress_account_id\.as_deref\(\) == Some\(account_id\.as_str\(\)\)/);
     assert.match(webMenu, /AcknowledgeRewardPresentation \{[\s\S]*account_id,[\s\S]*receipt_id,[\s\S]*progress_account_id\.as_deref\(\) == Some\(account_id\.as_str\(\)\)/);
-    assert.match(shellSource, /if \(!shown\) \{\s*if \(document\.visibilityState === "visible"\) maybePresentRewards\(\);/);
+    assert.match(shellSource, /if \(!shown\) \{\s*writeProgression\(progressionFromState\(\)\);\s*if \(document\.visibilityState === "visible"\) maybePresentRewards\(\);/);
     assert.doesNotMatch(relaySource, /record_client_stats|record_match_report|SubmitStatsWithLeader|SubmitMatchReport/);
     assert.match(serverSource, /SubmitStatsWithLeader \{ \.\. \}[\s\S]*SubmitMatchReport \{ \.\. \} => \{\}/);
     assert.doesNotMatch(webMenu, /hud\.rewards/);
@@ -222,9 +232,11 @@ test("hero purchase stays server-backed, direct, and visually honest", () => {
     assert.match(shellSource, /send\("unlock_skin", \{ skin_id: purchaseModal\.skinId \}\)/);
     assert.match(storeSource, /purchaseModal\.phase = "success"/);
     assert.match(storeSource, /purchaseItemOwned/);
+    assert.match(storeSource, /reducedRewardMotion\(\) \? " is-reduced-motion"/);
     assert.match(storeSource, /sow-purchase-modal__visual/);
     assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal__layout/);
-    assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal-pop/);
+    assert.match(menuCss["main_menu.base.css"], /sow-purchase-art-reveal/);
+    assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal-particle/);
 });
 
 test("hero selection opens the shared catalog for equipped and purchasable skins", () => {
@@ -285,14 +297,22 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
 });
 
-test("canvas right-click is routed to the Rust map-menu handler", () => {
-    assert.match(hud, /gameCanvas\.addEventListener\("contextmenu"/);
-    assert.match(hud, /if \(event\.button !== 2\) return/);
-    assert.match(hud, /send\("open_map_context_menu", \{/);
-    assert.match(webMenu, /OpenMapContextMenu\s*\{\s*x: f64,\s*y: f64/);
-    assert.match(webMenu, /WebMenuCommand::OpenMapContextMenu\s*\{ x, y \} =>\s*\{\s*self\.handle_secondary_click\(x, y\);/);
-    assert.match(mapClick, /pub\(crate\) fn handle_secondary_click/);
-    assert.doesNotMatch(windowInput, /else if right && !pressed/);
+test("WASM right-click stays on the Rust pointer-release path; touch hold stays intact", () => {
+    assert.match(windowInput, /let right = matches!\([\s\S]*?MouseButton::Right[\s\S]*?\);/);
+    const rightClickStart = windowInput.indexOf("} else if right && !pressed");
+    const rightClickEnd = windowInput.indexOf("\n        }\n    }\n\n    fn handle_pointer_move", rightClickStart);
+    assert.notEqual(rightClickStart, -1);
+    assert.notEqual(rightClickEnd, -1);
+    const rightClickBody = windowInput.slice(rightClickStart, rightClickEnd);
+    assert.match(rightClickBody, /self\.ui\.app\.phase == ClientPhase::Playing/);
+    assert.match(rightClickBody, /selected_building_kind\.is_some\(\)[\s\S]*selected_nuke_kind\.is_some\(\)[\s\S]*self\.clear_placement\(\)/);
+    assert.match(rightClickBody, /else if !self\.move_selected_warships\(x, y\) \{\s*self\.open_map_context_menu\(x, y\);/);
+    assert.match(rightClickBody, /else \{\s*self\.close_map_context_menu\(\);/);
+    assert.match(windowInput, /pub\(crate\) fn poll_pointer_hold[\s\S]*?self\.open_map_context_menu\(x, y\);/);
+    assert.match(indexTemplate, /<canvas id="blade" oncontextmenu="return false;"/);
+    assert.doesNotMatch(hud, /addEventListener\("contextmenu"/);
+    assert.doesNotMatch(webMenu, /OpenMapContextMenu/);
+    assert.doesNotMatch(mapClick, /handle_secondary_click/);
 });
 
 test("map menu stays visible with disabled sectors when no action is available", () => {

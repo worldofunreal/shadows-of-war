@@ -30,12 +30,12 @@
     var rewardAnimationShown = new Set();
     var rewardAckTimes = Object.create(null);
     var rewardAnimationToken = 0;
-    var activeRewardIcon = null;
-    var activeRewardMotion = null;
+    var activeRewardStage = null;
     var rewardOptimisticPreview = null;
     var rewardPresentationReady = false;
     var displayedProgression = null;
     var progressionAnimationFrame = 0;
+    var progressionAnimationTarget = null;
 
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);
@@ -646,7 +646,7 @@
         if (xpFill) xpFill.style.width = (displayedProgression.xp % 100) + "%";
         if (crownsValue) crownsValue.textContent = Math.round(displayedProgression.crowns);
         if (laurelsValue) laurelsValue.textContent = Math.round(displayedProgression.laurels);
-        if (gemsValue) gemsValue.textContent = displayedProgression.gems;
+        if (gemsValue) gemsValue.textContent = Math.round(displayedProgression.gems);
     }
 
     function ensureProgressionDisplay() {
@@ -680,94 +680,184 @@
         var from = Object.assign({}, displayedProgression || progressionFromState());
         if (reducedRewardMotion() || duration <= 0) {
             writeProgression(target);
+            if (token === rewardAnimationToken) progressionAnimationTarget = null;
             return Promise.resolve(true);
         }
+        progressionAnimationTarget = Object.assign({}, target);
         var start = performance.now();
         return new Promise(function (resolve) {
+            var frameId = 0;
             function frame(now) {
-                if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") {
+                if (token !== rewardAnimationToken) {
+                    if (progressionAnimationFrame === frameId) progressionAnimationFrame = 0;
+                    resolve(false);
+                    return;
+                }
+                if (root.hidden || document.visibilityState !== "visible") {
                     progressionAnimationFrame = 0;
+                    progressionAnimationTarget = null;
+                    writeProgression(progressionFromState());
                     resolve(false);
                     return;
                 }
                 var t = Math.min(1, (now - start) / duration);
                 var eased = 1 - Math.pow(1 - t, 3);
+                var currentXp = from.xp + (target.xp - from.xp) * eased;
                 writeProgression({
-                    xp: from.xp + (target.xp - from.xp) * eased,
-                    level: Math.floor((from.xp + (target.xp - from.xp) * eased) / 100) + 1,
+                    xp: currentXp,
+                    level: Math.floor(currentXp / 100) + 1,
                     crowns: from.crowns + (target.crowns - from.crowns) * eased,
                     laurels: from.laurels + (target.laurels - from.laurels) * eased,
-                    gems: target.gems
+                    gems: from.gems + (target.gems - from.gems) * eased
                 });
-                if (t < 1) progressionAnimationFrame = requestAnimationFrame(frame);
+                if (t < 1) {
+                    frameId = requestAnimationFrame(frame);
+                    progressionAnimationFrame = frameId;
+                }
                 else {
-                    progressionAnimationFrame = 0;
+                    if (progressionAnimationFrame === frameId) progressionAnimationFrame = 0;
                     writeProgression(target);
+                    progressionAnimationTarget = null;
+                    if (!activeRewardStage && duration >= 900) {
+                        if (from.xp !== target.xp) pulseRewardCounter("[data-progression-xp-value]", false);
+                        if (from.crowns !== target.crowns) pulseRewardCounter("[data-progression-crowns-value]", false);
+                        if (from.laurels !== target.laurels) pulseRewardCounter("[data-progression-laurels-value]", false);
+                        if (from.gems !== target.gems) pulseRewardCounter("[data-progression-gems-value]", false);
+                        if (target.level > from.level) pulseRewardCounter("[data-progression-level-value]", true);
+                    }
                     resolve(true);
                 }
             }
-            progressionAnimationFrame = requestAnimationFrame(frame);
+            frameId = requestAnimationFrame(frame);
+            progressionAnimationFrame = frameId;
         });
+    }
+
+    function removeRewardStage() {
+        var layer = activeRewardStage;
+        activeRewardStage = null;
+        if (!layer) return;
+        if (typeof layer.getAnimations === "function") layer.getAnimations({ subtree: true }).forEach(function (motion) { motion.cancel(); });
+        layer.remove();
+        if (layer._shell && "inert" in layer._shell) layer._shell.inert = layer._shellWasInert;
+        if (layer._restoreFocus && layer._restoreFocus.isConnected && !root.hidden) layer._restoreFocus.focus({ preventScroll: true });
     }
 
     function cancelRewardAnimation() {
         rewardAnimationToken += 1;
         rewardAnimationRunning = false;
-        if (progressionAnimationFrame) cancelAnimationFrame(progressionAnimationFrame);
-        progressionAnimationFrame = 0;
-        var motion = activeRewardMotion;
-        var icon = activeRewardIcon;
-        activeRewardMotion = null;
-        activeRewardIcon = null;
-        if (motion) motion.cancel();
-        if (icon) icon.remove();
+        progressionAnimationTarget = null;
+        removeRewardStage();
     }
 
-    function flyRewardIcon(kind, selector, token) {
-        if (reducedRewardMotion()) return Promise.resolve(true);
-        var target = root.querySelector(selector);
-        if (!target || !document.body) return Promise.resolve(true);
-        var bounds = target.getBoundingClientRect();
-        var startX = window.innerWidth / 2;
-        var startY = window.innerHeight / 2;
-        var icon = kind === "xp" ? document.createElement("span") : document.createElement("img");
-        icon.className = "sow-menu__reward-flight sow-menu__reward-flight--" + kind;
-        icon.setAttribute("aria-hidden", "true");
-        if (kind === "xp") {
-            icon.textContent = "XP";
-            icon.style.color = window.getComputedStyle(root).getPropertyValue("--sow-gold-bright").trim();
-        } else icon.src = currencyAsset(kind === "crowns" ? "crown" : "laurel");
-        icon.style.left = (startX - 14) + "px";
-        icon.style.top = (startY - 14) + "px";
-        document.body.appendChild(icon);
-        activeRewardIcon = icon;
-        if (typeof icon.animate !== "function") {
-            return new Promise(function (resolve) {
-                window.setTimeout(function () {
-                    icon.remove();
-                    if (activeRewardIcon === icon) activeRewardIcon = null;
-                    resolve(token === rewardAnimationToken);
-                }, 350);
+    function createRewardStage(stages, skip) {
+        var layer = document.createElement("section");
+        layer.className = "sow-menu__reward-stage";
+        layer.setAttribute("role", "dialog");
+        layer.setAttribute("aria-modal", "true");
+        layer.setAttribute("aria-label", SOW_t("endgame.match_result"));
+        var cards = document.createElement("div");
+        cards.className = "sow-menu__reward-cards";
+        var items = stages.map(function (stage, index) {
+            var card = document.createElement("div");
+            card.className = "sow-menu__reward-card sow-menu__reward-card--" + stage.kind;
+            card.style.animationDelay = (120 + index * 140) + "ms";
+            card.setAttribute("role", "group");
+            card.setAttribute("aria-label", stage.amount + " " + SOW_t(stage.kind === "xp" ? "menu.xp" : stage.kind === "crowns" ? "store.crowns" : "store.laurels"));
+            var medallion = document.createElement("span");
+            medallion.className = "sow-menu__reward-medallion";
+            medallion.setAttribute("aria-hidden", "true");
+            var emblem = document.createElement(stage.kind === "xp" ? "span" : "img");
+            emblem.className = "sow-menu__reward-emblem";
+            if (stage.kind === "xp") emblem.textContent = "XP";
+            else emblem.src = currencyAsset(stage.kind === "crowns" ? "crown" : "laurel");
+            medallion.appendChild(emblem);
+            var amount = document.createElement("strong");
+            amount.className = "sow-menu__reward-amount";
+            amount.setAttribute("aria-hidden", "true");
+            amount.textContent = "+0";
+            card.appendChild(medallion);
+            card.appendChild(amount);
+            cards.appendChild(card);
+            return { stage: stage, card: card, amount: amount };
+        });
+        var close = document.createElement("button");
+        close.className = "sow-menu__reward-skip sow-menu__icon-button";
+        close.type = "button";
+        close.textContent = "×";
+        close.setAttribute("aria-label", SOW_t("menu.close"));
+        close.addEventListener("click", skip);
+        layer.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); skip(); }
+        });
+        layer.appendChild(cards);
+        layer.appendChild(close);
+        layer._shell = root.querySelector(".sow-menu__shell");
+        layer._shellWasInert = layer._shell && layer._shell.inert;
+        layer._restoreFocus = document.activeElement;
+        root.appendChild(layer);
+        activeRewardStage = layer;
+        if (layer._shell && "inert" in layer._shell) layer._shell.inert = true;
+        close.focus({ preventScroll: true });
+        return items;
+    }
+
+    function revealRewardAmounts(items, token) {
+        var start = performance.now();
+        return new Promise(function (resolve) {
+            function frame(now) {
+                if (token !== rewardAnimationToken || root.hidden || document.visibilityState !== "visible") { resolve(false); return; }
+                var elapsed = now - start;
+                items.forEach(function (item, index) {
+                    var t = Math.max(0, Math.min(1, (elapsed - 300 - index * 140) / 650));
+                    var value = "+" + Math.round(item.stage.amount * (1 - Math.pow(1 - t, 3)));
+                    if (item.amount.textContent !== value) item.amount.textContent = value;
+                });
+                if (elapsed < 1450) requestAnimationFrame(frame);
+                else resolve(true);
+            }
+            requestAnimationFrame(frame);
+        });
+    }
+
+    function flyRewardCard(item, token) {
+        var target = root.querySelector(item.stage.selector);
+        if (!target || typeof item.card.animate !== "function") { item.card.style.visibility = "hidden"; return Promise.resolve(true); }
+        var from = item.card.getBoundingClientRect();
+        var to = target.getBoundingClientRect();
+        var dx = to.left + to.width / 2 - from.left - from.width / 2;
+        var dy = to.top + to.height / 2 - from.top - from.height / 2;
+        var bend = Math.min(160, Math.max(70, Math.hypot(dx, dy) * .2));
+        var controlX = dx / 2 + (dx < 0 ? -bend * .6 : bend * .6);
+        var controlY = dy / 2 - bend;
+        var path = [];
+        for (var i = 0; i <= 12; i++) {
+            var t = i / 12;
+            var inverse = 1 - t;
+            var x = 2 * inverse * t * controlX + t * t * dx;
+            var y = 2 * inverse * t * controlY + t * t * dy;
+            path.push({
+                offset: t,
+                transform: "translate3d(" + x + "px," + y + "px,0) scale(" + (1 - .82 * t) + ") rotate(" + (Math.sin(Math.PI * t) * 8) + "deg)",
+                opacity: 1 - .4 * Math.max(0, (t - .8) / .2)
             });
         }
-        var dx = bounds.left + bounds.width / 2 - startX;
-        var dy = bounds.top + bounds.height / 2 - startY;
         return new Promise(function (resolve) {
-            var motion = icon.animate([
-                { transform: "translate3d(0,0,0) scale(.65)", opacity: 0 },
-                { transform: "translate3d(0,0,0) scale(1)", opacity: 1, offset: 0.2 },
-                { transform: "translate3d(" + dx + "px," + dy + "px,0) scale(.3)", opacity: 0.8 }
-            ], { duration: 350, easing: "cubic-bezier(.2,.7,.25,1)", fill: "forwards" });
-            activeRewardMotion = motion;
-            function cleanup(result) {
-                icon.remove();
-                if (activeRewardMotion === motion) activeRewardMotion = null;
-                if (activeRewardIcon === icon) activeRewardIcon = null;
-                resolve(result);
-            }
-            motion.onfinish = function () { cleanup(token === rewardAnimationToken); };
-            motion.oncancel = function () { cleanup(false); };
+            var motion = item.card.animate(path, { duration: 520, easing: "cubic-bezier(.45,0,.55,1)", fill: "forwards" });
+            motion.onfinish = function () { item.card.style.visibility = "hidden"; resolve(token === rewardAnimationToken); };
+            motion.oncancel = function () { resolve(false); };
         });
+    }
+
+    function pulseRewardCounter(selector, levelUp) {
+        if (reducedRewardMotion()) return;
+        var counter = root.querySelector(selector);
+        if (!counter) return;
+        var className = levelUp ? "is-reward-level-up" : "is-reward-value-hit";
+        counter.classList.remove(className);
+        void counter.offsetWidth;
+        counter.classList.add(className);
+        window.setTimeout(function () { counter.classList.remove(className); }, levelUp ? 900 : 640);
     }
 
     function acknowledgeShownReceipts(accountId) {
@@ -819,11 +909,19 @@
         ].filter(function (stage) { return stage.amount > 0; });
 
         function finish(shown) {
-            if (token === rewardAnimationToken) rewardAnimationRunning = false;
             if (token !== rewardAnimationToken || !state || state.account_id !== accountId) return;
+            rewardAnimationToken += 1;
+            rewardAnimationRunning = false;
+            removeRewardStage();
             if (!shown) {
+                writeProgression(progressionFromState());
                 if (document.visibilityState === "visible") maybePresentRewards();
                 return;
+            }
+            if (receipts.length) writeProgression(progressionFromState());
+            else {
+                target.gems = progressionFromState().gems;
+                writeProgression(target);
             }
             if (receipts.length) {
                 ids.forEach(function (id) { rewardAnimationShown.add(id); });
@@ -833,14 +931,13 @@
                 rewardOptimisticPreview = { receipt_id: preview.receipt_id, target: target };
                 send("acknowledge_reward_presentation", { account_id: accountId, receipt_id: preview.receipt_id });
             }
-            var level = root.querySelector("[data-progression-level-value]");
-            if (level && Math.floor(target.xp / 100) + 1 !== Math.floor((displayedProgression.xp - (totals.xp || 0)) / 100) + 1) {
-                level.classList.remove("is-reward-level-up");
-                void level.offsetWidth;
-                level.classList.add("is-reward-level-up");
-                window.setTimeout(function () { level.classList.remove("is-reward-level-up"); }, 700);
-            }
             maybePresentRewards();
+        }
+
+        function complete(shown) {
+            if (!shown || !activeRewardStage) { finish(shown); return; }
+            activeRewardStage.classList.add("is-exiting");
+            window.setTimeout(function () { finish(true); }, 240);
         }
 
         function next(index) {
@@ -849,27 +946,35 @@
                 return;
             }
             if (index >= stages.length) {
-                animateProgressionTo(target, 180, token).then(finish);
+                var latest = receipts.length ? progressionFromState() : Object.assign({}, target, { gems: progressionFromState().gems });
+                var current = displayedProgression || progressionFromState();
+                var changed = latest.xp !== current.xp || latest.level !== current.level || latest.crowns !== current.crowns ||
+                    latest.laurels !== current.laurels || latest.gems !== current.gems;
+                if (changed) animateProgressionTo(latest, 900, token).then(complete);
+                else complete(true);
                 return;
             }
-            var stage = stages[index];
+            var item = items[index];
+            var stage = item.stage;
             var nextValues = Object.assign({}, displayedProgression || progressionFromState());
             var oldLevel = Math.floor(nextValues.xp / 100) + 1;
             nextValues[stage.kind] = target[stage.kind];
             nextValues.level = Math.floor(nextValues.xp / 100) + 1;
-            Promise.all([
-                flyRewardIcon(stage.kind, stage.selector, token),
-                animateProgressionTo(nextValues, 350, token)
-            ]).then(function (results) {
-                if (!results[0] || !results[1]) { finish(false); return; }
-                if (stage.kind === "xp" && nextValues.level > oldLevel) {
-                    var level = root.querySelector("[data-progression-level-value]");
-                    if (level) level.classList.add("is-reward-level-up");
-                }
-                next(index + 1);
+            flyRewardCard(item, token).then(function (arrived) {
+                if (!arrived) { finish(false); return; }
+                animateProgressionTo(nextValues, 380, token).then(function (shown) {
+                    if (!shown) { finish(false); return; }
+                    pulseRewardCounter(stage.selector, false);
+                    if (stage.kind === "xp" && nextValues.level > oldLevel) {
+                        pulseRewardCounter("[data-progression-level-value]", true);
+                        window.setTimeout(function () { next(index + 1); }, 250);
+                    } else next(index + 1);
+                });
             });
         }
-        next(0);
+        if (reducedRewardMotion() || !stages.length) { finish(true); return; }
+        var items = createRewardStage(stages, function () { finish(true); });
+        revealRewardAmounts(items, token).then(function (shown) { if (shown) next(0); else finish(false); });
     }
 
     function maybePresentRewards() {
@@ -877,7 +982,7 @@
             !rewardPresentationReady || rewardAnimationRunning) return;
         ensureProgressionDisplay();
         var preview = state.exit_reward_preview;
-        if (rewardOptimisticPreview) {
+            if (rewardOptimisticPreview) {
             var receipt = findRewardReceipt(rewardOptimisticPreview.receipt_id);
             if (receipt) {
                 var accountId = state.account_id;
@@ -885,7 +990,7 @@
                 rewardOptimisticPreview = null;
                 rewardAnimationRunning = true;
                 var reconcileToken = ++rewardAnimationToken;
-                animateProgressionTo(progressionFromState(), 350, reconcileToken).then(function (shown) {
+                animateProgressionTo(progressionFromState(), 900, reconcileToken).then(function (shown) {
                     if (reconcileToken !== rewardAnimationToken || !state || state.account_id !== accountId) return;
                     rewardAnimationRunning = false;
                     if (shown) acknowledgeShownReceipts(accountId);
@@ -909,20 +1014,26 @@
     function updateDynamic() {
         if (!state || root.hidden) return;
         ensureProgressionDisplay();
+        if (reducedRewardMotion() && (rewardAnimationRunning || progressionAnimationTarget)) {
+            cancelRewardAnimation();
+            writeProgression(progressionFromState());
+        }
         var pendingRewards = pendingRewardReceipts().filter(function (receipt) { return !rewardAnimationShown.has(receipt.id); });
         var activePreview = state.exit_reward_preview &&
             state.exit_reward_preview.account_id === state.account_id &&
             !rewardAnimationShown.has(state.exit_reward_preview.receipt_id);
         if (!rewardAnimationRunning && !pendingRewards.length && !rewardOptimisticPreview && !activePreview) {
             var canonical = progressionFromState();
-            var changed = canonical.xp !== displayedProgression.xp || canonical.crowns !== displayedProgression.crowns ||
-                canonical.laurels !== displayedProgression.laurels || canonical.gems !== displayedProgression.gems;
-            if (changed) {
-                if (rewardAnimationShown.size) animateProgressionTo(canonical, 350, ++rewardAnimationToken);
-                else writeProgression(canonical);
+            var changed = canonical.xp !== displayedProgression.xp || canonical.level !== displayedProgression.level ||
+                canonical.crowns !== displayedProgression.crowns || canonical.laurels !== displayedProgression.laurels || canonical.gems !== displayedProgression.gems;
+            var sameTarget = progressionAnimationTarget && canonical.xp === progressionAnimationTarget.xp &&
+                canonical.level === progressionAnimationTarget.level && canonical.crowns === progressionAnimationTarget.crowns &&
+                canonical.laurels === progressionAnimationTarget.laurels && canonical.gems === progressionAnimationTarget.gems;
+            if (changed && !sameTarget) {
+                if (reducedRewardMotion() || root.hidden || document.visibilityState !== "visible") writeProgression(canonical);
+                else animateProgressionTo(canonical, 900, ++rewardAnimationToken);
             }
         }
-        writeProgression(Object.assign({}, displayedProgression, { gems: Number(state.gems) || 0 }));
         var panel = activeScreenPanel() || root;
         var settings = state.settings || {};
         var musicInput = root.querySelector("[data-setting='music_volume']");
@@ -1867,7 +1978,17 @@
     });
 
     document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState !== "visible" || !state || state.phase !== "MainMenu") return;
+        if (document.visibilityState !== "visible") {
+            if (state && (rewardAnimationRunning || progressionAnimationTarget)) {
+                cancelRewardAnimation();
+                writeProgression(progressionFromState());
+                var preview = state.exit_reward_preview;
+                var unpresentedReceipt = pendingRewardReceipts().some(function (receipt) { return !rewardAnimationShown.has(receipt.id); });
+                if (unpresentedReceipt || (preview && !rewardAnimationShown.has(preview.receipt_id))) displayedProgression = null;
+            }
+            return;
+        }
+        if (!state || state.phase !== "MainMenu") return;
         if (!rewardPresentationReady) scheduleRewardPresentation(0);
         else maybePresentRewards();
     });
@@ -1906,7 +2027,10 @@
         lastMenuPhase = state.phase;
         if (state.phase !== "MainMenu") {
             rewardPresentationReady = false;
-            if (rewardAnimationRunning) cancelRewardAnimation();
+            if (rewardAnimationRunning) {
+                cancelRewardAnimation();
+                writeProgression(progressionFromState());
+            }
             if (rewardAnimationTimer !== null) window.clearTimeout(rewardAnimationTimer);
             rewardAnimationTimer = null;
         }

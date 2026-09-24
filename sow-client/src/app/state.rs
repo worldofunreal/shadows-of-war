@@ -1,6 +1,5 @@
 use web_time::{Duration, Instant};
-
-pub const MAX_DEATH_NAMEPLATES: usize = 64;
+pub use crate::death_nameplate::{DeathNameplateAnimation, MAX_DEATH_NAMEPLATES};
 
 /// Subset of [`sow_core::protocol::ProjectileSnapshot`] for detonation / launch detection.
 #[derive(Clone, Copy, Debug)]
@@ -251,28 +250,6 @@ pub struct FloatingNotice {
     pub start_time: web_time::Instant,
     pub duration: web_time::Duration,
     pub color: [f32; 4],
-}
-
-#[derive(Clone, Debug)]
-pub struct DeathNameplateAnimation {
-    pub name: String,
-    pub color: [f32; 3],
-    pub world_x: f32,
-    pub world_y: f32,
-    pub start_time: web_time::Instant,
-    pub by_nuke: bool,
-    pub drift_x: f32,
-    pub flight_distance: f32,
-    pub icon_scale: f32,
-}
-
-impl DeathNameplateAnimation {
-    pub fn enqueue(queue: &mut Vec<Self>, animation: Self) {
-        if queue.len() >= MAX_DEATH_NAMEPLATES {
-            queue.remove(0);
-        }
-        queue.push(animation);
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -559,35 +536,4 @@ pub struct SowApp {
     #[cfg(target_arch = "wasm32")]
     pub boot_db_settled: bool,
     pub boot_campaign_pending: Option<String>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn animation(name: impl Into<String>) -> DeathNameplateAnimation {
-        DeathNameplateAnimation {
-            name: name.into(),
-            color: [1.0; 3],
-            world_x: 0.0,
-            world_y: 0.0,
-            start_time: Instant::now(),
-            by_nuke: false,
-            drift_x: 0.0,
-            flight_distance: 15.0,
-            icon_scale: 1.0,
-        }
-    }
-
-    #[test]
-    fn death_nameplate_queue_caps_at_64_and_evicts_oldest() {
-        let mut queue = Vec::with_capacity(MAX_DEATH_NAMEPLATES);
-        for index in 0..=MAX_DEATH_NAMEPLATES {
-            DeathNameplateAnimation::enqueue(&mut queue, animation(index.to_string()));
-        }
-        assert_eq!(queue.len(), MAX_DEATH_NAMEPLATES);
-        assert_eq!(queue.first().unwrap().name, "1");
-        assert_eq!(queue.last().unwrap().name, MAX_DEATH_NAMEPLATES.to_string());
-        assert!(queue.capacity() >= MAX_DEATH_NAMEPLATES);
-    }
 }

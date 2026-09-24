@@ -586,7 +586,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             println!("    {file}");
         }
     }
-    for command in ["cargo", "curl", "rsync", "rustc", "scp", "ssh", "wasm-opt"] {
+    for command in ["cargo", "curl", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt"] {
         if !Command::new("/bin/sh")
             .args(["-c", &format!("command -v {command} >/dev/null")])
             .status()?
@@ -595,6 +595,12 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             bail!("{command} is required");
         }
     }
+    run(
+        "node",
+        &["--test", "sow-web/shell/main_menu.interaction.test.js"],
+        Some(&paths.root),
+    )
+    .context("web interaction regression tests failed")?;
     if !Command::new("rustc")
         .args([
             "--print",

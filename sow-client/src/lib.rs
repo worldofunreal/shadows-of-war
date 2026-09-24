@@ -97,6 +97,7 @@ pub(crate) fn get_build_version() -> String {
 mod analytics;
 mod anonymous_identity;
 mod asset_config;
+mod death_nameplate;
 pub mod diag;
 
 pub use asset_config::AssetConfig;

@@ -228,6 +228,10 @@ impl SowApp {
         let is_touch = matches!(button, winit::event::ButtonSource::Touch { .. });
         let left =
             matches!(button, winit::event::ButtonSource::Mouse(MouseButton::Left)) || is_touch;
+        let right = matches!(
+            button,
+            winit::event::ButtonSource::Mouse(MouseButton::Right)
+        );
 
         if let winit::event::ButtonSource::Touch { finger_id, .. } = button {
             let id = finger_id.into_raw() as u64;
@@ -323,6 +327,17 @@ impl SowApp {
                         self.handle_map_click(start.x, start.y);
                     }
                 }
+            }
+        } else if right && !pressed && self.ui.app.phase == ClientPhase::Playing {
+            if self.ui.app.hud_state.selected_building_kind.is_some()
+                || self.ui.app.hud_state.selected_nuke_kind.is_some()
+            {
+                self.clear_placement();
+                self.close_map_context_menu();
+            } else if !self.move_selected_warships(x, y) {
+                self.open_map_context_menu(x, y);
+            } else {
+                self.close_map_context_menu();
             }
         }
     }

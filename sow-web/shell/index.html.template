@@ -229,7 +229,7 @@
         <h1>Shadows of War</h1>
         <p>Shadows of War is a match-based MMORTS on world maps. Join matchmaking, command one of twelve historical leaders, forge alliances, betray rivals, expand territory, and build your war economy.</p>
     </div>
-    <canvas id="blade" tabindex="0"></canvas>
+    <canvas id="blade" oncontextmenu="return false;" tabindex="0"></canvas>
     <div id="sow-menu" hidden aria-live="polite"></div>
     <div id="sow-hud" hidden aria-live="polite"></div>
     <div id="version">v__VERSION__</div>

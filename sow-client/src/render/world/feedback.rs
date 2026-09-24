@@ -1,4 +1,5 @@
 use crate::app::{InputState, SimState, UiState};
+use crate::death_nameplate::{death_animation, death_emoji};
 use crate::render::gpu::TextRenderer;
 use crate::render::world::overlays::{INLINE_EMOJI_SCALE, world_to_screen};
 use crate::render::{dev_emoji_outline, dev_text_style};
@@ -9,7 +10,6 @@ use web_time::Instant;
 const CLICK_MARKER_DURATION: f32 = 0.16;
 const NOTICE_FONT_SIZE: f32 = 14.0;
 const NOTICE_RISE: f32 = 6.5;
-const DEATH_NAMEPLATE_DURATION: f32 = 0.3;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
 const DEATH_NAMEPLATE_RISE: f32 = 2.5;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
@@ -106,26 +106,6 @@ fn render_death_nameplates(
         );
         true
     });
-}
-
-fn death_animation(elapsed: f32) -> Option<(f32, f32, f32)> {
-    if !elapsed.is_finite() || elapsed < 0.0 || elapsed >= DEATH_NAMEPLATE_DURATION {
-        return None;
-    }
-    let t = elapsed / DEATH_NAMEPLATE_DURATION;
-    let eased = t * (2.0 - t);
-    let alpha = if t < 0.1 {
-        t / 0.1
-    } else if t > 0.6 {
-        ((1.0 - t) / 0.4).clamp(0.0, 1.0)
-    } else {
-        1.0
-    };
-    Some((t, eased, alpha))
-}
-
-fn death_emoji(by_nuke: bool) -> &'static str {
-    if by_nuke { "☢️" } else { "🕊️" }
 }
 
 fn render_click_markers(
@@ -406,18 +386,4 @@ mod tests {
         assert_eq!(spring_overshoot(0.0), 0.0);
     }
 
-    #[test]
-    fn death_animation_eases_fades_and_expires_at_300ms() {
-        let start = death_animation(0.0).unwrap();
-        let middle = death_animation(0.15).unwrap();
-        assert_eq!(start, (0.0, 0.0, 0.0));
-        assert_eq!(middle, (0.5, 0.75, 1.0));
-        assert!(death_animation(0.3).is_none());
-    }
-
-    #[test]
-    fn death_animation_uses_dove_or_nuke_emoji() {
-        assert_eq!(death_emoji(false), "🕊️");
-        assert_eq!(death_emoji(true), "☢️");
-    }
 }

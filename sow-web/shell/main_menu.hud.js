@@ -49,20 +49,6 @@
         return true;
     }
 
-    var gameCanvas = document.getElementById("blade");
-    if (gameCanvas) {
-        gameCanvas.addEventListener("contextmenu", function (event) {
-            event.preventDefault();
-            if (event.button !== 2) return;
-            var rect = gameCanvas.getBoundingClientRect();
-            var scale = window.devicePixelRatio || 1;
-            send("open_map_context_menu", {
-                x: (event.clientX - rect.left) * scale,
-                y: (event.clientY - rect.top) * scale
-            });
-        });
-    }
-
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
@@ -972,7 +958,7 @@
             }
             if (hudRefs.surrenderPortrait) {
                 hudRefs.surrenderPortrait.src = asset("gameplay/avatars/" + surrenderLeader.slug + ".webp");
-                hudRefs.surrenderPortrait.alt = leaderDisplayName(surrenderLeader) || SOW_t("hud.leader_avatar");
+                hudRefs.surrenderPortrait.alt = surrenderLeader.name || SOW_t("hud.leader_avatar");
             }
             if (hudRefs.surrenderCancel) hudRefs.surrenderCancel.textContent = SOW_t("endgame.cancel");
             if (hudRefs.surrenderActionLabel) hudRefs.surrenderActionLabel.textContent = tutorialActive
@@ -1000,7 +986,7 @@
                 var activeLeader = leaderById(activeLeaderId);
                 if (hudRefs.endgamePortrait) {
                     hudRefs.endgamePortrait.src = asset("gameplay/avatars/" + activeLeader.slug + ".webp");
-                    hudRefs.endgamePortrait.alt = leaderDisplayName(activeLeader) || SOW_t("hud.leader_avatar");
+                    hudRefs.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
                 var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;

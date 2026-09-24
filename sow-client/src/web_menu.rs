@@ -51,10 +51,6 @@ enum WebMenuCommand {
         tile_idx: u32,
         action: crate::input::map_click::MapMenuAction,
     },
-    OpenMapContextMenu {
-        x: f64,
-        y: f64,
-    },
     CompleteCampaignEpisode {
         episode_id: String,
     },
@@ -504,9 +500,6 @@ impl SowApp {
                     action,
                 } => {
                     self.handle_map_menu_action(session, tile_idx, action);
-                }
-                WebMenuCommand::OpenMapContextMenu { x, y } => {
-                    self.handle_secondary_click(x, y);
                 }
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {

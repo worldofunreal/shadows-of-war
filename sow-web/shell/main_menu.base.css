@@ -356,34 +356,190 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     object-fit: contain;
 }
 
-.sow-menu__reward-flight {
-    position: fixed;
+.sow-menu__reward-stage {
+    position: absolute;
     z-index: 1000;
-    width: 28px;
-    height: 28px;
-    object-fit: contain;
-    pointer-events: none;
-    filter: drop-shadow(0 0 8px rgba(255, 211, 106, 0.8));
-    will-change: transform, opacity;
-}
-
-.sow-menu__reward-flight--xp {
+    inset: 0;
     display: grid;
     place-items: center;
-    font-size: 11px;
-    font-weight: 900;
-    text-shadow: 0 0 8px rgba(255, 211, 106, 0.9);
+    padding: 120px 28px 76px;
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.sow-menu__reward-stage::before {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(4, 6, 12, .15) 0 100px, rgba(4, 6, 12, .82) 170px, rgba(4, 6, 12, .9) 100%);
+    content: "";
+    animation: sow-reward-curtain 260ms ease-out both;
+}
+
+.sow-menu__reward-stage.is-exiting { animation: sow-reward-stage-out 240ms ease-in both; }
+
+.sow-menu__reward-cards {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(14px, 3vw, 28px);
+}
+
+.sow-menu__reward-card {
+    --reward-color: #38bdf8;
+    --reward-glow: rgba(56, 189, 248, .48);
+    position: relative;
+    display: flex;
+    width: min(24vw, 250px);
+    min-height: 250px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    padding: 20px;
+    border: 1px solid var(--reward-color);
+    border-radius: 22px;
+    background: linear-gradient(155deg, #1b2430, #0a0d14 78%);
+    box-shadow: 0 18px 55px rgba(0, 0, 0, .75), 0 0 40px var(--reward-glow), inset 0 1px rgba(255, 255, 255, .16);
+    transform-origin: 50% 65%;
+    will-change: transform, opacity;
+    animation: sow-reward-card-reveal 760ms cubic-bezier(.22, 1.35, .36, 1) both;
+}
+
+.sow-menu__reward-card--crowns { --reward-color: #ffd36a; --reward-glow: rgba(255, 211, 106, .48); }
+.sow-menu__reward-card--laurels { --reward-color: #d9b5ff; --reward-glow: rgba(192, 132, 252, .5); }
+
+.sow-menu__reward-medallion {
+    position: relative;
+    display: grid;
+    width: 150px;
+    height: 150px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 3px solid var(--reward-color);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 28%, #374451, #111923 60%, #080b12);
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, .045), 0 0 42px var(--reward-glow), inset 0 0 28px var(--reward-glow);
+}
+
+.sow-menu__reward-medallion::before {
+    position: absolute;
+    z-index: -1;
+    inset: -19px;
+    border-radius: 50%;
+    background: conic-gradient(from 10deg, transparent 0 18deg, var(--reward-glow) 20deg 24deg, transparent 26deg 60deg, var(--reward-glow) 63deg 67deg, transparent 69deg 360deg);
+    content: "";
+    animation: sow-reward-rays 1800ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.sow-menu__reward-emblem {
+    display: grid;
+    width: 100px;
+    height: 100px;
+    place-items: center;
+    object-fit: contain;
+    color: #fff;
+    font-size: 68px;
+    font-weight: 1000;
+    font-style: italic;
+    letter-spacing: -.08em;
+    text-shadow: 0 3px #102431, 0 0 24px var(--reward-color);
+}
+
+.sow-menu__reward-amount {
+    position: relative;
+    color: #fff;
+    font-size: clamp(50px, 4.4vw, 64px);
+    font-weight: 1000;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    text-shadow: 0 3px 2px #050609, 0 0 24px var(--reward-glow);
+    white-space: nowrap;
+}
+
+.sow-menu__reward-skip.sow-menu__icon-button {
+    position: absolute;
+    z-index: 2;
+    right: calc(env(safe-area-inset-right) + 18px);
+    bottom: calc(env(safe-area-inset-bottom) + 18px);
+    width: 46px;
+    height: 46px;
+    background: rgba(13, 16, 23, .9);
+    color: #fff;
+    font-size: 30px;
+}
+
+@keyframes sow-reward-curtain { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sow-reward-stage-out { to { opacity: 0; } }
+@keyframes sow-reward-rays { from { opacity: 0; transform: rotate(-30deg) scale(.72); } 35% { opacity: 1; } to { opacity: .3; transform: rotate(100deg) scale(1.12); } }
+@keyframes sow-reward-card-reveal {
+    0% { opacity: 0; transform: translateY(32px) scale(.82, .88); }
+    16% { opacity: .75; transform: translateY(40px) scale(.73, .78); }
+    52% { opacity: 1; transform: translateY(-16px) scale(1.09, .92); }
+    73% { transform: translateY(5px) scale(.95, 1.05); }
+    88% { transform: translateY(-3px) scale(1.025, .985); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 680px), (orientation: portrait) {
+    .sow-menu__reward-stage { padding: 118px 12px 70px; }
+    .sow-menu__reward-cards { flex-direction: column; gap: 10px; }
+    .sow-menu__reward-card { width: min(100%, 340px); min-height: 126px; flex-direction: row; gap: 18px; padding: 9px 16px; }
+    .sow-menu__reward-medallion { width: 108px; height: 108px; }
+    .sow-menu__reward-emblem { width: 88px; height: 88px; font-size: 57px; }
+    .sow-menu__reward-amount { font-size: clamp(40px, 12vw, 52px); }
+}
+
+@media (max-height: 650px) and (min-width: 700px) {
+    .sow-menu__reward-stage { padding: 90px 12px 24px; }
+    .sow-menu__reward-card { width: min(30vw, 210px); min-height: 180px; gap: 6px; }
+    .sow-menu__reward-medallion { width: 100px; height: 100px; }
+    .sow-menu__reward-emblem { width: 76px; height: 76px; font-size: 50px; }
+    .sow-menu__reward-amount { font-size: 42px; }
+}
+
+.sow-menu__progress [data-progression-xp-value],
+.sow-menu__progress [data-progression-crowns-value],
+.sow-menu__progress [data-progression-laurels-value],
+.sow-menu__progress [data-progression-gems-value],
+.sow-menu__progress [data-progression-level-value] {
+    display: inline-block;
+    transform-origin: center;
+}
+
+.sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
+.sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,
+.sow-menu__progress [data-progression-laurels-value].is-reward-value-hit,
+.sow-menu__progress [data-progression-gems-value].is-reward-value-hit {
+    animation: sow-reward-value-impact 640ms cubic-bezier(.22, 1.3, .36, 1) both;
 }
 
 .sow-menu__level [data-progression-level-value].is-reward-level-up {
-    animation: sow-reward-level-pulse 650ms ease-out;
+    animation: sow-reward-level-pulse 900ms cubic-bezier(.22, 1.3, .36, 1) both;
+}
+
+@keyframes sow-reward-value-impact {
+    0%, 100% { transform: scale(1); }
+    36% { color: #fff8dc; text-shadow: 0 0 18px rgba(255, 211, 106, 1); transform: translateY(-3px) scale(1.5); }
+    64% { transform: translateY(1px) scale(.9); }
+    82% { transform: translateY(-1px) scale(1.14); }
 }
 
 @keyframes sow-reward-level-pulse {
-    45% { color: var(--sow-gold-bright); text-shadow: 0 0 14px rgba(255, 211, 106, 0.9); transform: scale(1.2); }
+    0%, 100% { transform: scale(1); }
+    34% { color: var(--sow-gold-bright); text-shadow: 0 0 26px rgba(255, 211, 106, 1); transform: translateY(-4px) scale(1.65) rotate(-4deg); }
+    58% { transform: translateY(1px) scale(.9) rotate(2deg); }
+    78% { transform: translateY(-1px) scale(1.17); }
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
+    .sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,
+    .sow-menu__progress [data-progression-laurels-value].is-reward-value-hit,
+    .sow-menu__progress [data-progression-gems-value].is-reward-value-hit,
     .sow-menu__level [data-progression-level-value].is-reward-level-up { animation: none; }
 }
 
@@ -802,6 +958,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 .sow-purchase-modal__layout {
+    position: relative;
     display: grid;
     min-height: 480px;
     grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
@@ -825,7 +982,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 
 .sow-purchase-modal__visual::before {
     z-index: 1;
-    background: conic-gradient(from 12deg, transparent 0 12deg, rgba(255, 214, 91, .22) 13deg 14deg, transparent 15deg 31deg, rgba(243, 177, 43, .18) 32deg 33deg, transparent 34deg 360deg);
+    background: repeating-conic-gradient(from 12deg, transparent 0 20deg, rgba(255, 214, 91, .3) 22deg 28deg, transparent 30deg 60deg);
     opacity: 0;
 }
 
@@ -936,9 +1093,9 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     top: 50%;
     left: 50%;
     display: block;
-    width: 7px;
-    height: 7px;
-    border-radius: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
     background: var(--sow-gold-bright);
     box-shadow: 0 0 14px rgba(255, 214, 91, .9);
     opacity: 0;
@@ -953,36 +1110,121 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 .sow-purchase-modal__effects i:nth-child(7) { --sow-particle-x: -105px; --sow-particle-y: -178px; }
 .sow-purchase-modal__effects i:nth-child(8) { --sow-particle-x: 108px; --sow-particle-y: -170px; }
 
-.sow-purchase-modal.is-success .sow-purchase-modal__visual {
-    animation: sow-purchase-modal-pop 700ms cubic-bezier(.16, 1, .3, 1) both;
+.sow-menu__modal.sow-purchase-modal.is-success {
+    width: min(100%, 1120px);
+    max-height: min(94dvh, 800px);
+    animation: sow-purchase-modal-pop 1150ms cubic-bezier(.22, 1.3, .36, 1) both;
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__layout {
+    height: min(76dvh, 700px);
+    min-height: 0;
+    grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__visual { min-height: 0; }
+
+.sow-purchase-modal.is-success .sow-purchase-modal__copy {
+    position: relative;
+    z-index: 4;
+    justify-content: center;
+    gap: 28px;
+    background: linear-gradient(105deg, rgba(18, 20, 28, .92), #090b11);
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__copy .sow-menu__modal-actions {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__copy h2 { font-size: clamp(42px, 4.6vw, 64px); }
+.sow-purchase-modal.is-success .sow-purchase-modal__effects { z-index: 5; }
+
+.sow-purchase-modal.is-success .sow-purchase-modal__effects::before {
+    position: absolute;
+    top: 50%;
+    left: 33%;
+    width: min(42vw, 440px);
+    aspect-ratio: 1;
+    border: 3px solid rgba(255, 232, 163, .9);
+    border-radius: 50%;
+    box-shadow: 0 0 0 14px rgba(255, 220, 116, .12), 0 0 65px rgba(255, 211, 86, .5);
+    content: "";
+    animation: sow-purchase-impact-ring 1100ms cubic-bezier(.16, 1, .3, 1) 120ms both;
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__effects i:nth-child(odd) {
+    border-radius: 50%;
+    background: #fff2c5;
 }
 
 .sow-purchase-modal.is-success .sow-purchase-modal__visual::before {
-    opacity: 1;
-    animation: sow-purchase-modal-rays 9s linear infinite;
+    animation: sow-purchase-modal-rays 2100ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__art-image {
+    transform-origin: 50% 68%;
+    animation: sow-purchase-art-reveal 1750ms cubic-bezier(.22, 1.3, .36, 1) both;
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__visual--skin .sow-purchase-modal__art-image--skin {
+    width: min(80%, 400px);
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__eyebrow {
+    animation: sow-purchase-copy-reveal 700ms cubic-bezier(.16, 1, .3, 1) 440ms both;
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__copy h2 {
+    animation: sow-purchase-copy-reveal 850ms cubic-bezier(.16, 1, .3, 1) 600ms both;
 }
 
 .sow-purchase-modal.is-success .sow-purchase-modal__effects i {
-    animation: sow-purchase-modal-particle 900ms cubic-bezier(.16, 1, .3, 1) both;
+    animation: sow-purchase-modal-particle 1650ms cubic-bezier(.16, 1, .3, 1) 260ms both;
 }
 
-.sow-purchase-modal.is-success .sow-purchase-modal__effects i:nth-child(2n) { animation-delay: 90ms; }
-.sow-purchase-modal.is-success .sow-purchase-modal__effects i:nth-child(3n) { animation-delay: 160ms; }
+.sow-purchase-modal.is-success .sow-purchase-modal__effects i:nth-child(2n) { animation-delay: 390ms; }
+.sow-purchase-modal.is-success .sow-purchase-modal__effects i:nth-child(3n) { animation-delay: 520ms; }
 
 @keyframes sow-purchase-modal-pop {
-    0% { transform: scale(.92); filter: brightness(.72) saturate(.8); }
-    55% { transform: scale(1.035); filter: brightness(1.24) saturate(1.2); }
-    100% { transform: scale(1); filter: brightness(1) saturate(1); }
+    0% { opacity: 0; transform: translateY(32px) scale(.88, .92); }
+    18% { opacity: 1; transform: translateY(38px) scale(.81, .86); }
+    54% { transform: translateY(-10px) scale(1.04, .96); }
+    72% { transform: translateY(4px) scale(.985, 1.02); }
+    88% { transform: translateY(-2px) scale(1.01, .995); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes sow-purchase-modal-rays {
-    to { transform: rotate(360deg); }
+    0% { opacity: 0; transform: rotate(-25deg) scale(.7); }
+    28% { opacity: .9; }
+    100% { opacity: 0; transform: rotate(150deg) scale(1.2); }
+}
+
+@keyframes sow-purchase-impact-ring {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.18); }
+    25% { opacity: .9; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.45); }
+}
+
+@keyframes sow-purchase-art-reveal {
+    0% { opacity: .25; transform: translateY(54px) scale(.76, .82) rotate(-4deg); }
+    48% { opacity: 1; transform: translateY(-17px) scale(1.1, .92) rotate(2deg); }
+    70% { transform: translateY(6px) scale(.96, 1.05) rotate(-1deg); }
+    86% { transform: translateY(-3px) scale(1.025, .985) rotate(.4deg); }
+    100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+
+@keyframes sow-purchase-copy-reveal {
+    0% { opacity: 0; transform: translateY(26px) scale(.94); }
+    72% { opacity: 1; transform: translateY(-5px) scale(1.035); }
+    100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes sow-purchase-modal-particle {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
-    24% { opacity: 1; }
-    100% { opacity: 0; transform: translate(calc(-50% + var(--sow-particle-x)), calc(-50% + var(--sow-particle-y))) rotate(135deg) scale(1); }
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.25) rotate(-35deg); }
+    18% { opacity: 1; transform: translate(-50%, -50%) scale(1.45) rotate(20deg); }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--sow-particle-x)), calc(-50% + var(--sow-particle-y))) rotate(185deg) scale(.65); }
 }
 
 @media (max-width: 680px), (orientation: portrait) {
@@ -996,7 +1238,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     }
 
     .sow-purchase-modal__visual {
-        min-height: clamp(190px, 36dvh, 290px);
+        min-height: clamp(190px, 38dvh, 300px);
         max-height: 42dvh;
     }
 
@@ -1012,15 +1254,77 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
         font-size: clamp(28px, 9vw, 40px);
     }
 
+    .sow-purchase-modal.is-success .sow-purchase-modal__visual--skin .sow-purchase-modal__art-image--skin {
+        width: min(70%, 280px);
+    }
+
     .sow-purchase-modal__copy .sow-menu__modal-actions {
         padding-top: 22px;
+    }
+
+    .sow-menu__modal.sow-purchase-modal.is-success {
+        height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+        max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+    }
+
+    .sow-purchase-modal.is-success .sow-purchase-modal__layout {
+        height: 100%;
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
+    }
+
+    .sow-purchase-modal.is-success .sow-purchase-modal__visual {
+        min-height: 0;
+        max-height: none;
+    }
+
+    .sow-purchase-modal.is-success .sow-purchase-modal__copy {
+        gap: 16px;
+        padding: clamp(18px, 5vw, 26px);
+        background: linear-gradient(180deg, #171b23, #090b11);
+    }
+
+    .sow-purchase-modal.is-success .sow-purchase-modal__copy .sow-menu__modal-head { margin-bottom: 8px; }
+    .sow-purchase-modal.is-success .sow-purchase-modal__copy h2 { font-size: clamp(34px, 10vw, 52px); }
+
+    .sow-purchase-modal.is-success .sow-purchase-modal__visual--skin .sow-purchase-modal__art-image--skin {
+        width: min(72%, 320px);
+    }
+
+    .sow-purchase-modal.is-success .sow-purchase-modal__effects::before {
+        top: 40%;
+        left: 50%;
+        width: min(86vw, 400px);
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .sow-purchase-modal.is-success .sow-purchase-modal__visual,
+    .sow-menu__progress [data-progression-xp-value].is-reward-value-hit,
+    .sow-menu__progress [data-progression-crowns-value].is-reward-value-hit,
+    .sow-menu__progress [data-progression-laurels-value].is-reward-value-hit,
+    .sow-menu__progress [data-progression-gems-value].is-reward-value-hit,
+    .sow-menu__level [data-progression-level-value].is-reward-level-up,
+    .sow-menu__reward-stage,
+    .sow-menu__reward-stage::before,
+    .sow-menu__reward-card,
+    .sow-menu__reward-medallion::before,
+    .sow-purchase-modal.is-success,
+    .sow-purchase-modal.is-success .sow-purchase-modal__effects::before,
     .sow-purchase-modal.is-success .sow-purchase-modal__visual::before,
+    .sow-purchase-modal.is-success .sow-purchase-modal__visual .sow-purchase-modal__art-image,
+    .sow-purchase-modal.is-success .sow-purchase-modal__eyebrow,
+    .sow-purchase-modal.is-success .sow-purchase-modal__copy h2,
     .sow-purchase-modal.is-success .sow-purchase-modal__effects i {
         animation: none;
     }
+}
+
+.sow-purchase-modal.is-success.is-reduced-motion,
+.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__effects::before,
+.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__visual::before,
+.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__visual .sow-purchase-modal__art-image,
+.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__eyebrow,
+.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__copy h2,
+.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__effects i {
+        animation: none;
 }

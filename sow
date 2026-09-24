@@ -12,10 +12,10 @@ USAGE:
   ./sow [COMMAND] [OPTIONS]
 
 COMMANDS:
-  (no args)            Build, package, and open the native JavaScript/WASM game
+  (no args)            Fast-build and open the native Tauri/WASM game
   m, map                Serve the campaign editor locally on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
-  native                Build, package, and open the native JavaScript/WASM game
+  native                Fast-build and open the native Tauri/WASM game
   p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
   a, android           Build the Android AAB and publish it to Google Play alpha
   help, -h, --help     Show this help message
@@ -25,6 +25,7 @@ EXAMPLES:
   ./sow m              # Serve the campaign editor (JSON changes need no Rust rebuild)
   ./sow l              # Build and serve the local web client (Ctrl-C to stop)
   ./sow native         # Build and open the native desktop client
+  SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Tauri, without an installer
   ./sow p              # Production build and deploy to IONOS & Azure
   ./sow p -v           # Production deploy with public version bump
   ./sow a              # Android AAB + Play alpha upload (each upload restarts Play review)

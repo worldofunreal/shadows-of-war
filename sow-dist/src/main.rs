@@ -92,6 +92,7 @@ fn shell_quote(s: &str) -> String {
 
 struct Paths {
     root: PathBuf,
+    target_dir: PathBuf,
     shell: PathBuf,
     assets_shell: PathBuf,
     assets_gameplay: PathBuf,
@@ -101,6 +102,7 @@ struct Paths {
     dist_web: PathBuf,
     dist_cg: PathBuf,
     dist_poki: PathBuf,
+    native_web: PathBuf,
     wasm_input: PathBuf,
     wasm_cache: PathBuf,
 }
@@ -126,6 +128,8 @@ impl Paths {
             dist_web: root.join("dist/web"),
             dist_cg: root.join("dist/crazygames"),
             dist_poki: root.join("dist/poki"),
+            native_web: t.join("sow-native-dev/web"),
+            target_dir: t,
             root,
         })
     }
@@ -414,17 +418,18 @@ fn prune_qs(root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn compile_wasm(paths: &Paths, dev: bool) -> Result<()> {
-    println!("==> Compiling WASM (wasm-release)...");
-    let mut a = vec![
-        "build",
-        "--profile",
-        "wasm-release",
-        "-p",
-        "sow-client",
-        "--target",
-        "wasm32-unknown-unknown",
-    ];
+fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathBuf> {
+    let profile_dir = match profile {
+        "dev" => "debug",
+        "wasm-release" => "wasm-release",
+        _ => bail!("unsupported WASM profile: {profile}"),
+    };
+    println!("==> Compiling WASM ({profile})...");
+    let mut a = vec!["build"];
+    if profile != "dev" {
+        a.extend_from_slice(&["--profile", profile]);
+    }
+    a.extend_from_slice(&["-p", "sow-client", "--target", "wasm32-unknown-unknown"]);
     if dev {
         a.extend_from_slice(&["--features", "dev"]);
         println!("==> (local) dev tools enabled");
@@ -439,7 +444,17 @@ fn compile_wasm(paths: &Paths, dev: bool) -> Result<()> {
     if !c.spawn()?.wait()?.success() {
         bail!("WASM compile failed");
     }
-    require_file(&paths.wasm_input, "WASM output")?;
+    let wasm = paths
+        .target_dir
+        .join("wasm32-unknown-unknown")
+        .join(profile_dir)
+        .join("sow_client.wasm");
+    require_file(&wasm, "WASM output")?;
+    Ok(wasm)
+}
+
+fn compile_wasm(paths: &Paths, dev: bool) -> Result<()> {
+    compile_wasm_profile(paths, "wasm-release", dev)?;
     Ok(())
 }
 
@@ -455,7 +470,7 @@ fn run_bindgen(wasm: &Path, out: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_wasm_opt(path: &Path, cache: &Path) -> Result<()> {
+fn run_wasm_opt(path: &Path, cache: &Path, compress: bool) -> Result<()> {
     require_file(path, "wasm-opt input")?;
     let hash = file_sha256(path)?;
     fs::create_dir_all(cache)?;
@@ -464,14 +479,18 @@ fn run_wasm_opt(path: &Path, cache: &Path) -> Result<()> {
     let br = brotli_dst(path);
     if c.is_file() {
         fs::copy(&c, path)?;
-        if cb.is_file() {
-            fs::copy(&cb, &br)?;
-        } else {
-            compress_brotli(path, &br)?;
-            fs::copy(&br, &cb)?;
+        if compress {
+            if cb.is_file() {
+                fs::copy(&cb, &br)?;
+            } else {
+                compress_brotli(path, &br)?;
+                fs::copy(&br, &cb)?;
+            }
         }
         require_file(path, "wasm-opt")?;
-        require_file(&br, "brotli")?;
+        if compress {
+            require_file(&br, "brotli")?;
+        }
         return Ok(());
     }
     println!("==> wasm-opt -O3 ({})...", path.display());
@@ -495,8 +514,11 @@ fn run_wasm_opt(path: &Path, cache: &Path) -> Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o644))?;
     require_file(path, "wasm-opt")?;
     fs::copy(path, &c)?;
-    compress_brotli(path, &br)?;
-    fs::copy(&br, &cb)?;
+    if compress {
+        compress_brotli(path, &br)?;
+        fs::copy(&br, &cb)?;
+        require_file(&br, "brotli")?;
+    }
     println!("✅ wasm-opt finished");
     Ok(())
 }
@@ -747,6 +769,7 @@ struct IndexBuild<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WebTarget {
     Local,
+    Native,
     CrazyGames,
     Poki,
 }
@@ -852,6 +875,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 WebTarget::Local => {
                     "if ('serviceWorker' in navigator && window.location.hostname !== \"appassets.androidplatform.net\" && !isPortal) { navigator.serviceWorker.register('/sw.js', { scope: './' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
                 }
+                WebTarget::Native => "",
                 WebTarget::CrazyGames => {
                     "if ('serviceWorker' in navigator && !isPortal) { navigator.serviceWorker.register('sw.js', { scope: '/' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
                 }
@@ -866,7 +890,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             } else {
                 // Production shell declares every endpoint explicitly — the
                 // client resolves strict config only (no fallbacks).
-                if target == WebTarget::Local {
+                if matches!(target, WebTarget::Local | WebTarget::Native) {
                     concat!(
                         "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
                         "window.SOW_MAPS_URL = \"/maps\"; ",
@@ -2190,7 +2214,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
 
     if compile {
         minify_js(&out.join(&js))?;
-        run_wasm_opt(&out.join(&wasm), &paths.wasm_cache)?;
+        run_wasm_opt(&out.join(&wasm), &paths.wasm_cache, true)?;
         brotli_file(&out.join(&wasm))?;
         brotli_file(&out.join(&js))?;
     } else {
@@ -2315,6 +2339,127 @@ fn prepare_native_webroot(out: &Path) -> Result<()> {
         );
     fs::write(&index, html)?;
     Ok(())
+}
+
+fn native_static_fingerprint(paths: &Paths) -> Result<String> {
+    let roots = [
+        paths.shell.clone(),
+        paths.assets_shell.clone(),
+        paths.assets_gameplay.join("avatars"),
+        paths.assets_gameplay.join("skins"),
+        paths.assets_gameplay.join("currency"),
+        paths.assets_gameplay.join("store"),
+        paths.root.join("assets/campaign"),
+        paths.assets_site.join("media"),
+        paths.assets_site.join("icons"),
+        paths.assets_maps.clone(),
+        paths.map_sources.clone(),
+        paths.root.join("sow-web/site/fonts"),
+        paths.root.join("sow-web/site/manifest.webmanifest"),
+    ];
+    // ponytail: size/mtime avoids hashing the asset payload; hash contents if timestamp-preserving edits become an issue.
+    let mut hash = Sha256::new();
+    for stamp in local_source_snapshot(paths)?
+        .into_iter()
+        .filter(|stamp| roots.iter().any(|root| stamp.path.starts_with(root)))
+    {
+        hash.update(stamp.path.to_string_lossy().as_bytes());
+        hash.update(stamp.len.to_le_bytes());
+        hash.update(stamp.modified_nanos.to_le_bytes());
+    }
+    Ok(format!("{:x}", hash.finalize()))
+}
+
+fn package_native_web(
+    paths: &Paths,
+    version: &str,
+    wasm_input: &Path,
+    release: bool,
+) -> Result<PathBuf> {
+    let out = &paths.native_web;
+    let fingerprint = native_static_fingerprint(paths)?;
+    let fingerprint_file = out.join(".native-static-fingerprint");
+    let static_ready = fs::read_to_string(&fingerprint_file)
+        .is_ok_and(|cached| cached == fingerprint)
+        && out.join("maps/catalog.bin").is_file()
+        && out.join("fonts/fonts.css").is_file()
+        && out
+            .join("assets/shell/loader/sow-splash-desktop.webp")
+            .is_file();
+
+    if !static_ready {
+        if out.exists() {
+            fs::remove_dir_all(out)
+                .with_context(|| format!("reset native development webroot {}", out.display()))?;
+        }
+        fs::create_dir_all(out)?;
+        let assets = out.join("assets");
+        copy_dir(&paths.assets_shell, &assets.join("shell"))?;
+        for name in ["avatars", "skins", "currency", "store"] {
+            copy_dir(
+                &paths.assets_gameplay.join(name),
+                &assets.join("gameplay").join(name),
+            )?;
+        }
+        copy_dir(
+            &paths.root.join("assets/campaign"),
+            &assets.join("campaign"),
+        )?;
+        copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
+        copy_dir(&paths.assets_maps, &out.join("maps"))?;
+        refresh_map_thumbnails(&out.join("maps"), &paths.map_sources)?;
+        copy_shell(paths, out)?;
+
+        let site = paths.root.join("sow-web/site");
+        copy_dir(&site.join("fonts"), &out.join("fonts"))?;
+        fs::copy(
+            site.join("manifest.webmanifest"),
+            out.join("manifest.webmanifest"),
+        )?;
+        for name in ["icon-192.png", "icon-512.png", "icon-512-maskable.png"] {
+            fs::copy(paths.assets_site.join("icons").join(name), out.join(name))?;
+        }
+    }
+
+    for entry in fs::read_dir(out)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file()
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("sow_client_")
+        {
+            fs::remove_file(entry.path())?;
+        }
+    }
+
+    let wasm_hash = file_sha256(wasm_input)?;
+    let build_id = &wasm_hash[..10];
+    let bindgen_name = format!("sow_client_{build_id}");
+    run_bindgen(wasm_input, out, &bindgen_name)?;
+    let wasm_name = format!("{bindgen_name}_bg.wasm");
+    if release {
+        run_wasm_opt(&out.join(&wasm_name), &paths.wasm_cache, false)?;
+    }
+
+    let maps_cache_bust = thumbnail_cache_bust(&out.join("maps"))?;
+    build_index(
+        paths,
+        out,
+        IndexBuild {
+            version,
+            js: &format!("{bindgen_name}.js"),
+            wasm: &wasm_name,
+            ts: build_id,
+            maps_cache_bust: &maps_cache_bust,
+            target: WebTarget::Native,
+        },
+    )?;
+    export_locales(out)?;
+    prepare_native_webroot(out)?;
+    fs::write(fingerprint_file, fingerprint)?;
+    out.canonicalize()
+        .context("resolve native development webroot")
 }
 
 fn package_cg(
@@ -2900,87 +3045,92 @@ fn ensure_native_dependencies(native_root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn build_native(paths: &Paths, native_root: &Path, version: &str) -> Result<()> {
-    let config = serde_json::json!({ "version": version }).to_string();
-    let bundles = if cfg!(target_os = "linux") {
-        "deb"
-    } else if cfg!(target_os = "macos") {
-        "app,dmg"
+fn set_native_renderer_workaround(command: &mut Command) {
+    if cfg!(target_os = "linux")
+        && env::var_os("WEBKIT_DMABUF_RENDERER_FORCE_SHM").is_none()
+        && Path::new("/sys/module/nvidia").is_dir()
+    {
+        command.env("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1");
+    }
+}
+
+fn build_native(
+    paths: &Paths,
+    native_root: &Path,
+    version: &str,
+    webroot: &Path,
+    release: bool,
+) -> Result<()> {
+    let webroot = webroot
+        .to_str()
+        .context("native webroot path is not UTF-8")?;
+    let config = serde_json::json!({
+        "version": version,
+        "build": { "frontendDist": webroot },
+    })
+    .to_string();
+    let mut args = vec!["run", "tauri", "--"];
+    if release {
+        args.extend_from_slice(&["build", "--no-bundle", "--no-sign"]);
     } else {
-        "nsis"
-    };
-    println!("+ npm run tauri -- build --no-sign --bundles {bundles} --config {config}");
-    let status = Command::new("npm")
-        .args([
-            "run",
-            "tauri",
-            "--",
-            "build",
-            "--no-sign",
-            "--bundles",
-            bundles,
-            "--config",
-            config.as_str(),
-        ])
+        args.push("dev");
+    }
+    args.extend_from_slice(&["--config", config.as_str()]);
+    println!("+ npm {}", args.join(" "));
+    let mut command = Command::new("npm");
+    command
+        .args(&args)
         .current_dir(native_root)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    set_native_renderer_workaround(&mut command);
+    let status = command
         .status()
-        .context("build native desktop bundle (npm is required)")?;
+        .context("run Tauri native client (npm is required)")?;
     if !status.success() {
-        bail!("Tauri native build failed");
+        bail!(
+            "Tauri native {} failed",
+            if release { "build" } else { "dev" }
+        );
     }
-    launch_native(paths)
+    if release {
+        launch_native(paths)?;
+    }
+    Ok(())
 }
 
 fn launch_native(paths: &Paths) -> Result<()> {
-    let target = env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| paths.root.join("target"));
-    if cfg!(target_os = "macos") {
-        let app = target.join("release/bundle/macos/Shadows of War.app");
-        if !app.is_dir() {
-            bail!("native macOS app missing: {}", app.display());
-        }
-        run(
-            "open",
-            &[app.to_str().context("native app path is not UTF-8")?],
-            None,
-        )?;
+    let name = if cfg!(windows) {
+        "sow-native.exe"
     } else {
-        let name = if cfg!(windows) {
-            "sow-native.exe"
-        } else {
-            "sow-native"
-        };
-        let executable = target.join("release").join(name);
-        require_file(&executable, "native executable")?;
-        println!("✅ Native game ready: {}", executable.display());
-        let mut command = Command::new(&executable);
-        command.current_dir(&paths.root);
-        if cfg!(target_os = "linux")
-            && env::var_os("WEBKIT_DMABUF_RENDERER_FORCE_SHM").is_none()
-            && Path::new("/sys/module/nvidia").is_dir()
-        {
-            command.env("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1");
-        }
-        let mut child = command
-            .spawn()
-            .with_context(|| format!("open native game {}", executable.display()))?;
-        child.wait().context("wait for native game")?;
-    }
+        "sow-native"
+    };
+    let executable = paths.target_dir.join("release").join(name);
+    require_file(&executable, "native executable")?;
+    println!("✅ Native game ready: {}", executable.display());
+    let mut command = Command::new(&executable);
+    command.current_dir(&paths.root);
+    set_native_renderer_workaround(&mut command);
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("open native game {}", executable.display()))?;
+    child.wait().context("wait for native game")?;
     Ok(())
 }
 
 fn cmd_native(paths: &Paths) -> Result<()> {
     let version = read_version(paths)?;
-    println!("==> Building native JavaScript/WASM game");
-    compile_wasm(paths, false)?;
-    package_self(paths, &paths.dist_web, &version, true)?;
-    prepare_native_webroot(&paths.dist_web)?;
+    let release = env::var("SOW_NATIVE_RELEASE").is_ok_and(|value| value == "1");
+    let profile = if release { "wasm-release" } else { "dev" };
+    println!(
+        "==> Building native {} WASM client",
+        if release { "release" } else { "fast" }
+    );
+    let wasm = compile_wasm_profile(paths, profile, false)?;
+    let webroot = package_native_web(paths, &version, &wasm, release)?;
     let native_root = paths.root.join("sow-native");
     ensure_native_dependencies(&native_root)?;
-    build_native(paths, &native_root, &version)
+    build_native(paths, &native_root, &version, &webroot, release)
 }
 
 fn watch_local_preview(
