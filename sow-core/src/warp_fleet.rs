@@ -61,8 +61,7 @@ impl fmt::Display for FleetLaunchError {
     }
 }
 
-/// Shared route resolution for `LaunchFleet` — used by simulation and client preflight
-/// so right-click / KeyB cannot diverge from `apply_launch_fleet_intent`.
+/// Shared route resolution for `LaunchFleet`.
 ///
 /// `target_border`: required when `target_owner != 0` (enemy player's `border_tiles`);
 /// ignored for neutral (`target_owner == 0`).
@@ -75,6 +74,36 @@ pub fn resolve_fleet_route(
     border_tiles: &crate::bitset::DenseBitSet,
     target_border: Option<&crate::bitset::DenseBitSet>,
 ) -> Result<FleetRoute, FleetLaunchError> {
+    let (src, landing) = resolve_fleet_endpoints(
+        map,
+        water_components,
+        player_id,
+        target,
+        border_tiles,
+        target_border,
+    )?;
+
+    let path = path_scratch
+        .astar
+        .find_path(map, &[src], landing)
+        .ok_or(FleetLaunchError::NoWaterPath)?;
+
+    Ok(FleetRoute {
+        src_tile: src,
+        landing_tile: landing,
+        path,
+    })
+}
+
+/// Shore and water-component check for menus; launch still resolves the full path.
+pub fn resolve_fleet_endpoints(
+    map: &GameMap,
+    water_components: &WaterComponents,
+    player_id: u16,
+    target: (u16, u32),
+    border_tiles: &crate::bitset::DenseBitSet,
+    target_border: Option<&crate::bitset::DenseBitSet>,
+) -> Result<(u32, u32), FleetLaunchError> {
     let (target_owner, target_tile) = target;
     let map_area = map.width.saturating_mul(map.height);
     if map_area == 0 || target_tile >= map_area {
@@ -116,16 +145,7 @@ pub fn resolve_fleet_route(
         component: landing_comp,
     })?;
 
-    let path = path_scratch
-        .astar
-        .find_path(map, &[src], landing)
-        .ok_or(FleetLaunchError::NoWaterPath)?;
-
-    Ok(FleetRoute {
-        src_tile: src,
-        landing_tile: landing,
-        path,
-    })
+    Ok((src, landing))
 }
 
 /// Diagnostic variant used by bot profiling builds; it calls the production resolver

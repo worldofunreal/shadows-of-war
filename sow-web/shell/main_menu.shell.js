@@ -97,24 +97,11 @@
     }
 
     function renderFeedback() {
-        var purchaseStatus = "";
-        try {
-            var purchase = new URLSearchParams(window.location.search).get("purchase");
-            var purchaseMessages = {
-                success: "menu.purchase_received",
-                restored: "menu.purchases_restored",
-                cancelled: "menu.purchase_cancelled",
-                error: "menu.purchase_failed"
-            };
-            if (purchaseMessages[purchase]) {
-                purchaseStatus = "<div class='sow-menu__status sow-menu__status--notice'>" + esc(SOW_t(purchaseMessages[purchase])) + "</div>";
-            }
-        } catch (e) {}
         var error = state.error ? "<div class='sow-menu__status sow-menu__status--error'>" + esc(localizedText(state.error)) + "</div>" : "";
         var notice = state.notice ? "<div class='sow-menu__status sow-menu__status--notice'>" +
             esc(SOW_t(({ host_left: "menu.host_left", kicked: "menu.removed_from_lobby", banned: "menu.banned_from_lobby", connection_lost: "menu.connection_lost" }[state.notice] || "menu.connection_lost"))) +
             "</div>" : "";
-        return purchaseStatus + error + notice;
+        return error + notice;
     }
 
     function renderFooter(label) {
@@ -1022,6 +1009,7 @@
         var activePreview = state.exit_reward_preview &&
             state.exit_reward_preview.account_id === state.account_id &&
             !rewardAnimationShown.has(state.exit_reward_preview.receipt_id);
+        var holdBundleGems = purchaseModal && purchaseModal.type === "bundle" && !purchaseModal.gemPresented;
         if (!rewardAnimationRunning && !pendingRewards.length && !rewardOptimisticPreview && !activePreview) {
             var canonical = progressionFromState();
             var changed = canonical.xp !== displayedProgression.xp || canonical.level !== displayedProgression.level ||
@@ -1029,7 +1017,7 @@
             var sameTarget = progressionAnimationTarget && canonical.xp === progressionAnimationTarget.xp &&
                 canonical.level === progressionAnimationTarget.level && canonical.crowns === progressionAnimationTarget.crowns &&
                 canonical.laurels === progressionAnimationTarget.laurels && canonical.gems === progressionAnimationTarget.gems;
-            if (changed && !sameTarget) {
+            if (changed && !sameTarget && !holdBundleGems) {
                 if (reducedRewardMotion() || root.hidden || document.visibilityState !== "visible") writeProgression(canonical);
                 else animateProgressionTo(canonical, 900, ++rewardAnimationToken);
             }
@@ -1061,8 +1049,12 @@
     root.addEventListener("click", function (event) {
         var purchaseOverlay = event.target.closest("[data-menu-overlay='purchase']");
         if (purchaseOverlay && event.target === purchaseOverlay) {
-            purchaseModal = null;
-            purchaseIntent = null;
+            if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+            if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
+            else {
+                purchaseModal = null;
+                purchaseIntent = null;
+            }
             render();
             return;
         }
@@ -1434,8 +1426,12 @@
         if (command === "cancel_purchase") {
             if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
             else {
-                purchaseModal = null;
-                purchaseIntent = null;
+                if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+                if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
+                else {
+                    purchaseModal = null;
+                    purchaseIntent = null;
+                }
                 render();
             }
             return;
@@ -1646,17 +1642,33 @@
         storeCheckoutBusy = false;
         if (!state) return;
         storeCheckoutRequestId = null;
-        if (result.status === "success" || result.status === "restored") {
+        if (result.status === "success") {
             state.error = null;
-            if (!purchaseModal || purchaseModal.type !== "product") purchaseIntent = null;
+            var attempt = typeof currentExternalPurchaseAttempt === "function" ? currentExternalPurchaseAttempt() : null;
+            if (attempt && (!result.product_id || attempt.product_id === result.product_id)) {
+                completeExternalPurchase(attempt.product_id);
+            } else {
+                purchaseIntent = null;
+                send("refresh_profile");
+            }
+        } else if (result.status === "restored") {
+            purchaseIntent = null;
             send("refresh_profile");
         } else if (result.status === "cancelled") {
-            purchaseModal = null;
-            purchaseIntent = null;
+            if (typeof abandonExternalPurchaseAttempt === "function") abandonExternalPurchaseAttempt(result.product_id);
+            if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
+            else {
+                purchaseModal = null;
+                purchaseIntent = null;
+            }
             state.error = SOW_t("menu.purchase_cancelled");
         } else {
-            purchaseModal = null;
-            purchaseIntent = null;
+            if (typeof abandonExternalPurchaseAttempt === "function") abandonExternalPurchaseAttempt(result.product_id);
+            if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
+            else {
+                purchaseModal = null;
+                purchaseIntent = null;
+            }
             state.error = SOW_t("menu.purchase_failed");
         }
         render();
@@ -1719,8 +1731,12 @@
             event.preventDefault();
             if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
             else {
-                purchaseModal = null;
-                purchaseIntent = null;
+                if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
+                if (typeof dismissPurchaseModal === "function") dismissPurchaseModal();
+                else {
+                    purchaseModal = null;
+                    purchaseIntent = null;
+                }
                 render();
             }
             return;
@@ -1989,6 +2005,7 @@
             return;
         }
         if (!state || state.phase !== "MainMenu") return;
+        if (typeof resumeExternalPurchaseDelivery === "function") resumeExternalPurchaseDelivery(true);
         if (!rewardPresentationReady) scheduleRewardPresentation(0);
         else maybePresentRewards();
     });
@@ -2019,6 +2036,7 @@
             if (rewardAnimationTimer !== null) window.clearTimeout(rewardAnimationTimer);
             rewardAnimationTimer = null;
         }
+        if (typeof resumeExternalPurchaseDelivery === "function") resumeExternalPurchaseDelivery(false);
         if (typeof resolvePurchaseModal === "function") resolvePurchaseModal();
         var returnedFromGame = lastMenuPhase !== null &&
             lastMenuPhase !== "MainMenu" &&

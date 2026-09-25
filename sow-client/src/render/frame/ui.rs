@@ -12,6 +12,7 @@ impl SowApp {
             .as_secs_f32()
             .min(0.1);
         self.time.last_frame_time = now;
+        self.pump_hold_build(dt, now);
 
         if self.ui.app.phase == ClientPhase::Playing && !self.input.input_focused {
             let dx = self.input.key_pan_left as i32 as f32 - self.input.key_pan_right as i32 as f32;

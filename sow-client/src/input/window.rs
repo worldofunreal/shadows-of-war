@@ -3,6 +3,27 @@ use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
 use crate::{ClientPhase, camera_zoom_lower_bound, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
 
+const HOLD_BUILD_INTERVAL_SECS: f32 = 0.25;
+const HOLD_BUILD_BURST_INTERVAL_SECS: f32 = 0.1;
+pub(crate) const HOLD_BUILD_BURST_AFTER_SECS: f32 = 2.0;
+
+pub(crate) fn hold_build_repeat_interval(held_secs: f32) -> f32 {
+    if held_secs >= HOLD_BUILD_BURST_AFTER_SECS {
+        HOLD_BUILD_BURST_INTERVAL_SECS
+    } else {
+        HOLD_BUILD_INTERVAL_SECS
+    }
+}
+
+fn advance_hold_build_timer(remaining: &mut f32, dt: f32, held_secs: f32) -> bool {
+    *remaining -= dt.max(0.0);
+    if *remaining > 0.0 {
+        return false;
+    }
+    *remaining = hold_build_repeat_interval(held_secs);
+    true
+}
+
 impl SowApp {
     pub fn handle_window_event(
         &mut self,
@@ -81,6 +102,7 @@ impl SowApp {
     fn handle_pointer_left(&mut self, kind: PointerKind) {
         match kind {
             PointerKind::Touch(finger_id) => {
+                self.cancel_hold_build();
                 self.input
                     .active_touches
                     .remove(&(finger_id.into_raw() as u64));
@@ -94,6 +116,7 @@ impl SowApp {
                 self.sync_hover_pointer(HoverPointer::Touch, None);
             }
             _ => {
+                self.cancel_hold_build();
                 self.input.map_pointer_start = None;
                 self.input.dragging = false;
                 self.sync_hover_pointer(HoverPointer::None, None);
@@ -244,9 +267,10 @@ impl SowApp {
                         x,
                         y,
                         is_touch: true,
-                        attack_sent: false,
+                        action_sent: false,
                     });
                 } else {
+                    self.cancel_hold_build();
                     self.input.map_pointer_start = None;
                     self.input.dragging = false;
                     self.close_map_context_menu();
@@ -266,6 +290,10 @@ impl SowApp {
             self.sync_hover_pointer(HoverPointer::Mouse, Some((x, y)));
         }
 
+        let in_game =
+            self.ui.app.phase == ClientPhase::Playing && self.ui.app.hud_state.sync_state.is_none();
+        let build_tool_selected = self.ui.app.hud_state.selected_building_kind.is_some();
+
         if left {
             if pressed {
                 // winit-web reports pointermove with a held button through this
@@ -282,17 +310,22 @@ impl SowApp {
                     return;
                 }
                 self.close_map_context_menu();
-                self.input.dragging = self.ui.app.hud_state.selected_building_kind.is_none()
-                    && self.ui.app.hud_state.selected_nuke_kind.is_none();
+                self.input.dragging =
+                    !build_tool_selected && self.ui.app.hud_state.selected_nuke_kind.is_none();
                 if !is_touch {
-                    let attack_sent = self.try_attack_at(x, y);
+                    let action_sent = build_tool_selected || self.try_attack_at(x, y);
                     self.input.map_pointer_start = Some(MapPointerStart {
                         started_at: web_time::Instant::now(),
                         x,
                         y,
                         is_touch,
-                        attack_sent,
+                        action_sent,
                     });
+                    if build_tool_selected {
+                        if in_game && !self.ui.observing {
+                            self.begin_hold_build(x, y);
+                        }
+                    }
                 } else if self.input.map_pointer_start.is_none()
                     && self.input.active_touches.len() == 1
                 {
@@ -301,10 +334,22 @@ impl SowApp {
                         x,
                         y,
                         is_touch,
-                        attack_sent: false,
+                        action_sent: build_tool_selected,
                     });
                 }
+                if is_touch && build_tool_selected && self.input.active_touches.len() == 1 {
+                    let has_start = if let Some(start) = self.input.map_pointer_start.as_mut() {
+                        start.action_sent = true;
+                        true
+                    } else {
+                        false
+                    };
+                    if has_start && in_game && !self.ui.observing {
+                        self.begin_hold_build(x, y);
+                    }
+                }
             } else {
+                self.cancel_hold_build();
                 if self.input.active_touches.is_empty() {
                     self.input.dragging = false;
                 }
@@ -315,6 +360,9 @@ impl SowApp {
                 if distance_sq > 400.0 || self.ui.app.phase != ClientPhase::Playing {
                     return;
                 }
+                if start.action_sent {
+                    return;
+                }
                 if start.is_touch {
                     let elapsed_ms = start.started_at.elapsed().as_millis();
                     if is_quick_tap(elapsed_ms, distance_sq) {
@@ -323,12 +371,10 @@ impl SowApp {
                         self.open_map_context_menu(start.x, start.y);
                     }
                 } else {
-                    if !start.attack_sent {
-                        self.handle_map_click(start.x, start.y);
-                    }
+                    self.handle_map_click(start.x, start.y);
                 }
             }
-        } else if right && !pressed && self.ui.app.phase == ClientPhase::Playing {
+        } else if right && pressed && self.ui.app.phase == ClientPhase::Playing {
             if self.ui.app.hud_state.selected_building_kind.is_some()
                 || self.ui.app.hud_state.selected_nuke_kind.is_some()
             {
@@ -356,6 +402,7 @@ impl SowApp {
         }
         let is_touch = matches!(source, winit::event::PointerSource::Touch { .. });
         if self.input.active_touches.len() >= 2 {
+            self.cancel_hold_build();
             self.input.map_pointer_start = None;
             self.input.dragging = false;
             self.input.hover_pointer = HoverPointer::None;
@@ -383,8 +430,10 @@ impl SowApp {
             if let Some(start) = self.input.map_pointer_start.as_ref() {
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
                 if distance_sq > 400.0 {
-                    self.input.map_pointer_start = None;
-                    crossed_drag_threshold = true;
+                    if !self.input.hold_build_active {
+                        self.input.map_pointer_start = None;
+                        crossed_drag_threshold = true;
+                    }
                 }
             }
             if (crossed_drag_threshold || self.input.map_pointer_start.is_none())
@@ -438,6 +487,7 @@ impl SowApp {
     }
 
     fn cancel_pointer_gesture(&mut self) {
+        self.cancel_hold_build();
         self.input.dragging = false;
         self.input.map_pointer_start = None;
         self.input.active_touches.clear();
@@ -452,6 +502,7 @@ impl SowApp {
         if !start.is_touch
             || self.input.active_touches.len() != 1
             || self.ui.app.phase != ClientPhase::Playing
+            || start.action_sent
             || self.ui.app.hud_state.selected_building_kind.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
             || start.started_at.elapsed().as_millis() < TOUCH_HOLD_MS
@@ -462,6 +513,40 @@ impl SowApp {
         self.input.map_pointer_start = None;
         self.input.dragging = false;
         self.open_map_context_menu(x, y);
+    }
+
+    pub(crate) fn begin_hold_build(&mut self, x: f64, y: f64) {
+        self.input.hold_build_active = true;
+        self.input.hold_build_accum = HOLD_BUILD_INTERVAL_SECS;
+        self.handle_map_click(x, y);
+    }
+
+    pub(crate) fn cancel_hold_build(&mut self) {
+        self.input.hold_build_active = false;
+        self.input.hold_build_accum = 0.0;
+    }
+
+    pub(crate) fn pump_hold_build(&mut self, dt: f32, now: web_time::Instant) {
+        if !self.input.hold_build_active {
+            return;
+        }
+        let Some(start) = self.input.map_pointer_start.as_ref() else {
+            self.cancel_hold_build();
+            return;
+        };
+        if self.ui.app.phase != ClientPhase::Playing
+            || self.ui.app.hud_state.sync_state.is_some()
+            || self.ui.observing
+            || self.ui.app.hud_state.selected_building_kind.is_none()
+            || self.input.active_touches.len() > 1
+        {
+            self.cancel_hold_build();
+            return;
+        }
+        let held_secs = now.duration_since(start.started_at).as_secs_f32();
+        if advance_hold_build_timer(&mut self.input.hold_build_accum, dt, held_secs) {
+            self.handle_map_click(self.input.last_mouse_x, self.input.last_mouse_y);
+        }
     }
 }
 
@@ -475,7 +560,10 @@ fn single_touch_position(
 
 #[cfg(test)]
 mod tests {
-    use super::single_touch_position;
+    use super::{
+        HOLD_BUILD_BURST_INTERVAL_SECS, HOLD_BUILD_INTERVAL_SECS, advance_hold_build_timer,
+        hold_build_repeat_interval, single_touch_position,
+    };
     use std::collections::HashMap;
 
     #[test]
@@ -488,5 +576,23 @@ mod tests {
 
         touches.insert(8, (320.0, 480.0));
         assert_eq!(single_touch_position(&touches), None);
+    }
+
+    #[test]
+    fn hold_build_changes_to_burst_after_two_seconds() {
+        assert_eq!(hold_build_repeat_interval(1.999), HOLD_BUILD_INTERVAL_SECS);
+        assert_eq!(
+            hold_build_repeat_interval(2.0),
+            HOLD_BUILD_BURST_INTERVAL_SECS
+        );
+
+        let mut remaining = HOLD_BUILD_INTERVAL_SECS;
+        assert!(!advance_hold_build_timer(&mut remaining, 0.249, 0.0));
+        assert!(advance_hold_build_timer(&mut remaining, 0.001, 0.25));
+        assert_eq!(remaining, HOLD_BUILD_INTERVAL_SECS);
+
+        remaining = 0.001;
+        assert!(advance_hold_build_timer(&mut remaining, 0.001, 2.0));
+        assert_eq!(remaining, HOLD_BUILD_BURST_INTERVAL_SECS);
     }
 }

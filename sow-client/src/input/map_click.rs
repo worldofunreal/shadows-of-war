@@ -5,6 +5,11 @@ use serde::Deserialize;
 pub(crate) const TOUCH_HOLD_MS: u128 = 300;
 const MAP_CLICK_MAX_DISTANCE_SQ: f64 = 400.0;
 
+enum FleetRouteCheck {
+    Access,
+    Path,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum MapMenuAction {
@@ -90,12 +95,7 @@ impl MapTarget {
         self.owner == 0 || self.is_enemy()
     }
 
-    fn menu_actions(
-        self,
-        spawning: bool,
-        can_attack: bool,
-        can_fleet: bool,
-    ) -> Vec<MapMenuAction> {
+    fn menu_actions(self, spawning: bool, can_attack: bool, can_fleet: bool) -> Vec<MapMenuAction> {
         if spawning {
             return self
                 .is_land
@@ -273,6 +273,7 @@ impl SowApp {
         &mut self,
         tile_idx: u32,
         target_owner: u16,
+        check: FleetRouteCheck,
     ) -> Result<(), sow_core::warp_fleet::FleetLaunchError> {
         let player_id = self.sim.my_player_id.unwrap_or(0);
         let Some(engine) = self.sim.engine.as_mut() else {
@@ -291,21 +292,34 @@ impl SowApp {
                     .state
                     .player(target_owner)
                     .map(|player| &player.border_tiles)
-                    .ok_or(sow_core::warp_fleet::FleetLaunchError::TargetPlayerNotFound {
-                        target_owner,
-                    })?,
+                    .ok_or(
+                        sow_core::warp_fleet::FleetLaunchError::TargetPlayerNotFound {
+                            target_owner,
+                        },
+                    )?,
             )
         };
-        sow_core::warp_fleet::resolve_fleet_route(
-            &engine.state.map,
-            &engine.water,
-            &mut engine.path_scratch,
-            player_id,
-            (target_owner, tile_idx),
-            border_tiles,
-            target_border,
-        )
-        .map(|_| ())
+        match check {
+            FleetRouteCheck::Access => sow_core::warp_fleet::resolve_fleet_endpoints(
+                &engine.state.map,
+                &engine.water,
+                player_id,
+                (target_owner, tile_idx),
+                border_tiles,
+                target_border,
+            )
+            .map(|_| ()),
+            FleetRouteCheck::Path => sow_core::warp_fleet::resolve_fleet_route(
+                &engine.state.map,
+                &engine.water,
+                &mut engine.path_scratch,
+                player_id,
+                (target_owner, tile_idx),
+                border_tiles,
+                target_border,
+            )
+            .map(|_| ()),
+        }
     }
 
     fn show_fleet_unavailable(
@@ -324,13 +338,13 @@ impl SowApp {
 
     fn show_map_menu_unavailable(&mut self, tile_idx: u32, anchor: (f64, f64)) {
         let message = match self.map_target(tile_idx) {
-            Some(target) if target.owner == 0 => match self.fleet_route_check(tile_idx, 0) {
-                Err(error) => format!("Fleet unavailable: {error}."),
-                Ok(()) => "No action is available here.".to_string(),
-            },
-            Some(target) if target.is_teammate => {
-                "Teammates cannot be targeted. 🤝".to_string()
+            Some(target) if target.owner == 0 => {
+                match self.fleet_route_check(tile_idx, 0, FleetRouteCheck::Access) {
+                    Err(error) => format!("Fleet unavailable: {error}."),
+                    Ok(()) => "No action is available here.".to_string(),
+                }
             }
+            Some(target) if target.is_teammate => "Teammates cannot be targeted. 🤝".to_string(),
             Some(target) if target.owner == target.my_id && !target.is_land => {
                 "Buildings require owned land. 🗺️".to_string()
             }
@@ -356,13 +370,7 @@ impl SowApp {
             Some(_) => "No action is available here.".to_string(),
             None => "No action is available here.".to_string(),
         };
-        self.add_notice_at_screen(
-            message,
-            anchor.0,
-            anchor.1,
-            2000,
-            crate::rgb(248, 113, 113),
-        );
+        self.add_notice_at_screen(message, anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
     }
 
     pub(crate) fn map_menu_actions(&mut self, tile_idx: u32) -> Vec<MapMenuAction> {
@@ -374,7 +382,9 @@ impl SowApp {
         });
         let can_fleet = !spawning
             && target.owner == 0
-            && self.fleet_route_check(tile_idx, target.owner).is_ok();
+            && self
+                .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
+                .is_ok();
         let mut actions = target.menu_actions(
             spawning,
             target.is_land && self.can_attack(tile_idx, target.owner),
@@ -479,13 +489,7 @@ impl SowApp {
             } else {
                 "Action unavailable here.".to_string()
             };
-            self.add_notice_at_screen(
-                message,
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
-            );
+            self.add_notice_at_screen(message, anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
             self.close_map_context_menu();
             return;
         }
@@ -997,7 +1001,7 @@ impl SowApp {
             );
             return false;
         }
-        if let Err(error) = self.fleet_route_check(tile_idx, target.owner) {
+        if let Err(error) = self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Path) {
             self.show_fleet_unavailable(error, anchor);
             return false;
         }
@@ -1164,17 +1168,29 @@ impl SowApp {
         let Some(renderer) = self.gfx.map_renderer.as_ref() else {
             return false;
         };
-        shares_land_border(
-            &renderer.owners,
-            &renderer.terrain,
-            self.sim.map_w,
-            self.sim.map_h,
-            self.sim.my_player_id.unwrap_or(0),
-            target_owner,
-        ) && renderer
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let Some(border_tiles) = self
+            .sim
+            .engine
+            .as_ref()
+            .and_then(|engine| engine.state.player(my_id))
+            .map(|player| &player.border_tiles)
+        else {
+            return false;
+        };
+        renderer
             .terrain
             .get(tile_idx as usize)
             .is_some_and(|terrain| terrain & 0x80 != 0)
+            && shares_land_border(
+                &renderer.owners,
+                &renderer.terrain,
+                self.sim.map_w,
+                self.sim.map_h,
+                my_id,
+                target_owner,
+                border_tiles,
+            )
     }
 
     fn select_warships_at(&mut self, x: f64, y: f64) -> bool {
@@ -1263,28 +1279,22 @@ impl SowApp {
     pub(crate) fn clear_placement(&mut self) {
         self.ui.app.hud_state.selected_building_kind = None;
         self.ui.app.hud_state.selected_nuke_kind = None;
-        self.input.hold_build_active = false;
-        self.input.hold_build_accum = 0.0;
+        self.cancel_hold_build();
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
         if self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
-            || !self
-                .sim
-                .current_snapshot
-                .as_ref()
-                .is_some_and(|snapshot| {
-                    matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
-                })
+            || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+            })
         {
             return;
         }
         let selected = &mut self.ui.app.hud_state.selected_building_kind;
         *selected = (*selected != Some(kind)).then_some(kind);
         self.ui.app.hud_state.selected_nuke_kind = None;
-        self.input.hold_build_active = false;
-        self.input.hold_build_accum = 0.0;
+        self.cancel_hold_build();
     }
 }
 
@@ -1295,6 +1305,7 @@ fn shares_land_border(
     map_h: u32,
     my_id: u16,
     target_owner: u16,
+    border_tiles: &sow_core::bitset::DenseBitSet,
 ) -> bool {
     if my_id == 0 || my_id == target_owner || map_w == 0 {
         return false;
@@ -1312,28 +1323,27 @@ fn shares_land_border(
         (-1, 1),
     ];
 
-    for row in 0..height {
-        for col in 0..width {
-            let index = (row * width + col) as usize;
-            if owners.get(index).copied() != Some(my_id) {
+    for raw_idx in border_tiles.ones() {
+        if raw_idx / map_w >= map_h || owners.get(raw_idx as usize).copied() != Some(my_id) {
+            continue;
+        }
+        let col = (raw_idx % map_w) as i32;
+        let row = (raw_idx / map_w) as i32;
+        for (dc, dr) in neighbors {
+            let neighbor_col = col + dc;
+            let neighbor_row = row + dr;
+            if neighbor_col < 0
+                || neighbor_col >= width
+                || neighbor_row < 0
+                || neighbor_row >= height
+            {
                 continue;
             }
-            for (dc, dr) in neighbors {
-                let neighbor_col = col + dc;
-                let neighbor_row = row + dr;
-                if neighbor_col < 0
-                    || neighbor_col >= width
-                    || neighbor_row < 0
-                    || neighbor_row >= height
-                {
-                    continue;
-                }
-                let neighbor = (neighbor_row * width + neighbor_col) as usize;
-                if owners.get(neighbor).copied() == Some(target_owner)
-                    && terrain.get(neighbor).is_some_and(|value| value & 0x80 != 0)
-                {
-                    return true;
-                }
+            let neighbor = (neighbor_row * width + neighbor_col) as usize;
+            if owners.get(neighbor).copied() == Some(target_owner)
+                && terrain.get(neighbor).is_some_and(|value| value & 0x80 != 0)
+            {
+                return true;
             }
         }
     }
@@ -1343,6 +1353,7 @@ fn shares_land_border(
 #[cfg(test)]
 mod tests {
     use super::{MapMenuAction, MapTarget, TOUCH_HOLD_MS, is_quick_tap, shares_land_border};
+    use sow_core::bitset::DenseBitSet;
 
     #[test]
     fn tap_and_hold_are_distinct_and_drag_cancels_both() {
@@ -1355,9 +1366,35 @@ mod tests {
     fn land_border_is_required_for_a_click_attack() {
         let owners = [1, 2, 0, 0];
         let terrain = [0x80, 0x80, 0x80, 0x80];
-        assert!(shares_land_border(&owners, &terrain, 2, 2, 1, 2));
-        assert!(shares_land_border(&owners, &terrain, 2, 2, 1, 0));
-        assert!(!shares_land_border(&owners, &terrain, 2, 2, 1, 3));
+        let mut border_tiles = DenseBitSet::new();
+        border_tiles.insert(0);
+        assert!(shares_land_border(
+            &owners,
+            &terrain,
+            2,
+            2,
+            1,
+            2,
+            &border_tiles
+        ));
+        assert!(shares_land_border(
+            &owners,
+            &terrain,
+            2,
+            2,
+            1,
+            0,
+            &border_tiles
+        ));
+        assert!(!shares_land_border(
+            &owners,
+            &terrain,
+            2,
+            2,
+            1,
+            3,
+            &border_tiles
+        ));
     }
 
     #[test]

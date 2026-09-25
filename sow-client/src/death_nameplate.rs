@@ -29,12 +29,12 @@ pub fn death_animation(elapsed: f32) -> Option<(f32, f32, f32)> {
     if !elapsed.is_finite() || elapsed < 0.0 || elapsed >= DEATH_NAMEPLATE_DURATION {
         return None;
     }
-    let t = elapsed / DEATH_NAMEPLATE_DURATION;
+    let t = (elapsed / DEATH_NAMEPLATE_DURATION).min(1.0);
     let eased = t * (2.0 - t);
-    let alpha = if t < 0.1 {
-        t / 0.1
-    } else if t > 0.6 {
-        ((1.0 - t) / 0.4).clamp(0.0, 1.0)
+    let alpha = if elapsed < 0.03 {
+        elapsed / 0.03
+    } else if elapsed > DEATH_NAMEPLATE_DURATION - 0.1 {
+        ((DEATH_NAMEPLATE_DURATION - elapsed) / 0.1).clamp(0.0, 1.0)
     } else {
         1.0
     };
@@ -64,9 +64,10 @@ mod tests {
     }
 
     #[test]
-    fn animation_eases_fades_and_expires_at_300ms() {
+    fn animation_rises_and_expires_within_300ms() {
         assert_eq!(death_animation(0.0), Some((0.0, 0.0, 0.0)));
         assert_eq!(death_animation(0.15), Some((0.5, 0.75, 1.0)));
+        assert!(death_animation(0.25).unwrap().2 < 1.0);
         assert!(death_animation(0.3).is_none());
     }
 

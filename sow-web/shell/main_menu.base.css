@@ -1008,7 +1008,8 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     object-position: center 28%;
 }
 
-.sow-purchase-modal__visual--skin {
+.sow-purchase-modal__visual--skin,
+.sow-purchase-modal__visual--bundle {
     display: grid;
     place-items: center;
     background: radial-gradient(circle at 50% 42%, rgba(243, 177, 43, .24), transparent 46%), #0b1018;
@@ -1020,6 +1021,20 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     width: min(58%, 320px);
     height: auto;
     filter: drop-shadow(0 18px 26px rgba(0, 0, 0, .55));
+}
+
+.sow-purchase-modal__visual--bundle .sow-purchase-modal__art-image--bundle {
+    position: relative;
+    z-index: 1;
+    width: min(58%, 320px);
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 22px 32px rgba(0, 0, 0, .58));
+}
+
+.sow-purchase-modal__bundle-flyer {
+    object-fit: contain;
+    filter: drop-shadow(0 12px 22px rgba(0, 0, 0, .55));
 }
 
 .sow-purchase-modal__copy {
@@ -1081,6 +1096,54 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     min-height: 50px;
 }
 
+.sow-purchase-modal__bundle-amount {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--sow-gold-bright);
+    font-variant-numeric: tabular-nums;
+}
+
+.sow-purchase-modal__bundle-amount .sow-store__currency-icon {
+    width: .82em;
+    height: .82em;
+}
+
+.sow-purchase-modal.is-processing .sow-purchase-modal__copy,
+.sow-purchase-modal.is-spending .sow-purchase-modal__copy {
+    justify-content: center;
+}
+
+.sow-purchase-modal__pending,
+.sow-purchase-modal__spend {
+    display: flex;
+    min-height: 54px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.sow-purchase-modal__pending i {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 214, 91, .24);
+    border-top-color: var(--sow-gold-bright);
+    border-radius: 50%;
+    animation: sow-purchase-pending 760ms linear infinite;
+}
+
+.sow-purchase-modal__spend i {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    background: var(--sow-gold-bright);
+    box-shadow: 0 0 20px rgba(255, 214, 91, .85);
+    animation: sow-purchase-spend-spark 460ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.sow-purchase-modal__spend i:nth-child(2) { animation-delay: 90ms; }
+.sow-purchase-modal__spend i:nth-child(3) { animation-delay: 180ms; }
+
 .sow-purchase-modal__effects {
     position: absolute;
     z-index: 3;
@@ -1113,7 +1176,7 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 .sow-menu__modal.sow-purchase-modal.is-success {
     width: min(100%, 1120px);
     max-height: min(94dvh, 800px);
-    animation: sow-purchase-modal-pop 1150ms cubic-bezier(.22, 1.3, .36, 1) both;
+    animation: sow-purchase-modal-pop 460ms cubic-bezier(.16, 1, .3, 1) both;
 }
 
 .sow-purchase-modal.is-success .sow-purchase-modal__layout {
@@ -1162,13 +1225,12 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     animation: sow-purchase-modal-rays 2100ms cubic-bezier(.16, 1, .3, 1) both;
 }
 
-.sow-purchase-modal.is-success .sow-purchase-modal__art-image {
-    transform-origin: 50% 68%;
-    animation: sow-purchase-art-reveal 1750ms cubic-bezier(.22, 1.3, .36, 1) both;
-}
-
 .sow-purchase-modal.is-success .sow-purchase-modal__visual--skin .sow-purchase-modal__art-image--skin {
     width: min(80%, 400px);
+}
+
+.sow-purchase-modal.is-success .sow-purchase-modal__visual--bundle .sow-purchase-modal__art-image--bundle {
+    width: min(72%, 380px);
 }
 
 .sow-purchase-modal.is-success .sow-purchase-modal__eyebrow {
@@ -1187,12 +1249,8 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 .sow-purchase-modal.is-success .sow-purchase-modal__effects i:nth-child(3n) { animation-delay: 520ms; }
 
 @keyframes sow-purchase-modal-pop {
-    0% { opacity: 0; transform: translateY(32px) scale(.88, .92); }
-    18% { opacity: 1; transform: translateY(38px) scale(.81, .86); }
-    54% { transform: translateY(-10px) scale(1.04, .96); }
-    72% { transform: translateY(4px) scale(.985, 1.02); }
-    88% { transform: translateY(-2px) scale(1.01, .995); }
-    100% { opacity: 1; transform: translateY(0) scale(1); }
+    0% { opacity: 0; transform: translateY(18px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes sow-purchase-modal-rays {
@@ -1207,18 +1265,20 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     100% { opacity: 0; transform: translate(-50%, -50%) scale(1.45); }
 }
 
-@keyframes sow-purchase-art-reveal {
-    0% { opacity: .25; transform: translateY(54px) scale(.76, .82) rotate(-4deg); }
-    48% { opacity: 1; transform: translateY(-17px) scale(1.1, .92) rotate(2deg); }
-    70% { transform: translateY(6px) scale(.96, 1.05) rotate(-1deg); }
-    86% { transform: translateY(-3px) scale(1.025, .985) rotate(.4deg); }
-    100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+@keyframes sow-purchase-copy-reveal {
+    0% { opacity: 0; transform: translateY(26px); }
+    72% { opacity: 1; transform: translateY(-5px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes sow-purchase-copy-reveal {
-    0% { opacity: 0; transform: translateY(26px) scale(.94); }
-    72% { opacity: 1; transform: translateY(-5px) scale(1.035); }
-    100% { opacity: 1; transform: translateY(0); }
+@keyframes sow-purchase-pending {
+    to { transform: rotate(1turn); }
+}
+
+@keyframes sow-purchase-spend-spark {
+    0% { opacity: 0; transform: translateY(14px) scale(.35) rotate(0); }
+    60% { opacity: 1; transform: translateY(-7px) scale(1.35) rotate(45deg); }
+    100% { opacity: 0; transform: translateY(-18px) scale(.7) rotate(90deg); }
 }
 
 @keyframes sow-purchase-modal-particle {
@@ -1258,6 +1318,10 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
         width: min(70%, 280px);
     }
 
+    .sow-purchase-modal__visual--bundle .sow-purchase-modal__art-image--bundle {
+        width: min(48%, 220px);
+    }
+
     .sow-purchase-modal__copy .sow-menu__modal-actions {
         padding-top: 22px;
     }
@@ -1291,6 +1355,10 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
         width: min(72%, 320px);
     }
 
+    .sow-purchase-modal.is-success .sow-purchase-modal__visual--bundle .sow-purchase-modal__art-image--bundle {
+        width: min(58%, 260px);
+    }
+
     .sow-purchase-modal.is-success .sow-purchase-modal__effects::before {
         top: 40%;
         left: 50%;
@@ -1311,20 +1379,22 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     .sow-purchase-modal.is-success,
     .sow-purchase-modal.is-success .sow-purchase-modal__effects::before,
     .sow-purchase-modal.is-success .sow-purchase-modal__visual::before,
-    .sow-purchase-modal.is-success .sow-purchase-modal__visual .sow-purchase-modal__art-image,
     .sow-purchase-modal.is-success .sow-purchase-modal__eyebrow,
     .sow-purchase-modal.is-success .sow-purchase-modal__copy h2,
-    .sow-purchase-modal.is-success .sow-purchase-modal__effects i {
+    .sow-purchase-modal.is-success .sow-purchase-modal__effects i,
+    .sow-purchase-modal__pending i,
+    .sow-purchase-modal__spend i {
         animation: none;
     }
 }
 
-.sow-purchase-modal.is-success.is-reduced-motion,
-.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__effects::before,
-.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__visual::before,
-.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__visual .sow-purchase-modal__art-image,
-.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__eyebrow,
-.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__copy h2,
-.sow-purchase-modal.is-success.is-reduced-motion .sow-purchase-modal__effects i {
+.sow-purchase-modal.is-reduced-motion,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__effects::before,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__visual::before,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__eyebrow,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__copy h2,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__effects i,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__pending i,
+.sow-purchase-modal.is-reduced-motion .sow-purchase-modal__spend i {
         animation: none;
 }

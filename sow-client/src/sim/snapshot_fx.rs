@@ -167,7 +167,7 @@ impl SowApp {
                 .and_then(|mr| mr.owners.get(tile_idx as usize).copied())
                 .unwrap_or(0);
             let victim_name = if victim_id == 0 {
-                "unclaimed territory".to_string()
+                format!("({}, {})", alert.tile_x, alert.tile_y)
             } else {
                 snap.players
                     .iter()
@@ -176,16 +176,10 @@ impl SowApp {
                     .unwrap_or_else(|| format!("Player {}", victim_id))
             };
 
-            let (text, color) = if victim_id == my_id && my_id != 0 {
-                (
-                    crate::ui::UiText::new("hud.nuke_incoming").with("name", attacker_name),
-                    crate::rgb(239, 68, 68),
-                )
+            let color = if victim_id == my_id && my_id != 0 {
+                crate::rgb(239, 68, 68)
             } else if alert.owner_id == my_id {
-                (
-                    crate::ui::UiText::new("hud.nuke_hit").with("name", victim_name),
-                    crate::rgb(74, 222, 128),
-                )
+                crate::rgb(74, 222, 128)
             } else if my_id != 0
                 && snap
                     .players
@@ -195,21 +189,13 @@ impl SowApp {
                     .unwrap_or(false)
                 && victim_id != 0
             {
-                (
-                    crate::ui::UiText::new("hud.nuke_ally_hit")
-                        .with("attacker", attacker_name)
-                        .with("victim", victim_name),
-                    crate::rgb(251, 191, 36),
-                )
+                crate::rgb(251, 191, 36)
             } else {
-                (
-                    crate::ui::UiText::new("hud.nuke_struck")
-                        .with("attacker", attacker_name)
-                        .with("victim", victim_name),
-                    crate::rgb(180, 180, 200),
-                )
+                crate::rgb(180, 180, 200)
             };
-
+            let text = crate::ui::UiText::new("hud.nuke_struck")
+                .with("attacker", attacker_name)
+                .with("victim", victim_name);
             self.ui.app.hud_state.push_notification(text, color);
         }
     }

@@ -421,6 +421,7 @@ fn prune_qs(root: &Path) -> Result<()> {
 fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathBuf> {
     let profile_dir = match profile {
         "dev" => "debug",
+        "wasm-dev" => "wasm-dev",
         "wasm-release" => "wasm-release",
         _ => bail!("unsupported WASM profile: {profile}"),
     };
@@ -1330,6 +1331,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "heroes.leader_vercingetorix_name"
                 | "hud.fps"
                 | "hud.fps_ping"
+                | "hud.nuke_struck"
                 | "hud.pin"
                 | "lobbies.hvn"
                 | "lobbies.terminator"
@@ -3121,7 +3123,7 @@ fn launch_native(paths: &Paths) -> Result<()> {
 fn cmd_native(paths: &Paths) -> Result<()> {
     let version = read_version(paths)?;
     let release = env::var("SOW_NATIVE_RELEASE").is_ok_and(|value| value == "1");
-    let profile = if release { "wasm-release" } else { "dev" };
+    let profile = if release { "wasm-release" } else { "wasm-dev" };
     println!(
         "==> Building native {} WASM client",
         if release { "release" } else { "fast" }

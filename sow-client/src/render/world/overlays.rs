@@ -160,6 +160,8 @@ pub(crate) fn render_overlays(
         &dev,
         sf,
         zoom_scaled,
+        time_secs,
+        now,
     );
     render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
@@ -1303,20 +1305,7 @@ fn render_buildings(
             render_city_modules(text, center, marker_size, building.modules, dev, sf);
         }
 
-        if building.level != 1
-            || building.queued_level != building.level
-            || building.count > 1
-            || building.under_construction
-        {
-            let label = if building.under_construction {
-                "🔨".to_string()
-            } else if building.count > 1 {
-                format!("{} × {}", building.level, building.count)
-            } else if building.queued_level > building.level {
-                format!("{} -> {}", building.level, building.queued_level)
-            } else {
-                building.level.to_string()
-            };
+        if let Some(label) = building_badge_label(building) {
             let level_font_size = (marker_size * BUILDING_LEVEL_FONT_RATIO)
                 .clamp(8.0, 18.0)
                 .round()
@@ -1361,6 +1350,8 @@ fn render_building_placement_preview(
     dev: &DevConfig,
     sf: f32,
     zoom_scaled: f32,
+    time_secs: f32,
+    now: Instant,
 ) {
     let Some(kind) = ui.app.hud_state.selected_building_kind else {
         return;
@@ -1430,6 +1421,29 @@ fn render_building_placement_preview(
         [color[0], color[1], color[2], 0.16],
     );
     text.push_ring(center_px, half_tile, color, (2.0 * sf).max(1.0));
+    if input.hold_build_active
+        && let Some(start) = input.map_pointer_start.as_ref()
+    {
+        let held_secs = now.duration_since(start.started_at).as_secs_f32();
+        let interval = crate::input::window::hold_build_repeat_interval(held_secs);
+        let progress = (1.0 - input.hold_build_accum / interval).clamp(0.0, 1.0);
+        let burst = held_secs >= crate::input::window::HOLD_BUILD_BURST_AFTER_SECS;
+        let color = if burst {
+            [1.0, 0.62, 0.16, 1.0]
+        } else {
+            [0.13, 0.83, 0.94, 1.0]
+        };
+        let pulse_rate = if burst { 28.0 } else { 8.0 };
+        let pulse = (time_secs * pulse_rate).sin().max(0.0);
+        let radius = half_tile + (3.0 + pulse * 2.0) * sf;
+        text.push_ring(
+            center_px,
+            radius,
+            [color[0], color[1], color[2], 0.32],
+            (2.0 * sf).max(1.0),
+        );
+        text.push_arc(center_px, radius, progress, color, (3.0 * sf).max(1.0));
+    }
 
     let marker_size = building_icon_size(zoom_scaled).max(20.0) * sf;
     if let Some(building) = stack_building {
@@ -1510,6 +1524,29 @@ fn render_building_placement_preview(
         dev,
         sf,
     );
+}
+
+fn building_badge_label(building: &RenderedBuilding) -> Option<String> {
+    if building.under_construction {
+        return Some("🔨".to_string());
+    }
+    if building.level == 0 {
+        return Some(if building.count > 1 {
+            format!("🔨 × {}", building.count)
+        } else {
+            "🔨".to_string()
+        });
+    }
+    if building.level == 1 && building.queued_level == 1 && building.count == 1 {
+        return None;
+    }
+    Some(if building.count > 1 {
+        format!("{} × {}", building.level, building.count)
+    } else if building.queued_level > building.level {
+        format!("{} -> {}", building.level, building.queued_level)
+    } else {
+        building.level.to_string()
+    })
 }
 
 fn render_building_preview_badge(
@@ -1802,6 +1839,28 @@ fn avatar_visual_radius(radius: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zero_level_cluster_uses_construction_badge_and_keeps_count() {
+        let mut building = RenderedBuilding {
+            bx: 0.0,
+            by: 0.0,
+            kind: BuildingKind::City,
+            level: 0,
+            queued_level: 0,
+            modules: sow_core::building::CityModules::default(),
+            under_construction: false,
+            count: 4,
+            owner_id: 7,
+            tile_idx: None,
+            status: None,
+        };
+        assert_eq!(building_badge_label(&building).as_deref(), Some("🔨 × 4"));
+
+        building.level = 3;
+        building.queued_level = 4;
+        assert_eq!(building_badge_label(&building).as_deref(), Some("3 × 4"));
+    }
 
     #[test]
     fn nameplate_scales_match_the_last_gpu_tuning() {

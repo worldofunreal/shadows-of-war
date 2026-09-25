@@ -235,8 +235,14 @@ test("hero purchase stays server-backed, direct, and visually honest", () => {
     assert.match(storeSource, /reducedRewardMotion\(\) \? " is-reduced-motion"/);
     assert.match(storeSource, /sow-purchase-modal__visual/);
     assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal__layout/);
-    assert.match(menuCss["main_menu.base.css"], /sow-purchase-art-reveal/);
+    assert.doesNotMatch(menuCss["main_menu.base.css"], /sow-purchase-art-reveal/);
+    assert.match(menuCss["main_menu.base.css"], /sow-purchase-impact-ring/);
     assert.match(menuCss["main_menu.base.css"], /sow-purchase-modal-particle/);
+    const leaderStart = coreSource.indexOf("function leaderById(id)");
+    const leaderEnd = coreSource.indexOf("function leaderPerk", leaderStart);
+    const context = { state: { leaders: [{ id: "SunTzu", slug: "sun_tzu" }] } };
+    vm.runInNewContext(coreSource.slice(leaderStart, leaderEnd) + "this.leaderById = leaderById;", context);
+    assert.equal(context.leaderById("sun_tzu").slug, "sun_tzu");
 });
 
 test("hero selection opens the shared catalog for equipped and purchasable skins", () => {
@@ -253,6 +259,20 @@ test("hero selection opens the shared catalog for equipped and purchasable skins
     assert.match(shellSource, /command === "close_skin_picker"/);
     assert.match(shellSource, /syncOverlay\("skin-picker"[\s\S]*syncOverlay\("purchase"/);
     assert.match(profileCss, /\.sow-menu__modal\.sow-skin-picker/);
+});
+
+test("direct purchases wait for delivery before celebrating", () => {
+    assert.match(storeSource, /EXTERNAL_PURCHASE_POLL_MS = 3000/);
+    assert.match(storeSource, /EXTERNAL_PURCHASE_WAIT_MS = 120000/);
+    assert.match(storeSource, /sow_pending_store_purchase_v1/);
+    assert.match(storeSource, /profileApi\("\/store\/purchases"\)/);
+    assert.match(storeSource, /record\.status === "granted"/);
+    assert.match(storeSource, /onComplete: function \(\) \{\s*completeExternalPurchase\(productId\);/);
+    assert.match(storeSource, /purchaseModal\.type === "product"[\s\S]*attempt\.delivery_id[\s\S]*profileHasExternalPurchase/);
+    assert.match(storeSource, /purchaseModal\.type === "bundle"[\s\S]*beginBundlePurchasePresentation/);
+    assert.match(storeSource, /purchaseModal\.phase === "spending" \|\| purchaseModal\.phase === "success"/);
+    assert.match(shellSource, /resumeExternalPurchaseDelivery\(true\)/);
+    assert.doesNotMatch(shellSource, /URLSearchParams\(window\.location\.search\)\.get\("purchase"\)/);
 });
 
 test("weekly free rotation is a splash-only status", () => {
@@ -297,9 +317,9 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
 });
 
-test("WASM right-click stays on the Rust pointer-release path; touch hold stays intact", () => {
+test("WASM right-click opens on pointer press; touch hold stays intact", () => {
     assert.match(windowInput, /let right = matches!\([\s\S]*?MouseButton::Right[\s\S]*?\);/);
-    const rightClickStart = windowInput.indexOf("} else if right && !pressed");
+    const rightClickStart = windowInput.indexOf("} else if right && pressed");
     const rightClickEnd = windowInput.indexOf("\n        }\n    }\n\n    fn handle_pointer_move", rightClickStart);
     assert.notEqual(rightClickStart, -1);
     assert.notEqual(rightClickEnd, -1);

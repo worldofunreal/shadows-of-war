@@ -36,6 +36,365 @@
         return Math.max(0, Number(state && state[currency]) || 0);
     }
 
+    var EXTERNAL_PURCHASE_POLL_MS = 3000;
+    var EXTERNAL_PURCHASE_WAIT_MS = 120000;
+    var externalPurchaseAttempt = null;
+    var externalPurchasePollTimer = null;
+    var externalPurchasePollInFlight = false;
+    var externalPurchaseRevealTimer = null;
+    var purchaseSuccessTimer = null;
+    var bundleFlightToken = null;
+
+    function storeBundleByProductId(productId) {
+        return (state && state.store && state.store.gem_bundles || []).find(function (bundle) {
+            return String(bundle.product_id) === String(productId);
+        }) || null;
+    }
+
+    function externalPurchaseStorageKey(accountId) {
+        return "sow_pending_store_purchase_v1:" + accountId;
+    }
+
+    function clearExternalPurchasePoll() {
+        if (externalPurchasePollTimer !== null) window.clearTimeout(externalPurchasePollTimer);
+        externalPurchasePollTimer = null;
+        externalPurchasePollInFlight = false;
+    }
+
+    function saveExternalPurchaseAttempt() {
+        if (!externalPurchaseAttempt) return;
+        try {
+            window.localStorage.setItem(
+                externalPurchaseStorageKey(externalPurchaseAttempt.account_id),
+                JSON.stringify(externalPurchaseAttempt)
+            );
+        } catch (error) {}
+    }
+
+    function currentExternalPurchaseAttempt() {
+        if (!state || !state.account_id) return null;
+        if (externalPurchaseAttempt && externalPurchaseAttempt.account_id === state.account_id) return externalPurchaseAttempt;
+        clearExternalPurchasePoll();
+        externalPurchaseAttempt = null;
+        try {
+            var saved = JSON.parse(window.localStorage.getItem(externalPurchaseStorageKey(state.account_id)) || "null");
+            if (saved && saved.account_id === state.account_id && saved.product_id &&
+                (saved.kind === "bundle" || saved.kind === "leader" || saved.kind === "skin")) {
+                externalPurchaseAttempt = saved;
+            }
+        } catch (error) {}
+        return externalPurchaseAttempt;
+    }
+
+    function clearExternalPurchaseAttempt() {
+        var attempt = currentExternalPurchaseAttempt();
+        clearExternalPurchasePoll();
+        if (attempt) {
+            try { window.localStorage.removeItem(externalPurchaseStorageKey(attempt.account_id)); } catch (error) {}
+        }
+        externalPurchaseAttempt = null;
+    }
+
+    function externalPurchaseDetails(productId) {
+        var bundle = storeBundleByProductId(productId);
+        if (bundle) return { kind: "bundle", itemId: bundle.id, gems: Number(bundle.gems) || 0 };
+        var intent = purchaseIntent || {};
+        if (intent.productId !== productId) return null;
+        if (intent.leaderId) return { kind: "leader", itemId: intent.leaderId, gems: 0 };
+        if (intent.skinId) return { kind: "skin", itemId: intent.skinId, gems: 0 };
+        return null;
+    }
+
+    function beginExternalPurchaseAttempt(productId) {
+        if (!state || !state.account_id) return null;
+        var details = externalPurchaseDetails(productId);
+        if (!details) return null;
+        externalPurchaseAttempt = {
+            account_id: state.account_id,
+            product_id: productId,
+            kind: details.kind,
+            item_id: details.itemId,
+            gems: details.gems,
+            base_gems: Math.max(0, Number(state.gems) || 0),
+            started_at: Date.now(),
+            deadline_at: Date.now() + EXTERNAL_PURCHASE_WAIT_MS,
+            provider_complete: false,
+            delivery_id: "",
+            timed_out: false,
+            dismissed: false
+        };
+        saveExternalPurchaseAttempt();
+        return externalPurchaseAttempt;
+    }
+
+    function requestExternalPurchaseProfile(attempt) {
+        if (!attempt || !state || state.account_id !== attempt.account_id) return;
+        send("refresh_profile");
+    }
+
+    function profileHasExternalPurchase(attempt) {
+        if (!attempt || !state || state.account_id !== attempt.account_id) return false;
+        if (attempt.kind === "bundle") return Number(state.gems) > Number(attempt.base_gems || 0);
+        if (attempt.kind === "leader") {
+            var leader = storeLeaderById(attempt.item_id);
+            return !!leader && !!leader.owned;
+        }
+        var skin = storeSkinById(attempt.item_id);
+        return !!skin && !!skin.owned;
+    }
+
+    function purchaseIntentForAttempt(attempt) {
+        if (!attempt) return null;
+        if (attempt.kind === "leader") return { type: "leader", leaderId: attempt.item_id, productId: attempt.product_id };
+        if (attempt.kind === "skin") return { type: "skin", skinId: attempt.item_id, productId: attempt.product_id };
+        return { type: "bundle", productId: attempt.product_id };
+    }
+
+    function showExternalPurchaseProcessing(attempt) {
+        if (!attempt || attempt.dismissed || !attempt.provider_complete) return;
+        purchaseIntent = purchaseIntentForAttempt(attempt);
+        purchaseModal = {
+            type: attempt.kind === "bundle" ? "bundle" : "product",
+            productId: attempt.product_id,
+            leaderId: attempt.kind === "leader" ? attempt.item_id : "",
+            skinId: attempt.kind === "skin" ? attempt.item_id : "",
+            bundleId: attempt.kind === "bundle" ? attempt.item_id : "",
+            phase: "processing",
+            submitted: true,
+            timedOut: !!attempt.timed_out
+        };
+    }
+
+    function purchaseHistory() {
+        var auth = storeAuth();
+        if (!auth.available || !state || !state.account_id) return Promise.reject(new Error("store unavailable"));
+        return fetch(profileApi("/store/purchases"), {
+            method: "POST",
+            headers: auth.headers,
+            body: JSON.stringify({ account_id: state.account_id, auth_secret: auth.authSecret })
+        }).then(function (response) {
+            if (!response.ok) throw new Error("purchase history unavailable");
+            return response.json();
+        });
+    }
+
+    function deliveredPurchaseRecord(records, attempt) {
+        var startedAt = Number(attempt && attempt.started_at) || 0;
+        return (Array.isArray(records) ? records : []).find(function (record) {
+            return record && record.status === "granted" && record.product_id === attempt.product_id &&
+                Number(record.updated_at || 0) * 1000 >= startedAt - 1000;
+        }) || null;
+    }
+
+    function scheduleExternalPurchasePoll(delay) {
+        var attempt = currentExternalPurchaseAttempt();
+        if (!attempt || externalPurchasePollTimer !== null || attempt.timed_out) return;
+        externalPurchasePollTimer = window.setTimeout(function () {
+            externalPurchasePollTimer = null;
+            pollExternalPurchaseDelivery();
+        }, delay == null ? EXTERNAL_PURCHASE_POLL_MS : delay);
+    }
+
+    function timeOutExternalPurchase(attempt) {
+        if (!attempt || attempt.timed_out) return;
+        attempt.timed_out = true;
+        saveExternalPurchaseAttempt();
+        clearExternalPurchasePoll();
+        if (attempt.provider_complete && !attempt.dismissed) {
+            showExternalPurchaseProcessing(attempt);
+            render();
+        }
+    }
+
+    function pollExternalPurchaseDelivery() {
+        var attempt = currentExternalPurchaseAttempt();
+        if (!attempt || externalPurchasePollInFlight || !state || state.account_id !== attempt.account_id) return;
+        if (Date.now() >= Number(attempt.deadline_at || 0)) {
+            timeOutExternalPurchase(attempt);
+            return;
+        }
+        externalPurchasePollInFlight = true;
+        purchaseHistory().then(function (records) {
+            var delivered = deliveredPurchaseRecord(records, attempt);
+            if (delivered) {
+                attempt.delivery_id = delivered.id;
+                attempt.provider_complete = true;
+                attempt.dismissed = false;
+                saveExternalPurchaseAttempt();
+                showExternalPurchaseProcessing(attempt);
+                requestExternalPurchaseProfile(attempt);
+                render();
+            }
+        }).catch(function () {}).finally(function () {
+            externalPurchasePollInFlight = false;
+            var latest = currentExternalPurchaseAttempt();
+            if (!latest || latest !== attempt) return;
+            if (Date.now() >= Number(latest.deadline_at || 0)) timeOutExternalPurchase(latest);
+            else scheduleExternalPurchasePoll();
+        });
+    }
+
+    function beginBundlePurchasePresentation(attempt) {
+        if (!attempt || !state || !profileHasExternalPurchase(attempt)) return;
+        clearExternalPurchaseAttempt();
+        purchaseIntent = null;
+        purchaseModal = {
+            type: "bundle",
+            productId: attempt.product_id,
+            bundleId: attempt.item_id,
+            gems: attempt.gems,
+            phase: "success",
+            submitted: false,
+            gemBaseline: Math.max(0, Number(attempt.base_gems) || 0),
+            gemPresented: false,
+            gemFlightStarted: false
+        };
+        render();
+        if (externalPurchaseRevealTimer !== null) window.clearTimeout(externalPurchaseRevealTimer);
+        externalPurchaseRevealTimer = window.setTimeout(function () {
+            externalPurchaseRevealTimer = null;
+            if (!purchaseModal || purchaseModal.type !== "bundle" || purchaseModal.phase !== "success" || purchaseModal.gemFlightStarted) return;
+            purchaseModal.gemFlightStarted = true;
+            var finalValues = progressionFromState();
+            var startValues = Object.assign({}, finalValues, { gems: purchaseModal.gemBaseline });
+            writeProgression(startValues);
+            if (reducedRewardMotion()) {
+                purchaseModal.gemPresented = true;
+                writeProgression(finalValues);
+                return;
+            }
+            var token = root.querySelector(".sow-purchase-modal__bundle-token");
+            var animationToken = rewardAnimationToken;
+            if (!token) {
+                purchaseModal.gemPresented = true;
+                animateProgressionTo(finalValues, 640, animationToken).then(function () {
+                    pulseRewardCounter("[data-progression-gems-value]", false);
+                });
+                return;
+            }
+            flyBundleToken(token, animationToken).then(function (arrived) {
+                if (!arrived || !purchaseModal || purchaseModal.type !== "bundle") return;
+                animateProgressionTo(finalValues, 640, animationToken).then(function (shown) {
+                    if (!shown || !purchaseModal || purchaseModal.type !== "bundle") return;
+                    purchaseModal.gemPresented = true;
+                    pulseRewardCounter("[data-progression-gems-value]", false);
+                });
+            });
+        }, 760);
+    }
+
+    function settleBundlePurchasePresentation() {
+        if (externalPurchaseRevealTimer !== null) window.clearTimeout(externalPurchaseRevealTimer);
+        externalPurchaseRevealTimer = null;
+        if (bundleFlightToken) {
+            if (typeof bundleFlightToken.getAnimations === "function") bundleFlightToken.getAnimations().forEach(function (animation) { animation.cancel(); });
+            bundleFlightToken.remove();
+            bundleFlightToken = null;
+        }
+        if (purchaseModal && purchaseModal.type === "bundle") purchaseModal.gemPresented = true;
+        if (state) writeProgression(progressionFromState());
+    }
+
+    function flyBundleToken(token, animationToken) {
+        var rect = token.getBoundingClientRect();
+        var flyer = token.cloneNode(true);
+        flyer.className += " sow-purchase-modal__bundle-flyer";
+        flyer.style.cssText = "position:fixed;z-index:30;left:" + rect.left + "px;top:" + rect.top + "px;width:" + rect.width + "px;height:" + rect.height + "px;margin:0;pointer-events:none;";
+        document.body.appendChild(flyer);
+        bundleFlightToken = flyer;
+        return flyRewardCard({ card: flyer, stage: { selector: "[data-progression-gems-value]" } }, animationToken).then(function (arrived) {
+            if (bundleFlightToken === flyer) bundleFlightToken = null;
+            flyer.remove();
+            return arrived;
+        });
+    }
+
+    function beginPurchaseSuccessReveal() {
+        if (!purchaseModal || purchaseModal.phase !== "spending") return;
+        if (reducedRewardMotion()) {
+            purchaseModal.phase = "success";
+            render();
+            return;
+        }
+        if (purchaseSuccessTimer !== null) window.clearTimeout(purchaseSuccessTimer);
+        purchaseSuccessTimer = window.setTimeout(function () {
+            purchaseSuccessTimer = null;
+            if (!purchaseModal || purchaseModal.phase !== "spending") return;
+            purchaseModal.phase = "success";
+            render();
+        }, 460);
+    }
+
+    function dismissPurchaseModal() {
+        if (purchaseModal && purchaseModal.type === "bundle") settleBundlePurchasePresentation();
+        if (purchaseModal && purchaseModal.phase === "processing") {
+            var attempt = currentExternalPurchaseAttempt();
+            if (attempt && attempt.timed_out) {
+                attempt.dismissed = true;
+                saveExternalPurchaseAttempt();
+            }
+        }
+        if (purchaseSuccessTimer !== null) window.clearTimeout(purchaseSuccessTimer);
+        purchaseSuccessTimer = null;
+        purchaseModal = null;
+        purchaseIntent = null;
+    }
+
+    function canDismissPurchaseModal() {
+        return !purchaseModal || purchaseModal.phase !== "processing" || purchaseModal.timedOut;
+    }
+
+    function abandonExternalPurchaseAttempt(productId) {
+        var attempt = currentExternalPurchaseAttempt();
+        if (productId && (!attempt || attempt.product_id !== productId)) return;
+        clearExternalPurchaseAttempt();
+    }
+
+    function completeExternalPurchase(productId) {
+        if (purchaseModal && purchaseModal.productId === productId &&
+            (purchaseModal.phase === "spending" || purchaseModal.phase === "success")) return;
+        var attempt = currentExternalPurchaseAttempt();
+        if (!attempt || attempt.product_id !== productId) attempt = beginExternalPurchaseAttempt(productId);
+        if (!attempt) return;
+        if (storeCheckoutProduct === productId) {
+            if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") storeCheckoutInstance.destroy();
+            storeCheckoutInstance = null;
+            storeCheckoutProduct = null;
+            storeCheckoutRequestId = null;
+            storeCheckoutBusy = false;
+        }
+        attempt.provider_complete = true;
+        attempt.dismissed = false;
+        attempt.timed_out = false;
+        attempt.deadline_at = Date.now() + EXTERNAL_PURCHASE_WAIT_MS;
+        saveExternalPurchaseAttempt();
+        showExternalPurchaseProcessing(attempt);
+        requestExternalPurchaseProfile(attempt);
+        render();
+        pollExternalPurchaseDelivery();
+    }
+
+    function resumeExternalPurchaseDelivery(fromReturn) {
+        var attempt = currentExternalPurchaseAttempt();
+        if (!attempt) return;
+        if (fromReturn && attempt.timed_out) {
+            attempt.timed_out = false;
+            attempt.dismissed = false;
+            attempt.deadline_at = Date.now() + EXTERNAL_PURCHASE_WAIT_MS;
+            saveExternalPurchaseAttempt();
+        }
+        if (attempt.delivery_id && profileHasExternalPurchase(attempt)) {
+            if (attempt.kind === "bundle") beginBundlePurchasePresentation(attempt);
+            else {
+                showExternalPurchaseProcessing(attempt);
+                resolvePurchaseModal();
+            }
+            return;
+        }
+        if ((attempt.provider_complete || attempt.delivery_id) && !attempt.dismissed) showExternalPurchaseProcessing(attempt);
+        scheduleExternalPurchasePoll(0);
+    }
+
     function storeProductButton(productId, label, confirm, priceLabel, leaderId, skinId) {
         var command = confirm ? "open_product_purchase" : "buy_product";
         var price = priceLabel ? " data-price-label='" + esc(priceLabel) + "'" : "";
@@ -161,14 +520,23 @@
         return !!offer && !!offer.owned;
     }
 
-    function renderPurchaseArt(leader, skin, success) {
-        var art = skin
-            ? "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' src='" + esc(asset(skin.asset_path)) + "' alt='" + esc(skin.name) + "' width='256' height='256'>"
-            : "<picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(asset("shell/leaders/" + leader.slug + "_mobile.webp")) + "'><img class='sow-purchase-modal__art-image' src='" + esc(asset("shell/leaders/" + leader.slug + "_desktop.webp")) + "' alt='" + esc(leaderDisplayName(leader)) + "' width='1080' height='1920'></picture>";
+    function renderPurchaseArt(leader, skin, bundle, success) {
+        var visualClass = "";
+        var art;
+        if (bundle) {
+            var bundleArt = bundle.asset_path ? asset(bundle.asset_path) : asset("gameplay/store/gem_bundles/" + bundle.id + ".webp");
+            visualClass = " sow-purchase-modal__visual--bundle";
+            art = "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--bundle sow-purchase-modal__bundle-token' src='" + esc(bundleArt) + "' alt='' width='128' height='128'>";
+        } else if (skin) {
+            visualClass = " sow-purchase-modal__visual--skin";
+            art = "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' src='" + esc(asset(skin.asset_path)) + "' alt='" + esc(skin.name) + "' width='256' height='256'>";
+        } else {
+            art = "<picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(asset("shell/leaders/" + leader.slug + "_mobile.webp")) + "'><img class='sow-purchase-modal__art-image' src='" + esc(asset("shell/leaders/" + leader.slug + "_desktop.webp")) + "' alt='" + esc(leaderDisplayName(leader)) + "' width='1080' height='1920'></picture>";
+        }
         var effects = success
             ? "<div class='sow-purchase-modal__effects' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>"
             : "";
-        return "<div class='sow-purchase-modal__visual" + (skin ? " sow-purchase-modal__visual--skin" : "") + "'>" + art + "</div>" + effects;
+        return "<div class='sow-purchase-modal__visual" + visualClass + "'>" + art + "</div>" + effects;
     }
 
     function renderPurchaseModal() {
@@ -176,43 +544,75 @@
         var leader = purchaseModal.leaderId ? leaderById(purchaseModal.leaderId) : null;
         var offer = purchaseModal.leaderId ? storeLeaderById(purchaseModal.leaderId) : null;
         var skin = purchaseModal.skinId ? storeSkinById(purchaseModal.skinId) : null;
-        if ((purchaseModal.leaderId && (!leader || !offer)) || (purchaseModal.skinId && !skin)) return "";
+        var bundle = purchaseModal.type === "bundle" ? storeBundleByProductId(purchaseModal.productId) : null;
+        if ((purchaseModal.leaderId && (!leader || !offer)) || (purchaseModal.skinId && !skin) || (purchaseModal.type === "bundle" && !bundle)) return "";
         var isProduct = purchaseModal.type === "product";
         var success = purchaseModal.phase === "success";
-        var checkout = !success && isProduct && storeCheckoutProduct === purchaseModal.productId;
+        var spending = purchaseModal.phase === "spending";
+        var processing = purchaseModal.phase === "processing";
+        var checkout = purchaseModal.phase === "confirm" && isProduct && storeCheckoutProduct === purchaseModal.productId;
         var busy = purchaseModal.submitted || storeCheckoutBusy || (state && state.store_busy);
-        var itemName = skin ? skin.name : leaderDisplayName(leader);
-        var summary = isProduct
+        var itemName = bundle ? SOW_t("store.gems_count", { amount: bundle.gems }) : (skin ? skin.name : leaderDisplayName(leader));
+        var heading = bundle
+            ? "<span class='sow-purchase-modal__bundle-amount'>" + renderCurrencyAmount(bundle.gems, "gem") + "</span>"
+            : esc(itemName);
+        var summary = bundle ? "" : isProduct
             ? (purchaseModal.priceLabel || SOW_t("store.buy"))
             : renderCurrencyAmount(
                 purchaseModal.currency === "gems" ? (skin ? skin.cost_gems : offer.cost_gems) : offer.cost_crowns,
                 purchaseModal.currency === "gems" ? "gem" : "crown"
             );
-        var error = !success && state && state.error ? "<div class='sow-menu__status sow-menu__status--error' role='alert'>" + esc(localizedText(state.error)) + "</div>" : "";
+        var error = !success && !spending && !processing && state && state.error ? "<div class='sow-menu__status sow-menu__status--error' role='alert'>" + esc(localizedText(state.error)) + "</div>" : "";
         var body = success
             ? "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='cancel_purchase'>" + esc(SOW_t("tutorial.continue")) + "</button></div>"
+            : processing
+                ? (purchaseModal.timedOut
+                    ? "<div class='sow-menu__modal-actions'><button class='sow-menu__primary' type='button' data-command='cancel_purchase'>" + esc(SOW_t("tutorial.continue")) + "</button></div>"
+                    : "<div class='sow-purchase-modal__pending' aria-busy='true' aria-hidden='true'><i></i></div>")
+                : spending
+                    ? "<div class='sow-purchase-modal__spend' aria-hidden='true'><i></i><i></i><i></i></div>"
             : checkout
                 ? renderStoreCheckout()
                 : "<div class='sow-menu__modal-actions'><button class='sow-menu__ghost-button' type='button' data-command='cancel_purchase'>" + esc(SOW_t("lobbies.cancel")) + "</button><button class='sow-menu__primary' type='button' data-command='confirm_purchase'" + (busy ? " disabled" : "") + ">" + esc(SOW_t("store.buy")) + "</button></div>";
-        var close = success ? "" : "<button class='sow-menu__icon-button' type='button' data-command='cancel_purchase' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button>";
         var eyebrow = success ? SOW_t("store.unlocked") : SOW_t("store.purchase");
-        var price = success ? "" : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
-        var successClass = success ? " is-success" + (reducedRewardMotion() ? " is-reduced-motion" : "") : "";
-        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" + successClass + "' role='dialog' aria-modal='true' aria-live='polite' aria-label='" + esc(itemName) + "'><div class='sow-purchase-modal__layout'>" + renderPurchaseArt(leader, skin, success) + "<div class='sow-purchase-modal__copy'><div class='sow-menu__modal-head'><div><p class='sow-purchase-modal__eyebrow'>" + esc(eyebrow) + "</p><h2>" + esc(itemName) + "</h2></div>" + close + "</div>" + price + error + body + "</div></div></section></div>";
+        var price = success || spending || processing || !summary ? "" : "<strong class='sow-purchase-modal__price'>" + summary + "</strong>";
+        var successClass = success ? " is-success" : "";
+        var phaseClass = (spending ? " is-spending" : (processing ? " is-processing" : "")) + (reducedRewardMotion() ? " is-reduced-motion" : "");
+        var head = spending ? "" : "<div class='sow-menu__modal-head'><div><p class='sow-purchase-modal__eyebrow'>" + esc(eyebrow) + "</p><h2>" + heading + "</h2></div></div>";
+        return "<div class='sow-menu__overlay' data-menu-overlay='purchase'><section class='sow-menu__modal sow-purchase-modal" + successClass + phaseClass + "' role='dialog' aria-modal='true' aria-live='polite' aria-busy='" + (spending || processing ? "true" : "false") + "' aria-label='" + esc(itemName) + "'><div class='sow-purchase-modal__layout'>" + renderPurchaseArt(leader, skin, bundle, success) + "<div class='sow-purchase-modal__copy'>" + head + price + error + body + "</div></div></section></div>";
     }
 
     function resolvePurchaseModal() {
         if (!purchaseModal || purchaseModal.phase === "success" || !purchaseModal.submitted || !purchaseIntent) return;
+        if (purchaseModal.type === "bundle") {
+            var bundleAttempt = currentExternalPurchaseAttempt();
+            if (bundleAttempt && bundleAttempt.delivery_id && profileHasExternalPurchase(bundleAttempt)) {
+                beginBundlePurchasePresentation(bundleAttempt);
+            }
+            return;
+        }
+        if (purchaseModal.type === "product") {
+            var attempt = currentExternalPurchaseAttempt();
+            if (!attempt || !attempt.delivery_id || !profileHasExternalPurchase(attempt)) return;
+            clearExternalPurchaseAttempt();
+            purchaseModal.phase = "spending";
+            purchaseModal.submitted = false;
+            purchaseIntent = null;
+            if (state) state.error = null;
+            beginPurchaseSuccessReveal();
+            return;
+        }
         if (purchaseItemOwned()) {
             if (storeCheckoutInstance && typeof storeCheckoutInstance.destroy === "function") storeCheckoutInstance.destroy();
             storeCheckoutInstance = null;
             storeCheckoutProduct = null;
             storeCheckoutRequestId = null;
             storeCheckoutBusy = false;
-            purchaseModal.phase = "success";
+            purchaseModal.phase = "spending";
             purchaseModal.submitted = false;
             purchaseIntent = null;
             if (state) state.error = null;
+            beginPurchaseSuccessReveal();
         } else if (state && !state.store_busy && state.error && purchaseModal.type !== "product") {
             purchaseModal.submitted = false;
             purchaseIntent = null;
@@ -261,8 +661,10 @@
 
     function beginStorePurchase(productId) {
         if (!productId || storeCheckoutBusy) return false;
+        if (!beginExternalPurchaseAttempt(productId)) return false;
         if (isAndroidTwa()) {
             if (!state.account_id || typeof window.SOW_requestAndroidPurchase !== "function") {
+                abandonExternalPurchaseAttempt(productId);
                 state.error = SOW_t("store.store_unavailable");
                 render();
                 return false;
@@ -271,6 +673,7 @@
             var requestId = window.SOW_requestAndroidPurchase(productId, state.account_id);
             if (!requestId) {
                 storeCheckoutBusy = false;
+                abandonExternalPurchaseAttempt(productId);
                 state.error = SOW_t("store.android_checkout_unavailable");
                 render();
             } else {
@@ -281,6 +684,7 @@
         }
         var auth = storeAuth();
         if (!auth.available || !state.account_id) {
+            abandonExternalPurchaseAttempt(productId);
             state.error = SOW_t("store.store_unavailable");
             render();
             return false;
@@ -304,9 +708,7 @@
                 return stripe.initEmbeddedCheckout({
                     clientSecret: data.client_secret,
                     onComplete: function () {
-                        if (purchaseModal && purchaseModal.type === "product" && purchaseModal.productId === productId) {
-                            send("refresh_profile");
-                        }
+                        completeExternalPurchase(productId);
                     }
                 });
             });
@@ -322,6 +724,7 @@
                 checkout.mount(host);
             }
         }).catch(function (error) {
+            abandonExternalPurchaseAttempt(productId);
             state.error = error.message === "Checkout is not configured" ? SOW_t("store.checkout_not_configured") : SOW_t("store.checkout_unavailable");
             storeCheckoutProduct = null;
             if (purchaseModal && purchaseModal.type === "product" && purchaseModal.productId === productId) {
@@ -358,8 +761,8 @@
         storeCheckoutProduct = null;
         storeCheckoutRequestId = null;
         storeCheckoutBusy = false;
-        purchaseModal = null;
-        purchaseIntent = null;
+        abandonExternalPurchaseAttempt();
+        dismissPurchaseModal();
         render();
     }
 

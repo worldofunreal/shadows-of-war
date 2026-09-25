@@ -72,13 +72,19 @@ impl SowApp {
         let drift_x = (((seed & 0xff) as f32 / 255.0) - 0.5) * 8.0;
         let flight_distance = 15.0 + ((seed >> 8 & 0xff) as f32 / 255.0) * 15.0;
         let icon_scale = 0.8 + ((seed >> 16 & 0xff) as f32 / 255.0) * 0.6;
+        let (anim_x, anim_y) = self
+            .ui
+            .nameplate_visuals
+            .get(&player_id)
+            .map(|label| (label.to_center[0], label.to_center[1]))
+            .unwrap_or((wx, wy));
         crate::app::DeathNameplateAnimation::enqueue(
             &mut self.ui.death_nameplates,
             crate::app::DeathNameplateAnimation {
                 name,
                 color,
-                world_x: wx,
-                world_y: wy,
+                world_x: anim_x,
+                world_y: anim_y,
                 start_time: now_instant,
                 by_nuke: info.by_nuke,
                 drift_x,

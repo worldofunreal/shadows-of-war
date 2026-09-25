@@ -216,7 +216,7 @@ pub struct MapPointerStart {
     pub x: f64,
     pub y: f64,
     pub is_touch: bool,
-    pub attack_sent: bool,
+    pub action_sent: bool,
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -133,7 +133,9 @@
 
     function leaderById(id) {
         var leaders = state && Array.isArray(state.leaders) ? state.leaders : [];
-        var found = leaders.find(function (leader) { return leader.id === id; });
+        var normalize = function (value) { return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase(); };
+        var wanted = normalize(id);
+        var found = leaders.find(function (leader) { return normalize(leader.id) === wanted; });
         if (found) return found;
         return leaders[0] || {
             id: "Caesar", name: "Caesar", civilization_key: "heroes.civilization_rome", perk_key: "site.leader_caesar_description", slug: "caesar"
