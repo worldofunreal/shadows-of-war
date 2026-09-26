@@ -1267,9 +1267,11 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
         && paths.dist_web.join("play/index.html").is_file()
         && paths.dist_cg.join("index.html").is_file()
         && paths.dist_poki.join("index.html").is_file()
+        && paths.dist_jest.join("index.html").is_file()
         && verify_layout(&paths.dist_web).is_ok()
         && verify_cg_layout(&paths.dist_cg).is_ok()
-        && verify_poki_layout(&paths.dist_poki).is_ok();
+        && verify_poki_layout(&paths.dist_poki).is_ok()
+        && verify_jest_layout(&paths.dist_jest).is_ok();
     if cached {
         println!("==> Web package unchanged — reusing dist");
         return Ok(());
@@ -1290,6 +1292,14 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
         version,
         &maps_cache_bust,
     )?;
+    package_jest(
+        &paths.dist_web,
+        &paths.dist_jest,
+        paths,
+        version,
+        &maps_cache_bust,
+    )?;
+    write_jest_zip(paths)?;
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
     Ok(())
@@ -1297,7 +1307,7 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
 
 pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     input_fingerprint(
-        "web-v8-poki",
+        "web-v9-jest",
         version,
         &[
             &paths.wasm_input,

@@ -989,7 +989,7 @@
                     hudRefs.endgamePortrait.alt = activeLeader.name || SOW_t("hud.leader_avatar");
                 }
                 if (hudRefs.endgameKda) hudRefs.endgameKda.textContent = kdaText;
-                var featuredSkin = window.SOW_PORTAL === "poki" ? null : hud.featured_skin;
+                var featuredSkin = (window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest") ? null : hud.featured_skin;
                 if (hudRefs.endgameStore) hudRefs.endgameStore.classList.toggle("hidden", !featuredSkin);
                 if (featuredSkin) {
                     if (hudRefs.endgameStoreName) hudRefs.endgameStoreName.textContent = featuredSkin.name || SOW_t("store.featured_skin");
@@ -1130,7 +1130,7 @@
             } else if (cmd === "confirm_endgame_leave") {
                 send("return_to_menu");
             } else if (cmd === "open_store") {
-                if (window.SOW_PORTAL === "poki") return;
+                if (window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest") return;
                 window.SOW_open_store_after_match = true;
                 send("return_to_menu");
             } else if (cmd === "continue_observing") {

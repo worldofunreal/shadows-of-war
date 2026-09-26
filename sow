@@ -16,9 +16,10 @@ COMMANDS:
   m, map                Serve the campaign editor locally on port 8777
   l, local              Build WASM + webroot and serve it locally on port 4173
   native                Fast-build and open the native Tauri/WASM game
-  p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
-  a, android           Build the Android AAB and publish it to Google Play alpha
-  help, -h, --help     Show this help message
+   p, prod              Run production build & deploy (WASM + FreeBSD + Azure, no Android)
+   a, android           Build the Android AAB and publish it to Google Play alpha
+   jest                 Build the self-contained Jest bundle + dist/jest.zip (no deploy)
+   help, -h, --help     Show this help message
 
 EXAMPLES:
   ./sow                # Build and open the native desktop client
@@ -26,8 +27,9 @@ EXAMPLES:
   ./sow l              # Build and serve the local web client (Ctrl-C to stop)
   ./sow native         # Build and open the native desktop client
   SOW_NATIVE_RELEASE=1 ./sow  # Compare with optimized WASM in Tauri, without an installer
-  ./sow p              # Production build and deploy to IONOS & Azure
-  ./sow p -v           # Production deploy with public version bump
+   ./sow p              # Production build and deploy to IONOS & Azure
+   ./sow p -v           # Production deploy with public version bump
+   ./sow jest           # Jest bundle + upload zip (upload via console/MCP, never auto)
   ./sow a              # Android AAB + Play alpha upload (each upload restarts Play review)
 EOF
 }
@@ -131,6 +133,10 @@ case "${CMD}" in
     export FASTLANE_SKIP_UPDATE_CHECK=1
     export FASTLANE_DISABLE_COLORS=1
     run_dist android "$@"
+    ;;
+  jest)
+    load_dist_env
+    run_dist jest "$@"
     ;;
   *)
     echo "Unknown command: ${CMD}" >&2

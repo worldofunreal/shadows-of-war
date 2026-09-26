@@ -557,11 +557,11 @@
                         "<div class='sow-menu__queue-countdown' data-live-countdown></div>" +
                         feedback +
                         "<div class='sow-menu__queue-info-table'>" +
-                            (lobby && lobby.host_name ? "<div class='sow-menu__info-row'><span>" + esc(SOW_t("lobbies.host")) + "</span><strong>" + esc(lobby.host_name) + "</strong></div>" : "") +
-                            (isCustom && lobby ? "<div class='sow-menu__info-row'><span>" + esc(SOW_t("lobbies.room_code")) + "</span><div class='sow-menu__code-box'><strong>" + lobby.id + "</strong><button type='button' data-command='copy_lobby_code' data-lobby-id='" + lobby.id + "'>" + esc(SOW_t("lobbies.copy")) + "</button></div></div>" : "") +
-                            (lobby && lobby.bot_count > 0 ? "<div class='sow-menu__info-row'><span>" + esc(SOW_t("lobbies.tribes")) + "</span><strong>" + lobby.bot_count + " (" + esc(lobby.bot_difficulty || SOW_t("lobbies.vanilla")) + ")</strong></div>" : "") +
-                            (lobby && lobby.nation_count > 0 ? "<div class='sow-menu__info-row'><span>" + esc(SOW_t("lobbies.nations")) + "</span><strong>" + lobby.nation_count + "</strong></div>" : "") +
-                            (lobby && lobby.has_password ? "<div class='sow-menu__info-row'><span>" + esc(SOW_t("lobbies.access")) + "</span><strong class='sow-menu__lock-tag'>🔒 " + esc(SOW_t("lobbies.password")) + "</strong></div>" : "") +
+                            (lobby && lobby.host_name ? "<div class='sow-menu__info-row' data-info='host'><span>" + esc(SOW_t("lobbies.host")) + "</span><strong>" + esc(lobby.host_name) + "</strong></div>" : "") +
+                            (isCustom && lobby ? "<div class='sow-menu__info-row' data-info='code'><span>" + esc(SOW_t("lobbies.room_code")) + "</span><div class='sow-menu__code-box'><strong>" + lobby.id + "</strong><button type='button' data-command='copy_lobby_code' data-lobby-id='" + lobby.id + "'>" + esc(SOW_t("lobbies.copy")) + "</button></div></div>" : "") +
+                            (lobby && lobby.bot_count > 0 ? "<div class='sow-menu__info-row' data-info='bots'><span>" + esc(SOW_t("lobbies.tribes")) + "</span><strong>" + lobby.bot_count + " (" + esc(lobby.bot_difficulty || SOW_t("lobbies.vanilla")) + ")</strong></div>" : "") +
+                            (lobby && lobby.nation_count > 0 ? "<div class='sow-menu__info-row' data-info='nations'><span>" + esc(SOW_t("lobbies.nations")) + "</span><strong>" + lobby.nation_count + "</strong></div>" : "") +
+                            (lobby && lobby.has_password ? "<div class='sow-menu__info-row' data-info='access'><span>" + esc(SOW_t("lobbies.access")) + "</span><strong class='sow-menu__lock-tag'>🔒 " + esc(SOW_t("lobbies.password")) + "</strong></div>" : "") +
                         "</div>" +
                         "<div class='sow-menu__queue-action-bar'>" +
                             (isHost ? "<button class='sow-menu__primary sow-menu__queue-start-btn' type='button' data-command='start_private' data-lobby-id='" + lobby.id + "'>" + esc(SOW_t("lobbies.start_game")) + " <span>↗</span></button>" : "") +

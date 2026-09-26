@@ -203,8 +203,12 @@
 
 .sow-menu__queue-roster-wrap {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     max-height: calc(100vh - 280px);
+    max-height: calc(100dvh - 280px);
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 .sow-menu__teams-roster {
@@ -375,11 +379,39 @@
             grid-template-columns: 1fr;
             gap: 10px;
         }
-    
+
         .sow-menu__main--queue {
             display: flex;
             flex-direction: column;
             gap: 14px;
+        }
+
+    /* Lobby only: one scroll zone — the player list. The screen itself never scrolls. */
+    #sow-menu[data-screen="queue"] .sow-menu__main--queue {
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-summary-card {
+            flex: 0 0 auto;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-players-card {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-roster-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            max-height: none;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
         }
 }
 
@@ -405,6 +437,43 @@
             z-index: 4;
             padding: 10px 0 max(10px, env(safe-area-inset-bottom));
             background: linear-gradient(180deg, transparent, rgba(8, 10, 14, 0.98) 24%);
+        }
+
+    /* Lobby only, small portrait: compact text above the list. Map hero untouched. */
+    #sow-menu[data-screen="queue"] .sow-menu__main--queue {
+            overflow: hidden;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-countdown,
+    #sow-menu[data-screen="queue"] .sow-menu__queue-info-table [data-info="bots"],
+    #sow-menu[data-screen="queue"] .sow-menu__queue-info-table [data-info="nations"] {
+            display: none;
+        }
+
+    /* Lobby only, small portrait: less air between map and buttons. Map hero untouched. */
+    #sow-menu[data-screen="queue"] .sow-menu__queue-summary-card {
+            gap: 8px;
+            padding: 12px;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-info-table {
+            gap: 4px;
+            padding: 4px 0;
+            border: 0;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-action-bar {
+            gap: 6px;
+            padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+        }
+
+    /* Lobby only, small portrait: tighter PLAYERS header, more room for the roster. */
+    #sow-menu[data-screen="queue"] .sow-menu__queue-players-card {
+            padding: 12px;
+        }
+
+    #sow-menu[data-screen="queue"] .sow-menu__queue-players-head {
+            margin-bottom: 8px;
         }
 }
 

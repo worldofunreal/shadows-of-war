@@ -102,6 +102,7 @@ struct Paths {
     dist_web: PathBuf,
     dist_cg: PathBuf,
     dist_poki: PathBuf,
+    dist_jest: PathBuf,
     native_web: PathBuf,
     wasm_input: PathBuf,
     wasm_cache: PathBuf,
@@ -128,6 +129,7 @@ impl Paths {
             dist_web: root.join("dist/web"),
             dist_cg: root.join("dist/crazygames"),
             dist_poki: root.join("dist/poki"),
+            dist_jest: root.join("dist/jest"),
             native_web: t.join("sow-native-dev/web"),
             target_dir: t,
             root,
@@ -223,6 +225,7 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         &src.join("gameplay/currency"),
         &dst.join("gameplay/currency"),
     )?;
+    copy_dir(&src.join("campaign"), &dst.join("campaign"))?;
     let mobile_nav = dst.join("shell/mobile-nav");
     fs::create_dir_all(&mobile_nav)?;
     for file in ["heroes.webp", "battle.webp", "profile.webp"] {
@@ -773,6 +776,7 @@ enum WebTarget {
     Native,
     CrazyGames,
     Poki,
+    Jest,
 }
 
 fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
@@ -786,7 +790,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     } = build;
     let cg = target == WebTarget::CrazyGames;
     let poki = target == WebTarget::Poki;
-    let portal = cg || poki;
+    let jest = target == WebTarget::Jest;
+    let portal = cg || poki || jest;
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
@@ -839,7 +844,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 // but the whitelist bundle ships no assets — point straight at
                 // the production CDN (served with ACAO for cross-origin reads).
                 "https://shadowsofwar.io/assets/shell/loader/"
-            } else if poki {
+            } else if poki || jest {
                 "./assets/shell/loader/"
             } else {
                 "/assets/shell/loader/"
@@ -880,7 +885,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 WebTarget::CrazyGames => {
                     "if ('serviceWorker' in navigator && !isPortal) { navigator.serviceWorker.register('sw.js', { scope: '/' }).catch(function (err) { console.warn('Service worker registration failed:', err); }); }"
                 }
-                WebTarget::Poki => "",
+                WebTarget::Poki | WebTarget::Jest => "",
             },
         )
         .replace(
@@ -910,7 +915,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
                 }
             },
         );
-    if poki {
+    if poki || jest {
         for (begin, end) in [
             (
                 "/* POKI_ANDROID_AUTH_BEGIN */",
@@ -933,7 +938,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     fs::create_dir_all(index.parent().unwrap())?;
     fs::write(&index, &html)?;
     let mut loader = fs::read_to_string(paths.shell.join("loader.js"))?;
-    if poki {
+    if poki || jest {
         loader = strip_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
@@ -972,6 +977,20 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.shell.js",
             "main_menu.hud.js",
         ]
+    } else if jest {
+        vec![
+            "sow-i18n.js",
+            "sow-dropdown.js",
+            "main_menu.core.js",
+            "main_menu.motion.js",
+            "main_menu.lobbies.js",
+            "main_menu.heroes.js",
+            "main_menu.profile.js",
+            "main_menu.jest.js",
+            "main_menu.tutorial.js",
+            "main_menu.shell.js",
+            "main_menu.hud.js",
+        ]
     } else {
         vec![
             "sow-i18n.js",
@@ -989,7 +1008,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     };
     let mut menu_js = read_shell_bundle(&paths.shell, "main_menu.js", &menu_parts)?
         .replace("</script>", "<\\/script>");
-    if poki {
+    if poki || jest {
         menu_js = strip_marked_section(
             &menu_js,
             "/* POKI_RENDER_REPLACEMENT_BEGIN */",
@@ -1081,7 +1100,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         bail!("index.html: no main menu JS injection point");
     }
     fh = fh.replacen(menu_js_marker, &menu_js, 1);
-    if poki {
+    if poki || jest {
         fh = fh
             .replace("href=\"/fonts/fonts.css\"", "href=\"fonts/fonts.css\"")
             .replace("href=\"/manifest.webmanifest\"", "href=\"manifest.webmanifest\"")
@@ -2004,6 +2023,8 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "fonts/noto-sans-cjk-regular.ttc",
         "assets/shell/loader/loader_empty.webp",
         "assets/shell/loader/loader_full.webp",
+        "assets/campaign/boudica.json",
+        "assets/campaign/boudica.triggers.json",
         "maps/catalog.bin",
         "maps/world/map.bin.br",
     ] {
@@ -2511,6 +2532,10 @@ fn package_cg(
         out.join("sow_client_bg.wasm"),
     )?;
     copy_shell(paths, out)?;
+    let stale_bridge = out.join("sdk/jest_portals.js");
+    if stale_bridge.is_file() {
+        fs::remove_file(stale_bridge)?;
+    }
     export_locales(out)?;
     write_sw(out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
     fs::write(
@@ -2606,6 +2631,10 @@ fn package_poki(
     copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
     copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
     copy_shell(paths, out)?;
+    let stale_bridge = out.join("sdk/jest_portals.js");
+    if stale_bridge.is_file() {
+        fs::remove_file(stale_bridge)?;
+    }
     optimize_poki_thumbnail(
         &paths.assets_shell.join("brand/app-icon.png"),
         &out.parent()
@@ -2696,6 +2725,271 @@ fn package_poki(
     fs::write(&index, lines.join("\n") + "\n")?;
     verify_poki_layout(out)?;
     println!("✅ Poki bundle ready (self-contained): {}", out.display());
+    Ok(())
+}
+
+fn verify_jest_layout(dir: &Path) -> Result<()> {
+    verify_exported_locales(dir)?;
+    for required in [
+        "index.html",
+        "sow_client.js",
+        "sow_client_bg.wasm",
+        "sow.svg",
+        "loader.js",
+        "game-manifest.json",
+        "manifest.webmanifest",
+        "sdk/store_portals.js",
+        "fonts/fonts.css",
+        "fonts/work-sans-latin.woff2",
+        "fonts/noto-sans-regular.ttf",
+        "fonts/noto-sans-arabic-regular.ttf",
+        "fonts/noto-sans-cjk-regular.ttc",
+        "assets/shell/loader/loader_empty.webp",
+        "assets/shell/loader/loader_full.webp",
+        "assets/campaign/boudica.json",
+        "assets/campaign/boudica.triggers.json",
+        "maps/catalog.bin",
+        "maps/world/map.bin.br",
+    ] {
+        if !dir.join(required).is_file() {
+            bail!("jest bundle missing {required}");
+        }
+    }
+    for forbidden in [
+        "admin",
+        "play",
+        "site",
+        ".well-known",
+        "sw.js",
+        "assets/gameplay/store",
+        "assets/gameplay/skins",
+        "assets/shell/mobile-nav/store.webp",
+        "sdk/poki_portals.js",
+        "sdk/jest_portals.js",
+    ] {
+        if dir.join(forbidden).exists() {
+            bail!("jest bundle must not contain {forbidden}");
+        }
+    }
+    let html = fs::read_to_string(dir.join("index.html"))?;
+    let loader = fs::read_to_string(dir.join("loader.js"))?;
+    let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
+    for needle in [
+        "https://cdn.jest.com/sdk/latest/jestsdk.js",
+        "window.SOW_PORTAL = \"jest\"",
+        "window.SOW_MAPS_URL = \"./maps\"",
+        "window.SOW_ASSETS_URL = \"./assets\"",
+        "window.SOW_DISABLE_CHAT = true",
+        "main_menu.jest.js",
+        "window.JestSDK",
+        "markGameLoaded",
+        "getPlayer",
+        "scheduleNotification",
+        "SOW_jestLogin",
+    ] {
+        if !html.contains(needle) && !sdk.contains(needle) {
+            bail!("jest bundle missing {needle}");
+        }
+    }
+    // Jest has no ads: the ad-gated portal hooks must be fully absent.
+    // (SOW_portalGameplayStart/Stop stay defined as no-ops: the Rust
+    // client calls them on match boundaries. The loader's unreachable
+    // poki-measure branch rides along dead, same as in the Poki bundle.)
+    for forbidden in [
+        "SOW_ENABLE_PORTAL_ADS",
+        "commercialBreak",
+        "rewardedBreak",
+        "PokiSDK",
+        "openExternalLink",
+        "main_menu.poki.js",
+        "main_menu.store.js",
+    ] {
+        if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
+            bail!("jest bundle contains forbidden content {forbidden}");
+        }
+    }
+    if html.matches("function selfCreds()").count() != 1 {
+        bail!("jest bundle must define shared selfCreds exactly once");
+    }
+    for required in [
+        "<canvas id=\"blade\"",
+        "tabindex=\"0\"",
+        "touch-action: none",
+    ] {
+        if !html.contains(required) {
+            bail!("jest bundle missing responsive/focus contract {required}");
+        }
+    }
+    let manifest = fs::read_to_string(dir.join("manifest.webmanifest"))?;
+    if !manifest.contains("\"display\": \"fullscreen\"") {
+        bail!("jest manifest missing responsive/focus contract \"display\": \"fullscreen\"");
+    }
+    if html.contains("<iframe") || html.contains("href=\"https://") {
+        bail!("jest bundle must not own an iframe or direct external href");
+    }
+    for forbidden in POKI_FORBIDDEN_MARKERS.iter().copied().chain([
+        "SOW_MAPS_URL = \"https://",
+        "SOW_ASSETS_URL = \"https://",
+        "register('/sw.js'",
+    ]) {
+        if html.contains(forbidden) || loader.contains(forbidden) || sdk.contains(forbidden) {
+            bail!("jest bundle contains forbidden content {forbidden}");
+        }
+    }
+    if loader.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || loader.contains("/event") {
+        bail!("Jest loader contains first-party analytics");
+    }
+    if html.contains("SOW_FIRST_PARTY_ANALYTICS_BEGIN") || html.contains("/event") {
+        bail!("Jest index.html contains first-party analytics");
+    }
+    if html.matches("window.SOW_PORTAL = \"jest\";").count() != 1 {
+        bail!("Jest index.html must contain exactly one portal boot block");
+    }
+    if html.contains("/* PORTAL_BOOT_SLOT */") {
+        bail!("Jest index.html still contains the portal boot marker");
+    }
+    for entry in fs::read_dir(dir.join("maps"))? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() && entry.path().join("map.bin").exists() {
+            bail!(
+                "Jest bundle contains an uncompressed map: {}",
+                entry.path().display()
+            );
+        }
+    }
+    println!("✅ Jest layout OK ({})", dir.display());
+    Ok(())
+}
+
+fn package_jest(
+    play_dir: &Path,
+    out: &Path,
+    paths: &Paths,
+    version: &str,
+    maps_cache_bust: &str,
+) -> Result<()> {
+    let (mut jh, mut wh) = (String::new(), String::new());
+    for e in fs::read_dir(play_dir)? {
+        let n = e?.file_name().to_string_lossy().into_owned();
+        if n.starts_with("sow_client_") && n.ends_with(".js") && !n.ends_with(".br") {
+            jh = n
+                .trim_start_matches("sow_client_")
+                .trim_end_matches(".js")
+                .to_string();
+        }
+        if n.ends_with("_bg.wasm") && !n.ends_with(".br") {
+            wh = n
+                .trim_end_matches("_bg.wasm")
+                .trim_start_matches("sow_client_")
+                .to_string();
+        }
+    }
+    if jh.is_empty() || wh.is_empty() {
+        bail!("Jest package is missing hashed client artifacts");
+    }
+
+    if out.exists() {
+        fs::remove_dir_all(out)?;
+    }
+    fs::create_dir_all(out)?;
+    fs::copy(
+        play_dir.join(format!("sow_client_{jh}.js")),
+        out.join("sow_client.js"),
+    )?;
+    fs::copy(
+        play_dir.join(format!("sow_client_{wh}_bg.wasm")),
+        out.join("sow_client_bg.wasm"),
+    )?;
+
+    copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
+    copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
+    copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
+    copy_shell(paths, out)?;
+    fs::write(
+        out.join("manifest.webmanifest"),
+        r##"{
+  "name": "Shadows of War",
+  "short_name": "Shadows of War",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "icons": [{"src": "sow.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}
+"##,
+    )?;
+    let loader_path = out.join("loader.js");
+    let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
+    fs::write(
+        &loader_path,
+        strip_marked_section(
+            &loader,
+            "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
+            "/* SOW_FIRST_PARTY_ANALYTICS_END */",
+        )?,
+    )?;
+    fs::copy(
+        paths.shell.join("sdk/jest_portals.js"),
+        out.join("sdk/store_portals.js"),
+    )?;
+    for stale in ["sdk/jest_portals.js", "sdk/poki_portals.js"] {
+        let stale = out.join(stale);
+        if stale.is_file() {
+            fs::remove_file(stale)?;
+        }
+    }
+    export_locales(out)?;
+    write_manifest(out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    build_index(
+        paths,
+        out,
+        IndexBuild {
+            version,
+            js: "sow_client.js",
+            wasm: "sow_client_bg.wasm",
+            ts: &jh,
+            maps_cache_bust,
+            target: WebTarget::Jest,
+        },
+    )?;
+
+    let index = out.join("index.html");
+    let html = fs::read_to_string(&index)?;
+    let mut lines = Vec::new();
+    let mut sdk = false;
+    let mut boot = false;
+    for line in html.lines() {
+        if line.contains("PORTAL_SDK_SLOT") {
+            lines.push(
+                "    <script src=\"https://cdn.jest.com/sdk/latest/jestsdk.js\"></script>"
+                    .to_string(),
+            );
+            sdk = true;
+        } else if line.trim() == "/* PORTAL_BOOT_SLOT */" {
+            lines.push(
+                concat!(
+                    "        window.SOW_PORTAL = \"jest\"; ",
+                    "window.SOW_WS_URL = \"wss://shadowsofwar.io/ws/\"; ",
+                    "window.SOW_MAPS_URL = \"./maps\"; ",
+                    "window.SOW_ASSETS_URL = \"./assets\"; ",
+                    "window.SOW_DATABASE_URL = \"https://shadowsofwar.io/api\"; ",
+                    "window.SOW_DISABLE_CHAT = true;"
+                )
+                .to_string(),
+            );
+            boot = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    if !sdk || !boot {
+        bail!("Jest index.html is missing portal slots (sdk={sdk} boot={boot})");
+    }
+    fs::write(&index, lines.join("\n") + "\n")?;
+    verify_jest_layout(out)?;
+    println!("✅ Jest bundle ready (self-contained): {}", out.display());
     Ok(())
 }
 
@@ -3014,6 +3308,55 @@ fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()
         version,
         &maps_cache_bust,
     )?;
+    Ok(())
+}
+
+/// `./sow jest` — Jest-only track, decoupled from `./sow p` on purpose.
+/// Builds the self-contained Jest bundle (dist/jest) and zips it with
+/// index.html at the zip root. Upload stays outside this command: Jest
+/// console Versions tab or the Jest MCP upload flow.
+fn cmd_jest(paths: &Paths) -> Result<()> {
+    let version = read_version(paths)?;
+    println!("==> Building Jest bundle {version}");
+    compile_wasm(paths, false)?;
+    package_self(paths, &paths.dist_web, &version, true)?;
+    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
+    package_jest(
+        &paths.dist_web,
+        &paths.dist_jest,
+        paths,
+        &version,
+        &maps_cache_bust,
+    )?;
+    write_jest_zip(paths)?;
+    println!("✅ Jest {version} ready: upload dist/jest.zip as a new console Version");
+    Ok(())
+}
+
+fn write_jest_zip(paths: &Paths) -> Result<()> {
+    let zip = paths.root.join("dist/jest.zip");
+    if zip.is_file() {
+        fs::remove_file(&zip)?;
+    }
+    // No `zip` binary and no zip crate: python3's stdlib writes the archive
+    // with index.html at the root (portals reject zips wrapped in a folder).
+    let script = "import os, sys, zipfile\nroot, dest = sys.argv[1], sys.argv[2]\nwith zipfile.ZipFile(dest, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:\n    entries = []\n    for base, _, files in os.walk(root):\n        for name in files:\n            full = os.path.join(base, name)\n            entries.append((os.path.relpath(full, root), full))\n    for arc, full in sorted(entries):\n        z.write(full, arc)\n";
+    run(
+        "python3",
+        &[
+            "-c",
+            &script,
+            &paths.dist_jest.to_string_lossy(),
+            &zip.to_string_lossy(),
+        ],
+        None,
+    )?;
+    require_file(&zip, "Jest upload zip")?;
+    println!(
+        "  Jest zip ready: {} (sha256 {})",
+        zip.display(),
+        file_sha256(&zip)?
+    );
     Ok(())
 }
 
@@ -3391,10 +3734,11 @@ fn main() -> Result<()> {
     match cmd.as_str() {
         "p" | "prod" => prod::execute(&paths, bump),
         "a" | "android" => prod::execute_android(&paths),
+        "jest" => cmd_jest(&paths),
         "native" => cmd_native(&paths),
         "local" | "l" | "" => cmd_local(&paths),
         _ => {
-            eprintln!("Usage: ./sow [native|l|p|a]");
+            eprintln!("Usage: ./sow [native|l|p|a|jest]");
             std::process::exit(1);
         }
     }
@@ -3461,11 +3805,22 @@ mod tests {
             "main_menu.lobbies.js",
             "main_menu.store.js",
             "main_menu.poki.js",
+            "main_menu.jest.js",
             "main_menu.heroes.js",
             "main_menu.profile.js",
             "main_menu.tutorial.js",
             "main_menu.shell.js",
             "main_menu.hud.js",
+        ] {
+            assert!(
+                root.join("sow-web/shell").join(required).is_file(),
+                "Required game shell source file missing: {required}"
+            );
+        }
+        for required in [
+            "sdk/store_portals.js",
+            "sdk/poki_portals.js",
+            "sdk/jest_portals.js",
         ] {
             assert!(
                 root.join("sow-web/shell").join(required).is_file(),
@@ -3536,6 +3891,45 @@ mod tests {
         assert!(!html.contains("register('/sw.js'"));
         for forbidden in POKI_FORBIDDEN_MARKERS {
             assert!(!html.contains(forbidden), "Poki shell contains {forbidden}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_index_inlines_jest_shell_without_store_or_service_worker() -> Result<()> {
+        let paths = Paths::discover()?;
+        let out = tempfile::tempdir()?;
+        build_index(
+            &paths,
+            out.path(),
+            IndexBuild {
+                version: "test",
+                js: "sow_client.js",
+                wasm: "sow_client_bg.wasm",
+                ts: "test",
+                maps_cache_bust: "test-maps",
+                target: WebTarget::Jest,
+            },
+        )?;
+        let html = fs::read_to_string(out.path().join("index.html"))?;
+        assert!(html.contains("href=\"fonts/fonts.css\""));
+        assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
+        assert!(html.contains("main_menu.jest.js"));
+        assert!(html.contains("jestLocaleOptions"));
+        assert!(!html.contains("main_menu.store.js"));
+        assert!(!html.contains("main_menu.poki.js"));
+        assert!(!html.contains("SOW_startWouOAuth"));
+        assert_eq!(html.matches("function selfCreds()").count(), 1);
+        assert!(!html.contains("<iframe"));
+        assert!(!html.contains("href=\"https://"));
+        assert!(!html.contains("allowfullscreen"));
+        assert!(!html.contains("web-share"));
+        assert!(!html.contains("focus-without-user-activation"));
+        assert!(!html.contains("monetization"));
+        assert!(!html.contains("__SOW_SERVICE_WORKER_SLOT__"));
+        assert!(!html.contains("register('/sw.js'"));
+        for forbidden in POKI_FORBIDDEN_MARKERS {
+            assert!(!html.contains(forbidden), "Jest shell contains {forbidden}");
         }
         Ok(())
     }
