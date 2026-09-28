@@ -9,6 +9,22 @@
     justify-content: center;
 }
 
+.sow-campaign__intro h1 {
+    max-width: 7ch;
+    font-size: clamp(38px, 4.4vw, 64px);
+    letter-spacing: -.045em;
+    line-height: .86;
+    text-wrap: balance;
+    text-shadow: 0 8px 34px #0009;
+}
+
+.sow-campaign__intro .sow-menu__secondary {
+    width: fit-content;
+    min-height: 42px;
+    margin-top: 34px;
+    padding-inline: 14px;
+}
+
 .sow-campaign__battlefield {
     align-items: stretch;
     justify-content: flex-start;
@@ -44,53 +60,179 @@
 }
 
 .sow-campaign__episode {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
     min-width: 0;
-    padding: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-inline-start: 3px solid var(--sow-line);
-    border-radius: 7px;
-    background: rgba(10, 12, 16, 0.82);
+    min-height: 178px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: linear-gradient(118deg, #151b1b 0%, #0d1113 72%);
+    box-shadow: 0 10px 28px #0003;
+    transition: border-color 160ms, background 160ms, transform 160ms, box-shadow 160ms;
 }
 
-.sow-campaign__episode.is-unlocked,
-.sow-campaign__episode.is-complete {
-    border-inline-start-color: var(--sow-gold);
+.sow-campaign__episode-art {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 24% 50%, #4a4840, #15191a 78%);
+}
+
+.sow-campaign__episode-art::after {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(90deg, #090d10f5 0%, #0b1112e8 38%, #0b1112a8 72%, #0b111258 100%), linear-gradient(0deg, #090d10b8, transparent 66%);
+    content: "";
+}
+
+.sow-campaign__episode-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: filter 180ms, transform 240ms;
+}
+
+.sow-campaign__map-art {
+    filter: saturate(.68) brightness(.58) contrast(1.08);
+    transition: filter 180ms, transform 240ms;
+}
+
+.sow-campaign__episode-art .sow-campaign__leader-art {
+    inset: 50% auto auto 28px;
+    width: 88px;
+    height: 88px;
+    transform: translateY(-50%);
+    object-position: 50% 24%;
+    border: 1px solid #d7bd7c;
+    border-radius: 50%;
+    box-shadow: 0 0 0 5px #0b1010c7, 0 0 0 6px #c9ae7155, 0 10px 28px #000a;
+    z-index: 2;
+}
+
+.sow-campaign__episode-copy {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    margin-left: 132px;
+    padding: 16px 18px 14px 0;
+}
+
+.sow-campaign__episode:hover,
+.sow-campaign__episode:focus-within {
+    transform: translateY(-2px);
+    border-color: #c9ae7170;
+    box-shadow: 0 16px 36px #0005;
+}
+
+.sow-campaign__episode:hover .sow-campaign__episode-art img,
+.sow-campaign__episode:focus-within .sow-campaign__episode-art img {
+    filter: saturate(.86) brightness(.62) contrast(1.06);
+    transform: scale(1.035);
+}
+
+.sow-campaign__episode:hover .sow-campaign__leader-art,
+.sow-campaign__episode:focus-within .sow-campaign__leader-art {
+    filter: saturate(1) contrast(1.04);
+    transform: translateY(-50%) scale(1.035);
+}
+
+.sow-campaign__episode.is-next {
+    border-color: #c9ae7199;
+    background: linear-gradient(118deg, #24251d 0%, #101414 72%);
+    box-shadow: 0 0 0 1px #c9ae7112, 0 14px 38px #0005;
+}
+
+.sow-campaign__episode.is-next::before {
+    position: absolute;
+    z-index: 4;
+    inset: 16px auto 16px 0;
+    width: 2px;
+    background: linear-gradient(180deg, transparent, #f3c96e 24%, #f3c96e 76%, transparent);
+    box-shadow: 0 0 14px #f3c96e99;
+    content: "";
+    pointer-events: none;
 }
 
 .sow-campaign__episode.is-complete {
-    background: rgba(243, 177, 43, 0.08);
+    border-color: #c9ae714d;
 }
 
 .sow-campaign__episode.is-locked {
-    opacity: 0.55;
+    background: linear-gradient(118deg, #15191a 0%, #0e1112 72%);
+}
+
+.sow-campaign__episode.is-locked .sow-campaign__episode-art img {
+    filter: grayscale(.72) saturate(.55) brightness(.7);
 }
 
 .sow-campaign__episode-status {
-    margin-bottom: 12px;
-    color: var(--sow-gold);
-    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 6px;
+    color: #c9ae71;
+    font-size: 9px;
     font-weight: 900;
-    letter-spacing: 0.16em;
-}
-
-.sow-campaign__episode h2 {
-    margin: 0 0 6px;
-    color: #fff;
-    font-size: clamp(18px, 2vw, 26px);
-    line-height: 1;
+    letter-spacing: 0.14em;
+    line-height: 1.2;
     text-transform: uppercase;
 }
 
+.sow-campaign__episode-status::before {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 10px currentColor;
+    content: "";
+}
+
+.sow-campaign__episode.is-locked .sow-campaign__episode-status {
+    color: #909795;
+}
+
+.sow-campaign__episode.is-locked .sow-campaign__episode-status::before {
+    background: transparent;
+    box-shadow: none;
+}
+
+.sow-campaign__episode h2 {
+    margin: 0 0 5px;
+    color: #f4f0e7;
+    font-size: clamp(17px, 1.6vw, 22px);
+    font-weight: 760;
+    line-height: 1.08;
+    letter-spacing: -.025em;
+    text-wrap: balance;
+}
+
 .sow-campaign__episode p {
-    min-height: 34px;
+    min-height: 0;
     margin: 0;
     color: var(--sow-muted);
-    font-size: 11px;
-    line-height: 1.45;
+    font-size: 10px;
+    line-height: 1.4;
 }
 
 .sow-campaign__play {
-    margin-top: 18px;
+    margin-top: auto;
+    width: fit-content;
+    min-width: min(190px, 100%);
+    padding-block: 8px;
+    font-size: 10px;
 }
 
 .sow-campaign__play:disabled {
@@ -122,6 +264,15 @@
         border-inline-start: 0;
     }
 
+    .sow-campaign__intro h1 {
+        max-width: none;
+        font-size: clamp(30px, 8vw, 44px);
+    }
+
+    .sow-campaign__intro .sow-menu__secondary {
+        margin-top: 18px;
+    }
+
     #sow-menu[data-screen="campaign"] .sow-campaign__battlefield {
         flex: 1 1 auto;
         padding: 0 14px 14px;
@@ -141,5 +292,28 @@
     .sow-campaign__episodes {
         grid-template-columns: 1fr;
     }
-}
 
+    .sow-campaign__episode {
+        min-height: 164px;
+    }
+
+    .sow-campaign__episode-art .sow-campaign__leader-art {
+        inset: 50% auto auto 18px;
+        width: 68px;
+        height: 68px;
+    }
+
+    .sow-campaign__episode-copy {
+        margin-left: 102px;
+        padding: 13px 12px 12px 0;
+    }
+
+    .sow-campaign__episode h2 {
+        font-size: clamp(16px, 4.6vw, 20px);
+    }
+
+    .sow-campaign__play {
+        min-height: 40px;
+        min-width: min(170px, 100%);
+    }
+}

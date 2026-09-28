@@ -1,109 +1,363 @@
 {
-  "version": 1,
+  "version": 2,
   "episode_id": "boudica",
+  "default_locale": "en",
   "settings": {
     "buildings_enabled": false,
     "starting_troops": 1000
   },
+  "entry": "boudica_rise_of_the_iceni_intro",
+  "menu_guide": {
+    "entry": "boudica_return_campaign",
+    "dismissible": true
+  },
+  "strings": {
+    "en": {
+      "tutorial.boudica_menu_campaign_title": "Campaigns",
+      "tutorial.boudica_menu_campaign_hint": "Open Campaigns to continue the story.",
+      "tutorial.boudica_menu_replay_title": "Replay the tutorial",
+      "tutorial.boudica_menu_replay_hint": "Choose Boudica to play this tutorial again.",
+      "tutorial.boudica_menu_ready_title": "You're ready",
+      "tutorial.boudica_menu_ready_body": "Continue the campaign, replay this tutorial, or jump into multiplayer."
+    },
+    "es": {
+      "tutorial.boudica_menu_campaign_title": "Campañas",
+      "tutorial.boudica_menu_campaign_hint": "Abre Campañas para continuar la historia.",
+      "tutorial.boudica_menu_replay_title": "Repetir el tutorial",
+      "tutorial.boudica_menu_replay_hint": "Elige a Boudica para volver a jugar este tutorial.",
+      "tutorial.boudica_menu_ready_title": "Ya estás listo",
+      "tutorial.boudica_menu_ready_body": "Continúa la campaña, repite este tutorial o entra al multijugador."
+    }
+  },
+  "speakers": {
+    "boudica": {
+      "name": "Boudica",
+      "avatar": "boudica"
+    }
+  },
   "steps": [
     {
-      "id": "boudica_rise_of_the_iceni",
-      "mechanic": "expansion",
-      "trigger": { "type": "territory", "value": 256, "mode": "gained" },
+      "id": "boudica_rise_of_the_iceni_intro",
+      "type": "scene",
       "title_key": "tutorial.boudica_rise_title",
       "body_key": "tutorial.boudica_rise_body",
+      "speaker": "boudica",
+      "presentation": "chapter",
+      "next": "boudica_rise_of_the_iceni"
+    },
+    {
+      "id": "boudica_rise_of_the_iceni",
+      "type": "objective",
+      "title_key": "tutorial.boudica_rise_title",
       "hint_key": "tutorial.boudica_rise_hint",
-      "marker": { "target": "player" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "territory",
+        "value": 256,
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap"
+      },
+      "next": "boudica_grow_the_warband_intro"
+    },
+    {
+      "id": "boudica_grow_the_warband_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_warband_title",
+      "body_key": "tutorial.boudica_warband_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_grow_the_warband"
     },
     {
       "id": "boudica_grow_the_warband",
-      "mechanic": "expansion",
-      "trigger": { "type": "territory", "value": 1024, "mode": "gained" },
+      "type": "objective",
       "title_key": "tutorial.boudica_warband_title",
-      "body_key": "tutorial.boudica_warband_body",
       "hint_key": "tutorial.boudica_warband_hint",
-      "marker": { "target": "player" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "territory",
+        "value": 1024,
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap"
+      },
+      "next": "boudica_first_contact_intro"
+    },
+    {
+      "id": "boudica_first_contact_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_contact_title",
+      "body_key": "tutorial.boudica_contact_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_first_contact"
     },
     {
       "id": "boudica_first_contact",
-      "mechanic": "attack",
-      "trigger": { "type": "kills", "value": 1 },
+      "type": "objective",
       "title_key": "tutorial.boudica_contact_title",
-      "body_key": "tutorial.boudica_contact_body",
       "hint_key": "tutorial.boudica_contact_hint",
-      "marker": { "target": "player" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "kills",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "assault",
+        "gesture": "tap"
+      },
+      "next": "boudica_unite_the_east_intro"
+    },
+    {
+      "id": "boudica_unite_the_east_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_unite_title",
+      "body_key": "tutorial.boudica_unite_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_unite_the_east"
     },
     {
       "id": "boudica_unite_the_east",
-      "mechanic": "attack",
-      "trigger": { "type": "kills", "value": 4 },
+      "type": "objective",
       "title_key": "tutorial.boudica_unite_title",
-      "body_key": "tutorial.boudica_unite_body",
       "hint_key": "tutorial.boudica_unite_hint",
-      "marker": { "target": "player" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "kills",
+        "value": 4,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "assault",
+        "gesture": "tap"
+      },
+      "next": "boudica_camulodunum_intro"
+    },
+    {
+      "id": "boudica_camulodunum_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_camulodunum_title",
+      "body_key": "tutorial.boudica_camulodunum_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_camulodunum"
     },
     {
       "id": "boudica_camulodunum",
-      "mechanic": "siege",
-      "trigger": { "type": "defeated", "target": "Camulodunum" },
+      "type": "objective",
       "title_key": "tutorial.boudica_camulodunum_title",
-      "body_key": "tutorial.boudica_camulodunum_body",
       "hint_key": "tutorial.boudica_camulodunum_hint",
-      "marker": { "target": "Camulodunum" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "Camulodunum",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Camulodunum"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_londinium_intro"
+    },
+    {
+      "id": "boudica_londinium_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_londinium_title",
+      "body_key": "tutorial.boudica_londinium_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_londinium"
     },
     {
       "id": "boudica_londinium",
-      "mechanic": "siege",
-      "trigger": { "type": "defeated", "target": "Londinium" },
+      "type": "objective",
       "title_key": "tutorial.boudica_londinium_title",
-      "body_key": "tutorial.boudica_londinium_body",
       "hint_key": "tutorial.boudica_londinium_hint",
-      "marker": { "target": "Londinium" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "Londinium",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Londinium"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_verulamium_intro"
+    },
+    {
+      "id": "boudica_verulamium_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_verulamium_title",
+      "body_key": "tutorial.boudica_verulamium_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_verulamium"
     },
     {
       "id": "boudica_verulamium",
-      "mechanic": "siege",
-      "trigger": { "type": "defeated", "target": "Verulamium" },
+      "type": "objective",
       "title_key": "tutorial.boudica_verulamium_title",
-      "body_key": "tutorial.boudica_verulamium_body",
       "hint_key": "tutorial.boudica_verulamium_hint",
-      "marker": { "target": "Verulamium" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "Verulamium",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Verulamium"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_ninth_legion_intro"
+    },
+    {
+      "id": "boudica_ninth_legion_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_ninth_title",
+      "body_key": "tutorial.boudica_ninth_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_ninth_legion"
     },
     {
       "id": "boudica_ninth_legion",
-      "mechanic": "attack",
-      "trigger": { "type": "defeated", "target": "Legio IX Hispana" },
+      "type": "objective",
       "title_key": "tutorial.boudica_ninth_title",
-      "body_key": "tutorial.boudica_ninth_body",
       "hint_key": "tutorial.boudica_ninth_hint",
-      "marker": { "target": "Legio IX Hispana" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "Legio IX Hispana",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Legio IX Hispana"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_final_battle_intro"
+    },
+    {
+      "id": "boudica_final_battle_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_final_title",
+      "body_key": "tutorial.boudica_final_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_final_battle"
     },
     {
       "id": "boudica_final_battle",
-      "mechanic": "attack",
-      "trigger": { "type": "defeated", "target": "Legio XIV Gemina" },
+      "type": "objective",
       "title_key": "tutorial.boudica_final_title",
-      "body_key": "tutorial.boudica_final_body",
       "hint_key": "tutorial.boudica_final_hint",
-      "marker": { "target": "Legio XIV Gemina" },
-      "on_enter": [],
-      "on_complete": []
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "Legio XIV Gemina",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Legio XIV Gemina"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_end"
+    },
+    {
+      "id": "boudica_end",
+      "type": "end",
+      "title_key": "tutorial.complete",
+      "speaker": "boudica",
+      "presentation": "chapter"
+    },
+    {
+      "id": "boudica_return_campaign",
+      "type": "guide",
+      "title_key": "tutorial.boudica_menu_campaign_title",
+      "hint_key": "tutorial.boudica_menu_campaign_hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_campaign",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_campaign",
+        "gesture": "tap"
+      },
+      "next": "boudica_return_replay"
+    },
+    {
+      "id": "boudica_return_replay",
+      "type": "guide",
+      "title_key": "tutorial.boudica_menu_replay_title",
+      "hint_key": "tutorial.boudica_menu_replay_hint",
+      "trigger": {
+        "type": "ui",
+        "action": "campaign_replay",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "campaign_replay",
+        "gesture": "tap"
+      },
+      "next": "boudica_return_end"
+    },
+    {
+      "id": "boudica_return_end",
+      "type": "end",
+      "title_key": "tutorial.boudica_menu_ready_title",
+      "body_key": "tutorial.boudica_menu_ready_body",
+      "speaker": "boudica"
     }
-  ]
+  ],
+  "layout": {
+    "boudica_return_campaign": { "x": 70, "y": 1580 },
+    "boudica_return_replay": { "x": 350, "y": 1580 },
+    "boudica_return_end": { "x": 630, "y": 1580 }
+  }
 }

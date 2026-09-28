@@ -2,6 +2,7 @@
     "use strict";
 
     var STORAGE_KEY = "sow_ui_locale";
+    var rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
     var runtimeScript = document.currentScript;
     var inferredBase = "locales";
     if (runtimeScript && runtimeScript.src) {
@@ -52,7 +53,7 @@
     }
 
     function localeDirection(locale) {
-        return String(locale || "").toLowerCase() === "ar" ? "rtl" : "ltr";
+        return rtlLanguages.has(String(locale || "").toLowerCase().split("-")[0]) ? "rtl" : "ltr";
     }
 
     function localeScript(locale) {

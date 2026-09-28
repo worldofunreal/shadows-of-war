@@ -960,6 +960,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.auth.css",
             "main_menu.campaign.css",
             "main_menu.hud.css",
+            "main_menu.tutorial.css",
             "main_menu.profile.css",
         ],
     )?;
@@ -967,6 +968,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         vec![
             "sow-i18n.js",
             "sow-dropdown.js",
+            "sow-campaign.js",
+            "sow-campaign-view.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -981,6 +984,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         vec![
             "sow-i18n.js",
             "sow-dropdown.js",
+            "sow-campaign.js",
+            "sow-campaign-view.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -995,6 +1000,8 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         vec![
             "sow-i18n.js",
             "sow-dropdown.js",
+            "sow-campaign.js",
+            "sow-campaign-view.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -1701,167 +1708,101 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
             rosters.insert(id.to_string(), path);
         }
     }
-    let trigger_types = [
-        "territory",
-        "kills",
-        "defeated",
-        "contact",
-        "attack",
-        "troops",
-        "building",
-        "fleet",
-        "nuke",
-        "elapsed",
-    ];
-    let action_types = [
-        "show_dialog",
-        "set_objective",
-        "emote",
-        "pause",
-        "resume",
-        "set_flag",
-    ];
     for episode_id in triggers.keys() {
         if !rosters.contains_key(episode_id) {
             bail!("campaign triggers have no roster: {episode_id}");
         }
     }
+    let mut episodes = Vec::new();
     for (episode_id, roster_path) in &rosters {
         let roster: serde_json::Value = serde_json::from_str(&fs::read_to_string(roster_path)?)
             .with_context(|| format!("parse {}", roster_path.display()))?;
-        let factions = roster
-            .get("factions")
-            .and_then(serde_json::Value::as_array)
-            .filter(|factions| !factions.is_empty())
-            .context("campaign roster has no factions")?;
-        let names = factions
-            .iter()
-            .map(|faction| {
-                faction
-                    .get("name")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or_default()
-            })
-            .collect::<HashSet<_>>();
-        if names.len() != factions.len() || names.iter().any(|name| name.is_empty()) {
-            bail!("campaign roster has duplicate or empty faction names: {episode_id}");
-        }
         let trigger_path = triggers
             .get(episode_id)
             .with_context(|| format!("missing triggers for {episode_id}"))?;
         let definition: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(trigger_path)?)
                 .with_context(|| format!("parse {}", trigger_path.display()))?;
-        let expected_episode_id = episode_id.strip_prefix("lady_").unwrap_or(episode_id);
         if definition
-            .get("version")
-            .and_then(serde_json::Value::as_u64)
-            != Some(1)
-            || definition
-                .get("episode_id")
-                .and_then(serde_json::Value::as_str)
-                != Some(expected_episode_id)
+            .get("episode_id")
+            .and_then(serde_json::Value::as_str)
+            != Some(episode_id.as_str())
         {
-            bail!("campaign trigger header is invalid: {episode_id}");
+            bail!("campaign episode_id does not match filename: {episode_id}");
         }
-        let settings = definition
-            .get("settings")
-            .context("campaign has no settings")?;
-        if settings
-            .get("buildings_enabled")
-            .and_then(serde_json::Value::as_bool)
-            .is_none()
-            || !settings
-                .get("starting_troops")
-                .and_then(serde_json::Value::as_f64)
-                .is_some_and(|value| value.is_finite() && (1.0..=100_000.0).contains(&value))
+        if let Some(speakers) = definition
+            .get("speakers")
+            .and_then(serde_json::Value::as_object)
         {
-            bail!("campaign settings are invalid: {episode_id}");
-        }
-        let steps = definition
-            .get("steps")
-            .and_then(serde_json::Value::as_array)
-            .filter(|steps| !steps.is_empty())
-            .context("campaign has no steps")?;
-        let mut ids = HashSet::new();
-        for step in steps {
-            let id = step
-                .get("id")
-                .and_then(serde_json::Value::as_str)
-                .context("campaign step has no id")?;
-            if !ids.insert(id) {
-                bail!("duplicate campaign step id: {id}");
-            }
-            let trigger = step
-                .get("trigger")
-                .context("campaign step has no trigger")?;
-            let trigger_type = trigger
-                .get("type")
-                .and_then(serde_json::Value::as_str)
-                .context("campaign trigger has no type")?;
-            if !trigger_types.contains(&trigger_type) {
-                bail!("unknown campaign trigger: {trigger_type}");
-            }
-            if [
-                "territory",
-                "kills",
-                "attack",
-                "troops",
-                "building",
-                "fleet",
-                "nuke",
-                "elapsed",
-            ]
-            .contains(&trigger_type)
-                && !trigger
-                    .get("value")
-                    .and_then(serde_json::Value::as_f64)
-                    .is_some_and(|value| value.is_finite())
-            {
-                bail!("campaign trigger value is invalid: {id}");
-            }
-            for key in ["title_key", "body_key", "hint_key"] {
-                let Some(translation_key) = step
-                    .get(key)
-                    .and_then(serde_json::Value::as_str)
+            for (speaker, definition) in speakers {
+                let Some(avatar) = definition.get("avatar").and_then(serde_json::Value::as_str)
                 else {
-                    bail!("campaign translation key is invalid: {id}.{key}");
+                    continue;
                 };
-                if !translation_key.starts_with("tutorial.")
-                    || web_catalog_value(catalog, translation_key).is_none()
+                if avatar.is_empty() {
+                    continue;
+                }
+                if !avatar.chars().all(|character| {
+                    character.is_ascii_alphanumeric() || character == '_' || character == '-'
+                }) || !paths
+                    .assets_gameplay
+                    .join("avatars")
+                    .join(format!("{avatar}.webp"))
+                    .is_file()
                 {
-                    bail!("campaign translation key is invalid: {id}.{key}");
-                }
-            }
-            for target in [
-                trigger.get("target").and_then(serde_json::Value::as_str),
-                step.get("marker")
-                    .and_then(|marker| marker.get("target"))
-                    .and_then(serde_json::Value::as_str),
-            ]
-            .into_iter()
-            .flatten()
-            .filter(|target| *target != "player")
-            {
-                if !names.contains(target) {
-                    bail!("campaign references unknown faction: {target}");
-                }
-            }
-            for phase in ["on_enter", "on_complete"] {
-                if let Some(actions) = step.get(phase).and_then(serde_json::Value::as_array) {
-                    for action in actions {
-                        if !action_types.contains(
-                            &action
-                                .get("type")
-                                .and_then(serde_json::Value::as_str)
-                                .unwrap_or_default(),
-                        ) {
-                            bail!("unknown campaign action in {id}");
-                        }
-                    }
+                    bail!("campaign speaker avatar is invalid or missing: {episode_id}.{speaker}: {avatar}");
                 }
             }
         }
+        episodes.push(serde_json::json!({
+            "episode_id": episode_id,
+            "definition": definition,
+            "roster": roster,
+        }));
+    }
+    // Episode-local strings and flow rules belong to the browser/editor's shared validator.
+    let mut validator = Command::new("node")
+        .args([
+            "-e",
+            r#"
+const fs = require("node:fs");
+const campaign = require(process.argv[1]);
+const { catalog, episodes } = JSON.parse(fs.readFileSync(0, "utf8"));
+const hasText = key => {
+    const value = key.split(".").reduce((node, part) =>
+        node && Object.prototype.hasOwnProperty.call(node, part) ? node[part] : undefined, catalog);
+    return typeof value === "string" && value.trim().length > 0;
+};
+for (const { episode_id, definition, roster } of episodes) {
+    const result = campaign.validate(definition, roster, { hasText });
+    for (const issue of result.errors) {
+        console.error([episode_id, issue.step, issue.field].filter(Boolean).join(".") + ": " + issue.message);
+    }
+    for (const issue of result.warnings) {
+        console.warn(episode_id + ": " + issue.message);
+    }
+    if (result.errors.length) process.exitCode = 1;
+}
+"#,
+        ])
+        .arg(paths.shell.join("sow-campaign.js"))
+        .stdin(Stdio::piped())
+        .spawn()
+        .context("start shared campaign validator (Node.js required)")?;
+    serde_json::to_writer(
+        validator
+            .stdin
+            .take()
+            .context("open campaign validator input")?,
+        &serde_json::json!({ "catalog": catalog, "episodes": episodes }),
+    )
+    .context("write campaign validator input")?;
+    if !validator
+        .wait()
+        .context("wait for shared campaign validator")?
+        .success()
+    {
+        bail!("shared campaign validation failed");
     }
     Ok(())
 }
@@ -2187,6 +2128,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     copy_dir(
         &paths.assets_gameplay.join("currency"),
         &assets.join("gameplay/currency"),
+    )?;
+    copy_dir(
+        &paths.assets_gameplay.join("icons"),
+        &assets.join("gameplay/icons"),
     )?;
     copy_dir(
         &paths.assets_gameplay.join("store"),
@@ -3799,7 +3744,10 @@ mod tests {
             "main_menu.auth.css",
             "main_menu.campaign.css",
             "main_menu.hud.css",
+            "main_menu.tutorial.css",
             "main_menu.profile.css",
+            "sow-campaign.js",
+            "sow-campaign-view.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -3939,6 +3887,10 @@ mod tests {
         let paths = Paths::discover()?;
         let rust_path = paths.root.join("sow-client/src/lib.rs");
         let css_path = paths.root.join("sow-web/shell/main_menu.base.css");
+        let tutorial_js_path = paths.root.join("sow-web/shell/main_menu.tutorial.js");
+        let html_path = paths.root.join("sow-web/site/index.html");
+        let roster_path = paths.root.join("assets/campaign/boudica.json");
+        let campaign_path = paths.root.join("assets/campaign/boudica.triggers.json");
         let previous = vec![
             LocalFileStamp {
                 path: rust_path.clone(),
@@ -3950,14 +3902,40 @@ mod tests {
                 len: 1,
                 modified_nanos: 1,
             },
+            LocalFileStamp {
+                path: tutorial_js_path,
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: html_path,
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: roster_path,
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: campaign_path,
+                len: 1,
+                modified_nanos: 1,
+            },
         ];
         let mut current = previous.clone();
         current[0].len = 2;
         assert!(local_change_requires_wasm(&previous, &current, &paths));
 
-        current = previous.clone();
-        current[1].len = 2;
-        assert!(!local_change_requires_wasm(&previous, &current, &paths));
+        for index in 1..previous.len() {
+            current = previous.clone();
+            current[index].len = 2;
+            assert!(
+                !local_change_requires_wasm(&previous, &current, &paths),
+                "web/editor file changes must not rebuild WASM: {}",
+                current[index].path.display()
+            );
+        }
         Ok(())
     }
 

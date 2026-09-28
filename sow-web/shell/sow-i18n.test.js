@@ -33,7 +33,7 @@ function loadRuntime(storedLocale, catalogs) {
     const window = {
         SOW_LOCALE_DEFAULT: "en",
         SOW_LOCALE_CATALOG_VERSION: 11,
-        SOW_LOCALE_CODES: ["en", "es", "ar", "bad"],
+        SOW_LOCALE_CODES: ["en", "es", "ar", "fa", "fa-ir", "he", "ur", "yi", "bad"],
         SOW_LOCALE_BASE: "locales",
         localStorage: {
             getItem: key => storage.get(key) || null,
@@ -87,6 +87,8 @@ test("i18n runtime falls back, caches, persists, and updates direction", async (
     await runtime.window.SOW_setLocale("ar");
     assert.equal(runtime.window.SOW_getLocale(), "ar");
     assert.equal(runtime.document.documentElement.dir, "rtl");
+    for (const locale of ["ar", "fa", "fa-ir", "he", "ur", "yi"]) assert.equal(runtime.window.SOW_getLocaleDirection(locale), "rtl");
+    assert.equal(runtime.window.SOW_getLocaleDirection("en"), "ltr");
     assert.equal(runtime.storage.get("sow_ui_locale"), "ar");
     assert.deepEqual(runtime.localeEvents, ["ar"]);
 

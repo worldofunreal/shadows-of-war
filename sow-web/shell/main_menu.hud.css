@@ -449,32 +449,96 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     display: grid;
     place-items: center;
     padding: 0;
-    border: 1px solid var(--sow-line);
+    border: 1px solid color-mix(in srgb, var(--sow-gold) 48%, var(--sow-line));
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
-    color: #fff;
-    font-size: 22px;
+    background: var(--sow-panel);
+    color: var(--sow-gold-bright);
     cursor: pointer;
     touch-action: manipulation;
     transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.sow-hud__building-btn:hover {
+.sow-hud__building-icon {
+    display: block;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.sow-hud__action-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.sow-hud__inline-icon {
+    display: inline-block;
+    width: 1.1em;
+    height: 1.1em;
+    object-fit: contain;
+    vertical-align: -0.2em;
+    pointer-events: none;
+}
+
+.sow-hud__map-action-icon {
+    display: block;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.sow-hud__building-btn:hover:not(:disabled),
+.sow-hud__building-btn:focus-visible:not(:disabled) {
     border-color: var(--sow-gold);
-    background: rgba(255, 255, 255, 0.14);
+    background: var(--sow-panel-soft);
+}
+
+.sow-hud__building-btn:hover:not(:disabled) {
     transform: translateY(-2px);
 }
 
 .sow-hud__building-btn.active {
     border-color: var(--sow-cyan);
-    background: rgba(56, 189, 248, 0.15);
-    box-shadow: 0 0 14px rgba(56, 189, 248, 0.6);
+    background: color-mix(in srgb, var(--sow-cyan) 13%, var(--sow-panel));
+    color: var(--sow-cyan);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--sow-cyan) 30%, transparent);
 }
 
 .sow-hud__building-btn:disabled {
     cursor: default;
     opacity: 0.35;
     filter: grayscale(0.6);
+}
+
+.sow-hud__army-allocation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--sow-line);
+    border-radius: var(--sow-button-radius);
+    background: var(--sow-panel-soft);
+    color: #f5f1e8;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.sow-hud__army-allocation input[type="range"] {
+    flex: 1 1 7rem;
+    min-width: 5rem;
+    accent-color: var(--sow-cyan);
+}
+
+.sow-hud__army-allocation output {
+    color: var(--sow-cyan);
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
 }
 
 .sow-hud__deploy-panel {
@@ -830,110 +894,6 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     margin-top: 0;
 }
 
-.sow-hud__tutorial-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 180;
-    pointer-events: none;
-}
-
-.sow-hud__tutorial-overlay.is-open {
-    pointer-events: auto;
-}
-
-.sow-hud__tutorial-card {
-    position: absolute;
-    left: 50%;
-    bottom: 108px;
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    width: min(560px, calc(100vw - 32px));
-    transform: translateX(-50%);
-    padding: 18px 20px;
-    border: 1px solid rgba(243, 177, 43, 0.42);
-    border-radius: 16px;
-    background: linear-gradient(160deg, rgba(24, 27, 33, 0.98), rgba(10, 12, 16, 0.98));
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.7);
-    pointer-events: none;
-}
-
-.sow-hud__tutorial-overlay.is-open .sow-hud__tutorial-card {
-    pointer-events: auto;
-}
-
-.sow-hud__tutorial-card[hidden] {
-    display: none !important;
-}
-
-.sow-hud__tutorial-copy {
-    min-width: 0;
-    flex: 1;
-}
-
-.sow-hud__tutorial-step {
-    margin: 0 0 5px;
-    color: var(--sow-muted);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-}
-
-.sow-hud__tutorial-card h2 {
-    margin: 0 0 7px;
-    color: #fca5a5;
-    font-size: clamp(22px, 4vw, 32px);
-    line-height: 1;
-    letter-spacing: 0.04em;
-}
-
-.sow-hud__tutorial-card p {
-    margin: 0;
-    color: #f5f1e8;
-    font-size: 13px;
-    line-height: 1.45;
-}
-
-.sow-hud__tutorial-card strong {
-    display: block;
-    margin-top: 10px;
-    color: var(--sow-muted);
-    font-size: 11px;
-    line-height: 1.35;
-}
-
-.sow-hud__tutorial-progress {
-    margin-top: 8px;
-    color: var(--sow-muted);
-    font-size: 10px;
-}
-
-.sow-hud__tutorial-action {
-    min-height: 38px;
-    margin-top: 14px;
-    padding: 9px 14px;
-    border: 1px solid var(--sow-button-primary-border);
-    border-radius: var(--sow-button-radius);
-    background: var(--sow-button-primary-bg);
-    color: var(--sow-button-primary-text);
-    font-size: 10px;
-    font-weight: var(--sow-button-weight);
-    letter-spacing: var(--sow-button-tracking);
-    cursor: pointer;
-    touch-action: manipulation;
-}
-
-.sow-hud__tutorial-avatar {
-    order: 2;
-    width: 92px;
-    height: 92px;
-    flex: 0 0 92px;
-    border: 2px solid rgba(243, 177, 43, 0.45);
-    border-radius: 14px;
-    object-fit: cover;
-    object-position: top center;
-}
-
 .sow-hud__map-menu {
     --sow-map-size: min(240px, calc(100vw - 24px), calc(100vh - 24px));
     position: absolute;
@@ -1063,14 +1023,36 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     display: block;
 }
 
+.sow-hud__map-action-label {
+    display: block;
+    min-width: 0;
+    color: #f5f1e8;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.sow-hud__map-action-reason {
+    display: block;
+    min-width: 0;
+    color: var(--sow-muted);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
 .sow-hud__map-sector .sow-hud__map-action-title {
     pointer-events: none;
 }
 
 .sow-hud__map-sector:disabled,
+.sow-hud__map-sector[aria-disabled="true"],
 .sow-hud__map-center:disabled,
+.sow-hud__map-center[aria-disabled="true"],
 .sow-hud__map-card:disabled {
-    cursor: not-allowed;
+    cursor: help;
     filter: grayscale(.75) brightness(.62);
     opacity: .62;
 }
@@ -1128,20 +1110,37 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 }
 
 .sow-hud__map-card {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
     align-items: center;
-    justify-content: space-between;
+    justify-content: stretch;
     gap: 12px;
     width: 100%;
 }
 
 .sow-hud__map-card .sow-hud__map-action-title {
+    grid-column: 1;
+    grid-row: 1 / span 2;
     font-size: 28px;
     line-height: 1;
     font-weight: 800;
 }
 
+.sow-hud__map-card .sow-hud__map-action-label {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.sow-hud__map-card .sow-hud__map-action-reason {
+    grid-column: 2;
+    grid-row: 2;
+}
+
 .sow-hud__map-action-meta {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    align-self: center;
     color: var(--sow-gold-bright);
     font-size: 10px;
     font-weight: 700;
@@ -1170,6 +1169,16 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     .sow-hud__map-sector,
     .sow-hud__map-center,
     .sow-hud__map-action { transition: none; }
+
+    #sow-hud .sow-hud__building-btn,
+    #sow-hud .sow-hud__map-sector,
+    #sow-hud .sow-hud__map-center,
+    #sow-hud .sow-hud__map-action { transition: none !important; }
+
+    #sow-hud .sow-hud__building-btn:hover,
+    #sow-hud .sow-hud__map-sector:is(:hover, :focus-visible) { transform: none !important; }
+
+    #sow-hud .sow-hud__map-center:is(:hover, :focus-visible) { transform: translate(-50%, -50%) !important; }
 }
 
 /* Keep the overlay itself click-through; only the menu controls capture input. */
@@ -1181,7 +1190,7 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     pointer-events: auto;
 }
 
-.sow-tutorial__error {
+.sow-campaign-error {
     position: fixed;
     left: 50%;
     bottom: 28px;
@@ -1198,7 +1207,7 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     font-size: 12px;
 }
 
-.sow-tutorial__error button {
+.sow-campaign-error button {
     min-height: 30px;
     padding: 6px 10px;
     border: 1px solid rgba(243, 177, 43, 0.55);
@@ -1209,17 +1218,11 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 }
 
 @media (max-width: 640px) {
-    .sow-hud__tutorial-card {
-        bottom: 88px;
-        gap: 12px;
-        padding: 14px;
+    #sow-hud[data-tutorial-active="true"] .sow-hud__notifications {
+        top: max(64px, calc(var(--sow-sat) + 56px));
+        bottom: auto;
     }
 
-    .sow-hud__tutorial-avatar {
-        width: 68px;
-        height: 68px;
-        flex-basis: 68px;
-    }
 }
 
 .sow-hud__endgame-hero {
@@ -1499,6 +1502,10 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     font-weight: 700;
     text-align: center;
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+#sow-hud[data-overlay-open="true"] .sow-hud__notifications {
+    z-index: 191;
 }
 
 .sow-hud__pin-btn,
@@ -1891,8 +1898,13 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     #sow-hud[data-overlay-open="true"] .sow-hud__right-rail,
     #sow-hud[data-overlay-open="true"] .sow-hud__hover-card,
     #sow-hud[data-overlay-open="true"] .sow-hud__dock,
-    #sow-hud[data-overlay-open="true"] .sow-hud__notifications {
+    #sow-hud[data-overlay-open="true"] .sow-hud__notification {
         display: none;
+    }
+
+    #sow-hud[data-overlay-open="true"] .sow-hud__notifications {
+        top: max(64px, calc(var(--sow-sat) + 56px));
+        bottom: auto;
     }
 }
 

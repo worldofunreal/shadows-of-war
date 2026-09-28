@@ -187,16 +187,21 @@
         var isNext = unlocked && !completed && episode.id === continueId;
         var title = localizedText(episode.title);
         var subtitle = localizedText(episode.subtitle);
+        var mapName = episode.id === "boudica" ? "eastanglia" : "northamerica";
+        var mapArt = lobbyThumb({ map_name: mapName });
+        var avatar = asset("gameplay/avatars/" + (episode.id === "boudica" ? "boudica" : "lady_six_sky") + ".webp");
         var status = completed ? SOW_t("lobbies.completed") : unlocked ? (isNext ? SOW_t("lobbies.next") : SOW_t("lobbies.available")) : SOW_t("lobbies.locked");
         var label = completed ? SOW_t("lobbies.replay") : isNext ? SOW_t("lobbies.continue") : SOW_t("lobbies.play");
         var action = unlocked
             ? "<button class='sow-menu__secondary sow-campaign__play' type='button' data-command='start_campaign_episode' data-episode-id='" + esc(episode.id) + "'>" + esc(label) + " <span>↗</span></button>"
             : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>" + esc(SOW_t("lobbies.locked")) + "</button>";
-        return "<article class='sow-campaign__episode" + (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") + "'>" +
-            "<div class='sow-campaign__episode-status'>" + esc(status) + "</div>" +
-            "<h2>" + esc(title) + "</h2>" +
-            "<p>" + esc(subtitle) + "</p>" +
-            action +
+        return "<article class='sow-campaign__episode" + (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") + (isNext ? " is-next" : "") + "'>" +
+            "<div class='sow-campaign__episode-art' aria-hidden='true'><img class='sow-campaign__map-art' src='" + esc(mapArt) + "' alt='' loading='lazy' decoding='async'><img class='sow-campaign__leader-art' src='" + esc(avatar) + "' alt='' loading='lazy' decoding='async'></div>" +
+            "<div class='sow-campaign__episode-copy'><div class='sow-campaign__episode-status'>" + esc(status) + "</div>" +
+                "<h2>" + esc(title) + "</h2>" +
+                "<p>" + esc(subtitle) + "</p>" +
+                action +
+            "</div>" +
         "</article>";
     }
 
@@ -211,7 +216,6 @@
             "<section class='sow-menu__command sow-campaign__intro'>" +
                 "<p class='sow-menu__eyebrow'>" + esc(SOW_t("lobbies.single_player")) + "</p>" +
                 "<h1>" + esc(SOW_t("lobbies.campaign_chronicles")).replace("\n", "<br>") + "</h1>" +
-                "<p class='sow-menu__tagline'>" + esc(SOW_t("lobbies.campaign_tagline")) + "</p>" +
                 "<button class='sow-menu__secondary' type='button' data-command='close_campaign'>← " + esc(SOW_t("lobbies.back")) + "</button>" +
             "</section>" +
             "<section class='sow-menu__battlefield sow-campaign__battlefield'>" +

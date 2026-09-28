@@ -1,467 +1,76 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>SOW — Campaign Logic (nodes)</title>
-<style>
-  :root { --bg:#14171c; --panel:#1d222b; --line:#2c333f; --text:#e6e9ee; --muted:#8b94a3; --accent:#e06b1f;
-          --event:#3aa564; --action:#3372f2; }
-  * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif; overflow:hidden; }
-  #app { display:flex; height:100%; }
-  #stage { flex:1; position:relative; overflow:hidden; background:#0c0e12 radial-gradient(circle at 20px 20px, #181c23 1px, transparent 1px); background-size:24px 24px; }
-  #nodes { position:absolute; inset:0; transform-origin:0 0; }
-  svg#wires { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-  svg#wires path { pointer-events:stroke; }
-  .node { position:absolute; width:210px; background:var(--panel); border:1px solid var(--line); border-radius:9px; box-shadow:0 6px 18px rgba(0,0,0,.4); user-select:none; }
-  .node.sel { border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.25),0 6px 18px rgba(0,0,0,.5); }
-  .node .hd { padding:7px 10px; border-radius:8px 8px 0 0; font-weight:600; font-size:12px; cursor:grab; display:flex; justify-content:space-between; align-items:center; }
-  .node.event .hd { background:rgba(58,165,100,.22); border-bottom:1px solid var(--event); }
-  .node.action .hd { background:rgba(51,114,242,.20); border-bottom:1px solid var(--action); }
-  .node .hd .x { color:var(--muted); cursor:pointer; padding:0 2px; }
-  .node .hd .x:hover { color:#f1b0b4; }
-  .node .bd { padding:8px 10px; display:flex; flex-direction:column; gap:6px; }
-  .node label { font-size:10px; color:var(--muted); margin:0 0 1px; display:block; text-transform:uppercase; letter-spacing:.4px; }
-  .node input, .node select, .node textarea { width:100%; background:#11151b; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:4px 6px; font:inherit; font-size:12px; }
-  .node textarea { resize:vertical; min-height:38px; }
-  .pin { position:absolute; width:14px; height:14px; border-radius:50%; background:#11151b; border:2px solid var(--muted); top:9px; cursor:crosshair; z-index:2; }
-  .pin:hover { border-color:#fff; background:#2a3340; }
-  .pin.in { left:-8px; } .pin.out { right:-8px; }
-  .node.event .pin.out { border-color:var(--event); } .node.action .pin { border-color:var(--action); }
-  #side { width:250px; background:var(--panel); border-left:1px solid var(--line); display:flex; flex-direction:column; }
-  header { padding:12px 14px; border-bottom:1px solid var(--line); }
-  header h1 { margin:0; font-size:14px; } header .sub { color:var(--muted); font-size:11px; margin-top:3px; }
-  header a { color:var(--accent); text-decoration:none; }
-  .group { padding:10px 14px; border-bottom:1px solid var(--line); }
-  .group h2 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); }
-  .pal { display:flex; flex-wrap:wrap; gap:6px; }
-  .pal button { font-size:11px; padding:5px 8px; border-radius:6px; border:1px solid var(--line); background:#222a35; color:var(--text); cursor:pointer; }
-  .pal button:hover { background:#2c3743; }
-  .pal .ev { border-left:3px solid var(--event); } .pal .ac { border-left:3px solid var(--action); }
-  .btns { display:flex; gap:8px; flex-wrap:wrap; }
-  button.primary { background:var(--accent); border:1px solid var(--accent); color:#1a1206; font-weight:600; border-radius:6px; padding:7px 10px; cursor:pointer; }
-  button.ghost { background:#2a3340; border:1px solid var(--line); color:var(--text); border-radius:6px; padding:7px 10px; cursor:pointer; }
-  .hint { color:var(--muted); font-size:11px; margin-top:6px; }
-  #hud { position:absolute; left:10px; bottom:10px; background:rgba(10,12,16,.82); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font-size:11px; color:var(--muted); pointer-events:none; }
-  #toast { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); background:#222a35; border:1px solid var(--line); border-radius:8px; padding:8px 14px; opacity:0; transition:opacity .25s; }
-  #zoomctl { position:absolute; left:10px; top:10px; display:flex; align-items:center; gap:4px; background:rgba(10,12,16,.82); border:1px solid var(--line); border-radius:8px; padding:4px 6px; }
-  #zoomctl button { width:24px; height:24px; border:1px solid var(--line); background:#222a35; color:var(--text); border-radius:5px; cursor:pointer; font-size:14px; line-height:1; }
-  #zoomctl button:hover { background:#2c3743; }
-  #zoomctl #zlabel { min-width:42px; text-align:center; color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
-  #stage.panning { cursor:grabbing; }
-  .node .hd:active { cursor:grabbing; }
-  .list { overflow:auto; flex:1; padding:6px 0; }
-  .trow { padding:5px 14px; font-size:12px; color:var(--muted); border-bottom:1px solid #232a34; }
-  .trow b { color:var(--text); }
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOW · Campaign studio</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/shell/sow-controls.css">
+<link rel="stylesheet" href="/shell/main_menu.tutorial.css">
+<link rel="stylesheet" href="editor.css">
+<script defer src="/shell/sow-campaign.js"></script>
+<script defer src="/shell/sow-campaign-view.js"></script>
+<script defer src="map-preview.js"></script>
+<script defer src="editor.js"></script>
 </head>
-<body>
-<div id="app">
-  <div id="stage">
-    <svg id="wires"></svg>
-    <div id="nodes"></div>
-    <div id="hud">drag header to move · drag a pin to wire · drag empty space to pan · scroll to zoom</div>
-    <div id="toast"></div>
-    <div id="zoomctl">
-      <button data-z="out" title="Zoom out (−)">−</button>
-      <span id="zlabel">100%</span>
-      <button data-z="in" title="Zoom in (+)">+</button>
-      <button data-z="reset" title="Reset view (0)">⤢</button>
+<body class="logic-editor">
+<header class="studio-bar">
+  <a class="brand" href="index.html">SOW <span>CAMPAIGN STUDIO</span></a>
+  <nav aria-label="Editor"><a id="mapLink" href="index.html" title="Unsaved story changes are saved before opening Map">Map</a><a id="logicLink" aria-current="page" href="logic.html">Story &amp; logic</a></nav>
+  <label class="episode-control">Episode <select id="episodeSelect"><option value="boudica">Boudica</option><option value="six_sky_ep1">Six Sky · I</option><option value="six_sky_ep2">Six Sky · II</option><option value="six_sky_ep3">Six Sky · III</option></select></label>
+  <span class="status" id="saveStatus" role="status">Loading…</span>
+  <button id="reloadBtn">Reload</button><button id="exportBtn" class="primary">Save / export</button>
+</header>
+<div id="notice" role="alert" hidden></div>
+<main class="studio-layout">
+  <section id="graphPanel" class="graph-panel" aria-label="Story graph">
+    <div class="panel-bar"><div><span class="eyebrow">MISSION FLOW</span><h1 id="episodeLabel">Episode</h1></div><label>Flow <select id="flowSelect"><option value="episode">In-game</option><option value="menu">After return</option></select></label><button id="flowEntryBtn" type="button">Use selected as opening</button><span id="stepCount" class="muted"></span></div>
+    <div class="palette" id="palette" aria-label="Add a step"></div>
+    <div id="stage" tabindex="0" aria-label="Drag steps or empty space. Scroll to zoom.">
+      <svg id="wires" aria-hidden="true"></svg><div id="nodes"></div>
+      <div class="zoom-controls"><button data-zoom="out" aria-label="Zoom out">−</button><span id="zlabel">100%</span><button data-zoom="in" aria-label="Zoom in">+</button><button data-zoom="fit">Fit</button><button id="arrangeGraphBtn" type="button">Arrange</button></div>
+      <div class="graph-hint" role="status" aria-live="polite">Drag outputs to inputs · keyboard: Enter on output, then Enter on destination · Escape cancels</div>
     </div>
-  </div>
-  <div id="side">
-    <header>
-      <h1>Campaign Logic</h1>
-      <div class="sub"><span id="episodeLabel">boudica</span> steps · <a id="mapLink" href="index.html">← Map</a></div>
-    </header>
-    <div class="group">
-      <h2>Add node</h2>
-      <div class="pal" id="pal"></div>
+    <details class="diagnostics" open><summary id="validationStatus">Validation</summary><div id="errors"></div></details>
+    <div class="graph-footer"><label class="file-button">Import JSON<input id="fileIn" type="file" accept=".json,application/json"></label><button id="downloadBtn">Download draft</button><button id="menuGuideBtn">Create / open menu guide</button>
+    <details class="workflow-help"><summary>Quick start</summary><ol><li>Add and select a step; edit its text, speakers, and pacing in the inspector. For an objective or guide, use Pick target on map to assign a faction. Scenes wait for Continue; objectives wait for a game action; choose Wait (seconds) for a timed beat.</li><li>Use Create next step on each decision answer to build its path in place, then connect paths where the story rejoins. The selected answer remains available to later scenes.</li><li>Use a hand guide only to teach a mechanic or control. Decisions stay free of prompts; each language has editable text.</li><li>Preview the branching sample without changing this episode. Simulate choices and objectives, then return to your draft. Save, wait for the local update, and restart the episode in the game.</li></ol></details>
     </div>
-    <div class="group">
-      <h2>Export</h2>
-      <div class="btns">
-        <button class="primary" id="exportBtn">Export</button>
-        <button class="ghost" id="reloadBtn">Reload</button>
+  </section>
+  <aside id="inspectorPanel" class="inspector-panel" aria-label="Step inspector">
+    <div class="panel-bar"><span class="eyebrow">INSPECTOR</span><label>Text language <select id="editLocale"><option value="en">English</option><option value="es">Español</option></select></label></div>
+    <div id="inspector" class="inspector-scroll"></div>
+    <details class="episode-settings"><summary>Episode settings & speakers</summary><div id="settings"></div></details>
+  </aside>
+  <section class="preview-panel" aria-label="Campaign preview">
+    <div class="panel-bar"><div><span class="eyebrow">LIVE PREVIEW</span><h2>Player experience</h2></div><button id="demoBtn" class="sample-toggle" type="button" aria-pressed="false">Preview branching sample</button><span class="simulation-badge">SIMULATION</span></div>
+    <div class="preview-toolbar"><label>Viewport <select id="device"><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></label><label>Language <select id="previewLocale"><option value="en">English</option><option value="es">Español</option></select></label><label class="check"><input id="factionLabels" type="checkbox"> Show faction labels</label><button id="pickFactionTarget" class="faction-pick" type="button" aria-pressed="false" disabled>Pick target on map</button><label class="check"><input id="reducedMotion" type="checkbox"> Reduced motion</label></div>
+    <div class="preview-scroll"><div id="previewFrame" class="preview-frame" data-device="desktop">
+      <div class="sample-world" role="group" aria-label="Selected campaign map preview">
+        <div id="campaignPreviewLayer"><canvas id="campaignMapPreview"></canvas><div id="campaignPreviewMarkers"></div></div>
+        <div class="sample-hud"><span id="previewMapLabel">Loading map…</span><span id="previewFactionCount"></span></div>
+        <p id="previewMapStatus" role="status" hidden></p>
       </div>
-      <input type="file" id="fileIn" accept=".json" style="margin-top:8px;width:100%;font-size:11px" />
-    </div>
-    <div class="group">
-      <h2>Episode settings</h2>
-      <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0"><input type="checkbox" id="buildingsEnabled" style="width:auto"> Buildings enabled</label>
-      <label>Starting troops</label><input id="startingTroops" type="number" min="1" max="100000" step="1" value="1000">
-    </div>
-    <div class="group" style="flex:0 0 auto"><h2>Steps</h2></div>
-    <div class="list" id="list"></div>
-  </div>
-</div>
-
-<script>
-// ---- node vocabulary for the runtime campaign JSON ----
-// cat: event|condition|action · params: {key,label,type,opts?}
-const stepParams = extra => [
-  {k:"id",l:"step id",t:"text"},
-  {k:"mechanic",l:"mechanic",t:"text"},
-  {k:"title_key",l:"title key",t:"text"},
-  {k:"body_key",l:"body key",t:"text"},
-  {k:"hint_key",l:"hint key",t:"text"},
-  {k:"marker_target",l:"marker",t:"faction"},
-  ...extra,
-];
-const DEFS = {
-  // STEP EVENTS — no input pin
-  step_territory: { cat:"event", title:"Territory", params:stepParams([{k:"value",l:"tiles",t:"num",d:256},{k:"mode",l:"mode",t:"text",d:"gained"}]) },
-  step_kills:     { cat:"event", title:"Kills",     params:stepParams([{k:"value",l:"kills",t:"num",d:1}]) },
-  step_defeated:  { cat:"event", title:"Defeated",  params:stepParams([{k:"target",l:"faction",t:"faction"}]) },
-  step_contact:   { cat:"event", title:"Contact",   params:stepParams([{k:"target",l:"faction",t:"faction"}]) },
-  step_attack:    { cat:"event", title:"Attacks",   params:stepParams([{k:"value",l:"attacks",t:"num",d:1}]) },
-  step_troops:    { cat:"event", title:"Troops",    params:stepParams([{k:"value",l:"troops",t:"num",d:1000}]) },
-  step_building:  { cat:"event", title:"Building",  params:stepParams([{k:"value",l:"buildings",t:"num",d:1}]) },
-  step_fleet:     { cat:"event", title:"Fleet",     params:stepParams([{k:"value",l:"fleets",t:"num",d:1}]) },
-  step_nuke:      { cat:"event", title:"Nuke",      params:stepParams([{k:"value",l:"nukes",t:"num",d:1}]) },
-  step_elapsed:   { cat:"event", title:"Elapsed",   params:stepParams([{k:"value",l:"ticks",t:"num",d:1}]) },
-  // ACTIONS
-  show_dialog:      { cat:"action", title:"Show dialog",      params:[{k:"speaker",l:"speaker",t:"faction"},{k:"title",l:"title",t:"text"},{k:"body",l:"body",t:"area"}] },
-  set_objective:    { cat:"action", title:"Set objective",   params:[{k:"title",l:"title",t:"text"},{k:"body",l:"body",t:"area"}] },
-  emote:            { cat:"action", title:"Emote",            params:[{k:"faction",l:"faction",t:"faction"},{k:"emoji",l:"emoji",t:"text",d:"🎉"}] },
-  pause:            { cat:"action", title:"Pause world",      params:[] },
-  resume:           { cat:"action", title:"Resume world",     params:[] },
-  set_flag:         { cat:"action", title:"Set flag",         params:[{k:"name",l:"flag",t:"text"}] },
-};
-const hasIn  = k => DEFS[k].cat !== "event";
-const hasOut = () => true;
-
-const query = new URLSearchParams(location.search);
-const episodeId = /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
-document.getElementById("episodeLabel").textContent = episodeId;
-document.getElementById("mapLink").href = `index.html?episode=${encodeURIComponent(episodeId)}`;
-const episodeSettings = { buildings_enabled:false, starting_troops:1000 };
-const S = { nodes:[], wires:[], pan:{x:40,y:40}, zoom:1, nextId:1, sel:null, factions:["player"] };
-document.getElementById("buildingsEnabled").onchange = e => { episodeSettings.buildings_enabled = e.target.checked; };
-document.getElementById("startingTroops").oninput = e => { episodeSettings.starting_troops = Math.max(1, Math.min(100000, Number(e.target.value) || 1)); };
-
-const stage = document.getElementById("stage");
-const nodesEl = document.getElementById("nodes");
-const wiresEl = document.getElementById("wires");
-const hud = document.getElementById("hud");
-const zlabel = document.getElementById("zlabel");
-
-// ---- view transform (pan + zoom) ----
-const ZMIN = 0.3, ZMAX = 2.5;
-function applyTransform() {
-  nodesEl.style.transform = `translate(${S.pan.x}px,${S.pan.y}px) scale(${S.zoom})`;
-  if (zlabel) zlabel.textContent = Math.round(S.zoom*100)+"%";
-}
-// keep the content point under (cx,cy) fixed while changing zoom -> cursor-anchored zoom
-function zoomAround(cx, cy, z1) {
-  z1 = Math.min(ZMAX, Math.max(ZMIN, z1));
-  if (z1===S.zoom) return;
-  const r = z1/S.zoom;
-  S.pan.x = cx - (cx-S.pan.x)*r;
-  S.pan.y = cy - (cy-S.pan.y)*r;
-  S.zoom = z1;
-  applyTransform(); redrawWires();
-}
-function resetView() { S.pan={x:40,y:40}; S.zoom=1; applyTransform(); redrawWires(); }
-// lightweight selection toggle — no full DOM rebuild, so in-flight drags keep their element
-function selectNode(id) {
-  S.sel = id;
-  nodesEl.querySelectorAll(".node").forEach(c => c.classList.toggle("sel", +c.dataset.id===id));
-}
-
-// ---- palette ----
-const pal = document.getElementById("pal");
-for (const [k,def] of Object.entries(DEFS)) {
-  const b = document.createElement("button");
-  b.className = def.cat==="event"?"ev":"ac";
-  b.textContent = def.title;
-  b.onclick = () => addNode(k, (stage.clientWidth/2 - S.pan.x)/S.zoom - 105, (stage.clientHeight/2 - S.pan.y)/S.zoom - 40);
-  pal.appendChild(b);
-}
-
-// ---- model ops ----
-function addNode(kind, x, y) {
-  const params = {};
-  for (const p of DEFS[kind].params) params[p.k] = p.d ?? (p.t==="num"?0:p.t==="faction"?(S.factions[0]||""):"");
-  const n = { id:S.nextId++, kind, x:Math.round(x), y:Math.round(y), params };
-  S.nodes.push(n); S.sel = n.id; render(); return n;
-}
-function delNode(id) {
-  S.nodes = S.nodes.filter(n=>n.id!==id);
-  S.wires = S.wires.filter(w=>w.from!==id && w.to!==id);
-  if (S.sel===id) S.sel=null;
-  render();
-}
-const node = id => S.nodes.find(n=>n.id===id);
-
-// ---- render nodes ----
-function render() {
-  applyTransform();
-  nodesEl.innerHTML = "";
-  for (const n of S.nodes) nodesEl.appendChild(card(n));
-  redrawWires();
-  renderList();
-}
-function factionOpts(sel) {
-  return S.factions.map(f=>`<option ${f===sel?"selected":""}>${f}</option>`).join("");
-}
-function card(n) {
-  const def = DEFS[n.kind];
-  const el = document.createElement("div");
-  el.className = `node ${def.cat}${S.sel===n.id?" sel":""}`;
-  el.dataset.id = n.id;
-  el.style.left = n.x+"px"; el.style.top = n.y+"px";
-  let body = "";
-  for (const p of def.params) {
-    const v = n.params[p.k] ?? "";
-    const id = `p_${n.id}_${p.k}`;
-    if (p.t==="faction") body += `<div><label>${p.l}</label><select data-p="${p.k}">${factionOpts(v)}</select></div>`;
-    else if (p.t==="area") body += `<div><label>${p.l}</label><textarea data-p="${p.k}">${String(v).replace(/</g,"&lt;")}</textarea></div>`;
-    else if (p.t==="num") body += `<div><label>${p.l}</label><input data-p="${p.k}" type="number" value="${v}"></div>`;
-    else body += `<div><label>${p.l}</label><input data-p="${p.k}" value="${String(v).replace(/"/g,"&quot;")}"></div>`;
-  }
-  el.innerHTML =
-    `${hasIn(n.kind)?'<div class="pin in" data-pin="in"></div>':""}` +
-    `<div class="pin out" data-pin="out"></div>` +
-    `<div class="hd">${def.title}<span class="x" data-x>✕</span></div>` +
-    `<div class="bd">${body || '<div class="hint" style="margin:0">no params</div>'}</div>`;
-  // header drag = move; click = select
-  const hd = el.querySelector(".hd");
-  hd.addEventListener("mousedown", e => {
-    if (e.target.hasAttribute("data-x")) return;
-    e.preventDefault();
-    selectNode(n.id); // keep `el` attached so the drag moves the live card in real time
-    const sx=e.clientX, sy=e.clientY, ox=n.x, oy=n.y;
-    const mv = ev => {
-      // divide screen delta by zoom so the node tracks the cursor 1:1 at any zoom level
-      n.x=Math.round(ox+(ev.clientX-sx)/S.zoom); n.y=Math.round(oy+(ev.clientY-sy)/S.zoom);
-      el.style.left=n.x+"px"; el.style.top=n.y+"px"; redrawWires();
-    };
-    const up = () => { window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
-    window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
-  });
-  el.querySelector("[data-x]").onclick = () => delNode(n.id);
-  // param edits
-  el.querySelectorAll("[data-p]").forEach(inp => {
-    inp.addEventListener("input", () => {
-      const p = inp.dataset.p;
-      n.params[p] = inp.type==="number" ? (+inp.value) : inp.value;
-      renderList();
-    });
-  });
-  // pin wiring
-  el.querySelectorAll(".pin").forEach(pin => {
-    pin.addEventListener("mousedown", e => { e.stopPropagation(); e.preventDefault(); startLink(n.id, pin.dataset.pin); });
-  });
-  return el;
-}
-
-// ---- wires ----
-function pinCenter(id, which) {
-  const el = document.querySelector(`.node[data-id="${id}"] .pin.${which}`);
-  if (!el) return null;
-  const cr = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
-  return { x:r.left+r.width/2-cr.left, y:r.top+r.height/2-cr.top };
-}
-function bezier(a, b) {
-  const dx = Math.max(40, Math.abs(b.x-a.x)/2);
-  return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`;
-}
-let tempWire = null;
-let wireRaf = 0;
-function redrawWires() { if (!wireRaf) wireRaf = requestAnimationFrame(drawWires); } // coalesce per-frame
-function drawWires() {
-  wireRaf = 0;
-  let svg = "";
-  for (let i=0;i<S.wires.length;i++) {
-    const w = S.wires[i];
-    const a = pinCenter(w.from,"out"), b = pinCenter(w.to,"in");
-    if (a&&b) svg += `<path d="${bezier(a,b)}" fill="none" stroke="#5b6675" stroke-width="2.5" data-w="${i}"/>`;
-  }
-  if (tempWire) svg += `<path d="${bezier(tempWire.a,tempWire.b)}" fill="none" stroke="#e06b1f" stroke-width="2.5" stroke-dasharray="5 4"/>`;
-  wiresEl.innerHTML = svg;
-  wiresEl.querySelectorAll("[data-w]").forEach(p => p.onclick = () => { S.wires.splice(+p.dataset.w,1); redrawWires(); renderList(); });
-}
-function startLink(fromId, which) {
-  // only start from an output pin (exec flows out→in)
-  if (which!=="out") return;
-  const move = e => {
-    const cr = stage.getBoundingClientRect();
-    tempWire = { a: pinCenter(fromId,"out"), b: { x:e.clientX-cr.left, y:e.clientY-cr.top } };
-    redrawWires();
-  };
-  const up = e => {
-    window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up);
-    tempWire = null;
-    const tgt = e.target.closest(".node");
-    if (tgt) {
-      const toId = +tgt.dataset.id;
-      if (toId!==fromId && hasIn(node(toId).kind) && !S.wires.some(w=>w.from===fromId&&w.to===toId)) {
-        S.wires.push({ from:fromId, to:toId });
-      }
-    }
-    redrawWires(); renderList();
-  };
-  window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-}
-
-// ---- pan (drag empty canvas) ----
-stage.addEventListener("mousedown", e => {
-  if (e.target!==stage && e.target!==wiresEl && e.target!==nodesEl) return;
-  selectNode(null);
-  stage.classList.add("panning");
-  const sx=e.clientX, sy=e.clientY, ox=S.pan.x, oy=S.pan.y;
-  const mv = ev => { S.pan.x=ox+ev.clientX-sx; S.pan.y=oy+ev.clientY-sy; applyTransform(); redrawWires(); };
-  const up = () => { stage.classList.remove("panning"); window.removeEventListener("mousemove",mv); window.removeEventListener("mouseup",up); };
-  window.addEventListener("mousemove",mv); window.addEventListener("mouseup",up);
-});
-// ---- zoom (scroll to zoom toward cursor, like the map) ----
-stage.addEventListener("wheel", e => {
-  e.preventDefault();
-  const cr = stage.getBoundingClientRect();
-  zoomAround(e.clientX-cr.left, e.clientY-cr.top, S.zoom*Math.exp(-e.deltaY*0.0015));
-}, { passive:false });
-document.querySelectorAll("#zoomctl [data-z]").forEach(b => b.onclick = () => {
-  const cx=stage.clientWidth/2, cy=stage.clientHeight/2;
-  if (b.dataset.z==="in") zoomAround(cx,cy,S.zoom*1.2);
-  else if (b.dataset.z==="out") zoomAround(cx,cy,S.zoom/1.2);
-  else resetView();
-});
-window.addEventListener("keydown", e => { if ((e.key==="Delete"||e.key==="Backspace") && S.sel!=null && document.activeElement.tagName==="BODY") delNode(S.sel); });
-window.addEventListener("keydown", e => {
-  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-  if (e.key==="0") resetView();
-  else if (e.key==="+"||e.key==="=") zoomAround(stage.clientWidth/2, stage.clientHeight/2, S.zoom*1.2);
-  else if (e.key==="-"||e.key==="_") zoomAround(stage.clientWidth/2, stage.clientHeight/2, S.zoom/1.2);
-});
-window.addEventListener("resize", redrawWires);
-
-// ---- graph -> canonical campaign steps ----
-function downstream(id) { // ordered exec chain from a node, following out->in wires
-  const out = []; const seen = new Set();
-  const walk = nid => { for (const w of S.wires.filter(w=>w.from===nid)) { if (!seen.has(w.to)) { seen.add(w.to); out.push(w.to); walk(w.to); } } };
-  walk(id); return out;
-}
-function actionToJson(n) {
-  const out = { type:n.kind };
-  for (const [key,value] of Object.entries(n.params||{})) if (key !== "_phase") out[key] = value;
-  return out;
-}
-function triggerFromNode(n) {
-  const p = n.params || {};
-  const type = n.kind.slice("step_".length);
-  const trigger = { type };
-  if (["territory", "kills", "attack", "troops", "building", "fleet", "nuke", "elapsed"].includes(type)) trigger.value = Number(p.value);
-  if (type === "territory") trigger.mode = p.mode || "gained";
-  if (type === "defeated" || type === "contact") trigger.target = p.target;
-  return trigger;
-}
-function canonicalSteps() {
-  const steps = [];
-  for (const ev of S.nodes.filter(n=>DEFS[n.kind] && DEFS[n.kind].cat === "event")) {
-    const p = ev.params || {};
-    const chain = downstream(ev.id).map(node).filter(Boolean);
-    const step = {
-      id: p.id,
-      mechanic: p.mechanic,
-      trigger: triggerFromNode(ev),
-      title_key: p.title_key,
-      body_key: p.body_key,
-      hint_key: p.hint_key,
-      marker: { target: p.marker_target || "player" },
-      on_enter: chain.filter(n=>DEFS[n.kind].cat === "action" && n.params._phase !== "complete").map(actionToJson),
-      on_complete: chain.filter(n=>DEFS[n.kind].cat === "action" && n.params._phase === "complete").map(actionToJson),
-    };
-    steps.push(step);
-  }
-  validateSteps(steps);
-  return steps;
-}
-function validateSteps(steps) {
-  if (!Array.isArray(steps) || !steps.length) throw new Error("add at least one step");
-  const ids = new Set();
-  const factions = new Set(S.factions);
-  for (const step of steps) {
-    if (!step.id || !/^[a-z0-9][a-z0-9_-]*$/.test(step.id) || ids.has(step.id)) throw new Error("duplicate or invalid step id");
-    if (!step.mechanic || !step.trigger || !DEFS[`step_${step.trigger.type}`]) throw new Error("unknown step type");
-    if (![step.title_key, step.body_key, step.hint_key].every(key=>typeof key === "string" && key.startsWith("tutorial."))) throw new Error("translation keys must start with tutorial.");
-    if ((step.trigger.type === "defeated" || step.trigger.type === "contact") && !factions.has(step.trigger.target)) throw new Error("step references an unknown faction");
-    if (step.marker && !factions.has(step.marker.target) && step.marker.target !== "player") throw new Error("step marker references an unknown faction");
-    ids.add(step.id);
-  }
-}
-function serialize() {
-  if (!Number.isFinite(episodeSettings.starting_troops) || episodeSettings.starting_troops < 1 || episodeSettings.starting_troops > 100000) throw new Error("invalid starting troops");
-  const out = { version:1, episode_id:episodeId, settings:{ ...episodeSettings }, steps:canonicalSteps() };
-  return JSON.stringify(out, null, 2) + "\n";
-}
-
-// ---- canonical steps -> node layout ----
-function decompile(j) {
-  S.nodes=[]; S.wires=[]; S.nextId=1;
-  let col = 0;
-  const steps = Array.isArray(j.steps) ? j.steps : [];
-  for (const step of steps) {
-    let y = 30, x = 40 + col*270; let prev = null;
-    const place = (kind, params) => { const n={id:S.nextId++,kind,x,y,params:params||{}}; S.nodes.push(n); if(prev!=null) S.wires.push({from:prev,to:n.id}); prev=n.id; y+=140; return n.id; };
-    const trigger = step.trigger || {};
-    const kind = `step_${trigger.type}`;
-    if (!DEFS[kind]) throw new Error("unknown trigger type " + trigger.type);
-    const params = { id:step.id, mechanic:step.mechanic, title_key:step.title_key, body_key:step.body_key, hint_key:step.hint_key, marker_target:step.marker && step.marker.target || "player" };
-    if (trigger.value != null) params.value = trigger.value;
-    if (trigger.mode != null) params.mode = trigger.mode;
-    if (trigger.target != null) params.target = trigger.target;
-    place(kind, params);
-    for (const action of [...(step.on_enter||[]), ...(step.on_complete||[])]) {
-      if (!action || !DEFS[action.type] || DEFS[action.type].cat !== "action") throw new Error("unknown action type");
-      const p = {...action}; delete p.type;
-      if (step.on_complete && step.on_complete.includes(action)) p._phase = "complete";
-      place(action.type, p);
-    }
-    col++;
-  }
-}
-
-// ---- export / load ----
-function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
-document.getElementById("exportBtn").onclick = async () => {
-  try {
-    const file = `${episodeId}.triggers.json`;
-    const res = await fetch(`/__save?file=${encodeURIComponent(file)}`, {method:"POST", body:serialize()});
-    if(!res.ok) throw new Error(await res.text());
-    toast(`Exported → assets/campaign/${file}`);
-  } catch(e){ toast("Export failed (run via `sow m`): "+e.message); }
-};
-document.getElementById("reloadBtn").onclick = () => boot();
-document.getElementById("fileIn").onchange = e => { const f=e.target.files[0]; if(!f) return; const fr=new FileReader(); fr.onload=()=>{ try{ loadGraph(JSON.parse(fr.result)); toast("Loaded "+f.name);}catch(err){toast("Bad JSON: "+err.message);} }; fr.readAsText(f); };
-
-function renderList() {
-  const t = S.nodes.filter(n=>DEFS[n.kind] && DEFS[n.kind].cat === "event").map(n=>({id:n.params.id, trigger:n.params, actions:downstream(n.id).map(node).filter(x=>x && DEFS[x.kind].cat === "action")}));
-  document.getElementById("list").innerHTML = t.length
-    ? t.map(x=>`<div class="trow"><b>${x.id || "(missing id)"}</b> — ${x.trigger.mechanic || "step"} · ${x.actions.length} actions</div>`).join("")
-    : `<div class="trow">No steps yet. Add one from the palette.</div>`;
-}
-
-function loadGraph(j) {
-  episodeSettings.buildings_enabled = Boolean(j && j.settings && j.settings.buildings_enabled);
-  episodeSettings.starting_troops = Number(j && j.settings && j.settings.starting_troops) || 1000;
-  document.getElementById("buildingsEnabled").checked = episodeSettings.buildings_enabled;
-  document.getElementById("startingTroops").value = episodeSettings.starting_troops;
-  decompile(j||{}); S.pan={x:40,y:40}; S.zoom=1;
-  S.sel=null; render();
-}
-
-async function boot() {
-  // factions for dropdowns come from the live roster (shared with the map editor)
-  try { const r=await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.json`,{cache:"no-store"});
-    if(r.ok){ const j=await r.json(); S.factions=["player",...(j.factions||[]).map(f=>f.name)]; } } catch(e){}
-  let loaded=false;
-  try { const r=await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.triggers.json`,{cache:"no-store"});
-    if(r.ok){ loadGraph(await r.json()); loaded=true; } } catch(e){}
-  if(!loaded) { S.nodes=[]; S.wires=[]; render(); }
-}
-boot();
-</script>
+      <div id="sow-menu" class="sample-menu" aria-label="Simulated campaign menu" hidden>
+        <div class="sample-menu-screen" data-preview-menu-screen="home"><button type="button" data-command="open_campaign">CAMPAIGN</button><button type="button" data-command="quick_match">MULTIPLAYER</button><button type="button" data-nav-screen="heroes">HEROES</button><button type="button" data-nav-screen="profile">PROFILE</button></div>
+        <div class="sample-menu-screen sample-menu-screen--campaign" data-preview-menu-screen="campaign" hidden><button class="sample-campaign-back" type="button" data-preview-menu-back>← BACK</button><article class="sample-campaign-card"><p>CAMPAIGN</p><h3 data-preview-episode-title>Boudica</h3><button type="button" data-command="start_campaign_episode" data-episode-id="boudica">REPLAY TUTORIAL</button></article></div>
+      </div>
+      <div id="sow-hud" class="sample-hud-root" aria-label="Simulated game controls">
+        <div class="sample-toolbar"><button type="button" data-command="toggle_leaderboard">RANKINGS</button><button type="button" data-command="toggle_settings">SETTINGS</button><button type="button" data-command="toggle_inbox">INBOX</button><button type="button" data-command="zoom_in" aria-label="Zoom in">+</button><button type="button" data-command="zoom_out" aria-label="Zoom out">−</button><button type="button" data-command="center_camera" aria-label="Center camera">⌖</button></div>
+        <label class="sample-troop-control">TROOPS <b id="sampleTroops">1,000</b><input id="sow-hud-slider" type="range" min="5" max="100" value="50"></label>
+        <div class="sample-dock" aria-label="Simulated building dock"><button type="button" data-command="select_building" data-kind="City">CITY</button><button type="button" data-command="select_building" data-kind="Factory">FACTORY</button><button type="button" data-command="select_building" data-kind="Port">PORT</button><button type="button" data-command="select_building" data-kind="Bunker">BUNKER</button></div>
+        <div class="sample-map-menu" aria-label="Simulated map action menu">
+          <div class="sample-map-popup" hidden><button class="sample-map-back" type="button" data-map-back>BACK</button>
+            <div class="sample-map-submenu" data-preview-map-menu="build" hidden><button type="button" data-map-action="build_city">CITY</button><button type="button" data-map-action="build_factory">FACTORY</button><button type="button" data-map-action="build_port">PORT</button><button type="button" data-map-action="build_bunker">BUNKER</button><button type="button" data-map-action="build_warship">WARSHIP</button><button type="button" data-map-action="build_trade_ship">TRADE SHIP</button><button type="button" data-map-action="upgrade_tile">UPGRADE</button><button type="button" data-map-action="upgrade_arsenal">ARSENAL</button><button type="button" data-map-action="upgrade_port">PORT UPGRADE</button><button type="button" data-map-action="upgrade_foundry">FOUNDRY</button></div>
+          </div>
+          <div class="sample-controls"><button type="button" data-map-action="spawn">SPAWN</button><button type="button" data-map-action="attack">ATTACK</button><button type="button" data-map-action="transfer">TRANSFER</button><button type="button" data-map-action="fleet">FLEET</button><button type="button" data-map-action="alliance">ALLIANCE</button><button type="button" data-map-group="build">BUILD</button><button type="button" data-map-action="nuke">NUKE</button></div>
+        </div>
+      </div>
+      <div id="previewRoot"></div>
+    </div></div>
+    <div class="preview-actions"><label id="previewBranchWrap" class="preview-branch" hidden>Simulate branch <select id="previewBranchSelect"><option value="">Current preview state</option></select></label><button id="playSelected" class="primary">Play selected</button><button id="restartBtn">Restart episode</button><button id="simulateBtn" hidden>Complete objective</button><button id="tickBtn" hidden>+1 second</button></div>
+    <div id="previewStatus" role="status" class="preview-status">Shared campaign renderer</div>
+    <details class="simulation-facts"><summary>Simulation facts & state</summary><div id="factControls"></div><pre id="engineState"></pre></details>
+  </section>
+</main>
 </body>
 </html>

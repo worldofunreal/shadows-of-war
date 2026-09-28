@@ -586,7 +586,9 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             println!("    {file}");
         }
     }
-    for command in ["cargo", "curl", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt"] {
+    for command in [
+        "cargo", "curl", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
+    ] {
         if !Command::new("/bin/sh")
             .args(["-c", &format!("command -v {command} >/dev/null")])
             .status()?
@@ -597,7 +599,10 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     run(
         "node",
-        &["--test", "sow-web/shell/main_menu.interaction.test.js"],
+        &[
+            "--test",
+            "sow-web/shell/main_menu.interaction.test.js",
+        ],
         Some(&paths.root),
     )
     .context("web interaction regression tests failed")?;
@@ -1328,7 +1333,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
 fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let local = paths.root.join("dist/freebsd-bin");
     let fingerprint = input_fingerprint(
-        "freebsd-v3",
+        "freebsd-v4",
         "",
         &[
             &paths.root.join("Cargo.toml"),
@@ -1368,7 +1373,7 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
 
     let root = shell_quote(&config.build_root);
     let command = format!(
-        "set -eu; cd {root}; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
+        "set -eu; cd {root}; cargo test --locked -p sow-core; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
     );
     run("ssh", &[&config.build_host, &command], None)?;
 

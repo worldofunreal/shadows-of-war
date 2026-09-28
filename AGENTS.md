@@ -88,7 +88,9 @@ review clock, so `./sow p` never touches Android. The owner alone runs `./sow a`
 manually only when a new build is actually ready for review; Codex must never
 run it or upload to Play. Codex validates Android locally with
 `scripts/android-local-test.sh` only. `native`, `l`, `p`, and `a` are the CLI
-contract; do not invent further subcommands.
+contract; do not invent further subcommands. The full set is `native`, `l`
+(local preview, port 4173), `m` (campaign editor, port 8777), `p`, `a`, and
+`jest` (self-contained Jest bundle + `dist/jest.zip`).
 
 ### UI ownership
 

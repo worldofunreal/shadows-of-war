@@ -44,6 +44,7 @@
     var profileLastPhase = null;
     var storeOpen = false;
     var skinPickerOpen = false;
+    var heroInfoOpen = false;
     var heroesOpen = false;
     var campaignOpen = false;
     var createDraft = null;

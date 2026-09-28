@@ -5,7 +5,7 @@
 <h1 align="center">Shadows of War</h1>
 
 <p align="center">
-  <strong>Command 1 of 12 historic leaders in real-time territory wars. Roster growing.</strong><br />
+  <strong>Command historic leaders in real-time territory wars. 12 playable today, roster growing.</strong><br />
   Build cities, factories and ports, forge alliances, betray rivals, and redraw the world map in this multiplayer game.
 </p>
 
@@ -65,12 +65,20 @@ The native build and the browser preview use the same client. The desktop shell 
 | Path | Role |
 | --- | --- |
 | `sow-core` | Simulation rules and shared game state |
-| `sow-client` | Rust/WASM client and Blade rendering integration |
+| `sow-client` | Rust/WASM game client and Blade integration |
+| `sow-render` | Pure GPU rendering pipelines and shaders (Blade) |
+| `sow-net` | WebSocket networking and turn relay protocol |
+| `sow-audio` | Audio engine (WASM/cpal output, SFX preview) |
+| `sow-i18n` | Locale catalogs and localization |
+| `sow-map` | Map import, validation and thumbnail pipeline |
+| `sow-data` | Leaders, maps, profiles, commerce and game data |
+| `sow-server` | Matchmaking and multiplayer coordination |
+| `sow-relay` | Multiplayer relay service (F-Stack/DPDK transport) |
+| `fstack-bridge` | Zero-copy Rust bridge over F-Stack (FreeBSD only) |
+| `sow-backfill` | Private-match backfill and bot-manager daemon |
+| `sow-tools` | Map generator and tooling CLI |
 | `sow-web/shell` | JavaScript interface, HUD, tutorial and browser input |
 | `sow-native` | Tauri desktop shell for the JavaScript/WASM client |
-| `sow-data` | Leaders, maps, profiles and game data |
-| `sow-server` | Matchmaking and multiplayer coordination |
-| `sow-relay` | Multiplayer relay service |
 | `sow-dist` | Build and packaging pipeline behind `./sow` |
 
 ## Links
@@ -80,8 +88,14 @@ The native build and the browser preview use the same client. The desktop shell 
 - [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)
 
-## License
+## License & derivatives
 
-Shadows of War is licensed under [AGPL-3.0-or-later](LICENSE).
+Shadows of War is licensed under [AGPL-3.0-or-later](LICENSE). Portions derive from [OpenFrontIO](https://github.com/openfrontio/OpenFrontIO). See [COPYRIGHT](docs/legal/COPYRIGHT) and [NOTICE](docs/legal/NOTICE).
 
-Portions derive from [OpenFrontIO](https://github.com/openfrontio/OpenFrontIO). See [COPYRIGHT](docs/legal/COPYRIGHT) and [NOTICE](docs/legal/NOTICE).
+**What this means if you build on this code:**
+
+- You may use, study, modify and redistribute it — including commercially — under the same AGPL-3.0 license.
+- If you run a modified or unmodified version as a service over a network (a hosted game, a web client, a relay), AGPL section 13 obligates you to offer the **full corresponding source of your modified version** to every user of that service. This applies to closed-source servers, SaaS and game backends alike; there is no loophole for "we only host it."
+- Your derivative must stay AGPL (or compatible) when shared, keep the legal notices intact, and game art carries its own terms in [docs/legal/LICENSE-ASSETS](docs/legal/LICENSE-ASSETS) (CC BY-SA for shipped art), so replaced content is share-alike too.
+- The license does **not** grant the right to distribute your version under the *Shadows of War* name, logo or brand. Please rebrand derivatives entirely; we enforce our brand as a trademark matter separate from the code license.
+- AGPL cannot require you to notify the upstream project, and we ask nothing of you as a license condition — but if you run something public built on this code, we would genuinely like to hear about it. Non-compliance (closed-source network use, stripped notices, brand reuse) is copyright infringement and we do monitor and enforce it.

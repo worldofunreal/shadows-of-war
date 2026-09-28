@@ -2,83 +2,56 @@
     "use strict";
 
     var hudRoot = document.getElementById("sow-hud");
+    var root = document.createElement("div");
+    root.id = "sow-story";
+    root.hidden = true;
+    document.body.appendChild(root);
+    var pendingMenuGuide = null;
+
     var runtime = {
-        episodeId: null,
-        definition: null,
-        roster: null,
-        active: false,
-        stepIndex: 0,
-        baselineTiles: null,
-        dialogOpen: true,
-        paused: null,
-        finalReady: false,
-        completionSent: false,
-        enteredSteps: Object.create(null),
-        completedSteps: Object.create(null),
-        flags: Object.create(null),
-        loading: Object.create(null),
-        startingEpisode: null,
-        bootEpisode: null,
         generation: 0,
-        lastPhase: null
+        episodeId: null,
+        activating: null,
+        definition: null,
+        machine: null,
+        view: null,
+        active: false,
+        starting: null,
+        loading: Object.create(null),
+        latestHud: null,
+        uiCounts: Object.create(null),
+        uiPaused: false,
+        completionSent: false,
+        priorChoices: Object.create(null),
+        failedEpisode: null,
+        bootEpisode: null,
+        lastPhase: null,
+        modalObserver: null,
+        menuGuide: false
     };
-
-    var allowedTriggers = {
-        territory: true,
-        kills: true,
-        defeated: true,
-        contact: true,
-        attack: true,
-        troops: true,
-        building: true,
-        fleet: true,
-        nuke: true,
-        elapsed: true
-    };
-    var allowedActions = {
-        show_dialog: true,
-        set_objective: true,
-        emote: true,
-        pause: true,
-        resume: true,
-        set_flag: true
-    };
-
-    function esc(value) {
-        return String(value == null ? "" : value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-    }
 
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
     }
 
-    function leaderSlug(value) {
-        return String(value || "boudica")
-            .replace(/([a-z])([A-Z])/g, "$1_$2")
-            .replace(/\s+/g, "_")
-            .toLowerCase();
-    }
-
-    function send(type, extra) {
+    function send(type, fields) {
         if (typeof window.SOW_menu_command !== "function") return false;
-        window.SOW_menu_command(JSON.stringify(Object.assign({ type: type }, extra || {})));
+        window.SOW_menu_command(JSON.stringify(Object.assign({ type: type }, fields || {})));
         return true;
     }
 
-    function translation(key) {
+    function tr(key) {
+        var definition = runtime.definition;
+        var locale = String(typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en").toLowerCase().replace(/_/g, "-");
+        var strings = definition && definition.strings;
+        var localized = strings && !Array.isArray(strings) && (strings[locale] || strings[locale.split("-")[0]]);
+        var text = localized && localized[key];
+        if (typeof text === "string" && text.trim()) return text;
+        if (strings && !Array.isArray(strings)) text = (strings[definition.default_locale] || {})[key];
+        if (typeof text === "string" && text.trim()) return text;
         var value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
-        if (!value || value === "[" + key + "]") throw new Error("missing translation " + key);
-        return value;
-    }
-
-    function ensureI18n() {
-        return Promise.resolve(window.SOW_I18N_READY).catch(function () {});
+        return !value || value === "[" + key + "]" ? key : value;
     }
 
     function fetchJson(path) {
@@ -88,325 +61,409 @@
         });
     }
 
-    function validateEpisode(episodeId, roster, definition) {
-        if (!roster || typeof roster !== "object" || typeof roster.map !== "string" || !Array.isArray(roster.factions)) {
-            throw new Error("roster shape");
-        }
-        if (!Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2) {
-            throw new Error("player spawn");
-        }
-        var names = Object.create(null);
-        roster.factions.forEach(function (faction) {
-            if (!faction || typeof faction.name !== "string" || !faction.name.trim()) throw new Error("faction name");
-            if (names[faction.name]) throw new Error("duplicate faction " + faction.name);
-            names[faction.name] = true;
-        });
-        if (!definition || definition.version !== 1 || definition.episode_id !== episodeId || !Array.isArray(definition.steps) || !definition.steps.length) {
-            throw new Error("trigger shape");
-        }
-        var ids = Object.create(null);
-        definition.steps.forEach(function (step) {
-            if (!step || typeof step.id !== "string" || !step.id || ids[step.id]) throw new Error("duplicate step id");
-            ids[step.id] = true;
-            if (!step.trigger || !allowedTriggers[step.trigger.type]) throw new Error("unknown trigger");
-            [step.title_key, step.body_key, step.hint_key].forEach(function (key) {
-                if (typeof key !== "string") throw new Error("missing translation key");
-                translation(key);
-            });
-            var trigger = step.trigger;
-            if ((trigger.type === "defeated" || trigger.type === "contact") && !names[trigger.target]) throw new Error("unknown faction target " + trigger.target);
-            if (["territory", "kills", "contact", "attack", "troops", "building", "fleet", "nuke", "elapsed"].indexOf(trigger.type) >= 0 && (!Number.isFinite(Number(trigger.value)) || Number(trigger.value) < 0)) {
-                throw new Error("invalid trigger value");
-            }
-            [step.on_enter || [], step.on_complete || []].forEach(function (actions) {
-                if (!Array.isArray(actions)) throw new Error("invalid actions");
-                actions.forEach(function (action) {
-                    if (!action || !allowedActions[action.type]) throw new Error("unknown action");
-                });
-            });
-            if (step.marker && step.marker.target !== "player" && !names[step.marker.target]) throw new Error("unknown marker target " + step.marker.target);
-        });
-        var settings = definition.settings || {};
-        if (typeof settings.buildings_enabled !== "boolean" || !Number.isFinite(Number(settings.starting_troops))) throw new Error("invalid episode settings");
-    }
-
-    function episodeFiles(episodeId) {
-        return {
-            roster: "campaign/" + episodeId + ".json",
-            triggers: "campaign/" + episodeId + ".triggers.json"
-        };
+    function hasText(key) {
+        if (typeof window.SOW_t !== "function") return false;
+        var text = window.SOW_t(key);
+        return Boolean(text && text !== "[" + key + "]");
     }
 
     function loadEpisode(episodeId) {
         if (runtime.loading[episodeId]) return runtime.loading[episodeId];
-        var files = episodeFiles(episodeId);
-        runtime.loading[episodeId] = Promise.all([fetchJson(files.roster), fetchJson(files.triggers)])
-            .then(function (payload) {
-                return ensureI18n().then(function () {
-                    validateEpisode(episodeId, payload[0], payload[1]);
-                    return { roster: payload[0], definition: payload[1] };
-                });
-            })
-            .catch(function (error) {
-                delete runtime.loading[episodeId];
-                throw error;
-            });
-        return runtime.loading[episodeId];
-    }
-
-    function removeError() {
-        var node = document.getElementById("sow-tutorial-error");
-        if (node) node.remove();
-    }
-
-    function resetRuntime() {
-        runtime.generation += 1;
-        runtime.episodeId = null;
-        runtime.definition = null;
-        runtime.roster = null;
-        runtime.active = false;
-        runtime.stepIndex = 0;
-        runtime.baselineTiles = null;
-        runtime.dialogOpen = true;
-        runtime.paused = null;
-        runtime.finalReady = false;
-        runtime.completionSent = false;
-        runtime.enteredSteps = Object.create(null);
-        runtime.completedSteps = Object.create(null);
-        runtime.flags = Object.create(null);
-        runtime.startingEpisode = null;
-        runtime.bootEpisode = null;
-        removeError();
-        if (hudRoot) {
-            var stale = hudRoot.querySelector("[data-tutorial-overlay]");
-            if (stale) stale.remove();
+        var request = Promise.all([
+            fetchJson("campaign/" + episodeId + ".json"),
+            fetchJson("campaign/" + episodeId + ".triggers.json")
+        ]).then(function (files) {
+            var roster = files[0], definition = files[1];
+            if (!window.SOWCampaign || !window.SOWCampaignView) throw new Error("Campaign runtime is missing.");
+            if (definition.episode_id !== episodeId) throw new Error("Campaign filename and episode ID do not match.");
+            var result = window.SOWCampaign.validate(definition, roster, { hasText: hasText });
+            if (result.errors.length) throw new Error(result.errors.map(function (issue) { return issue.message; }).join("\n"));
+            return { roster: roster, definition: definition };
+        });
+        runtime.loading[episodeId] = request;
+        function releaseRequest() {
+            if (runtime.loading[episodeId] === request) delete runtime.loading[episodeId];
         }
+        request.then(releaseRequest, releaseRequest);
+        return request;
     }
 
-    function showError(error, episodeId) {
-        console.error("[SOW TUTORIAL]", error);
-        removeError();
-        var node = document.createElement("div");
-        node.id = "sow-tutorial-error";
-        node.className = "sow-tutorial__error";
-        node.setAttribute("role", "alert");
-        node.innerHTML = "<span>" + esc(translation("tutorial.unavailable")) + "</span><button type='button' data-tutorial-retry>" + esc(translation("tutorial.retry")) + "</button>";
-        document.body.appendChild(node);
-        node.querySelector("[data-tutorial-retry]").addEventListener("click", function () {
-            removeError();
-            if (episodeId) startEpisode(episodeId, false);
+    function showError(error, episodeId, retryAction, dismissAction) {
+        console.error("[SOW CAMPAIGN]", error);
+        if (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.active) {
+            runtime.uiPaused = true;
+            send("set_tutorial_paused", { paused: true });
+        }
+        var previous = document.getElementById("sow-campaign-error");
+        if (previous) previous.remove();
+        var focusBefore = document.activeElement;
+        var panel = document.createElement("section");
+        panel.id = "sow-campaign-error";
+        panel.className = "sow-campaign-error";
+        panel.setAttribute("role", "alertdialog");
+        var message = document.createElement("p");
+        message.textContent = tr("tutorial.unavailable");
+        var retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = tr("tutorial.retry");
+        retry.addEventListener("click", function () {
+            panel.remove(); runtime.failedEpisode = null; delete runtime.loading[episodeId];
+            if (retryAction) { retryAction(); return; }
+            if (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.active && runtime.latestHud.tutorial.episode_id === episodeId) {
+                runtime.activating = null; activate(runtime.latestHud.tutorial, runtime.latestHud);
+            } else startEpisode(episodeId, false);
+        });
+        panel.append(message, retry);
+        if (dismissAction) {
+            var dismiss = document.createElement("button");
+            dismiss.type = "button";
+            dismiss.textContent = tr("tutorial.continue");
+            dismiss.addEventListener("click", function () {
+                panel.remove(); dismissAction();
+                if (focusBefore && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
+            });
+            panel.appendChild(dismiss);
+        }
+        document.body.appendChild(panel);
+        retry.focus({ preventScroll: true });
+    }
+
+    function makeView() {
+        if (runtime.view) runtime.view.destroy();
+        if (!root.isConnected) document.body.appendChild(root);
+        runtime.view = window.SOWCampaignView.mount(root, {
+            translate: tr,
+            asset: asset,
+            onContinue: continueScene,
+            onChoice: choose,
+            onFocus: focusMarker,
+            onDismiss: runtime.menuGuide
+                ? (runtime.definition.menu_guide.dismissible === false ? null : dismissMenuGuide)
+                : openLeaveMatch
         });
     }
 
     function startEpisode(episodeId, fromBoot) {
-        if (!episodeId || runtime.startingEpisode === episodeId || (runtime.active && runtime.episodeId === episodeId)) return;
-        var generation = runtime.generation;
-        runtime.startingEpisode = episodeId;
-        runtime.bootEpisode = fromBoot ? episodeId : runtime.bootEpisode;
-        removeError();
+        episodeId = String(episodeId || "");
+        if (!/^[a-z][a-z0-9_]{0,63}$/.test(episodeId) || runtime.starting === episodeId || (runtime.active && runtime.episodeId === episodeId)) return;
+        if (runtime.menuGuide) dismissMenuGuide();
+        runtime.priorChoices = Object.create(null);
+        var generation = ++runtime.generation;
+        runtime.starting = episodeId;
+        runtime.failedEpisode = null;
+        var error = document.getElementById("sow-campaign-error");
+        if (error) error.remove();
         loadEpisode(episodeId).then(function (data) {
             if (generation !== runtime.generation) return;
             runtime.episodeId = episodeId;
-            runtime.roster = data.roster;
             runtime.definition = data.definition;
-            runtime.stepIndex = 0;
-            runtime.baselineTiles = null;
-            runtime.dialogOpen = true;
-            runtime.paused = null;
-            runtime.finalReady = false;
-            runtime.completionSent = false;
-            runtime.enteredSteps = Object.create(null);
-            runtime.completedSteps = Object.create(null);
-            runtime.flags = Object.create(null);
-            if (!send("start_campaign_episode", {
-                episode_id: episodeId,
-                roster: data.roster,
-                match: data.definition.settings
-            })) {
-                throw new Error("menu bridge unavailable");
-            }
-        }).catch(function (error) {
-            if (generation !== runtime.generation) return;
-            showError(error, episodeId);
-        }).then(function () {
-            if (generation === runtime.generation) runtime.startingEpisode = null;
-        });
-    }
-
-    function tutorialFacts(hud) {
-        var tutorial = hud.tutorial || {};
-        var facts = tutorial.facts || {};
-        if (runtime.baselineTiles == null && Number.isFinite(Number(facts.tiles)) && Number(facts.tiles) > 0) {
-            runtime.baselineTiles = Number(facts.tiles);
-        }
-        facts.tiles_gained = Math.max(0, Number(facts.tiles || 0) - Number(runtime.baselineTiles || 0));
-        return facts;
-    }
-
-    function triggerProgress(trigger, facts) {
-        var type = trigger.type;
-        if (type === "defeated") return { current: facts.defeated_names && facts.defeated_names.indexOf(trigger.target) >= 0 ? 1 : 0, target: 1 };
-        var current = type === "territory" && trigger.mode === "gained" ? facts.tiles_gained : facts[type + "s"];
-        if (type === "kills") current = facts.kills;
-        if (type === "troops") current = facts.troops;
-        if (type === "elapsed") current = facts.elapsed_ticks;
-        current = Number(current || 0);
-        return { current: Math.min(current, Number(trigger.value)), target: Number(trigger.value) };
-    }
-
-    function runActions(actions) {
-        (actions || []).forEach(function (action) {
-            if (!action || typeof action.type !== "string") return;
-            if (action.type === "pause") setPaused(true);
-            else if (action.type === "resume") setPaused(false);
-            else if (action.type === "show_dialog") { runtime.dialogOpen = true; setPaused(true); }
-            else if (action.type === "set_flag" && action.name) runtime.flags[action.name] = true;
-            else if (action.type === "emote" && action.emoji) send("express_emoji", { emoji: action.emoji, pinned: false });
-        });
-    }
-
-    function enterStep(step) {
-        if (!step || runtime.enteredSteps[step.id]) return;
-        runtime.enteredSteps[step.id] = true;
-        runActions(step.on_enter);
-    }
-
-    function completeStep(step) {
-        if (!step || runtime.completedSteps[step.id]) return;
-        runtime.completedSteps[step.id] = true;
-        runActions(step.on_complete);
-    }
-
-    function currentStep(hud) {
-        if (!runtime.definition) return null;
-        var facts = tutorialFacts(hud);
-        var steps = runtime.definition.steps;
-        while (runtime.stepIndex < steps.length - 1) {
-            var progress = triggerProgress(steps[runtime.stepIndex].trigger, facts);
-            if (progress.current < progress.target) break;
-            completeStep(steps[runtime.stepIndex]);
-            runtime.stepIndex += 1;
-            runtime.dialogOpen = true;
-            runtime.finalReady = false;
-            setPaused(true);
-        }
-        var step = steps[runtime.stepIndex];
-        enterStep(step);
-        var progress = triggerProgress(step.trigger, facts);
-        runtime.finalReady = runtime.stepIndex === steps.length - 1 && progress.current >= progress.target;
-        return { step: step, progress: progress, facts: facts };
-    }
-
-    function setPaused(paused) {
-        if (!runtime.active || runtime.paused === paused) return;
-        runtime.paused = paused;
-        send("set_tutorial_paused", { paused: paused });
-    }
-
-    function render(hud) {
-        if (!hudRoot) return;
-        var tutorial = hud && hud.tutorial;
-        if (!tutorial || !tutorial.active || !runtime.definition || runtime.episodeId !== tutorial.episode_id) {
-            var stale = hudRoot.querySelector("[data-tutorial-overlay]");
-            if (stale) stale.remove();
+            runtime.machine = null;
             runtime.active = false;
-            runtime.paused = null;
+            runtime.uiCounts = Object.create(null);
+            runtime.uiPaused = null;
+            runtime.markerId = undefined;
+            runtime.completionSent = false;
+            if (!send("start_campaign_episode", { episode_id: episodeId, roster: data.roster, match: data.definition.settings })) {
+                throw new Error("Campaign could not reach the game.");
+            }
+        }).catch(function (reason) {
+            if (generation === runtime.generation) { runtime.failedEpisode = episodeId; showError(reason, episodeId); }
+        }).then(function () {
+            if (generation === runtime.generation) runtime.starting = null;
+        });
+        if (fromBoot) runtime.bootEpisode = episodeId;
+    }
+
+    function activate(tutorial, hud) {
+        if (runtime.machine && runtime.episodeId === tutorial.episode_id) {
+            runtime.latestHud = hud;
+            update(hud);
             return;
         }
-        runtime.active = true;
-        var info = currentStep(hud);
-        if (!info) return;
-        var step = info.step;
-        var progress = info.progress;
-        var overlay = hudRoot.querySelector("[data-tutorial-overlay]");
-        if (!overlay) {
-            overlay = document.createElement("section");
-            overlay.className = "sow-hud__tutorial-overlay";
-            overlay.dataset.tutorialOverlay = "true";
-            overlay.innerHTML = "<article class='sow-hud__tutorial-card' data-tutorial-card role='dialog' aria-modal='true'><div class='sow-hud__tutorial-copy'><p class='sow-hud__tutorial-step' data-tutorial-step></p><h2 data-tutorial-title></h2><p data-tutorial-body></p><strong data-tutorial-hint></strong><div class='sow-hud__tutorial-progress' data-tutorial-progress></div><button type='button' class='sow-hud__tutorial-action' data-tutorial-continue></button></div><img class='sow-hud__tutorial-avatar' data-tutorial-avatar alt=''></article>";
-            hudRoot.appendChild(overlay);
-            overlay.addEventListener("click", function (event) {
-                event.stopPropagation();
-                var button = event.target && event.target.closest
-                    ? event.target.closest("[data-tutorial-continue]")
-                    : null;
-                if (!button) return;
-                event.preventDefault();
-                if (runtime.finalReady) {
-                    if (runtime.completionSent) return;
-                    completeStep(runtime.definition.steps[runtime.stepIndex]);
-                    runtime.completionSent = true;
-                    send("complete_campaign_episode", { episode_id: runtime.episodeId });
-                    return;
-                }
-                runtime.dialogOpen = false;
-                setPaused(false);
-                render(hud);
-            }, true);
-            overlay.addEventListener("pointerdown", function (event) {
-                if (runtime.dialogOpen) event.stopPropagation();
-            }, true);
-            overlay.addEventListener("pointerup", function (event) {
-                if (runtime.dialogOpen) event.stopPropagation();
-            }, true);
-        }
-        overlay.classList.toggle("is-open", runtime.dialogOpen);
-        var card = overlay.querySelector("[data-tutorial-card]");
-        card.hidden = !runtime.dialogOpen;
-        overlay.querySelector("[data-tutorial-step]").textContent = (runtime.stepIndex + 1) + " / " + runtime.definition.steps.length;
-        overlay.querySelector("[data-tutorial-title]").textContent = translation(step.title_key);
-        overlay.querySelector("[data-tutorial-body]").textContent = translation(step.body_key);
-        overlay.querySelector("[data-tutorial-hint]").textContent = translation(step.hint_key);
-        overlay.querySelector("[data-tutorial-progress]").textContent = Math.floor(progress.current) + " / " + Math.floor(progress.target);
-        overlay.querySelector("[data-tutorial-continue]").textContent = translation(runtime.finalReady ? "tutorial.complete" : "tutorial.continue");
-        var leader = leaderSlug(hud.player_leader || "boudica");
-        var avatar = overlay.querySelector("[data-tutorial-avatar]");
-        avatar.src = asset("gameplay/avatars/" + leader + ".webp");
-        avatar.alt = leader;
-        if (runtime.paused == null) setPaused(true);
+        var episodeId = String(tutorial.episode_id || "");
+        if (runtime.failedEpisode === episodeId) return;
+        if (runtime.activating === episodeId) return;
+        runtime.activating = episodeId;
+        var generation = runtime.generation;
+        var episode = runtime.episodeId === episodeId && runtime.definition
+            ? Promise.resolve({ definition: runtime.definition })
+            : loadEpisode(episodeId);
+        episode.then(function (data) {
+            if (generation !== runtime.generation || !runtime.latestHud || !runtime.latestHud.tutorial || runtime.latestHud.tutorial.episode_id !== episodeId) return;
+            if (runtime.machine && runtime.episodeId === episodeId) { update(runtime.latestHud); return; }
+            runtime.episodeId = episodeId;
+            runtime.definition = data.definition;
+            runtime.machine = window.SOWCampaign.create(data.definition);
+            runtime.active = true;
+            runtime.uiCounts = Object.create(null);
+            runtime.uiPaused = null;
+            runtime.markerId = undefined;
+            runtime.completionSent = false;
+            makeView();
+            update(runtime.latestHud);
+        }).catch(function (error) {
+            if (generation === runtime.generation) { runtime.failedEpisode = episodeId; showError(error, episodeId); }
+        }).then(function () {
+            if (runtime.activating === episodeId) runtime.activating = null;
+        });
     }
 
-    window.SOW_startCampaignEpisode = function (episodeId) {
-        startEpisode(String(episodeId || ""), false);
-    };
+    function anchorFor(step, hud) {
+        if (!step || !step.guide) return null;
+        var guide = step.guide, tutorial = hud.tutorial || {};
+        var result;
+        if (guide.kind === "world") {
+            var point = tutorial[guide.target];
+            if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return null;
+            result = { x: Number(point.x), y: Number(point.y) };
+        } else {
+            var source = window.SOWCampaign.resolveUiTarget(guide.target, document, runtime.episodeId);
+            if (!source || source.disabled || source.getClientRects().length === 0) return null;
+            result = window.SOWCampaign.resolveUiAnchor(source);
+        }
+        if (guide.gesture === "drag" && guide.to) {
+            if (guide.kind === "world") {
+                var worldDestination = tutorial[guide.to];
+                if (!worldDestination || !Number.isFinite(Number(worldDestination.x)) || !Number.isFinite(Number(worldDestination.y))) return null;
+                result.toX = Number(worldDestination.x); result.toY = Number(worldDestination.y);
+            } else {
+                var destination = window.SOWCampaign.resolveUiTarget(guide.to, document, runtime.episodeId);
+                if (!destination || destination.disabled || !destination.getClientRects().length) return null;
+                var targetAnchor = window.SOWCampaign.resolveUiAnchor(destination);
+                result.toX = targetAnchor.x;
+                result.toY = targetAnchor.y;
+            }
+        }
+        return result;
+    }
 
+    function markerTargetFor(step) {
+        if (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target) {
+            return step.trigger.target;
+        }
+        return step.marker && step.marker.target;
+    }
+
+    function update(hud) {
+        if (!runtime.machine || runtime.modalOpen || !hud || !hud.tutorial || !hud.tutorial.active) return;
+        if (!root.isConnected) document.body.appendChild(root);
+        var tutorial = hud.tutorial;
+        var machineView = runtime.machine.update(tutorial.facts || {}, runtime.uiCounts, performance.now());
+        runtime.priorChoices = Object.assign(Object.create(null), runtime.machine.state.choices);
+        if (machineView.paused !== runtime.uiPaused) {
+            runtime.uiPaused = machineView.paused;
+            send("set_tutorial_paused", { paused: machineView.paused });
+        }
+        var markerId = null;
+        var markerTarget = markerTargetFor(machineView.step);
+        if (markerTarget) {
+            var marked = markerTarget === "player"
+                ? (hud.players || []).find(function (player) { return player && player.is_me; })
+                : (hud.players || []).find(function (player) { return player && player.name === markerTarget; });
+            if (marked && Number.isInteger(Number(marked.id))) markerId = Number(marked.id);
+        }
+        if (markerId !== runtime.markerId) {
+            runtime.markerId = markerId;
+            send("set_tutorial_marker", { player_id: markerId });
+        }
+        if (!runtime.modalOpen) runtime.view.render(machineView, { anchor: anchorFor(machineView.step, hud), reducedMotion: Boolean(hud.settings && hud.settings.reduced_motion), direction: document.documentElement.dir });
+        if (machineView.done && !runtime.completionSent) {
+            runtime.completionSent = true;
+            if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
+            send("complete_campaign_episode", { episode_id: runtime.episodeId });
+        }
+    }
+
+    function updateMenuGuide() {
+        if (!runtime.menuGuide || !runtime.machine || !runtime.definition || !runtime.latestHud && runtime.lastPhase !== "MainMenu") return;
+        var machineView = runtime.machine.update({}, runtime.uiCounts, performance.now());
+        runtime.view.render(machineView, {
+            anchor: anchorFor(machineView.step, { tutorial: {} }),
+            reducedMotion: Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches),
+            direction: document.documentElement.dir
+        });
+        if (machineView.done) {
+            runtime.menuGuide = false;
+            runtime.machine = null;
+            pendingMenuGuide = null;
+        }
+    }
+
+    function startMenuGuide() {
+        if (!pendingMenuGuide || !runtime.lastPhase || runtime.lastPhase !== "MainMenu") return;
+        var episodeId = pendingMenuGuide.episodeId;
+        var generation = runtime.generation;
+        loadEpisode(episodeId).then(function (data) {
+            if (runtime.generation !== generation || !pendingMenuGuide || pendingMenuGuide.episodeId !== episodeId) return;
+            if (!data.definition.menu_guide) {
+                pendingMenuGuide = null;
+                runtime.priorChoices = Object.create(null);
+                return;
+            }
+            runtime.generation++;
+            runtime.episodeId = episodeId;
+            runtime.definition = data.definition;
+            runtime.latestHud = null;
+            runtime.uiCounts = Object.create(null);
+            runtime.active = false;
+            runtime.menuGuide = true;
+            runtime.completionSent = true;
+            runtime.machine = window.SOWCampaign.create(data.definition, data.definition.menu_guide.entry);
+            runtime.machine.jump(data.definition.menu_guide.entry, null, runtime.priorChoices);
+            runtime.priorChoices = Object.create(null);
+            makeView();
+            updateMenuGuide();
+            pendingMenuGuide = null;
+        }).catch(function (error) {
+            if (runtime.generation === generation && pendingMenuGuide && pendingMenuGuide.episodeId === episodeId) {
+                showError(error, episodeId, startMenuGuide, function () {
+                    pendingMenuGuide = null;
+                    runtime.priorChoices = Object.create(null);
+                });
+            }
+        });
+    }
+
+    function dismissMenuGuide() {
+        if (!runtime.menuGuide) { openLeaveMatch(); return; }
+        runtime.menuGuide = false;
+        runtime.machine = null;
+        runtime.priorChoices = Object.create(null);
+        pendingMenuGuide = null;
+        if (runtime.view) runtime.view.render(null);
+    }
+
+    function continueScene() {
+        if (!runtime.machine) return;
+        var step = runtime.machine.view().step;
+        if (runtime.machine.advance(null, step.id)) runtime.menuGuide ? updateMenuGuide() : update(runtime.latestHud);
+    }
+
+    function choose(choiceId) {
+        if (!runtime.machine) return;
+        var step = runtime.machine.view().step;
+        if (runtime.machine.advance(choiceId, step.id)) runtime.menuGuide ? updateMenuGuide() : update(runtime.latestHud);
+    }
+
+    function focusMarker() {
+        var hud = runtime.latestHud;
+        if (!hud || !runtime.machine) return;
+        var step = runtime.machine.view().step;
+        var target = markerTargetFor(step);
+        var player = target === "player" ? (hud.players || []).find(function (item) { return item && item.is_me; }) : (hud.players || []).find(function (item) { return item && item.name === target; });
+        if (player) send("focus_player", { player_id: Number(player.id) });
+    }
+
+    function openLeaveMatch() {
+        var button = hudRoot && hudRoot.querySelector('[data-command="prompt_surrender"]');
+        if (button) button.click();
+    }
+
+    function modalChanged() {
+        var modal = document.getElementById("sow-hud-surrender-modal");
+        var open = Boolean(modal && !modal.classList.contains("hidden"));
+        if (open === runtime.modalOpen) return;
+        runtime.modalOpen = open;
+        if (runtime.machine) runtime.machine.setPaused(open, performance.now());
+        if (open) {
+            runtime.resumeAfterModal = runtime.machine ? runtime.machine.view().paused : false;
+            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: true });
+            root.hidden = true;
+        } else if (runtime.machine) {
+            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false });
+            runtime.view.render(runtime.machine.view(), { anchor: anchorFor(runtime.machine.view().step, runtime.latestHud) });
+        }
+    }
+
+    function redrawCampaign() {
+        if (!runtime.machine || !runtime.view || runtime.modalOpen) return;
+        if (runtime.menuGuide) { updateMenuGuide(); return; }
+        if (!runtime.latestHud) return;
+        var model = runtime.machine.view();
+        runtime.view.render(model, {
+            anchor: anchorFor(model.step, runtime.latestHud),
+            reducedMotion: Boolean(runtime.latestHud.settings && runtime.latestHud.settings.reduced_motion),
+            direction: document.documentElement.dir
+        });
+    }
+    window.addEventListener("resize", redrawCampaign, { passive: true });
+
+    if (hudRoot && typeof MutationObserver !== "undefined") {
+        runtime.modalObserver = new MutationObserver(modalChanged);
+        runtime.modalObserver.observe(hudRoot, { subtree: true, attributes: true, attributeFilter: ["class"] });
+    }
+
+    function recordUiAction(event) {
+        if (!runtime.machine) return;
+        if (root.contains(event.target)) return;
+        var changed = false;
+        Object.keys(window.SOWCampaign.UI_TARGETS).forEach(function (key) {
+            var control = window.SOWCampaign.resolveUiTarget(key, document, runtime.episodeId);
+            var actionEvent = control && control.matches('input[type="range"]') ? "change" : "click";
+            if (event.type === actionEvent && control && !control.disabled && control.getClientRects().length && (control === event.target || control.contains(event.target))) {
+                runtime.uiCounts[key] = (runtime.uiCounts[key] || 0) + 1; changed = true;
+            }
+        });
+        if (changed && runtime.menuGuide) {
+            updateMenuGuide();
+            window.setTimeout(updateMenuGuide, 650);
+        }
+    }
+    ["click", "input", "change"].forEach(function (type) { document.addEventListener(type, recordUiAction, true); });
+
+    window.SOW_startCampaignEpisode = function (episodeId) { startEpisode(episodeId, false); };
     window.SOW_tutorial_menu_state_update = function (state) {
         var phase = state && state.phase;
-        var enteringMenu = phase === "MainMenu" && runtime.lastPhase !== "MainMenu";
+        if (phase !== "MainMenu" && runtime.menuGuide) dismissMenuGuide();
+        if (phase === "MainMenu" && runtime.lastPhase !== "MainMenu" && !(state && state.boot_campaign)) {
+            if (runtime.active && runtime.definition && runtime.definition.menu_guide) {
+                pendingMenuGuide = pendingMenuGuide || { episodeId: runtime.episodeId };
+            }
+            reset();
+        }
         runtime.lastPhase = phase;
-        if (enteringMenu && (!state || !state.boot_campaign)) resetRuntime();
-        if (!state || !state.boot_campaign || runtime.bootEpisode === state.boot_campaign) return;
-        startEpisode(String(state.boot_campaign), true);
+        if (state && state.boot_campaign && runtime.bootEpisode !== state.boot_campaign) startEpisode(state.boot_campaign, true);
     };
-
     window.SOW_tutorial_state_update = function (state) {
+        if (runtime.menuGuide && state && state.phase === "MainMenu") { updateMenuGuide(); return; }
         var hud = state && state.phase === "Playing" ? state.hud : null;
-        if (!hud || !hud.tutorial || !hud.tutorial.active) {
-            render(null);
+        var tutorial = hud && hud.tutorial;
+        if (!tutorial || !tutorial.active) {
+            runtime.latestHud = null;
+            if (runtime.view) runtime.view.render(null);
+            if (runtime.machine && state && state.phase === "MainMenu" && !runtime.menuGuide) reset();
             return;
         }
-        if (runtime.episodeId !== hud.tutorial.episode_id) {
-            var generation = runtime.generation;
-            loadEpisode(hud.tutorial.episode_id).then(function (data) {
-                if (generation !== runtime.generation) return;
-                runtime.episodeId = hud.tutorial.episode_id;
-                runtime.roster = data.roster;
-                runtime.definition = data.definition;
-                runtime.stepIndex = 0;
-                runtime.baselineTiles = null;
-                runtime.finalReady = false;
-                runtime.completionSent = false;
-                runtime.enteredSteps = Object.create(null);
-                runtime.completedSteps = Object.create(null);
-                runtime.flags = Object.create(null);
-                runtime.dialogOpen = true;
-                render(hud);
-            }).catch(function (error) {
-                if (generation !== runtime.generation) return;
-                showError(error, hud.tutorial.episode_id);
-            });
-            return;
-        }
-        render(hud);
+        runtime.latestHud = hud;
+        if (!runtime.machine || runtime.episodeId !== tutorial.episode_id) activate(tutorial, hud);
+        else update(hud);
     };
+    window.addEventListener("sow:locale-change", function () {
+        if (runtime.menuGuide) updateMenuGuide();
+        else if (runtime.machine && runtime.latestHud) update(runtime.latestHud);
+    });
+    window.addEventListener("sow:campaign-menu-guide-ready", startMenuGuide);
+
+    function reset() {
+        runtime.generation++;
+        if (!pendingMenuGuide) runtime.priorChoices = Object.create(null);
+        runtime.episodeId = null;
+        runtime.definition = null;
+        runtime.machine = null;
+        runtime.active = false;
+        runtime.starting = null;
+        runtime.activating = null;
+        runtime.bootEpisode = null;
+        runtime.latestHud = null;
+        runtime.menuGuide = false;
+        runtime.uiPaused = false;
+        runtime.modalOpen = false;
+        runtime.resumeAfterModal = false;
+        runtime.completionSent = false;
+        runtime.failedEpisode = null;
+        runtime.markerId = undefined;
+        if (runtime.view) { runtime.view.destroy(); runtime.view = null; }
+        var error = document.getElementById("sow-campaign-error");
+        if (error) error.remove();
+    }
 })();

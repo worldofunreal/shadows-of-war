@@ -23,4 +23,4 @@ One line per leader. Name + one bonus with a number. Nothing else.
 
 1. Bonus has a number (`+50%`, `10%`, `20%`).
 2. No second sentence that restates the first.
-3. Same wording in all 6 languages (or English fallback + translator pass).
+3. Same wording in all published locales (15 today — see `sow-i18n/src/lib.rs`; or English fallback + translator pass).

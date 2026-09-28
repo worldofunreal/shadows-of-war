@@ -33,6 +33,12 @@ impl SowApp {
             geo_bounds,
             num_land_tiles,
         );
+        if self.net.is_offline && new_engine.state.config.tutorial {
+            self.sim.tutorial_observation.reset();
+            self.sim
+                .tutorial_observation
+                .observe_sim(&new_engine, self.sim.my_player_id.unwrap_or(0));
+        }
         let snap = new_engine.build_snapshot();
         let phase = snap.phase.clone();
         self.sim.current_snapshot = Some(snap);

@@ -1,0 +1,299 @@
+{
+  "version": 2,
+  "episode_id": "six_sky_ep3",
+  "default_locale": "en",
+  "settings": {
+    "buildings_enabled": false,
+    "starting_troops": 1000
+  },
+  "entry": "six_sky_ep3_count_intro",
+  "strings": {
+    "en": {},
+    "es": {}
+  },
+  "speakers": {
+    "lady_six_sky": {
+      "name": "Lady Six Sky",
+      "avatar": "lady_six_sky"
+    }
+  },
+  "steps": [
+    {
+      "id": "six_sky_ep3_count_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_count_title",
+      "body_key": "tutorial.six_sky_ep3_count_body",
+      "speaker": "lady_six_sky",
+      "presentation": "chapter",
+      "next": "six_sky_ep3_count"
+    },
+    {
+      "id": "six_sky_ep3_count",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_count_title",
+      "hint_key": "tutorial.six_sky_ep3_count_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "territory",
+        "value": 256,
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_offerings_intro"
+    },
+    {
+      "id": "six_sky_ep3_offerings_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_offerings_title",
+      "body_key": "tutorial.six_sky_ep3_offerings_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_offerings"
+    },
+    {
+      "id": "six_sky_ep3_offerings",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_offerings_title",
+      "hint_key": "tutorial.six_sky_ep3_offerings_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "kills",
+        "value": 2,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "assault",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_unknown_intro"
+    },
+    {
+      "id": "six_sky_ep3_unknown_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_unknown_title",
+      "body_key": "tutorial.six_sky_ep3_unknown_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_unknown"
+    },
+    {
+      "id": "six_sky_ep3_unknown",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_unknown_title",
+      "hint_key": "tutorial.six_sky_ep3_unknown_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "defeated",
+        "target": "K'inichil Kab",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "K'inichil Kab"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_caracol_intro"
+    },
+    {
+      "id": "six_sky_ep3_caracol_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_caracol_title",
+      "body_key": "tutorial.six_sky_ep3_caracol_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_caracol"
+    },
+    {
+      "id": "six_sky_ep3_caracol",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_caracol_title",
+      "hint_key": "tutorial.six_sky_ep3_caracol_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "defeated",
+        "target": "Caracol War Host",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Caracol War Host"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_hill_intro"
+    },
+    {
+      "id": "six_sky_ep3_hill_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_hill_title",
+      "body_key": "tutorial.six_sky_ep3_hill_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_hill"
+    },
+    {
+      "id": "six_sky_ep3_hill",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_hill_title",
+      "hint_key": "tutorial.six_sky_ep3_hill_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "defeated",
+        "target": "Xunantunich Rebels",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Xunantunich Rebels"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_moon_intro"
+    },
+    {
+      "id": "six_sky_ep3_moon_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_moon_title",
+      "body_key": "tutorial.six_sky_ep3_moon_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_moon"
+    },
+    {
+      "id": "six_sky_ep3_moon",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_moon_title",
+      "hint_key": "tutorial.six_sky_ep3_moon_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "territory",
+        "value": 1024,
+        "scope": "episode"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "expand",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_vanguard_intro"
+    },
+    {
+      "id": "six_sky_ep3_vanguard_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_vanguard_title",
+      "body_key": "tutorial.six_sky_ep3_vanguard_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_vanguard"
+    },
+    {
+      "id": "six_sky_ep3_vanguard",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_vanguard_title",
+      "hint_key": "tutorial.six_sky_ep3_vanguard_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "defeated",
+        "target": "Tikal Vanguard",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Tikal Vanguard"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_tribute_intro"
+    },
+    {
+      "id": "six_sky_ep3_tribute_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_tribute_title",
+      "body_key": "tutorial.six_sky_ep3_tribute_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_tribute"
+    },
+    {
+      "id": "six_sky_ep3_tribute",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_tribute_title",
+      "hint_key": "tutorial.six_sky_ep3_tribute_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "kills",
+        "value": 6,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "assault",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_legacy_intro"
+    },
+    {
+      "id": "six_sky_ep3_legacy_intro",
+      "type": "scene",
+      "title_key": "tutorial.six_sky_ep3_legacy_title",
+      "body_key": "tutorial.six_sky_ep3_legacy_body",
+      "speaker": "lady_six_sky",
+      "presentation": "dialogue",
+      "next": "six_sky_ep3_legacy"
+    },
+    {
+      "id": "six_sky_ep3_legacy",
+      "type": "objective",
+      "title_key": "tutorial.six_sky_ep3_legacy_title",
+      "hint_key": "tutorial.six_sky_ep3_legacy_hint",
+      "speaker": "lady_six_sky",
+      "trigger": {
+        "type": "defeated",
+        "target": "Tikal",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Tikal"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "six_sky_ep3_end"
+    },
+    {
+      "id": "six_sky_ep3_end",
+      "type": "end",
+      "title_key": "tutorial.complete",
+      "speaker": "lady_six_sky",
+      "presentation": "chapter"
+    }
+  ]
+}

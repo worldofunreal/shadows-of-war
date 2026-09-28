@@ -1,7 +1,7 @@
 use web_time::Instant;
 
 pub const MAX_DEATH_NAMEPLATES: usize = 64;
-pub const DEATH_NAMEPLATE_DURATION: f32 = 0.3;
+pub const DEATH_NAMEPLATE_DURATION: f32 = 0.6;
 
 #[derive(Clone, Debug)]
 pub struct DeathNameplateAnimation {
@@ -11,9 +11,6 @@ pub struct DeathNameplateAnimation {
     pub world_y: f32,
     pub start_time: Instant,
     pub by_nuke: bool,
-    pub drift_x: f32,
-    pub flight_distance: f32,
-    pub icon_scale: f32,
 }
 
 impl DeathNameplateAnimation {
@@ -57,18 +54,15 @@ mod tests {
             world_y: 0.0,
             start_time: Instant::now(),
             by_nuke: false,
-            drift_x: 0.0,
-            flight_distance: 15.0,
-            icon_scale: 1.0,
         }
     }
 
     #[test]
-    fn animation_rises_and_expires_within_300ms() {
+    fn animation_rises_and_expires_within_600ms() {
         assert_eq!(death_animation(0.0), Some((0.0, 0.0, 0.0)));
-        assert_eq!(death_animation(0.15), Some((0.5, 0.75, 1.0)));
-        assert!(death_animation(0.25).unwrap().2 < 1.0);
-        assert!(death_animation(0.3).is_none());
+        assert_eq!(death_animation(0.3), Some((0.5, 0.75, 1.0)));
+        assert!(death_animation(0.55).unwrap().2 < 1.0);
+        assert!(death_animation(0.6).is_none());
     }
 
     #[test]

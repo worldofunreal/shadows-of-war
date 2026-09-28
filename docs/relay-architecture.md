@@ -1,6 +1,6 @@
 # Relay Architecture: F-Stack as the TLS endpoint
 
-> Status: live. Verified 2026-08-22 with `./sow p` release `0.1.2-3b977aa9f91c` (relay `3ff15be`, bin `002edc46`, `ws_write_timeout_ms 15000`) and real game traffic `319 [DIAG RELAY TX]` on worker 1.
+> Status: live. Verified 2026-08-22 with `./sow p` release `0.1.2-3b977aa9f91c` (relay `3ff15be`, bin `002edc46`, `ws_write_timeout_ms 15000`) and real game traffic `319 [DIAG RELAY TX]` on worker 1. Ticket/Valkey/settlement sections re-verified against code on 2026-09-28 (`38d859d2`).
 
 ## Why this exists
 
@@ -16,9 +16,9 @@ are distributed, and how to operate/recover it.
                     IONOS (FreeBSD VPS)              Azure (Ubuntu, DPDK VM)
                     ──────────────────              ────────────────────────
  Browser ──https──► │ nginx (web, TLS)   │
-        ──wss─────► │ sow-server :25564  │  Start{relay_host, relay_port}
+        ──wss─────► │ sow-server :25564  │  Start{relay_host, relay_port, ticket digests}
                     │ sow-database      │───────POST /internal/lobby/register──► mgmt :8080-8083 (kernel)
-                    │ valkey            │                                        │
+                    │ valkey ◄──────────┼─────── SOW_VALKEY_URL (shared, relay writes lobby state)
                     │                   │              ┌─────────────────────────┴──────────┐
                     │                   │              │  NIC DPDK ConnectX-5 VF 100Gbps      │
                     └───────────────────┘              │  RSS hash → queue                     │
@@ -41,13 +41,50 @@ are distributed, and how to operate/recover it.
    (eth → IPv4 → TCP dst port) and computes `dst_port % nb_queues`. This is
    F-Stack's cross-queue dispatch: a packet that lands on the wrong RSS queue
    is forwarded to the owning worker's queue via the shared dispatch ring.
-3. When a lobby starts, sow-server picks a dynamic port (1024..65535) and
-   registers it with the worker where `port % 4 == worker_id`:
-   `POST /internal/lobby/register {lobby_id, relay_port, ...}`.
+3. When a lobby starts, sow-server picks a dynamic port from its allocator
+   range **25592..26500** (`sow-server/src/main.rs`) and registers it with the
+   worker where `port % 4 == worker_id`:
+   `POST /internal/lobby/register {lobby_id, relay_port, ticket_expires_at,
+   relay_ticket_digest, ...}`.
 4. That worker binds the port as an F-Stack listener (userspace, invisible to
    the kernel) and replies to sow-server, which broadcasts
-   `Start{relay_host, relay_port}` to the players.
-5. Players connect directly: `wss://{relay_host}:{relay_port}/ws/`.
+   `Start{relay_host, relay_port, ticket_expires_at, relay_ticket_digest}` to
+   the players.
+5. Players connect directly: `wss://{relay_host}:{relay_port}/ws/` and must
+   present a valid per-player relay ticket before gameplay frames flow
+   (see “Admission” below).
+
+## Admission: relay tickets are mandatory
+
+Since `b4db2470` every network player must hold a server-issued ticket;
+unticketed traffic is rejected. There is no runtime flag anymore
+(`SOW_RELAY_TICKETS_REQUIRED` was removed).
+
+- sow-server issues the ticket when the lobby starts: per-player HMAC digest
+  with a 900 s TTL (`sow-server/src/main.rs`), carried inside `Start`.
+- Protocol frames: `ReadyWithTicket` / `ReconnectWithTicket` replaces the old
+  unticketed Ready; `RelayTicket` / `RelayReconnectTicket` are the first frames
+  the client sends (`sow-core/src/protocol.rs`, `sow-client/src/net/session.rs`).
+- The relay validates unconditionally on registration: missing
+  `ticket_expires_at` or `relay_ticket_digest` → hard reject
+  (`sow-relay/src/main.rs`: “ticket_expires_at required”, “relay ticket digest
+  required for every network player”). Digest comparison is constant-time.
+- Effect on the attack surface: knowing host:port is not enough to join or
+  flood a lobby port; admission cost falls on sow-server's authenticated
+  matchmaking path.
+
+## Relay state: Valkey and settlement
+
+The relay is no longer purely stateless next to the kernel path:
+
+- It connects to the shared Valkey via `SOW_VALKEY_URL`
+  (`sow-relay/src/main.rs`) and mirrors lobby state under `sow:relay:{lobby_id}`
+  so sow-server/sow-database can observe relay-side liveness.
+- At match exit the relay drives participant settlement
+  (`trigger_participant_settlements`) and posts replay finalization
+  (`post_replay_finalize`) to the backend — the deterministic-replay
+  verification path (exit-time settlement `80c7043d`, replay verification
+  `b945feb3`). Relay-side replay spool lives at `/var/lib/sow-relay/replays`.
 
 ## The client handoff
 
@@ -60,7 +97,9 @@ if let Some(host) = relay_host {
 ```
 
 There is deliberately NO branch for "secure page" anymore. The relay terminates
-TLS on every game port, so WASM and native clients use the same URL shape.
+TLS on every game port, so clients use the same URL shape. Production clients
+are WASM-only since `b4db2470`; the native Tauri build is the dev loop and
+shares this code path.
 Historical retired path: commit 25c1af1 introduced an `is_secure` branch that routed browsers
 through `wss://shadowsofwar.io/relay/{port}/ws/` → nginx on IONOS → Azure,
 turning IONOS into a middleman for every game packet (~300ms vs ~67ms). The

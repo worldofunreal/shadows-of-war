@@ -4,11 +4,12 @@
 
 - **Crowns** are the free spendable currency: earned from matches and campaign
   episodes, spent on leader unlocks (500) alongside gems.
-- **Laurels** are achievement points: earned from matches and campaign
-  episodes, never spent. The Google Play "Laurel Hoard" achievement tracks
-  them. Gems remain the premium currency.
-- Campaign episodes and the teaching intro grant both (100 crowns + 100
-  laurels each).
+- **Laurels** are achievement points: accrued only from achievement unlock
+  points (`sow-data/src/rewards.rs` — “Laurels are achievement points, never
+  match currency”, d7315566), never spent. The Google Play "Laurel Hoard"
+  achievement tracks them. Gems remain the premium currency.
+- Matches, campaign episodes and the teaching intro grant crowns only; the
+  settlement payloads carry `laurels: 0`.
 - Migration: profiles stored before the split keep the spendable balance under
   the legacy `"laurels"` key; the server (`parse_account_with_migration`) and
   the client (`migrate_legacy_currency_json`) move it to `"crowns"` lazily on
@@ -23,7 +24,7 @@
 - Main menu entry: `Store`.
 - Eight leaders are free in a deterministic weekly rotation.
 - A new player receives one random leader from that rotation.
-- Leaders outside the rotation are locked until the player unlocks them with 500 crowns or 1,500 gems.
+- Leaders outside the rotation are locked until the player unlocks them with 500 crowns or 450 gems (`LEADER_UNLOCK_COST_GEMS`, `sow-data/src/commerce.rs`; reduced from 1,500 in 80c7043d).
 - Leader unlocks offer either currency; the server owns both balances and validates the selected spend.
 - The server resolves the selected leader before a match, so a client cannot use a locked leader by editing local state.
 - The purchase surface is universal: in-game store → platform checkout/RevenueCat → server grant. It is not tied to CrazyGames or Poki.
@@ -53,6 +54,12 @@
 - The end-of-match screen shows the next unowned skin as a featured store offer and can open the store after returning to the menu.
 
 ## Current release state
+
+- Shipped since this log's last update (verified against `38d859d2`, 2026-09-26):
+  exit-time participant settlement with shared Valkey (`80c7043d`), SFX preview
+  in the store (`sow-audio/src/native/preview.rs`), deterministic replay
+  verification gating rewards (`b945feb3`), skin style previews, and the
+  cinematic reward stage (`aa1e4e39`).
 
 - `PLAY_API`: Android gem bundles are registered in Google Play and attached to
   the same RevenueCat offering as the three Stripe web products.

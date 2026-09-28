@@ -353,10 +353,36 @@ impl GameState {
         }
     }
     pub fn set_tile_owner(&mut self, x: u32, y: u32, new_owner: u16) {
+        self.set_tile_owner_inner(x, y, new_owner, None);
+    }
+
+    pub(crate) fn set_tile_owner_with_eliminations(
+        &mut self,
+        x: u32,
+        y: u32,
+        new_owner: u16,
+    ) -> Vec<(u16, u32, u32)> {
+        let mut eliminated = Vec::new();
+        self.set_tile_owner_inner(x, y, new_owner, Some(&mut eliminated));
+        eliminated
+    }
+
+    fn set_tile_owner_inner(
+        &mut self,
+        x: u32,
+        y: u32,
+        new_owner: u16,
+        mut eliminated: Option<&mut Vec<(u16, u32, u32)>>,
+    ) {
         let old_owner = self.map.owner_id(x, y);
         if old_owner == new_owner {
             return;
         }
+        let eliminates_old_owner = new_owner != 0
+            && old_owner != 0
+            && self
+                .player(old_owner)
+                .is_some_and(|player| player.alive && player.tile_count == 1);
         let linear_idx = y * self.map.width + x;
         if old_owner != 0
             && let Some(p) = self.player_mut(old_owner)
@@ -377,6 +403,11 @@ impl GameState {
             }
         }
         self.map.set_owner_id(x, y, new_owner);
+        if eliminates_old_owner
+            && let Some(eliminated) = eliminated.as_deref_mut()
+        {
+            eliminated.push((old_owner, x, y));
+        }
         if new_owner != 0 {
             let is_border = self.map.is_border_tile(x, y, new_owner);
             if is_border && let Some(p) = self.player_mut(new_owner) {
@@ -420,12 +451,18 @@ impl GameState {
                         && self.config.bot_difficulty == crate::game_config::BotDifficulty::Vanilla
                 })
             };
+            let capturer_team = self.player(new_owner).and_then(|player| player.team);
 
             for &(nx, ny) in neighbors.iter().take(n_count) {
                 let n_owner = self.map.owner_id(nx, ny);
                 if n_owner != new_owner
                     && self.map.terrain[self.map.ref_id(nx, ny)].is_land()
                     && !(capturer_is_passive_tribe && n_owner != 0)
+                    && !(n_owner != 0
+                        && capturer_team.is_some_and(|team| {
+                            self.player(n_owner)
+                                .is_some_and(|player| player.team == Some(team))
+                        }))
                 {
                     let mut surrounded = true;
                     self.map.for_each_neighbor(nx, ny, |nnx, nny| {
@@ -441,7 +478,7 @@ impl GameState {
             }
 
             for &(cx, cy) in to_capture.iter().take(capture_count) {
-                self.set_tile_owner(cx, cy, new_owner);
+                self.set_tile_owner_inner(cx, cy, new_owner, eliminated.as_deref_mut());
             }
         }
     }

@@ -41,6 +41,14 @@ impl SowApp {
         );
     }
 
+    pub(crate) fn complete_boudica_tutorial(&mut self) {
+        if self.progress.mark_tutorial_completed() {
+            self.capture_tutorial_reward_preview();
+            self.save_local_progress();
+            self.persist_tutorial_completion();
+        }
+    }
+
     pub(crate) fn reset_progress_session(&mut self) {
         self.progress_match_recorded = false;
         self.progress_session_defeats = crate::player_progress::SessionDefeats::default();

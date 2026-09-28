@@ -30,7 +30,7 @@ state and a successful build do not satisfy the purchase/runtime checkboxes.
 - `./sow a` builds the signed Android AAB, runs the USB smoke test, validates it with Play, and
   uploads the configured Play track.
 - `./sow l` is local Web/WASM preview only.
-- `./sow` launches the local JavaScript/WASM client; `./sow l` is the explicit alias.
+- `./sow` (or `./sow native`) fast-builds and opens the native Tauri/WASM client; `./sow l` builds and serves the local Web/WASM client on 127.0.0.1:4173.
 
 Android versioning is independent from Web deployment. The Android release path must advance both
 the semantic `versionName` and the Play `versionCode`; never reuse an uploaded AAB.

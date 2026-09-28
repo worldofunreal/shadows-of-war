@@ -102,7 +102,6 @@ impl SowApp {
             .and_then(serde_json::Value::as_f64)
             .filter(|value| value.is_finite() && (1.0..=100_000.0).contains(value))
             .ok_or_else(|| "Campaign starting_troops is invalid.".to_string())?;
-
         let seed = web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()

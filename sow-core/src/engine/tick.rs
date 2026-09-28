@@ -185,7 +185,8 @@ impl SowEngine {
     }
 
     fn check_winner(&mut self) {
-        if self.state.winner.is_some() {
+        // Campaign objectives decide tutorial completion; the client still handles player death.
+        if self.state.config.tutorial || self.state.winner.is_some() {
             return;
         }
 
@@ -309,5 +310,71 @@ impl SowEngine {
             winner_id,
             winning_team,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SowEngine;
+    use crate::game::{GameEvent, GamePhase, GameState};
+    use crate::game_config::GameConfig;
+    use crate::player::Player;
+    use crate::protocol::Team;
+    use crate::water_components::WaterComponents;
+
+    #[test]
+    fn tutorial_skips_automatic_victory_without_changing_normal_games() {
+        for game_mode in ["FFA", "Teams", "HumansVsNations"] {
+            // Map-control victory with an opponent, then last player/team below the threshold.
+            for (red_tiles, blue_tiles) in [(70, 10), (10, 0)] {
+                for tutorial in [false, true] {
+                    let config = GameConfig {
+                        game_mode: game_mode.into(),
+                        tutorial,
+                        random_spawn: true,
+                        map_control_win_percentage: 0.60,
+                        ..Default::default()
+                    };
+                    let mut state = GameState::new(42, 10, 10, config);
+                    state.total_land_tiles = 100;
+                    for (id, team, tiles) in
+                        [(1, Team::Red, red_tiles), (2, Team::Blue, blue_tiles)]
+                    {
+                        let mut player =
+                            Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+                        player.team = Some(team);
+                        player.tile_count = tiles;
+                        player.alive = tiles > 0;
+                        player.has_spawned = true;
+                        state.register_player(player);
+                    }
+                    let mut engine = SowEngine::new(state, WaterComponents::default());
+                    engine.check_winner();
+
+                    assert_eq!(
+                        engine.state.phase,
+                        if tutorial {
+                            GamePhase::Playing
+                        } else {
+                            GamePhase::GameOver
+                        },
+                        "{game_mode}, tutorial={tutorial}, tiles={red_tiles}/{blue_tiles}"
+                    );
+                    assert_eq!(engine.state.winner, (!tutorial).then_some(1));
+                    assert_eq!(
+                        engine.state.winning_team,
+                        (!tutorial && game_mode != "FFA").then_some(Team::Red)
+                    );
+                    assert_eq!(
+                        engine
+                            .state
+                            .events
+                            .iter()
+                            .any(|event| matches!(event, GameEvent::GameOver { .. })),
+                        !tutorial
+                    );
+                }
+            }
+        }
     }
 }

@@ -191,9 +191,10 @@ impl SowApp {
         let leaving_unfinished_boudica_intro = self.ui.tutorial_active
             && was_offline
             && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
-            && !self.progress.intro_completed.unwrap_or(false);
+            && !self.ui.tutorial_campaign.is_completed(&self.progress);
         if leaving_unfinished_boudica_intro {
             crate::analytics::track("tutorial_exit_early");
+            self.complete_boudica_tutorial();
         }
         if was_playing {
             if let Some(player_id) = self.sim.my_player_id

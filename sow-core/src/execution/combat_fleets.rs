@@ -60,6 +60,7 @@ impl SowEngine {
 
         // fleets are sorted on insertion
         let mut to_remove = Vec::new();
+        let mut elimination_candidates = Vec::new();
 
         for i in 0..self.fleets.len() {
             let fleet = &mut self.fleets[i];
@@ -211,7 +212,12 @@ impl SowEngine {
             let f_troops = fleet.troops;
             let f_id = fleet.id;
 
-            self.state.set_tile_owner(lx, ly, f_owner);
+            elimination_candidates.extend(
+                self.state
+                    .set_tile_owner_with_eliminations(lx, ly, f_owner)
+                    .into_iter()
+                    .map(|(victim, x, y)| (victim, f_owner, x, y)),
+            );
             self.state.events.push(GameEvent::TileCaptured {
                 x: lx,
                 y: ly,
@@ -235,12 +241,215 @@ impl SowEngine {
         if has_removals {
             self.fleets.sort_unstable_by_key(|f| f.id);
         }
+
+        for (victim, conqueror, x, y) in elimination_candidates {
+            self.eliminate_player(victim, conqueror, x, y, false);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::execution::fractional_extra_tiles_milli;
+    use super::SowEngine;
+    use crate::execution::{AttackExecution, PrioritizedTile, fractional_extra_tiles_milli};
+    use crate::game::{GameEvent, GameState, UnitType};
+    use crate::game_config::GameConfig;
+    use crate::map::MapTile;
+    use crate::player::Player;
+    use crate::protocol::Team;
+    use crate::warp_fleet::WarpFleet;
+    use crate::water_components::WaterComponents;
+    use std::collections::BinaryHeap;
+
+    #[test]
+    fn landing_on_last_tile_records_one_defeat_for_the_fleet_owner() {
+        for has_other_tile in [false, true] {
+            let mut state = GameState::new(
+                1,
+                5,
+                3,
+                GameConfig {
+                    random_spawn: true,
+                    ..Default::default()
+                },
+            );
+            state.map.terrain.fill(MapTile::from_byte(0x20));
+            for id in [1, 2] {
+                let mut player = Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+                player.gold = 0.0;
+                player.has_spawned = true;
+                state.register_player(player);
+            }
+            for (x, y, owner) in [(0, 1, 1), (4, 1, 2)] {
+                state.map.terrain[(y * 5 + x) as usize] = MapTile::from_byte(0xC0);
+                state.set_tile_owner(x, y, owner);
+            }
+            if has_other_tile {
+                state.map.terrain[14] = MapTile::from_byte(0xC0);
+                state.set_tile_owner(4, 2, 2);
+            }
+            let mut engine = SowEngine::new(state, WaterComponents::default());
+            // The route is already at its final shore tile; exercise the real landing path.
+            engine.add_fleet(WarpFleet::new(
+                1,
+                1,
+                2,
+                UnitType::TransportShip,
+                50.0,
+                (5, 9),
+                vec![9],
+            ));
+            engine.execute_fleets();
+            let gold_after_landing = engine.state.player(1).unwrap().gold;
+            engine.execute_fleets();
+
+            let killer = engine.state.player(1).unwrap();
+            let victim = engine.state.player(2).unwrap();
+            assert_eq!(engine.state.map.owner_id(4, 1), 1);
+            assert_eq!(victim.alive, has_other_tile);
+            assert_eq!(victim.deaths, u32::from(!has_other_tile));
+            assert_eq!(killer.kills, u32::from(!has_other_tile));
+            assert_eq!(killer.gold, gold_after_landing);
+            assert_eq!(killer.gold > 0.0, !has_other_tile);
+            let defeats = engine
+                .state
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    GameEvent::PlayerEliminated {
+                        player_id,
+                        conqueror_id,
+                        elimination_x,
+                        elimination_y,
+                        ..
+                    } => Some((*player_id, *conqueror_id, *elimination_x, *elimination_y)),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(
+                defeats,
+                if has_other_tile {
+                    vec![]
+                } else {
+                    vec![(2, 1, 4, 1)]
+                }
+            );
+            assert!(engine.fleets.is_empty());
+        }
+    }
+
+    #[test]
+    fn enclosure_eliminations_are_credited_once_and_never_capture_teammates() {
+        for by_fleet in [false, true] {
+            for same_team in [false, true] {
+                let mut state = GameState::new(
+                    1,
+                    5,
+                    5,
+                    GameConfig {
+                        random_spawn: true,
+                        global_speed_multiplier: 100.0,
+                        ..Default::default()
+                    },
+                );
+                state.map.terrain.fill(MapTile::from_byte(0x20));
+
+                for (id, team) in [
+                    (1, Team::Blue),
+                    (2, if same_team { Team::Blue } else { Team::Red }),
+                ] {
+                    let mut player =
+                        Player::new_human(id, format!("P{id}"), [1.0; 3], &state.config);
+                    player.gold = 0.0;
+                    player.has_spawned = true;
+                    player.team = Some(team);
+                    state.register_player(player);
+                }
+
+                // P1 surrounds P2 except for one neutral land tile to be captured.
+                for y in 1..=3 {
+                    for x in 1..=3 {
+                        if (x, y) != (2, 1) && (x, y) != (2, 2) {
+                            state.map.terrain[(y * 5 + x) as usize] = MapTile::from_byte(0xC0);
+                            state.set_tile_owner(x, y, 1);
+                        }
+                    }
+                }
+                state.map.terrain[2 * 5 + 2] = MapTile::from_byte(0xC0);
+                state.set_tile_owner(2, 2, 2);
+                state.map.terrain[1 * 5 + 2] = MapTile::from_byte(0xC0); // (x=2, y=1): row-major
+
+                let mut engine = SowEngine::new(state, WaterComponents::default());
+                if by_fleet {
+                    // The fleet is already at the neutral gap's landing tile.
+                    engine.add_fleet(WarpFleet::new(
+                        1,
+                        1,
+                        0,
+                        UnitType::TransportShip,
+                        100.0,
+                        (5, 7),
+                        vec![7],
+                    ));
+                    engine.execute_fleets();
+                    engine.execute_fleets();
+                } else {
+                    engine.add_attack(AttackExecution {
+                        id: 1,
+                        owner_id: 1,
+                        target_owner: 0,
+                        troops: 100_000.0,
+                        to_conquer: BinaryHeap::from([PrioritizedTile {
+                            priority: 0,
+                            insert_seq: 0,
+                            x: 2,
+                            y: 1,
+                        }]),
+                        insert_seq_counter: 1,
+                        rng: wyrand::WyRand::new(1),
+                        retreating: false,
+                    });
+                    engine.execute_combat();
+                    engine.execute_combat();
+                }
+
+                let eliminated = !same_team;
+                assert_eq!(engine.state.map.owner_id(2, 1), 1);
+                assert_eq!(engine.state.map.owner_id(2, 2), if eliminated { 1 } else { 2 });
+                let attacker = engine.state.player(1).unwrap();
+                let victim = engine.state.player(2).unwrap();
+                assert_eq!(victim.alive, !eliminated);
+                assert_eq!(victim.deaths, u32::from(eliminated));
+                assert_eq!(attacker.kills, u32::from(eliminated));
+                assert_eq!(attacker.gold > 0.0, eliminated);
+
+                let defeats = engine
+                    .state
+                    .events
+                    .iter()
+                    .filter_map(|event| match event {
+                        GameEvent::PlayerEliminated {
+                            player_id,
+                            conqueror_id,
+                            elimination_x,
+                            elimination_y,
+                            ..
+                        } => Some((*player_id, *conqueror_id, *elimination_x, *elimination_y)),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    defeats,
+                    if eliminated {
+                        vec![(2, 1, 2, 2)]
+                    } else {
+                        vec![]
+                    },
+                    "by_fleet={by_fleet}, same_team={same_team}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn fractional_extra_tile_milli_threshold_is_stable() {

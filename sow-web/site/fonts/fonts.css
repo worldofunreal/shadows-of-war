@@ -51,13 +51,16 @@
 :root {
   --sow-ui-font: 'Work Sans', 'SOW Noto Sans', system-ui, sans-serif;
 }
-html[data-locale-script='arabic'] {
+html[data-locale-script='arabic'],
+.sow-story[data-locale-script='arabic'] {
   --sow-ui-font: 'SOW Noto Arabic', 'Work Sans', sans-serif;
 }
-html[data-locale-script='cyrillic'] {
+html[data-locale-script='cyrillic'],
+.sow-story[data-locale-script='cyrillic'] {
   --sow-ui-font: 'SOW Noto Cyrillic', 'SOW Noto Sans', 'Work Sans', sans-serif;
 }
-html[data-locale-script='cjk'] {
+html[data-locale-script='cjk'],
+.sow-story[data-locale-script='cjk'] {
   --sow-ui-font: 'SOW Noto CJK', 'Work Sans', sans-serif;
 }
 @font-face {

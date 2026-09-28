@@ -3829,7 +3829,11 @@ async fn handle_match_start(
                     "humans": humans,
                 }),
             );
-            if let Err(e) = state.db.record_product_event("match_started", None).await {
+            if let Err(e) = state
+                .db
+                .record_product_event("match_started", None)
+                .await
+            {
                 warn!("match_started analytics counter failed: {e}");
             }
             (StatusCode::OK, Json(serde_json::json!({ "status": "ok" }))).into_response()
@@ -4078,7 +4082,11 @@ async fn handle_match_finalize(
                         "humans": humans,
                     }),
                 );
-                if let Err(e) = state.db.record_product_event("match_ended", None).await {
+                if let Err(e) = state
+                    .db
+                    .record_product_event("match_ended", None)
+                    .await
+                {
                     warn!("match_ended analytics counter failed: {e}");
                 }
                 if let Err(e) = state.db.record_match_activation(&participants).await {

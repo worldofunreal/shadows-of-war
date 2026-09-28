@@ -248,6 +248,7 @@ impl SowApp {
                 app,
                 tutorial_active: false,
                 tutorial_campaign: crate::campaign::CampaignId::Boudica,
+                tutorial_marker_player_id: None,
                 show_leaderboard: false,
                 leaderboard_top_three: [None; 3],
                 leaderboard_refresh_at: None,
@@ -322,6 +323,7 @@ impl SowApp {
             } else {
                 String::from("local")
             },
+            wou_collectibles_synced: None,
             pending_display_name,
             display_name_save_request_id: None,
             profile_request_in_flight: false,

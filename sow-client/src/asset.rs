@@ -509,6 +509,7 @@ impl SowApp {
                     }
                     self.progress = progress;
                     self.save_local_progress();
+                    self.sync_wou_collectibles();
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message = None;
                     log::info!("[store] {operation} acknowledged by server");

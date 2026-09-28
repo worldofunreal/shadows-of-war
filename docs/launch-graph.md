@@ -76,7 +76,7 @@ official packaging and deployment path includes them.
 | Simulation | `sow-core/src/game_config.rs`, `sow-core/src/engine/` | Default mode is FFA; map-control threshold is 60%; elimination is also an end condition. |
 | Distribution | `sow-dist/src/main.rs` | The package includes the root site, `/how-to-play/`, media, and `/play/`; sitemap includes the onboarding route. |
 | External listings | `sow-web/site/index.html` | Other platform listings are explicitly not claimed as live. |
-| Browser measurement | repository search across `sow-web/` | No browser conversion event instrumentation was found. Server logs exist, but they are not a funnel. |
+| Browser measurement | repository search across `sow-web/` | Updated: funnel instrumentation now exists — landing page posts `/api/event` entry + Play-now CTA events (`sow-web/site/app.js`, since c1a8b6e0), and the game shell carries first-party analytics (`SOW_FIRST_PARTY_ANALYTICS`, `sow-web/shell/loader.js`). Server logs complement but are not the funnel. |
 
 ## Verification snapshot — 2026-08-22
 

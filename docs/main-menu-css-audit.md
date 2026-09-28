@@ -13,6 +13,7 @@
 | `main_menu.auth.css` | WouID email, OTP, and provider access modal | Settings/account preferences |
 | `main_menu.campaign.css` | Campaign episode selector and its responsive layout | Tutorial runtime |
 | `main_menu.hud.css` | In-game HUD | Main-menu screens |
+| `main_menu.tutorial.css` | Tutorial runtime surfaces | Campaign selector, HUD-only layout |
 | `main_menu.profile.css` | Heroes, store, and profile surfaces | Main-menu shared frame |
 
 The sharing rule is simple: a selector stays in `base` when more than one screen renders it. A selector moves to a domain file only when its markup and behavior belong to one screen or one shared domain.
@@ -47,6 +48,7 @@ main_menu.settings.css
 main_menu.auth.css
 main_menu.campaign.css
 main_menu.hud.css
+main_menu.tutorial.css
 main_menu.profile.css
 ```
 
@@ -74,5 +76,5 @@ Shared rules load first. Domain rules load afterward so a screen can refine its 
 ## Checkpoints
 
 - `C0`: audit reduced the base file from 2,998 to 2,957 lines and removed confirmed unused variables/rules plus the stale auth class hook.
-- `C1`: current split creates eight focused menu files and removes the unhooked `.sow-menu__queue` rule.
+- `C1`: current split creates nine focused menu files (including `main_menu.tutorial.css` between hud and profile in the `read_shell_bundle` list in `sow-dist/src/main.rs`) and removes the unhooked `.sow-menu__queue` rule. Note: at audit time `sow-web/shell/main_menu.tutorial.css` exists on disk but is **not yet tracked in git** while the tracked bundle list already requires it — stage it before the next `./sow p` from a clean clone.
 - `C2`: `./sow p` passed; web, Poki, CrazyGames, public verification, and the inlined CSS order all passed. The listed screen checks remain the visual acceptance checklist.

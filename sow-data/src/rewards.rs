@@ -78,6 +78,12 @@ pub fn newly_unlocked_achievements(
     newly_unlocked
 }
 
+/// Canonical NFTROPOLY/WOU-ID card token for an unlocked achievement. Same
+/// snake_case -> kebab derivation as skins, with a `sow-ach-` prefix.
+pub fn achievement_card_token_id(achievement_id: &str) -> String {
+    format!("sow-ach-{}", achievement_id.replace('_', "-"))
+}
+
 pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     AchievementDefinition {
         id: "first_command",

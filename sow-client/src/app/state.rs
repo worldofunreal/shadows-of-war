@@ -1,5 +1,5 @@
-use web_time::{Duration, Instant};
 pub use crate::death_nameplate::{DeathNameplateAnimation, MAX_DEATH_NAMEPLATES};
+use web_time::{Duration, Instant};
 
 /// Subset of [`sow_core::protocol::ProjectileSnapshot`] for detonation / launch detection.
 #[derive(Clone, Copy, Debug)]
@@ -56,12 +56,23 @@ pub struct LoadTelemetry {
 #[derive(Default)]
 pub struct TutorialObservation {
     pub seen_attacks: std::collections::HashSet<u64>,
+    pub attacks_by_target: std::collections::BTreeMap<String, u64>,
     pub seen_fleets: std::collections::HashSet<u64>,
     pub seen_structures: std::collections::HashSet<u64>,
+    pub owned_structures: std::collections::HashSet<u64>,
     pub seen_defeated: std::collections::HashSet<u16>,
     pub seen_defeated_names: std::collections::HashSet<String>,
     pub seen_contacts: std::collections::HashSet<u16>,
-    pub seen_nukes: std::collections::HashSet<(u32, u32, u16)>,
+    pub seen_contact_names: std::collections::HashSet<String>,
+    pub seen_nukes: std::collections::HashSet<u64>,
+    /// Sum of positive per-update territory changes, excluding the initial spawn.
+    pub tiles_gained: u64,
+    pub previous_tiles: Option<u32>,
+    pub guide_tick: u64,
+    pub guide_target_owner: u16,
+    pub guide_expand: Option<u32>,
+    pub guide_assault: Option<u32>,
+    pub guide_target_action: Option<u32>,
 }
 
 impl TutorialObservation {
@@ -283,6 +294,8 @@ pub struct UiState {
     pub tutorial_active: bool,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
+    /// Player whose avatar the current tutorial step points at; None points to the local player.
+    pub tutorial_marker_player_id: Option<u16>,
     pub show_leaderboard: bool,
     pub leaderboard_top_three: [Option<u16>; 3],
     pub leaderboard_refresh_at: Option<web_time::Instant>,
@@ -515,6 +528,10 @@ pub struct SowApp {
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,
     pub progress_provider: String,
+    /// Dedupe for the nftropoly collectibles sync (WOU-ID): last
+    /// (account, desired card count). A larger owned count re-syncs within
+    /// the same session (purchases, unlocks).
+    pub(crate) wou_collectibles_synced: Option<(String, usize)>,
     /// Last requested name, kept until the canonical profile acknowledges it.
     pub pending_display_name: Option<String>,
     pub display_name_save_request_id: Option<u64>,

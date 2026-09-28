@@ -11,7 +11,7 @@ const CLICK_MARKER_DURATION: f32 = 0.16;
 const NOTICE_FONT_SIZE: f32 = 14.0;
 const NOTICE_RISE: f32 = 6.5;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
-const DEATH_NAMEPLATE_RISE: f32 = 2.5;
+const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 
@@ -40,7 +40,6 @@ fn render_death_nameplates(
     now: Instant,
 ) {
     let sf = sf.max(0.01);
-    let zoom_scale = (input.camera_zoom / sf).clamp(0.2, 3.0);
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
@@ -49,7 +48,7 @@ fn render_death_nameplates(
 
     ui.death_nameplates.retain(|animation| {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
-        let Some((t, eased, alpha)) = death_animation(elapsed) else {
+        let Some((_, eased, alpha)) = death_animation(elapsed) else {
             return false;
         };
         if alpha <= 0.0 {
@@ -70,14 +69,13 @@ fn render_death_nameplates(
         );
         let name_width = measure.width / sf;
         let name_height = measure.height / sf;
-        let icon_size = DEATH_NAMEPLATE_FONT_SIZE * 2.2 * animation.icon_scale * (1.0 - t * 0.2);
-        let flight = animation.flight_distance * zoom_scale * eased;
+        let icon_size = font_size * 0.8;
         let icon_center = [
-            center[0] + animation.drift_x * zoom_scale * eased,
-            center[1] - name_height * 0.5 - icon_size * 0.5 - 4.0 - flight,
+            center[0],
+            center[1] - name_height * 0.5 - icon_size * 0.5 - 4.0,
         ];
         let margin_x = (name_width * 0.5).max(icon_size * 0.5) + 8.0;
-        let margin_y = name_height + icon_size + flight + 8.0;
+        let margin_y = name_height + icon_size + 8.0;
         if center[0] < -margin_x
             || center[0] > screen_w + margin_x
             || center[1] < -margin_y

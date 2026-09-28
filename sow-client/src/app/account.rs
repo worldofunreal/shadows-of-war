@@ -157,6 +157,121 @@ impl SowApp {
         }
     }
 
+    /// Mirror in-game entitlements as NFTROPOLY collectibles in WOU-ID:
+    /// every owned commander, skin, and unlocked achievement becomes a
+    /// claimed card on the player's own account, using the player's WOU-ID
+    /// bearer token (guests own nothing server-side by design). One-shot per
+    /// account per session, re-run when the owned set grows (purchases).
+    /// Best-effort: failures log and are retried on the next profile apply.
+    pub(crate) fn sync_wou_collectibles(&mut self) {
+        if self.progress_provider != "wou" {
+            return;
+        }
+        let Some(account_id) = self.progress_account_id.clone() else {
+            return;
+        };
+        let identity = crate::store_portals::load_identity("Player");
+        if identity.provider != "wou" {
+            return;
+        }
+        let Some(session_token) = identity.auth_token.filter(|token| !token.is_empty()) else {
+            return;
+        };
+        // Assets in WOU-ID are keyed by the WOU-ID account id (the JWT
+        // subject), which the portal surfaces as external_id. Prefer it over
+        // the SOW profile account id so the owner lookup can never drift.
+        let owner_id = identity
+            .external_id
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| account_id.clone());
+        let mut desired: Vec<String> = Vec::new();
+        for leader_id in &self.progress.owned_leaders {
+            if let Some(leader) = sow_data::commerce::leader_from_id(leader_id) {
+                desired.push(leader.card_token_id().to_string());
+            }
+        }
+        for skin_id in &self.progress.owned_skins {
+            desired.push(sow_data::commerce::skin_card_token_id(skin_id));
+        }
+        for achievement in &self.progress.unlocked_achievements {
+            desired.push(sow_data::rewards::achievement_card_token_id(achievement));
+        }
+        if desired.is_empty() {
+            return;
+        }
+        if self
+            .wou_collectibles_synced
+            .as_ref()
+            .is_some_and(|(synced_account, synced_count)| {
+                synced_account == &account_id && *synced_count >= desired.len()
+            })
+        {
+            return;
+        }
+        self.wou_collectibles_synced = Some((account_id.clone(), desired.len()));
+        const ID_API: &str = "https://id.worldofunreal.com";
+        let mut request = ehttp::Request::get(format!("{ID_API}/api/v1/assets/owner/{owner_id}"));
+        request
+            .headers
+            .insert("Authorization", format!("Bearer {session_token}"));
+        log::info!(
+            "[collectibles] syncing {} owned cards for account={}",
+            desired.len(),
+            account_hint(Some(&account_id))
+        );
+        ehttp::fetch(request, move |result| {
+            let owned: Vec<String> = match result {
+                Ok(response) if response.ok => {
+                    serde_json::from_slice::<Vec<serde_json::Value>>(&response.bytes)
+                        .map(|items| {
+                            items
+                                .iter()
+                                .filter_map(|item| {
+                                    item.get("token")
+                                        .and_then(|token| token.as_str())
+                                        .map(str::to_string)
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                }
+                Ok(response) => {
+                    log::warn!("[collectibles] owner lookup failed HTTP {:?}", response.status);
+                    return;
+                }
+                Err(error) => {
+                    log::warn!("[collectibles] owner lookup failed: {error}");
+                    return;
+                }
+            };
+            for token in desired.into_iter().filter(|card| !owned.contains(card)) {
+                let Ok(body) = serde_json::to_vec(&serde_json::json!({ "token": &token })) else {
+                    continue;
+                };
+                let mut claim =
+                    ehttp::Request::post(format!("{ID_API}/api/v1/assets/claim"), body);
+                claim
+                    .headers
+                    .insert("Authorization", format!("Bearer {session_token}"));
+                claim
+                    .headers
+                    .insert("Content-Type", "application/json");
+                ehttp::fetch(claim, move |result| match result {
+                    Ok(response) if response.ok => {
+                        log::info!("[collectibles] claimed {token}")
+                    }
+                    Ok(response) => log::warn!(
+                        "[collectibles] claim {token} failed HTTP {:?}",
+                        response.status
+                    ),
+                    Err(error) => {
+                        log::warn!("[collectibles] claim {token} failed: {error}")
+                    }
+                });
+            }
+        });
+    }
+
     fn track_reward_receipt_sync(&mut self, receipt_id: impl Into<String>) {
         self.pending_reward_receipt_ids.insert(receipt_id.into());
         if let Some(account_id) = self.progress_account_id.as_deref() {
@@ -626,6 +741,7 @@ impl SowApp {
         } else {
             self.reward_profile_retry_at = Some(Instant::now() + REWARD_PROFILE_RETRY_INTERVAL);
         }
+        self.sync_wou_collectibles();
     }
 
     #[cfg(target_arch = "wasm32")]

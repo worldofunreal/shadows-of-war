@@ -179,6 +179,27 @@ impl Leader {
             Leader::Napoleon => Civilization::France,
         }
     }
+
+    /// Canonical NFTROPOLY/WOU-ID card token for this commander. These ids
+    /// are registered in the `sow` collection and rendered by nftropoly;
+    /// they intentionally do not follow `leader_id()` (richard, not
+    /// richard_the_lionheart), so they are mapped, not derived.
+    pub fn card_token_id(self) -> &'static str {
+        match self {
+            Leader::Caesar => "sow-caesar",
+            Leader::Cleopatra => "sow-cleopatra",
+            Leader::Ragnar => "sow-ragnar",
+            Leader::SunTzu => "sow-sun-tzu",
+            Leader::Alexander => "sow-alexander",
+            Leader::GenghisKhan => "sow-genghis-khan",
+            Leader::RichardTheLionheart => "sow-richard",
+            Leader::Vercingetorix => "sow-vercingetorix",
+            Leader::Boudica => "sow-boudica",
+            Leader::LadySixSky => "sow-lady-six-sky",
+            Leader::Leonidas => "sow-leonidas",
+            Leader::Napoleon => "sow-napoleon",
+        }
+    }
 }
 
 pub fn leader_for_civilization(civ: Civilization) -> Leader {

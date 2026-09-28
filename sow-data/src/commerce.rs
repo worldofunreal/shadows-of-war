@@ -281,6 +281,14 @@ pub fn skin_by_id(skin_id: &str) -> Option<SkinOffer> {
     skins().into_iter().find(|skin| skin.id == skin_id)
 }
 
+/// Canonical NFTROPOLY/WOU-ID card token for an owned skin. The public skin
+/// id is the only value persisted in player ownership, so the card id is
+/// derived from it (snake_case -> kebab, `sow-skin-` prefix) and registered
+/// identically on WOU-ID.
+pub fn skin_card_token_id(skin_id: &str) -> String {
+    format!("sow-skin-{}", skin_id.replace('_', "-"))
+}
+
 pub fn skin_style_for_id(skin_id: Option<&str>) -> u8 {
     skin_id
         .and_then(skin_by_id)

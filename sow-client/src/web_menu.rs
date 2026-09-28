@@ -19,6 +19,16 @@ use crate::app::{HoverPointer, SowApp};
 use crate::campaign::CampaignId;
 
 const LEADERBOARD_LIMIT: usize = 100;
+const TUTORIAL_ATTACK_NEIGHBORS: [(i32, i32); 8] = [
+    (1, 0),
+    (-1, 0),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (-1, -1),
+    (1, 1),
+    (-1, 1),
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -45,6 +55,10 @@ enum WebMenuCommand {
     },
     SetTutorialPaused {
         paused: bool,
+    },
+    SetTutorialMarker {
+        #[serde(default)]
+        player_id: Option<u16>,
     },
     MapMenuAction {
         session: u64,
@@ -218,6 +232,7 @@ thread_local! {
         RefCell<Option<(u64, u32, u16, u16, serde_json::Value)>> = const { RefCell::new(None) };
     static LAST_WEB_INBOX_PAYLOAD:
         RefCell<Option<(u64, u16, serde_json::Value)>> = const { RefCell::new(None) };
+
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -480,6 +495,7 @@ impl SowApp {
                         "menu_campaign_start",
                         serde_json::json!({ "episode": campaign.episode_id() }),
                     );
+                    self.ui.tutorial_marker_player_id = None;
                     self.boot_campaign_pending = None;
                     if let Err(error) =
                         self.start_campaign_episode_from_web(campaign, roster, match_config)
@@ -492,6 +508,18 @@ impl SowApp {
                 WebMenuCommand::SetTutorialPaused { paused } => {
                     if self.ui.tutorial_active && self.net.is_offline {
                         self.sim.paused = paused;
+                    }
+                }
+                WebMenuCommand::SetTutorialMarker { player_id } => {
+                    if self.ui.tutorial_active && self.net.is_offline {
+                        self.ui.tutorial_marker_player_id = player_id.filter(|player_id| {
+                            self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                                snapshot
+                                    .players
+                                    .iter()
+                                    .any(|player| player.id == *player_id)
+                            })
+                        });
                     }
                 }
                 WebMenuCommand::MapMenuAction {
@@ -517,11 +545,7 @@ impl SowApp {
                         continue;
                     }
                     if campaign == CampaignId::Boudica {
-                        if self.progress.mark_tutorial_completed() {
-                            self.capture_tutorial_reward_preview();
-                            self.save_local_progress();
-                            self.persist_tutorial_completion();
-                        }
+                        self.complete_boudica_tutorial();
                     } else if self
                         .progress
                         .complete_episode(campaign.episode_id(), campaign.advisor())
@@ -578,13 +602,9 @@ impl SowApp {
                     receipt_id,
                 } => {
                     if self.progress_account_id.as_deref() == Some(account_id.as_str())
-                        && self
-                            .exit_reward_preview
-                            .as_ref()
-                            .is_some_and(|preview| {
-                                preview.account_id == account_id
-                                    && preview.receipt_id == receipt_id
-                            })
+                        && self.exit_reward_preview.as_ref().is_some_and(|preview| {
+                            preview.account_id == account_id && preview.receipt_id == receipt_id
+                        })
                     {
                         self.exit_reward_preview = None;
                     }
@@ -937,7 +957,6 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
                 || me.is_some_and(|player| !player.alive && player.has_spawned)
         });
     let inbox_count = me.map(|player| player.inbox_count).unwrap_or(0);
-
     HudPublishKey {
         fps: app.time.current_fps,
         ping_ms: app.net.current_ping_ms,
@@ -1040,149 +1059,330 @@ fn dev_tools_payload(_app: &SowApp) -> serde_json::Value {
     })
 }
 
-fn refresh_tutorial_observation(
+fn tutorial_owner_is_attackable(
+    owner: u16,
+    my_pid: u16,
+    me: &sow_core::protocol::PlayerSnapshot,
+    players: &[sow_core::protocol::PlayerSnapshot],
+) -> bool {
+    if owner == 0 {
+        return true;
+    }
+    let Some(other) = players
+        .iter()
+        .find(|player| player.id == owner && player.alive && player.tile_count > 0)
+    else {
+        return false;
+    };
+    let teammate = me.team.is_some() && me.team == other.team;
+    let allied = me.alliances.contains(&owner);
+    owner != my_pid && !teammate && !allied
+}
+
+fn tutorial_assault_tile(
+    owners: &[u16],
+    terrain: &[u8],
+    map_w: u32,
+    map_h: u32,
+    border_tiles: &sow_core::bitset::DenseBitSet,
+    my_pid: u16,
+    me: &sow_core::protocol::PlayerSnapshot,
+    players: &[sow_core::protocol::PlayerSnapshot],
+) -> Option<u32> {
+    if map_w == 0 || map_w.checked_mul(map_h).is_none() {
+        return None;
+    }
+    let width = i32::try_from(map_w).ok()?;
+    let height = i32::try_from(map_h).ok()?;
+    let (center_x, center_y) = (me.centroid_x as i32, me.centroid_y as i32);
+    let mut best: Option<(i64, u32)> = None;
+    for border_idx in border_tiles.ones() {
+        if border_idx / map_w >= map_h || owners.get(border_idx as usize).copied() != Some(my_pid) {
+            continue;
+        }
+        let (col, row) = ((border_idx % map_w) as i32, (border_idx / map_w) as i32);
+        for (dc, dr) in TUTORIAL_ATTACK_NEIGHBORS {
+            let (next_col, next_row) = (col + dc, row + dr);
+            if next_col < 0 || next_col >= width || next_row < 0 || next_row >= height {
+                continue;
+            }
+            let tile = (next_row as u32 * map_w + next_col as u32) as usize;
+            let Some(owner) = owners.get(tile).copied() else {
+                continue;
+            };
+            if !terrain.get(tile).is_some_and(|value| value & 0x80 != 0)
+                || !tutorial_owner_is_attackable(owner, my_pid, me, players)
+            {
+                continue;
+            }
+            let dx = i64::from(next_col - center_x);
+            let dy = i64::from(next_row - center_y);
+            let distance = dx * dx + dy * dy;
+            if best.is_none_or(|(best_distance, _)| distance < best_distance) {
+                best = Some((distance, tile as u32));
+            }
+        }
+    }
+    best.map(|(_, tile)| tile)
+}
+
+fn tutorial_target_action_tile(
+    owners: &[u16],
+    terrain: &[u8],
+    map_w: u32,
+    map_h: u32,
+    border_tiles: &sow_core::bitset::DenseBitSet,
+    my_pid: u16,
+    target_owner: u16,
+    me: &sow_core::protocol::PlayerSnapshot,
+    players: &[sow_core::protocol::PlayerSnapshot],
+) -> Option<u32> {
+    let target = players.iter().find(|player| player.id == target_owner)?;
+    if !tutorial_owner_is_attackable(target_owner, my_pid, me, players)
+        || map_w == 0
+        || map_w.checked_mul(map_h).is_none()
+    {
+        return None;
+    }
+    let width = i32::try_from(map_w).ok()?;
+    let height = i32::try_from(map_h).ok()?;
+    let (goal_x, goal_y) = (target.centroid_x as i32, target.centroid_y as i32);
+    let mut best: Option<(i64, u32)> = None;
+    for border_idx in border_tiles.ones() {
+        if border_idx / map_w >= map_h || owners.get(border_idx as usize).copied() != Some(my_pid) {
+            continue;
+        }
+        let (col, row) = ((border_idx % map_w) as i32, (border_idx / map_w) as i32);
+        for (dc, dr) in TUTORIAL_ATTACK_NEIGHBORS {
+            let (next_col, next_row) = (col + dc, row + dr);
+            if next_col < 0 || next_col >= width || next_row < 0 || next_row >= height {
+                continue;
+            }
+            let next = (next_row as u32 * map_w + next_col as u32) as usize;
+            let Some(&owner) = owners.get(next) else {
+                continue;
+            };
+            if !terrain.get(next).is_some_and(|value| value & 0x80 != 0) {
+                continue;
+            }
+            if owner == target.id {
+                return Some(next as u32);
+            }
+            if !tutorial_owner_is_attackable(owner, my_pid, me, players) {
+                continue;
+            }
+            let source_dx = i64::from(col - goal_x);
+            let source_dy = i64::from(row - goal_y);
+            let next_dx = i64::from(next_col - goal_x);
+            let next_dy = i64::from(next_row - goal_y);
+            let source_distance = source_dx * source_dx + source_dy * source_dy;
+            let next_distance = next_dx * next_dx + next_dy * next_dy;
+            if next_distance < source_distance
+                && best.is_none_or(|(best_distance, _)| next_distance < best_distance)
+            {
+                best = Some((next_distance, next as u32));
+            }
+        }
+    }
+    best.map(|(_, tile)| tile)
+}
+
+fn tutorial_screen_point_visible(point: [f32; 2], width: f32, height: f32) -> bool {
+    point[0].is_finite()
+        && point[1].is_finite()
+        && point[0] >= 0.0
+        && point[1] >= 0.0
+        && point[0] <= width
+        && point[1] <= height
+}
+
+fn tutorial_project_tile(
+    tile: Option<u32>,
+    map_w: u32,
+    map_h: u32,
+    input: &crate::app::InputState,
+    sf: f32,
+) -> Option<[f32; 2]> {
+    let tile = tile?;
+    if map_w == 0 || tile >= map_w.checked_mul(map_h)? {
+        return None;
+    }
+    Some(crate::render::world::overlays::world_to_screen(
+        (tile % map_w) as f32 + 0.5,
+        (tile / map_w) as f32 + 0.5,
+        input,
+        sf,
+    ))
+}
+
+/// Tutorial hand anchors, as tile indices cached per snapshot tick.
+/// `expand` is neutral land touching the player's border (where to tap to grow);
+/// `assault` is attackable land touching the player's border;
+/// `target_action` is legal frontier land that reaches or moves toward the named faction.
+fn tutorial_guide_tiles(
     app: &mut SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
     my_pid: u16,
-) {
-    if !app.ui.tutorial_active || !app.net.is_offline {
-        return;
-    }
-    let attack_ids = snapshot
-        .attacks
-        .iter()
-        .map(|attack| attack.id)
-        .collect::<Vec<_>>();
-    let fleet_ids = snapshot
-        .fleets
-        .iter()
-        .map(|fleet| fleet.id)
-        .collect::<Vec<_>>();
-    let structure_ids = snapshot
-        .buildings
-        .iter()
-        .filter(|building| building.owner_id == my_pid)
-        .map(|building| building.id)
-        .collect::<Vec<_>>();
-    let defeated_ids = snapshot
-        .players
-        .iter()
-        .filter(|player| player.id != my_pid && !player.alive)
-        .map(|player| player.id)
-        .collect::<Vec<_>>();
-    let defeated_names = snapshot
-        .players
-        .iter()
-        .filter(|player| player.id != my_pid && !player.alive)
-        .map(|player| player.name.clone())
-        .collect::<Vec<_>>();
-    let contact_ids = snapshot
-        .players
-        .iter()
-        .filter(|player| player.id != my_pid && player.alive && player.tile_count > 0)
-        .map(|player| player.id)
-        .collect::<Vec<_>>();
-    let nuke_ids = snapshot
-        .nuke_alerts
-        .iter()
-        .map(|nuke| (nuke.tile_x, nuke.tile_y, nuke.owner_id))
-        .collect::<Vec<_>>();
+    target_owner: u16,
+) -> (Option<u32>, Option<u32>, Option<u32>) {
     let observation = &mut app.sim.tutorial_observation;
-    observation.seen_attacks.extend(attack_ids);
-    observation.seen_fleets.extend(fleet_ids);
-    observation.seen_structures.extend(structure_ids);
-    observation.seen_defeated.extend(defeated_ids);
-    observation.seen_defeated_names.extend(defeated_names);
-    observation.seen_contacts.extend(contact_ids);
-    observation.seen_nukes.extend(nuke_ids);
+    if observation.guide_tick == snapshot.tick && observation.guide_target_owner == target_owner {
+        return (
+            observation.guide_expand,
+            observation.guide_assault,
+            observation.guide_target_action,
+        );
+    }
+    observation.guide_tick = snapshot.tick;
+    observation.guide_target_owner = target_owner;
+    observation.guide_expand = None;
+    observation.guide_assault = None;
+    observation.guide_target_action = None;
+    let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
+    if map_w == 0 || map_h == 0 {
+        return (None, None, None);
+    }
+    let Some(renderer) = app.gfx.map_renderer.as_ref() else {
+        return (None, None, None);
+    };
+    let (owners, terrain) = (&renderer.owners, &renderer.terrain);
+    let Some(me) = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
+    else {
+        return (None, None, None);
+    };
+    let (cx, cy) = (me.centroid_x as i32, me.centroid_y as i32);
+    const RADIUS: i32 = 48;
+    let mut expand = None;
+    'scan: for ring in 0..=RADIUS {
+        for dy in -ring..=ring {
+            for dx in -ring..=ring {
+                if dx.abs().max(dy.abs()) != ring {
+                    continue;
+                }
+                let (col, row) = (cx + dx, cy + dy);
+                if col < 0 || row < 0 || col >= map_w as i32 || row >= map_h as i32 {
+                    continue;
+                }
+                let idx = (row as u32 * map_w + col as u32) as usize;
+                if owners.get(idx).copied().unwrap_or(0) != my_pid {
+                    continue;
+                }
+                let odd = (row & 1) != 0;
+                let deltas = if odd {
+                    [(1, 0), (-1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
+                } else {
+                    [(1, 0), (-1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
+                };
+                for (ndx, ndy) in deltas {
+                    let (ncol, nrow) = (col + ndx, row + ndy);
+                    if ncol < 0 || nrow < 0 || ncol >= map_w as i32 || nrow >= map_h as i32 {
+                        continue;
+                    }
+                    let nidx = (nrow as u32 * map_w + ncol as u32) as usize;
+                    if terrain.get(nidx).copied().unwrap_or(0) & 0x80 == 0 {
+                        continue;
+                    }
+                    let Some(owner) = owners.get(nidx).copied() else {
+                        continue;
+                    };
+                    if owner == 0 && expand.is_none() {
+                        expand = Some(nidx as u32);
+                        break 'scan;
+                    }
+                }
+            }
+        }
+    }
+
+    let border_tiles = app
+        .sim
+        .engine
+        .as_ref()
+        .and_then(|engine| engine.state.player(my_pid))
+        .map(|player| &player.border_tiles);
+    let assault = border_tiles.and_then(|border_tiles| {
+        tutorial_assault_tile(
+            owners,
+            terrain,
+            map_w,
+            map_h,
+            border_tiles,
+            my_pid,
+            me,
+            &snapshot.players,
+        )
+    });
+    let target_action = border_tiles.and_then(|border_tiles| {
+        tutorial_target_action_tile(
+            owners,
+            terrain,
+            map_w,
+            map_h,
+            border_tiles,
+            my_pid,
+            target_owner,
+            me,
+            &snapshot.players,
+        )
+    });
+    observation.guide_expand = expand;
+    observation.guide_assault = assault;
+    observation.guide_target_action = target_action;
+    (expand, assault, target_action)
 }
 
 fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     let Some(snapshot) = app.sim.current_snapshot.clone() else {
         return serde_json::json!({ "active": true, "episode_id": app.ui.tutorial_campaign.episode_id(), "tick": 0 });
     };
-    refresh_tutorial_observation(app, &snapshot, my_pid);
+    let marker_player_id = app.ui.tutorial_marker_player_id.unwrap_or(my_pid);
+    let (expand_tile, assault_tile, target_tile) =
+        tutorial_guide_tiles(app, &snapshot, my_pid, marker_player_id);
+    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
+    let viewport_w = app.input.screen_w / sf;
+    let viewport_h = app.input.screen_h / sf;
+    let guide_screen = |tile: Option<u32>| {
+        tutorial_project_tile(tile, map_w, map_h, &app.input, sf)
+            .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
+            .map(|[x, y]| serde_json::json!({ "x": x, "y": y, "tile_idx": tile }))
+            .unwrap_or(serde_json::Value::Null)
+    };
     let observation = &app.sim.tutorial_observation;
     let me = snapshot.players.iter().find(|player| player.id == my_pid);
-    let defeated_names = observation
-        .seen_defeated_names
-        .iter()
-        .cloned()
-        .collect::<Vec<_>>();
-    let contacts = observation
-        .seen_contacts
-        .iter()
-        .copied()
-        .collect::<Vec<_>>();
     let players = snapshot
         .players
         .iter()
         .map(|player| player_json(player, my_pid, snapshot.total_land_tiles, None))
         .collect::<Vec<_>>();
-    let structures = snapshot
-        .buildings
-        .iter()
-        .map(|building| {
-            serde_json::json!({
-                "id": building.id,
-                "tile_idx": building.tile_idx,
-                "owner_id": building.owner_id,
-                "kind": format!("{:?}", building.kind),
-                "under_construction": building.under_construction,
-            })
-        })
-        .collect::<Vec<_>>();
-    let attacks = snapshot
-        .attacks
-        .iter()
-        .map(|attack| {
-            serde_json::json!({
-                "id": attack.id,
-                "owner_id": attack.owner_id,
-                "target_owner": attack.target_owner,
-                "troops": attack.troops,
-                "retreating": attack.retreating,
-                "front_x": attack.front_cx,
-                "front_y": attack.front_cy,
-            })
-        })
-        .collect::<Vec<_>>();
-    let fleets = snapshot
-        .fleets
-        .iter()
-        .map(|fleet| {
-            serde_json::json!({
-                "id": fleet.id,
-                "owner_id": fleet.owner_id,
-                "unit_type": format!("{:?}", fleet.unit_type),
-                "troops": fleet.troops,
-                "current_tile": fleet.current_tile,
-                "retreating": fleet.retreating,
-            })
-        })
-        .collect::<Vec<_>>();
     serde_json::json!({
         "active": true,
         "episode_id": app.ui.tutorial_campaign.episode_id(),
         "tick": snapshot.tick,
+        "expand": guide_screen(expand_tile),
+        "assault": guide_screen(assault_tile),
+        "target_action": guide_screen(target_tile),
         "facts": {
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
+            "tiles_gained": observation.tiles_gained,
             "troops": me.map(|player| player.troops).unwrap_or(0.0),
             "kills": me.map(|player| player.kills).unwrap_or(0),
             "defeated": observation.seen_defeated.len(),
-            "defeated_names": defeated_names,
+            "defeated_names": observation.seen_defeated_names,
             "contacts": observation.seen_contacts.len(),
+            "contact_names": observation.seen_contact_names,
             "attacks": observation.seen_attacks.len(),
+            "attacks_by_target": observation.attacks_by_target,
             "buildings": observation.seen_structures.len(),
             "fleets": observation.seen_fleets.len(),
             "nukes": observation.seen_nukes.len(),
             "elapsed_ticks": snapshot.tick,
+            "elapsed_seconds": snapshot.tick as f64 * f64::from(app.sim.config.tick_rate_ms) / 1000.0,
         },
         "players": players,
-        "structures": structures,
-        "attacks": attacks,
-        "fleets": fleets,
-        "contacts": contacts,
     })
 }
 
@@ -1425,11 +1625,14 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .sim
         .my_player_id
         .unwrap_or(app.ui.app.hud_state.my_player_id);
-    let tutorial_state = if app.ui.tutorial_active && app.net.is_offline {
+    let mut tutorial_state = if app.ui.tutorial_active && app.net.is_offline {
         tutorial_payload(app, tutorial_pid)
     } else {
         serde_json::json!({ "active": false })
     };
+    let tutorial_players = tutorial_state
+        .as_object_mut()
+        .and_then(|tutorial| tutorial.remove("players"));
     let map_menu = app
         .input
         .map_context_menu
@@ -1556,6 +1759,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "assists": me.map(|player| player.assists).unwrap_or(0),
         },
     });
+    if let Some(players) = tutorial_players {
+        payload["players"] = players;
+    }
 
     if let Some(snapshot) = snapshot {
         if hovered_owner != 0 {
@@ -1604,12 +1810,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     if let Some(sync) = &hud.sync_state {
         payload["sync"] = serde_json::to_value(sync).unwrap_or(serde_json::Value::Null);
     }
-    payload["notifications"] = serde_json::Value::Array(
-        hud.hud_notifications
-            .iter()
-            .map(|notice| localized_text_payload(&notice.text))
-            .collect(),
-    );
     payload
 }
 

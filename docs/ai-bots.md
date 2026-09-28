@@ -45,16 +45,23 @@ Source of truth is code. Update this table when behavior changes.
 
 | Parameter | Ghost | Nation | Tribe (Vanilla) |
 |---|---:|---:|---:|
-| IQ band | 160–181 | 130–160 | 50–86 |
+| IQ band | 160–180 | 130–159 | 50–85 |
 | Base cadence (ticks) | 5 | 30 | 100 |
 | `trigger_ratio` | 0.05 | 0.45 | ignored (`attacks_players=false`) |
 | `reserve_ratio` | 0.02 | 0.20 | 0.50 |
 | `expand_ratio` | 0.02 | 0.15 | 0.10 |
-| IQ costs (war/build/alliance/send) | 5/5/5/5 | 5/5/5/999 | 10/10/10/999 |
+| IQ costs (war/build/alliance/send) | 5/5/5/5 | 5/5/5/5 | 10/10/10/999 |
+
+- Costs are IQ-keyed, not tier-keyed (`sow-core/src/intent/nation/mod.rs`):
+  IQ ≥ 130 pays 5/5/5/5, IQ 100–129 pays 5/5/5/999, IQ < 100 pays 10/10/10/999.
+  No spawn band reaches the 100–129 tier, so nations always send for 5.
 
 - Neutral expansion is free; war costs `attack_cost`, clamped at zero.
-- `max_troops = 10 + tiles^0.625 × 350 + 5000×city_levels`; tribes divide it by 1.5.
-- Troop income is `250 + 25×cities + tiles/16` per second; tribes receive 0.75× that value.
+- `max_troops = 10 + tiles^0.625 × 350 + 5000×city_levels + 500×armory_levels`; tribes divide it by 1.5.
+- Troop income is `250 + 25×cities + tiles/16 + 80×armory_levels + 50×ports` per second (`sow-core/src/execution/income.rs`, `income_rates.rs`); tribes receive 0.75× that value; leader perks multiply on top.
+- Human-safe nations: `refuse_human_chance` (Nation 20, Vanilla Tribe 100 in
+  `sow-core/src/intent/nation/profile.rs`) means nations and tribes never
+  target real humans at their roll chance — 0b65c0f1 / 1810d640 behavior.
 - Ghost fill is 65–92% of `max_players` (`SOW_BOT_FILL_MIN/MAX`).
 - Matchmaking human capacity is randomized from 12–256; smaller rooms are more
   common, and Teams capacities are always even.

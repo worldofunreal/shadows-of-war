@@ -159,8 +159,8 @@ Use the official pipelines for changes. Android upload is owner-only:
 ```sh
 ./sow p       # Web/backend/infra
 ./sow a       # Android/Google Play — owner runs manually; Codex never runs it
-./sow l       # local Web/WASM preview
-./sow  # local JavaScript/WASM client
+./sow l       # local Web/WASM preview (127.0.0.1:4173)
+./sow         # native Tauri/WASM desktop client (fast build + open)
 ```
 
 ## Opt-in procedure

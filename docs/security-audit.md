@@ -125,9 +125,9 @@ relay-to-database calls.  The database accepts a request when its
 
 Evidence:
 
-- Validation: [sow-data/src/main.rs](/home/bizkit/Github/shadows-of-war/sow-data/src/main.rs:233)
-- Server use: [sow-server/src/main.rs](/home/bizkit/Github/shadows-of-war/sow-server/src/main.rs:384)
-- Relay use: [sow-relay/src/main.rs](/home/bizkit/Github/shadows-of-war/sow-relay/src/main.rs:503)
+- Validation: [sow-data/src/main.rs](/home/bizkit/Github/shadows-of-war/sow-data/src/main.rs:1984) (secret load, fail-closed; bearer comparison in the request handlers)
+- Server use: [sow-server/src/main.rs](/home/bizkit/Github/shadows-of-war/sow-server/src/main.rs:407)
+- Relay use: [sow-relay/src/main.rs](/home/bizkit/Github/shadows-of-war/sow-relay/src/main.rs:802) (line re-verified 2026-09-28 at `38d859d2`)
 
 ### Current verified state
 

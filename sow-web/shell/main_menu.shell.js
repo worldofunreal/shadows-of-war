@@ -33,6 +33,7 @@
     var activeRewardStage = null;
     var rewardOptimisticPreview = null;
     var rewardPresentationReady = false;
+    var menuGuideReturnPending = false;
     var displayedProgression = null;
     var progressionAnimationFrame = 0;
     var progressionAnimationTarget = null;
@@ -499,6 +500,7 @@
         renderPending = false;
         var screen = currentScreen();
         if (screen !== "heroes") skinPickerOpen = false;
+        if (screen !== "heroes") heroInfoOpen = false;
         var screenChanged = previousScreen !== screen;
         var sameScreen = !screenChanged;
         if (screenChanged) dropdownOpenKey = null;
@@ -553,6 +555,7 @@
         syncOverlay("auth", authModalOpen ? renderAuthModal() : "");
         syncOverlay("profile-detail", profileOpen ? renderProfileDetail() : "");
         syncOverlay("skin-picker", typeof renderSkinPickerModal === "function" ? renderSkinPickerModal() : "");
+        syncOverlay("hero-info", typeof renderHeroInfoModal === "function" ? renderHeroInfoModal() : "");
         syncOverlay("purchase", typeof renderPurchaseModal === "function" ? renderPurchaseModal() : "");
 
         if (sameScreen && isTyping) {
@@ -969,7 +972,7 @@
             !rewardPresentationReady || rewardAnimationRunning) return;
         ensureProgressionDisplay();
         var preview = state.exit_reward_preview;
-            if (rewardOptimisticPreview) {
+        if (rewardOptimisticPreview) {
             var receipt = findRewardReceipt(rewardOptimisticPreview.receipt_id);
             if (receipt) {
                 var accountId = state.account_id;
@@ -985,6 +988,7 @@
                 });
                 return;
             }
+            return;
         }
         if (preview && preview.account_id === state.account_id && !rewardAnimationShown.has(preview.receipt_id)) {
             runRewardPresentation([], preview);
@@ -996,6 +1000,10 @@
             return;
         }
         acknowledgeShownReceipts(state.account_id);
+        if (menuGuideReturnPending) {
+            menuGuideReturnPending = false;
+            window.dispatchEvent(new CustomEvent("sow:campaign-menu-guide-ready"));
+        }
     }
 
     function updateDynamic() {
@@ -1061,6 +1069,12 @@
         var skinPickerOverlay = event.target.closest("[data-menu-overlay='skin-picker']");
         if (skinPickerOverlay && event.target === skinPickerOverlay) {
             skinPickerOpen = false;
+            render();
+            return;
+        }
+        var heroInfoOverlay = event.target.closest("[data-menu-overlay='hero-info']");
+        if (heroInfoOverlay && event.target === heroInfoOverlay) {
+            heroInfoOpen = false;
             render();
             return;
         }
@@ -1367,6 +1381,16 @@
         }
         if (command === "select_dropdown") {
             selectDropdown(target.dataset.dropdownKey, target.dataset.dropdownOptionValue);
+            return;
+        }
+        if (command === "open_hero_info") {
+            heroInfoOpen = true;
+            render();
+            return;
+        }
+        if (command === "close_hero_info") {
+            heroInfoOpen = false;
+            render();
             return;
         }
         if (command === "preview_leader") {
@@ -1741,9 +1765,10 @@
             }
             return;
         }
-        if (event.key === "Escape" && skinPickerOpen) {
+        if (event.key === "Escape" && (skinPickerOpen || heroInfoOpen)) {
             event.preventDefault();
             skinPickerOpen = false;
+            heroInfoOpen = false;
             render();
             return;
         }
@@ -2053,6 +2078,7 @@
             rewardAnimationTimer = null;
         }
         if (returnedFromGame) {
+            menuGuideReturnPending = true;
             profileOpen = false;
             heroesOpen = false;
             campaignOpen = false;

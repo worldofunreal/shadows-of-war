@@ -10,6 +10,10 @@ enum FleetRouteCheck {
     Path,
 }
 
+fn attack_troops_meet_minimum(troops: f64, minimum: f64) -> bool {
+    troops.is_finite() && minimum.is_finite() && troops >= minimum
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum MapMenuAction {
@@ -126,9 +130,9 @@ impl MapTarget {
         }
 
         let mut actions = Vec::new();
-        actions.push(MapMenuAction::Transfer);
         if self.is_friendly() {
-            if self.is_allied && self.is_land {
+            actions.push(MapMenuAction::Transfer);
+            if self.is_allied && !self.is_teammate && self.is_land && can_attack {
                 actions.push(MapMenuAction::Attack);
             }
             if !self.is_teammate {
@@ -941,6 +945,10 @@ impl SowApp {
         if troops <= 0.0 {
             return false;
         }
+        let minimum_troops = self.sim.config.attack_cost_neutral;
+        if !attack_troops_meet_minimum(troops, minimum_troops) {
+            return false;
+        }
         let intent = sow_core::protocol::GameplayIntent::Attack(sow_core::protocol::AttackIntent {
             target_owner: target.owner,
             troops: Some(troops),
@@ -972,33 +980,15 @@ impl SowApp {
             return false;
         };
         if target.is_teammate {
-            self.add_notice_at_screen(
-                "Teammates cannot be targeted. 🤝",
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
-            );
+            self.add_notice_at_screen("Teammates cannot be targeted. 🤝", anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
             return false;
         }
         if target.is_allied {
-            self.add_notice_at_screen(
-                "Break the alliance before launching a fleet. 🛡️",
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
-            );
+            self.add_notice_at_screen("Break the alliance before launching a fleet. 🛡️", anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
             return false;
         }
         if target.owner != 0 && !target.is_enemy() {
-            self.add_notice_at_screen(
-                "A fleet cannot target your own territory. 🛡️",
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
-            );
+            self.add_notice_at_screen("A fleet cannot target your own territory. 🛡️", anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
             return false;
         }
         if let Err(error) = self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Path) {
@@ -1008,10 +998,7 @@ impl SowApp {
         let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
         if troops < self.sim.config.attack_cost_neutral {
             self.add_notice_at_screen(
-                format!(
-                    "Need at least {} troops for a fleet. 🚢",
-                    crate::utils::format_number(self.sim.config.attack_cost_neutral)
-                ),
+                format!("Need at least {} troops for a fleet. 🚢", crate::utils::format_number(self.sim.config.attack_cost_neutral)),
                 anchor.0,
                 anchor.1,
                 2000,
@@ -1352,7 +1339,10 @@ fn shares_land_border(
 
 #[cfg(test)]
 mod tests {
-    use super::{MapMenuAction, MapTarget, TOUCH_HOLD_MS, is_quick_tap, shares_land_border};
+    use super::{
+        MapMenuAction, MapTarget, TOUCH_HOLD_MS, attack_troops_meet_minimum, is_quick_tap,
+        shares_land_border,
+    };
     use sow_core::bitset::DenseBitSet;
 
     #[test]
@@ -1421,6 +1411,13 @@ mod tests {
     }
 
     #[test]
+    fn attack_amount_must_meet_the_configured_minimum() {
+        assert!(!attack_troops_meet_minimum(0.5, 1.0));
+        assert!(attack_troops_meet_minimum(1.0, 1.0));
+        assert!(!attack_troops_meet_minimum(f64::NAN, 1.0));
+    }
+
+    #[test]
     fn map_menu_keeps_actions_on_the_rust_route() {
         let enemy = MapTarget {
             owner: 2,
@@ -1435,7 +1432,6 @@ mod tests {
         assert_eq!(
             enemy.menu_actions(false, true, false),
             vec![
-                MapMenuAction::Transfer,
                 MapMenuAction::Attack,
                 MapMenuAction::Fleet,
                 MapMenuAction::Nuke,
@@ -1445,7 +1441,6 @@ mod tests {
         assert_eq!(
             enemy.menu_actions(false, false, false),
             vec![
-                MapMenuAction::Transfer,
                 MapMenuAction::Fleet,
                 MapMenuAction::Nuke,
                 MapMenuAction::Alliance
@@ -1456,6 +1451,14 @@ mod tests {
             is_allied: true,
             ..enemy
         };
+        assert_eq!(
+            ally.menu_actions(false, false, false),
+            vec![
+                MapMenuAction::Transfer,
+                MapMenuAction::Fleet,
+                MapMenuAction::Alliance
+            ]
+        );
         assert_eq!(
             ally.menu_actions(false, true, false),
             vec![
@@ -1472,6 +1475,14 @@ mod tests {
         };
         assert_eq!(
             teammate.menu_actions(false, true, false),
+            vec![MapMenuAction::Transfer]
+        );
+        let allied_teammate = MapTarget {
+            is_teammate: true,
+            ..ally
+        };
+        assert_eq!(
+            allied_teammate.menu_actions(false, true, true),
             vec![MapMenuAction::Transfer]
         );
 

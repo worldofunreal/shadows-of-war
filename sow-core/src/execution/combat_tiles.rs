@@ -26,7 +26,7 @@ impl SowEngine {
 
         // attacks are sorted on insertion
 
-        let mut last_captured_tiles = std::collections::HashMap::new();
+        let mut elimination_candidates = Vec::new();
         let mut to_remove = Vec::new();
 
         for i in 0..self.attacks.len() {
@@ -317,11 +317,16 @@ impl SowEngine {
                     // Apply change AFTER enqueuing neighbors
                     // This ensures new neighbors don't artificially lower their priority by counting this tile as friendly yet!
                     // Guaranteed BFS spread without DFS spikes!
-                    self.state
-                        .set_tile_owner(target_tile.x, target_tile.y, execution.owner_id);
-
-                    last_captured_tiles
-                        .insert(execution.target_owner, (target_tile.x, target_tile.y));
+                    elimination_candidates.extend(
+                        self.state
+                            .set_tile_owner_with_eliminations(
+                                target_tile.x,
+                                target_tile.y,
+                                execution.owner_id,
+                            )
+                            .into_iter()
+                            .map(|(victim, x, y)| (victim, execution.owner_id, x, y)),
+                    );
 
                     // Send event
                     self.state.events.push(GameEvent::TileCaptured {
@@ -344,27 +349,6 @@ impl SowEngine {
                 }
             }
 
-            // Conquer Gold Mechanic: Check elimination ONCE per attack, outside the tile loop
-            let execution_ref = &self.attacks[i];
-            if execution_ref.target_owner != 0 {
-                let mut is_eliminated = false;
-                if let Some(target_player) = self.state.player(execution_ref.target_owner)
-                    && target_player.tile_count == 0
-                    && target_player.alive
-                {
-                    is_eliminated = true;
-                }
-
-                if is_eliminated {
-                    let victim_id = execution_ref.target_owner;
-                    let killer_id = execution_ref.owner_id;
-                    let (ex, ey) = last_captured_tiles
-                        .get(&victim_id)
-                        .copied()
-                        .unwrap_or((0, 0));
-                    self.eliminate_player(victim_id, killer_id, ex, ey, false);
-                }
-            }
         }
 
         // Remove dead attacks in O(1) and re-sort to preserve deterministic order
@@ -375,6 +359,10 @@ impl SowEngine {
         if has_removals {
             self.attacks.sort_unstable_by_key(|a| a.id);
             self.ai_attack_index_dirty = true;
+        }
+
+        for (victim, conqueror, x, y) in elimination_candidates {
+            self.eliminate_player(victim, conqueror, x, y, false);
         }
     }
 }
