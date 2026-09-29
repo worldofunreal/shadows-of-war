@@ -2,12 +2,13 @@ use crate::render::gpu::{MoverInstanceGpu, MoverSpriteId, TrailSegmentGpu};
 use sow_core::game::{ProjectileKind, UnitType};
 use sow_core::protocol::{FleetSnapshot, ProjectileSnapshot, SimSnapshot};
 use std::collections::{HashMap, HashSet};
-use web_time::Instant;
 
 const TRAIL_CAP: usize = 32;
 const NUKE_ARC_PEAK: f32 = 4.0;
-const NUKE_ARC_LIFT: f32 = 20.0;
-const NUKE_ARC_SAMPLES: usize = 40;
+const NUKE_ARC_MIN_HEIGHT: f32 = 50.0;
+const NUKE_ARC_SAMPLES: usize = 128;
+const NUKE_CURVE_MIN_SAMPLES: usize = 64;
+const NUKE_CURVE_MAX_SAMPLES: usize = 4096;
 const MIN_PROJECTILE_SCREEN_PX: f32 = 11.0;
 const PROJECTILE_TRAIL_WIDTH_MIN: f32 = 3.0;
 const PROJECTILE_TRAIL_WIDTH_MAX: f32 = 10.0;
@@ -41,11 +42,6 @@ fn nuke_arc_height(progress: f32) -> f32 {
 }
 
 #[inline]
-fn lift_world_for_arc(wx: f32, wy: f32, progress: f32) -> [f32; 2] {
-    [wx, wy - nuke_arc_height(progress) * NUKE_ARC_LIFT]
-}
-
-#[inline]
 fn path_world_at(path: &[u32], map_w: u32, index_f: f32) -> (f32, f32) {
     if path.is_empty() {
         return (0.0, 0.0);
@@ -63,23 +59,140 @@ fn path_world_at(path: &[u32], map_w: u32, index_f: f32) -> (f32, f32) {
     }
 }
 
-fn sample_nuke_arc(path: &[u32], map_w: u32, progress: f32, out: &mut Vec<[f32; 2]>) {
+#[inline]
+fn bezier_point(points: [[f32; 2]; 4], t: f32) -> [f32; 2] {
+    let one_minus_t = 1.0 - t;
+    let a = one_minus_t * one_minus_t * one_minus_t;
+    let b = 3.0 * one_minus_t * one_minus_t * t;
+    let c = 3.0 * one_minus_t * t * t;
+    let d = t * t * t;
+    [
+        a * points[0][0] + b * points[1][0] + c * points[2][0] + d * points[3][0],
+        a * points[0][1] + b * points[1][1] + c * points[2][1] + d * points[3][1],
+    ]
+}
+
+#[inline]
+fn sampled_path_at(path: &[[f32; 2]], index_f: f32) -> [f32; 2] {
+    if path.is_empty() {
+        return [0.0, 0.0];
+    }
+    let idx = (index_f.floor() as usize).min(path.len() - 1);
+    let next = (idx + 1).min(path.len() - 1);
+    let frac = (index_f - idx as f32).clamp(0.0, 1.0);
+    let a = path[idx];
+    let b = path[next];
+    [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac]
+}
+
+struct NukeArcPath {
+    points: Vec<[f32; 2]>,
+    bounds: [f32; 4], // min x, min y, max x, max y
+}
+
+impl NukeArcPath {
+    fn new(src_tile: u32, dst_tile: u32, map_w: u32, map_h: u32) -> Self {
+        let start = tile_to_world(src_tile, map_w);
+        let end = tile_to_world(dst_tile, map_w);
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let distance = (dx * dx + dy * dy).sqrt();
+        if distance <= f32::EPSILON {
+            return Self {
+                points: vec![[start.0, start.1]],
+                bounds: [start.0, start.1, start.0, start.1],
+            };
+        }
+        let height = (distance / 3.0).max(NUKE_ARC_MIN_HEIGHT);
+        let min_y = 0.5;
+        let max_y = (map_h.max(1) as f32 - 0.5).max(min_y);
+        let controls = [
+            [start.0, start.1],
+            [
+                start.0 + dx / 4.0,
+                (start.1 + dy / 4.0 - height).clamp(min_y, max_y),
+            ],
+            [
+                start.0 + dx * 3.0 / 4.0,
+                (start.1 + dy * 3.0 / 4.0 - height).clamp(min_y, max_y),
+            ],
+            [end.0, end.1],
+        ];
+
+        // Approximate the curve, then resample it at equal world-space distances.
+        let raw_steps = ((distance * 2.0).ceil() as usize)
+            .clamp(NUKE_CURVE_MIN_SAMPLES, NUKE_CURVE_MAX_SAMPLES);
+        let mut raw_points = Vec::with_capacity(raw_steps + 1);
+        let mut cumulative = Vec::with_capacity(raw_steps + 1);
+        raw_points.push(bezier_point(controls, 0.0));
+        cumulative.push(0.0);
+        let mut total_length = 0.0;
+        for i in 1..=raw_steps {
+            let point = bezier_point(controls, i as f32 / raw_steps as f32);
+            let previous = raw_points[i - 1];
+            let dx = point[0] - previous[0];
+            let dy = point[1] - previous[1];
+            total_length += (dx * dx + dy * dy).sqrt();
+            raw_points.push(point);
+            cumulative.push(total_length);
+        }
+
+        let uniform_steps = total_length.ceil().max(1.0) as usize;
+        let mut points = Vec::with_capacity(uniform_steps + 1);
+        let mut raw_idx = 1;
+        for i in 0..=uniform_steps {
+            let target_distance = total_length * i as f32 / uniform_steps as f32;
+            while raw_idx + 1 < cumulative.len() && cumulative[raw_idx] < target_distance {
+                raw_idx += 1;
+            }
+            let from_distance = cumulative[raw_idx - 1];
+            let segment_length = cumulative[raw_idx] - from_distance;
+            let t = ((target_distance - from_distance) / segment_length.max(f32::EPSILON))
+                .clamp(0.0, 1.0);
+            let from = raw_points[raw_idx - 1];
+            let to = raw_points[raw_idx];
+            points.push([
+                from[0] + (to[0] - from[0]) * t,
+                from[1] + (to[1] - from[1]) * t,
+            ]);
+        }
+
+        let first = points[0];
+        let mut bounds = [first[0], first[1], first[0], first[1]];
+        for point in &points[1..] {
+            bounds[0] = bounds[0].min(point[0]);
+            bounds[1] = bounds[1].min(point[1]);
+            bounds[2] = bounds[2].max(point[0]);
+            bounds[3] = bounds[3].max(point[1]);
+        }
+        Self { points, bounds }
+    }
+
+    #[inline]
+    fn point_at(&self, progress: f32) -> [f32; 2] {
+        if self.points.len() == 1 {
+            return self.points[0];
+        }
+        sampled_path_at(
+            &self.points,
+            progress.clamp(0.0, 1.0) * (self.points.len() - 1) as f32,
+        )
+    }
+}
+
+fn sample_nuke_arc(path: &NukeArcPath, progress: f32, out: &mut Vec<[f32; 2]>) {
     out.clear();
-    let path_len = path.len();
-    if path_len <= 1 || progress <= 0.0 {
+    if path.points.len() <= 1 || progress <= 0.0 {
         return;
     }
     for s in 0..=NUKE_ARC_SAMPLES {
-        let p = progress * (s as f32 / NUKE_ARC_SAMPLES as f32);
-        let idx_f = p * (path_len - 1) as f32;
-        let (wx, wy) = path_world_at(path, map_w, idx_f);
-        out.push(lift_world_for_arc(wx, wy, p));
+        out.push(path.point_at(progress * s as f32 / NUKE_ARC_SAMPLES as f32));
     }
 }
 
 #[inline]
-fn screen_margin(zoom: f32) -> f32 {
-    64.0 + NUKE_ARC_PEAK * NUKE_ARC_LIFT * zoom
+fn screen_margin() -> f32 {
+    64.0
 }
 
 #[inline]
@@ -116,6 +229,7 @@ pub struct MoverScene {
     trail_points: Vec<[f32; 2]>,
     arc_scratch: Vec<[f32; 2]>,
     arc_paths: HashMap<u64, Vec<u32>>,
+    nuke_arcs: HashMap<u64, NukeArcPath>,
     player_colors: HashMap<u16, [f32; 3]>,
     last_snap_tick: u64,
     map_w: u32,
@@ -127,7 +241,6 @@ pub struct MoverPackParams {
     pub camera_zoom: f32,
     pub screen_w: f32,
     pub screen_h: f32,
-    pub alpha: f32,
     pub linear_alpha: f32,
 }
 
@@ -139,6 +252,7 @@ impl MoverScene {
             trail_points: Vec::new(),
             arc_scratch: Vec::with_capacity(NUKE_ARC_SAMPLES + 1),
             arc_paths: HashMap::new(),
+            nuke_arcs: HashMap::new(),
             player_colors: HashMap::new(),
             last_snap_tick: u64::MAX,
             map_w: 1,
@@ -149,6 +263,7 @@ impl MoverScene {
         &mut self,
         snap: &SimSnapshot,
         map_w: u32,
+        map_h: u32,
         fog_of_war_enabled: bool,
         my_id: u16,
         fog_visible: &sow_core::bitset::DenseBitSet,
@@ -189,7 +304,7 @@ impl MoverScene {
             if is_visible {
                 let key = proj.id | (1u64 << 63);
                 alive.insert(key);
-                self.ingest_projectile(proj, map_w);
+                self.ingest_projectile(proj, map_w, map_h);
             }
         }
 
@@ -201,6 +316,7 @@ impl MoverScene {
             .collect();
         for id in dead {
             self.arc_paths.remove(&id);
+            self.nuke_arcs.remove(&id);
             if let Some(idx) = self.id_to_idx.remove(&id) {
                 let rem = idx as usize;
                 if rem < self.slots.len() {
@@ -283,8 +399,8 @@ impl MoverScene {
         let trail_start = self.trail_points.len() as u32;
         let traveled = fleet.path_cursor.saturating_sub(1);
         if traveled > 0 {
-            let start = traveled.saturating_sub(TRAIL_CAP);
-            for &tile in &fleet.path[start..traveled] {
+            let start = traveled.saturating_sub(TRAIL_CAP - 1);
+            for &tile in &fleet.path[start..=traveled] {
                 let (wx, wy) = tile_to_world(tile, map_w);
                 self.trail_points.push([wx, wy]);
             }
@@ -310,7 +426,7 @@ impl MoverScene {
         self.upsert_slot(fleet.id, entry);
     }
 
-    fn ingest_projectile(&mut self, proj: &ProjectileSnapshot, map_w: u32) {
+    fn ingest_projectile(&mut self, proj: &ProjectileSnapshot, map_w: u32, map_h: u32) {
         let cursor = proj.path_cursor.min(proj.path.len().saturating_sub(1));
         let prev_idx = cursor.saturating_sub(proj.steps_per_tick as usize);
         let (curr_x, curr_y) = tile_to_world(proj.path[cursor], map_w);
@@ -338,7 +454,13 @@ impl MoverScene {
 
         let is_nuke = matches!(proj.kind, ProjectileKind::Nuke { .. });
         let key = proj.id | (1u64 << 63);
-        self.arc_paths.insert(key, proj.path.clone());
+        if is_nuke {
+            self.nuke_arcs
+                .entry(key)
+                .or_insert_with(|| NukeArcPath::new(proj.src_tile, proj.dst_tile, map_w, map_h));
+        } else {
+            self.arc_paths.insert(key, proj.path.clone());
+        }
 
         let (trail_start, trail_len) = if is_nuke {
             (0, 0)
@@ -445,8 +567,7 @@ impl MoverScene {
         renderer: &mut crate::render::gpu::MoverRenderer,
     ) {
         renderer.begin_frame();
-        let alpha = params.alpha;
-        let margin = screen_margin(params.camera_zoom);
+        let margin = screen_margin();
         let min_sx = -margin;
         let min_sy = -margin;
         let max_sx = params.screen_w + margin;
@@ -458,15 +579,20 @@ impl MoverScene {
             let slot = &self.slots[idx as usize];
 
             let (wx, wy, progress) = if slot.is_fleet {
-                let wx = slot.prev_x + (slot.curr_x - slot.prev_x) * alpha;
-                let wy = slot.prev_y + (slot.curr_y - slot.prev_y) * alpha;
+                let wx = slot.prev_x + (slot.curr_x - slot.prev_x) * params.linear_alpha;
+                let wy = slot.prev_y + (slot.curr_y - slot.prev_y) * params.linear_alpha;
                 let progress = slot.path_progress_prev
-                    + (slot.path_progress_curr - slot.path_progress_prev) * alpha;
+                    + (slot.path_progress_curr - slot.path_progress_prev) * params.linear_alpha;
                 (wx, wy, progress)
             } else {
                 let progress = slot.path_progress_prev
                     + (slot.path_progress_curr - slot.path_progress_prev) * params.linear_alpha;
-                if let Some(path) = self.arc_paths.get(id) {
+                if slot.arc_trail
+                    && let Some(path) = self.nuke_arcs.get(id)
+                {
+                    let [wx, wy] = path.point_at(progress);
+                    (wx, wy, progress)
+                } else if let Some(path) = self.arc_paths.get(id) {
                     let path_len = path.len();
                     if path_len > 0 {
                         let idx_f = progress * (path_len - 1) as f32;
@@ -489,13 +615,7 @@ impl MoverScene {
             } else {
                 nuke_arc_height(progress)
             };
-            let world_pos = if slot.arc_trail {
-                lift_world_for_arc(wx, wy, progress)
-            } else if slot.is_fleet {
-                [wx, wy]
-            } else {
-                [wx, wy - height * NUKE_ARC_LIFT]
-            };
+            let world_pos = [wx, wy];
 
             let sx = params.camera_x + wx * params.camera_zoom;
             let sy = params.camera_y + world_pos[1] * params.camera_zoom;
@@ -508,31 +628,31 @@ impl MoverScene {
             };
 
             if slot.arc_trail {
-                // Fast O(1) nuke arc bounding box frustum culling
-                let min_x = slot.prev_x.min(slot.curr_x);
-                let max_x = slot.prev_x.max(slot.curr_x);
-                let min_y = slot.prev_y.min(slot.curr_y) - NUKE_ARC_PEAK * NUKE_ARC_LIFT;
-                let max_y = slot.prev_y.max(slot.curr_y);
-
-                let min_sx = params.camera_x + min_x * params.camera_zoom;
-                let max_sx = params.camera_x + max_x * params.camera_zoom;
-                let min_sy = params.camera_y + min_y * params.camera_zoom;
-                let max_sy = params.camera_y + max_y * params.camera_zoom;
-
-                let arc_visible = max_sx >= -margin
-                    && min_sx <= params.screen_w + margin
-                    && max_sy >= -margin
-                    && min_sy <= params.screen_h + margin;
-
-                if arc_visible && let Some(path) = self.arc_paths.get(id) {
-                    sample_nuke_arc(path, self.map_w, progress, &mut arc_scratch);
-                    self.push_trail_segments(
-                        renderer,
-                        &arc_scratch,
-                        world_pos,
-                        trail_width,
-                        slot.trail_color,
-                    );
+                if let Some(path) = self.nuke_arcs.get(id) {
+                    let bounds = path.bounds;
+                    let arc_visible = params.camera_x + bounds[2] * params.camera_zoom >= -margin
+                        && params.camera_x + bounds[0] * params.camera_zoom
+                            <= params.screen_w + margin
+                        && params.camera_y + bounds[3] * params.camera_zoom >= -margin
+                        && params.camera_y + bounds[1] * params.camera_zoom
+                            <= params.screen_h + margin;
+                    if arc_visible {
+                        sample_nuke_arc(path, progress, &mut arc_scratch);
+                        if self.arc_visible(
+                            &arc_scratch,
+                            world_pos,
+                            params,
+                            (min_sx, min_sy, max_sx, max_sy),
+                        ) {
+                            self.push_trail_segments(
+                                renderer,
+                                &arc_scratch,
+                                world_pos,
+                                trail_width,
+                                slot.trail_color,
+                            );
+                        }
+                    }
                 }
             } else if slot.trail_len > 0 {
                 let start = slot.trail_start as usize;
@@ -606,7 +726,7 @@ impl MoverScene {
                 rotation,
                 color: slot.color,
                 uv_rect: slot.sprite.uv_rect(),
-                height: height * NUKE_ARC_LIFT,
+                height: 0.0,
             });
         }
         self.arc_scratch = arc_scratch;
@@ -619,6 +739,35 @@ impl Default for MoverScene {
     }
 }
 
-pub fn interp_alpha(time: &crate::app::TimeState, now: Instant) -> f32 {
-    time.interp.alpha(now)
+#[cfg(test)]
+mod tests {
+    use super::NukeArcPath;
+
+    #[test]
+    fn nuke_arc_is_distance_spaced_bounded_and_distance_scaled() {
+        let short = NukeArcPath::new(100 * 256 + 20, 100 * 256 + 40, 256, 256);
+        let long = NukeArcPath::new(100 * 256 + 20, 100 * 256 + 220, 256, 256);
+
+        let start = short.point_at(0.0);
+        let end = short.point_at(1.0);
+        assert!((start[0] - 20.5).abs() < 0.001 && (start[1] - 100.5).abs() < 0.001);
+        assert!((end[0] - 40.5).abs() < 0.001 && (end[1] - 100.5).abs() < 0.001);
+        assert!(long.point_at(0.5)[1] < short.point_at(0.5)[1]);
+        assert!(
+            long.points
+                .iter()
+                .all(|point| point[1] >= 0.5 && point[1] <= 255.5)
+        );
+
+        let mut min_step = f32::INFINITY;
+        let mut max_step: f32 = 0.0;
+        for pair in long.points.windows(2) {
+            let dx = pair[1][0] - pair[0][0];
+            let dy = pair[1][1] - pair[0][1];
+            let step = (dx * dx + dy * dy).sqrt();
+            min_step = min_step.min(step);
+            max_step = max_step.max(step);
+        }
+        assert!(max_step - min_step < 0.05);
+    }
 }

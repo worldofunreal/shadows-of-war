@@ -3,7 +3,7 @@ use super::nameplate_placement::{
     NameplateLandCache, NameplateLayout, NameplateStatus, fit_bounds_to_land, fit_size_to_land,
 };
 use crate::app::{InputState, SimState, UiState};
-use crate::render::gpu::TextRenderer;
+use crate::render::gpu::{BuildingSpriteId, TextRenderer};
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
 use sow_core::player::{Leader, PlayerType};
@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
 const NAMEPLATE_WORLD_SCALE: f32 = 0.05;
+const NAMEPLATE_MIN_FONT: f32 = 8.0;
 const NAMEPLATE_MAX_FONT: f32 = 32.0;
 const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
 const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
@@ -222,6 +223,7 @@ fn render_nameplates(
         if fit_scale <= 0.0 || !fit_scale.is_finite() {
             continue;
         }
+        let fit_scale = fit_scale_with_human_minimum(fit_scale, scaled_size, is_human);
 
         if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
             let dot_scale = fit_size_to_land(
@@ -511,9 +513,18 @@ fn nameplate_world_size(tile_count: u32) -> f32 {
 fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
     let world_px = world_size * NAMEPLATE_WORLD_SCALE * zoom_scaled;
     if is_human {
-        world_px.clamp(8.0, NAMEPLATE_MAX_FONT)
+        world_px.clamp(NAMEPLATE_MIN_FONT, NAMEPLATE_MAX_FONT)
     } else {
         world_px
+    }
+}
+
+#[inline]
+fn fit_scale_with_human_minimum(fit_scale: f32, scaled_size: f32, is_human: bool) -> f32 {
+    if is_human {
+        fit_scale.max(NAMEPLATE_MIN_FONT / scaled_size.max(NAMEPLATE_MIN_FONT))
+    } else {
+        fit_scale
     }
 }
 
@@ -1191,17 +1202,7 @@ fn render_buildings(
             continue;
         }
 
-        let icon_size = building_icon_size(zoom_scaled);
-        let natural_size = if building.count > 1 {
-            icon_size * 1.2
-        } else {
-            icon_size
-        } * lod.final_scale;
-        let marker_size = if lod.compact {
-            natural_size.max(BUILDING_MIN_MARKER_SIZE)
-        } else {
-            natural_size
-        };
+        let marker_size = building_marker_size(building, lod, zoom_scaled);
 
         if let Some(status) = &building.status {
             let center_px = [center[0] * sf, center[1] * sf];
@@ -1228,12 +1229,11 @@ fn render_buildings(
         } else {
             1.0
         };
-        let _ = text.push_emoji(
-            building_kind_emoji(building.kind, building.level.max(1)),
+        text.push_building_sprite(
+            building_kind_sprite(building.kind, building.level.max(1)),
             [center[0] * sf, center[1] * sf],
             marker_size * sf * 0.5,
             [1.0, 1.0, 1.0, alpha],
-            crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]),
         );
 
         if let Some(tile_idx) = building.tile_idx
@@ -1288,6 +1288,130 @@ fn render_buildings(
         }
     }
     ui.building_upgrade_flashes = building_upgrade_flashes;
+}
+
+pub(crate) fn building_at_pointer(
+    snapshot: &SimSnapshot,
+    sim: &SimState,
+    ui: &mut UiState,
+    input: &InputState,
+    x: f64,
+    y: f64,
+) -> Option<u32> {
+    let my_id = sim.my_player_id.unwrap_or(0);
+    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let zoom_scaled = input.camera_zoom / sf;
+    if my_id == 0
+        || sim.map_w == 0
+        || !input.camera_zoom.is_finite()
+        || input.camera_zoom <= 0.0
+        || zoom_scaled < BUILDING_CULL_FLOOR
+    {
+        return None;
+    }
+
+    let lod = BuildingLod::for_zoom(zoom_scaled);
+    let buildings = cached_buildings(
+        ui,
+        snapshot,
+        sim.map_w,
+        lod,
+        my_id,
+        sim.config.tick_rate_ms,
+    );
+    let pointer_x = x as f32 / sf;
+    let pointer_y = y as f32 / sf;
+    let pointer_world_x = (x as f32 - input.camera_x) / input.camera_zoom;
+    let pointer_world_y = (y as f32 - input.camera_y) / input.camera_zoom;
+    let mut closest: Option<(f32, u32)> = None;
+
+    for building in buildings {
+        if building.owner_id != my_id {
+            continue;
+        }
+        let center = world_to_screen(building.bx, building.by, input, sf);
+        let dx = pointer_x - center[0];
+        let dy = pointer_y - center[1];
+        let distance_sq = dx * dx + dy * dy;
+        let hit_radius = (building_marker_size(building, lod, zoom_scaled) * 0.5).max(12.0);
+        if distance_sq > hit_radius * hit_radius {
+            continue;
+        }
+
+        let Some(tile_idx) = building.tile_idx.or_else(|| {
+            nearest_building_in_cluster(
+                snapshot,
+                sim.map_w,
+                lod.cluster_cell_size,
+                building,
+                pointer_world_x,
+                pointer_world_y,
+            )
+        }) else {
+            continue;
+        };
+        if closest.is_none_or(|(best_distance, best_tile)| {
+            distance_sq < best_distance || (distance_sq == best_distance && tile_idx < best_tile)
+        }) {
+            closest = Some((distance_sq, tile_idx));
+        }
+    }
+    closest.map(|(_, tile_idx)| tile_idx)
+}
+
+fn nearest_building_in_cluster(
+    snapshot: &SimSnapshot,
+    map_w: u32,
+    cluster_cell_size: f32,
+    marker: &RenderedBuilding,
+    pointer_x: f32,
+    pointer_y: f32,
+) -> Option<u32> {
+    let grid_x = (marker.bx / cluster_cell_size) as i32;
+    let grid_y = (marker.by / cluster_cell_size) as i32;
+    let mut closest: Option<(f32, u32)> = None;
+
+    for building in &snapshot.buildings {
+        if building.owner_id != marker.owner_id
+            || building.kind != marker.kind
+            || building.active_level() != marker.level
+        {
+            continue;
+        }
+        let tile_x = (building.tile_idx % map_w) as f32;
+        let tile_y = (building.tile_idx / map_w) as f32;
+        if (tile_x / cluster_cell_size) as i32 != grid_x
+            || (tile_y / cluster_cell_size) as i32 != grid_y
+        {
+            continue;
+        }
+        let (world_x, world_y) =
+            crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
+        let dx = pointer_x - world_x;
+        let dy = pointer_y - world_y;
+        let distance_sq = dx * dx + dy * dy;
+        if closest.is_none_or(|(best_distance, best_tile)| {
+            distance_sq < best_distance
+                || (distance_sq == best_distance && building.tile_idx < best_tile)
+        }) {
+            closest = Some((distance_sq, building.tile_idx));
+        }
+    }
+    closest.map(|(_, tile_idx)| tile_idx)
+}
+
+fn building_marker_size(building: &RenderedBuilding, lod: BuildingLod, zoom_scaled: f32) -> f32 {
+    let icon_size = building_icon_size(zoom_scaled);
+    let natural_size = (if building.count > 1 {
+        icon_size * 1.2
+    } else {
+        icon_size
+    }) * lod.final_scale;
+    if lod.compact {
+        natural_size.max(BUILDING_MIN_MARKER_SIZE)
+    } else {
+        natural_size
+    }
 }
 
 fn render_building_placement_preview(
@@ -1389,12 +1513,11 @@ fn render_building_placement_preview(
     }
 
     let marker_size = building_icon_size(zoom_scaled).max(20.0) * sf;
-    let _ = text.push_emoji(
-        building_kind_emoji(kind, 1),
+    text.push_building_sprite(
+        building_kind_sprite(kind, 1),
         center_px,
         marker_size * 0.5,
         [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
-        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
     );
     let label = construction_status_label(
         None,
@@ -1719,30 +1842,30 @@ fn building_icon_size(zoom_scaled: f32) -> f32 {
     size.clamp(11.0, 96.0)
 }
 
-fn building_kind_emoji(kind: BuildingKind, level: u8) -> &'static str {
-    match (kind, level) {
-        (BuildingKind::City, 1) => "🏕️",
-        (BuildingKind::City, 2) => "🏘️",
-        (BuildingKind::City, 3) => "🏡",
-        (BuildingKind::City, 4) => "🏙️",
-        (BuildingKind::City, 5) => "🏛️",
-        (BuildingKind::City, _) => "🌆",
-        (BuildingKind::Factory, 1) => "🛠️",
-        (BuildingKind::Factory, 2) => "🏗️",
-        (BuildingKind::Factory, 3) => "🏭",
-        (BuildingKind::Factory, _) => "🏭",
-        (BuildingKind::Port, 1) => "⚓",
-        (BuildingKind::Port, 2) => "🛶",
-        (BuildingKind::Port, 3) => "🚢",
-        (BuildingKind::Port, 4) => "⚓",
-        (BuildingKind::Port, _) => "🛳️",
-        (BuildingKind::Bunker, 1) => "👁️",
-        (BuildingKind::Bunker, 2) => "🗼",
-        (BuildingKind::Bunker, 3) => "🏰",
-        (BuildingKind::Bunker, _) => "🏯",
-        (BuildingKind::Farm, 1) => "🌱",
-        (BuildingKind::Farm, 2) => "🌾",
-        (BuildingKind::Farm, _) => "🚜",
+fn building_kind_sprite(kind: BuildingKind, level: u8) -> BuildingSpriteId {
+    match (kind, level.clamp(1, kind.max_level())) {
+        (BuildingKind::City, 1) => BuildingSpriteId::Camp,
+        (BuildingKind::City, 2) => BuildingSpriteId::Hamlet,
+        (BuildingKind::City, 3) => BuildingSpriteId::Village,
+        (BuildingKind::City, 4) => BuildingSpriteId::Town,
+        (BuildingKind::City, 5) => BuildingSpriteId::City,
+        (BuildingKind::City, _) => BuildingSpriteId::Metropolis,
+        (BuildingKind::Port, 1) => BuildingSpriteId::Dock,
+        (BuildingKind::Port, 2) => BuildingSpriteId::Wharf,
+        (BuildingKind::Port, 3) => BuildingSpriteId::Harbor,
+        (BuildingKind::Port, 4) => BuildingSpriteId::Port,
+        (BuildingKind::Port, _) => BuildingSpriteId::Megaport,
+        (BuildingKind::Factory, 1) => BuildingSpriteId::Workshop,
+        (BuildingKind::Factory, 2) => BuildingSpriteId::Manufactory,
+        (BuildingKind::Factory, 3) => BuildingSpriteId::Factory,
+        (BuildingKind::Factory, _) => BuildingSpriteId::IndustrialComplex,
+        (BuildingKind::Bunker, 1) => BuildingSpriteId::Watchpost,
+        (BuildingKind::Bunker, 2) => BuildingSpriteId::Watchtower,
+        (BuildingKind::Bunker, 3) => BuildingSpriteId::Bastion,
+        (BuildingKind::Bunker, _) => BuildingSpriteId::Citadel,
+        (BuildingKind::Farm, 1) => BuildingSpriteId::CultivatedPlot,
+        (BuildingKind::Farm, 2) => BuildingSpriteId::Farm,
+        (BuildingKind::Farm, _) => BuildingSpriteId::IrrigatedFields,
     }
 }
 
@@ -1778,6 +1901,14 @@ mod tests {
         assert_eq!(human.avatar_diameter, 14.0 * HUMAN_AVATAR_SCALE);
         assert_eq!(bot.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
         assert_eq!(nation.avatar_diameter, 14.0 * NATION_AVATAR_SCALE);
+    }
+
+    #[test]
+    fn land_fit_preserves_human_minimum_and_keeps_other_scales() {
+        assert_eq!(fit_scale_with_human_minimum(0.2, 8.0, true), 1.0);
+        assert_eq!(fit_scale_with_human_minimum(0.2, 16.0, true), 0.5);
+        assert_eq!(fit_scale_with_human_minimum(0.75, 16.0, true), 0.75);
+        assert_eq!(fit_scale_with_human_minimum(0.2, 8.0, false), 0.2);
     }
 
     #[test]
@@ -1906,9 +2037,23 @@ mod tests {
     }
 
     #[test]
-    fn unfinished_foundations_use_the_same_art_as_level_one() {
+    fn every_building_level_uses_its_own_atlas_cell() {
+        let offsets = [0, 24, 16, 8, 28];
+        for (kind, offset) in BuildingKind::ALL.into_iter().zip(offsets) {
+            for level in 1..=kind.max_level() {
+                assert_eq!(
+                    building_kind_sprite(kind, level) as u8,
+                    offset + level - 1,
+                    "{kind:?} level {level}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn unfinished_foundations_use_the_level_one_sprite() {
         for kind in BuildingKind::ALL {
-            assert_eq!(building_kind_emoji(kind, 0), building_kind_emoji(kind, 1));
+            assert_eq!(building_kind_sprite(kind, 0), building_kind_sprite(kind, 1));
         }
     }
 

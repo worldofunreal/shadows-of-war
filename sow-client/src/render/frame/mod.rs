@@ -223,9 +223,10 @@ impl SowApp {
                         force_fog_upload,
                     );
                     for dt in dirty {
-                        let i = dt.index as usize;
-                        if i < self.sim.tile_upgrades.len() {
-                            self.sim.tile_upgrades[i] = dt.upgrade_level;
+                        if dt.upgrade_level == 0 {
+                            self.sim.tile_upgrades.remove(&dt.index);
+                        } else {
+                            self.sim.tile_upgrades.insert(dt.index, dt.upgrade_level);
                         }
                     }
                     if let Some(snap) = &mut self.sim.current_snapshot {
@@ -519,7 +520,6 @@ impl SowApp {
                             (&mut self.gfx.mover_renderer, &self.sim.current_snapshot)
                         {
                             let now = web_time::Instant::now();
-                            let alpha = crate::render::world::movers::interp_alpha(&self.time, now);
                             let linear_alpha = self.time.interp.linear_alpha(now);
                             let pack = crate::render::world::movers::MoverPackParams {
                                 camera_x: self.input.camera_x,
@@ -527,12 +527,12 @@ impl SowApp {
                                 camera_zoom: self.input.camera_zoom,
                                 screen_w: self.input.screen_w,
                                 screen_h: self.input.screen_h,
-                                alpha,
                                 linear_alpha,
                             };
                             self.ui.mover_scene.on_snapshot(
                                 snap,
                                 self.sim.map_w,
+                                self.sim.map_h,
                                 dev.fog_of_war,
                                 self.sim.my_player_id.unwrap_or(0),
                                 &self.sim.fog_visible,

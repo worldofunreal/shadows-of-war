@@ -734,7 +734,7 @@
         if (!hudRefs || !hudRefs.mapMenu) return false;
         var menu = hudRefs.mapMenu;
         var open = Boolean(mapMenu && mapMenu.open);
-        var showRadial = Boolean(open && mapMenu.show_radial !== false);
+        var showRadial = Boolean(open && mapMenu.view === "radial");
         menu.classList.toggle("hidden", !showRadial);
         if (!open) {
             menu.dataset.renderKey = "";
@@ -744,13 +744,14 @@
         }
         menu.dataset.session = String(mapMenu.session);
         menu.dataset.tileIdx = String(mapMenu.tile_idx);
-        if (!showRadial) {
+        if (mapMenu.view === "building_details") {
             if (menu.dataset.renderKey !== "building_details") menu.replaceChildren();
             menu.dataset.renderKey = "building_details";
             mapMenuStateKey = "";
             mapMenuView = "root";
             return true;
         }
+        if (!showRadial) return false;
         var items = mapItems(mapMenu);
         var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + String(showRadial) + ":" + JSON.stringify(items);
         if (stateKey !== mapMenuStateKey) {
@@ -843,7 +844,7 @@
     function renderBuildingCard(mapMenu) {
         if (!hudRefs || !hudRefs.buildingCard) return;
         var detail = mapMenu && mapMenu.building;
-        var open = Boolean(mapMenu && mapMenu.open && detail);
+        var open = Boolean(mapMenu && mapMenu.open && mapMenu.view === "building_details" && detail);
         hudRefs.buildingCard.classList.toggle("hidden", !open);
         if (!open) return;
         hudRefs.buildingCard.dataset.session = String(mapMenu.session);

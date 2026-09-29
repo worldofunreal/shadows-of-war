@@ -13,6 +13,10 @@ Foundation prices and their existing growth stay the same. An upgrade costs 85% 
 
 Factories at Manufactory level or higher also shorten construction by 5% each, up to 25% total.
 
+Each completed level gives the small amount shown below. Bonuses that change a
+percentage stop at their stated limit. Extra room, such as boat slots or Farm
+plots, adds one space for each level that grants it.
+
 ## Benefits by building
 
 Only building benefits are halved. Starting resources and income remain unchanged.
@@ -23,17 +27,17 @@ Only building benefits are halved. Starting resources and income remain unchange
 | Port | +1 boat slot, +1% boat speed, +12.5 troops/second, +1 gold/second | Harbor unlocks Trade Ships with a Town; Port unlocks Warships with a City. Speed from all finished Port levels stops at +30%. |
 | Factory | +2 gold/second for every finished Factory level | Manufactory speeds construction; Factory lowers other building upgrade prices; Industrial Complex increases Trade Ship income. Each factory at each milestone adds 5%; those three bonuses stop at 25% total. |
 | Bunker | +5% enemy attack losses near this bunker for each finished level | Range starts at 14 and grows by 2 at each level, stopping at 20. Citadel can intercept nuclear bombs. The local attack-loss bonus from all bunkers stops at 50%. |
-| Farm | +6.25 troops/second for each finished Farm level | Three levels: Cultivated Plot, Farm, Irrigated Fields. |
+| Farm tile | +6.25 troops/second for each finished level | Cultivated Plot → Farm → Irrigated Fields. One City plot covers one improved tile, even after upgrades. |
 
-City farm plots are a limit, not an order to fill every tile. Farms can be placed only on empty lowland tiles you own. The game stores a record for each farm that is actually built; it does not create a second data entry for every tile on the map.
+City farm plots are a limit, not an order to fill every tile. Improve an empty lowland tile you own; then select that tile again to upgrade it in place. The game stores a record only for each improved tile, not for every untouched tile on the map.
 
 ### Boat example
 
-- With no Port, you can have one boat active or being built.
-- Each finished Port level adds one more boat slot. A Dock adds one; upgrading it to a Wharf adds one more.
-- Each finished Port level adds 1% speed. Four hundred Port levels give 400 extra boat slots, but speed still stops at 30%.
+- You start with room for one boat, even before building a Port.
+- A finished Dock adds room for one more boat. Upgrading it to a Wharf adds another space; each later Port level does the same.
+- Every finished Port level adds 1% speed, up to 30% total. With 400 finished Port levels, you have 401 boat spaces and boats are still only 30% faster.
 - Each finished Port level also adds 12.5 troops/s and 1 gold/s.
-- The Port card shows boats in use, total slots, and the current speed bonus.
+- The Port card shows how many boats are in use, how many fit, and the current speed increase.
 
 ## Names and order
 
@@ -43,11 +47,11 @@ City farm plots are a limit, not an order to fill every tile. Farms can be place
 | Port | Dock → Wharf → Harbor → Port → Megaport |
 | Factory | Workshop → Manufactory → Factory → Industrial Complex |
 | Bunker | Watchpost → Watchtower → Bastion → Citadel |
-| Farm | Cultivated Plot → Farm → Irrigated Fields |
+| Farm tile | Cultivated Plot → Farm → Irrigated Fields |
 
 ## Touch and visuals
 
-The browser JavaScript HUD owns the building card and buttons. The map and building markers remain in Rust. Blade's GPU text-and-emoji renderer draws building icons and level labels from the existing emoji atlas. A completed upgrade gets a brief 300 ms sparkle; the effect adds no new sprite sheet or per-tile map storage.
+The browser JavaScript HUD owns the mobile building card and buttons. Rust draws map markers with Blade's GPU image-and-text renderer, using the 22-cell building atlas. Level labels remain text; the 300 ms completion sparkle uses the existing emoji atlas, so it needs no extra effect sprite. Farm data is stored only for tiles that actually have a Farm.
 
 The card uses a large touch target and can scroll on a small screen. It shows the active level, what the next level adds, the price, and the remaining or expected time. It does not put a permanent explanation beneath the building buttons.
 
@@ -56,7 +60,7 @@ The card uses a large touch target and can scroll on a small screen. It shows th
 Use a normal match and try the same actions on a phone-sized screen if available.
 
 1. Build a City. Tap it and check that the card shows its name, level, benefit, next name, price, and time. Upgrade it; its name and new benefit should change only when the work finishes.
-2. Build a Farm on an empty lowland tile you own. It should add troops over time. A highland, mountain, water, occupied, or unowned tile should not offer a Farm action. Try to exceed the number of farm plots from your Cities; the extra Farm should not be accepted.
+2. Improve an empty lowland tile you own to a Cultivated Plot. It should add troops over time. Select it again and upgrade it to Farm, then Irrigated Fields; each level should add its benefit when the work finishes. A highland, mountain, water, occupied, or unowned tile should not offer the action. One improved tile should use one City plot at every level; an extra tile should not be accepted after all plots are used.
 3. Send one transport without a Port. It should work. While that boat is active, a second launch should be unavailable. Finish a Dock; one more boat should become available. Upgrade the Dock; capacity should gain one more slot and boat speed should rise by another 1%.
 4. Select a Port and check the card's boat count and current speed. With many finished Port levels, speed should never exceed 30%.
 5. Upgrade a Factory to each level. Confirm the displayed gold income, shorter construction, lower prices for other upgrades, and increased Trade Ship income appear only after each level finishes. Each percentage bonus should stop growing at 25%.

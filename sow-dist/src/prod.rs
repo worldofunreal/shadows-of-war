@@ -104,11 +104,12 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
     // and runs only when a new build is actually ready for review.
 
     println!("==> 2/8 Build candidates");
-    let (_web, backend, _relay) = std::thread::scope(|scope| {
+    let (web, backend, _relay) = std::thread::scope(|scope| {
         let web = scope.spawn(|| build_web(paths, &version));
         let backend = scope.spawn(|| build_freebsd(paths, &config));
         let relay = scope.spawn(|| build_relay(paths, &config));
-        web.join()
+        let web = web
+            .join()
             .map_err(|_| anyhow::anyhow!("web build panicked"))??;
         let backend = backend
             .join()
@@ -116,11 +117,11 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
         let relay = relay
             .join()
             .map_err(|_| anyhow::anyhow!("relay build panicked"))??;
-        Ok::<_, anyhow::Error>(((), backend, relay))
+        Ok::<_, anyhow::Error>((web, backend, relay))
     })?;
 
     println!("==> 3/8 Package immutable release");
-    let release = assemble_release(paths, &paths.dist_web, &backend, &version, &config)?;
+    let release = assemble_release(paths, &web, &backend, &version, &config)?;
     println!("  release {}", release.id);
 
     println!("==> Runtime prerequisites");
@@ -1264,41 +1265,44 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
     Ok(())
 }
 
-fn build_web(paths: &Paths, version: &str) -> Result<()> {
+fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
     compile_wasm(paths, false)?;
     let fingerprint = web_fingerprint(paths, version)?;
-    let cache = paths.root.join("dist/.sow-state/web-package");
+    let candidate_root = paths.root.join("dist/.sow-state/prod-web");
+    let web = candidate_root.join("web");
+    let poki = candidate_root.join("poki");
+    let cache = paths.root.join("dist/.sow-state/prod-web-package");
     let cached = fs::read_to_string(&cache).is_ok_and(|value| value.trim() == fingerprint)
-        && paths.dist_web.join("play/index.html").is_file()
+        && web.join("play/index.html").is_file()
         && paths.dist_cg.join("index.html").is_file()
-        && paths.dist_poki.join("index.html").is_file()
+        && poki.join("index.html").is_file()
         && paths.dist_jest.join("index.html").is_file()
-        && verify_layout(&paths.dist_web).is_ok()
+        && verify_layout(&web).is_ok()
         && verify_cg_layout(&paths.dist_cg).is_ok()
-        && verify_poki_layout(&paths.dist_poki).is_ok()
+        && verify_poki_layout(&poki).is_ok()
         && verify_jest_layout(&paths.dist_jest).is_ok();
     if cached {
-        println!("==> Web package unchanged — reusing dist");
-        return Ok(());
+        println!("==> Web package unchanged — reusing production candidate");
+        return Ok(web);
     }
-    package_self(paths, &paths.dist_web, version, true)?;
-    let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;
+    package_self(paths, &web, version, true)?;
+    let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
     package_cg(
-        &paths.dist_web,
+        &web,
         &paths.dist_cg,
         paths,
         version,
         &maps_cache_bust,
     )?;
     package_poki(
-        &paths.dist_web,
-        &paths.dist_poki,
+        &web,
+        &poki,
         paths,
         version,
         &maps_cache_bust,
     )?;
     package_jest(
-        &paths.dist_web,
+        &web,
         &paths.dist_jest,
         paths,
         version,
@@ -1307,7 +1311,7 @@ fn build_web(paths: &Paths, version: &str) -> Result<()> {
     write_jest_zip(paths)?;
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
-    Ok(())
+    Ok(web)
 }
 
 pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {

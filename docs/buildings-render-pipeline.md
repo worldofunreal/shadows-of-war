@@ -31,10 +31,12 @@ render/frame/mod.rs  -->  world/overlays.rs::render_overlays
                                  |        |          (grid_x, grid_y, owner, kind, level)
                                  |        |        - non-compact: exact individual records
                                  |        |
-                                 |        +--> emoji markers and level badges:
-                                 |        |    Blade GPU TextRenderer using the shared
-                                 |        |    text/emoji atlas at assets/gameplay/emoji/atlas_opt.webp
-                                 |        +--> completed upgrade: one 300 ms sparkle
+                                 |        +--> building image markers:
+                                 |        |    Blade GPU TextRenderer using the 8×4 atlas at
+                                 |        |    assets/gameplay/buildings/building_atlas.png
+                                 |        +--> level labels and 300 ms completion sparkle:
+                                 |             shared text/emoji atlas at
+                                 |             assets/gameplay/emoji/atlas_opt.webp
                                  |
                                  +--> BuildingRenderCache
                                           - reuses the clustered building set while
@@ -55,9 +57,10 @@ render/frame/mod.rs  -->  world/overlays.rs::render_overlays
   `BuildingRenderCache` path so preview and live markers stay consistent.
 - Hover/hit-testing reads `snapshot.buildings` directly (same source as
   `crate::input::find_building_*`); rendering never mutates gameplay state.
-- The current building art is emoji from the shared atlas; no dedicated
-  building sprite sheet is loaded. A 300 ms GPU-rendered sparkle marks a
-  finished upgrade. The animation is tracked per building, not per map tile.
+- Building levels use their fixed cell in the 22-sprite image atlas and stay in
+  the same GPU text batch as labels and markers. A 300 ms GPU-rendered sparkle
+  marks a finished upgrade using the existing emoji atlas. The animation is
+  tracked per building, not per map tile.
 
 When changing this pipeline, update `BuildingLod` first, then the callers in
 `render_buildings`.

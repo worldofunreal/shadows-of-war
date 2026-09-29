@@ -192,7 +192,7 @@ pub struct SimState {
     pub offline_last_update: web_time::Instant,
     pub offline_intents: Vec<sow_core::protocol::GameplayIntent>,
     pub last_synced_cost_tick: Option<u64>,
-    pub tile_upgrades: Vec<u32>,
+    pub tile_upgrades: std::collections::BTreeMap<u32, u32>,
     pub config: sow_core::game_config::GameConfig,
     pub paused: bool,
     pub tutorial_observation: TutorialObservation,
@@ -251,7 +251,13 @@ pub struct MapContextMenu {
     pub y: f32,
     pub tile_idx: u32,
     pub session: u64,
-    pub show_radial: bool,
+    pub view: MapContextMenuView,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapContextMenuView {
+    BuildingDetails,
+    Radial,
 }
 
 #[derive(Clone, Debug)]
@@ -444,15 +450,6 @@ pub struct InterpClock {
 }
 
 impl InterpClock {
-    #[inline]
-    pub fn alpha(&self, now: Instant) -> f32 {
-        let elapsed = now.duration_since(self.last_applied_at).as_secs_f32();
-        let dur = self.tick_dur.as_secs_f32().max(0.001);
-        let t = (elapsed / dur).clamp(0.0, 1.0);
-        // Smoothstep keeps fleet/nuke overlays visually consistent.
-        t * t * (3.0 - 2.0 * t)
-    }
-
     #[inline]
     pub fn linear_alpha(&self, now: Instant) -> f32 {
         let elapsed = now.duration_since(self.last_applied_at).as_secs_f32();

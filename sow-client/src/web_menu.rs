@@ -15,7 +15,7 @@ use wasm_bindgen::prelude::*;
 use web_time::{Duration, Instant};
 
 use crate::UiAction;
-use crate::app::{HoverPointer, SowApp};
+use crate::app::{HoverPointer, MapContextMenuView, SowApp};
 use crate::campaign::CampaignId;
 
 const LEADERBOARD_LIMIT: usize = 100;
@@ -274,8 +274,7 @@ struct HudPublishKey {
     snapshot_tick: u64,
     hovered_tile: u32,
     hovered_owner: u16,
-    map_menu_open: bool,
-    map_menu_show_radial: bool,
+    map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
     map_menu_tile: u32,
 }
@@ -1005,8 +1004,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
         hovered_tile,
         hovered_owner,
-        map_menu_open: map_menu.is_some(),
-        map_menu_show_radial: map_menu.is_some_and(|menu| menu.show_radial),
+        map_menu_view: map_menu.map(|menu| menu.view),
         map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
         map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
     }
@@ -1898,7 +1896,10 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 .map(|building| building_detail_payload(app, building));
             serde_json::json!({
                 "open": true,
-                "show_radial": menu.show_radial,
+                "view": match menu.view {
+                    MapContextMenuView::BuildingDetails => "building_details",
+                    MapContextMenuView::Radial => "radial",
+                },
                 "x": menu.x / sf,
                 "y": menu.y / sf,
                 "tile_idx": menu.tile_idx,

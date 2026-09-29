@@ -43,7 +43,7 @@ impl SowApp {
         let phase = snap.phase.clone();
         self.sim.current_snapshot = Some(snap);
         self.sim.engine = Some(new_engine);
-        self.sim.tile_upgrades = vec![0; (map_w * map_h) as usize];
+        self.sim.tile_upgrades.clear();
         self.time
             .interp
             .set_tick_dur_ms(self.sim.config.tick_rate_ms);

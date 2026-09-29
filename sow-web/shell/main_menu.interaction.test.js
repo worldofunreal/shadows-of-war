@@ -37,6 +37,8 @@ const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/s
 const actionsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
 const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
+const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
+const buildingOverlaySource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
 const progressSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/progress.rs"), "utf8");
 const dataDbSource = fs.readFileSync(path.join(shell, "../../sow-data/src/db.rs"), "utf8");
 const dataMainSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
@@ -1495,7 +1497,7 @@ test("building card separates active construction from an available upgrade", ()
         hud.slice(renderStart, renderEnd) + "\nrenderBuildingCard;",
         { hudRefs }
     );
-    const menu = building => ({ open: true, session: 4, tile_idx: 12, building });
+    const menu = (building, view = "building_details") => ({ open: true, view, session: 4, tile_idx: 12, building });
 
     renderBuildingCard(menu({
         name: "City",
@@ -1532,6 +1534,11 @@ test("building card separates active construction from an available upgrade", ()
     assert.equal(hudRefs.buildingCardUpgrade.textContent, "Upgrade · 150g");
     assert.equal(hudRefs.buildingCardUpgrade.hidden, false);
     assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
+
+    renderBuildingCard(menu({ kind: "City", level: 1 }, "radial"));
+    assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
+    renderBuildingCard(null);
+    assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
 });
 
 test("primary click selects owned buildings without changing other map gestures", () => {
@@ -1541,17 +1548,40 @@ test("primary click selects owned buildings without changing other map gestures"
     assert.ok(clickBody.indexOf("selected_nuke_kind") < clickBody.indexOf("select_owned_building"));
     assert.ok(clickBody.indexOf("selected_building_kind") < clickBody.indexOf("select_owned_building"));
     assert.ok(clickBody.indexOf("select_warships_at") < clickBody.indexOf("select_owned_building"));
-    assert.match(clickBody, /select_owned_building\(tile_idx, x, y\)[\s\S]*?primary_target\(tile_idx/);
-    assert.match(mapClick, /building\.tile_idx == tile_idx && building\.owner_id == target\.my_id/);
-    assert.match(mapClick, /self\.set_map_context_menu\(x, y, tile_idx, false\)/);
-    assert.match(mapClick, /self\.set_map_context_menu\(x, y, tile_idx, true\)/);
+    assert.match(clickBody, /select_owned_building\(x, y\)[\s\S]*?primary_target\(tile_idx/);
+    assert.match(mapClick, /building_at_pointer\(/);
+    assert.match(mapClick, /target\.owner != target\.my_id/);
+    assert.match(buildingOverlaySource, /pub\(crate\) fn building_at_pointer/);
+    assert.match(buildingOverlaySource, /cached_buildings\(/);
+    assert.match(buildingOverlaySource, /if building\.owner_id != my_id/);
+    assert.match(buildingOverlaySource, /hit_radius = .*\.max\(12\.0\)/);
+    assert.match(buildingOverlaySource, /nearest_building_in_cluster/);
+    assert.match(buildingOverlaySource, /building_marker_size\(building, lod, zoom_scaled\)/);
+    assert.match(appStateSource, /pub enum MapContextMenuView\s*\{\s*BuildingDetails,\s*Radial/);
+    assert.match(mapClick, /MapContextMenuView::BuildingDetails/);
+    assert.match(mapClick, /MapContextMenuView::Radial/);
     assert.match(windowInput, /if is_quick_tap\(elapsed_ms, distance_sq\)\s*\{\s*self\.handle_map_click/);
     assert.match(windowInput, /else if right && pressed[\s\S]*?self\.open_map_context_menu\(x, y\)/);
     assert.match(windowInput, /pub\(crate\) fn poll_pointer_hold[\s\S]*?self\.open_map_context_menu\(x, y\)/);
-    assert.match(webMenu, /"show_radial": menu\.show_radial/);
-    assert.match(hud, /var showRadial = Boolean\(open && mapMenu\.show_radial !== false\)/);
+    assert.match(webMenu, /"view": match menu\.view[\s\S]*?"building_details"[\s\S]*?"radial"/);
+    assert.match(hud, /var showRadial = Boolean\(open && mapMenu\.view === "radial"\)/);
+    assert.match(hud, /mapMenu\.view === "building_details" && detail/);
     assert.match(hud, /send\("close_map_context_menu"\)/);
     assert.match(webMenu, /WebMenuCommand::CloseMapContextMenu => self\.close_map_context_menu\(\)/);
+    assert.match(mapClick, /pub\(crate\) fn close_map_context_menu\(&mut self\)\s*\{\s*self\.input\.map_context_menu = None;/);
+    assert.match(webMenu, /map_menu_view: map_menu\.map\(\|menu\| menu\.view\)/);
+
+    const targetStart = mapClick.indexOf("fn primary_target(&mut self");
+    const targetEnd = mapClick.indexOf("fn attack_from_tile", targetStart);
+    const targetBody = mapClick.slice(targetStart, targetEnd);
+    assert.match(targetBody, /target\.owner == target\.my_id\s*\{\s*return;/);
+    assert.match(targetBody, /if target\.is_friendly\(\)\s*\{\s*self\.open_transfer_from_tile\(tile_idx\);\s*\} else \{\s*self\.attack_from_tile\(tile_idx\);/);
+
+    const actionStart = mapClick.indexOf("pub(crate) fn handle_map_menu_action");
+    const actionEnd = mapClick.indexOf("fn map_menu_cost", actionStart);
+    const actionBody = mapClick.slice(actionStart, actionEnd);
+    assert.match(actionBody, /menu\.session != session \|\| menu\.tile_idx != tile_idx/);
+    assert.match(actionBody, /!self\.map_menu_actions\(tile_idx\)\.contains\(&action\)/);
 });
 
 test("WASM right-click opens on pointer press; touch hold stays intact", () => {

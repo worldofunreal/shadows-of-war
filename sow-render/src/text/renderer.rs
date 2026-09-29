@@ -3,8 +3,9 @@ use crate::text::msdf::FontAtlas;
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_CROSS, KIND_DISC,
-    KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle,
-    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    BuildingSpriteId, KIND_BUILDING_SPRITE, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING,
+    KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
+    TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -145,6 +146,7 @@ pub struct TextRenderer {
     pub font_atlas_tex: FontAtlasTexture,
     emoji_atlas_tex: FontAtlasTexture,
     avatar_atlas_tex: FontAtlasTexture,
+    building_atlas_tex: FontAtlasTexture,
     avatar_loaded: [bool; AVATAR_SLOT_COUNT],
     avatar_dirty: bool,
     pipeline: gpu::RenderPipeline,
@@ -171,6 +173,12 @@ impl TextRenderer {
             AVATAR_ROWS * AVATAR_CELL,
             "avatar_atlas",
             gpu::TextureFormat::Rgba8UnormSrgb, // portraits are sRGB color, like emoji
+        );
+        let building_atlas_tex = FontAtlasTexture::from_bytes(
+            context,
+            include_bytes!("../../../assets/gameplay/buildings/building_atlas.png"),
+            "building_atlas",
+            gpu::TextureFormat::Rgba8UnormSrgb,
         );
 
         let shader_source = include_str!("../shaders/text_glow.wgsl");
@@ -254,6 +262,7 @@ impl TextRenderer {
             font_atlas_tex,
             emoji_atlas_tex,
             avatar_atlas_tex,
+            building_atlas_tex,
             avatar_loaded: [false; AVATAR_SLOT_COUNT],
             avatar_dirty: true, // force first (blank) upload so the texture is defined
             pipeline,
@@ -266,18 +275,20 @@ impl TextRenderer {
     }
 
     /// Transition all atlas textures to a defined layout before first use. Must be called once
-    /// (alongside `upload_atlas`) before any draw — the avatar atlas in particular is sampled by
-    /// KIND_SPRITE and, like the font/terrain textures, needs init or it reads as undefined.
+    /// (alongside `upload_atlas`) before any draw — avatar and building images are sampled by
+    /// sprite instances, so their textures must be initialized before the first text pass.
     pub fn init_textures(&self, encoder: &mut gpu::CommandEncoder) {
         encoder.init_texture(self.font_atlas_tex.texture);
         encoder.init_texture(self.emoji_atlas_tex.texture);
         encoder.init_texture(self.avatar_atlas_tex.texture);
+        encoder.init_texture(self.building_atlas_tex.texture);
     }
 
     pub fn upload_atlas(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
         self.font_atlas_tex.upload(encoder, context);
         self.emoji_atlas_tex.upload(encoder, context);
         self.avatar_atlas_tex.upload(encoder, context);
+        self.building_atlas_tex.upload(encoder, context);
     }
 
     pub fn begin_frame(&mut self) {
@@ -657,6 +668,30 @@ impl TextRenderer {
         });
     }
 
+    /// Push a square building image from the shared 8×4 building atlas.
+    pub fn push_building_sprite(
+        &mut self,
+        sprite: BuildingSpriteId,
+        center: [f32; 2],
+        half_size: f32,
+        tint: [f32; 4],
+    ) {
+        let half_size = half_size.max(0.0);
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [center[0] - half_size, center[1] - half_size],
+            size: [half_size * 2.0; 2],
+            uv_rect: sprite.uv_rect(),
+            content_rect: [0.0, 0.0, 1.0, 1.0],
+            color: tint,
+            outline_color: [0.0; 4],
+            face_dilate: 0.0,
+            outline_thickness: 0.0,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_BUILDING_SPRITE,
+        });
+    }
+
     /// Push an anti-aliased filled rectangle. `screen_pos`/`size` are physical pixels.
     pub fn push_rect(&mut self, screen_pos: [f32; 2], size: [f32; 2], color: [f32; 4]) {
         self.push_inst(TextInstanceGpu {
@@ -762,6 +797,7 @@ impl TextRenderer {
             emoji_sampler: self.emoji_sampler,
             avatar_atlas: self.avatar_atlas_tex.view,
             avatar_sampler: self.avatar_sampler,
+            building_atlas: self.building_atlas_tex.view,
         };
 
         let mut rc = pass.with(&self.pipeline);
@@ -805,6 +841,15 @@ impl TextRenderer {
         render_ctx
             .context
             .destroy_buffer(self.avatar_atlas_tex.buffer);
+        render_ctx
+            .context
+            .destroy_texture_view(self.building_atlas_tex.view);
+        render_ctx
+            .context
+            .destroy_texture(self.building_atlas_tex.texture);
+        render_ctx
+            .context
+            .destroy_buffer(self.building_atlas_tex.buffer);
     }
 }
 

@@ -1,5 +1,6 @@
 use bitfield::bitfield;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 bitfield! {
     #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,7 +71,7 @@ pub struct GameMap {
     pub height: u32,
     pub terrain: Vec<MapTile>,
     pub state: Vec<u16>,
-    pub tile_upgrades: Vec<u32>,
+    pub tile_upgrades: BTreeMap<u32, u32>,
     #[serde(skip)]
     pub dirty_tiles: Vec<usize>,
 }
@@ -92,7 +93,7 @@ impl GameMap {
             height,
             terrain: vec![MapTile::from_byte(0b10000000); size],
             state: vec![0; size],
-            tile_upgrades: vec![0; size],
+            tile_upgrades: BTreeMap::new(),
             dirty_tiles: Vec::new(),
         }
     }

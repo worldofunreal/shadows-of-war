@@ -880,6 +880,33 @@ impl serde::Serialize for S16TracePlayers<'_> {
     }
 }
 
+struct S16TraceMap<'a>(&'a crate::map::GameMap);
+
+impl serde::Serialize for S16TraceMap<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let map = self.0;
+        let mut tile_upgrades = vec![0; (map.width * map.height) as usize];
+        for (&tile, &level) in &map.tile_upgrades {
+            if let Some(slot) = tile_upgrades.get_mut(tile as usize) {
+                *slot = level;
+            }
+        }
+
+        let mut trace = serializer.serialize_struct("GameMap", 5)?;
+        trace.serialize_field("width", &map.width)?;
+        trace.serialize_field("height", &map.height)?;
+        trace.serialize_field("terrain", &map.terrain)?;
+        trace.serialize_field("state", &map.state)?;
+        trace.serialize_field("tile_upgrades", &tile_upgrades)?;
+        trace.end()
+    }
+}
+
 struct S16TraceGameState<'a>(&'a GameState);
 
 impl serde::Serialize for S16TraceGameState<'_> {
@@ -894,7 +921,7 @@ impl serde::Serialize for S16TraceGameState<'_> {
         trace.serialize_field("seed", &state.seed)?;
         trace.serialize_field("config", &state.config)?;
         trace.serialize_field("phase", &state.phase)?;
-        trace.serialize_field("map", &state.map)?;
+        trace.serialize_field("map", &S16TraceMap(&state.map))?;
         trace.serialize_field("players", &S16TracePlayers(&state.players))?;
         trace.serialize_field("tick", &state.tick)?;
         trace.serialize_field("winner", &state.winner)?;

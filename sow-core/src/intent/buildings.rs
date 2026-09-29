@@ -273,7 +273,13 @@ impl SowEngine {
             return;
         }
 
-        let current_level = self.state.map.tile_upgrades[tile_idx as usize];
+        let current_level = self
+            .state
+            .map
+            .tile_upgrades
+            .get(&tile_idx)
+            .copied()
+            .unwrap_or_default();
         let new_level = current_level.saturating_add(1);
 
         let s = crate::config::GOLD_SCALE.max(1.0);
@@ -287,7 +293,7 @@ impl SowEngine {
         }
         player_mut.gold = (player_mut.gold - cost).max(0.0);
 
-        self.state.map.tile_upgrades[tile_idx as usize] = new_level;
+        self.state.map.tile_upgrades.insert(tile_idx, new_level);
         self.state.map.dirty_tiles.push(tile_idx as usize);
 
         self.state.events.push(GameEvent::TileUpgraded {
@@ -317,6 +323,17 @@ mod tests {
         player.gold = 1_000_000.0;
         game.register_player(player);
         SowEngine::new(game, WaterComponents::default())
+    }
+
+    #[test]
+    fn tile_upgrade_stores_only_the_upgraded_tile() {
+        let mut engine = engine(false);
+        engine.state.map.set_owner_id(0, 0, 1);
+
+        engine.apply_upgrade_tile_intent(1, 0);
+
+        assert_eq!(engine.state.map.tile_upgrades.len(), 1);
+        assert_eq!(engine.state.map.tile_upgrades.get(&0), Some(&1));
     }
 
     fn pacing_match() -> SowEngine {

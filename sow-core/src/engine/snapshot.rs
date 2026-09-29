@@ -10,7 +10,13 @@ impl SowEngine {
             .map(|i| crate::protocol::DirtyTile {
                 index: i as u32,
                 new_owner: self.state.map.state[i],
-                upgrade_level: self.state.map.tile_upgrades[i],
+                upgrade_level: self
+                    .state
+                    .map
+                    .tile_upgrades
+                    .get(&(i as u32))
+                    .copied()
+                    .unwrap_or_default(),
             })
             .collect();
 

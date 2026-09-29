@@ -1,5 +1,5 @@
 use super::placement::{PlacementQuery, resolve_build_target_tile};
-use crate::app::{MapContextMenu, SowApp};
+use crate::app::{MapContextMenu, MapContextMenuView, SowApp};
 use serde::Deserialize;
 
 pub(crate) const TOUCH_HOLD_MS: u128 = 300;
@@ -239,33 +239,33 @@ impl SowApp {
             .as_ref()
             .is_some_and(|snapshot| matches!(snapshot.phase, sow_core::game::GamePhase::Playing))
         {
-            if self.select_owned_building(tile_idx, x, y) {
+            if self.select_owned_building(x, y) {
                 return;
             }
             self.primary_target(tile_idx);
         }
     }
 
-    fn select_owned_building(&mut self, tile_idx: u32, x: f64, y: f64) -> bool {
+    fn select_owned_building(&mut self, x: f64, y: f64) -> bool {
+        let Some(tile_idx) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+            crate::render::world::building_at_pointer(
+                snapshot,
+                &self.sim,
+                &mut self.ui,
+                &self.input,
+                x,
+                y,
+            )
+        }) else {
+            return false;
+        };
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
         if target.my_id == 0 || !target.is_land || target.owner != target.my_id {
             return false;
         }
-        let has_owned_building = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .is_some_and(|snapshot| {
-                snapshot.buildings.iter().any(|building| {
-                    building.tile_idx == tile_idx && building.owner_id == target.my_id
-                })
-            });
-        if !has_owned_building {
-            return false;
-        }
-        self.set_map_context_menu(x, y, tile_idx, false);
+        self.set_map_context_menu(x, y, tile_idx, MapContextMenuView::BuildingDetails);
         true
     }
 
@@ -285,10 +285,16 @@ impl SowApp {
         if self.map_menu_actions(tile_idx).is_empty() {
             self.show_map_menu_unavailable(tile_idx);
         }
-        self.set_map_context_menu(x, y, tile_idx, true);
+        self.set_map_context_menu(x, y, tile_idx, MapContextMenuView::Radial);
     }
 
-    fn set_map_context_menu(&mut self, x: f64, y: f64, tile_idx: u32, show_radial: bool) {
+    fn set_map_context_menu(
+        &mut self,
+        x: f64,
+        y: f64,
+        tile_idx: u32,
+        view: MapContextMenuView,
+    ) {
         let session = self.input.map_context_menu_session.wrapping_add(1);
         self.input.map_context_menu_session = session;
         self.input.map_context_menu = Some(MapContextMenu {
@@ -296,7 +302,7 @@ impl SowApp {
             y: y as f32,
             tile_idx,
             session,
-            show_radial,
+            view,
         });
     }
 
@@ -895,7 +901,7 @@ impl SowApp {
                 let level = self
                     .sim
                     .tile_upgrades
-                    .get(tile_idx as usize)
+                    .get(&tile_idx)
                     .copied()
                     .unwrap_or(0) as i32;
                 let cost = (1000.0 * 1.5_f64.powi(level)) / sow_core::config::GOLD_SCALE.max(1.0);

@@ -117,11 +117,63 @@ pub const KIND_RECT: f32 = 5.0;
 pub const KIND_TRIANGLE: f32 = 6.0;
 pub const KIND_CROSS: f32 = 7.0;
 pub const KIND_ARC: f32 = 8.0;
+pub const KIND_BUILDING_SPRITE: f32 = 9.0;
 
 pub const AVATAR_CELL: u32 = 128;
 pub const AVATAR_COLS: u32 = 8;
 pub const AVATAR_ROWS: u32 = 8;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
+
+/// Stable cell order for the 8×4 building art atlas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum BuildingSpriteId {
+    Camp = 0,
+    Hamlet,
+    Village,
+    Town,
+    City,
+    Metropolis,
+    Dock = 8,
+    Wharf,
+    Harbor,
+    Port,
+    Megaport,
+    Workshop = 16,
+    Manufactory,
+    Factory,
+    IndustrialComplex,
+    Watchpost = 24,
+    Watchtower,
+    Bastion,
+    Citadel,
+    CultivatedPlot = 28,
+    Farm,
+    IrrigatedFields,
+}
+
+impl BuildingSpriteId {
+    pub const COLS: u32 = 8;
+    pub const ROWS: u32 = 4;
+    pub const CELL_SIZE: u32 = 128;
+    pub const USED_CELL_COUNT: usize = 22;
+    pub const UNUSED_CELL_INDICES: [u8; 10] = [6, 7, 13, 14, 15, 20, 21, 22, 23, 31];
+
+    pub fn uv_rect(self) -> [f32; 4] {
+        let index = self as u32;
+        let col = index % Self::COLS;
+        let row = index / Self::COLS;
+        let width = (Self::COLS * Self::CELL_SIZE) as f32;
+        let height = (Self::ROWS * Self::CELL_SIZE) as f32;
+        let inset = 0.5;
+        [
+            (col * Self::CELL_SIZE) as f32 / width + inset / width,
+            (row * Self::CELL_SIZE) as f32 / height + inset / height,
+            ((col + 1) * Self::CELL_SIZE) as f32 / width - inset / width,
+            ((row + 1) * Self::CELL_SIZE) as f32 / height - inset / height,
+        ]
+    }
+}
 
 pub fn avatar_slot_uv(slot: usize) -> [f32; 4] {
     let i = slot as u32;
@@ -167,4 +219,69 @@ pub struct TextShaderData {
     pub emoji_sampler: gpu::Sampler,
     pub avatar_atlas: gpu::TextureView,
     pub avatar_sampler: gpu::Sampler,
+    pub building_atlas: gpu::TextureView,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BuildingSpriteId as Sprite;
+
+    #[test]
+    fn building_sprites_use_22_separate_cells_in_sheet_order() {
+        let sprites = [
+            Sprite::Camp,
+            Sprite::Hamlet,
+            Sprite::Village,
+            Sprite::Town,
+            Sprite::City,
+            Sprite::Metropolis,
+            Sprite::Dock,
+            Sprite::Wharf,
+            Sprite::Harbor,
+            Sprite::Port,
+            Sprite::Megaport,
+            Sprite::Workshop,
+            Sprite::Manufactory,
+            Sprite::Factory,
+            Sprite::IndustrialComplex,
+            Sprite::Watchpost,
+            Sprite::Watchtower,
+            Sprite::Bastion,
+            Sprite::Citadel,
+            Sprite::CultivatedPlot,
+            Sprite::Farm,
+            Sprite::IrrigatedFields,
+        ];
+        let cells = [
+            0u8, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 16, 17, 18, 19, 24, 25, 26, 27, 28, 29, 30,
+        ];
+        assert_eq!(sprites.len(), Sprite::USED_CELL_COUNT);
+        for (sprite, cell) in sprites.into_iter().zip(cells) {
+            assert_eq!(sprite as u8, cell);
+            let uv = sprite.uv_rect();
+            assert!(uv[0] < uv[2] && uv[1] < uv[3]);
+            assert!(uv.into_iter().all(|coordinate| (0.0..=1.0).contains(&coordinate)));
+        }
+    }
+
+    #[test]
+    fn building_art_file_matches_atlas_size_and_keeps_ten_cells_empty() {
+        let atlas = image::load_from_memory(include_bytes!(
+            "../../../assets/gameplay/buildings/building_atlas.png"
+        ))
+        .unwrap()
+        .to_rgba8();
+        assert_eq!(atlas.dimensions(), (1024, 512));
+
+        for cell in Sprite::UNUSED_CELL_INDICES {
+            let cell = u32::from(cell);
+            let x0 = cell % Sprite::COLS * Sprite::CELL_SIZE;
+            let y0 = cell / Sprite::COLS * Sprite::CELL_SIZE;
+            for y in y0..y0 + Sprite::CELL_SIZE {
+                for x in x0..x0 + Sprite::CELL_SIZE {
+                    assert_eq!(atlas.get_pixel(x, y).0[3], 0, "unused cell {cell}");
+                }
+            }
+        }
+    }
 }

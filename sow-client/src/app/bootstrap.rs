@@ -209,7 +209,7 @@ impl SowApp {
                 offline_last_update: web_time::Instant::now(),
                 offline_intents: Vec::new(),
                 last_synced_cost_tick: None,
-                tile_upgrades: Vec::new(),
+                tile_upgrades: std::collections::BTreeMap::new(),
                 config: sow_core::game_config::GameConfig::default(),
                 paused: false,
                 tutorial_observation: crate::app::TutorialObservation::default(),
