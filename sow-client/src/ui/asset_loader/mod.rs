@@ -4,10 +4,11 @@ use web_time::{Duration, Instant};
 
 pub const MAX_AVATAR_FETCHES_IN_FLIGHT: usize = 6;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AvatarFetchKey {
     Fallback,
     Leader(Leader),
+    Campaign { slug: String, slot: usize },
 }
 
 #[derive(Clone, Debug)]
@@ -23,6 +24,8 @@ pub struct AssetLoader {
     pub maps: HashMap<String, Vec<u8>>,
     pub maps_in_flight: HashSet<String>,
     pub avatars: HashMap<Leader, Vec<u8>>,
+    pub campaign_avatar_slots: HashMap<String, usize>,
+    pub campaign_avatars: HashMap<String, Vec<u8>>,
     pub avatar_fallback: Option<Vec<u8>>,
     pub avatars_fetch_pending: Vec<AvatarFetchKey>,
     pub avatars_in_flight: HashSet<AvatarFetchKey>,
@@ -48,6 +51,8 @@ impl AssetLoader {
             maps: HashMap::new(),
             maps_in_flight: HashSet::new(),
             avatars: HashMap::new(),
+            campaign_avatar_slots: HashMap::new(),
+            campaign_avatars: HashMap::new(),
             avatar_fallback: None,
             avatars_fetch_pending: Vec::new(),
             avatars_in_flight: HashSet::new(),
@@ -68,10 +73,42 @@ impl AssetLoader {
         leader.name().to_lowercase().replace(' ', "_")
     }
 
-    pub fn avatar_filename(key: AvatarFetchKey) -> String {
+    pub fn avatar_filename(key: &AvatarFetchKey) -> String {
         match key {
             AvatarFetchKey::Fallback => "null.webp".into(),
-            AvatarFetchKey::Leader(leader) => format!("{}.webp", Self::leader_slug(leader)),
+            AvatarFetchKey::Leader(leader) => format!("{}.webp", Self::leader_slug(*leader)),
+            AvatarFetchKey::Campaign { slug, .. } => format!("{slug}.webp"),
+        }
+    }
+
+    pub fn queue_campaign_avatar(&mut self, slug: &str) {
+        if slug == "null" || !valid_avatar_id(slug) {
+            return;
+        }
+        let slot = if let Some(slot) = self.campaign_avatar_slots.get(slug) {
+            *slot
+        } else {
+            let slot = Leader::ALL.len() + 1 + self.campaign_avatar_slots.len();
+            if slot >= sow_render::text::AVATAR_SLOT_COUNT {
+                return;
+            }
+            self.campaign_avatar_slots.insert(slug.to_string(), slot);
+            slot
+        };
+        self.queue_avatar_fetch(
+            AvatarFetchKey::Campaign {
+                slug: slug.to_string(),
+                slot,
+            },
+            false,
+        );
+    }
+
+    pub fn campaign_avatar_slot(&self, slug: &str) -> Option<usize> {
+        if slug == "null" {
+            Some(Leader::ALL.len())
+        } else {
+            self.campaign_avatar_slots.get(slug).copied()
         }
     }
 
@@ -100,24 +137,25 @@ impl AssetLoader {
         self.request_avatars_fetch_all();
     }
 
-    fn avatar_loaded(&self, key: AvatarFetchKey) -> bool {
+    fn avatar_loaded(&self, key: &AvatarFetchKey) -> bool {
         match key {
             AvatarFetchKey::Fallback => self.avatar_fallback.is_some(),
             AvatarFetchKey::Leader(leader) => self.avatars.contains_key(&leader),
+            AvatarFetchKey::Campaign { slug, .. } => self.campaign_avatars.contains_key(slug),
         }
     }
 
-    fn retry_ready(&self, key: AvatarFetchKey) -> bool {
+    fn retry_ready(&self, key: &AvatarFetchKey) -> bool {
         self.avatar_retry_state
-            .get(&key)
+            .get(key)
             .map(|retry| !retry.permanent && Instant::now() >= retry.next_retry_at)
             .unwrap_or(true)
     }
 
     fn queue_avatar_fetch(&mut self, key: AvatarFetchKey, front: bool) {
-        if self.avatar_loaded(key)
+        if self.avatar_loaded(&key)
             || self.avatars_in_flight.contains(&key)
-            || !self.retry_ready(key)
+            || !self.retry_ready(&key)
             || self.avatars_fetch_pending.contains(&key)
         {
             return;
@@ -131,7 +169,7 @@ impl AssetLoader {
 
     pub fn take_next_avatar_fetch_pending(
         &mut self,
-        priority: AvatarFetchKey,
+        priority: &AvatarFetchKey,
     ) -> Option<AvatarFetchKey> {
         if self.avatars_in_flight.len() >= MAX_AVATAR_FETCHES_IN_FLIGHT {
             return None;
@@ -139,13 +177,13 @@ impl AssetLoader {
         let index = self
             .avatars_fetch_pending
             .iter()
-            .position(|key| *key == priority)
+            .position(|key| key == priority)
             .or((!self.avatars_fetch_pending.is_empty()).then_some(0))?;
         let key = self.avatars_fetch_pending.remove(index);
-        if self.avatar_loaded(key) {
+        if self.avatar_loaded(&key) {
             return self.take_next_avatar_fetch_pending(priority);
         }
-        self.avatars_in_flight.insert(key);
+        self.avatars_in_flight.insert(key.clone());
         Some(key)
     }
 
@@ -182,12 +220,15 @@ impl AssetLoader {
         let cell = image::imageops::resize(&image, 128, 128, image::imageops::FilterType::Triangle)
             .into_raw();
         self.gpu_avatar_cells
-            .retain(|(loaded_key, _)| *loaded_key != key);
-        self.gpu_avatar_cells.push((key, cell));
+            .retain(|(loaded_key, _)| loaded_key != &key);
+        self.gpu_avatar_cells.push((key.clone(), cell));
         match key {
             AvatarFetchKey::Fallback => self.avatar_fallback = Some(bytes.to_vec()),
             AvatarFetchKey::Leader(leader) => {
                 self.avatars.insert(leader, bytes.to_vec());
+            }
+            AvatarFetchKey::Campaign { slug, .. } => {
+                self.campaign_avatars.insert(slug, bytes.to_vec());
             }
         }
         Ok(())
@@ -224,4 +265,10 @@ impl AssetLoader {
             })
             .collect()
     }
+}
+
+fn valid_avatar_id(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
 }

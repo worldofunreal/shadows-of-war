@@ -41,7 +41,19 @@ fn default_territory_troop_tiles() -> u32 {
 }
 
 fn default_city_troop_income() -> f64 {
-    50.0
+    12.5
+}
+
+fn default_farm_troop_income() -> f64 {
+    12.5
+}
+
+fn default_structure_upgrade_scale() -> f64 {
+    1.8
+}
+
+fn default_cost_farm() -> f64 {
+    100.0
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -69,6 +81,17 @@ pub struct ScriptedSpawn {
     /// 130; bots normally roll 130–180. Lets a scripted clan be deliberately dull or sharp.
     #[serde(default)]
     pub iq: Option<u32>,
+    /// Optional portrait asset for campaign factions; absent uses the generic avatar.
+    #[serde(default)]
+    pub campaign_avatar: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CampaignSupport {
+    pub after_defeated: String,
+    pub interval_seconds: u32,
+    pub gold: f64,
+    pub troops: f64,
 }
 
 fn default_true() -> bool {
@@ -177,7 +200,7 @@ pub struct GameConfig {
     pub territory_troop_tiles: u32,
 
     // ==========================================
-    // Buildings (stacking model — each placed building adds its flat bonus)
+    // Buildings (separate foundations plus explicit level upgrades)
     // ==========================================
     /// Max troop capacity added per City.
     pub city_max_troops: f64,
@@ -186,6 +209,9 @@ pub struct GameConfig {
     /// Troop income per second added per City level.
     #[serde(default = "default_city_troop_income")]
     pub city_troop_income: f64,
+    /// Troop income per second added per Farm level. Farms never affect capacity.
+    #[serde(default = "default_farm_troop_income")]
+    pub farm_troop_income: f64,
     /// Defense range/radius of each Bunker.
     pub bunker_range: f64,
     /// Extra attack frontier priority per Bunker within range.
@@ -206,6 +232,12 @@ pub struct GameConfig {
     pub cost_factory: f64,
     /// Gold cost to place a Port.
     pub cost_port: f64,
+    /// Gold cost to place a Farm.
+    #[serde(default = "default_cost_farm")]
+    pub cost_farm: f64,
+    /// Multiplier applied to each successive structure upgrade level.
+    #[serde(default = "default_structure_upgrade_scale")]
+    pub structure_upgrade_scale: f64,
     /// Max multiplier applied to structure base cost as count grows (cost plateaus at base × this).
     #[serde(default = "default_cost_scale_cap_multiplier")]
     pub cost_scale_cap_multiplier: f64,
@@ -225,6 +257,12 @@ pub struct GameConfig {
     pub player_team: Option<crate::protocol::Team>,
     #[serde(default = "default_true")]
     pub buildings_enabled: bool,
+    /// Campaign-only milestone for enabling structures after a named faction is defeated.
+    #[serde(default)]
+    pub buildings_unlock_after_defeated: Option<String>,
+    /// Deterministic campaign aid from contacted teammates after a story milestone.
+    #[serde(default)]
+    pub campaign_support: Option<CampaignSupport>,
 
     /// **Tutorial firewall flag.** `true` only for the scripted campaign/tutorial. The engine
     /// ignores it — it exists so the *client* can derive its tutorial UI from the match it is
@@ -293,19 +331,22 @@ impl Default for GameConfig {
             territory_troop_tiles: 16,
 
             // Buildings (stacking)
-            city_max_troops: 5000.0,
-            city_gold_income: 4.0,
-            city_troop_income: 25.0,
+            city_max_troops: 2500.0,
+            city_gold_income: 2.0,
+            city_troop_income: 12.5,
+            farm_troop_income: 12.5,
             bunker_range: 14.0,
             bunker_priority: 120.0,
             bunker_strength: 4.0,
-            factory_gold_income: 8.0,
-            port_troop_income: 50.0,
-            port_gold_income: 4.0,
+            factory_gold_income: 4.0,
+            port_troop_income: 25.0,
+            port_gold_income: 2.0,
             cost_city: 200.0,
             cost_bunker: 75.0,
             cost_factory: 125.0,
             cost_port: 150.0,
+            cost_farm: 100.0,
+            structure_upgrade_scale: 1.8,
             cost_scale_cap_multiplier: 10.0,
             nuke_cost: 5.0,
 
@@ -316,6 +357,8 @@ impl Default for GameConfig {
             player_spawn: None,
             player_team: None,
             buildings_enabled: true,
+            buildings_unlock_after_defeated: None,
+            campaign_support: None,
             tutorial: false,
         }
     }

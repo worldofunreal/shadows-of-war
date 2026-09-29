@@ -192,6 +192,9 @@ impl SowApp {
                         .as_ref()
                         .map(|s| s.dirty_tiles.as_slice())
                         .unwrap_or(&[]);
+                    if !dirty.is_empty() {
+                        self.ui.nameplate_land_cache.mark_dirty();
+                    }
 
                     thread_local! {
                         static LAST_FOG_OF_WAR_TOGGLE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
@@ -291,6 +294,7 @@ impl SowApp {
                             sow_core::game::BuildingKind::Bunker => 2.0,
                             sow_core::game::BuildingKind::Factory => 3.0,
                             sow_core::game::BuildingKind::Port => 4.0,
+                            sow_core::game::BuildingKind::Farm => 5.0,
                         };
 
                         if let Some(snap) = &self.sim.current_snapshot {

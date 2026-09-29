@@ -32,6 +32,10 @@ pub(super) fn bot_structure_target_count(
             let val = ((city_equivalent as f64) * 0.30 * factor).floor() as u32;
             if factor > 0.4 { val.max(1) } else { val }
         }
+        BuildingKind::Farm => {
+            let val = ((city_equivalent as f64) * 0.45 * factor).floor() as u32;
+            if factor > 0.4 { val.max(1) } else { val }
+        }
     }
 }
 
@@ -60,7 +64,11 @@ pub(super) fn pick_stack_click_tile(
 ) -> Option<u32> {
     let mut best: Option<(u8, u64, u32)> = None;
     for b in buildings {
-        if b.owner_id != bot_id || b.kind != kind || b.under_construction || b.level >= 5 {
+        if b.owner_id != bot_id
+            || b.kind != kind
+            || b.under_construction
+            || b.level >= kind.max_level()
+        {
             continue;
         }
         let cand = (b.level, b.id, b.tile_idx);
@@ -80,18 +88,26 @@ pub(super) fn stack_build_decision(
     bot_id: u16,
     kind: BuildingKind,
     player_gold: f64,
-    cost: f64,
+    cfg: &crate::game_config::GameConfig,
 ) -> Option<BotDecision> {
     let stack_tile = pick_stack_click_tile(buildings, bot_id, kind)?;
+    let building = buildings
+        .iter()
+        .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)
+        ?;
+    let cost = crate::building::structure_upgrade_cost_gold(
+        kind,
+        building.level.saturating_add(1),
+        cfg,
+    );
     if player_gold < cost {
         return None;
     }
     Some(BotDecision {
         bot_id,
         kind: BotDecisionKind::Build,
-        intent: GameplayIntent::BuildStructure {
-            kind,
-            target_tile: stack_tile,
+        intent: GameplayIntent::UpgradeStructure {
+            building_id: building.id,
         },
     })
 }
@@ -144,4 +160,5 @@ pub(super) fn cheapest_gold_cost(cfg: &crate::game_config::GameConfig) -> f64 {
         .min(cfg.cost_bunker)
         .min(cfg.cost_factory)
         .min(cfg.cost_port)
+        .min(cfg.cost_farm)
 }

@@ -470,6 +470,8 @@ pub struct PlayerSnapshot {
     pub civilization: crate::player::Civilization,
     pub leader: crate::player::Leader,
     #[serde(default)]
+    pub campaign_avatar: Option<String>,
+    #[serde(default)]
     pub skin_style: u8,
     #[serde(default)]
     pub kills: u32,

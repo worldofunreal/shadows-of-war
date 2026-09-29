@@ -18,14 +18,16 @@ pub enum BuildingKind {
     Bunker,
     Factory,
     Port,
+    Farm,
 }
 
 impl BuildingKind {
-    pub const ALL: [BuildingKind; 4] = [
+    pub const ALL: [BuildingKind; 5] = [
         BuildingKind::City,
         BuildingKind::Bunker,
         BuildingKind::Factory,
         BuildingKind::Port,
+        BuildingKind::Farm,
     ];
     #[inline]
     pub fn as_str(self) -> &'static str {
@@ -34,6 +36,73 @@ impl BuildingKind {
             BuildingKind::Bunker => "Defense Tower",
             BuildingKind::Factory => "Factory",
             BuildingKind::Port => "Port",
+            BuildingKind::Farm => "Farm",
+        }
+    }
+
+    pub const fn max_level(self) -> u8 {
+        match self {
+            Self::City => 6,
+            Self::Port => 5,
+            Self::Factory => 4,
+            Self::Bunker => 4,
+            Self::Farm => 3,
+        }
+    }
+
+    pub const fn level_name(self, level: u8) -> &'static str {
+        match (self, level) {
+            (Self::City, 1) => "Camp",
+            (Self::City, 2) => "Hamlet",
+            (Self::City, 3) => "Village",
+            (Self::City, 4) => "Town",
+            (Self::City, 5) => "City",
+            (Self::City, 6) => "Metropolis",
+            (Self::Port, 1) => "Dock",
+            (Self::Port, 2) => "Wharf",
+            (Self::Port, 3) => "Harbor",
+            (Self::Port, 4) => "Port",
+            (Self::Port, 5) => "Megaport",
+            (Self::Factory, 1) => "Workshop",
+            (Self::Factory, 2) => "Manufactory",
+            (Self::Factory, 3) => "Factory",
+            (Self::Factory, 4) => "Industrial Complex",
+            (Self::Bunker, 1) => "Watchpost",
+            (Self::Bunker, 2) => "Watchtower",
+            (Self::Bunker, 3) => "Bastion",
+            (Self::Bunker, 4) => "Citadel",
+            (Self::Farm, 1) => "Cultivated Plot",
+            (Self::Farm, 2) => "Farm",
+            (Self::Farm, 3) => "Irrigated Fields",
+            _ => "Unknown",
+        }
+    }
+
+    pub const fn level_benefit(self, level: u8) -> &'static str {
+        match (self, level) {
+            (Self::City, 1) => "troop_capacity",
+            (Self::City, 2) => "territory_gold",
+            (Self::City, 3) => "unlocks_workshop",
+            (Self::City, 4) => "unlocks_trade_ships",
+            (Self::City, 5) => "unlocks_warships",
+            (Self::City, 6) => "unlocks_nukes",
+            (Self::Port, 1) => "unlocks_transports",
+            (Self::Port, 2) => "departure_speed",
+            (Self::Port, 3) => "unlocks_trade_ships",
+            (Self::Port, 4) => "unlocks_warships",
+            (Self::Port, 5) => "departure_speed_plus",
+            (Self::Factory, 1) => "gold_income",
+            (Self::Factory, 2) => "build_time_reduction",
+            (Self::Factory, 3) => "upgrade_cost_reduction",
+            (Self::Factory, 4) => "trade_ship_income",
+            (Self::Bunker, 1) => "attack_cost_aura",
+            (Self::Bunker, 2) => "defense_range",
+            (Self::Bunker, 3) => "defender_strength",
+            (Self::Bunker, 4) => "nuke_interception",
+            (Self::Farm, 1) => "farm_troop_income",
+            (Self::Farm, 2) => "farm_troop_income_plus",
+            (Self::Farm, 3) => "farm_troop_income_max",
+            _ => "none",
         }
     }
     pub fn construction_duration_ticks(self) -> u32 {
@@ -42,6 +111,7 @@ impl BuildingKind {
             BuildingKind::Bunker => 50,
             BuildingKind::Factory => 35,
             BuildingKind::Port => 30,
+            BuildingKind::Farm => 25,
         }
     }
 }

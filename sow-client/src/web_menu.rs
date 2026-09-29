@@ -1138,7 +1138,10 @@ fn tutorial_target_action_tile(
     players: &[sow_core::protocol::PlayerSnapshot],
 ) -> Option<u32> {
     let target = players.iter().find(|player| player.id == target_owner)?;
-    if !tutorial_owner_is_attackable(target_owner, my_pid, me, players)
+    let target_is_attackable = tutorial_owner_is_attackable(target_owner, my_pid, me, players);
+    if target_owner == my_pid
+        || !target.alive
+        || target.tile_count == 0
         || map_w == 0
         || map_w.checked_mul(map_h).is_none()
     {
@@ -1165,10 +1168,15 @@ fn tutorial_target_action_tile(
             if !terrain.get(next).is_some_and(|value| value & 0x80 != 0) {
                 continue;
             }
-            if owner == target.id {
+            if owner == target.id && target_is_attackable {
                 return Some(next as u32);
             }
-            if !tutorial_owner_is_attackable(owner, my_pid, me, players) {
+            let legal_frontier = if target_is_attackable {
+                tutorial_owner_is_attackable(owner, my_pid, me, players)
+            } else {
+                owner == 0
+            };
+            if !legal_frontier {
                 continue;
             }
             let source_dx = i64::from(col - goal_x);
@@ -1218,7 +1226,8 @@ fn tutorial_project_tile(
 /// Tutorial hand anchors, as tile indices cached per snapshot tick.
 /// `expand` is neutral land touching the player's border (where to tap to grow);
 /// `assault` is attackable land touching the player's border;
-/// `target_action` is legal frontier land that reaches or moves toward the named faction.
+/// `target_action` is legal land toward a named faction: neutral land to approach allies,
+/// or neutral/enemy land to approach or attack an enemy.
 fn tutorial_guide_tiles(
     app: &mut SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
@@ -1351,6 +1360,21 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             .map(|[x, y]| serde_json::json!({ "x": x, "y": y, "tile_idx": tile }))
             .unwrap_or(serde_json::Value::Null)
     };
+    let player_screen = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == marker_player_id && player.alive && player.tile_count > 0)
+        .map(|player| {
+            crate::render::world::overlays::world_to_screen(
+                player.centroid_x,
+                player.centroid_y,
+                &app.input,
+                sf,
+            )
+        })
+        .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
+        .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
+        .unwrap_or(serde_json::Value::Null);
     let observation = &app.sim.tutorial_observation;
     let me = snapshot.players.iter().find(|player| player.id == my_pid);
     let players = snapshot
@@ -1365,6 +1389,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "expand": guide_screen(expand_tile),
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
+        "player": player_screen,
         "facts": {
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
@@ -1377,6 +1402,21 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "attacks": observation.seen_attacks.len(),
             "attacks_by_target": observation.attacks_by_target,
             "buildings": observation.seen_structures.len(),
+            "cities": observation.seen_cities.len(),
+            "farms": observation.seen_buildings_by_kind.get("farms").map_or(0, |ids| ids.len()),
+            "factories": observation.seen_buildings_by_kind.get("factories").map_or(0, |ids| ids.len()),
+            "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
+            "bunkers": observation.seen_buildings_by_kind.get("bunkers").map_or(0, |ids| ids.len()),
+            "ally_support_deliveries": observation.ally_support_deliveries,
+            "first_ally_support_sender_id": observation.first_ally_support_sender,
+            "structure_upgrades": observation.structure_upgrades,
+            "city_upgrades": observation.city_upgrades,
+            "city_levels": observation.city_levels,
+            "port_upgrades": observation.port_upgrades,
+            "port_levels": observation.port_levels,
+            "tile_upgrades": observation.tile_upgrades,
+            "resource_transfers": observation.resource_transfers,
+            "alliances_formed": observation.alliances_formed,
             "fleets": observation.seen_fleets.len(),
             "nukes": observation.seen_nukes.len(),
             "elapsed_ticks": snapshot.tick,
@@ -1403,6 +1443,7 @@ fn player_json(
         "is_alive": player.alive,
         "is_me": player.id == my_pid,
         "leader": leader_id(player.leader),
+        "avatar": &player.campaign_avatar,
         "civilization": player.civilization.name(),
         "team": player.team,
         "active_emoji": &player.active_emoji,
@@ -1493,6 +1534,7 @@ fn build_hover_payload(
     let mut factories = 0;
     let mut ports = 0;
     let mut bunkers = 0;
+    let mut farms = 0;
     for building in &snapshot.buildings {
         if building.owner_id != owner_id {
             continue;
@@ -1502,6 +1544,7 @@ fn build_hover_payload(
             sow_core::game::BuildingKind::Factory => factories += 1,
             sow_core::game::BuildingKind::Port => ports += 1,
             sow_core::game::BuildingKind::Bunker => bunkers += 1,
+            sow_core::game::BuildingKind::Farm => farms += 1,
         }
     }
     let mut payload = player_json(player, my_pid, snapshot.total_land_tiles, None);
@@ -1509,6 +1552,7 @@ fn build_hover_payload(
     payload["factories"] = serde_json::json!(factories);
     payload["ports"] = serde_json::json!(ports);
     payload["bunkers"] = serde_json::json!(bunkers);
+    payload["farms"] = serde_json::json!(farms);
     payload
 }
 
@@ -1616,6 +1660,53 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
     serde_json::Value::Array(requests)
 }
 
+fn building_detail_payload(
+    app: &SowApp,
+    building: &sow_core::protocol::BuildingSnapshot,
+) -> serde_json::Value {
+    let active_level = building.active_level();
+    let next_level = active_level.saturating_add(1);
+    let cost = sow_core::building::cost::structure_upgrade_cost_gold(
+        building.kind,
+        next_level,
+        &app.sim.config,
+    );
+    let my_id = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
+    let owns = building.owner_id == my_id;
+    let has_gold = app.ui.app.hud_state.gold >= cost;
+    let maxed = next_level > building.kind.max_level();
+    let factory_requirement = building.kind != sow_core::game::BuildingKind::Factory
+        || next_level != 2
+        || app.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.buildings.iter().any(|other| {
+                other.owner_id == my_id
+                    && other.kind == sow_core::game::BuildingKind::City
+                    && other.active_level() >= 3
+            })
+        });
+    let requirements = if building.kind == sow_core::game::BuildingKind::Factory {
+        serde_json::json!([{ "key": "village", "met": factory_requirement }])
+    } else {
+        serde_json::json!([])
+    };
+    serde_json::json!({
+        "id": building.id,
+        "kind": building.kind.as_str(),
+        "level": active_level,
+        "name": building.kind.level_name(active_level),
+        "benefit": building.kind.level_benefit(active_level),
+        "next_level": (!maxed).then_some(next_level),
+        "next_name": (!maxed).then_some(building.kind.level_name(next_level)),
+        "next_benefit": (!maxed).then_some(building.kind.level_benefit(next_level)),
+        "cost": cost,
+        "duration_ticks": (!maxed).then_some(sow_core::building::core::upgrade_duration_ticks(building.kind, next_level)),
+        "under_construction": building.under_construction,
+        "owns": owns,
+        "can_upgrade": owns && !building.under_construction && !maxed && factory_requirement && has_gold,
+        "requirements": requirements
+    })
+}
+
 fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json::Value {
     if app.ui.app.phase != crate::ClientPhase::Playing {
         return serde_json::Value::Null;
@@ -1654,6 +1745,17 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 .iter()
                 .filter_map(|item| item.get("action").and_then(|action| action.as_str()))
                 .collect::<Vec<_>>();
+            let building = app
+                .sim
+                .current_snapshot
+                .as_ref()
+                .and_then(|snapshot| {
+                    snapshot
+                        .buildings
+                        .iter()
+                        .find(|building| building.tile_idx == menu.tile_idx)
+                })
+                .map(|building| building_detail_payload(app, building));
             serde_json::json!({
                 "open": true,
                 "x": menu.x / sf,
@@ -1662,6 +1764,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 "session": menu.session,
                 "actions": actions,
                 "items": items,
+                "building": building,
             })
         })
         .unwrap_or(serde_json::Value::Null);
@@ -1717,8 +1820,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         sow_core::game::BuildingKind::Bunker => "Bunker",
         sow_core::game::BuildingKind::Factory => "Factory",
         sow_core::game::BuildingKind::Port => "Port",
+        sow_core::game::BuildingKind::Farm => "Farm",
     });
     let costs = &hud.building_costs;
+    let selected_building_detail = map_menu
+        .get("building")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
     let mut payload = serde_json::json!({
         "gold": me.map(|player| player.gold).unwrap_or(hud.gold),
         "troops": me.map(|player| player.troops).unwrap_or(hud.troops),
@@ -1727,11 +1835,13 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "attack_ratio": hud.attack_ratio,
         "spawn_timer_secs": hud.spawn_timer_secs,
         "selected_building": selected_building,
+        "selected_building_detail": selected_building_detail,
         "building_costs": {
             "city": costs[0],
             "bunker": costs[1],
             "factory": costs[2],
             "port": costs[3],
+            "farm": costs[4],
         },
         "pin_emoji": hud.pin_emoji,
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
@@ -2166,11 +2276,48 @@ mod tests {
             traitor: false,
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
+            campaign_avatar: None,
             skin_style: 0,
             kills: 0,
             deaths: 0,
             assists: 0,
         }
+    }
+
+    #[test]
+    fn tutorial_target_action_guides_neutral_land_toward_an_ally() {
+        use sow_core::protocol::Team;
+
+        let mut me = test_player(1, 1, 500.0);
+        me.centroid_x = 1.0;
+        me.centroid_y = 2.0;
+        me.team = Some(Team::Red);
+        let mut ally = test_player(2, 1, 500.0);
+        ally.centroid_x = 4.0;
+        ally.centroid_y = 2.0;
+        ally.team = Some(Team::Red);
+
+        let mut owners = vec![0; 25];
+        owners[11] = me.id;
+        owners[14] = ally.id;
+        let terrain = vec![0x80; 25];
+        let mut border = sow_core::bitset::DenseBitSet::new();
+        border.insert(11);
+
+        assert_eq!(
+            tutorial_target_action_tile(
+                &owners,
+                &terrain,
+                5,
+                5,
+                &border,
+                me.id,
+                ally.id,
+                &me,
+                &[me, ally],
+            ),
+            Some(12)
+        );
     }
 
     fn test_snapshot(players: Vec<PlayerSnapshot>) -> SimSnapshot {

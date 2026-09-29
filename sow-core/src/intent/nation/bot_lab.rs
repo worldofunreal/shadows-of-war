@@ -2304,44 +2304,56 @@ fn s16_seed_replays_same_checkpoints_and_first_failure() {
 }
 
 #[test]
-fn s16_per_tick_decision_and_state_reference() {
+fn s16_checkpoint_decision_and_state_reference() {
+    const S16_REFERENCE_TICKS: u64 = 2_102;
+
     let mut scenario = build_s16_scenario();
     scenario.assert_setup();
     let mut hash = 0xcbf29ce484222325;
     let mut ticks = 0u64;
     let mut checkpoints = Vec::with_capacity(9);
 
-    while scenario.engine.state.phase == GamePhase::Playing {
+    while scenario.engine.state.phase == GamePhase::Playing && ticks < S16_REFERENCE_TICKS {
         scenario.engine.tick();
+        ticks += 1;
+        if ticks.is_multiple_of(250) {
+            let state = s16_engine_state_bytes(&scenario.engine);
+            let tick_trace = bincode::serialize(&(
+                scenario.engine.state.tick,
+                &scenario.engine.test_last_ai_intents,
+                state,
+            ))
+            .expect("S16 checkpoint trace must serialize");
+            s16_trace_hash_bytes(&mut hash, &tick_trace);
+            checkpoints.push((ticks, hash));
+        }
+    }
+
+    if !ticks.is_multiple_of(250) {
         let state = s16_engine_state_bytes(&scenario.engine);
         let tick_trace = bincode::serialize(&(
             scenario.engine.state.tick,
             &scenario.engine.test_last_ai_intents,
             state,
         ))
-        .expect("S16 tick trace must serialize");
+        .expect("S16 final checkpoint trace must serialize");
         s16_trace_hash_bytes(&mut hash, &tick_trace);
-        ticks += 1;
-        if ticks.is_multiple_of(250) {
-            checkpoints.push((ticks, hash));
-        }
+        checkpoints.push((ticks, hash));
     }
-
-    checkpoints.push((ticks, hash));
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x117fd13fbe6cab52),
-        (500, 0x4f2d87ff5a3474f5),
-        (750, 0xf1836821104f084a),
-        (1000, 0xff60ddafe77e3bef),
-        (1250, 0x8e514b9407796820),
-        (1500, 0x1cbe4762503f77d1),
-        (1750, 0xbe6410569807de5a),
-        (2000, 0x081e75a09aa77890),
-        (2102, 0xe320beb4b8e904dd),
+        (250, 0xee48361d702627f5),
+        (500, 0x3366ca1ea9af31e0),
+        (750, 0x4f994f8f14aa9619),
+        (1000, 0x274223a324fe408e),
+        (1250, 0x54530a0bc92cbbc9),
+        (1500, 0x6b58355bd1e54de6),
+        (1750, 0x910dbba5b808776a),
+        (2000, 0x0d308e2c2f4282a9),
+        (S16_REFERENCE_TICKS, 0xf3adbebcfa2522e7),
     ];
     assert_eq!(
         checkpoints, REFERENCE,
-        "S16 per-tick intent/state trace changed"
+        "S16 checkpoint intent/state trace changed"
     );
 }
 

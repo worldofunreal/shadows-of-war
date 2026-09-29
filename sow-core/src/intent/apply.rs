@@ -128,14 +128,7 @@ impl SowEngine {
                 self.apply_build_structure_intent(stamped.player_id, *kind, *target_tile);
             }
             GameplayIntent::UpgradeStructure { building_id } => {
-                let stack_tile = self
-                    .buildings
-                    .iter()
-                    .find(|b| b.id == *building_id && b.owner_id == stamped.player_id)
-                    .map(|b| (b.kind, b.tile_idx));
-                if let Some((kind, tile)) = stack_tile {
-                    self.apply_build_structure_intent(stamped.player_id, kind, tile);
-                }
+                self.apply_upgrade_structure_intent(stamped.player_id, *building_id);
             }
             GameplayIntent::UpgradeCityModule {
                 building_id,
@@ -149,6 +142,21 @@ impl SowEngine {
             GameplayIntent::BuildShip { port_tile, kind } => {
                 let pid = stamped.player_id;
                 let cost = kind.gold_cost();
+                let required_city_level = match kind {
+                    crate::game::UnitType::TradeShip => 4,
+                    crate::game::UnitType::Warship => 5,
+                    crate::game::UnitType::TransportShip => 1,
+                };
+                let required_port_level = match kind {
+                    crate::game::UnitType::TradeShip => 3,
+                    crate::game::UnitType::Warship => 4,
+                    crate::game::UnitType::TransportShip => 1,
+                };
+                let has_city_requirement = self.buildings.iter().any(|b| {
+                    b.owner_id == pid
+                        && b.kind == crate::game::BuildingKind::City
+                        && b.active_level() >= required_city_level
+                });
                 let port_id = self
                     .buildings
                     .iter()
@@ -156,13 +164,13 @@ impl SowEngine {
                         b.tile_idx == *port_tile
                             && b.owner_id == pid
                             && !b.under_construction
-                            && (b.kind == crate::game::BuildingKind::Port
-                                || (b.kind == crate::game::BuildingKind::City
-                                    && b.modules.port > 0))
+                            && b.kind == crate::game::BuildingKind::Port
+                            && b.active_level() >= required_port_level
                     })
                     .map(|b| b.id);
 
-                if let Some(port_id) = port_id
+                if has_city_requirement
+                    && let Some(port_id) = port_id
                     && let Some(player) = self.state.player_mut(pid)
                     && player.gold >= cost
                 {

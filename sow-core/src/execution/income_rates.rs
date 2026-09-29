@@ -30,6 +30,7 @@ pub fn troop_income_per_second(
 
     cfg.troop_base_income
         + cfg.city_troop_income * agg.city_levels as f64 * vercingetorix_mult
+        + cfg.farm_troop_income * agg.farm_levels as f64
         + ARMORY_TROOP_INCOME * agg.armory_levels as f64 * sun_tzu_mult
         + cfg.port_troop_income * agg.port_levels as f64 * ragnar_mult
         + territory_rate(

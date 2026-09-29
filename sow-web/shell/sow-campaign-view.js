@@ -71,7 +71,15 @@
             const focusModal = modal && (!wasModal || wasHidden);
             if (modal && !wasModal) focusBefore = doc.activeElement;
             if (!modal && wasModal) releaseFocus();
-            const character = (model.definition.speakers || {})[line.speaker || step.speaker] || {};
+            const character = Object.assign({}, (model.definition.speakers || {})[line.speaker || step.speaker] || {});
+            if (character.faction) {
+                const roster = typeof options.roster === "function" ? options.roster() : options.roster;
+                const faction = (roster && roster.factions || []).find(function (item) { return item.name === character.faction; });
+                if (faction) { character.name = faction.name; character.name_key = null; character.avatar = faction.avatar || "null"; }
+            }
+            if (character.dynamic && context.dynamicSpeakers && context.dynamicSpeakers[character.dynamic]) {
+                Object.assign(character, context.dynamicSpeakers[character.dynamic]);
+            }
             const speakerName = character.name_key ? t(character.name_key) : character.name || "";
             const copyTitle = t(line.title_key || step.title_key), copyBody = t(line.body_key || step.body_key);
             const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key)])]);
@@ -128,7 +136,7 @@
             setText(amount, Math.floor(progress.current).toLocaleString() + " / " + Math.ceil(progress.target).toLocaleString());
             setText(find(".sow-story__objective-mark"), model.ready ? "✓" : "◇");
             const focus = find("[data-story-focus]");
-            const hasMapTarget = step.marker || (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target);
+            const hasMapTarget = step.marker || (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && (step.trigger.target || Array.isArray(step.trigger.targets)));
             focus.hidden = !options.onFocus || !hasMapTarget;
             focus.setAttribute("aria-label", t("hud.center_camera"));
             objective.setAttribute("role", "status");
@@ -155,9 +163,19 @@
             }
         }
         function click(event) {
-            const button = event.target.closest("button");
             event.stopPropagation();
-            if (!button || !root.contains(button) || button.disabled || !model) return;
+            if (!model) return;
+            const button = event.target.closest("button");
+            if (!button || !root.contains(button) || button.disabled) {
+                if (model.paused && event.target === shade) {
+                    event.preventDefault();
+                    if (model.step.type !== "choice" && event.timeStamp - lastAction >= 220) {
+                        lastAction = event.timeStamp;
+                        options.onContinue();
+                    }
+                }
+                return;
+            }
             event.preventDefault();
             if (event.timeStamp - lastAction < 220) return;
             lastAction = event.timeStamp;

@@ -82,6 +82,7 @@ impl SowApp {
         self.ui.nameplate_order_my_id = None;
         self.ui.nameplate_order.clear();
         self.ui.nameplate_visuals.clear();
+        self.ui.nameplate_land_cache = Default::default();
         self.ui.building_render_cache = Default::default();
         self.ui.leaderboard_top_three = [None; 3];
         self.ui.leaderboard_refresh_at = None;

@@ -89,7 +89,13 @@ impl SowApp {
             .as_object()
             .ok_or_else(|| "Campaign settings are invalid.".to_string())?;
         for key in options.keys() {
-            if !matches!(key.as_str(), "buildings_enabled" | "starting_troops") {
+            if !matches!(
+                key.as_str(),
+                "buildings_enabled"
+                    | "starting_troops"
+                    | "buildings_unlock_after_defeated"
+                    | "campaign_support"
+            ) {
                 return Err(format!("Campaign setting is not allowed: {key}"));
             }
         }
@@ -102,6 +108,61 @@ impl SowApp {
             .and_then(serde_json::Value::as_f64)
             .filter(|value| value.is_finite() && (1.0..=100_000.0).contains(value))
             .ok_or_else(|| "Campaign starting_troops is invalid.".to_string())?;
+        let faction_names: std::collections::HashSet<&str> =
+            factions.iter().map(|faction| faction.name.as_str()).collect();
+        let buildings_unlock_after_defeated = options
+            .get("buildings_unlock_after_defeated")
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|name| faction_names.contains(name))
+                    .map(str::to_string)
+                    .ok_or_else(|| "Campaign building unlock target is invalid.".to_string())
+            })
+            .transpose()?;
+        let campaign_support = options
+            .get("campaign_support")
+            .map(|value| {
+                let support = value
+                    .as_object()
+                    .ok_or_else(|| "Campaign support settings are invalid.".to_string())?;
+                if support.keys().any(|key| {
+                    !matches!(key.as_str(), "after_defeated" | "interval_seconds" | "gold" | "troops")
+                }) {
+                    return Err("Campaign support contains an unknown setting.".to_string());
+                }
+                let after_defeated = support
+                    .get("after_defeated")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|name| faction_names.contains(name))
+                    .ok_or_else(|| "Campaign support milestone is invalid.".to_string())?
+                    .to_string();
+                let interval_seconds = support
+                    .get("interval_seconds")
+                    .and_then(serde_json::Value::as_u64)
+                    .filter(|value| (5..=600).contains(value))
+                    .ok_or_else(|| "Campaign support interval must be 5–600 seconds.".to_string())?
+                    as u32;
+                let amount = |key: &str| {
+                    support
+                        .get(key)
+                        .and_then(serde_json::Value::as_f64)
+                        .filter(|value| value.is_finite() && (0.0..=1_000_000_000.0).contains(value))
+                        .ok_or_else(|| format!("Campaign support {key} is invalid."))
+                };
+                let gold = amount("gold")?;
+                let troops = amount("troops")?;
+                if gold == 0.0 && troops == 0.0 {
+                    return Err("Campaign support must send gold or troops.".to_string());
+                }
+                Ok(sow_core::game_config::CampaignSupport {
+                    after_defeated,
+                    interval_seconds,
+                    gold,
+                    troops,
+                })
+            })
+            .transpose()?;
         let seed = web_time::SystemTime::now()
             .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
@@ -143,6 +204,8 @@ impl SowApp {
                 player_team: Some(crate::campaign::PLAYER_TEAM),
                 starting_troops,
                 buildings_enabled,
+                buildings_unlock_after_defeated,
+                campaign_support,
                 ..Default::default()
             },
             true,
@@ -218,12 +281,16 @@ impl SowApp {
             players: vec![sow_core::protocol::PlayerInfo {
                 id: 1,
                 name: {
-                    let name = &self.ui.app.main_menu_state.player_name;
-                    let tag = &self.ui.app.main_menu_state.clan_tag;
-                    if tag.is_empty() {
-                        name.clone()
+                    if tutorial {
+                        leader.name().to_string()
                     } else {
-                        format!("[{}] {}", tag, name)
+                        let name = &self.ui.app.main_menu_state.player_name;
+                        let tag = &self.ui.app.main_menu_state.clan_tag;
+                        if tag.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("[{}] {}", tag, name)
+                        }
                     }
                 },
                 color: self.ui.app.main_menu_state.selected_leader.filler_rgb(),

@@ -8,7 +8,7 @@ from the world overlay pass (`render_overlays`, re-exported by
 `sow-client/src/render/world/mod.rs`) that runs each frame from
 `sow-client/src/render/frame/mod.rs`. The former `buildings/` module
 (`render.rs`, `metrics.rs`, `cluster.rs`, `overlays.rs`) was removed in
-`93b7ff4a` (egui retirement).
+`93b7ff4a`.
 
 ```text
 SimSnapshot::buildings

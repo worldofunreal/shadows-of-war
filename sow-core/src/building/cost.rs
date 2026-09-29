@@ -24,10 +24,33 @@ pub fn structure_build_cost_gold(
         BuildingKind::Bunker => cfg.cost_bunker,
         BuildingKind::Factory => cfg.cost_factory,
         BuildingKind::Port => cfg.cost_port,
+        BuildingKind::Farm => cfg.cost_farm,
     };
     let cap_mult = cfg.cost_scale_cap_multiplier.max(1.0);
     let scaled = base_cost * 1.1f64.powi(count as i32);
     scaled.min(base_cost * cap_mult)
+}
+
+/// Gold price for moving one structure to its next level.
+/// The level is authoritative; nearby structures never participate in this cost.
+#[inline]
+pub fn structure_upgrade_cost_gold(
+    kind: BuildingKind,
+    target_level: u8,
+    cfg: &crate::game_config::GameConfig,
+) -> f64 {
+    if target_level == 0 || target_level > kind.max_level() {
+        return f64::INFINITY;
+    }
+    let base = match kind {
+        BuildingKind::City => cfg.cost_city,
+        BuildingKind::Bunker => cfg.cost_bunker,
+        BuildingKind::Factory => cfg.cost_factory,
+        BuildingKind::Port => cfg.cost_port,
+        BuildingKind::Farm => cfg.cost_farm,
+    };
+    let multiplier = cfg.structure_upgrade_scale.max(1.0);
+    base * multiplier.powi(target_level.saturating_sub(1) as i32)
 }
 
 #[inline]
@@ -40,8 +63,7 @@ pub fn structure_kind_enabled(_kind: BuildingKind) -> bool {
 pub fn player_has_completed_port(buildings: &[Building], player_id: u16) -> bool {
     buildings.iter().any(|b| {
         b.owner_id == player_id
-            && ((b.kind == BuildingKind::City && !b.under_construction && b.modules.port > 0)
-                || (b.kind == BuildingKind::Port && !b.under_construction))
+            && (b.kind == BuildingKind::Port && !b.under_construction)
     })
 }
 

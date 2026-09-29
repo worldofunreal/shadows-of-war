@@ -1,4 +1,7 @@
 use super::feedback;
+use super::nameplate_placement::{
+    NameplateLandCache, NameplateLayout, NameplateStatus, fit_bounds_to_land, fit_size_to_land,
+};
 use crate::app::{InputState, SimState, UiState};
 use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
@@ -13,16 +16,7 @@ const NAMEPLATE_MAX_FONT: f32 = 32.0;
 const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
 const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
 const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
-const NAMEPLATE_WORLD_MOVE_THRESHOLD: f32 = 0.1;
-const NAMEPLATE_SCREEN_MOVE_THRESHOLD: f32 = 1.0;
-const NAMEPLATE_TELEPORT_THRESHOLD: f32 = 50.0;
 const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
-const NAMEPLATE_WORLD_MOVE_THRESHOLD_SQ: f32 =
-    NAMEPLATE_WORLD_MOVE_THRESHOLD * NAMEPLATE_WORLD_MOVE_THRESHOLD;
-const NAMEPLATE_SCREEN_MOVE_THRESHOLD_SQ: f32 =
-    NAMEPLATE_SCREEN_MOVE_THRESHOLD * NAMEPLATE_SCREEN_MOVE_THRESHOLD;
-const NAMEPLATE_TELEPORT_THRESHOLD_SQ: f32 =
-    NAMEPLATE_TELEPORT_THRESHOLD * NAMEPLATE_TELEPORT_THRESHOLD;
 const LOD_DOT_RADIUS: f32 = 2.0;
 
 const HUMAN_AVATAR_SCALE: f32 = 4.0;
@@ -30,9 +24,6 @@ const BOT_AVATAR_SCALE: f32 = 3.0;
 const NATION_AVATAR_SCALE: f32 = 3.6;
 const BADGE_SCALE: f32 = 1.8;
 const TROOPS_SCALE: f32 = 1.30;
-const AVATAR_TEXT_GAP_SCALE: f32 = 0.16;
-const BADGE_GAP: f32 = 3.0;
-const BADGE_STACK_GAP: f32 = 2.0;
 const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
 pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
@@ -43,14 +34,6 @@ const BUILDING_LOD_ZOOM_RANGE: f32 = 9.0;
 const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
 const BUILDING_CLUSTER_TARGET_SIZE: f32 = 40.0;
 const BUILDING_LEVEL_FONT_RATIO: f32 = 0.58;
-
-pub(crate) fn nameplate_screen_center(
-    player: &PlayerSnapshot,
-    input: &InputState,
-    sf: f32,
-) -> [f32; 2] {
-    world_to_screen(player.centroid_x + 0.5, player.centroid_y + 0.5, input, sf)
-}
 
 #[inline]
 pub(crate) fn world_to_screen(world_x: f32, world_y: f32, input: &InputState, sf: f32) -> [f32; 2] {
@@ -86,6 +69,7 @@ pub(crate) fn render_overlays(
     ui: &mut UiState,
     input: &InputState,
     map_renderer: Option<&crate::render::gpu::MapRenderer>,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
     time_secs: f32,
     now: Instant,
@@ -113,7 +97,18 @@ pub(crate) fn render_overlays(
         time_secs,
         now,
     );
-    render_nameplates(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
+    render_nameplates(
+        text,
+        snapshot,
+        sim,
+        ui,
+        input,
+        &dev,
+        campaign_avatar_slots,
+        sf,
+        zoom_scaled,
+        now,
+    );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 
     if !ui.tutorial_active {
@@ -128,12 +123,13 @@ fn render_nameplates(
     ui: &mut UiState,
     input: &InputState,
     dev: &DevConfig,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
     zoom_scaled: f32,
     now: Instant,
 ) {
     let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    sample_nameplates(text, snapshot, sim, ui, dev, sf, zoom_scaled, my_id, now);
+    sample_nameplates(text, snapshot, sim, ui, dev, sf, my_id, now);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
     let mut full_labels_drawn = 0usize;
@@ -147,18 +143,13 @@ fn render_nameplates(
         let player = &snapshot.players[player_index];
         let is_me = player.id == my_id;
         let is_human = player.player_type == PlayerType::Human;
-        if dev.fog_of_war && !is_me && !fog_hidden && !player_at_explored_tile(player, sim) {
-            continue;
-        }
-
         let Some(state) = ui.nameplate_visuals.get(&player.id) else {
             continue;
         };
-        let center_world = if state.from_center == state.to_center {
-            state.to_center
-        } else {
-            lerp_point(state.from_center, state.to_center, inverse_alpha)
-        };
+        let center_world = state.to_center;
+        if dev.fog_of_war && !is_me && !fog_hidden && !player_at_explored_tile(center_world, sim) {
+            continue;
+        }
         let world_size = if state.from_size == state.to_size {
             state.to_size
         } else {
@@ -181,19 +172,6 @@ fn render_nameplates(
         }
 
         let scaled_size = nameplate_font_px(world_size, zoom_scaled, is_human);
-        if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
-            paint_lod_dot(text, center, player_color(player), sf);
-            continue;
-        }
-
-        let show_full = is_human || (scaled_size >= 7.0 && full_labels_drawn < 80);
-        if !show_full {
-            paint_lod_dot(text, center, player_color(player), sf);
-            continue;
-        }
-        if !is_human {
-            full_labels_drawn += 1;
-        }
 
         let is_allied = my_player
             .filter(|me| me.id != player.id)
@@ -206,21 +184,86 @@ fn render_nameplates(
             .iter()
             .position(|id| *id == Some(player.id))
             .map(|index| index + 1);
+        let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
+        let layout = compute_nameplate_layout(
+            player.player_type,
+            show_bot_avatars,
+            center,
+            scaled_size,
+            state.name_measure_unit,
+            state.troops_measure_unit,
+            dev,
+            sf,
+        );
+        let status = NameplateStatus {
+            show_names: dev.vfx_nameplate_names,
+            show_troops: dev.vfx_nameplate_troops,
+            is_me,
+            is_allied,
+            has_request,
+            has_rank: rank.is_some(),
+            has_traitor: player.traitor,
+            has_active_emoji: player
+                .active_emoji
+                .as_deref()
+                .is_some_and(|emoji| emoji != "🗡️"),
+            has_disconnected: player.disconnected,
+        };
+        let glyph_padding = (dev.font_face_dilate + dev.font_outline_thickness)
+            .max(dev.font_face_dilate)
+            .max(0.0);
+        let shadow_padding = dev.font_underlay_softness.max(0.0) + dev.font_shadow_y.abs();
+        let text_padding = glyph_padding
+            .max(shadow_padding)
+            .max(layout.badge_effect_padding);
+        let layout_bounds =
+            layout.visual_bounds(center, status, layout.badge_effect_padding, text_padding);
+        let fit_scale = fit_bounds_to_land(layout_bounds, center, state.land_bounds, zoom_scaled);
+        if fit_scale <= 0.0 || !fit_scale.is_finite() {
+            continue;
+        }
+
+        if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
+            let dot_scale = fit_size_to_land(
+                2.0 * (LOD_DOT_RADIUS + 1.0),
+                2.0 * (LOD_DOT_RADIUS + 1.0),
+                state.land_bounds,
+                zoom_scaled,
+            );
+            paint_lod_dot(text, center, player_color(player), sf, dot_scale);
+            continue;
+        }
+
+        let show_full = is_human || (scaled_size >= 7.0 && full_labels_drawn < 80);
+        if !show_full {
+            let dot_scale = fit_size_to_land(
+                2.0 * (LOD_DOT_RADIUS + 1.0),
+                2.0 * (LOD_DOT_RADIUS + 1.0),
+                state.land_bounds,
+                zoom_scaled,
+            );
+            paint_lod_dot(text, center, player_color(player), sf, dot_scale);
+            continue;
+        }
+        if !is_human {
+            full_labels_drawn += 1;
+        }
 
         paint_nameplate(
             text,
             player,
             center,
             scaled_size,
+            layout,
+            fit_scale,
             &state.display_name,
             &state.troops_text,
-            state.name_measure_unit,
-            state.troops_measure_unit,
             is_me,
             is_allied,
             has_request,
             rank,
             dev,
+            campaign_avatar_slots,
             sf,
         );
     }
@@ -233,7 +276,6 @@ fn sample_nameplates(
     ui: &mut UiState,
     dev: &DevConfig,
     sf: f32,
-    zoom_scaled: f32,
     my_id: u16,
     now: Instant,
 ) {
@@ -241,6 +283,29 @@ fn sample_nameplates(
     if !nameplate_sample_due(ui.nameplate_sample_tick, snapshot.tick, my_id_changed) {
         return;
     }
+
+    let Some(engine) = sim.engine.as_ref() else {
+        ui.nameplate_order.clear();
+        ui.nameplate_visuals.clear();
+        ui.nameplate_land_cache = NameplateLandCache::default();
+        return;
+    };
+    let new_player_needs_landmass = snapshot.players.iter().any(|player| {
+        player.alive && player.tile_count > 0 && !ui.nameplate_land_cache.has_landmass(player.id)
+    });
+    if ui.nameplate_land_cache.needs_rebuild(
+        &engine.state.map,
+        snapshot.tick,
+        new_player_needs_landmass,
+    ) && !ui
+        .nameplate_land_cache
+        .rebuild(&engine.state.map, snapshot.tick)
+    {
+        ui.nameplate_order.clear();
+        ui.nameplate_visuals.clear();
+        return;
+    }
+
     let tick_gap = ui
         .nameplate_sample_tick
         .map(|tick| snapshot.tick.saturating_sub(tick))
@@ -258,7 +323,11 @@ fn sample_nameplates(
         .players
         .iter()
         .enumerate()
-        .filter(|(_, player)| player.alive && player.tile_count > 0)
+        .filter(|(_, player)| {
+            player.alive
+                && player.tile_count > 0
+                && ui.nameplate_land_cache.rect_for(player.id).is_some()
+        })
         .map(|(index, _)| index)
         .collect();
     order.sort_unstable_by(|a, b| {
@@ -287,28 +356,17 @@ fn sample_nameplates(
         .iter()
         .filter(|player| player.alive && player.tile_count > 0)
     {
-        let target_center = [player.centroid_x + 0.5, player.centroid_y + 0.5];
+        let Some(land_rect) = ui.nameplate_land_cache.rect_for(player.id) else {
+            continue;
+        };
+        let target_center = land_rect.center();
+        let land_bounds = land_rect.world_bounds();
         let target_size = nameplate_world_size(player.tile_count);
         if let Some(state) = ui.nameplate_visuals.get_mut(&player.id) {
-            let current_center = if state.from_center == state.to_center {
-                state.to_center
-            } else {
-                lerp_point(state.from_center, state.to_center, inverse_sample_alpha)
-            };
             let current_size = if state.from_size == state.to_size {
                 state.to_size
             } else {
                 lerp(state.from_size, state.to_size, inverse_sample_alpha)
-            };
-            state.from_center = if force_snap
-                || !nameplate_position_needs_interpolation(
-                    current_center,
-                    target_center,
-                    zoom_scaled,
-                ) {
-                target_center
-            } else {
-                current_center
             };
             state.from_size =
                 if force_snap || !nameplate_size_needs_interpolation(current_size, target_size) {
@@ -318,9 +376,11 @@ fn sample_nameplates(
                 };
             state.to_center = target_center;
             state.to_size = target_size;
+            state.land_bounds = land_bounds;
             refresh_nameplate_text_cache(text, state, player, style_key, dev, sf);
         } else {
-            let mut state = new_nameplate_visual_state(player, target_center, target_size);
+            let mut state =
+                new_nameplate_visual_state(player, target_center, target_size, land_bounds);
             refresh_nameplate_text_cache(text, &mut state, player, style_key, dev, sf);
             ui.nameplate_visuals.insert(player.id, state);
         }
@@ -336,12 +396,13 @@ fn new_nameplate_visual_state(
     player: &PlayerSnapshot,
     center: [f32; 2],
     size: f32,
+    land_bounds: [f32; 4],
 ) -> crate::app::NameplateVisualState {
     crate::app::NameplateVisualState {
-        from_center: center,
         to_center: center,
         from_size: size,
         to_size: size,
+        land_bounds,
         source_name: String::new(),
         player_type: player.player_type,
         display_name: String::new(),
@@ -380,7 +441,7 @@ fn refresh_nameplate_text_cache(
             text,
             &state.display_name,
             1.0,
-            dev.font_char_spacing.max(0.1),
+            dev.font_char_spacing.max(1.0),
             sf,
         );
     }
@@ -389,7 +450,7 @@ fn refresh_nameplate_text_cache(
             text,
             &state.troops_text,
             1.0,
-            dev.font_char_spacing.max(0.1),
+            dev.font_char_spacing.max(1.0),
             sf,
         );
     }
@@ -397,7 +458,7 @@ fn refresh_nameplate_text_cache(
 }
 
 fn nameplate_metrics_style_key(dev: &DevConfig, sf: f32) -> [u32; 2] {
-    [dev.font_char_spacing.max(0.1).to_bits(), sf.to_bits()]
+    [dev.font_char_spacing.max(1.0).to_bits(), sf.to_bits()]
 }
 
 fn nameplate_sample_duration(sim: &SimState) -> Duration {
@@ -424,20 +485,6 @@ fn nameplate_sample_alpha(sample_at: Option<Instant>, now: Instant, duration: Du
 }
 
 #[inline]
-fn nameplate_position_needs_interpolation(from: [f32; 2], to: [f32; 2], zoom_scaled: f32) -> bool {
-    let dx = to[0] - from[0];
-    let dy = to[1] - from[1];
-    let world_distance_sq = dx * dx + dy * dy;
-    if world_distance_sq > NAMEPLATE_TELEPORT_THRESHOLD_SQ {
-        return false;
-    }
-    let screen_scale = zoom_scaled.max(0.0);
-    let screen_distance_sq = world_distance_sq * screen_scale * screen_scale;
-    world_distance_sq > NAMEPLATE_WORLD_MOVE_THRESHOLD_SQ
-        && screen_distance_sq > NAMEPLATE_SCREEN_MOVE_THRESHOLD_SQ
-}
-
-#[inline]
 fn nameplate_size_needs_interpolation(from: f32, to: f32) -> bool {
     (to - from).abs() > NAMEPLATE_SIZE_DEADZONE
 }
@@ -447,17 +494,9 @@ fn lerp(from: f32, to: f32, inverse_amount: f32) -> f32 {
     to - (to - from) * inverse_amount
 }
 
-#[inline]
-fn lerp_point(from: [f32; 2], to: [f32; 2], inverse_amount: f32) -> [f32; 2] {
-    [
-        lerp(from[0], to[0], inverse_amount),
-        lerp(from[1], to[1], inverse_amount),
-    ]
-}
-
-fn player_at_explored_tile(player: &PlayerSnapshot, sim: &SimState) -> bool {
-    let col = player.centroid_x.floor() as i32;
-    let row = player.centroid_y.floor() as i32;
+fn player_at_explored_tile(center: [f32; 2], sim: &SimState) -> bool {
+    let col = center[0].floor() as i32;
+    let row = center[1].floor() as i32;
     if col < 0 || row < 0 || col >= sim.map_w as i32 || row >= sim.map_h as i32 {
         return false;
     }
@@ -511,94 +550,9 @@ impl NameplateMetrics {
     }
 }
 
-#[derive(Clone, Copy)]
-struct NameplateLayout {
-    avatar_center: [f32; 2],
-    avatar_radius: f32,
-    badge_size: f32,
-    left_x: f32,
-    right_x: f32,
-    rank_center: [f32; 2],
-    star_center: [f32; 2],
-    text_top: f32,
-    item_spacing_y: f32,
-    name_size: [f32; 2],
-    troops_size: [f32; 2],
-    stack_step: f32,
-}
-
-impl NameplateLayout {
-    fn compute(
-        center: [f32; 2],
-        metrics: NameplateMetrics,
-        name_size: [f32; 2],
-        troops_size: [f32; 2],
-        show_names: bool,
-        show_troops: bool,
-        badge_effect_padding: f32,
-    ) -> Self {
-        let name_size = if show_names { name_size } else { [0.0; 2] };
-        let troops_size = if show_troops { troops_size } else { [0.0; 2] };
-        let item_spacing_y = if show_names && show_troops {
-            metrics.render_size * 0.111
-        } else {
-            0.0
-        };
-        let text_height = name_size[1] + item_spacing_y + troops_size[1];
-        let avatar_text_gap = if metrics.avatar_diameter > 0.0 && text_height > 0.0 {
-            metrics.render_size * AVATAR_TEXT_GAP_SCALE
-        } else {
-            0.0
-        };
-        let total_height = metrics.avatar_diameter + avatar_text_gap + text_height;
-        let content_top = center[1] - total_height * 0.5;
-        let avatar_center = [center[0], content_top + metrics.avatar_diameter * 0.5];
-        let avatar_visual_radius = avatar_visual_radius(metrics.avatar_radius);
-        let badge_clearance = BADGE_GAP + badge_effect_padding.max(0.0);
-        let badge_half = metrics.badge_size * 0.5;
-        let stack_step = metrics.badge_size + BADGE_STACK_GAP + badge_effect_padding.max(0.0) * 2.0;
-        let left_x = center[0] - avatar_visual_radius - badge_half - badge_clearance;
-        let right_x = center[0] + avatar_visual_radius + badge_half + badge_clearance;
-
-        Self {
-            avatar_center,
-            avatar_radius: metrics.avatar_radius,
-            badge_size: metrics.badge_size,
-            left_x,
-            right_x,
-            rank_center: [
-                center[0],
-                avatar_center[1] - avatar_visual_radius - badge_half - badge_clearance,
-            ],
-            star_center: [left_x, avatar_center[1]],
-            text_top: content_top + metrics.avatar_diameter + avatar_text_gap,
-            item_spacing_y,
-            name_size,
-            troops_size,
-            stack_step,
-        }
-    }
-
-    fn side_badge_center(&self, left: bool, stack_slot: usize, is_me: bool) -> [f32; 2] {
-        let x = if left { self.left_x } else { self.right_x };
-        let y = if left && is_me {
-            self.avatar_center[1] + self.stack_step
-        } else {
-            self.avatar_center[1] - stack_slot as f32 * self.stack_step
-        };
-        [x, y]
-    }
-
-    fn express_center(&self, right_stack_slots: usize) -> [f32; 2] {
-        [
-            self.right_x + 2.0,
-            self.side_badge_center(false, right_stack_slots, false)[1] - self.badge_size * 0.5,
-        ]
-    }
-}
-
 fn compute_nameplate_layout(
     player_type: PlayerType,
+    show_bot_avatars: bool,
     center: [f32; 2],
     scaled_size: f32,
     name_measure_unit: [f32; 2],
@@ -606,7 +560,7 @@ fn compute_nameplate_layout(
     dev: &DevConfig,
     sf: f32,
 ) -> NameplateLayout {
-    let metrics = NameplateMetrics::compute(scaled_size, player_type, dev.vfx_bot_avatars);
+    let metrics = NameplateMetrics::compute(scaled_size, player_type, show_bot_avatars);
     let font_scale = dev.font_size_scale.max(0.1);
     let name_font_size = metrics.render_size * font_scale;
     let troops_font_size = metrics.troops_render_size * font_scale;
@@ -624,7 +578,10 @@ fn compute_nameplate_layout(
         / sf;
     NameplateLayout::compute(
         center,
-        metrics,
+        metrics.render_size,
+        metrics.avatar_diameter,
+        metrics.avatar_radius,
+        metrics.badge_size,
         name_measure,
         troops_size,
         dev.vfx_nameplate_names,
@@ -638,35 +595,35 @@ fn paint_nameplate(
     player: &PlayerSnapshot,
     center: [f32; 2],
     scaled_size: f32,
+    layout: NameplateLayout,
+    fit_scale: f32,
     display_name: &str,
     troops: &str,
-    name_measure_unit: [f32; 2],
-    troops_measure_unit: [f32; 2],
     is_me: bool,
     is_allied: bool,
     has_request: bool,
     rank: Option<usize>,
     dev: &DevConfig,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
 ) {
-    let metrics = NameplateMetrics::compute(scaled_size, player.player_type, dev.vfx_bot_avatars);
+    let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
+    let metrics = NameplateMetrics::compute(scaled_size, player.player_type, show_bot_avatars);
     let font_scale = dev.font_size_scale.max(0.1);
-    let char_spacing = dev.font_char_spacing.max(0.1);
-    let name_font_size = metrics.render_size * font_scale;
-    let troops_font_size = metrics.troops_render_size * font_scale;
+    let char_spacing = dev.font_char_spacing.max(0.1) * fit_scale;
+    let name_font_size = metrics.render_size * font_scale * fit_scale;
+    let troops_font_size = metrics.troops_render_size * font_scale * fit_scale;
     let troops_icon_size = troops_font_size;
-    let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let layout = compute_nameplate_layout(
-        player.player_type,
-        center,
-        scaled_size,
-        name_measure_unit,
-        troops_measure_unit,
-        dev,
-        sf,
+    let outline = scale_outline_style(
+        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]),
+        fit_scale,
     );
+    let layout = layout.scaled_about(center, fit_scale);
     let color = player_color(player);
-    let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
+    let text_style = scale_text_style(
+        crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
+        fit_scale,
+    );
 
     if layout.avatar_radius > 0.0 {
         draw_avatar(
@@ -676,6 +633,8 @@ fn paint_nameplate(
             layout.avatar_radius,
             color,
             outline,
+            campaign_avatar_slots,
+            fit_scale,
             sf,
         );
 
@@ -814,7 +773,7 @@ fn paint_nameplate(
         text.push_string(
             troops,
             [
-                (left_x + troops_icon_size + 3.0) * sf,
+                (left_x + troops_icon_size + 3.0 * fit_scale) * sf,
                 (row_y + layout.troops_size[1] * 0.85) * sf,
             ],
             troops_font_size * sf,
@@ -841,6 +800,26 @@ fn scale_text_measure(unit: [f32; 2], font_size: f32) -> [f32; 2] {
     [unit[0] * font_size, unit[1] * font_size]
 }
 
+fn scale_outline_style(
+    mut outline: crate::render::gpu::OutlineStyle,
+    scale: f32,
+) -> crate::render::gpu::OutlineStyle {
+    outline.thickness *= scale;
+    outline.shadow_y *= scale;
+    outline.reference_diameter *= scale;
+    outline
+}
+
+fn scale_text_style(
+    mut style: crate::render::gpu::TextPaintStyle,
+    scale: f32,
+) -> crate::render::gpu::TextPaintStyle {
+    style.face_dilate *= scale;
+    style.outline = scale_outline_style(style.outline, scale);
+    style.underlay_softness *= scale;
+    style
+}
+
 fn draw_avatar(
     text: &mut TextRenderer,
     player: &PlayerSnapshot,
@@ -848,11 +827,33 @@ fn draw_avatar(
     radius: f32,
     color: [f32; 4],
     outline: crate::render::gpu::OutlineStyle,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    fit_scale: f32,
     sf: f32,
 ) {
     let center = [center[0] * sf, center[1] * sf];
     let radius = radius * sf;
-    let frame = if player.player_type == PlayerType::Human {
+    let campaign_slot = player.campaign_avatar.as_ref().map(|slug| {
+        if slug == "null" {
+            Leader::ALL.len()
+        } else {
+            campaign_avatar_slots
+                .get(slug)
+                .copied()
+                .unwrap_or(Leader::ALL.len())
+        }
+    });
+    let frame = if let Some(slot) = campaign_slot {
+        if let Some(uv) = text
+            .avatar_uv(slot)
+            .or_else(|| text.avatar_uv(Leader::ALL.len()))
+        {
+            text.push_sprite(center, radius, uv, [1.0; 4]);
+        } else {
+            text.push_disc(center, radius, color);
+        }
+        color
+    } else if player.player_type == PlayerType::Human {
         let rgb = player.leader.filler_rgb();
         let frame = [rgb[0], rgb[1], rgb[2], 1.0];
         if let Some(uv) = text
@@ -869,7 +870,7 @@ fn draw_avatar(
         color
     };
 
-    let border = (radius * 0.12).max(1.0);
+    let border = (radius * 0.12).max(fit_scale * sf);
     text.push_ring(
         center,
         radius + border * 0.3,
@@ -884,10 +885,14 @@ fn draw_avatar(
         border * 0.35,
     );
 
-    let glyph = match player.player_type {
+    let glyph = if campaign_slot.is_some() {
+        None
+    } else {
+        match player.player_type {
         PlayerType::Bot => Some(sow_core::player::tribe_animal(player.id, &player.name)),
         PlayerType::Nation => Some(sow_core::player::empire_emoji(player.id, &player.name)),
         PlayerType::Human => None,
+        }
     };
     if let Some(glyph) = glyph {
         let _ = text.push_emoji(
@@ -918,11 +923,22 @@ fn draw_emoji(
     );
 }
 
-fn paint_lod_dot(text: &mut TextRenderer, center: [f32; 2], color: [f32; 4], sf: f32) {
+fn paint_lod_dot(
+    text: &mut TextRenderer,
+    center: [f32; 2],
+    color: [f32; 4],
+    sf: f32,
+    fit_scale: f32,
+) {
     let center = [center[0] * sf, center[1] * sf];
-    let radius = LOD_DOT_RADIUS * sf;
+    let radius = LOD_DOT_RADIUS * fit_scale * sf;
     text.push_disc(center, radius, color);
-    text.push_ring(center, radius, [0.0, 0.0, 0.0, 180.0 / 255.0], sf);
+    text.push_ring(
+        center,
+        radius,
+        [0.0, 0.0, 0.0, 180.0 / 255.0],
+        fit_scale * sf,
+    );
 }
 
 fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
@@ -1203,7 +1219,7 @@ fn render_buildings(
             1.0
         };
         let _ = text.push_emoji(
-            building_kind_emoji(building.kind),
+            building_kind_emoji(building.kind, building.level),
             [center[0] * sf, center[1] * sf],
             marker_size * sf * 0.5,
             [1.0, 1.0, 1.0, alpha],
@@ -1292,13 +1308,8 @@ fn render_building_placement_preview(
             my_id,
             buildings: &snapshot.buildings,
         });
-    let stack_building =
-        crate::input::find_stack_target_tile(kind, col, row, sim.map_w, my_id, &snapshot.buildings)
-            .and_then(|tile| {
-                snapshot.buildings.iter().find(|building| {
-                    building.tile_idx == tile && building.owner_id == my_id && building.kind == kind
-                })
-            });
+    // Placement is always a new foundation. Upgrades come from the selected building card.
+    let stack_building: Option<&sow_core::protocol::BuildingSnapshot> = None;
     let preview_tile = target.unwrap_or(hovered_tile);
     let cost_index = sow_core::game::BuildingKind::ALL
         .iter()
@@ -1395,7 +1406,7 @@ fn render_building_placement_preview(
         }
     } else {
         let _ = text.push_emoji(
-            building_kind_emoji(kind),
+        building_kind_emoji(kind, 1),
             center_px,
             marker_size * 0.5,
             [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
@@ -1728,21 +1739,31 @@ fn building_icon_size(zoom_scaled: f32) -> f32 {
     size.clamp(11.0, 96.0)
 }
 
-fn building_kind_emoji(kind: BuildingKind) -> &'static str {
-    match kind {
-        BuildingKind::City => "🏛️",
-        BuildingKind::Factory => "🏭",
-        BuildingKind::Port => "⚓",
-        BuildingKind::Bunker => "🛡️",
+fn building_kind_emoji(kind: BuildingKind, level: u8) -> &'static str {
+    match (kind, level) {
+        (BuildingKind::City, 1) => "🏕️",
+        (BuildingKind::City, 2) => "🏘️",
+        (BuildingKind::City, 3) => "🏡",
+        (BuildingKind::City, 4) => "🏙️",
+        (BuildingKind::City, 5) => "🏛️",
+        (BuildingKind::City, _) => "🌆",
+        (BuildingKind::Factory, 1) => "🛠️",
+        (BuildingKind::Factory, 2) => "🏗️",
+        (BuildingKind::Factory, 3) => "🏭",
+        (BuildingKind::Factory, _) => "🏭",
+        (BuildingKind::Port, 1) => "⚓",
+        (BuildingKind::Port, 2) => "🛶",
+        (BuildingKind::Port, 3) => "🚢",
+        (BuildingKind::Port, 4) => "⚓",
+        (BuildingKind::Port, _) => "🛳️",
+        (BuildingKind::Bunker, 1) => "👁️",
+        (BuildingKind::Bunker, 2) => "🗼",
+        (BuildingKind::Bunker, 3) => "🏰",
+        (BuildingKind::Bunker, _) => "🏯",
+        (BuildingKind::Farm, 1) => "🌱",
+        (BuildingKind::Farm, 2) => "🌾",
+        (BuildingKind::Farm, _) => "🚜",
     }
-}
-
-fn avatar_visual_radius(radius: f32) -> f32 {
-    if radius <= 0.0 {
-        return 0.0;
-    }
-    let border = (radius * 0.12).max(1.0);
-    radius + border * 0.8
 }
 
 #[cfg(test)]
@@ -1791,49 +1812,9 @@ mod tests {
     }
 
     #[test]
-    fn nameplate_position_threshold_skips_noise_and_teleports() {
-        assert!(!nameplate_position_needs_interpolation(
-            [0.0, 0.0],
-            [0.099, 0.0],
-            20.0
-        ));
-        assert!(!nameplate_position_needs_interpolation(
-            [0.0, 0.0],
-            [0.2, 0.0],
-            4.0
-        ));
-        assert!(nameplate_position_needs_interpolation(
-            [0.0, 0.0],
-            [0.2, 0.0],
-            6.0
-        ));
-        assert!(!nameplate_position_needs_interpolation(
-            [0.0, 0.0],
-            [60.0, 0.0],
-            20.0
-        ));
-    }
-
-    #[test]
     fn nameplate_size_deadzone_skips_small_growth() {
         assert!(!nameplate_size_needs_interpolation(10.0, 10.2));
         assert!(nameplate_size_needs_interpolation(10.0, 10.21));
-    }
-
-    #[test]
-    fn nameplate_interpolation_is_bounded_and_reaches_target() {
-        let duration = Duration::from_millis(400);
-        let start = Instant::now();
-        let halfway =
-            nameplate_sample_alpha(Some(start), start + Duration::from_millis(200), duration);
-        let complete =
-            nameplate_sample_alpha(Some(start), start + Duration::from_millis(400), duration);
-        assert!(halfway > 0.0 && halfway < 1.0);
-        assert_eq!(complete, 1.0);
-        assert_eq!(
-            lerp_point([0.0, 4.0], [10.0, 14.0], 1.0 - complete),
-            [10.0, 14.0]
-        );
     }
 
     #[test]

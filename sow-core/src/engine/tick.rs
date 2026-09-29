@@ -113,6 +113,7 @@ impl SowEngine {
         self.execute_projectiles();
         self.execute_sam();
         self.execute_combat();
+        self.apply_campaign_unlocks_and_support();
 
         // Sync building ownership with tile ownership
         for b in &mut self.buildings {
@@ -181,6 +182,88 @@ impl SowEngine {
                 p_b.alliances.retain(|&id| id != a);
                 p_b.alliance_timers.remove(&a);
             }
+        }
+    }
+
+    fn apply_campaign_unlocks_and_support(&mut self) {
+        let unlock_target = self.state.config.buildings_unlock_after_defeated.clone();
+        if !self.state.config.buildings_enabled
+            && unlock_target.as_ref().is_some_and(|name| {
+                self.state
+                    .players
+                    .iter()
+                    .any(|player| player.name == *name && !player.alive)
+            })
+        {
+            self.state.config.buildings_enabled = true;
+        }
+
+        let Some(support) = self.state.config.campaign_support.clone() else {
+            return;
+        };
+        if !self.state.players.iter().any(|player| {
+            player.name == support.after_defeated && !player.alive
+        }) {
+            return;
+        }
+        let contact_check_ticks = (1000.0 / self.state.config.tick_rate_ms.max(1.0))
+            .ceil() as u64;
+        if self.state.tick % contact_check_ticks.max(1) != 0 {
+            return;
+        }
+        let Some(receiver) = self
+            .state
+            .players
+            .iter()
+            .find(|player| player.player_type == crate::player::PlayerType::Human && player.alive)
+        else {
+            return;
+        };
+        let receiver_id = receiver.id;
+        let Some(team) = receiver.team else { return };
+        let map_w = self.state.map.width;
+        let mut contacted = std::collections::HashSet::new();
+        for tile in receiver.border_tiles.ones() {
+            let x = tile % map_w;
+            let y = tile / map_w;
+            self.state.map.for_each_neighbor(x, y, |nx, ny| {
+                let other_id = self.state.map.owner_id(nx, ny);
+                if other_id != 0 && other_id != receiver_id {
+                    contacted.insert(other_id);
+                }
+            });
+        }
+        let ally_ids: Vec<u16> = self
+            .state
+            .players
+            .iter()
+            .filter(|player| {
+                player.id != receiver_id
+                    && player.player_type != crate::player::PlayerType::Human
+                    && player.alive
+                    && player.team == Some(team)
+                    && contacted.contains(&player.id)
+                    && self
+                        .campaign_support_next_tick
+                        .get(&player.id)
+                        .is_none_or(|next| self.state.tick >= *next)
+            })
+            .map(|player| player.id)
+            .collect();
+        let interval_ticks = (u64::from(support.interval_seconds) * 1000
+            / u64::from(self.state.config.tick_rate_ms.max(1.0) as u32))
+        .max(1);
+        for ally_id in ally_ids {
+            self.campaign_support_next_tick
+                .insert(ally_id, self.state.tick.saturating_add(interval_ticks));
+            self.apply_intents(&[crate::protocol::StampedIntent {
+                player_id: ally_id,
+                intent: crate::protocol::GameplayIntent::SendResources {
+                    target_player: receiver_id,
+                    gold: support.gold,
+                    troops: support.troops,
+                },
+            }]);
         }
     }
 
@@ -317,10 +400,78 @@ impl SowEngine {
 mod tests {
     use super::SowEngine;
     use crate::game::{GameEvent, GamePhase, GameState};
-    use crate::game_config::GameConfig;
-    use crate::player::Player;
+    use crate::game_config::{CampaignSupport, GameConfig};
+    use crate::player::{Player, PlayerType};
     use crate::protocol::Team;
     use crate::water_components::WaterComponents;
+
+    #[test]
+    fn campaign_support_waits_for_defeat_and_contact_then_repeats_from_ally_reserves() {
+        let milestone = "The Iceni Despoilers";
+        let config = GameConfig {
+            tick_rate_ms: 1000.0,
+            buildings_enabled: false,
+            buildings_unlock_after_defeated: Some(milestone.to_string()),
+            campaign_support: Some(CampaignSupport {
+                after_defeated: milestone.to_string(),
+                interval_seconds: 8,
+                gold: 100.0,
+                troops: 100.0,
+            }),
+            ..GameConfig::default()
+        };
+        let mut state = GameState::new(1, 5, 5, config.clone());
+        state.phase = GamePhase::Playing;
+
+        let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
+        human.team = Some(Team::Red);
+        human.gold = 0.0;
+        human.troops = 0.0;
+        human.max_troops = 500.0;
+        human.border_tiles.insert(6); // (1, 1), beside (0, 1)
+        state.register_player(human);
+
+        let mut ally = Player::new_human(2, "Snettisham".into(), [1.0; 3], &config);
+        ally.player_type = PlayerType::Bot;
+        ally.team = Some(Team::Red);
+        ally.gold = 500.0;
+        ally.troops = 500.0;
+        state.register_player(ally);
+
+        let mut roman = Player::new_human(3, milestone.into(), [1.0; 3], &config);
+        roman.team = Some(Team::Blue);
+        state.register_player(roman);
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.state.tick = 1;
+        engine.apply_campaign_unlocks_and_support();
+        assert!(!engine.state.config.buildings_enabled);
+        assert!(!engine.state.events.iter().any(|event| matches!(event, GameEvent::ResourceTransferred { .. })));
+
+        engine.state.player_mut(3).unwrap().alive = false;
+        engine.apply_campaign_unlocks_and_support();
+        assert!(engine.state.config.buildings_enabled);
+        assert!(!engine.state.events.iter().any(|event| matches!(event, GameEvent::ResourceTransferred { .. })));
+
+        engine.state.map.set_owner_id(0, 1, 2);
+        engine.apply_campaign_unlocks_and_support();
+        assert_eq!(engine.state.player(1).unwrap().gold, 100.0);
+        assert_eq!(engine.state.player(1).unwrap().troops, 100.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 400.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 400.0);
+
+        engine.state.events.clear();
+        engine.state.tick = 8;
+        engine.apply_campaign_unlocks_and_support();
+        assert!(!engine.state.events.iter().any(|event| matches!(event, GameEvent::ResourceTransferred { .. })));
+
+        engine.state.tick = 9;
+        engine.apply_campaign_unlocks_and_support();
+        assert_eq!(engine.state.player(1).unwrap().gold, 200.0);
+        assert_eq!(engine.state.player(1).unwrap().troops, 200.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 300.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 300.0);
+    }
 
     #[test]
     fn tutorial_skips_automatic_victory_without_changing_normal_games() {

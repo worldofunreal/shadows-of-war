@@ -26,6 +26,8 @@ pub(crate) enum MapMenuAction {
     BuildFactory,
     BuildPort,
     BuildBunker,
+    BuildFarm,
+    UpgradeStructure,
     Nuke,
     UpgradeTile,
     UpgradeArsenal,
@@ -47,6 +49,8 @@ impl MapMenuAction {
             Self::BuildFactory => "build_factory",
             Self::BuildPort => "build_port",
             Self::BuildBunker => "build_bunker",
+            Self::BuildFarm => "build_farm",
+            Self::UpgradeStructure => "upgrade_structure",
             Self::Nuke => "nuke",
             Self::UpgradeTile => "upgrade_tile",
             Self::UpgradeArsenal => "upgrade_arsenal",
@@ -113,6 +117,7 @@ impl MapTarget {
                 MapMenuAction::BuildFactory,
                 MapMenuAction::BuildPort,
                 MapMenuAction::BuildBunker,
+                MapMenuAction::BuildFarm,
             ];
         }
         if self.owner == 0 {
@@ -406,45 +411,35 @@ impl SowApp {
             .as_ref()
             .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx));
         match building {
-            Some(building) if !building.under_construction => match building.kind {
-                sow_core::game::BuildingKind::City => {
-                    for module in [
-                        sow_core::building::ModuleKind::Arsenal,
-                        sow_core::building::ModuleKind::Port,
-                        sow_core::building::ModuleKind::Foundry,
-                    ] {
-                        if self.city_module_is_available(building, module, tile_idx) {
-                            actions.push(match module {
-                                sow_core::building::ModuleKind::Arsenal => {
-                                    MapMenuAction::UpgradeArsenal
-                                }
-                                sow_core::building::ModuleKind::Port => MapMenuAction::UpgradePort,
-                                sow_core::building::ModuleKind::Foundry => {
-                                    MapMenuAction::UpgradeFoundry
-                                }
-                                _ => continue,
-                            });
-                        }
-                    }
-                    if building.modules.port > 0 {
-                        actions
-                            .extend([MapMenuAction::BuildWarship, MapMenuAction::BuildTradeShip]);
-                    }
+            Some(building) if !building.under_construction => {
+                if building.level < building.kind.max_level() {
+                    actions.push(MapMenuAction::UpgradeStructure);
                 }
-                sow_core::game::BuildingKind::Port => {
-                    actions.extend([MapMenuAction::BuildWarship, MapMenuAction::BuildTradeShip]);
+                if self.sim.config.tutorial && building.kind == sow_core::game::BuildingKind::City {
+                    actions.push(MapMenuAction::UpgradeFoundry);
                 }
-                _ => {}
-            },
+                match building.kind {
+                    sow_core::game::BuildingKind::Port if building.level >= 4 => {
+                        actions.extend([MapMenuAction::BuildWarship, MapMenuAction::BuildTradeShip]);
+                    }
+                    sow_core::game::BuildingKind::Port if building.level >= 3 => {
+                        actions.push(MapMenuAction::BuildTradeShip);
+                    }
+                    _ => {}
+                }
+            }
             Some(_) => {}
             None => {
                 actions.extend([
-                    MapMenuAction::UpgradeTile,
                     MapMenuAction::BuildCity,
                     MapMenuAction::BuildFactory,
                     MapMenuAction::BuildPort,
                     MapMenuAction::BuildBunker,
+                    MapMenuAction::BuildFarm,
                 ]);
+                if self.sim.config.tutorial {
+                    actions.push(MapMenuAction::UpgradeTile);
+                }
             }
         }
         actions
@@ -519,15 +514,29 @@ impl SowApp {
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
             | MapMenuAction::BuildPort
-            | MapMenuAction::BuildBunker => {
+            | MapMenuAction::BuildBunker
+            | MapMenuAction::BuildFarm => {
                 let kind = match action {
                     MapMenuAction::BuildCity => sow_core::game::BuildingKind::City,
                     MapMenuAction::BuildFactory => sow_core::game::BuildingKind::Factory,
                     MapMenuAction::BuildPort => sow_core::game::BuildingKind::Port,
                     MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
+                    MapMenuAction::BuildFarm => sow_core::game::BuildingKind::Farm,
                     _ => unreachable!(),
                 };
                 self.select_building_kind(kind);
+            }
+            MapMenuAction::UpgradeStructure => {
+                if let Some(building) = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
+                {
+                    self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
+                        building_id: building.id,
+                    });
+                }
             }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
@@ -787,12 +796,14 @@ impl SowApp {
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
             | MapMenuAction::BuildPort
-            | MapMenuAction::BuildBunker => {
+            | MapMenuAction::BuildBunker
+            | MapMenuAction::BuildFarm => {
                 let kind = match action {
                     MapMenuAction::BuildCity => sow_core::game::BuildingKind::City,
                     MapMenuAction::BuildFactory => sow_core::game::BuildingKind::Factory,
                     MapMenuAction::BuildPort => sow_core::game::BuildingKind::Port,
                     MapMenuAction::BuildBunker => sow_core::game::BuildingKind::Bunker,
+                    MapMenuAction::BuildFarm => sow_core::game::BuildingKind::Farm,
                     _ => unreachable!(),
                 };
                 let owner = self.sim.my_player_id.unwrap_or(0);
@@ -816,6 +827,29 @@ impl SowApp {
                         &self.sim.config,
                     )),
                     None,
+                )
+            }
+            MapMenuAction::UpgradeStructure => {
+                let building = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| {
+                        snapshot
+                            .buildings
+                            .iter()
+                            .find(|building| building.tile_idx == tile_idx)
+                    });
+                let Some(building) = building else {
+                    return (None, None);
+                };
+                (
+                    Some(sow_core::building::cost::structure_upgrade_cost_gold(
+                        building.kind,
+                        building.level.saturating_add(1),
+                        &self.sim.config,
+                    )),
+                    Some(building.level),
                 )
             }
             _ => (None, None),

@@ -4,7 +4,14 @@
   "default_locale": "en",
   "settings": {
     "buildings_enabled": false,
-    "starting_troops": 1000
+    "buildings_unlock_after_defeated": "The Iceni Despoilers",
+    "campaign_support": {
+      "after_defeated": "The Iceni Despoilers",
+      "interval_seconds": 8,
+      "gold": 100,
+      "troops": 100
+    },
+    "starting_troops": 2000
   },
   "entry": "boudica_rise_of_the_iceni_intro",
   "menu_guide": {
@@ -13,18 +20,346 @@
   },
   "strings": {
     "en": {
+      "tutorial.boudica_council_title": "A Queen's Answer",
+      "tutorial.boudica_council_body": "Rome took our land and humiliated my family. The Iceni council waits for my answer.",
+      "tutorial.boudica_decision_title": "What do we do?",
+      "tutorial.boudica_decision_body": "Strike the Roman outpost now—or wait?",
+      "tutorial.boudica_decision_attack": "Strike now",
+      "tutorial.boudica_decision_wait": "Wait",
+      "tutorial.boudica_refusal_title": "The Iceni Refuse",
+      "tutorial.boudica_refusal_body": "Wait? Never. The Iceni will not stand idle while Rome plunders our homes. The outpost must fall.",
+      "tutorial.boudica_council_speaker": "Iceni Council",
+      "tutorial.boudica_first_victory_title": "First Vengeance",
+      "tutorial.boudica_first_victory_hint": "Send every troop against The Iceni Despoilers.",
+      "tutorial.boudica_victory_title": "The First Blow",
+      "tutorial.boudica_victory_body": "The outpost is broken. The tribes must see that the Iceni still stand.",
+      "tutorial.boudica_contact_title": "Call the Iceni",
+      "tutorial.boudica_contact_body": "Snettisham is within reach. Carry word: the Iceni are rising.",
+      "tutorial.boudica_contact_hint": "Find Snettisham; pan or zoom if needed, then claim land beside them.",
+      "tutorial.boudica_support_title": "Aid Arrives",
+      "tutorial.boudica_support_hint": "The tribes are sending gold and warriors.",
+      "tutorial.boudica_support_body": "You struck first. Our warriors and gold are yours.",
+      "tutorial.boudica_aid_choice_title": "Return the Favor",
+      "tutorial.boudica_aid_choice_body": "Our neighbors sent aid. Send some to Snettisham—or keep it for the march?",
+      "tutorial.boudica_aid_choice_share": "Send aid",
+      "tutorial.boudica_aid_choice_keep": "Keep our reserves",
+      "tutorial.boudica_share_intro_title": "Answer Their Call",
+      "tutorial.boudica_share_intro_body": "Choose how much gold and how many troops to send. They come from our reserves.",
+      "tutorial.boudica_transfer_target_title": "Send Aid to Snettisham",
+      "tutorial.boudica_transfer_target_hint": "Tap Snettisham's land and choose Transfer.",
+      "tutorial.boudica_transfer_troops_title": "Share the Warriors",
+      "tutorial.boudica_transfer_troops_hint": "Choose how many troops to send.",
+      "tutorial.boudica_transfer_gold_title": "Share the Gold",
+      "tutorial.boudica_transfer_gold_hint": "Choose how much gold to send.",
+      "tutorial.boudica_transfer_send_title": "Send Their Share",
+      "tutorial.boudica_transfer_send_hint": "Send the resources you selected.",
+      "tutorial.boudica_share_sent_title": "A Debt Repaid",
+      "tutorial.boudica_share_sent_body": "Snettisham has its garrison. We begin the march with fewer reserves.",
+      "tutorial.boudica_aid_kept_title": "Reserves Held",
+      "tutorial.boudica_aid_kept_body": "No troops or gold leave our ranks. We march with the full force.",
+      "tutorial.boudica_rebuild_title": "Rebuild the Iceni",
+      "tutorial.boudica_rebuild_body": "A gift will not sustain the rising. Give the Iceni a city to gather and grow.",
+      "tutorial.boudica_choose_city_title": "Choose a City",
+      "tutorial.boudica_choose_city_hint": "Select City from the building controls.",
+      "tutorial.boudica_build_city_title": "Raise an Iceni City",
+      "tutorial.boudica_build_city_hint": "Place and complete a city on your territory.",
+      "tutorial.boudica_farm_choice_title": "What Does the Rising Need?",
+      "tutorial.boudica_farm_choice_body": "Grow the Iceni's strength—or march now?",
+      "tutorial.boudica_farm_choice_build": "Raise more warriors",
+      "tutorial.boudica_farm_choice_skip": "March now",
+      "tutorial.boudica_farm_intro_title": "Fields Feed the Revolt",
+      "tutorial.boudica_farm_intro_body": "An Iceni farm brings new warriors into our ranks.",
+      "tutorial.boudica_choose_farm_title": "Choose a Farm",
+      "tutorial.boudica_choose_farm_hint": "Select Farm in the building dock.",
+      "tutorial.boudica_build_farm_title": "Plant the Iceni Fields",
+      "tutorial.boudica_build_farm_hint": "Place a farm on your territory and let it finish.",
+      "tutorial.boudica_farm_ready_title": "The Ranks Grow",
+      "tutorial.boudica_farm_ready_body": "The fields will keep new warriors coming. Now we move.",
+      "tutorial.boudica_first_expansion_title": "Reach Snettisham",
+      "tutorial.boudica_first_expansion_body": "They must see the Iceni still stand. Take open ground toward them.",
+      "tutorial.boudica_first_expansion_hint": "Claim one neutral tile toward Snettisham. Pan or zoom if needed.",
+      "tutorial.boudica_outposts_title": "Cut Rome's Supply Lines",
+      "tutorial.boudica_outposts_hint": "Destroy the three passive Roman outposts. The marked target updates after each victory.",
+      "tutorial.boudica_ratio_title": "Guard the Home Front",
+      "tutorial.boudica_ratio_intro_body": "Rome still holds the supply posts. We cannot leave our camp undefended.",
+      "tutorial.boudica_ratio_hint": "Send enough to break the posts. Keep some warriors at home.",
+      "tutorial.boudica_posts_fall_title": "Rome's Supply Line Breaks",
+      "tutorial.boudica_posts_fall_body": "Three posts silenced. Camulodunum is exposed—but the rebellion still needs supplies.",
+      "tutorial.boudica_factory_choice_title": "Prepare for the March",
+      "tutorial.boudica_factory_choice_body": "A factory or a city foundry could fund the march. Or we can leave now.",
+      "tutorial.boudica_factory_choice_build": "Build the workshop",
+      "tutorial.boudica_factory_choice_foundry": "Improve the foundry",
+      "tutorial.boudica_factory_choice_skip": "Skip the workshop",
+      "tutorial.boudica_foundry_title": "The city's war chest",
+      "tutorial.boudica_foundry_menu_hint": "Tap your city, then open its Build menu.",
+      "tutorial.boudica_foundry_upgrade_hint": "Improve the Foundry to increase the city's gold income.",
+      "tutorial.boudica_foundry_ready_title": "Gold for the march",
+      "tutorial.boudica_foundry_ready_body": "The Foundry brings in gold while the Iceni prepare.",
+      "tutorial.boudica_factory_intro_title": "Keep the War Chest Full",
+      "tutorial.boudica_factory_intro_body": "A workshop turns our territory into gold for the revolt.",
+      "tutorial.boudica_choose_factory_title": "Choose a Workshop",
+      "tutorial.boudica_choose_factory_hint": "Select Factory in the building dock.",
+      "tutorial.boudica_build_factory_title": "Raise the Workshop",
+      "tutorial.boudica_build_factory_hint": "Place and complete a Factory on your territory.",
+      "tutorial.boudica_factory_ready_title": "Supplies for the Road",
+      "tutorial.boudica_factory_ready_body": "The workshop adds gold while we prepare for the next battle.",
+      "tutorial.boudica_bunker_choice_title": "Protect the City",
+      "tutorial.boudica_bunker_choice_body": "Raise a defensive tower—or move while Rome is unsettled?",
+      "tutorial.boudica_bunker_choice_build": "Fortify the city",
+      "tutorial.boudica_bunker_choice_skip": "Move now",
+      "tutorial.boudica_bunker_intro_title": "Rome Will Strike Back",
+      "tutorial.boudica_bunker_intro_body": "A defensive tower will help shield our ground.",
+      "tutorial.boudica_choose_bunker_title": "Choose a Defense Tower",
+      "tutorial.boudica_choose_bunker_hint": "Select Bunker in the building dock.",
+      "tutorial.boudica_build_bunker_title": "Fortify Iceni Ground",
+      "tutorial.boudica_build_bunker_hint": "Place and complete a Bunker on your territory.",
+      "tutorial.boudica_bunker_ready_title": "A Stronger Front",
+      "tutorial.boudica_bunker_ready_body": "Our ground is harder to take. Now we march on Rome.",
+      "tutorial.boudica_upgrade_choice_title": "One Last Preparation",
+      "tutorial.boudica_upgrade_choice_body": "Improve a structure, reinforce the land, or march now?",
+      "tutorial.boudica_upgrade_choice_city": "Upgrade the city",
+      "tutorial.boudica_upgrade_choice_tile": "Upgrade the land",
+      "tutorial.boudica_upgrade_choice_skip": "Skip preparation",
+      "tutorial.boudica_structure_upgrade_title": "Strengthen the Settlement",
+      "tutorial.boudica_structure_upgrade_hint": "Reach city level 3 to unlock a workshop.",
+      "tutorial.boudica_tile_upgrade_title": "Reinforce the Land",
+      "tutorial.boudica_tile_upgrade_hint": "Tap our land, open Build, then choose Upgrade.",
+      "tutorial.boudica_pact_choice_title": "A Tribe at the Crossroads",
+      "tutorial.boudica_pact_choice_body": "The Catuvellauni could join us—or remain under Rome. Offer a pact?",
+      "tutorial.boudica_pact_choice_offer": "Offer a pact",
+      "tutorial.boudica_pact_choice_skip": "Keep marching",
+      "tutorial.boudica_pact_target_title": "Win the Catuvellauni",
+      "tutorial.boudica_pact_target_hint": "Center their banner, tap their land, choose Alliance.",
+      "tutorial.boudica_pact_success_title": "A New Ally",
+      "tutorial.boudica_pact_success_body": "The Catuvellauni stand with us; their border no longer threatens our march.",
+      "tutorial.boudica_port_choice_title": "Across the Sea",
+      "tutorial.boudica_port_choice_body": "Build a harbor for the coast—or march west by land?",
+      "tutorial.boudica_port_choice_build": "Build a harbor",
+      "tutorial.boudica_port_choice_skip": "Stay on land",
+      "tutorial.boudica_port_intro_title": "An Iceni Harbor",
+      "tutorial.boudica_port_intro_body": "Develop the harbor for ships. Troop fleets can cross without one.",
+      "tutorial.boudica_choose_port_title": "Choose a Port",
+      "tutorial.boudica_choose_port_hint": "Select Port, then place it on our coast.",
+      "tutorial.boudica_build_port_title": "Raise the Harbor",
+      "tutorial.boudica_build_port_hint": "Place and complete a port on your territory.",
+      "tutorial.boudica_port_upgrade_title": "Improve the Harbor",
+      "tutorial.boudica_port_upgrade_hint": "Select the port and upgrade it once.",
+      "tutorial.boudica_port_ready_hint": "Wait for the harbor upgrade to finish.",
+      "tutorial.boudica_fleet_intro_title": "Strike from the Sea",
+      "tutorial.boudica_fleet_intro_body": "The western road is long. Take our warriors across by fleet.",
+      "tutorial.boudica_fleet_target_title": "Send the Fleet",
+      "tutorial.boudica_fleet_target_hint": "Center on Legio XIV if needed. Tap its land and choose Fleet.",
+      "tutorial.boudica_fleet_launched_title": "The Sea Is Open",
+      "tutorial.boudica_fleet_launched_body": "The Iceni can now carry the fight across water.",
+      "tutorial.boudica_ship_choice_title": "The Harbor's Next Use",
+      "tutorial.boudica_ship_choice_body": "A trade ship can fund the revolt—or we can march before Rome regroups.",
+      "tutorial.boudica_ship_choice_trade": "Build a trade ship",
+      "tutorial.boudica_ship_choice_march": "March now",
+      "tutorial.boudica_trade_city_title": "Raise the City",
+      "tutorial.boudica_trade_city_hint": "Upgrade a city to level 4 to support trade ships.",
+      "tutorial.boudica_trade_port_title": "Deepen the Harbor",
+      "tutorial.boudica_trade_port_hint": "Select the port and upgrade it to level 3.",
+      "tutorial.boudica_trade_menu_title": "Put the Harbor to Work",
+      "tutorial.boudica_trade_menu_hint": "Open the map menu on your port, then choose Build.",
+      "tutorial.boudica_trade_ship_title": "Build a Trade Ship",
+      "tutorial.boudica_trade_ship_hint": "Queue a trade ship. It costs 10,000 gold and takes time.",
+      "tutorial.boudica_trade_ready_title": "Gold from the Sea",
+      "tutorial.boudica_trade_ready_body": "The trade ship brings in gold as we march.",
+      "tutorial.boudica_camulodunum_title": "Camulodunum",
+      "tutorial.boudica_camulodunum_body": "The Roman colony that began this revolt is within reach. Take it.",
+      "tutorial.boudica_camulodunum_hint": "Defeat Camulodunum.",
+      "tutorial.boudica_ninth_title": "The Ninth Legion",
+      "tutorial.boudica_ninth_body": "Rome sends its Ninth. Meet them before they reach Londinium.",
+      "tutorial.boudica_ninth_hint": "Defeat Legio IX Hispana.",
+      "tutorial.boudica_londinium_title": "Londinium",
+      "tutorial.boudica_londinium_body": "Suetonius has abandoned Londinium. Move before Rome regroups.",
+      "tutorial.boudica_londinium_hint": "Defeat Londinium.",
+      "tutorial.boudica_verulamium_title": "Verulamium",
+      "tutorial.boudica_verulamium_body": "Two Roman cities have fallen. Verulamium is the next stronghold.",
+      "tutorial.boudica_verulamium_hint": "Defeat Verulamium.",
+      "tutorial.boudica_final_title": "Rome's Final Army",
+      "tutorial.boudica_final_body": "Rome has gathered its legions. There will be no road back.",
+      "tutorial.boudica_final_hint": "Defeat Legio XIV Gemina.",
+      "tutorial.boudica_end_title": "The Rebellion Lives",
+      "tutorial.boudica_end_body": "Rome can break an army. It cannot undo what we began.",
       "tutorial.boudica_menu_campaign_title": "Campaigns",
       "tutorial.boudica_menu_campaign_hint": "Open Campaigns to continue the story.",
       "tutorial.boudica_menu_replay_title": "Replay the tutorial",
       "tutorial.boudica_menu_replay_hint": "Choose Boudica to play this tutorial again.",
+      "tutorial.boudica_menu_multiplayer_title": "Multiplayer",
+      "tutorial.boudica_menu_multiplayer_hint": "Choose Multiplayer whenever you're ready for a live match.",
       "tutorial.boudica_menu_ready_title": "You're ready",
       "tutorial.boudica_menu_ready_body": "Continue the campaign, replay this tutorial, or jump into multiplayer."
     },
     "es": {
+      "tutorial.boudica_council_title": "La respuesta de una reina",
+      "tutorial.boudica_council_body": "Roma arrebató nuestras tierras y humilló a mi familia. El consejo iceno espera mi respuesta.",
+      "tutorial.boudica_decision_title": "¿Qué hacemos?",
+      "tutorial.boudica_decision_body": "¿Atacamos ahora el puesto romano o esperamos?",
+      "tutorial.boudica_decision_attack": "Atacar ahora",
+      "tutorial.boudica_decision_wait": "Esperar",
+      "tutorial.boudica_refusal_title": "Los icenos se niegan",
+      "tutorial.boudica_refusal_body": "¿Esperar? Jamás. No nos quedaremos de brazos cruzados mientras Roma saquea nuestros hogares. El puesto debe caer.",
+      "tutorial.boudica_council_speaker": "Consejo iceno",
+      "tutorial.boudica_first_victory_title": "Primera venganza",
+      "tutorial.boudica_first_victory_hint": "Envía todas tus tropas contra The Iceni Despoilers.",
+      "tutorial.boudica_victory_title": "El primer golpe",
+      "tutorial.boudica_victory_body": "El puesto cayó. Las tribus deben ver que los icenos siguen en pie.",
+      "tutorial.boudica_contact_title": "Llama a los icenos",
+      "tutorial.boudica_contact_body": "Snettisham está al alcance. Lleva la noticia: los icenos se alzan.",
+      "tutorial.boudica_contact_hint": "Busca Snettisham; mueve o acerca el mapa si hace falta y reclama tierra junto a ellos.",
+      "tutorial.boudica_support_title": "Llega la ayuda",
+      "tutorial.boudica_support_hint": "Las tribus envían oro y guerreros.",
+      "tutorial.boudica_support_body": "Diste el primer golpe. Nuestros guerreros y nuestro oro son tuyos.",
+      "tutorial.boudica_aid_choice_title": "Devolver el apoyo",
+      "tutorial.boudica_aid_choice_body": "Nuestros vecinos enviaron ayuda. ¿Devolvemos parte a Snettisham o la guardamos para la marcha?",
+      "tutorial.boudica_aid_choice_share": "Enviar ayuda",
+      "tutorial.boudica_aid_choice_keep": "Guardar reservas",
+      "tutorial.boudica_share_intro_title": "Responder a su llamado",
+      "tutorial.boudica_share_intro_body": "Elige cuánto oro y cuántos guerreros enviar. Saldrán de nuestras reservas.",
+      "tutorial.boudica_transfer_target_title": "Ayuda a Snettisham",
+      "tutorial.boudica_transfer_target_hint": "Toca el territorio de Snettisham y elige Transferir.",
+      "tutorial.boudica_transfer_troops_title": "Comparte los guerreros",
+      "tutorial.boudica_transfer_troops_hint": "Elige cuántas tropas enviar.",
+      "tutorial.boudica_transfer_gold_title": "Comparte el oro",
+      "tutorial.boudica_transfer_gold_hint": "Elige cuánto oro enviar.",
+      "tutorial.boudica_transfer_send_title": "Envía su parte",
+      "tutorial.boudica_transfer_send_hint": "Envía los recursos que elegiste.",
+      "tutorial.boudica_share_sent_title": "Una deuda saldada",
+      "tutorial.boudica_share_sent_body": "Snettisham ya tiene su guarnición. Marchamos con menos reservas.",
+      "tutorial.boudica_aid_kept_title": "Reservas intactas",
+      "tutorial.boudica_aid_kept_body": "No enviamos tropas ni oro. Marcharemos con toda nuestra fuerza.",
+      "tutorial.boudica_rebuild_title": "Reconstruir a los icenos",
+      "tutorial.boudica_rebuild_body": "Un regalo no sostendrá el levantamiento. Dales a los icenos una ciudad para reunirse y crecer.",
+      "tutorial.boudica_choose_city_title": "Elige una ciudad",
+      "tutorial.boudica_choose_city_hint": "Selecciona Ciudad en los controles de construcción.",
+      "tutorial.boudica_build_city_title": "Levanta una ciudad icena",
+      "tutorial.boudica_build_city_hint": "Coloca y completa una ciudad en tu territorio.",
+      "tutorial.boudica_farm_choice_title": "¿Qué necesita el levantamiento?",
+      "tutorial.boudica_farm_choice_body": "¿Fortalecer a los icenos o marchar ahora?",
+      "tutorial.boudica_farm_choice_build": "Reclutar guerreros",
+      "tutorial.boudica_farm_choice_skip": "Marchar ya",
+      "tutorial.boudica_farm_intro_title": "Los campos alimentan la rebelión",
+      "tutorial.boudica_farm_intro_body": "Una granja icena suma guerreros a nuestras filas.",
+      "tutorial.boudica_choose_farm_title": "Elige una granja",
+      "tutorial.boudica_choose_farm_hint": "Selecciona Granja en el panel de construcción.",
+      "tutorial.boudica_build_farm_title": "Cultiva los campos icenos",
+      "tutorial.boudica_build_farm_hint": "Coloca una granja en tu territorio y deja que termine.",
+      "tutorial.boudica_farm_ready_title": "Crecen nuestras filas",
+      "tutorial.boudica_farm_ready_body": "Los campos traerán nuevos guerreros. Ahora avanzamos.",
+      "tutorial.boudica_first_expansion_title": "Alcanza Snettisham",
+      "tutorial.boudica_first_expansion_body": "Deben ver que los icenos siguen en pie. Toma tierra libre en su dirección.",
+      "tutorial.boudica_first_expansion_hint": "Reclama una casilla neutral hacia Snettisham. Mueve o acerca el mapa si hace falta.",
+      "tutorial.boudica_outposts_title": "Corta los suministros de Roma",
+      "tutorial.boudica_outposts_hint": "Destruye los tres puestos romanos pasivos. El marcador avanzará tras cada victoria.",
+      "tutorial.boudica_ratio_title": "Protege el hogar",
+      "tutorial.boudica_ratio_intro_body": "Roma aún conserva sus puestos de suministro. No podemos dejar el campamento indefenso.",
+      "tutorial.boudica_ratio_hint": "Envía suficientes para derribar los puestos. Deja guerreros en casa.",
+      "tutorial.boudica_posts_fall_title": "Se rompe la línea romana",
+      "tutorial.boudica_posts_fall_body": "Tres puestos silenciados. Camulodunum está expuesta, pero la rebelión necesita suministros.",
+      "tutorial.boudica_factory_choice_title": "Prepara la marcha",
+      "tutorial.boudica_factory_choice_body": "Una fábrica o la fundición de la ciudad pueden financiar la marcha. O avanzamos ya.",
+      "tutorial.boudica_factory_choice_build": "Montar el taller",
+      "tutorial.boudica_factory_choice_foundry": "Mejorar la fundición",
+      "tutorial.boudica_factory_choice_skip": "Omitir el taller",
+      "tutorial.boudica_foundry_title": "Las arcas de la ciudad",
+      "tutorial.boudica_foundry_menu_hint": "Toca tu ciudad y abre su menú de construcción.",
+      "tutorial.boudica_foundry_upgrade_hint": "Mejora la fundición para aumentar el oro de la ciudad.",
+      "tutorial.boudica_foundry_ready_title": "Oro para la marcha",
+      "tutorial.boudica_foundry_ready_body": "La fundición genera oro mientras los icenos se preparan.",
+      "tutorial.boudica_factory_intro_title": "Llena las arcas de guerra",
+      "tutorial.boudica_factory_intro_body": "Un taller convierte nuestro territorio en oro para la rebelión.",
+      "tutorial.boudica_choose_factory_title": "Elige un taller",
+      "tutorial.boudica_choose_factory_hint": "Selecciona Fábrica en el panel de construcción.",
+      "tutorial.boudica_build_factory_title": "Levanta el taller",
+      "tutorial.boudica_build_factory_hint": "Coloca y completa una fábrica en tu territorio.",
+      "tutorial.boudica_factory_ready_title": "Suministros para el camino",
+      "tutorial.boudica_factory_ready_body": "El taller suma oro mientras preparamos la próxima batalla.",
+      "tutorial.boudica_bunker_choice_title": "Protege la ciudad",
+      "tutorial.boudica_bunker_choice_body": "¿Levantar una torre defensiva o avanzar mientras Roma sigue débil?",
+      "tutorial.boudica_bunker_choice_build": "Fortificar la ciudad",
+      "tutorial.boudica_bunker_choice_skip": "Avanzar ya",
+      "tutorial.boudica_bunker_intro_title": "Roma contraatacará",
+      "tutorial.boudica_bunker_intro_body": "Una torre defensiva ayudará a proteger nuestras tierras.",
+      "tutorial.boudica_choose_bunker_title": "Elige una torre defensiva",
+      "tutorial.boudica_choose_bunker_hint": "Selecciona Búnker en el panel de construcción.",
+      "tutorial.boudica_build_bunker_title": "Fortifica las tierras icenas",
+      "tutorial.boudica_build_bunker_hint": "Coloca y completa un búnker en tu territorio.",
+      "tutorial.boudica_bunker_ready_title": "Un frente más fuerte",
+      "tutorial.boudica_bunker_ready_body": "Costará más arrebatarnos estas tierras. Marchamos sobre Roma.",
+      "tutorial.boudica_upgrade_choice_title": "Una última preparación",
+      "tutorial.boudica_upgrade_choice_body": "¿Mejorar una estructura, reforzar el terreno o marchar ya?",
+      "tutorial.boudica_upgrade_choice_city": "Mejorar la ciudad",
+      "tutorial.boudica_upgrade_choice_tile": "Reforzar el terreno",
+      "tutorial.boudica_upgrade_choice_skip": "Omitir preparación",
+      "tutorial.boudica_structure_upgrade_title": "Fortalece el asentamiento",
+      "tutorial.boudica_structure_upgrade_hint": "Mejora la ciudad al nivel 3 para desbloquear el taller.",
+      "tutorial.boudica_tile_upgrade_title": "Refuerza el terreno",
+      "tutorial.boudica_tile_upgrade_hint": "Toca nuestro terreno, abre Construcción y elige Mejorar.",
+      "tutorial.boudica_pact_choice_title": "Una tribu ante dos caminos",
+      "tutorial.boudica_pact_choice_body": "Los catuvellaunos pueden unirse o seguir bajo Roma. ¿Les ofrecemos un pacto?",
+      "tutorial.boudica_pact_choice_offer": "Ofrecer un pacto",
+      "tutorial.boudica_pact_choice_skip": "Seguir la marcha",
+      "tutorial.boudica_pact_target_title": "Gana a los catuvellaunos",
+      "tutorial.boudica_pact_target_hint": "Centra su estandarte, toca su territorio y elige Alianza.",
+      "tutorial.boudica_pact_success_title": "Una nueva alianza",
+      "tutorial.boudica_pact_success_body": "Los catuvellaunos se unen; su frontera ya no amenaza nuestra marcha.",
+      "tutorial.boudica_port_choice_title": "Al otro lado del mar",
+      "tutorial.boudica_port_choice_body": "¿Construimos un puerto o marchamos al oeste por tierra?",
+      "tutorial.boudica_port_choice_build": "Construir un puerto",
+      "tutorial.boudica_port_choice_skip": "Seguir por tierra",
+      "tutorial.boudica_port_intro_title": "Un puerto iceno",
+      "tutorial.boudica_port_intro_body": "Desarrolla el puerto para construir barcos; las flotas de tropas no lo necesitan.",
+      "tutorial.boudica_choose_port_title": "Elige un puerto",
+      "tutorial.boudica_choose_port_hint": "Selecciona Puerto y colócalo en nuestra costa.",
+      "tutorial.boudica_build_port_title": "Levanta el puerto",
+      "tutorial.boudica_build_port_hint": "Coloca y completa un puerto en tu territorio.",
+      "tutorial.boudica_port_upgrade_title": "Mejora el puerto",
+      "tutorial.boudica_port_upgrade_hint": "Selecciona el puerto y mejóralo una vez.",
+      "tutorial.boudica_port_ready_hint": "Espera a que termine la mejora del puerto.",
+      "tutorial.boudica_fleet_intro_title": "Ataca desde el mar",
+      "tutorial.boudica_fleet_intro_body": "El camino al oeste es largo. Lleva a los guerreros en una flota.",
+      "tutorial.boudica_fleet_target_title": "Envía la flota",
+      "tutorial.boudica_fleet_target_hint": "Centra la vista en la Legio XIV si hace falta. Toca su territorio y elige Flota.",
+      "tutorial.boudica_fleet_launched_title": "El mar está abierto",
+      "tutorial.boudica_fleet_launched_body": "Los icenos ya pueden llevar la lucha por mar.",
+      "tutorial.boudica_ship_choice_title": "Otro uso del puerto",
+      "tutorial.boudica_ship_choice_body": "Un barco mercante puede financiar la rebelión, o marchamos antes de que Roma se reagrupe.",
+      "tutorial.boudica_ship_choice_trade": "Construir barco mercante",
+      "tutorial.boudica_ship_choice_march": "Marchar ya",
+      "tutorial.boudica_trade_city_title": "Elevar la ciudad",
+      "tutorial.boudica_trade_city_hint": "Mejora una ciudad al nivel 4 para habilitar barcos mercantes.",
+      "tutorial.boudica_trade_port_title": "Ampliar el puerto",
+      "tutorial.boudica_trade_port_hint": "Selecciona el puerto y mejóralo al nivel 3.",
+      "tutorial.boudica_trade_menu_title": "Poner el puerto a trabajar",
+      "tutorial.boudica_trade_menu_hint": "Abre el menú del mapa en tu puerto y elige Construir.",
+      "tutorial.boudica_trade_ship_title": "Construir un barco mercante",
+      "tutorial.boudica_trade_ship_hint": "Encola un barco mercante. Cuesta 10.000 de oro y tarda en construirse.",
+      "tutorial.boudica_trade_ready_title": "Oro desde el mar",
+      "tutorial.boudica_trade_ready_body": "El barco mercante genera oro mientras seguimos la marcha.",
+      "tutorial.boudica_camulodunum_title": "Camulodunum",
+      "tutorial.boudica_camulodunum_body": "La colonia romana que inició esta rebelión está al alcance. Tómala.",
+      "tutorial.boudica_camulodunum_hint": "Derrota a Camulodunum.",
+      "tutorial.boudica_ninth_title": "La Novena Legión",
+      "tutorial.boudica_ninth_body": "Roma envía a la Novena. Detenla antes de que llegue a Londinium.",
+      "tutorial.boudica_ninth_hint": "Derrota a la Legio IX Hispana.",
+      "tutorial.boudica_londinium_title": "Londinium",
+      "tutorial.boudica_londinium_body": "Suetonio ha abandonado Londinium. Avancemos antes de que Roma se reagrupe.",
+      "tutorial.boudica_londinium_hint": "Derrota a Londinium.",
+      "tutorial.boudica_verulamium_title": "Verulamium",
+      "tutorial.boudica_verulamium_body": "Dos ciudades romanas han caído. Verulamium es su siguiente fortaleza.",
+      "tutorial.boudica_verulamium_hint": "Derrota a Verulamium.",
+      "tutorial.boudica_final_title": "El último ejército de Roma",
+      "tutorial.boudica_final_body": "Roma ha reunido sus legiones. No habrá camino de regreso.",
+      "tutorial.boudica_final_hint": "Derrota a la Legio XIV Gemina.",
+      "tutorial.boudica_end_title": "La rebelión sigue viva",
+      "tutorial.boudica_end_body": "Roma puede quebrar un ejército. No puede borrar lo que iniciamos.",
       "tutorial.boudica_menu_campaign_title": "Campañas",
       "tutorial.boudica_menu_campaign_hint": "Abre Campañas para continuar la historia.",
       "tutorial.boudica_menu_replay_title": "Repetir el tutorial",
       "tutorial.boudica_menu_replay_hint": "Elige a Boudica para volver a jugar este tutorial.",
+      "tutorial.boudica_menu_multiplayer_title": "Multijugador",
+      "tutorial.boudica_menu_multiplayer_hint": "Elige Multijugador cuando quieras entrar a una partida en vivo.",
       "tutorial.boudica_menu_ready_title": "Ya estás listo",
       "tutorial.boudica_menu_ready_body": "Continúa la campaña, repite este tutorial o entra al multijugador."
     }
@@ -33,58 +368,97 @@
     "boudica": {
       "name": "Boudica",
       "avatar": "boudica"
+    },
+    "council": {
+      "name_key": "tutorial.boudica_council_speaker"
+    },
+    "first_ally_support": {
+      "name": "Allied envoy",
+      "avatar": "null",
+      "dynamic": "first_ally_support"
     }
   },
   "steps": [
     {
       "id": "boudica_rise_of_the_iceni_intro",
       "type": "scene",
-      "title_key": "tutorial.boudica_rise_title",
-      "body_key": "tutorial.boudica_rise_body",
+      "title_key": "tutorial.boudica_council_title",
+      "body_key": "tutorial.boudica_council_body",
       "speaker": "boudica",
       "presentation": "chapter",
-      "next": "boudica_rise_of_the_iceni"
+      "next": "boudica_council_decision"
     },
     {
-      "id": "boudica_rise_of_the_iceni",
+      "id": "boudica_council_decision",
+      "type": "choice",
+      "title_key": "tutorial.boudica_decision_title",
+      "body_key": "tutorial.boudica_decision_body",
+      "speaker": "boudica",
+      "choices": [
+        {
+          "id": "attack",
+          "label_key": "tutorial.boudica_decision_attack",
+          "next": "boudica_first_victory"
+        },
+        {
+          "id": "wait",
+          "label_key": "tutorial.boudica_decision_wait",
+          "next": "boudica_council_refusal"
+        }
+      ]
+    },
+    {
+      "id": "boudica_council_refusal",
+      "type": "scene",
+      "title_key": "tutorial.boudica_refusal_title",
+      "body_key": "tutorial.boudica_refusal_body",
+      "speaker": "council",
+      "presentation": "dialogue",
+      "next": "boudica_council_decision"
+    },
+    {
+      "id": "boudica_first_victory",
       "type": "objective",
-      "title_key": "tutorial.boudica_rise_title",
-      "hint_key": "tutorial.boudica_rise_hint",
+      "title_key": "tutorial.boudica_first_victory_title",
+      "hint_key": "tutorial.boudica_first_victory_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "territory",
-        "value": 256,
-        "scope": "episode"
+        "type": "defeated",
+        "target": "The Iceni Despoilers",
+        "scope": "step"
       },
+      "attack_ratio_on_enter": 1,
       "marker": {
-        "target": "player"
+        "target": "The Iceni Despoilers"
       },
       "guide": {
         "kind": "world",
-        "target": "expand",
+        "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_grow_the_warband_intro"
+      "next": "boudica_first_victory_scene"
     },
     {
-      "id": "boudica_grow_the_warband_intro",
+      "id": "boudica_first_victory_scene",
       "type": "scene",
-      "title_key": "tutorial.boudica_warband_title",
-      "body_key": "tutorial.boudica_warband_body",
+      "title_key": "tutorial.boudica_victory_title",
+      "body_key": "tutorial.boudica_victory_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_grow_the_warband"
+      "attack_ratio_on_enter": 0.5,
+      "next": "boudica_first_expansion"
     },
     {
-      "id": "boudica_grow_the_warband",
+      "id": "boudica_first_expansion",
       "type": "objective",
-      "title_key": "tutorial.boudica_warband_title",
-      "hint_key": "tutorial.boudica_warband_hint",
+      "title_key": "tutorial.boudica_first_expansion_title",
+      "body_key": "tutorial.boudica_first_expansion_body",
+      "hint_key": "tutorial.boudica_first_expansion_hint",
       "speaker": "boudica",
       "trigger": {
         "type": "territory",
-        "value": 1024,
-        "scope": "episode"
+        "value": 1,
+        "scope": "step"
       },
       "marker": {
         "target": "player"
@@ -112,48 +486,442 @@
       "hint_key": "tutorial.boudica_contact_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "kills",
+        "type": "contact",
+        "target": "Snettisham",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Snettisham"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_ally_support_wait"
+    },
+    {
+      "id": "boudica_ally_support_wait",
+      "type": "objective",
+      "title_key": "tutorial.boudica_support_title",
+      "hint_key": "tutorial.boudica_support_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "support",
         "value": 1,
         "scope": "total"
       },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "assault",
-        "gesture": "tap"
-      },
-      "next": "boudica_unite_the_east_intro"
+      "next": "boudica_ally_support_received"
     },
     {
-      "id": "boudica_unite_the_east_intro",
+      "id": "boudica_ally_support_received",
       "type": "scene",
-      "title_key": "tutorial.boudica_unite_title",
-      "body_key": "tutorial.boudica_unite_body",
+      "title_key": "tutorial.boudica_support_title",
+      "body_key": "tutorial.boudica_support_body",
+      "speaker": "first_ally_support",
+      "presentation": "dialogue",
+      "next": "boudica_aid_choice"
+    },
+    {
+      "id": "boudica_aid_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_aid_choice_title",
+      "body_key": "tutorial.boudica_aid_choice_body",
+      "speaker": "boudica",
+      "choices": [
+        { "id": "share", "label_key": "tutorial.boudica_aid_choice_share", "next": "boudica_share_intro" },
+        { "id": "keep", "label_key": "tutorial.boudica_aid_choice_keep", "next": "boudica_aid_kept" }
+      ]
+    },
+    {
+      "id": "boudica_share_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_share_intro_title",
+      "body_key": "tutorial.boudica_share_intro_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_unite_the_east"
+      "next": "boudica_transfer_target"
     },
     {
-      "id": "boudica_unite_the_east",
-      "type": "objective",
-      "title_key": "tutorial.boudica_unite_title",
-      "hint_key": "tutorial.boudica_unite_hint",
+      "id": "boudica_transfer_target",
+      "type": "guide",
+      "title_key": "tutorial.boudica_transfer_target_title",
+      "hint_key": "tutorial.boudica_transfer_target_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "ui", "action": "map_transfer", "scope": "step" },
+      "marker": { "target": "Snettisham" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_transfer_troops"
+    },
+    {
+      "id": "boudica_transfer_troops",
+      "type": "guide",
+      "title_key": "tutorial.boudica_transfer_troops_title",
+      "hint_key": "tutorial.boudica_transfer_troops_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "ui", "action": "transfer_troops", "scope": "step" },
+      "guide": { "kind": "ui", "target": "transfer_troops", "gesture": "tap" },
+      "next": "boudica_transfer_gold"
+    },
+    {
+      "id": "boudica_transfer_gold",
+      "type": "guide",
+      "title_key": "tutorial.boudica_transfer_gold_title",
+      "hint_key": "tutorial.boudica_transfer_gold_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "ui", "action": "transfer_gold", "scope": "step" },
+      "guide": { "kind": "ui", "target": "transfer_gold", "gesture": "tap" },
+      "next": "boudica_transfer_send"
+    },
+    {
+      "id": "boudica_transfer_send",
+      "type": "guide",
+      "title_key": "tutorial.boudica_transfer_send_title",
+      "hint_key": "tutorial.boudica_transfer_send_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "resource_transfer", "value": 1, "scope": "step" },
+      "guide": { "kind": "ui", "target": "transfer_send", "gesture": "tap" },
+      "next": "boudica_share_sent"
+    },
+    {
+      "id": "boudica_share_sent",
+      "type": "scene",
+      "title_key": "tutorial.boudica_share_sent_title",
+      "body_key": "tutorial.boudica_share_sent_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_rebuild_intro"
+    },
+    {
+      "id": "boudica_aid_kept",
+      "type": "scene",
+      "title_key": "tutorial.boudica_aid_kept_title",
+      "body_key": "tutorial.boudica_aid_kept_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_rebuild_intro"
+    },
+    {
+      "id": "boudica_rebuild_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_rebuild_title",
+      "body_key": "tutorial.boudica_rebuild_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_choose_city"
+    },
+    {
+      "id": "boudica_choose_city",
+      "type": "guide",
+      "title_key": "tutorial.boudica_choose_city_title",
+      "hint_key": "tutorial.boudica_choose_city_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "kills",
-        "value": 4,
-        "scope": "total"
+        "type": "ui",
+        "action": "dock_city",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_city",
+        "gesture": "tap"
+      },
+      "next": "boudica_build_city"
+    },
+    {
+      "id": "boudica_build_city",
+      "type": "objective",
+      "title_key": "tutorial.boudica_build_city_title",
+      "hint_key": "tutorial.boudica_build_city_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "step"
       },
       "marker": {
         "target": "player"
       },
       "guide": {
         "kind": "world",
-        "target": "assault",
+        "target": "player",
         "gesture": "tap"
       },
+      "next": "boudica_farm_choice"
+    },
+    {
+      "id": "boudica_farm_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_farm_choice_title",
+      "body_key": "tutorial.boudica_farm_choice_body",
+      "speaker": "boudica",
+      "choices": [
+        { "id": "farm", "label_key": "tutorial.boudica_farm_choice_build", "next": "boudica_farm_intro" },
+        { "id": "march", "label_key": "tutorial.boudica_farm_choice_skip", "next": "boudica_ratio_intro" }
+      ]
+    },
+    {
+      "id": "boudica_farm_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_farm_intro_title",
+      "body_key": "tutorial.boudica_farm_intro_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_choose_farm"
+    },
+    {
+      "id": "boudica_choose_farm",
+      "type": "guide",
+      "title_key": "tutorial.boudica_choose_farm_title",
+      "hint_key": "tutorial.boudica_choose_farm_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "ui", "action": "dock_farm", "scope": "step" },
+      "guide": { "kind": "ui", "target": "dock_farm", "gesture": "tap" },
+      "next": "boudica_build_farm"
+    },
+    {
+      "id": "boudica_build_farm",
+      "type": "objective",
+      "title_key": "tutorial.boudica_build_farm_title",
+      "hint_key": "tutorial.boudica_build_farm_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "farm", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_farm_ready"
+    },
+    {
+      "id": "boudica_farm_ready",
+      "type": "scene",
+      "title_key": "tutorial.boudica_farm_ready_title",
+      "body_key": "tutorial.boudica_farm_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_ratio_intro"
+    },
+    {
+      "id": "boudica_ratio_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_ratio_title",
+      "body_key": "tutorial.boudica_ratio_intro_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_ratio_guide"
+    },
+    {
+      "id": "boudica_ratio_guide",
+      "type": "guide",
+      "title_key": "tutorial.boudica_ratio_title",
+      "hint_key": "tutorial.boudica_ratio_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "ui", "action": "attack_ratio", "scope": "step" },
+      "attack_ratio_on_enter": 0.5,
+      "guide": { "kind": "ui", "target": "attack_ratio", "gesture": "drag" },
+      "next": "boudica_roman_outposts"
+    },
+    {
+      "id": "boudica_roman_outposts",
+      "type": "objective",
+      "title_key": "tutorial.boudica_outposts_title",
+      "hint_key": "tutorial.boudica_outposts_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "targets": ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"],
+        "value": 3,
+        "scope": "total"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_posts_fall"
+    },
+    {
+      "id": "boudica_posts_fall",
+      "type": "scene",
+      "title_key": "tutorial.boudica_posts_fall_title",
+      "body_key": "tutorial.boudica_posts_fall_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_upgrade_choice"
+    },
+    {
+      "id": "boudica_upgrade_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_upgrade_choice_title",
+      "body_key": "tutorial.boudica_upgrade_choice_body",
+      "speaker": "council",
+      "choices": [
+        { "id": "city", "label_key": "tutorial.boudica_upgrade_choice_city", "next": "boudica_structure_upgrade" },
+        { "id": "tile", "label_key": "tutorial.boudica_upgrade_choice_tile", "next": "boudica_tile_upgrade_menu" },
+        { "id": "skip", "label_key": "tutorial.boudica_upgrade_choice_skip", "next": "boudica_bunker_choice" }
+      ]
+    },
+    {
+      "id": "boudica_structure_upgrade",
+      "type": "guide",
+      "title_key": "tutorial.boudica_structure_upgrade_title",
+      "hint_key": "tutorial.boudica_structure_upgrade_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "city_level", "value": 3, "scope": "total" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "next": "boudica_factory_choice"
+    },
+    {
+      "id": "boudica_tile_upgrade_menu",
+      "type": "guide",
+      "title_key": "tutorial.boudica_tile_upgrade_title",
+      "hint_key": "tutorial.boudica_tile_upgrade_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "map_build", "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "map_build", "gesture": "tap" },
+      "next": "boudica_tile_upgrade"
+    },
+    {
+      "id": "boudica_tile_upgrade",
+      "type": "guide",
+      "title_key": "tutorial.boudica_tile_upgrade_title",
+      "hint_key": "tutorial.boudica_tile_upgrade_hint",
+      "speaker": "council",
+      "trigger": { "type": "tile_upgrade", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "map_upgrade_tile", "gesture": "tap" },
+      "next": "boudica_bunker_choice"
+    },
+    {
+      "id": "boudica_factory_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_factory_choice_title",
+      "body_key": "tutorial.boudica_factory_choice_body",
+      "speaker": "council",
+      "choices": [
+        { "id": "build", "label_key": "tutorial.boudica_factory_choice_build", "next": "boudica_factory_intro" },
+        { "id": "foundry", "label_key": "tutorial.boudica_factory_choice_foundry", "next": "boudica_foundry_select_menu" },
+        { "id": "skip", "label_key": "tutorial.boudica_factory_choice_skip", "next": "boudica_bunker_choice" }
+      ]
+    },
+    {
+      "id": "boudica_foundry_select_menu",
+      "type": "guide",
+      "title_key": "tutorial.boudica_foundry_title",
+      "hint_key": "tutorial.boudica_foundry_menu_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "map_build", "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "map_build", "gesture": "tap" },
+      "next": "boudica_foundry_upgrade"
+    },
+    {
+      "id": "boudica_foundry_upgrade",
+      "type": "guide",
+      "title_key": "tutorial.boudica_foundry_title",
+      "hint_key": "tutorial.boudica_foundry_upgrade_hint",
+      "speaker": "council",
+      "trigger": { "type": "city_upgrade", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "map_upgrade_foundry", "gesture": "tap" },
+      "next": "boudica_foundry_ready"
+    },
+    {
+      "id": "boudica_foundry_ready",
+      "type": "scene",
+      "title_key": "tutorial.boudica_foundry_ready_title",
+      "body_key": "tutorial.boudica_foundry_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_bunker_choice"
+    },
+    {
+      "id": "boudica_factory_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_factory_intro_title",
+      "body_key": "tutorial.boudica_factory_intro_body",
+      "speaker": "council",
+      "presentation": "dialogue",
+      "next": "boudica_choose_factory"
+    },
+    {
+      "id": "boudica_choose_factory",
+      "type": "guide",
+      "title_key": "tutorial.boudica_choose_factory_title",
+      "hint_key": "tutorial.boudica_choose_factory_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "dock_factory", "scope": "step" },
+      "guide": { "kind": "ui", "target": "dock_factory", "gesture": "tap" },
+      "next": "boudica_build_factory"
+    },
+    {
+      "id": "boudica_build_factory",
+      "type": "objective",
+      "title_key": "tutorial.boudica_build_factory_title",
+      "hint_key": "tutorial.boudica_build_factory_hint",
+      "speaker": "council",
+      "trigger": { "type": "factory", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_factory_ready"
+    },
+    {
+      "id": "boudica_factory_ready",
+      "type": "scene",
+      "title_key": "tutorial.boudica_factory_ready_title",
+      "body_key": "tutorial.boudica_factory_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_bunker_choice"
+    },
+    {
+      "id": "boudica_bunker_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_bunker_choice_title",
+      "body_key": "tutorial.boudica_bunker_choice_body",
+      "speaker": "council",
+      "choices": [
+        { "id": "build", "label_key": "tutorial.boudica_bunker_choice_build", "next": "boudica_bunker_intro" },
+        { "id": "skip", "label_key": "tutorial.boudica_bunker_choice_skip", "next": "boudica_camulodunum_intro" }
+      ]
+    },
+    {
+      "id": "boudica_bunker_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_bunker_intro_title",
+      "body_key": "tutorial.boudica_bunker_intro_body",
+      "speaker": "council",
+      "presentation": "dialogue",
+      "next": "boudica_choose_bunker"
+    },
+    {
+      "id": "boudica_choose_bunker",
+      "type": "guide",
+      "title_key": "tutorial.boudica_choose_bunker_title",
+      "hint_key": "tutorial.boudica_choose_bunker_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "dock_bunker", "scope": "step" },
+      "guide": { "kind": "ui", "target": "dock_bunker", "gesture": "tap" },
+      "next": "boudica_build_bunker"
+    },
+    {
+      "id": "boudica_build_bunker",
+      "type": "objective",
+      "title_key": "tutorial.boudica_build_bunker_title",
+      "hint_key": "tutorial.boudica_build_bunker_hint",
+      "speaker": "council",
+      "trigger": { "type": "bunker", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_bunker_ready"
+    },
+    {
+      "id": "boudica_bunker_ready",
+      "type": "scene",
+      "title_key": "tutorial.boudica_bunker_ready_title",
+      "body_key": "tutorial.boudica_bunker_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_camulodunum_intro"
     },
     {
@@ -184,7 +952,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_londinium_intro"
+      "next": "boudica_ninth_legion_intro"
     },
     {
       "id": "boudica_londinium_intro",
@@ -244,7 +1012,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_ninth_legion_intro"
+      "next": "boudica_pact_choice"
     },
     {
       "id": "boudica_ninth_legion_intro",
@@ -274,6 +1042,201 @@
         "target": "target_action",
         "gesture": "tap"
       },
+      "next": "boudica_londinium_intro"
+    },
+    {
+      "id": "boudica_pact_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_pact_choice_title",
+      "body_key": "tutorial.boudica_pact_choice_body",
+      "speaker": "council",
+      "choices": [
+        { "id": "offer", "label_key": "tutorial.boudica_pact_choice_offer", "next": "boudica_pact_offer" },
+        { "id": "march", "label_key": "tutorial.boudica_pact_choice_skip", "next": "boudica_port_choice" }
+      ]
+    },
+    {
+      "id": "boudica_pact_offer",
+      "type": "guide",
+      "title_key": "tutorial.boudica_pact_target_title",
+      "hint_key": "tutorial.boudica_pact_target_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "map_alliance", "scope": "step" },
+      "marker": { "target": "Catuvellauni" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_pact_formed"
+    },
+    {
+      "id": "boudica_pact_formed",
+      "type": "objective",
+      "title_key": "tutorial.boudica_pact_target_title",
+      "speaker": "council",
+      "trigger": { "type": "alliance", "value": 1, "scope": "step" },
+      "marker": { "target": "Catuvellauni" },
+      "next": "boudica_pact_success"
+    },
+    {
+      "id": "boudica_pact_success",
+      "type": "scene",
+      "title_key": "tutorial.boudica_pact_success_title",
+      "body_key": "tutorial.boudica_pact_success_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_port_choice"
+    },
+    {
+      "id": "boudica_port_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_port_choice_title",
+      "body_key": "tutorial.boudica_port_choice_body",
+      "speaker": "council",
+      "choices": [
+        { "id": "build", "label_key": "tutorial.boudica_port_choice_build", "next": "boudica_port_intro" },
+        { "id": "skip", "label_key": "tutorial.boudica_port_choice_skip", "next": "boudica_final_battle_intro" }
+      ]
+    },
+    {
+      "id": "boudica_port_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_port_intro_title",
+      "body_key": "tutorial.boudica_port_intro_body",
+      "speaker": "council",
+      "presentation": "dialogue",
+      "next": "boudica_choose_port"
+    },
+    {
+      "id": "boudica_choose_port",
+      "type": "guide",
+      "title_key": "tutorial.boudica_choose_port_title",
+      "hint_key": "tutorial.boudica_choose_port_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "dock_port", "scope": "step" },
+      "guide": { "kind": "ui", "target": "dock_port", "gesture": "tap" },
+      "next": "boudica_build_port"
+    },
+    {
+      "id": "boudica_build_port",
+      "type": "objective",
+      "title_key": "tutorial.boudica_build_port_title",
+      "hint_key": "tutorial.boudica_build_port_hint",
+      "speaker": "council",
+      "trigger": { "type": "port", "value": 1, "scope": "total" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_port_upgrade"
+    },
+    {
+      "id": "boudica_port_upgrade",
+      "type": "guide",
+      "title_key": "tutorial.boudica_port_upgrade_title",
+      "hint_key": "tutorial.boudica_port_upgrade_hint",
+      "speaker": "council",
+      "trigger": { "type": "port_upgrade", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "next": "boudica_port_ready"
+    },
+    {
+      "id": "boudica_port_ready",
+      "type": "objective",
+      "title_key": "tutorial.boudica_port_upgrade_title",
+      "hint_key": "tutorial.boudica_port_ready_hint",
+      "speaker": "council",
+      "trigger": { "type": "port_level", "value": 2, "scope": "total" },
+      "marker": { "target": "player" },
+      "next": "boudica_fleet_intro"
+    },
+    {
+      "id": "boudica_fleet_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_fleet_intro_title",
+      "body_key": "tutorial.boudica_fleet_intro_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_fleet_target"
+    },
+    {
+      "id": "boudica_fleet_target",
+      "type": "guide",
+      "title_key": "tutorial.boudica_fleet_target_title",
+      "hint_key": "tutorial.boudica_fleet_target_hint",
+      "speaker": "council",
+      "trigger": { "type": "fleet", "value": 1, "scope": "step" },
+      "marker": { "target": "Legio XIV Gemina" },
+      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "next": "boudica_fleet_ready"
+    },
+    {
+      "id": "boudica_fleet_ready",
+      "type": "scene",
+      "title_key": "tutorial.boudica_fleet_launched_title",
+      "body_key": "tutorial.boudica_fleet_launched_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_ship_choice"
+    },
+    {
+      "id": "boudica_ship_choice",
+      "type": "choice",
+      "title_key": "tutorial.boudica_ship_choice_title",
+      "body_key": "tutorial.boudica_ship_choice_body",
+      "speaker": "council",
+      "choices": [
+        { "id": "trade", "label_key": "tutorial.boudica_ship_choice_trade", "next": "boudica_trade_city" },
+        { "id": "march", "label_key": "tutorial.boudica_ship_choice_march", "next": "boudica_final_battle_intro" }
+      ]
+    },
+    {
+      "id": "boudica_trade_city",
+      "type": "guide",
+      "title_key": "tutorial.boudica_trade_city_title",
+      "hint_key": "tutorial.boudica_trade_city_hint",
+      "speaker": "council",
+      "trigger": { "type": "city_level", "value": 4, "scope": "total" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "next": "boudica_trade_port"
+    },
+    {
+      "id": "boudica_trade_port",
+      "type": "guide",
+      "title_key": "tutorial.boudica_trade_port_title",
+      "hint_key": "tutorial.boudica_trade_port_hint",
+      "speaker": "council",
+      "trigger": { "type": "port_level", "value": 3, "scope": "total" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "next": "boudica_trade_menu"
+    },
+    {
+      "id": "boudica_trade_menu",
+      "type": "guide",
+      "title_key": "tutorial.boudica_trade_menu_title",
+      "hint_key": "tutorial.boudica_trade_menu_hint",
+      "speaker": "council",
+      "trigger": { "type": "ui", "action": "map_build", "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "map_build", "gesture": "tap" },
+      "next": "boudica_trade_ship"
+    },
+    {
+      "id": "boudica_trade_ship",
+      "type": "guide",
+      "title_key": "tutorial.boudica_trade_ship_title",
+      "hint_key": "tutorial.boudica_trade_ship_hint",
+      "speaker": "council",
+      "trigger": { "type": "fleet", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "ui", "target": "map_build_trade_ship", "gesture": "tap" },
+      "next": "boudica_trade_ready"
+    },
+    {
+      "id": "boudica_trade_ready",
+      "type": "scene",
+      "title_key": "tutorial.boudica_trade_ready_title",
+      "body_key": "tutorial.boudica_trade_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_final_battle_intro"
     },
     {
@@ -308,9 +1271,17 @@
     },
     {
       "id": "boudica_end",
+      "type": "scene",
+      "title_key": "tutorial.boudica_end_title",
+      "body_key": "tutorial.boudica_end_body",
+      "speaker": "boudica",
+      "presentation": "chapter",
+      "next": "boudica_complete"
+    },
+    {
+      "id": "boudica_complete",
       "type": "end",
       "title_key": "tutorial.complete",
-      "speaker": "boudica",
       "presentation": "chapter"
     },
     {
@@ -343,6 +1314,23 @@
       "guide": {
         "kind": "ui",
         "target": "campaign_replay",
+        "gesture": "tap"
+      },
+      "next": "boudica_return_multiplayer"
+    },
+    {
+      "id": "boudica_return_multiplayer",
+      "type": "guide",
+      "title_key": "tutorial.boudica_menu_multiplayer_title",
+      "hint_key": "tutorial.boudica_menu_multiplayer_hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_multiplayer",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_multiplayer",
         "gesture": "tap"
       },
       "next": "boudica_return_end"

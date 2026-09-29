@@ -219,6 +219,9 @@ impl SowApp {
             winit::keyboard::KeyCode::Digit4 | winit::keyboard::KeyCode::Numpad4 => {
                 Some(sow_core::game::BuildingKind::Bunker)
             }
+            winit::keyboard::KeyCode::Digit5 | winit::keyboard::KeyCode::Numpad5 => {
+                Some(sow_core::game::BuildingKind::Farm)
+            }
             _ => None,
         };
         if let Some(kind) = building {

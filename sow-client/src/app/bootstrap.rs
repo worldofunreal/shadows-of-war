@@ -277,6 +277,7 @@ impl SowApp {
                 nameplate_order_my_id: None,
                 nameplate_order: Vec::new(),
                 nameplate_visuals: std::collections::HashMap::new(),
+                nameplate_land_cache: Default::default(),
                 building_render_cache: crate::render::world::BuildingRenderCache::default(),
                 last_resource_notice_tick: None,
                 border_flashes: Vec::new(),

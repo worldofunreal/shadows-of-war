@@ -500,6 +500,9 @@ impl SowEngine {
                 player.iq = iq;
             }
             self.state.spawn_player(player, sx, sy);
+            if let Some(avatar) = &s.campaign_avatar {
+                self.campaign_avatars.insert(bot_id, avatar.clone());
+            }
             placed += 1;
             log::info!(
                 "spawn_scripted: [{}] '{}' team={:?} at ({},{})",

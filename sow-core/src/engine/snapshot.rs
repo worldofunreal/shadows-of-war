@@ -72,6 +72,7 @@ impl SowEngine {
                     traitor: p.traitor,
                     civilization: p.civilization,
                     leader: p.leader,
+                    campaign_avatar: self.campaign_avatars.get(&p.id).cloned(),
                     skin_style: p.skin_style,
                     kills: p.kills,
                     deaths: p.deaths,

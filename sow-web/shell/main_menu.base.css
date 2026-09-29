@@ -59,31 +59,41 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
 }
 
 #sow-menu,
-#sow-menu * {
+#sow-menu *,
+#sow-hud,
+#sow-hud * {
     scrollbar-width: thin;
     scrollbar-color: rgba(243, 177, 43, .82) rgba(13, 15, 19, .72);
 }
 
 #sow-menu::-webkit-scrollbar,
-#sow-menu *::-webkit-scrollbar {
+#sow-menu *::-webkit-scrollbar,
+#sow-hud::-webkit-scrollbar,
+#sow-hud *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 
 #sow-menu::-webkit-scrollbar-track,
-#sow-menu *::-webkit-scrollbar-track {
+#sow-menu *::-webkit-scrollbar-track,
+#sow-hud::-webkit-scrollbar-track,
+#sow-hud *::-webkit-scrollbar-track {
     background: rgba(13, 15, 19, .72);
 }
 
 #sow-menu::-webkit-scrollbar-thumb,
-#sow-menu *::-webkit-scrollbar-thumb {
+#sow-menu *::-webkit-scrollbar-thumb,
+#sow-hud::-webkit-scrollbar-thumb,
+#sow-hud *::-webkit-scrollbar-thumb {
     border: 2px solid rgba(13, 15, 19, .72);
     border-radius: 999px;
     background: rgba(243, 177, 43, .82);
 }
 
 #sow-menu::-webkit-scrollbar-thumb:hover,
-#sow-menu *::-webkit-scrollbar-thumb:hover {
+#sow-menu *::-webkit-scrollbar-thumb:hover,
+#sow-hud::-webkit-scrollbar-thumb:hover,
+#sow-hud *::-webkit-scrollbar-thumb:hover {
     background: var(--sow-gold-bright);
 }
 

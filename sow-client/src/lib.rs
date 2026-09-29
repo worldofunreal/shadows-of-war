@@ -168,13 +168,12 @@ fn spawn_sow_client_connect(url: String, connect_tx: &app::WakeSender<Result<Sow
 pub enum MapDownloadEvent {
     CatalogReady(Vec<sow_core::maps::MapCatalogEntry>),
     MapReady(String, Vec<u8>),
-    /// `leader == None` is the null/fallback avatar (`null.webp`).
     AvatarReady {
-        leader: Option<sow_core::player::Leader>,
+        key: crate::ui::asset_loader::AvatarFetchKey,
         bytes: Vec<u8>,
     },
     AvatarFailed {
-        leader: Option<sow_core::player::Leader>,
+        key: crate::ui::asset_loader::AvatarFetchKey,
         reason: String,
     },
     /// Portal identity avatar (CrazyGames profile picture, arbitrary remote URL).
@@ -240,6 +239,7 @@ pub(crate) fn building_sound_kind(
         sow_core::game::BuildingKind::Bunker => sow_audio::BuildingSoundKind::Bunker,
         sow_core::game::BuildingKind::Factory => sow_audio::BuildingSoundKind::Factory,
         sow_core::game::BuildingKind::Port => sow_audio::BuildingSoundKind::Port,
+        sow_core::game::BuildingKind::Farm => sow_audio::BuildingSoundKind::Factory,
     }
 }
 

@@ -195,6 +195,8 @@ pub struct Faction {
     /// Portrait/perk identity override; `None` = the role default (bosses Caesar,
     /// kin the episode advisor). Only the JSON loader sets it.
     pub leader: Option<Leader>,
+    /// Shared by the map nameplate and story dialogue; absent uses the generic portrait.
+    pub avatar: Option<String>,
 }
 
 impl Faction {
@@ -209,6 +211,7 @@ impl Faction {
             civ: role.civ(),
             iq: None,
             leader: None,
+            avatar: None,
         }
     }
 }
@@ -324,6 +327,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 troops: f.role.troops(),
                 troop_cap: f.role.troop_cap(),
                 iq: f.iq,
+                campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
             }
         })
         .collect()
@@ -348,6 +352,8 @@ struct RosterEntry {
     /// Leader override (`"lady_six_sky"`, …); absent = the role default.
     #[serde(default)]
     leader: Option<String>,
+    #[serde(default)]
+    avatar: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -400,10 +406,22 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
         if let Some(leader_name) = e.leader.as_deref() {
             f.leader = Some(sow_data::commerce::leader_from_id(leader_name)?);
         }
+        if let Some(avatar) = e.avatar.as_deref() {
+            if !valid_avatar_id(avatar) {
+                return None;
+            }
+            f.avatar = Some(avatar.to_string());
+        }
         factions.push(f);
     }
     if factions.is_empty() {
         return None;
     }
     Some((factions, rf.player_spawn.unwrap_or((696, 45))))
+}
+
+fn valid_avatar_id(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
 }

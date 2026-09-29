@@ -87,27 +87,19 @@ impl SowApp {
                         }
                     }
                 }
-                MapDownloadEvent::AvatarReady { leader, bytes } => {
-                    let key = match leader {
-                        Some(l) => crate::ui::asset_loader::AvatarFetchKey::Leader(l),
-                        None => crate::ui::asset_loader::AvatarFetchKey::Fallback,
-                    };
+                MapDownloadEvent::AvatarReady { key, bytes } => {
                     match self
                         .ui
                         .app
                         .asset_loader
-                        .ingest_avatar_webp_bytes(key, &bytes)
+                        .ingest_avatar_webp_bytes(key.clone(), &bytes)
                     {
                         Ok(()) => log::debug!("Loaded avatar {:?}", key),
                         Err(e) => log::warn!("Failed to ingest avatar {:?}: {e}", key),
                     }
                     // GPU atlas upload is fed inside `ingest_avatar_webp_bytes`.
                 }
-                MapDownloadEvent::AvatarFailed { leader, reason } => {
-                    let key = match leader {
-                        Some(l) => crate::ui::asset_loader::AvatarFetchKey::Leader(l),
-                        None => crate::ui::asset_loader::AvatarFetchKey::Fallback,
-                    };
+                MapDownloadEvent::AvatarFailed { key, reason } => {
                     log::warn!("Avatar fetch failed for {:?}: {reason}", key);
                     self.ui
                         .app
@@ -141,21 +133,21 @@ impl SowApp {
     fn fetch_avatar(
         url: String,
         tx: crate::app::WakeSender<MapDownloadEvent>,
-        leader: Option<sow_core::player::Leader>,
+        key: crate::ui::asset_loader::AvatarFetchKey,
     ) {
         let request = ehttp::Request::get(&url);
         ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
             let send = match result {
                 Ok(res) if res.ok => MapDownloadEvent::AvatarReady {
-                    leader,
+                    key: key.clone(),
                     bytes: res.bytes,
                 },
                 Ok(res) => MapDownloadEvent::AvatarFailed {
-                    leader,
+                    key: key.clone(),
                     reason: format!("HTTP {}", res.status),
                 },
                 Err(e) => MapDownloadEvent::AvatarFailed {
-                    leader,
+                    key,
                     reason: e.to_string(),
                 },
             };
@@ -169,25 +161,31 @@ impl SowApp {
         let priority_leader = self.ui.app.main_menu_state.selected_leader;
         let priority = AvatarFetchKey::Leader(priority_leader);
 
+        if let Some(snapshot) = self.sim.current_snapshot.as_ref() {
+            for slug in snapshot
+                .players
+                .iter()
+                .filter_map(|player| player.campaign_avatar.as_deref())
+            {
+                self.ui.app.asset_loader.queue_campaign_avatar(slug);
+            }
+        }
+
         while self.ui.app.asset_loader.avatars_in_flight.len() < MAX_AVATAR_FETCHES_IN_FLIGHT {
             let Some(key) = self
                 .ui
                 .app
                 .asset_loader
-                .take_next_avatar_fetch_pending(priority)
+                .take_next_avatar_fetch_pending(&priority)
             else {
                 break;
             };
 
-            let filename = AssetLoader::avatar_filename(key);
+            let filename = AssetLoader::avatar_filename(&key);
             let url = self.asset_config.avatar_url(&filename);
-            let leader = match key {
-                AvatarFetchKey::Fallback => None,
-                AvatarFetchKey::Leader(l) => Some(l),
-            };
             log::debug!("Fetching avatar {:?} url={}", key, url);
             let tx = self.tasks.map_tx.clone();
-            Self::fetch_avatar(url, tx, leader);
+            Self::fetch_avatar(url, tx, key);
         }
     }
 

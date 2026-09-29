@@ -61,7 +61,7 @@ impl Default for HudState {
             troops: 0.0,
             max_troops: 0.0,
             troop_rate: 0.0,
-            attack_ratio: 0.25,
+            attack_ratio: 0.5,
             spawn_timer_secs: None,
             sync_state: None,
             my_player_id: 0,

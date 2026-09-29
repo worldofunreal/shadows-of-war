@@ -26,6 +26,8 @@
     var inboxRenderKey = "";
     var mapMenuView = "root";
     var mapMenuStateKey = "";
+    var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
+    var lastAllocationKey = "";
 
     var EMOJIS = [
         "😀", "😎", "😏", "😂", "🤣", "😋", "😉", "😜", "😍", "🥰", "🥳", "🥺", "😇", "🤩", "👍",
@@ -63,19 +65,41 @@
         factory: "gameplay/icons/industry_forge_cutout.webp",
         port: "gameplay/icons/port_gate_1to1.webp",
         bunker: "gameplay/icons/defense_bunker_concrete_1to1.webp",
+        farm: "gameplay/icons/battle_icon_cutout.webp",
         troops: "gameplay/icons/battle_icon_cutout.webp",
         alliance: "gameplay/icons/alliance_flag_1to1.webp",
         betray: "gameplay/icons/betray_dagger_1to1.webp",
-        exit: "gameplay/icons/cancel_door_1to1.webp",
-        home: "gameplay/icons/gps_original_fav_1to1.webp",
         nuke: "gameplay/icons/silo_tower_1to1.webp",
         surrender: "gameplay/icons/surrender_flag_1to1.webp",
-        settings: "gameplay/icons/settings_gear_cutout.webp",
-        rankings: "gameplay/icons/ranking_podium_1to1.webp",
         warship: "gameplay/icons/port_galley_1to1.webp"
     };
 
+    var HUD_GLYPHS = {
+        plus: '<path d="M12 4v16M4 12h16"/>',
+        minus: '<path d="M4 12h16"/>',
+        inbox: '<path d="M4 4h16v16H4zM4 13h4l2 3h4l2-3h4M4 7l8 6 8-6"/>',
+        reaction: '<path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.7 8.7 0 0 1-3.5-.7L4 20l1.4-3.6A7 7 0 0 1 4 12c0-4.1 3.6-7.5 8-7.5s8 3.1 8 7Z"/><path d="M9 11h.01M15 11h.01M9 14.5s1 1.5 3 1.5 3-1.5 3-1.5"/>',
+        rankings: '<path d="M3 20h18M5 20v-6h4v6M10 20V4h4v16M15 20v-10h4v10"/>',
+        settings: '<path d="m10 3-.6 2.2a7.6 7.6 0 0 0-1.7 1L5.5 5.4 3.8 8.3l1.8 1.5a7.9 7.9 0 0 0 0 2.1l-1.8 1.5 1.7 2.9 2.2-.8a7.6 7.6 0 0 0 1.7 1L10 19h4l.6-2.2a7.6 7.6 0 0 0 1.7-1l2.2.8 1.7-2.9-1.8-1.5a7.9 7.9 0 0 0 0-2.1l1.8-1.5-1.7-2.9-2.2.8a7.6 7.6 0 0 0-1.7-1L14 3h-4Z"/><circle cx="12" cy="11" r="3"/>',
+        leave: '<path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M10 16l4-4-4-4M14 12H3"/>',
+        camera: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22"/>',
+        tools: '<path d="M14.5 6.5a5 5 0 0 0-6.7 6.7L3 18l3 3 4.8-4.8a5 5 0 0 0 6.7-6.7L14 13l-3-3 3.5-3.5Z"/>',
+        spawn: '<path d="M5 21V4m1 1h12l-3 4 3 4H6"/>',
+        attack: '<path d="m5 4 14 16M19 4 5 20M3 6l3-3 3 3M15 18l3 3 3-3M3 18l3 3 3-3M15 6l3-3 3 3"/>',
+        fleet: '<path d="M3 15h18l-3 5H7l-4-5ZM6 12l6-9 6 9M12 3v12M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0"/>',
+        transfer: '<path d="M4 7h15l-3-3M20 17H5l3 3M19 7l-3 3M5 17l3-3"/>',
+        alliance: '<path d="M8 12 5 9a3 3 0 0 1 4-4l3 3 3-3a3 3 0 0 1 4 4l-3 3M8 12l4 4 4-4M5 15l4 4M19 15l-4 4M12 8v8"/>',
+        nuke: '<path d="M12 22V9M9 12l3-3 3 3M12 9l5-5M17 4h4M17 4V1M7 21h10M9 18h6"/>',
+        upgrade: '<path d="m12 3 2.2 5.2L20 10l-4.4 3.5L17 19l-5-3-5 3 1.4-5.5L4 10l5.8-1.8L12 3Z"/>',
+        anchor: '<path d="M12 3v12M8 7a4 4 0 1 0 8 0M4 13a8 8 0 0 0 16 0M2 13h4M18 13h4"/>',
+        factory: '<path d="M3 21V9l6 3V8l6 4V5h6v16H3ZM17 8h1M17 11h1M7 17h2M12 17h2M17 17h1"/>',
+        warship: '<path d="M3 15h18l-3 5H7l-4-5ZM7 12V7h10v5M10 7V4h4v3M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0"/>',
+        trade_ship: '<path d="M3 15h18l-3 5H7l-4-5ZM6 12l6-9 6 9M12 3v12M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0M8 10h8"/>',
+        farm: '<path d="M12 21V8M12 12c-4-1-6-3-6-6 4 0 6 2 6 6ZM12 15c4-1 6-3 6-6-4 0-6 2-6 6Z"/>'
+    };
+
     function hudIcon(name, cls) {
+        if (HUD_GLYPHS[name]) return '<svg class="' + (cls || "sow-hud__action-icon") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + HUD_GLYPHS[name] + '</svg>';
         if (!HUD_ICONS[name]) return "";
         return '<img class="' + (cls || "sow-hud__action-icon") + '" src="' + asset(HUD_ICONS[name]) + '" alt="" aria-hidden="true">';
     }
@@ -105,13 +129,13 @@
             + '<header class="sow-hud__topbar">'
             + '  <div class="sow-hud__status-left">'
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.rankings") + '" title="' + SOW_t("hud.rankings") + '">' + hudIcon("rankings", "sow-hud__action-icon") + '</button>'
-            + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">🛠</button>'
+            + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">' + hudIcon("tools", "sow-hud__action-icon") + '</button>'
             + '  </div>'
             + '  <div class="sow-hud__status-right">'
             + '    <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
-            + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">📩 <span class="sow-hud__inbox-badge" id="sow-hud-inbox-count">0</span></button>'
+            + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">' + hudIcon("inbox") + '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>'
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">' + hudIcon("settings", "sow-hud__action-icon") + '</button>'
-            + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' + SOW_t("hud.leave_match") + '" title="' + SOW_t("hud.leave_match") + '">' + hudIcon("exit", "sow-hud__action-icon") + '</button>'
+            + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' + SOW_t("hud.leave_match") + '" title="' + SOW_t("hud.leave_match") + '">' + hudIcon("leave", "sow-hud__action-icon") + '</button>'
             + '  </div>'
             + '</header>'
             + '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">'
@@ -126,18 +150,19 @@
             + '<aside class="sow-hud__left-rail" id="sow-hud-left-rail">'
             + '  <div class="sow-hud__rail-card">'
             + '    <div class="sow-hud__slider-vertical-wrap">'
-            + '      <input type="range" min="5" max="100" value="50" step="5" class="sow-hud__range-vertical" id="sow-hud-slider">'
+            + '      <input type="range" min="5" max="100" value="50" step="5" class="sow-hud__range-vertical" id="sow-hud-slider" aria-label="' + SOW_t("hud.map_action_attack") + '">'
             + '    </div>'
             + '    <div class="sow-hud__army-allocation">'
-            + '      <output id="sow-hud-army-allocation" aria-hidden="true"></output>'
+            + '      <strong id="sow-hud-army-ratio" aria-hidden="true">50%</strong>'
             + '    </div>'
             + '  </div>'
+            + '  <output class="sow-hud__allocation-detail" id="sow-hud-army-allocation" for="sow-hud-slider" aria-hidden="true"></output>'
             + '</aside>'
             + '<aside class="sow-hud__right-rail" id="sow-hud-right-rail">'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_in" aria-label="' + SOW_t("hud.zoom_in") + '" title="' + SOW_t("hud.zoom_in") + '">➕</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="' + SOW_t("hud.zoom_out") + '" title="' + SOW_t("hud.zoom_out") + '">➖</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="' + SOW_t("hud.center_camera") + '" title="' + SOW_t("hud.center_camera") + '">' + hudIcon("home", "sow-hud__action-icon") + '</button>'
-            + '  <button type="button" class="sow-hud__icon-btn" data-command="toggle_emoji" aria-label="' + SOW_t("hud.emojis") + '" title="' + SOW_t("hud.emojis") + '">😀</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_in" aria-label="' + SOW_t("hud.zoom_in") + '" title="' + SOW_t("hud.zoom_in") + '">' + hudIcon("plus") + '</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="zoom_out" aria-label="' + SOW_t("hud.zoom_out") + '" title="' + SOW_t("hud.zoom_out") + '">' + hudIcon("minus") + '</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="center_camera" aria-label="' + SOW_t("hud.center_camera") + '" title="' + SOW_t("hud.center_camera") + '">' + hudIcon("camera", "sow-hud__action-icon") + '</button>'
+            + '  <button type="button" class="sow-hud__icon-btn" data-command="toggle_emoji" aria-label="' + SOW_t("hud.emojis") + '" title="' + SOW_t("hud.emojis") + '">' + hudIcon("reaction") + '</button>'
             + '</aside>'
             + '<div class="sow-hud__emoji-popout hidden" id="sow-hud-emoji-popout">'
             + '  <div class="sow-hud__emoji-header">'
@@ -178,6 +203,7 @@
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Factory" aria-label="' + SOW_t("hud.map_action_factory") + '">' + buildingIcon("Factory") + '</button>'
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Port" aria-label="' + SOW_t("hud.map_action_port") + '">' + buildingIcon("Port") + '</button>'
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Bunker" aria-label="' + SOW_t("hud.map_action_bunker") + '">' + buildingIcon("Bunker") + '</button>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="Farm">' + buildingIcon("Farm") + '</button>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
@@ -263,7 +289,14 @@
             + '    </div>'
             + '  </section>'
             + '</div>'
-            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' + SOW_t("hud.map_actions") + '"></div>';
+            + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' + SOW_t("hud.map_actions") + '"></div>'
+            + '<aside class="sow-hud__building-card hidden" id="sow-hud-building-card" aria-live="polite">'
+            + '  <div class="sow-hud__building-card-head"><span id="sow-hud-building-card-kind"></span><button type="button" class="sow-hud__close-btn" data-command="close_building_card" aria-label="Close">✕</button></div>'
+            + '  <div class="sow-hud__building-card-level" id="sow-hud-building-card-level"></div>'
+            + '  <div class="sow-hud__building-card-benefit" id="sow-hud-building-card-benefit"></div>'
+            + '  <div class="sow-hud__building-card-next" id="sow-hud-building-card-next"></div>'
+            + '  <button type="button" class="sow-hud__building-card-upgrade" id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure">Upgrade</button>'
+            + '</aside>';
 
         var emojiGrid = document.getElementById("sow-hud-emoji-grid");
         if (emojiGrid) {
@@ -294,6 +327,7 @@
             leftRail: document.getElementById("sow-hud-left-rail"),
             slider: document.getElementById("sow-hud-slider"),
             armyAllocation: document.getElementById("sow-hud-army-allocation"),
+            armyRatio: document.getElementById("sow-hud-army-ratio"),
             rightRail: document.getElementById("sow-hud-right-rail"),
             emojiPopout: document.getElementById("sow-hud-emoji-popout"),
             pinEmoji: hudRoot.querySelector("[data-command='toggle_pin_emoji']"),
@@ -304,6 +338,7 @@
             deployTimer: document.getElementById("sow-hud-deploy-timer"),
             buildingsStrip: document.getElementById("sow-hud-buildings-strip"),
             buildingButtons: Array.prototype.slice.call(hudRoot.querySelectorAll("[data-command='select_building']")),
+            panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_'], .sow-hud__right-rail [data-command='toggle_emoji']")),
             troopFill: document.getElementById("sow-hud-troop-fill"),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
@@ -339,6 +374,12 @@
             endgameStoreAction: document.getElementById("sow-hud-endgame-store-action"),
             endgameObserve: document.getElementById("sow-hud-endgame-observe"),
             mapMenu: document.getElementById("sow-hud-map-menu"),
+            buildingCard: document.getElementById("sow-hud-building-card"),
+            buildingCardKind: document.getElementById("sow-hud-building-card-kind"),
+            buildingCardLevel: document.getElementById("sow-hud-building-card-level"),
+            buildingCardBenefit: document.getElementById("sow-hud-building-card-benefit"),
+            buildingCardNext: document.getElementById("sow-hud-building-card-next"),
+            buildingCardUpgrade: document.getElementById("sow-hud-building-card-upgrade"),
             notifications: document.createElement("div")
         };
 
@@ -347,7 +388,33 @@
         hudRefs.notifications.setAttribute("aria-live", "polite");
         hudRoot.appendChild(hudRefs.notifications);
 
+        if (hudRefs.slider) hudRefs.slider.style.setProperty("--sow-crossed-swords", 'url("' + asset(HUD_ICONS.troops) + '")');
         if (hudRefs.slider) {
+            var allocationRail = hudRefs.leftRail;
+            var refreshAllocationDetail = function () {
+                var currentHud = hudState && hudState.hud ? hudState.hud : {};
+                var ratio = hudRefs.slider ? Number(hudRefs.slider.value) / 100 : 0.5;
+                updateArmyAllocation(currentHud.troops, ratio, true);
+            };
+            hudRefs.slider.addEventListener("pointerdown", function () {
+                if (allocationRail) allocationRail.classList.add("is-adjusting");
+                refreshAllocationDetail();
+            });
+            hudRefs.slider.addEventListener("pointerup", function () {
+                if (allocationRail) allocationRail.classList.remove("is-adjusting");
+            });
+            hudRefs.slider.addEventListener("pointercancel", function () {
+                if (allocationRail) allocationRail.classList.remove("is-adjusting");
+            });
+            hudRefs.slider.addEventListener("keydown", function () {
+                if (allocationRail) allocationRail.classList.add("is-adjusting");
+            });
+            hudRefs.slider.addEventListener("keyup", function () {
+                if (allocationRail) allocationRail.classList.remove("is-adjusting");
+            });
+            hudRefs.slider.addEventListener("blur", function () {
+                if (allocationRail) allocationRail.classList.remove("is-adjusting");
+            });
             hudRefs.slider.addEventListener("input", function (e) {
                 var val = parseFloat(e.target.value);
                 var ratio = val / 100.0;
@@ -355,6 +422,14 @@
                 updateArmyAllocation(currentHud.troops, ratio);
                 send("set_attack_ratio", { ratio: ratio });
             });
+            if (allocationRail) {
+                allocationRail.addEventListener("pointerenter", function (event) {
+                    if (event.pointerType !== "touch") refreshAllocationDetail();
+                });
+                allocationRail.addEventListener("focusin", function () {
+                    if (!allocationHoverNone || !allocationHoverNone.matches) refreshAllocationDetail();
+                });
+            }
         }
         hudRoot.addEventListener("input", function (event) {
             var input = event.target.closest("[data-dev]");
@@ -372,22 +447,24 @@
     }
 
     var mapActionLabels = {
-        spawn: { icon: "🌱", key: "hud.map_action_deploy" },
-        attack: { icon: "⚔", img: "troops", key: "hud.map_action_attack" },
-        fleet: { icon: "⛵", key: "hud.map_action_fleet" },
-        transfer: { icon: "⚖️", key: "hud.map_action_transfer" },
-        alliance: { icon: "🤝", img: "alliance", key: "hud.map_action_alliance" },
+        spawn: { icon: "spawn", key: "hud.map_action_deploy" },
+        attack: { icon: "attack", key: "hud.map_action_attack" },
+        fleet: { icon: "fleet", key: "hud.map_action_fleet" },
+        transfer: { icon: "transfer", key: "hud.map_action_transfer" },
+        alliance: { icon: "alliance", key: "hud.map_action_alliance" },
         build_city: { key: "hud.map_action_city" },
         build_factory: { key: "hud.map_action_factory" },
         build_port: { key: "hud.map_action_port" },
         build_bunker: { key: "hud.map_action_bunker" },
-        nuke: { icon: "🚀", img: "nuke", key: "hud.map_action_nuke" },
-        upgrade_tile: { icon: "✦", key: "hud.map_action_upgrade_tile" },
-        upgrade_arsenal: { icon: "🚀", key: "hud.map_action_upgrade_arsenal" },
-        upgrade_port: { icon: "⚓", img: "port", key: "hud.map_action_upgrade_port" },
-        upgrade_foundry: { icon: "🏭", img: "factory", key: "hud.map_action_upgrade_foundry" },
-        build_warship: { icon: "🚢", key: "hud.map_action_build_warship" },
-        build_trade_ship: { icon: "⛴️", key: "hud.map_action_build_trade_ship" }
+        build_farm: { text: "Farm" },
+        upgrade_structure: { icon: "upgrade", text: "Upgrade" },
+        nuke: { icon: "nuke", key: "hud.map_action_nuke" },
+        upgrade_tile: { icon: "upgrade", key: "hud.map_action_upgrade_tile" },
+        upgrade_arsenal: { icon: "nuke", key: "hud.map_action_upgrade_arsenal" },
+        upgrade_port: { icon: "anchor", key: "hud.map_action_upgrade_port" },
+        upgrade_foundry: { icon: "factory", key: "hud.map_action_upgrade_foundry" },
+        build_warship: { icon: "warship", key: "hud.map_action_build_warship" },
+        build_trade_ship: { icon: "trade_ship", key: "hud.map_action_build_trade_ship" }
     };
 
     var buildMenuActions = {
@@ -395,6 +472,8 @@
         build_factory: true,
         build_port: true,
         build_bunker: true,
+        build_farm: true,
+        upgrade_structure: true,
         upgrade_tile: true,
         upgrade_arsenal: true,
         upgrade_port: true,
@@ -408,13 +487,28 @@
         return label.key ? SOW_t(label.key) : label.text;
     }
 
-    function updateArmyAllocation(totalTroops, ratio) {
+    function updateArmyAllocation(totalTroops, ratio, forceDetails) {
         if (!hudRefs) return;
         var troopCount = Math.max(0, Number(totalTroops) || 0);
         var total = Math.floor(troopCount);
         var share = Number(ratio);
         if (!Number.isFinite(share)) share = 0.5;
         share = Math.max(0, Math.min(1, share));
+        var percent = Math.round(share * 100);
+        if (hudRefs.armyRatio && hudRefs.armyRatio.textContent !== percent + "%") hudRefs.armyRatio.textContent = percent + "%";
+        var fill = ((percent - 5) / 95 * 100) + "%";
+        if (hudRefs.slider && hudRefs.slider.style.getPropertyValue("--sow-ratio") !== fill) hudRefs.slider.style.setProperty("--sow-ratio", fill);
+        var allocationRail = hudRefs.leftRail;
+        var detailsVisible = forceDetails || (allocationRail && (
+            allocationRail.classList.contains("is-adjusting") || (
+                !(allocationHoverNone && allocationHoverNone.matches) &&
+                (allocationRail.matches(":hover") || allocationRail.contains(document.activeElement))
+            )
+        ));
+        if (!detailsVisible) return;
+        var allocationKey = total + ":" + share + ":" + String(window.SOW_LOCALE || "en");
+        if (allocationKey === lastAllocationKey) return;
+        lastAllocationKey = allocationKey;
         var sent = Math.min(total, Math.floor(troopCount * share));
         var kept = total - sent;
         var text = SOW_t("hud.attack_allocation", {
@@ -471,10 +565,10 @@
         var buildingImg = buildingKind ? buildingIcon(buildingKind) : "";
         if (buildingImg) {
             title.innerHTML = buildingImg;
-        } else if (label.img) {
-            title.innerHTML = hudIcon(label.img, "sow-hud__map-action-icon");
+        } else if (label.icon) {
+            title.innerHTML = hudIcon(label.icon, "sow-hud__map-action-icon");
         } else {
-            title.textContent = label.icon;
+            title.textContent = "•";
         }
         button.appendChild(title);
         var actionName = mapLabel(action);
@@ -633,12 +727,11 @@
                 var centerItem = items.find(function (item) { return item.action === "spawn" || item.action === "attack"; });
                 if (centerItem) {
                     var center = mapActionButton(centerItem, "sow-hud__map-center " + (centerItem.action === "spawn" ? "is-spawn" : "is-attack"), false);
-                    center.querySelector(".sow-hud__map-action-title").innerHTML = hudIcon("troops", "sow-hud__map-action-icon");
-                    if (centerItem.action === "spawn") center.querySelector(".sow-hud__map-action-title").textContent = "🌱";
+                    center.querySelector(".sow-hud__map-action-title").innerHTML = hudIcon(centerItem.action === "spawn" ? "spawn" : "attack", "sow-hud__map-action-icon");
                     radial.appendChild(center);
                 } else {
                     var disabledCenter = mapActionButton({ action: "attack", disabled: true }, "sow-hud__map-center is-attack", false);
-                    disabledCenter.querySelector(".sow-hud__map-action-title").textContent = "⚔";
+                    disabledCenter.querySelector(".sow-hud__map-action-title").innerHTML = hudIcon("attack", "sow-hud__map-action-icon");
                     disabledCenter.disabled = true;
                     disabledCenter.removeAttribute("data-map-action");
                     disabledCenter.setAttribute("aria-label", mapLabel("attack"));
@@ -650,20 +743,20 @@
                 var alliance = items.find(function (item) { return item.action === "alliance"; });
                 var radialCount = 4;
                 if (transfer) mapSector(radial, transfer, 0, radialCount, "transfer");
-                else mapDisabledSector(radial, 0, radialCount, "transfer", "⚖️", mapLabel("transfer"));
+                else mapDisabledSector(radial, 0, radialCount, "transfer", hudIcon("transfer", "sow-hud__map-action-icon"), mapLabel("transfer"));
                 if (fleet) mapSector(radial, fleet, 1, radialCount, "fleet");
-                else mapDisabledSector(radial, 1, radialCount, "fleet", "⛵", mapLabel("fleet"));
+                else mapDisabledSector(radial, 1, radialCount, "fleet", hudIcon("fleet", "sow-hud__map-action-icon"), mapLabel("fleet"));
                 if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance");
                 else mapDisabledSector(radial, 2, radialCount, "alliance", hudIcon("alliance", "sow-hud__map-action-icon"), mapLabel("alliance"));
                 if (buildItems.length) {
                     var buildIcon = buildItems.some(function (item) {
                         return item.action === "build_warship" || item.action === "build_trade_ship";
-                    }) ? hudIcon("port", "sow-hud__map-action-icon") : "🔧";
+                    }) ? hudIcon("port", "sow-hud__map-action-icon") : hudIcon("tools", "sow-hud__map-action-icon");
                     mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, "Build");
                 } else if (nukeItem) {
                     mapSector(radial, nukeItem, 3, radialCount, "nuke");
                 } else {
-                    mapDisabledSector(radial, 3, radialCount, "build", "🔧", "Build");
+                    mapDisabledSector(radial, 3, radialCount, "build", hudIcon("tools", "sow-hud__map-action-icon"), "Build");
                 }
                 menu.appendChild(radial);
             } else {
@@ -673,7 +766,7 @@
                 header.className = "sow-hud__map-submenu-header";
                 var heading = document.createElement("span");
                 heading.className = "sow-hud__map-submenu-icon";
-                heading.textContent = "🔧";
+                heading.innerHTML = hudIcon("tools", "sow-hud__map-action-icon");
                 heading.setAttribute("aria-hidden", "true");
                 header.appendChild(heading);
                 var back = document.createElement("button");
@@ -707,6 +800,29 @@
         return true;
     }
 
+    function renderBuildingCard(mapMenu) {
+        if (!hudRefs || !hudRefs.buildingCard) return;
+        var detail = mapMenu && mapMenu.building;
+        var open = Boolean(mapMenu && mapMenu.open && detail);
+        hudRefs.buildingCard.classList.toggle("hidden", !open);
+        if (!open) return;
+        hudRefs.buildingCard.dataset.session = String(mapMenu.session);
+        hudRefs.buildingCard.dataset.tileIdx = String(mapMenu.tile_idx);
+        hudRefs.buildingCardKind.textContent = detail.name || detail.kind || "Building";
+        hudRefs.buildingCardLevel.textContent = "Level " + String(detail.level || 0) + (detail.under_construction ? " · Under construction" : "");
+        hudRefs.buildingCardBenefit.textContent = "Active: " + String(detail.benefit || "none");
+        var unmet = Array.isArray(detail.requirements) ? detail.requirements.filter(function (item) { return !item.met; }) : [];
+        if (detail.next_level) {
+            hudRefs.buildingCardNext.textContent = "Next: " + detail.next_name + " · " + String(detail.next_benefit || "") + (unmet.length ? " · Requires " + unmet[0].key : "");
+            hudRefs.buildingCardUpgrade.textContent = "Upgrade · " + Math.floor(Number(detail.cost) || 0).toLocaleString() + "g";
+            hudRefs.buildingCardUpgrade.disabled = !detail.can_upgrade;
+            hudRefs.buildingCardUpgrade.classList.toggle("hidden", false);
+        } else {
+            hudRefs.buildingCardNext.textContent = "Maximum level";
+            hudRefs.buildingCardUpgrade.classList.toggle("hidden", true);
+        }
+    }
+
 
     function updateLeaderboard(players) {
         if (!hudRefs || !hudRefs.rows) return;
@@ -738,16 +854,16 @@
                 card.className = "sow-hud__player-card";
                 card.dataset.command = "focus_player";
                 card.dataset.playerId = String(player.id);
-                left.style.cssText = "display:flex;align-items:center;gap:6px;";
-                right.style.cssText = "display:flex;gap:10px;font-weight:700;";
+                left.className = "sow-hud__player-identity";
+                right.className = "sow-hud__player-stats";
                 transfer.type = "button";
                 transfer.className = "sow-hud__row-action";
                 transfer.dataset.command = "open_transfer";
                 transfer.dataset.playerId = String(player.id);
                 transfer.textContent = SOW_t("hud.gift");
-                rank.style.cssText = "font-size:10px;color:var(--sow-muted);font-weight:800;";
-                territory.style.color = "var(--sow-gold)";
-                troops.style.color = "#86efac";
+                rank.className = "sow-hud__player-rank";
+                territory.className = "sow-hud__player-land";
+                troops.className = "sow-hud__player-troops";
                 left.appendChild(rank);
                 left.appendChild(status);
                 left.appendChild(name);
@@ -759,7 +875,8 @@
                 row = { card: card, rank: rank, status: status, name: name, territory: territory, troops: troops, key: "" };
             }
 
-            var rowKey = [player.rank, idx, player.name, player.troops, player.tile_count, player.is_alive, player.is_me].join("|");
+            var displayName = player.name || SOW_t("hud.player_name");
+            var rowKey = [player.rank, idx, displayName, player.troops, player.tile_count, player.is_alive, player.is_me].join("|");
             if (row.key !== rowKey) {
                 row.key = rowKey;
                 row.card.classList.toggle("is-me", !!player.is_me);
@@ -767,7 +884,7 @@
                 var displayRank = Number.isFinite(Number(player.rank)) ? Number(player.rank) : idx + 1;
                 row.rank.textContent = "#" + displayRank;
                 row.status.textContent = player.is_alive ? (displayRank === 1 ? "👑" : "🛡️") : "💀";
-                row.name.textContent = player.name || SOW_t("hud.player_name");
+                row.name.textContent = displayName;
                 row.territory.textContent = Math.round((player.territory_pct || 0) * 100) + "%";
                 row.troops.textContent = (player.troops > 1000 ? (player.troops / 1000).toFixed(1) + "k" : Math.floor(player.troops)) + " ⚔";
             }
@@ -870,6 +987,7 @@
         hudRoot.hidden = false;
 
         var hud = hudState.hud;
+        hudRoot.classList.toggle("is-reduced-motion", Boolean(hudState.settings && hudState.settings.reduced_motion));
         var devTools = hud.dev_tools || {};
         if (hudRefs.devBtn) {
             hudRefs.devBtn.classList.toggle("hidden", !devTools.available);
@@ -922,7 +1040,10 @@
                 ? SOW_t("hud.fps_ping", { fps: hud.fps, ping: hud.ping })
                 : SOW_t("hud.fps", { fps: hasFps ? hud.fps : "--" });
         }
-        if (hudRefs.inboxCount) hudRefs.inboxCount.textContent = String(hud.inbox_count || 0);
+        if (hudRefs.inboxCount) {
+            hudRefs.inboxCount.textContent = String(hud.inbox_count || 0);
+            hudRefs.inboxCount.hidden = !hud.inbox_count;
+        }
 
         // Hover Card
         if (hudRefs.hoverCard) {
@@ -939,6 +1060,7 @@
                     if (hov.factories > 0) bldText.push(hudIcon("factory", "sow-hud__inline-icon") + " x" + hov.factories);
                     if (hov.ports > 0) bldText.push(hudIcon("port", "sow-hud__inline-icon") + " x" + hov.ports);
                     if (hov.bunkers > 0) bldText.push(hudIcon("bunker", "sow-hud__inline-icon") + " x" + hov.bunkers);
+                    if (hov.farms > 0) bldText.push(hudIcon("farm", "sow-hud__inline-icon") + " x" + hov.farms);
                     hudRefs.hoverBlds.innerHTML = bldText.join(" ");
                 }
             } else {
@@ -983,6 +1105,7 @@
                     ? label + ". " + shortageText
                     : (costText ? label + " " + costText : label);
                 button.setAttribute("aria-label", accessibleLabel);
+                if (button.title !== accessibleLabel) button.title = accessibleLabel;
             });
         }
 
@@ -1120,6 +1243,14 @@
             }
         }
         var mapMenuOpen = renderMapMenu(hud.map_menu);
+        renderBuildingCard(hud.map_menu);
+        var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: hudSettingsOpen, toggle_dev_sidebar: devSidebarOpen, toggle_emoji: emojiPickerOpen };
+        hudRefs.panelButtons.forEach(function (button) {
+            var expanded = Boolean(panelStates[button.dataset.command]);
+            button.classList.toggle("active", expanded);
+            var value = String(expanded);
+            if (button.getAttribute("aria-expanded") !== value) button.setAttribute("aria-expanded", value);
+        });
         hudRoot.dataset.overlayOpen = String(Boolean(
             leaderboardOpen || inboxOpen || transferOpen || betrayalOpen ||
             surrenderModalOpen || emojiPickerOpen || isOver
@@ -1248,6 +1379,8 @@
                 send("spawn_troops");
             } else if (cmd === "select_building") {
                 send("select_building", { kind: btn.dataset.kind });
+            } else if (cmd === "close_building_card") {
+                if (hudRefs && hudRefs.buildingCard) hudRefs.buildingCard.classList.add("hidden");
             } else if (cmd === "confirm_endgame_leave") {
                 send("return_to_menu");
             } else if (cmd === "open_store") {

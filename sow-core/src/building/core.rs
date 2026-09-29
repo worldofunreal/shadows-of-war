@@ -129,6 +129,7 @@ pub struct BuildingAggregate {
     pub bunker_levels: u32,
     pub factory_levels: u32,
     pub port_levels: u32,
+    pub farm_levels: u32,
     pub foundry_levels: u32,
     pub armory_levels: u32,
     pub intel_levels: u32,
@@ -144,6 +145,7 @@ pub struct BuildingAggregate {
     pub count_bunker: u32,
     pub count_factory: u32,
     pub count_port: u32,
+    pub count_farm: u32,
 }
 
 impl BuildingAggregate {
@@ -154,6 +156,7 @@ impl BuildingAggregate {
             BuildingKind::Bunker => self.count_bunker,
             BuildingKind::Factory => self.count_factory,
             BuildingKind::Port => self.count_port,
+            BuildingKind::Farm => self.count_farm,
         }
     }
 
@@ -165,6 +168,7 @@ impl BuildingAggregate {
             BuildingKind::Bunker => self.bunker_levels,
             BuildingKind::Factory => self.factory_levels,
             BuildingKind::Port => self.port_levels,
+            BuildingKind::Farm => self.farm_levels,
         }
     }
 }
@@ -186,6 +190,7 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Bunker => a.count_bunker += 1,
             BuildingKind::Factory => a.count_factory += 1,
             BuildingKind::Port => a.count_port += 1,
+            BuildingKind::Farm => a.count_farm += 1,
         }
         let active_lvl = b.active_level();
         if active_lvl == 0 {
@@ -196,15 +201,6 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::City => {
                 a.city_levels += active_lvl as u32;
                 a.ready_city_count += 1;
-                a.port_levels += b.modules.port as u32;
-                if b.modules.port > 0 {
-                    a.has_completed_port = true;
-                }
-                a.foundry_levels += b.modules.foundry as u32;
-                a.armory_levels += b.modules.armory as u32;
-                a.intel_levels += b.modules.intel as u32;
-                a.arsenal_levels += b.modules.arsenal as u32;
-                a.shield_levels += b.modules.shield as u32;
             }
             BuildingKind::Bunker => {
                 a.bunker_levels += active_lvl as u32;
@@ -216,6 +212,9 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
                 a.has_completed_port = true;
+            }
+            BuildingKind::Farm => {
+                a.farm_levels += active_lvl as u32;
             }
         }
     }

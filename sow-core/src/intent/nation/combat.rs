@@ -690,12 +690,11 @@ impl SowEngine {
             self.building_aggregates_dirty = false;
         }
 
-        let agg = self
-            .building_aggregates
-            .get(bot_id as usize)
-            .copied()
-            .unwrap_or_default();
-        if agg.arsenal_levels == 0 {
+        if !self.buildings.iter().any(|b| {
+            b.owner_id == bot_id
+                && b.kind == BuildingKind::City
+                && b.active_level() >= BuildingKind::City.max_level()
+        }) {
             return;
         }
 
@@ -707,7 +706,7 @@ impl SowEngine {
             }
             if b.owner_id == bot_id
                 && b.kind == BuildingKind::City
-                && b.modules.arsenal > 0
+                && b.active_level() >= BuildingKind::City.max_level()
                 && !b.under_construction
                 && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
             {
@@ -771,8 +770,8 @@ impl SowEngine {
                 self.buildings
                     .iter()
                     .filter(|b| {
-                        b.kind == BuildingKind::City
-                            && b.modules.shield > 0
+                        b.kind == BuildingKind::Bunker
+                            && b.active_level() >= BuildingKind::Bunker.max_level()
                             && !b.under_construction
                     })
                     .map(|b| (b.tile_idx, b.owner_id))
@@ -797,18 +796,12 @@ impl SowEngine {
             }
             let mut score = match b.kind {
                 BuildingKind::City => {
-                    let mut val = 25000.0;
-                    if b.modules.arsenal > 0 {
-                        val += 25000.0;
-                    }
-                    if b.modules.shield > 0 {
-                        val += 15000.0;
-                    }
-                    val
+                    25000.0 + 10000.0 * (b.active_level() as f64)
                 }
                 BuildingKind::Bunker => 5000.0 * (b.level as f64),
                 BuildingKind::Factory => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
+                BuildingKind::Farm => 7000.0 * (b.level as f64),
             };
 
             let bx = b.tile_idx % self.state.map.width;

@@ -45,16 +45,6 @@ pub struct PlacementQuery<'a> {
 }
 
 pub fn resolve_build_target_tile(query: &PlacementQuery) -> Result<u32, &'static str> {
-    if let Some(tile) = find_stack_target_tile(
-        query.kind,
-        query.click_x,
-        query.click_y,
-        query.map_w,
-        query.my_id,
-        query.buildings,
-    ) {
-        return Ok(tile);
-    }
     resolve_building_placement_tile(query)
 }
 

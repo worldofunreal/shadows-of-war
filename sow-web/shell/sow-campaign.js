@@ -5,9 +5,15 @@
     const TYPES = ["scene", "choice", "objective", "guide", "end"];
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
-        building: "buildings", fleet: "fleets", nuke: "nukes", elapsed: "elapsed_seconds"
+        building: "buildings", city: "cities", farm: "farms", factory: "factories",
+        port: "ports", bunker: "bunkers", structure_upgrade: "structure_upgrades",
+        city_upgrade: "city_upgrades", city_level: "city_levels",
+        port_upgrade: "port_upgrades", port_level: "port_levels",
+        tile_upgrade: "tile_upgrades", resource_transfer: "resource_transfers",
+        alliance: "alliances_formed", support: "ally_support_deliveries",
+        fleet: "fleets", nuke: "nukes", elapsed: "elapsed_seconds"
     };
-    const WORLD_TARGETS = ["expand", "assault", "target_action"];
+    const WORLD_TARGETS = ["expand", "assault", "target_action", "player"];
     const UI_TARGETS = {
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
         campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
@@ -23,6 +29,12 @@
         dock_factory: '#sow-hud [data-command="select_building"][data-kind="Factory"]',
         dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
         dock_bunker: '#sow-hud [data-command="select_building"][data-kind="Bunker"]',
+        dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
+        upgrade_structure: "#sow-hud-building-card-upgrade",
+        transfer_gold: "#sow-hud-transfer-gold",
+        transfer_troops: "#sow-hud-transfer-troops",
+        transfer_send: '#sow-hud-transfer [data-command="send_resources"]',
+        transfer_request: '#sow-hud-transfer [data-command="request_resources"]',
         map_spawn: '#sow-hud [data-map-action="spawn"]',
         map_attack: '#sow-hud [data-map-action="attack"]',
         map_transfer: '#sow-hud [data-map-action="transfer"]',
@@ -91,8 +103,15 @@
         if (!object(settings) || typeof settings.buildings_enabled !== "boolean" || !Number.isInteger(settings.starting_troops) || settings.starting_troops < 1 || settings.starting_troops > 100000) {
             issue(null, "settings", "Choose buildings on/off and 1–100000 starting troops.");
         }
-        if (object(settings) && Object.keys(settings).some(key => !["buildings_enabled", "starting_troops"].includes(key))) issue(null, "settings", "Unknown match setting.");
-        const factions = new Set(["player"]);
+        if (object(settings)) {
+            if (Object.keys(settings).some(key => !["buildings_enabled", "starting_troops", "buildings_unlock_after_defeated", "campaign_support"].includes(key))) issue(null, "settings", "Unknown match setting.");
+            if (settings.buildings_unlock_after_defeated != null && typeof settings.buildings_unlock_after_defeated !== "string") issue(null, "settings.buildings_unlock_after_defeated", "Choose a faction that unlocks construction.");
+            if (settings.campaign_support != null) {
+                const support = settings.campaign_support;
+                if (!object(support) || Object.keys(support).some(key => !["after_defeated", "interval_seconds", "gold", "troops"].includes(key)) || typeof support.after_defeated !== "string" || !Number.isInteger(support.interval_seconds) || support.interval_seconds < 5 || support.interval_seconds > 600 || !Number.isFinite(support.gold) || support.gold < 0 || support.gold > 1000000000 || !Number.isFinite(support.troops) || support.troops < 0 || support.troops > 1000000000 || (support.gold === 0 && support.troops === 0)) issue(null, "settings.campaign_support", "Set a valid milestone, 5–600 second interval, and a positive gold or troop amount.");
+            }
+        }
+        const factions = new Set(["player"]), rosterFactions = new Set();
         if (roster) {
             knownFields(roster, ["_comment", "map", "player_spawn", "factions"], null, "roster");
             const expectedMap = definition.episode_id === "boudica" ? ["eastanglia", 896, 504]
@@ -107,11 +126,15 @@
                     issue(null, "roster", "Faction names must be unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["name", "x", "y", "role", "iq", "civ", "leader"], null, "roster.factions");
+                knownFields(faction, ["name", "x", "y", "role", "iq", "civ", "leader", "avatar"], null, "roster.factions");
                 factions.add(faction.name);
+                rosterFactions.add(faction.name);
                 if (!["kin", "independent", "vassal", "boss", "big_boss", "neutral"].includes(faction.role) || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid faction role or spawn: " + faction.name);
                 else if (expectedMap && (faction.x >= expectedMap[1] || faction.y >= expectedMap[2])) issue(null, "roster", "Faction spawn is outside the campaign map: " + faction.name);
+                if (faction.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(faction.avatar) || faction.avatar !== "null" && options.hasAvatar && !options.hasAvatar(faction.avatar))) issue(null, "roster.factions.avatar", "Choose an existing portrait for " + faction.name + ".");
             });
+            if (object(settings) && settings.buildings_unlock_after_defeated && !rosterFactions.has(settings.buildings_unlock_after_defeated)) issue(null, "settings.buildings_unlock_after_defeated", "Construction unlock refers to an unknown faction.");
+            if (object(settings) && object(settings.campaign_support) && !rosterFactions.has(settings.campaign_support.after_defeated)) issue(null, "settings.campaign_support.after_defeated", "Support milestone refers to an unknown faction.");
         }
         const strings = definition.strings || {};
         const languageList = Array.isArray(strings) ? strings : object(strings) ? Object.keys(strings) : [];
@@ -131,10 +154,12 @@
         const speakers = definition.speakers || {};
         if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
         else Object.entries(speakers).forEach(([key, speaker]) => {
-            knownFields(speaker, ["name", "name_key", "avatar"], null, "speakers." + key);
-            if (!id(key) || !object(speaker) || !(typeof speaker.name === "string" && speaker.name.trim() || typeof speaker.name_key === "string" && speaker.name_key.trim())) issue(null, "speakers", "Invalid character: " + key);
+            knownFields(speaker, ["name", "name_key", "avatar", "faction", "dynamic"], null, "speakers." + key);
+            if (!id(key) || !object(speaker) || !(typeof speaker.name === "string" && speaker.name.trim() || typeof speaker.name_key === "string" && speaker.name_key.trim() || typeof speaker.faction === "string" && factions.has(speaker.faction))) issue(null, "speakers", "Invalid character: " + key);
             else {
-                if (speaker.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(speaker.avatar) || options.hasAvatar && !options.hasAvatar(speaker.avatar))) issue(null, "speakers", "Choose an existing avatar: " + key);
+                if (speaker.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(speaker.avatar) || speaker.avatar !== "null" && options.hasAvatar && !options.hasAvatar(speaker.avatar))) issue(null, "speakers", "Choose an existing avatar: " + key);
+                if (speaker.faction != null && !rosterFactions.has(speaker.faction)) issue(null, "speakers." + key + ".faction", "Choose an existing roster faction.");
+                if (speaker.dynamic != null && speaker.dynamic !== "first_ally_support") issue(null, "speakers." + key + ".dynamic", "Unknown dynamic speaker.");
                 text(null, "speakers", speaker.name_key, false);
             }
         });
@@ -170,15 +195,16 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "next", "routes"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "choices"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "next", "routes"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "next", "routes"],
-            end: ["id", "type", "title_key", "body_key", "speaker", "presentation"]
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "next", "routes", "attack_ratio_on_enter"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "next", "routes", "attack_ratio_on_enter"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "next", "routes", "attack_ratio_on_enter"],
+            end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
             if (!TYPES.includes(step.type)) issue(step, "type", "Unknown step type.");
+            if (own(step, "attack_ratio_on_enter") && (!Number.isFinite(step.attack_ratio_on_enter) || step.attack_ratio_on_enter < 0.05 || step.attack_ratio_on_enter > 1)) issue(step, "attack_ratio_on_enter", "Attack ratio must be between 0.05 and 1.");
             ["title_key", "body_key", "hint_key"].forEach(field => text(step, field, step[field], false));
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
             if (step.presentation && !["dialogue", "chapter"].includes(step.presentation)) issue(step, "presentation", "Unknown presentation.");
@@ -237,10 +263,15 @@
                 const trigger = step.trigger;
                 if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "ui"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
-                    knownFields(trigger, ["type", "scope", "value", "target", "action"], step, "trigger");
+                    knownFields(trigger, ["type", "scope", "value", "target", "targets", "action"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
-                    if (["contact", "defeated"].includes(trigger.type)) {
+                    if (trigger.type === "contact") {
                         if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
+                    } else if (trigger.type === "defeated") {
+                        if (trigger.targets != null) {
+                            if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || !rosterFactions.has(target))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
+                            if (!Number.isFinite(trigger.value) || trigger.value !== trigger.targets.length) issue(step, "trigger.value", "The required amount must match the selected factions.");
+                        } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
                     } else if (!Number.isFinite(trigger.value) || trigger.value <= 0) issue(step, "trigger.value", "Objective value must be greater than zero.");
@@ -285,7 +316,13 @@
         let changed = true;
         while (changed) {
             changed = false;
-            byId.forEach(step => { const targets = edges(step); if (!ends.has(step.id) && targets.length && targets.every(target => ends.has(target))) { ends.add(step.id); changed = true; } });
+            byId.forEach(step => {
+                const targets = edges(step);
+                const canReachEnding = step.type === "choice"
+                    ? targets.some(target => ends.has(target))
+                    : targets.length && targets.every(target => ends.has(target));
+                if (!ends.has(step.id) && canReachEnding) { ends.add(step.id); changed = true; }
+            });
         }
         reached.forEach(key => { if (!ends.has(key)) issue(byId.get(key), "next", "This path cannot reach an ending."); });
         const checked = new Set(), visiting = new Set();
@@ -325,8 +362,13 @@
             let current = 0, target = Number(trigger.value || 1);
             if (trigger.type === "contact" || trigger.type === "defeated") {
                 const field = trigger.type === "contact" ? "contact_names" : "defeated_names";
-                current = (facts[field] || []).includes(trigger.target) && !(reference[field] || []).includes(trigger.target) ? 1 : 0;
-                target = 1;
+                if (trigger.type === "defeated" && Array.isArray(trigger.targets)) {
+                    current = trigger.targets.filter(name => (facts[field] || []).includes(name) && !(reference[field] || []).includes(name)).length;
+                    target = Number(trigger.value || trigger.targets.length);
+                } else {
+                    current = (facts[field] || []).includes(trigger.target) && !(reference[field] || []).includes(trigger.target) ? 1 : 0;
+                    target = 1;
+                }
             } else if (trigger.type === "ui") {
                 const uiReference = trigger.scope === "step" ? uiBaseline : trigger.scope === "episode" ? initialUi : {};
                 current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);

@@ -340,7 +340,7 @@ mod bot_iq_alliance_tests {
             owner_id: 1,
             tile_idx: 0,
             kind: crate::game::BuildingKind::City,
-            level: 1,
+            level: BuildingKind::City.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
             modules: m1,
@@ -359,19 +359,15 @@ mod bot_iq_alliance_tests {
         });
 
         // Give bot 2 a SAM covering the city
-        let m2 = crate::building::CityModules {
-            shield: 1,
-            ..Default::default()
-        };
         engine.buildings.push(crate::building::Building {
             id: 102,
             owner_id: 2,
             tile_idx: 10,
-            kind: crate::game::BuildingKind::City,
-            level: 1,
+            kind: BuildingKind::Bunker,
+            level: BuildingKind::Bunker.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
-            modules: m2,
+            modules: Default::default(),
         });
 
         for _ in 0..30 {
@@ -416,7 +412,7 @@ mod bot_iq_alliance_tests {
             owner_id: 1,
             tile_idx: 0,
             kind: crate::game::BuildingKind::City,
-            level: 1,
+            level: BuildingKind::City.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
             modules: m1,
@@ -459,7 +455,7 @@ mod bot_iq_alliance_tests {
                 owner_id: 1,
                 tile_idx: 0,
                 kind: BuildingKind::City,
-                level: 1,
+                level: BuildingKind::City.max_level(),
                 under_construction: false,
                 ticks_until_complete: 0,
                 modules: crate::building::CityModules {
@@ -511,7 +507,7 @@ mod bot_iq_alliance_tests {
             owner_id: 1,
             tile_idx: 0,
             kind: BuildingKind::City,
-            level: 1,
+            level: BuildingKind::City.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
             modules: crate::building::CityModules {
@@ -770,7 +766,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn test_bot_build_stacks_like_player() {
+    fn test_structure_upgrade_uses_an_explicit_intent() {
         let w = 32u32;
         let config = crate::game_config::GameConfig::default();
         let mut game = GameState::new(42, w, w, config.clone());
@@ -816,10 +812,15 @@ mod bot_iq_alliance_tests {
             0,
         );
 
-        assert_eq!(
-            engine.buildings.len(),
-            1,
-            "stack must not spawn a second city"
+        assert_eq!(engine.buildings.len(), 1);
+        assert_eq!(engine.buildings[0].level, 1);
+
+        engine.apply_stamped_intent(
+            &crate::protocol::StampedIntent {
+                player_id: 1,
+                intent: crate::protocol::GameplayIntent::UpgradeStructure { building_id: 1 },
+            },
+            0,
         );
         assert_eq!(engine.buildings[0].level, 2);
     }

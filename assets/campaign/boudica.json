@@ -2,8 +2,8 @@
   "_comment": "Boudica tutorial roster — edited via tools/campaign-editor. role = kin | independent | vassal | boss | big_boss | neutral.",
   "map": "eastanglia",
   "player_spawn": [
-    720,
-    180
+    696,
+    64
   ],
   "factions": [
     {
@@ -15,8 +15,8 @@
     },
     {
       "name": "Snettisham",
-      "x": 680,
-      "y": 140,
+      "x": 667,
+      "y": 65,
       "role": "kin",
       "iq": 100
     },
@@ -29,8 +29,8 @@
     },
     {
       "name": "Stonea",
-      "x": 660,
-      "y": 170,
+      "x": 697,
+      "y": 95,
       "role": "kin",
       "iq": 100
     },
@@ -50,8 +50,8 @@
     },
     {
       "name": "Iceni Coast",
-      "x": 750,
-      "y": 150,
+      "x": 726,
+      "y": 73,
       "role": "kin",
       "iq": 100
     },
@@ -59,28 +59,32 @@
       "name": "Colonia Veterans",
       "x": 720,
       "y": 220,
-      "role": "independent",
+      "role": "vassal",
+      "civ": "Roman Empire",
       "iq": 100
     },
     {
-      "name": "Roman Outpost",
-      "x": 730,
-      "y": 250,
-      "role": "independent",
+      "name": "The Iceni Despoilers",
+      "x": 706,
+      "y": 64,
+      "role": "vassal",
+      "civ": "Roman Empire",
       "iq": 100
     },
     {
-      "name": "Pro-Roman Nobles",
+      "name": "Roman Supply Depot",
       "x": 690,
       "y": 220,
-      "role": "independent",
+      "role": "vassal",
+      "civ": "Roman Empire",
       "iq": 100
     },
     {
       "name": "Tax Collectors",
       "x": 670,
       "y": 240,
-      "role": "independent",
+      "role": "vassal",
+      "civ": "Roman Empire",
       "iq": 100
     },
     {
@@ -137,7 +141,7 @@
       "x": 560,
       "y": 260,
       "role": "vassal",
-      "iq": 100
+      "iq": 60
     },
     {
       "name": "Catuvellauni North",

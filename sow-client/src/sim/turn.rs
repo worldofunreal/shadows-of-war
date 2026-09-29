@@ -36,17 +36,67 @@ impl TutorialObservation {
                 .map(|projectile| projectile.id),
         );
         self.owned_structures.clear();
+        self.owned_structure_kinds.clear();
         for building in &engine.buildings {
             if building.owner_id == my_id {
                 self.owned_structures.insert(building.id);
+                self.owned_structure_kinds.insert(building.id, building.kind);
                 if building.active_level() > 0 {
                     self.seen_structures.insert(building.id);
+                    let kind = match building.kind {
+                        sow_core::game::BuildingKind::City => "cities",
+                        sow_core::game::BuildingKind::Bunker => "bunkers",
+                        sow_core::game::BuildingKind::Factory => "factories",
+                        sow_core::game::BuildingKind::Port => "ports",
+                        sow_core::game::BuildingKind::Farm => "farms",
+                    };
+                    self.seen_buildings_by_kind
+                        .entry(kind.to_string())
+                        .or_default()
+                        .insert(building.id);
+                    if building.kind == sow_core::game::BuildingKind::City {
+                        self.seen_cities.insert(building.id);
+                    }
                 }
             }
         }
         let Some(me) = engine.state.player(my_id) else {
             return;
         };
+        if !self.alliances_initialized {
+            self.seen_alliances.extend(me.alliances.iter().copied());
+            self.alliances_initialized = true;
+        } else {
+            for ally_id in &me.alliances {
+                if self.seen_alliances.insert(*ally_id) {
+                    self.alliances_formed = self.alliances_formed.saturating_add(1);
+                }
+            }
+        }
+        self.city_levels = self.city_levels.max(
+            engine
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_id
+                        && building.kind == sow_core::game::BuildingKind::City
+                })
+                .map(|building| u64::from(building.active_level()))
+                .max()
+                .unwrap_or_default(),
+        );
+        self.port_levels = self.port_levels.max(
+            engine
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_id
+                        && building.kind == sow_core::game::BuildingKind::Port
+                })
+                .map(|building| u64::from(building.active_level()))
+                .max()
+                .unwrap_or_default(),
+        );
         if me.has_spawned {
             if let Some(previous) = self.previous_tiles.replace(me.tile_count) {
                 self.tiles_gained = self
@@ -84,12 +134,68 @@ impl TutorialObservation {
 
     pub(crate) fn observe_events(&mut self, engine: &SowEngine, my_id: u16) {
         for event in &engine.state.events {
+            if let GameEvent::ResourceTransferred {
+                sender_id,
+                receiver_id,
+                ..
+            } = event
+            {
+                if *sender_id == my_id {
+                    self.resource_transfers = self.resource_transfers.saturating_add(1);
+                }
+                if *receiver_id == my_id
+                    && let (Some(sender), Some(receiver)) = (
+                        engine.state.player(*sender_id),
+                        engine.state.player(*receiver_id),
+                    )
+                    && sender.team.is_some()
+                    && sender.team == receiver.team
+                {
+                    self.ally_support_deliveries = self.ally_support_deliveries.saturating_add(1);
+                    self.first_ally_support_sender.get_or_insert(*sender_id);
+                }
+            }
             // Construction runs before combat. Keep a completion even if the building
             // is destroyed or captured later in this tick, using its pre-tick owner.
             if let GameEvent::StructureReady { id, .. } = event
                 && self.owned_structures.contains(id)
             {
                 self.seen_structures.insert(*id);
+                if let Some(kind) = self.owned_structure_kinds.get(id).copied() {
+                    let key = match kind {
+                        sow_core::game::BuildingKind::City => "cities",
+                        sow_core::game::BuildingKind::Bunker => "bunkers",
+                        sow_core::game::BuildingKind::Factory => "factories",
+                        sow_core::game::BuildingKind::Port => "ports",
+                        sow_core::game::BuildingKind::Farm => "farms",
+                    };
+                    self.seen_buildings_by_kind
+                        .entry(key.to_string())
+                        .or_default()
+                        .insert(*id);
+                }
+            }
+            if let GameEvent::StructureUpgraded { id, kind, .. } = event
+                && self.owned_structures.contains(id)
+            {
+                self.structure_upgrades = self.structure_upgrades.saturating_add(1);
+                match kind {
+                    sow_core::game::BuildingKind::City => {
+                        self.city_upgrades = self.city_upgrades.saturating_add(1);
+                    }
+                    sow_core::game::BuildingKind::Port => {
+                        self.port_upgrades = self.port_upgrades.saturating_add(1);
+                    }
+                    _ => {}
+                }
+            }
+            if let GameEvent::TileUpgraded { tile_idx, .. } = event {
+                let width = engine.state.map.width;
+                if width > 0
+                    && engine.state.map.owner_id(tile_idx % width, tile_idx / width) == my_id
+                {
+                    self.tile_upgrades = self.tile_upgrades.saturating_add(1);
+                }
             }
             if let GameEvent::PlayerEliminated { player_id, conqueror_id, assists, .. } = event
                 && (*conqueror_id == my_id || assists.iter().any(|(player_id, _)| *player_id == my_id))
@@ -112,10 +218,13 @@ impl SowApp {
             };
             e.apply_intents(&turn.intents);
             if observe_tutorial {
+                // Capture accepted actions before tick() clears their events.
+                self.sim.tutorial_observation.observe_events(e, my_id);
                 // Accepted launches can finish and disappear in their first tick.
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
             e.tick();
+            self.sim.config.buildings_enabled = e.state.config.buildings_enabled;
             if observe_tutorial {
                 self.sim.tutorial_observation.observe_events(e, my_id);
                 self.sim.tutorial_observation.observe_sim(e, my_id);
@@ -302,6 +411,107 @@ mod tests {
         assert_eq!(observation.seen_attacks.len(), 1);
         assert_eq!(observation.seen_fleets.len(), 1);
         assert_eq!(observation.seen_nukes.len(), 2);
+    }
+
+    #[test]
+    fn campaign_action_events_survive_the_tick_event_clear() {
+        let mut engine = engine();
+        let mut observation = TutorialObservation::default();
+        for (id, tile_idx, kind) in [
+            (20, 9, BuildingKind::City),
+            (21, 10, BuildingKind::Port),
+        ] {
+            engine.add_building(Building {
+                id,
+                owner_id: 1,
+                tile_idx,
+                kind,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: CityModules::default(),
+            });
+        }
+        observation.observe_sim(&engine, 1);
+        engine.state.events.extend([
+            GameEvent::StructureUpgraded {
+                id: 20,
+                tile_idx: 9,
+                kind: BuildingKind::City,
+                level: 2,
+            },
+            GameEvent::StructureUpgraded {
+                id: 21,
+                tile_idx: 10,
+                kind: BuildingKind::Port,
+                level: 2,
+            },
+            GameEvent::TileUpgraded {
+                tile_idx: 9,
+                level: 1,
+            },
+            GameEvent::ResourceTransferred {
+                sender_id: 1,
+                receiver_id: 2,
+                gold: 10.0,
+                troops: 10.0,
+            },
+        ]);
+
+        observation.observe_events(&engine, 1);
+        engine.tick(); // This clears intent events at the start of every simulation tick.
+        assert_eq!(observation.structure_upgrades, 2);
+        assert_eq!(observation.city_upgrades, 1);
+        assert_eq!(observation.port_upgrades, 1);
+        assert_eq!(observation.tile_upgrades, 1);
+        assert_eq!(observation.resource_transfers, 1);
+    }
+
+    #[test]
+    fn campaign_alliance_metric_ignores_starting_allies() {
+        let mut engine = engine();
+        let mut observation = TutorialObservation::default();
+        engine.state.player_mut(1).unwrap().alliances.push(2);
+
+        observation.observe_sim(&engine, 1);
+        assert_eq!(observation.alliances_formed, 0);
+
+        engine.state.player_mut(1).unwrap().alliances.push(3);
+        observation.observe_sim(&engine, 1);
+        observation.observe_sim(&engine, 1);
+        assert_eq!(observation.alliances_formed, 1);
+    }
+
+    #[test]
+    fn campaign_structure_level_facts_use_highest_building_not_sum() {
+        let mut engine = engine();
+        let mut observation = TutorialObservation::default();
+        for (id, kind) in [
+            (30, BuildingKind::City),
+            (31, BuildingKind::Port),
+            (32, BuildingKind::Port),
+        ] {
+            engine.add_building(Building {
+                id,
+                owner_id: 1,
+                tile_idx: 9,
+                kind,
+                level: 1,
+                under_construction: false,
+                ticks_until_complete: 0,
+                modules: CityModules::default(),
+            });
+        }
+
+        observation.observe_sim(&engine, 1);
+        assert_eq!(observation.city_levels, 1);
+        assert_eq!(observation.port_levels, 1);
+
+        engine.buildings.iter_mut().find(|building| building.id == 30).unwrap().level = 3;
+        engine.buildings.iter_mut().find(|building| building.id == 31).unwrap().level = 2;
+        observation.observe_sim(&engine, 1);
+        assert_eq!(observation.city_levels, 3);
+        assert_eq!(observation.port_levels, 2);
     }
 
     #[test]

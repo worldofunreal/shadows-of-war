@@ -130,6 +130,7 @@ const episodeId = /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(query.get("episode") || "") 
 let MAPW = 896, MAPH = 504;
 let terrain = null;            // Uint8Array length MAPW*MAPH, bit7 = land
 let roster = { map:"eastanglia", player_spawn:[696,45], factions:[] };
+let avatarCatalog = [];
 let rosterEtag = null;
 let rosterDirty = false, rosterExternal = false, rosterSaving = false;
 let sel = -1;                  // index into factions, or -2 = player spawn
@@ -148,10 +149,10 @@ function markRosterDirty(){
   document.getElementById("rosterStatus").className = "hint warn";
 }
 document.getElementById("side").addEventListener("input", e => {
-  if(e.target.matches("#psx,#psy,#fn,#fr,#fx,#fy,#fiq,#fiqn")) markRosterDirty();
+  if(e.target.matches("#psx,#psy,#fn,#fr,#fx,#fy,#fiq,#fiqn,#fa")) markRosterDirty();
 });
 document.getElementById("side").addEventListener("change", e => {
-  if(e.target.matches("#psx,#psy,#fn,#fr,#fx,#fy,#fiq,#fiqn")) markRosterDirty();
+  if(e.target.matches("#psx,#psy,#fn,#fr,#fx,#fy,#fiq,#fiqn,#fa")) markRosterDirty();
 });
 
 function isLand(mx, my) {
@@ -299,9 +300,13 @@ function renderSide() {
   } else if (sel >= 0) {
     const f = roster.factions[sel];
     const opts = Object.keys(ROLES).map(k=>`<option value="${k}" ${k===f.role?"selected":""}>${ROLES[k].label}</option>`).join("");
+    const avatarOpts = [{id:"",label:"Generic portrait"},...avatarCatalog.map(id=>({id,label:id.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())}))];
+    if(f.avatar && !avatarCatalog.includes(f.avatar)) avatarOpts.push({id:f.avatar,label:"Missing asset · "+f.avatar});
+    const avatarHtml = avatarOpts.map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===(f.avatar||"")?"selected":""}>${escapeHtml(a.label)}</option>`).join("");
     const iq = f.iq ?? 100;
     host.innerHTML = `<label>Name</label><input id="fn" value="${escapeHtml(f.name)}">
       <label>Role</label><select id="fr">${opts}</select>
+      <label>Nameplate and dialogue portrait</label><select id="fa">${avatarHtml}</select>
       <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
       <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
       <div class="row"><input id="fiq" type="range" min="85" max="180" step="5" value="${iq}" style="flex:3"><input id="fiqn" type="number" min="85" max="180" value="${iq}" style="flex:1;min-width:56px"></div>
@@ -317,6 +322,7 @@ function renderSide() {
     updateFactionHint();
     document.getElementById("fn").oninput = e => { f.name=e.target.value; renderList(); draw(); };
     document.getElementById("fr").onchange = e => { f.role=e.target.value; renderList(); renderSide(); draw(); };
+    document.getElementById("fa").onchange = e => { if(e.target.value) f.avatar=e.target.value; else delete f.avatar; markRosterDirty(); };
     document.getElementById("fx").oninput = e => { f.x=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
     document.getElementById("fy").oninput = e => { f.y=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
     const setIq = v => { v=Math.max(85,Math.min(180,v|0)); f.iq=v; document.getElementById("fiq").value=v; document.getElementById("fiqn").value=v; document.getElementById("iqtier").textContent=iqTier(v); };
@@ -394,7 +400,7 @@ function serialize() {
     _comment: roster._comment || `${episodeId} campaign roster — edited via tools/campaign-editor.`,
     map: roster.map || "eastanglia",
     player_spawn: roster.player_spawn.map(n=>Math.round(n)),
-    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, iq:f.iq??100, ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}) })),
+    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, iq:f.iq??100, ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
@@ -442,7 +448,7 @@ document.getElementById("fileIn").onchange = e => {
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 
 function normalize(j){
-  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], factions:(j.factions||[]).map(f=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",iq:(f.iq==null?100:f.iq|0),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{})})) };
+  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], factions:(j.factions||[]).map(f=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",iq:(f.iq==null?100:f.iq|0),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
   validateRoster(result);
   return result;
 }
@@ -451,7 +457,7 @@ function validateRoster(value){
   const names = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Number.isFinite(f.x) || !Number.isFinite(f.y)) throw new Error("invalid or duplicate faction");
+    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
     names.add(f.name);
   }
 }
@@ -526,6 +532,12 @@ async function fillEpisodePicker(){
 (async function(){
   resize();
   await fillEpisodePicker();
+  try {
+    const response = await fetch("/__avatars", {cache:"no-store"});
+    if(!response.ok) throw new Error("avatar list unavailable");
+    avatarCatalog = await response.json();
+    if(!Array.isArray(avatarCatalog) || avatarCatalog.some(id=>typeof id!=="string" || !/^[a-z][a-z0-9_]*$/.test(id))) throw new Error("invalid avatar list");
+  } catch(e) { toast("Portrait list unavailable: "+e.message); }
   await loadRoster();
   try { await loadMap(); } catch(e){ hud.textContent="map load failed: "+e.message; hud.className="warn"; }
   fitView(); draw();

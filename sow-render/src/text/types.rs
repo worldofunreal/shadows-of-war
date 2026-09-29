@@ -119,8 +119,8 @@ pub const KIND_CROSS: f32 = 7.0;
 pub const KIND_ARC: f32 = 8.0;
 
 pub const AVATAR_CELL: u32 = 128;
-pub const AVATAR_COLS: u32 = 4;
-pub const AVATAR_ROWS: u32 = 4;
+pub const AVATAR_COLS: u32 = 8;
+pub const AVATAR_ROWS: u32 = 8;
 pub const AVATAR_SLOT_COUNT: usize = (AVATAR_COLS * AVATAR_ROWS) as usize;
 
 pub fn avatar_slot_uv(slot: usize) -> [f32; 4] {

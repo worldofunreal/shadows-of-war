@@ -5,12 +5,19 @@
     var query = new URLSearchParams(location.search);
     var episodeId = /^[a-z][a-z0-9_]{0,63}$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
     var rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
-    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, pickingFaction: false, flow: "episode", language: "en", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
+    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, pickingFaction: false, flow: "episode", language: "en", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
     var types = ["scene", "choice", "objective", "guide", "end"];
     var triggerTypes = [
         { value: "territory", label: "Gain territory" }, { value: "kills", label: "Defeat troops" },
         { value: "attack", label: "Launch an attack" }, { value: "troops", label: "Reach a troop minimum" },
-        { value: "building", label: "Complete a building" }, { value: "fleet", label: "Launch a fleet" },
+        { value: "building", label: "Complete a building" }, { value: "city", label: "Complete a city" },
+        { value: "farm", label: "Complete a farm" }, { value: "factory", label: "Complete a factory" },
+        { value: "port", label: "Complete a port" }, { value: "bunker", label: "Complete a bunker" },
+        { value: "structure_upgrade", label: "Upgrade a structure" }, { value: "city_upgrade", label: "Upgrade a city" },
+        { value: "city_level", label: "Reach a city level" },
+        { value: "port_upgrade", label: "Upgrade a port" }, { value: "port_level", label: "Reach port level" }, { value: "tile_upgrade", label: "Upgrade territory" },
+        { value: "resource_transfer", label: "Send resources" }, { value: "alliance", label: "Form an alliance" },
+        { value: "support", label: "Receive allied support" }, { value: "fleet", label: "Launch a fleet" },
         { value: "nuke", label: "Launch a nuke" }, { value: "elapsed", label: "Wait for game time" },
         { value: "contact", label: "Reach a faction" }, { value: "defeated", label: "Defeat a faction" },
         { value: "ui", label: "Use a control" }
@@ -76,7 +83,10 @@
     function chooseFactionTarget(name) {
         var step = state.definition && state.definition.steps.find(function (item) { return item.id === state.selected; });
         if (!step || !["objective", "guide"].includes(step.type)) return;
-        if (["contact", "defeated", "attack"].includes(step.trigger && step.trigger.type)) step.trigger.target = name;
+        if (step.trigger && step.trigger.type === "defeated" && Array.isArray(step.trigger.targets)) {
+            if (!step.trigger.targets.includes(name)) step.trigger.targets.push(name);
+            step.trigger.value = step.trigger.targets.length;
+        } else if (["contact", "defeated", "attack"].includes(step.trigger && step.trigger.type)) step.trigger.target = name;
         else step.marker = { target: name };
         setFactionPicker(false);
         markDirty(); renderInspector(); renderPreview(step.id);
@@ -314,6 +324,7 @@
             var bodyKey = step.body_key || firstLine && firstLine.body_key || (value === "scene" && step.hint_key);
             if (bodyKey) replacement.body_key = bodyKey;
             if (step.speaker || firstLine && firstLine.speaker) replacement.speaker = step.speaker || firstLine.speaker;
+            if (Number.isFinite(step.attack_ratio_on_enter)) replacement.attack_ratio_on_enter = step.attack_ratio_on_enter;
             if (["scene", "end"].includes(value)) replacement.presentation = step.presentation || "dialogue";
             if (value === "scene") {
                 if (Array.isArray(step.lines)) replacement.lines = step.lines;
@@ -343,6 +354,11 @@
         }));
         basics.appendChild(selectField("Speaker", step.speaker || "", speakerOptions(), function (value) { step.speaker = value || undefined; if (!value) delete step.speaker; markDirty(); }));
         if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", ["dialogue", "chapter"], function (value) { step.presentation = value; markDirty(); }));
+        basics.appendChild(inputField("Set send percentage on entry (%)", step.attack_ratio_on_enter == null ? "" : Math.round(step.attack_ratio_on_enter * 100), function (value) {
+            if (value.trim() === "") delete step.attack_ratio_on_enter;
+            else step.attack_ratio_on_enter = Number(value) / 100;
+            markDirty();
+        }, { type: "number", min: 5, max: 100, step: 1, placeholder: "No change" }));
         textEditor(basics, "Title", "title_key");
         if (step.body_key || step.type === "choice" || (step.type === "scene" && !Array.isArray(step.lines))) textEditor(basics, step.type === "end" ? "Closing text" : "Story text", "body_key");
         else if (step.type === "end") {
@@ -448,19 +464,32 @@
                 if (value === "elapsed" && step.type === "objective") delete step.guide;
                 markDirty(); renderInspector();
             }));
-            if (["contact", "defeated"].includes(step.trigger.type)) objective.appendChild(selectField("Faction", step.trigger.target, factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
+            if (step.trigger.type === "contact") objective.appendChild(selectField("Faction", step.trigger.target, factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
+            else if (step.trigger.type === "defeated") {
+                if (Array.isArray(step.trigger.targets)) {
+                    var targets = el("select", { multiple: "multiple", size: Math.min(8, Math.max(3, state.roster.factions.length)) });
+                    factionOptions().forEach(function (option) { var item = el("option", { value: option.value }, option.label); item.selected = step.trigger.targets.includes(option.value); targets.appendChild(item); });
+                    targets.addEventListener("change", function () { step.trigger.targets = Array.from(targets.selectedOptions).map(function (item) { return item.value; }); step.trigger.value = step.trigger.targets.length; markDirty(); });
+                    objective.appendChild(el("label", {}, "Factions to defeat")); objective.appendChild(targets);
+                } else {
+                    objective.appendChild(selectField("Faction", step.trigger.target || "", factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
+                    var groupTargets = el("button", { type: "button" }, "Track multiple factions (3/3)");
+                    groupTargets.addEventListener("click", function () { step.trigger.targets = step.trigger.target ? [step.trigger.target] : []; delete step.trigger.target; step.trigger.value = step.trigger.targets.length; markDirty(); renderInspector(); });
+                    objective.appendChild(groupTargets);
+                }
+            }
             else if (step.trigger.type === "attack") objective.appendChild(selectField("Attack target", step.trigger.target || "", [{ value: "", label: "Any faction" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); }));
             else if (step.trigger.type === "ui") objective.appendChild(selectField("Control action", step.trigger.action, inGameUiTargets(), function (value) { step.trigger.action = value; markDirty(); }));
             else objective.appendChild(inputField(step.trigger.type === "troops" ? "Minimum troops" : step.trigger.type === "elapsed" ? "Wait (seconds)" : "Required amount", step.trigger.value, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             if (step.trigger.type !== "troops") objective.appendChild(selectField("Count from", step.trigger.scope || "step", ["step", "episode", "total"], function (value) { step.trigger.scope = value; markDirty(); }));
             if (step.guide) {
                 objective.appendChild(selectField("Hand points at", step.guide.kind + ":" + step.guide.target, [
-                    { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }
+                    { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }, { value: "world:player", label: "Map · player base" }
                 ].concat(inGameUiTargets().map(function (key) { return { value: "ui:" + key, label: "Interface · " + key.replace(/_/g, " ") }; })), function (value) { var pair = value.split(":"); if (pair[0] !== step.guide.kind) delete step.guide.to; step.guide.kind = pair[0]; step.guide.target = pair[1]; markDirty(); renderInspector(); }));
                 objective.appendChild(selectField("Gesture", step.guide.gesture || "tap", ["tap", "hold", "drag"], function (value) { step.guide.gesture = value; if (value !== "drag") delete step.guide.to; markDirty(); renderInspector(); }));
                 if (step.guide.gesture === "drag") {
                     var dragTargets = step.guide.kind === "world"
-                        ? [{ value: "expand", label: "Map · expansion" }, { value: "assault", label: "Map · attack" }, { value: "target_action", label: "Map · target action" }]
+                        ? [{ value: "expand", label: "Map · expansion" }, { value: "assault", label: "Map · attack" }, { value: "target_action", label: "Map · target action" }, { value: "player", label: "Map · player base" }]
                         : [{ value: "", label: "Within this control" }].concat(inGameUiTargets().map(function (key) { return { value: key, label: "Interface · " + key.replace(/_/g, " ") }; }));
                     objective.appendChild(selectField("Drag destination", step.guide.to, dragTargets, function (value) { if (value) step.guide.to = value; else delete step.guide.to; markDirty(); }));
                 }
@@ -572,7 +601,7 @@
         return state.definition.steps.filter(function (step) { return step.id !== except; }).map(stepOption);
     }
     function factionOptions() { return state.roster.factions.map(function (faction) { return { value: faction.name, label: faction.name }; }); }
-    function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { return { value: id, label: state.definition.speakers[id].name || id }; })); }
+    function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id]; return { value: id, label: speaker.faction || speaker.name || id }; })); }
     function inGameUiTargets() { return Object.keys(window.SOWCampaign.UI_TARGETS).filter(function (key) { return state.flow === "menu" ? key.startsWith("menu_") || key === "campaign_replay" : !key.startsWith("menu_") && key !== "campaign_replay"; }); }
     function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : "expand"; }
     function flowEntry() { return state.flow === "menu" ? state.definition.menu_guide && state.definition.menu_guide.entry : state.definition.entry; }
@@ -589,6 +618,25 @@
         var settings = state.definition.settings;
         host.appendChild(checkboxField("Buildings available", settings.buildings_enabled, function (value) { settings.buildings_enabled = value; markDirty(); }));
         host.appendChild(inputField("Starting troops", settings.starting_troops, function (value) { settings.starting_troops = Number(value); $("#sampleTroops").textContent = Number(value).toLocaleString(); markDirty(); }, { type: "number", min: 1, max: 100000, step: 100 }));
+        host.appendChild(selectField("Unlock buildings after", settings.buildings_unlock_after_defeated || "", [{ value: "", label: "No delayed unlock" }].concat(factionOptions()), function (value) {
+            if (value) settings.buildings_unlock_after_defeated = value; else delete settings.buildings_unlock_after_defeated;
+            markDirty();
+        }));
+        host.appendChild(checkboxField("Allied support after milestone", Boolean(settings.campaign_support), function (enabled) {
+            if (!enabled) delete settings.campaign_support;
+            else {
+                var defaultMilestone = settings.buildings_unlock_after_defeated || (state.roster.factions.find(function (faction) { return faction.name === "The Iceni Despoilers"; }) || {}).name || "";
+                settings.campaign_support = settings.campaign_support || { after_defeated: defaultMilestone, interval_seconds: 30, gold: 100, troops: 100 };
+            }
+            markDirty(); renderSettings();
+        }));
+        if (settings.campaign_support) {
+            var support = settings.campaign_support;
+            host.appendChild(selectField("Support begins after", support.after_defeated || "", factionOptions(), function (value) { support.after_defeated = value; markDirty(); }));
+            host.appendChild(inputField("Repeat every (seconds)", support.interval_seconds, function (value) { support.interval_seconds = Number(value); markDirty(); }, { type: "number", min: 5, max: 600, step: 1 }));
+            host.appendChild(inputField("Gold per ally", support.gold, function (value) { support.gold = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000000, step: 25 }));
+            host.appendChild(inputField("Troops per ally", support.troops, function (value) { support.troops = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000000, step: 25 }));
+        }
         host.appendChild(selectField("Default story language", state.definition.default_locale, localeOptions(), function (value) { state.definition.default_locale = value; state.definition.strings[value] = state.definition.strings[value] || {}; markDirty(); renderSettings(); }));
         host.appendChild(selectField("Opening step", state.definition.entry, state.definition.steps.map(stepOption), function (value) { state.definition.entry = value; markDirty(); }));
         host.appendChild(selectField("Menu guide opening", state.definition.menu_guide && state.definition.menu_guide.entry || "", [{ value: "", label: "Not set" }].concat(state.definition.steps.map(stepOption)), function (value) { if (!value) delete state.definition.menu_guide; else state.definition.menu_guide = Object.assign({}, state.definition.menu_guide, { entry: value, dismissible: true }); markDirty(); if (state.flow === "menu") resetPreview(); }));
@@ -596,6 +644,36 @@
         Object.keys(state.definition.speakers || {}).forEach(function (speakerId) {
             var speaker = state.definition.speakers[speakerId], card = el("div", { class: "form-card" });
             card.appendChild(el("strong", {}, "Character · " + speakerId));
+            var binding = speaker.faction ? "faction:" + speaker.faction : speaker.dynamic ? "dynamic:" + speaker.dynamic : "";
+            var bindingOptions = [{ value: "", label: "Custom character" }].concat(
+                factionOptions().map(function (option) { return { value: "faction:" + option.value, label: "Roster · " + option.label }; }),
+                [{ value: "dynamic:first_ally_support", label: "First allied supporter" }]
+            );
+            card.appendChild(selectField("Name and portrait source", binding, bindingOptions, function (value) {
+                delete speaker.faction; delete speaker.dynamic;
+                if (value.indexOf("faction:") === 0) { speaker.faction = value.slice(8); delete speaker.name_key; delete speaker.avatar; }
+                else if (value.indexOf("dynamic:") === 0) { speaker.dynamic = value.slice(8); speaker.name = speaker.name || "Allied envoy"; speaker.avatar = speaker.avatar || "null"; }
+                else speaker.name = speaker.name || "New character";
+                markDirty(); renderSettings();
+            }));
+            if (speaker.faction || speaker.dynamic) {
+                var boundFaction = speaker.faction && state.roster.factions.find(function (faction) { return faction.name === speaker.faction; });
+                var boundName = boundFaction ? boundFaction.name : speaker.name || "First allied supporter";
+                var boundAvatar = boundFaction ? boundFaction.avatar || "null" : speaker.avatar || "null";
+                var boundPortrait = el("img", { class: "speaker-avatar", alt: boundName, loading: "lazy" });
+                boundPortrait.src = asset("gameplay/avatars/" + boundAvatar + ".webp");
+                boundPortrait.addEventListener("error", function () { boundPortrait.hidden = true; });
+                card.appendChild(boundPortrait);
+                card.appendChild(el("small", {}, speaker.faction ? "Uses the selected faction's name and portrait." : "At runtime, this speaker becomes the first ally who sends support."));
+                var removeBoundSpeaker = el("button", { type: "button", class: "danger" }, "Remove character");
+                removeBoundSpeaker.addEventListener("click", function () {
+                    if (!confirm("Remove " + speakerId + "? Their dialogue will become narrator text.")) return;
+                    delete state.definition.speakers[speakerId];
+                    state.definition.steps.forEach(function (step) { if (step.speaker === speakerId) delete step.speaker; (step.lines || []).forEach(function (line) { if (line.speaker === speakerId) delete line.speaker; }); });
+                    markDirty(); renderSettings(); renderInspector();
+                });
+                card.appendChild(removeBoundSpeaker); host.appendChild(card); return;
+            }
             var displayName = speaker.name_key ? textValue(speaker.name_key, state.language) : speaker.name || "";
             var portrait = el("img", { class: "speaker-avatar", alt: displayName || speakerId, loading: "lazy", hidden: !speaker.avatar });
             portrait.addEventListener("error", function () { portrait.hidden = true; });
@@ -944,12 +1022,18 @@
     }
 
     function paintPreview(updateMachine) {
-        if (!state.machine) return;
+        if (!state.machine || state.validation.errors.length) return;
         $("#previewFrame").dataset.device = $("#device").value;
         var model;
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui, performance.now()); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.playingStep = model.step.id;
+        var actionRatio = Number.isFinite(model.step.attack_ratio_on_enter) ? model.step.attack_ratio_on_enter : null;
+        if (model.step.id !== state.previewActionStep || actionRatio !== state.previewActionRatio) {
+            state.previewActionStep = model.step.id;
+            state.previewActionRatio = actionRatio;
+            if (actionRatio != null) $("#sow-hud-slider").value = String(Math.round(actionRatio * 100));
+        }
         var anchor = previewAnchor(model.step);
         try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage) }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
@@ -974,6 +1058,7 @@
         return code === "ru" ? "cyrillic" : "latin";
     }
     function syncPreview() {
+        if (state.validation.errors.length) { $("#previewStatus").textContent = "Fix validation errors to preview this draft"; return; }
         if (state.machine && state.machine.replaceDefinition(state.definition)) paintPreview();
         else renderPreview();
     }
@@ -1010,7 +1095,16 @@
     function previewWorldMarker(frame, target, step) {
         if (target === "expand") return frame.querySelector(".player-base");
         var factions = state.roster && state.roster.factions || [];
-        var requested = target === "target_action" && (step.trigger && step.trigger.target || step.marker && step.marker.target !== "player" && step.marker.target);
+        if (target === "player") {
+            var playerTarget = step.marker && step.marker.target;
+            if (!playerTarget || playerTarget === "player") return frame.querySelector(".player-base");
+            var playerFaction = factions.find(function (item) { return item.name === playerTarget; });
+            return playerFaction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionName === playerFaction.name; }) || null;
+        }
+        var defeated = state.facts && state.facts.defeated_names || [];
+        var requested = target === "target_action" && (Array.isArray(step.trigger && step.trigger.targets)
+            ? step.trigger.targets.find(function (name) { return !defeated.includes(name); })
+            : step.trigger && step.trigger.target || step.marker && step.marker.target !== "player" && step.marker.target);
         var faction = requested && factions.find(function (item) { return item.name === requested; });
         if (!faction && state.roster) {
             var spawn = state.roster.player_spawn;
@@ -1028,8 +1122,10 @@
     }
     function applyPreviewFocus() {
         if (!state.previewFocusActive || !state.machine) return;
-        var step = state.machine.view().step, target = step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target
-            ? step.trigger.target : step.marker && step.marker.target;
+        var step = state.machine.view().step, defeated = state.facts && state.facts.defeated_names || [];
+        var target = step.guide && step.guide.kind === "world" && step.guide.target === "target_action"
+            ? Array.isArray(step.trigger && step.trigger.targets) ? step.trigger.targets.find(function (name) { return !defeated.includes(name); }) : step.trigger && step.trigger.target || step.marker && step.marker.target
+            : step.marker && step.marker.target;
         var marker = target === "player" ? $("#campaignPreviewMarkers .player-base")
             : target ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(function (item) { return item.dataset.factionName === target; })
                 : null;
@@ -1046,6 +1142,7 @@
     }
     function renderPreview(forceStep) {
         if (!state.definition) return;
+        if (state.validation.errors.length) { $("#previewStatus").textContent = "Fix validation errors to preview this draft"; return; }
         var frame = $("#previewFrame"); frame.dataset.device = $("#device").value;
         frame.dataset.flow = state.flow;
         $("#sow-menu").hidden = state.flow !== "menu";
@@ -1060,11 +1157,13 @@
         if (!steps.some(function (step) { return step && step.id === requestedEntry; })) requestedEntry = start;
         try { state.machine = window.SOWCampaign.create(state.definition, requestedEntry); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
+        state.previewActionStep = null; state.previewActionRatio = null;
         state.facts = state.facts || {};
         var context = previewContext(start);
         state.machine.jump(start, context.facts, context.choices);
         if (!state.renderer) state.renderer = window.SOWCampaignView.mount($("#previewRoot"), {
             translate: function (key) { return translated(key, state.previewLanguage); }, asset: asset,
+            roster: function () { return state.roster; },
             onContinue: function () { var step = state.machine.view().step; state.machine.advance(null, step.id); paintPreview(); },
             onChoice: function (choice) { var step = state.machine.view().step; state.machine.advance(choice, step.id); paintPreview(); },
             onFocus: focusPreviewTarget, onDismiss: null
@@ -1087,8 +1186,8 @@
         }
         var progress = model.progress;
         host.appendChild(el("small", {}, trigger.type + " · " + progress.current + " / " + progress.target));
-        if (["contact", "defeated", "troops", "elapsed"].includes(trigger.type)) return;
-        var button = el("button", { type: "button" }, "+1 " + trigger.type);
+        if (["contact", "troops", "elapsed"].includes(trigger.type)) return;
+        var button = el("button", { type: "button" }, trigger.type === "defeated" && Array.isArray(trigger.targets) ? "+1 faction" : "+1 " + trigger.type);
         button.disabled = model.ready;
         button.addEventListener("click", function () { simulateObjective(1); });
         host.appendChild(button);
@@ -1100,7 +1199,11 @@
         if (amount == null) { var progress = state.machine.view().progress; amount = Math.max(1, progress.target - progress.current); }
         amount = Number(amount || 1);
         if (trigger.type === "contact") state.facts.contact_names = Array.from(new Set((state.facts.contact_names || []).concat(trigger.target)));
-        else if (trigger.type === "defeated") state.facts.defeated_names = Array.from(new Set((state.facts.defeated_names || []).concat(trigger.target)));
+        else if (trigger.type === "defeated") {
+            var targets = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
+            var defeated = state.facts.defeated_names || [];
+            state.facts.defeated_names = Array.from(new Set(defeated.concat(targets.filter(function (name) { return name && !defeated.includes(name); }).slice(0, amount))));
+        }
         else if (trigger.type === "ui") state.ui[trigger.action] = Number(state.ui[trigger.action] || 0) + amount;
         else {
             var metric = window.SOWCampaign.METRICS[trigger.type];
@@ -1110,7 +1213,7 @@
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, fleets: 0, nukes: 0, attacks: 0, attacks_by_target: {}, contact_names: [], defeated_names: [], elapsed_seconds: 0 }; }
+    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, fleets: 0, nukes: 0, attacks: 0, attacks_by_target: {}, contact_names: [], defeated_names: [], elapsed_seconds: 0 }; }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;
@@ -1129,6 +1232,9 @@
         normalizeStrings(state.definition); ensureLayout();
         var report = valid();
         state.validation = report;
+        var blocked = report.errors.length > 0;
+        $("#previewRoot").inert = blocked;
+        ["playSelected", "restartBtn", "simulateBtn", "tickBtn", "previewBranchSelect"].forEach(function (id) { $("#" + id).disabled = blocked; });
         updateStepValidation();
         $("#validationStatus").textContent = report.errors.length ? "Needs fixes · " + report.errors.length : report.warnings.length ? "Ready · " + report.warnings.length + " notes" : "Ready to play";
         var errors = $("#errors"); errors.replaceChildren();
@@ -1410,7 +1516,7 @@
             var trigger = state.machine.view().step.trigger;
             if (!trigger || trigger.type !== "ui") return;
             var control = window.SOWCampaign.resolveUiTarget(trigger.action, document, episodeId);
-            var expectedEvent = control && control.matches('input[type="range"]') ? "change" : "click";
+            var expectedEvent = control && control.matches("input") ? "change" : "click";
             if (event.type !== expectedEvent) return;
             if (control && (control === event.target || control.contains(event.target))) simulateObjective(1);
         }
@@ -1432,6 +1538,8 @@
             else if (group) hudRoot.dataset.previewMapMenu = group.dataset.mapGroup;
             else if (action) hudRoot.dataset.previewMapMenu = "";
             else return;
+            var transferPanel = $("#sow-hud-transfer");
+            if (transferPanel && action && action.dataset.mapAction === "transfer") transferPanel.hidden = false;
             var popup = hudRoot.querySelector(".sample-map-popup");
             if (popup) popup.hidden = !hudRoot.dataset.previewMapMenu;
             hudRoot.querySelectorAll("[data-preview-map-menu]").forEach(function (panel) {

@@ -168,6 +168,10 @@ pub struct SowEngine {
     /// Bot id → tick when another betrayal is allowed.
     pub alliance_betray_cooldown_until: std::collections::HashMap<PlayerId, u32>,
     pub resource_requests_proposed: Vec<ResourceRequestProposed>,
+    /// Scripted roster portrait slugs, kept out of Player so ordinary matches stay unchanged.
+    pub campaign_avatars: std::collections::HashMap<PlayerId, String>,
+    /// Next campaign-support send tick for each contacted ally.
+    pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
     pub port_queues:
         std::collections::HashMap<u64, std::collections::VecDeque<crate::game::ShipProduction>>,
     pub projectiles: Vec<crate::game::Projectile>,
@@ -225,6 +229,8 @@ impl SowEngine {
             alliance_request_cooldown_until: std::collections::HashMap::new(),
             alliance_betray_cooldown_until: std::collections::HashMap::new(),
             resource_requests_proposed: Vec::new(),
+            campaign_avatars: std::collections::HashMap::new(),
+            campaign_support_next_tick: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
@@ -463,7 +469,7 @@ impl SowEngine {
         self.building_grid.mark_dirty();
         self.building_aggregates_dirty = true;
         self.bot_sam_tiles_cache = None;
-        if !b.under_construction && b.kind == crate::game::BuildingKind::City {
+        if !b.under_construction && b.kind == crate::game::BuildingKind::Port {
             self.sea_lanes_dirty = true;
         }
         if is_ready_defense {

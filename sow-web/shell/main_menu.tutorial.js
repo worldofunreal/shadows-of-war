@@ -11,6 +11,7 @@
     var runtime = {
         generation: 0,
         episodeId: null,
+        roster: null,
         activating: null,
         definition: null,
         machine: null,
@@ -22,6 +23,7 @@
         uiCounts: Object.create(null),
         uiPaused: false,
         completionSent: false,
+        lastActionStepId: null,
         priorChoices: Object.create(null),
         failedEpisode: null,
         bootEpisode: null,
@@ -134,6 +136,7 @@
         runtime.view = window.SOWCampaignView.mount(root, {
             translate: tr,
             asset: asset,
+            roster: function () { return runtime.roster; },
             onContinue: continueScene,
             onChoice: choose,
             onFocus: focusMarker,
@@ -141,6 +144,12 @@
                 ? (runtime.definition.menu_guide.dismissible === false ? null : dismissMenuGuide)
                 : openLeaveMatch
         });
+    }
+
+    function dynamicSpeakersFor(hud) {
+        var tutorial = hud && hud.tutorial, senderId = tutorial && tutorial.facts && tutorial.facts.first_ally_support_sender_id;
+        var sender = (hud && hud.players || []).find(function (player) { return player && Number(player.id) === Number(senderId); });
+        return sender ? { first_ally_support: { name: sender.name, avatar: sender.avatar || "null" } } : null;
     }
 
     function startEpisode(episodeId, fromBoot) {
@@ -156,6 +165,7 @@
         loadEpisode(episodeId).then(function (data) {
             if (generation !== runtime.generation) return;
             runtime.episodeId = episodeId;
+            runtime.roster = data.roster;
             runtime.definition = data.definition;
             runtime.machine = null;
             runtime.active = false;
@@ -163,6 +173,7 @@
             runtime.uiPaused = null;
             runtime.markerId = undefined;
             runtime.completionSent = false;
+            runtime.lastActionStepId = null;
             if (!send("start_campaign_episode", { episode_id: episodeId, roster: data.roster, match: data.definition.settings })) {
                 throw new Error("Campaign could not reach the game.");
             }
@@ -186,12 +197,13 @@
         runtime.activating = episodeId;
         var generation = runtime.generation;
         var episode = runtime.episodeId === episodeId && runtime.definition
-            ? Promise.resolve({ definition: runtime.definition })
+            ? Promise.resolve({ definition: runtime.definition, roster: runtime.roster })
             : loadEpisode(episodeId);
         episode.then(function (data) {
             if (generation !== runtime.generation || !runtime.latestHud || !runtime.latestHud.tutorial || runtime.latestHud.tutorial.episode_id !== episodeId) return;
             if (runtime.machine && runtime.episodeId === episodeId) { update(runtime.latestHud); return; }
             runtime.episodeId = episodeId;
+            runtime.roster = data.roster;
             runtime.definition = data.definition;
             runtime.machine = window.SOWCampaign.create(data.definition);
             runtime.active = true;
@@ -199,6 +211,7 @@
             runtime.uiPaused = null;
             runtime.markerId = undefined;
             runtime.completionSent = false;
+            runtime.lastActionStepId = null;
             makeView();
             update(runtime.latestHud);
         }).catch(function (error) {
@@ -238,6 +251,11 @@
     }
 
     function markerTargetFor(step) {
+        var defeated = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts && runtime.latestHud.tutorial.facts.defeated_names || [];
+        if (step.trigger && Array.isArray(step.trigger.targets)) {
+            var remaining = step.trigger.targets.find(function (target) { return !defeated.includes(target); });
+            if (remaining) return remaining;
+        }
         if (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target) {
             return step.trigger.target;
         }
@@ -250,6 +268,10 @@
         var tutorial = hud.tutorial;
         var machineView = runtime.machine.update(tutorial.facts || {}, runtime.uiCounts, performance.now());
         runtime.priorChoices = Object.assign(Object.create(null), runtime.machine.state.choices);
+        if (machineView.step.id !== runtime.lastActionStepId) {
+            runtime.lastActionStepId = machineView.step.id;
+            if (Number.isFinite(machineView.step.attack_ratio_on_enter)) send("set_attack_ratio", { ratio: machineView.step.attack_ratio_on_enter });
+        }
         if (machineView.paused !== runtime.uiPaused) {
             runtime.uiPaused = machineView.paused;
             send("set_tutorial_paused", { paused: machineView.paused });
@@ -266,7 +288,7 @@
             runtime.markerId = markerId;
             send("set_tutorial_marker", { player_id: markerId });
         }
-        if (!runtime.modalOpen) runtime.view.render(machineView, { anchor: anchorFor(machineView.step, hud), reducedMotion: Boolean(hud.settings && hud.settings.reduced_motion), direction: document.documentElement.dir });
+        if (!runtime.modalOpen) runtime.view.render(machineView, { anchor: anchorFor(machineView.step, hud), dynamicSpeakers: dynamicSpeakersFor(hud), reducedMotion: Boolean(hud.settings && hud.settings.reduced_motion), direction: document.documentElement.dir });
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
             if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
@@ -302,6 +324,7 @@
             }
             runtime.generation++;
             runtime.episodeId = episodeId;
+            runtime.roster = data.roster;
             runtime.definition = data.definition;
             runtime.latestHud = null;
             runtime.uiCounts = Object.create(null);
@@ -371,7 +394,7 @@
             root.hidden = true;
         } else if (runtime.machine) {
             if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false });
-            runtime.view.render(runtime.machine.view(), { anchor: anchorFor(runtime.machine.view().step, runtime.latestHud) });
+            runtime.view.render(runtime.machine.view(), { anchor: anchorFor(runtime.machine.view().step, runtime.latestHud), dynamicSpeakers: dynamicSpeakersFor(runtime.latestHud) });
         }
     }
 
@@ -382,6 +405,7 @@
         var model = runtime.machine.view();
         runtime.view.render(model, {
             anchor: anchorFor(model.step, runtime.latestHud),
+            dynamicSpeakers: dynamicSpeakersFor(runtime.latestHud),
             reducedMotion: Boolean(runtime.latestHud.settings && runtime.latestHud.settings.reduced_motion),
             direction: document.documentElement.dir
         });
@@ -399,7 +423,7 @@
         var changed = false;
         Object.keys(window.SOWCampaign.UI_TARGETS).forEach(function (key) {
             var control = window.SOWCampaign.resolveUiTarget(key, document, runtime.episodeId);
-            var actionEvent = control && control.matches('input[type="range"]') ? "change" : "click";
+            var actionEvent = control && control.matches("input") ? "change" : "click";
             if (event.type === actionEvent && control && !control.disabled && control.getClientRects().length && (control === event.target || control.contains(event.target))) {
                 runtime.uiCounts[key] = (runtime.uiCounts[key] || 0) + 1; changed = true;
             }
@@ -448,6 +472,7 @@
         runtime.generation++;
         if (!pendingMenuGuide) runtime.priorChoices = Object.create(null);
         runtime.episodeId = null;
+        runtime.roster = null;
         runtime.definition = null;
         runtime.machine = null;
         runtime.active = false;
@@ -460,6 +485,7 @@
         runtime.modalOpen = false;
         runtime.resumeAfterModal = false;
         runtime.completionSent = false;
+        runtime.lastActionStepId = null;
         runtime.failedEpisode = null;
         runtime.markerId = undefined;
         if (runtime.view) { runtime.view.destroy(); runtime.view = null; }

@@ -35,14 +35,16 @@ impl SowEngine {
 
         let width = self.state.map.width;
 
-        // Collect SAM launchers that are ready (not under construction)
+        // Citadel is the only structure that can intercept a nuclear strike.
         let sams: Vec<(u64, u16, u32, f32)> = self
             .buildings
             .iter()
             .filter(|b| {
-                b.kind == BuildingKind::City && b.modules.shield > 0 && !b.under_construction
+                b.kind == BuildingKind::Bunker
+                    && b.active_level() >= BuildingKind::Bunker.max_level()
+                    && !b.under_construction
             })
-            .map(|b| (b.id, b.owner_id, b.tile_idx, sam_range(b.modules.shield)))
+            .map(|b| (b.id, b.owner_id, b.tile_idx, sam_range(b.active_level())))
             .collect();
 
         let mut sam_missiles = Vec::new();

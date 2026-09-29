@@ -38,6 +38,10 @@ impl BuildingKind {
                     target_kind: BuildingKind::Port,
                     min_distance: CITY_MIN_DIST,
                 },
+                SpacingRule {
+                    target_kind: BuildingKind::Farm,
+                    min_distance: CITY_MIN_DIST,
+                },
             ],
             BuildingKind::Bunker => &[
                 SpacingRule {
@@ -54,6 +58,10 @@ impl BuildingKind {
                 },
                 SpacingRule {
                     target_kind: BuildingKind::Port,
+                    min_distance: BUILDING_MIN_DIST,
+                },
+                SpacingRule {
+                    target_kind: BuildingKind::Farm,
                     min_distance: BUILDING_MIN_DIST,
                 },
             ],
@@ -74,6 +82,10 @@ impl BuildingKind {
                     target_kind: BuildingKind::Port,
                     min_distance: BUILDING_MIN_DIST,
                 },
+                SpacingRule {
+                    target_kind: BuildingKind::Farm,
+                    min_distance: BUILDING_MIN_DIST,
+                },
             ],
             BuildingKind::Port => &[
                 SpacingRule {
@@ -90,6 +102,32 @@ impl BuildingKind {
                 },
                 SpacingRule {
                     target_kind: BuildingKind::Port,
+                    min_distance: BUILDING_MIN_DIST,
+                },
+                SpacingRule {
+                    target_kind: BuildingKind::Farm,
+                    min_distance: BUILDING_MIN_DIST,
+                },
+            ],
+            BuildingKind::Farm => &[
+                SpacingRule {
+                    target_kind: BuildingKind::City,
+                    min_distance: CITY_MIN_DIST,
+                },
+                SpacingRule {
+                    target_kind: BuildingKind::Bunker,
+                    min_distance: BUILDING_MIN_DIST,
+                },
+                SpacingRule {
+                    target_kind: BuildingKind::Factory,
+                    min_distance: BUILDING_MIN_DIST,
+                },
+                SpacingRule {
+                    target_kind: BuildingKind::Port,
+                    min_distance: BUILDING_MIN_DIST,
+                },
+                SpacingRule {
+                    target_kind: BuildingKind::Farm,
                     min_distance: BUILDING_MIN_DIST,
                 },
             ],

@@ -71,32 +71,33 @@ impl SowApp {
         if let Some(text) = &mut self.gfx.text_renderer {
             text.begin_frame();
             for (key, cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
-                let leader = match key {
-                    crate::ui::asset_loader::AvatarFetchKey::Leader(l) => Some(*l),
-                    crate::ui::asset_loader::AvatarFetchKey::Fallback => None,
-                };
-                let slot = match leader {
-                    Some(leader) => sow_core::player::Leader::ALL
+                let slot = match key {
+                    crate::ui::asset_loader::AvatarFetchKey::Leader(leader) => sow_core::player::Leader::ALL
                         .iter()
-                        .position(|value| *value == leader)
+                        .position(|value| value == leader)
                         .unwrap_or(0),
-                    None => sow_core::player::Leader::ALL.len(),
+                    crate::ui::asset_loader::AvatarFetchKey::Fallback => sow_core::player::Leader::ALL.len(),
+                    crate::ui::asset_loader::AvatarFetchKey::Campaign { slot, .. } => *slot,
                 };
                 if text.avatar_uv(slot).is_none() {
                     text.upload_avatar(slot, cell);
                 }
             }
             if self.ui.app.phase == ClientPhase::Playing {
+                let campaign_avatar_slots =
+                    std::mem::take(&mut self.ui.app.asset_loader.campaign_avatar_slots);
                 crate::render::world::render_overlays(
                     text,
                     &self.sim,
                     &mut self.ui,
                     &self.input,
                     self.gfx.map_renderer.as_ref(),
+                    &campaign_avatar_slots,
                     sf,
                     self.time.start_time.elapsed().as_secs_f32() % 1000.0,
                     now,
                 );
+                self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
             }
         }
         crate::web_menu::publish_state(self);

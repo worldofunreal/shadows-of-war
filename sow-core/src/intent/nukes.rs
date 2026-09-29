@@ -33,6 +33,7 @@ impl SowEngine {
                 b.kind == BuildingKind::City
                     && b.owner_id == player_id
                     && !b.under_construction
+                    && b.active_level() >= BuildingKind::City.max_level()
                     && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
             })
             .min_by_key(|b| {
@@ -46,7 +47,7 @@ impl SowEngine {
         };
         let silo_id = silo.id;
         let silo_tile = silo.tile_idx;
-        let level = silo.modules.arsenal.max(1);
+        let level = 1;
 
         // Deduct gold cost
         let nuke_cost = self.state.config.nuke_cost;
