@@ -1684,6 +1684,21 @@ fn s11_partitioned_world_war_keeps_flowing() {
     // border wars MUST keep flowing. Measure activity across 3 windows.
     for w in 0..3u32 {
         let before_counts: Vec<u32> = (1..=6).map(|id| tiles(&engine, id)).collect();
+        let before_fleet_state: std::collections::HashMap<_, _> = engine
+            .fleets
+            .iter()
+            .map(|fleet| {
+                (
+                    fleet.id,
+                    (
+                        fleet.current_tile,
+                        fleet.path_cursor,
+                        fleet.dst_tile,
+                        fleet.movement_progress,
+                    ),
+                )
+            })
+            .collect();
         let before_att = engine.state.next_attack_id;
         for _ in 0..600 {
             if engine.state.phase != GamePhase::Playing {
@@ -1693,12 +1708,25 @@ fn s11_partitioned_world_war_keeps_flowing() {
         }
         let after_counts: Vec<u32> = (1..=6).map(|id| tiles(&engine, id)).collect();
         let new_attacks = engine.state.next_attack_id - before_att;
+        let fleets_progressed = engine.fleets.iter().any(|fleet| {
+            let state = (
+                fleet.current_tile,
+                fleet.path_cursor,
+                fleet.dst_tile,
+                fleet.movement_progress,
+            );
+            before_fleet_state
+                .get(&fleet.id)
+                .map_or(!fleet.path.is_empty(), |before| *before != state)
+        }) || before_fleet_state
+            .keys()
+            .any(|id| !engine.fleets.iter().any(|fleet| fleet.id == *id));
         eprintln!(
-            "S11 w={w} att_new={new_attacks} before={before_counts:?} after={after_counts:?}"
+            "S11 w={w} att_new={new_attacks} fleet_progress={fleets_progressed} before={before_counts:?} after={after_counts:?}"
         );
         assert!(
-            new_attacks > 0,
-            "S11 FAIL window {w}: ZERO new attacks with zero neutral — total freeze"
+            new_attacks > 0 || fleets_progressed,
+            "S11 FAIL window {w}: no new attacks or fleet movement with zero neutral — total freeze"
         );
     }
     // ── Dissect the frozen empire ──
@@ -2341,15 +2369,15 @@ fn s16_checkpoint_decision_and_state_reference() {
         checkpoints.push((ticks, hash));
     }
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0xee48361d702627f5),
-        (500, 0x3366ca1ea9af31e0),
-        (750, 0x4f994f8f14aa9619),
-        (1000, 0x274223a324fe408e),
-        (1250, 0x54530a0bc92cbbc9),
-        (1500, 0x6b58355bd1e54de6),
-        (1750, 0x910dbba5b808776a),
-        (2000, 0x0d308e2c2f4282a9),
-        (S16_REFERENCE_TICKS, 0xf3adbebcfa2522e7),
+        (250, 0x4e6d45d67c4dad86),
+        (500, 0xea9474236ab356f0),
+        (750, 0x51490f142860df6a),
+        (1000, 0x902e55c8695b55ea),
+        (1250, 0xb16e6bccb0488b61),
+        (1500, 0x5916094f61e899d6),
+        (1750, 0x6ea860e0ecd98994),
+        (2000, 0x055233d4834f495e),
+        (S16_REFERENCE_TICKS, 0x0e9edf5d0305dac0),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

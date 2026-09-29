@@ -249,11 +249,11 @@ mod tests {
 
     #[test]
     fn defense_post_bonus_scales_with_level() {
-        let w = 20u32;
+        let w = 40u32;
         let b = Building {
             id: 1,
             owner_id: 2,
-            tile_idx: xy_idx(10, 10, w),
+            tile_idx: xy_idx(20, 20, w),
             kind: BuildingKind::Bunker,
             level: 2,
             under_construction: false,
@@ -261,7 +261,7 @@ mod tests {
             modules: crate::building::CityModules::default(),
         };
         let cfg = crate::game_config::GameConfig::default();
-        let bonus = defense_post_priority_bonus(&[b], 10, 10, w, &cfg);
+        let bonus = defense_post_priority_bonus(&[b], 20, 20, w, &cfg);
         assert_eq!(bonus, cfg.bunker_priority as i64 * 2);
         let bonus_far = defense_post_priority_bonus(&[b], 0, 0, w, &cfg);
         assert_eq!(bonus_far, 0);

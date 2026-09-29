@@ -25,9 +25,9 @@
     var lastLeaderboardPlayers = [];
     var inboxRenderKey = "";
     var notificationCursor = 0;
-    var supportReceiptQueue = [];
-    var supportReceiptTimer = null;
-    var latestNotificationEntries = [];
+    var notificationTimer = null;
+    var activeNotifications = [];
+    var notificationCards = [];
     var mapMenuView = "root";
     var mapMenuStateKey = "";
     var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
@@ -391,6 +391,34 @@
         hudRefs.notifications.className = "sow-hud__notifications";
         hudRefs.notifications.setAttribute("aria-live", "polite");
         hudRoot.appendChild(hudRefs.notifications);
+        notificationCards = Array.from({ length: 3 }, function () {
+            var card = document.createElement("div");
+            card.className = "sow-hud__notification sow-hud__notification--premium";
+            card.hidden = true;
+            var seal = document.createElement("span");
+            seal.className = "sow-hud__notification-seal";
+            seal.setAttribute("aria-hidden", "true");
+            var portraits = document.createElement("span");
+            portraits.className = "sow-hud__notification-portraits";
+            var portraitA = document.createElement("img");
+            var portraitB = document.createElement("img");
+            [portraitA, portraitB].forEach(function (portrait) {
+                portrait.className = "sow-hud__notification-portrait";
+                portrait.alt = "";
+                portrait.draggable = false;
+                portrait.hidden = true;
+                portrait.onerror = function () {
+                    var fallback = asset("gameplay/avatars/null.webp");
+                    if (this.getAttribute("src") !== fallback) this.src = fallback;
+                };
+                portraits.appendChild(portrait);
+            });
+            var copy = document.createElement("span");
+            copy.className = "sow-hud__notification-copy";
+            card.append(seal, portraits, copy);
+            hudRefs.notifications.appendChild(card);
+            return { card: card, seal: seal, portraits: [portraitA, portraitB], copy: copy };
+        });
 
         if (hudRefs.slider) hudRefs.slider.style.setProperty("--sow-crossed-swords", 'url("' + asset(HUD_ICONS.troops) + '")');
         if (hudRefs.slider) {
@@ -821,17 +849,35 @@
         hudRefs.buildingCard.dataset.session = String(mapMenu.session);
         hudRefs.buildingCard.dataset.tileIdx = String(mapMenu.tile_idx);
         hudRefs.buildingCardKind.textContent = detail.name || detail.kind || "Building";
-        hudRefs.buildingCardLevel.textContent = "Level " + String(detail.level || 0) + (detail.under_construction ? " · Under construction" : "");
-        hudRefs.buildingCardBenefit.textContent = "Active: " + String(detail.benefit || "none");
+        var underConstruction = Boolean(detail.under_construction);
+        hudRefs.buildingCardLevel.textContent = underConstruction
+            ? "🏗️ " + String(detail.construction_name || detail.kind || "Building")
+                + " · " + Math.max(0, Number(detail.remaining_seconds) || 0).toFixed(1) + "s left"
+            : "Level " + String(detail.level || 0);
+        var activeBenefit = String(detail.benefit || "");
+        if (detail.boat_slots) {
+            activeBenefit += " · Boats " + String(detail.boat_slots.used) + "/" + String(detail.boat_slots.total)
+                + " · Speed +" + String(detail.boat_slots.speed_percent) + "%";
+        }
+        hudRefs.buildingCardBenefit.textContent = activeBenefit;
+        hudRefs.buildingCardBenefit.hidden = underConstruction;
         var unmet = Array.isArray(detail.requirements) ? detail.requirements.filter(function (item) { return !item.met; }) : [];
+        if (underConstruction) {
+            hudRefs.buildingCardNext.textContent = "";
+            hudRefs.buildingCardUpgrade.disabled = true;
+            hudRefs.buildingCardUpgrade.hidden = true;
+            return;
+        }
         if (detail.next_level) {
-            hudRefs.buildingCardNext.textContent = "Next: " + detail.next_name + " · " + String(detail.next_benefit || "") + (unmet.length ? " · Requires " + unmet[0].key : "");
+            hudRefs.buildingCardNext.textContent = "Next: " + detail.next_name + " · " + String(detail.next_benefit || "")
+                + " · " + Math.max(0, Number(detail.duration_seconds) || 0).toFixed(1) + "s"
+                + (unmet.length ? " · Requires " + unmet[0].key : "");
             hudRefs.buildingCardUpgrade.textContent = "Upgrade · " + Math.floor(Number(detail.cost) || 0).toLocaleString() + "g";
             hudRefs.buildingCardUpgrade.disabled = !detail.can_upgrade;
-            hudRefs.buildingCardUpgrade.classList.toggle("hidden", false);
+            hudRefs.buildingCardUpgrade.hidden = false;
         } else {
             hudRefs.buildingCardNext.textContent = "Maximum level";
-            hudRefs.buildingCardUpgrade.classList.toggle("hidden", true);
+            hudRefs.buildingCardUpgrade.hidden = true;
         }
     }
 
@@ -954,59 +1000,129 @@
         inboxRenderKey = renderKey;
     }
 
-    function renderNotifications(entries) {
+    function renderNotifications(entries, forceRefresh) {
         if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
-        latestNotificationEntries = entries;
+        var changed = Boolean(forceRefresh);
+        var now = Date.now();
+        var unexpired = activeNotifications.filter(function (item) { return item.expiresAt > now; });
+        if (unexpired.length !== activeNotifications.length) changed = true;
+        activeNotifications = unexpired;
         entries.forEach(function (entry) {
             var id = Number(entry && entry.id);
             if (!Number.isSafeInteger(id) || id <= notificationCursor) return;
             notificationCursor = id;
-            if (entry.premium) supportReceiptQueue.push(entry);
+            var age = Math.max(0, Number(entry.age_ms) || 0);
+            if (age >= 3600) return;
+            var createdAt = Date.now();
+            var item = {
+                entry: entry,
+                priority: Math.max(0, Number(entry.priority) || 0),
+                group: entry.group ? String(entry.group) : "event:" + id,
+                sumValues: Boolean(entry.sum_values),
+                expiresAt: createdAt + 3600 - age,
+                createdAt: createdAt,
+                totals: null
+            };
+            var existing = activeNotifications.find(function (candidate) { return candidate.group === item.group; });
+            if (existing) {
+                if (item.sumValues) {
+                    var merged = Object.assign({}, existing.entry.values || {});
+                    var totals = existing.totals || Object.create(null);
+                    ["gold", "troops", "count", "attackers"].forEach(function (key) {
+                        var addedRaw = (entry.values || {})[key];
+                        if (totals[key] == null && merged[key] != null) {
+                            totals[key] = Number(String(merged[key]).replace(/,/g, "")) || 0;
+                        }
+                        if (addedRaw != null) {
+                            var added = Number(String(addedRaw).replace(/,/g, ""));
+                            if (Number.isFinite(added)) totals[key] = (totals[key] || 0) + added;
+                        }
+                        if (totals[key] != null) {
+                            merged[key] = new Intl.NumberFormat(window.SOW_LOCALE || "en", { maximumFractionDigits: 0 }).format(totals[key]);
+                        }
+                    });
+                    var mergedKey = entry.key;
+                    if (item.group.indexOf("resource:") === 0) {
+                        var direction = item.group.split(":")[1];
+                        var hasGold = Number(totals.gold || 0) > 0;
+                        var hasTroops = Number(totals.troops || 0) > 0;
+                        var resourceSuffix = hasGold && hasTroops ? "both" : hasGold ? "gold" : "troops";
+                        mergedKey = "hud.resource_" + direction + "_" + resourceSuffix;
+                    }
+                    item.entry = Object.assign({}, entry, { key: mergedKey, values: merged });
+                    item.totals = totals;
+                }
+                existing.entry = item.entry;
+                existing.priority = Math.max(existing.priority, item.priority);
+                existing.expiresAt = item.expiresAt;
+                existing.createdAt = item.createdAt;
+                existing.sumValues = item.sumValues;
+                existing.group = item.group;
+                existing.totals = item.totals;
+                changed = true;
+                return;
+            }
+            if (activeNotifications.length < 3) {
+                activeNotifications.push(item);
+                changed = true;
+                return;
+            }
+            var replaceIndex = 0;
+            for (var i = 1; i < activeNotifications.length; i += 1) {
+                var current = activeNotifications[i];
+                var candidate = activeNotifications[replaceIndex];
+                if (current.priority < candidate.priority || (current.priority === candidate.priority && current.createdAt < candidate.createdAt)) replaceIndex = i;
+            }
+            if (item.priority >= activeNotifications[replaceIndex].priority) {
+                activeNotifications[replaceIndex] = item;
+                changed = true;
+            }
         });
-        if (supportReceiptTimer) return;
-        if (supportReceiptQueue.length) {
-            var receipt = supportReceiptQueue.shift();
-            var avatarId = /^[a-z][a-z0-9_]*$/.test(receipt.avatar || "") ? receipt.avatar : "null";
-            var card = document.createElement("div");
-            card.className = "sow-hud__notification sow-hud__notification--support";
-            card.dataset.receiptId = String(receipt.id);
-            var seal = document.createElement("span");
-            seal.className = "sow-hud__notification-seal";
-            seal.setAttribute("aria-hidden", "true");
-            seal.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
-            var portrait = document.createElement("img");
-            portrait.className = "sow-hud__notification-portrait";
-            portrait.src = asset("gameplay/avatars/" + avatarId + ".webp");
-            portrait.alt = "";
-            portrait.draggable = false;
-            var copy = document.createElement("span");
-            copy.className = "sow-hud__notification-copy";
-            copy.textContent = receipt.key ? SOW_t(receipt.key, receipt.values || {}) : SOW_t("hud.event");
-            card.append(seal, portrait, copy);
-            hudRefs.notifications.dataset.key = "support:" + receipt.id;
-            hudRefs.notifications.replaceChildren(card);
-            supportReceiptTimer = window.setTimeout(function () {
-                supportReceiptTimer = null;
-                renderNotifications(latestNotificationEntries);
-            }, 3600);
-            return;
+        if (!changed) return;
+        activeNotifications.sort(function (a, b) { return b.priority - a.priority || a.createdAt - b.createdAt; });
+        notificationCards.forEach(function (parts, index) {
+            var item = activeNotifications[index];
+            parts.card.hidden = !item;
+            if (!item) {
+                parts.renderKey = "";
+                return;
+            }
+            var entry = item.entry || {};
+            var key = String(entry.key || "hud.event");
+            var renderKey = String(entry.id) + ":" + key + ":" + JSON.stringify(entry.values || {}) + ":" + JSON.stringify(entry.avatars || []) + ":" + item.priority;
+            if (parts.renderKey === renderKey) return;
+            parts.renderKey = renderKey;
+            parts.card.className = "sow-hud__notification sow-hud__notification--premium"
+                + (item.priority >= 4 ? " sow-hud__notification--urgent" : "")
+                + (/resource_received|ally_support/.test(key) ? " sow-hud__notification--support" : "");
+            parts.seal.innerHTML = key.indexOf("nuke") >= 0 ? hudIcon("nuke", "sow-hud__notification-icon")
+                : key.indexOf("elimination") >= 0 ? hudIcon("attack", "sow-hud__notification-icon")
+                    : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
+            var avatars = Array.isArray(entry.avatars) ? entry.avatars : [];
+            parts.portraits.forEach(function (portrait, portraitIndex) {
+                var rawId = String(avatars[portraitIndex] || "");
+                var slug = rawId ? leaderById(rawId).slug : "";
+                var valid = /^[a-z][a-z0-9_]*$/.test(slug || "");
+                portrait.hidden = !rawId;
+                if (rawId) {
+                    var src = asset("gameplay/avatars/" + (valid ? slug : "null") + ".webp");
+                    if (portrait.getAttribute("src") !== src) portrait.src = src;
+                }
+            });
+            parts.copy.textContent = SOW_t(key, entry.values || {});
+        });
+        if (notificationTimer) window.clearTimeout(notificationTimer);
+        notificationTimer = null;
+        if (activeNotifications.length) {
+            var nextExpiry = Math.min.apply(Math, activeNotifications.map(function (item) { return item.expiresAt; }));
+            notificationTimer = window.setTimeout(function () {
+                notificationTimer = null;
+                renderNotifications([], true);
+            }, Math.max(0, nextExpiry - Date.now()));
         }
-
-        var visible = entries.filter(function (entry) { return !entry || !entry.premium; }).slice(-3);
-        var key = visible.map(function (entry) {
-            return String(entry && entry.key || "") + JSON.stringify(entry && entry.values || {});
-        }).join("\u001f");
-        if (hudRefs.notifications.dataset.key === key) return;
-        hudRefs.notifications.dataset.key = key;
-        hudRefs.notifications.replaceChildren.apply(hudRefs.notifications, visible.map(function (entry) {
-            var node = document.createElement("div");
-            node.className = "sow-hud__notification";
-            node.textContent = entry && entry.key ? SOW_t(entry.key, entry.values || {}) : SOW_t("hud.event");
-            return node;
-        }));
     }
 
-    function renderHud() {
+    function renderHud(forceNotifications) {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
             hudRoot.hidden = true;
@@ -1025,15 +1141,11 @@
             lastLeaderboardPlayers = [];
             inboxRenderKey = "";
             if (hudRefs && hudRefs.rows) hudRefs.rows.replaceChildren();
-            if (hudRefs && hudRefs.notifications) {
-                hudRefs.notifications.dataset.key = "";
-                hudRefs.notifications.replaceChildren();
-            }
-            if (supportReceiptTimer) window.clearTimeout(supportReceiptTimer);
-            supportReceiptTimer = null;
-            supportReceiptQueue = [];
+            if (notificationTimer) window.clearTimeout(notificationTimer);
+            notificationTimer = null;
+            activeNotifications = [];
+            notificationCards.forEach(function (parts) { parts.card.hidden = true; });
             notificationCursor = 0;
-            latestNotificationEntries = [];
             return;
         }
         ensureHudDom();
@@ -1220,7 +1332,7 @@
             }
         }
 
-        renderNotifications(hud.notifications);
+        renderNotifications(hud.notifications, forceNotifications);
 
         // Leaderboard
         if (hudRefs.leaderboard) {
@@ -1480,7 +1592,7 @@
         hudInitialized = false;
         hudRefs = null;
         if (hudRoot) hudRoot.replaceChildren();
-        renderHud();
+        renderHud(true);
     });
 
     if (hudRoot) hudRoot.hidden = true;

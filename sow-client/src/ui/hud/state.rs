@@ -16,9 +16,11 @@ pub struct SelectedTileInfo {
 pub struct HudNotification {
     pub id: u64,
     pub text: UiText,
-    pub color: [f32; 4],
     pub spawned_at: Instant,
-    pub sender_avatar: Option<String>,
+    pub players: [Option<u16>; 2],
+    pub priority: u8,
+    pub group: Option<String>,
+    pub sum_values: bool,
 }
 
 pub struct HudState {
@@ -96,35 +98,35 @@ impl Default for HudState {
 }
 
 impl HudState {
-    pub fn push_notification(&mut self, text: UiText, color: [f32; 4]) {
-        self.push_notification_with_avatar(text, color, None);
+    pub fn push_notification(&mut self, text: UiText) {
+        self.push_notification_for_players(text, [None, None], 1, None, false);
     }
 
-    pub fn push_resource_notification(
+    pub fn push_notification_for_players(
         &mut self,
         text: UiText,
-        color: [f32; 4],
-        sender_avatar: Option<String>,
+        players: [Option<u16>; 2],
+        priority: u8,
+        group: Option<String>,
+        sum_values: bool,
     ) {
-        self.push_notification_with_avatar(text, color, sender_avatar);
-    }
-
-    fn push_notification_with_avatar(
-        &mut self,
-        text: UiText,
-        color: [f32; 4],
-        sender_avatar: Option<String>,
-    ) {
-        if self.hud_notifications.len() == 32 {
+        if self.hud_notifications.len() >= 32 {
             self.hud_notifications.pop_front();
         }
         let id = self.notification_revision.wrapping_add(1);
+        let group = group.or_else(|| {
+            players[0]
+                .or(players[1])
+                .map(|_| format!("{}:{:?}:{:?}", text.key, players[0], players[1]))
+        });
         self.hud_notifications.push_back(HudNotification {
             id,
             text,
-            color,
             spawned_at: Instant::now(),
-            sender_avatar,
+            players,
+            priority,
+            group,
+            sum_values,
         });
         self.notification_revision = id;
     }
@@ -143,29 +145,33 @@ mod tests {
     fn notifications_keep_only_the_32_most_recent_entries() {
         let mut hud = HudState::default();
         for _ in 0..40 {
-            hud.push_notification(UiText::new("hud.event"), [1.0; 4]);
+            hud.push_notification(UiText::new("hud.event"));
         }
         assert_eq!(hud.hud_notifications.len(), 32);
         assert_eq!(hud.notification_revision, 40);
     }
 
     #[test]
-    fn resource_receipts_keep_the_campaign_senders_portrait() {
+    fn notification_retains_both_entity_ids_and_priority() {
         let mut hud = HudState::default();
-        hud.push_resource_notification(
+        hud.push_notification_for_players(
             UiText::new("hud.resource_received_both"),
-            [1.0; 4],
-            Some("snettisham".into()),
+            [Some(17), Some(23)],
+            4,
+            Some("nuke:17:23".into()),
+            false,
         );
         let receipt = hud.hud_notifications.front().unwrap();
         assert_eq!(receipt.id, 1);
-        assert_eq!(receipt.sender_avatar.as_deref(), Some("snettisham"));
+        assert_eq!(receipt.players, [Some(17), Some(23)]);
+        assert_eq!(receipt.priority, 4);
+        assert_eq!(receipt.group.as_deref(), Some("nuke:17:23"));
     }
 
     #[test]
     fn clearing_notifications_advances_the_revision() {
         let mut hud = HudState::default();
-        hud.push_notification(UiText::new("hud.event"), [1.0; 4]);
+        hud.push_notification(UiText::new("hud.event"));
         let revision = hud.notification_revision;
         hud.clear_notifications();
         assert!(hud.hud_notifications.is_empty());

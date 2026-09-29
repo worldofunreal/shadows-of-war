@@ -464,8 +464,17 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.match(tutorial, /step\.trigger\.type === "territory" && step\.guide\.target === "expand" && view && view\.progress\.current > 0\) return null/);
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_roman_outposts").trigger, { type: "defeated", targets: ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"], value: 3, scope: "total" });
     assert.match(webMenu, /"notifications": notifications/);
-    assert.match(simUpdateSource, /push_resource_notification\(text, color, Some\(sender_avatar\)\)/);
-    assert.match(hud, /supportReceiptQueue/);
+    assert.match(simUpdateSource, /push_notification_for_players\(/);
+    assert.match(simUpdateSource, /\[Some\(transfer\.sender_id\), Some\(my_id\)\]/);
+    assert.match(webMenu, /"avatars": avatars/);
+    assert.match(hud, /notificationCards = Array\.from\(\{ length: 3 \}/);
+    assert.match(hud, /activeNotifications\.length < 3/);
+    assert.match(hud, /function renderNotifications\(entries, forceRefresh\)/);
+    assert.match(hud, /if \(!changed\) return;/);
+    assert.match(hud, /renderNotifications\(\[\], true\)/);
+    assert.match(hud, /renderHud\(true\)/);
+    assert.match(hud, /gameplay\/avatars\/null\.webp/);
+    assert.match(hud, /portrait\.hidden = !rawId/);
     assert.match(hudCss, /\.sow-hud__notification--support/);
     assert.match(campaignModule, /support_interval_seconds/);
     assert.match(campaignMapEditorHtml, /support_interval_seconds/);
@@ -476,6 +485,103 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.match(campaignEditor, /previewActionStep/);
     assert.match(campaignEditor, /if \(actionRatio != null\) \$\("#sow-hud-slider"\)\.value/);
     assert.match(tutorial, /machineView\.step\.id !== runtime\.lastActionStepId/);
+});
+
+test("HUD notifications coalesce, prioritize, reuse both portraits, and expire within fixed bounds", () => {
+    const start = hud.indexOf("    function renderNotifications(entries, forceRefresh) {");
+    const end = hud.indexOf("\n    function renderHud(", start);
+    assert.ok(start >= 0 && end > start);
+    const cards = Array.from({ length: 3 }, () => ({
+        card: { hidden: true, className: "" },
+        seal: { innerHTML: "" },
+        portraits: Array.from({ length: 2 }, () => ({
+            hidden: true,
+            src: "",
+            getAttribute(name) { return name === "src" ? this.src : null; }
+        })),
+        copy: { textContent: "" },
+        renderKey: ""
+    }));
+    let now = 1000;
+    const timers = [];
+    const context = {
+        hudRefs: { notifications: {} },
+        notificationCursor: 0,
+        notificationTimer: null,
+        activeNotifications: [],
+        notificationCards: cards,
+        Date: { now: () => now },
+        asset: path => "/assets/" + path,
+        leaderById: id => ({ slug: String(id) }),
+        hudIcon: name => name,
+        SOW_t: key => key,
+        window: {
+            SOW_LOCALE: "en",
+            clearTimeout(timer) { timer.cleared = true; },
+            setTimeout(callback, delay) {
+                const timer = { callback, delay, cleared: false };
+                timers.push(timer);
+                return timer;
+            }
+        }
+    };
+    const renderer = hud.slice(start, end) + "\nthis.renderNotifications = renderNotifications;";
+    vm.runInNewContext(renderer, context);
+    const add = (id, key, priority, group, values, avatars, sumValues = false) => {
+        now += 100;
+        context.renderNotifications([{
+            id, key, priority, group, values: values || {}, avatars: avatars || [],
+            sum_values: sumValues, age_ms: 0
+        }]);
+    };
+
+    add(1, "hud.resource_received_gold", 3, "resource:received:7", { gold: "100" }, ["boudica", "caesar"], true);
+    const firstTimerCount = timers.length;
+    context.renderNotifications([], false);
+    assert.equal(timers.length, firstTimerCount, "unchanged HUD updates must not reset the expiry timer");
+    add(2, "hud.resource_received_troops", 3, "resource:received:7", { troops: "25" }, ["boudica", "caesar"], true);
+    assert.equal(context.activeNotifications.length, 1);
+    assert.equal(context.activeNotifications[0].entry.key, "hud.resource_received_both");
+    assert.equal(context.activeNotifications[0].entry.values.gold, "100");
+    assert.equal(context.activeNotifications[0].entry.values.troops, "25");
+    assert.deepEqual(cards[0].portraits.map(item => item.hidden), [false, false]);
+    assert.deepEqual(cards[0].portraits.map(item => item.src), [
+        "/assets/gameplay/avatars/boudica.webp", "/assets/gameplay/avatars/caesar.webp"
+    ]);
+
+    add(3, "hud.nuke_struck", 4, "nuke:9:7", {}, ["caesar", "boudica"]);
+    add(4, "hud.structure_ready", 2, "building:7", {});
+    add(5, "hud.water_feedback", 1, "click:7", {});
+    assert.equal(context.activeNotifications.length, 3, "a burst must never create a backlog");
+    assert.ok(context.activeNotifications.some(item => item.group === "nuke:9:7"));
+    assert.ok(context.activeNotifications.some(item => item.group === "resource:received:7"));
+    assert.ok(!context.activeNotifications.some(item => item.group === "click:7"), "lower-priority feedback must yield to active event cards");
+    const timersBeforeAttack = timers.length;
+    add(6, "hud.attack_incoming", 4, "incoming-attack:7", { count: "2" }, ["caesar", "boudica"]);
+    add(7, "hud.attack_incoming", 4, "incoming-attack:7", { count: "3" }, ["caesar", "boudica"]);
+    assert.equal(context.activeNotifications.length, 3);
+    assert.equal(context.activeNotifications.find(item => item.group === "incoming-attack:7").entry.values.count, "3");
+    const timersBeforeDuplicate = timers.length;
+    context.renderNotifications([{
+        id: 7, key: "hud.attack_incoming", priority: 4, group: "incoming-attack:7",
+        values: { count: "3" }, avatars: ["caesar", "boudica"], age_ms: 0
+    }]);
+    assert.equal(timers.length, timersBeforeDuplicate, "duplicate IDs must not refresh or duplicate cards");
+    assert.ok(timersBeforeAttack < timersBeforeDuplicate);
+
+    const burst = Array.from({ length: 100 }, (_, index) => ({
+        id: index + 8, key: "hud.water_feedback", priority: 1, group: "click:" + index,
+        values: {}, avatars: ["boudica"], age_ms: 0
+    }));
+    const timersBeforeBurst = timers.length;
+    context.renderNotifications(burst);
+    assert.equal(context.activeNotifications.length, 3);
+    assert.equal(timers.length, timersBeforeBurst, "a low-priority spam burst must not churn timers");
+
+    now += 5000;
+    timers.at(-1).callback();
+    assert.equal(context.activeNotifications.length, 0);
+    assert.ok(cards.every(parts => parts.card.hidden), "expired cards release their visible slots");
 });
 
 test("campaign editor refresh serves current source files without browser caching", () => {
@@ -1356,6 +1462,78 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
 });
 
+test("building card separates active construction from an available upgrade", () => {
+    const renderStart = hud.indexOf("    function renderBuildingCard(mapMenu) {");
+    const renderEnd = hud.indexOf("\n    function updateLeaderboard", renderStart);
+    assert.ok(renderStart >= 0 && renderEnd > renderStart);
+
+    const element = () => {
+        const classes = new Set();
+        return {
+            dataset: {},
+            textContent: "",
+            disabled: false,
+            hidden: false,
+            classes,
+            classList: {
+                toggle(name, force) {
+                    if (force) classes.add(name);
+                    else classes.delete(name);
+                }
+            }
+        };
+    };
+    const hudRefs = {
+        buildingCard: element(),
+        buildingCardKind: element(),
+        buildingCardLevel: element(),
+        buildingCardBenefit: element(),
+        buildingCardNext: element(),
+        buildingCardUpgrade: element()
+    };
+    const renderBuildingCard = vm.runInNewContext(
+        hud.slice(renderStart, renderEnd) + "\nrenderBuildingCard;",
+        { hudRefs }
+    );
+    const menu = building => ({ open: true, session: 4, tile_idx: 12, building });
+
+    renderBuildingCard(menu({
+        name: "City",
+        kind: "City",
+        level: 1,
+        benefit: "Current benefit",
+        under_construction: true,
+        construction_name: "Hamlet",
+        remaining_seconds: 7.4,
+        can_upgrade: false
+    }));
+    assert.equal(hudRefs.buildingCardLevel.textContent, "🏗️ Hamlet · 7.4s left");
+    assert.equal(hudRefs.buildingCardKind.textContent, "City");
+    assert.equal(hudRefs.buildingCardBenefit.hidden, true);
+    assert.equal(hudRefs.buildingCardNext.textContent, "");
+    assert.equal(hudRefs.buildingCardUpgrade.hidden, true);
+    assert.equal(hudRefs.buildingCardUpgrade.disabled, true);
+
+    renderBuildingCard(menu({
+        name: "Camp",
+        kind: "City",
+        level: 1,
+        benefit: "Current benefit",
+        next_level: 2,
+        next_name: "Hamlet",
+        next_benefit: "Next benefit",
+        duration_seconds: 2.2,
+        cost: 150,
+        can_upgrade: true
+    }));
+    assert.equal(hudRefs.buildingCardLevel.textContent, "Level 1");
+    assert.equal(hudRefs.buildingCardBenefit.hidden, false);
+    assert.equal(hudRefs.buildingCardNext.textContent, "Next: Hamlet · Next benefit · 2.2s");
+    assert.equal(hudRefs.buildingCardUpgrade.textContent, "Upgrade · 150g");
+    assert.equal(hudRefs.buildingCardUpgrade.hidden, false);
+    assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
+});
+
 test("primary click selects owned buildings without changing other map gestures", () => {
     const clickStart = mapClick.indexOf("pub(crate) fn handle_map_click");
     const clickEnd = mapClick.indexOf("pub(crate) fn open_map_context_menu", clickStart);
@@ -1398,7 +1576,7 @@ test("map menu stays visible with disabled sectors when no action is available",
     const openStart = mapClick.indexOf("pub(crate) fn open_map_context_menu");
     const openEnd = mapClick.indexOf("pub(crate) fn close_map_context_menu", openStart);
     const openBody = mapClick.slice(openStart, openEnd);
-    assert.match(openBody, /if self\.map_menu_actions\(tile_idx\)\.is_empty\(\) \{\s*self\.show_map_menu_unavailable\(tile_idx, \(x, y\)\);\s*\}/);
+    assert.match(openBody, /if self\.map_menu_actions\(tile_idx\)\.is_empty\(\) \{\s*self\.show_map_menu_unavailable\(tile_idx\);\s*\}/);
     assert.match(openBody, /self\.input\.map_context_menu = Some\(MapContextMenu/);
 
     const renderStart = hud.indexOf("function renderMapMenu(mapMenu)");

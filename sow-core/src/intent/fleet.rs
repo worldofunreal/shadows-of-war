@@ -3,6 +3,24 @@ use crate::warp_fleet::WarpFleet;
 use crate::warp_fleet::{FleetRoute, resolve_fleet_route};
 
 impl SowEngine {
+    pub(crate) fn boat_slots_used(&self, player_id: u16) -> u32 {
+        let active = self
+            .fleets
+            .iter()
+            .filter(|fleet| fleet.owner_id == player_id && fleet.troops > 0.0)
+            .count() as u32;
+        let queued = self
+            .buildings
+            .iter()
+            .filter(|building| {
+                building.owner_id == player_id && building.kind == crate::game::BuildingKind::Port
+            })
+            .filter_map(|building| self.port_queues.get(&building.id))
+            .map(|queue| queue.len() as u32)
+            .sum::<u32>();
+        active.saturating_add(queued)
+    }
+
     pub(super) fn apply_launch_fleet_intent(
         &mut self,
         player_id: u16,
@@ -34,6 +52,10 @@ impl SowEngine {
             return;
         };
         if !player.alive {
+            return;
+        }
+        let capacity = crate::building::player_fleet_capacity(&self.buildings, player_id);
+        if self.boat_slots_used(player_id) >= capacity {
             return;
         }
         let map_area = self.state.map.width.saturating_mul(self.state.map.height);
@@ -131,7 +153,7 @@ impl SowEngine {
         let fid = self.state.next_fleet_id;
         self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
 
-        self.add_fleet(WarpFleet::new(
+        let mut fleet = WarpFleet::new(
             fid,
             player_id,
             target_owner,
@@ -139,6 +161,9 @@ impl SowEngine {
             launch,
             (src, landing),
             path,
-        ));
+        );
+        fleet.speed_bonus_percent =
+            crate::building::player_boat_speed_bonus(&self.buildings, player_id);
+        self.add_fleet(fleet);
     }
 }

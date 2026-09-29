@@ -1670,19 +1670,116 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
     serde_json::Value::Array(requests)
 }
 
+fn building_benefit_label(
+    kind: sow_core::game::BuildingKind,
+    level: u8,
+    config: &sow_core::game_config::GameConfig,
+) -> String {
+    use sow_core::game::BuildingKind as Kind;
+    match kind {
+        Kind::City => {
+            let slots = sow_core::building::farm_slots_for_city_level(level);
+            let milestone = match level {
+                3 => " Factories unlocked.",
+                4 => " Trade ships unlocked with a Harbor.",
+                5 => " Warships unlocked with a Port.",
+                6 => " Can launch nuclear bombs.",
+                _ => "",
+            };
+            format!(
+                "This site adds +{:.0} troop capacity, +{:.2} troops/s, +{:.2} gold/s, and holds {} farm plots.{}",
+                config.city_max_troops * f64::from(level),
+                config.city_troop_income * f64::from(level),
+                config.city_gold_income * f64::from(level),
+                slots,
+                milestone,
+            )
+        }
+        Kind::Port => format!(
+            "At level {level}, this Port adds {level} boat slots, +{level}% speed, +{troops:.2} troops/s, and +{gold:.2} gold/s. Total boat speed stops at 30%.",
+            troops = config.port_troop_income * f64::from(level),
+            gold = config.port_gold_income * f64::from(level),
+        ),
+        Kind::Factory => {
+            let income = config.factory_gold_income * f64::from(level);
+            match level {
+                0 => "No Factory benefit until construction is complete.".to_string(),
+                1 => format!("Produces +{income:.2} gold/s."),
+                2 => format!("Produces +{income:.2} gold/s. Each Manufactory shortens construction by 5% (25% max)."),
+                3 => format!("Produces +{income:.2} gold/s. Manufactory speeds work; each Factory lowers other upgrade prices by 5% (25% max)."),
+                _ => format!("Produces +{income:.2} gold/s. Also speeds work, lowers other upgrade prices, and adds 5% Trade Ship income (25% max)."),
+            }
+        }
+        Kind::Bunker => {
+            let range = (config.bunker_range.round() as u32
+                + u32::from(level.saturating_sub(1)) * 2)
+            .min(20);
+            let defense = u32::from(level) * 5;
+            if level >= sow_core::game::BuildingKind::Bunker.max_level() {
+                format!("Raises nearby enemy attack losses by up to {defense}% within range {range}; intercepts nuclear bombs. Combined defense stops at 50%.")
+            } else {
+                format!("Raises nearby enemy attack losses by up to {defense}% within range {range}. Combined defense stops at 50%.")
+            }
+        }
+        Kind::Farm => format!(
+            "This plot produces +{:.2} troops/s.",
+            config.farm_troop_income * f64::from(level)
+        ),
+    }
+}
+
 fn building_detail_payload(
     app: &SowApp,
     building: &sow_core::protocol::BuildingSnapshot,
 ) -> serde_json::Value {
     let active_level = building.active_level();
     let next_level = active_level.saturating_add(1);
+    let my_id = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
+    let owns = building.owner_id == my_id;
+    let snapshot = app.sim.current_snapshot.as_ref();
+    let owned_levels = snapshot
+        .map(|snapshot| {
+            snapshot
+                .buildings
+                .iter()
+                .filter(|candidate| candidate.owner_id == my_id && candidate.kind == building.kind)
+                .map(|candidate| candidate.level as u32)
+                .sum()
+        })
+        .unwrap_or_default();
+    let factory_time_levels = snapshot
+        .map(|snapshot| {
+            snapshot
+                .buildings
+                .iter()
+                .filter(|candidate| {
+                    candidate.owner_id == my_id
+                        && candidate.kind == sow_core::game::BuildingKind::Factory
+                        && candidate.active_level() >= 2
+                })
+                .count() as u32
+        })
+        .unwrap_or_default();
+    let factory_discount_levels = snapshot
+        .map(|snapshot| {
+            snapshot
+                .buildings
+                .iter()
+                .filter(|candidate| {
+                    candidate.owner_id == my_id
+                        && candidate.kind == sow_core::game::BuildingKind::Factory
+                        && candidate.active_level() >= 3
+                })
+                .count() as u32
+        })
+        .unwrap_or_default();
     let cost = sow_core::building::cost::structure_upgrade_cost_gold(
         building.kind,
         next_level,
+        owned_levels,
+        factory_discount_levels,
         &app.sim.config,
     );
-    let my_id = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
-    let owns = building.owner_id == my_id;
     let has_gold = app.ui.app.hud_state.gold >= cost;
     let maxed = next_level > building.kind.max_level();
     let factory_requirement = building.kind != sow_core::game::BuildingKind::Factory
@@ -1695,22 +1792,55 @@ fn building_detail_payload(
             })
         });
     let requirements = if building.kind == sow_core::game::BuildingKind::Factory {
-        serde_json::json!([{ "key": "village", "met": factory_requirement }])
+        serde_json::json!([{ "key": "Village", "met": factory_requirement }])
     } else {
         serde_json::json!([])
     };
+    let duration_ticks = sow_core::building::structure_upgrade_duration_ticks(
+        building.kind,
+        next_level,
+        factory_time_levels,
+    );
+    let construction_name = building
+        .under_construction
+        .then(|| building.kind.level_name(building.level));
+    let boat_slots = snapshot.and_then(|snapshot| {
+        snapshot.players.iter().find(|player| player.id == my_id).map(|player| {
+            let port_levels = snapshot
+                .buildings
+                .iter()
+                .filter(|candidate| {
+                    candidate.owner_id == my_id
+                        && candidate.kind == sow_core::game::BuildingKind::Port
+                })
+                .map(|candidate| u32::from(candidate.active_level()))
+                .sum::<u32>();
+            serde_json::json!({
+                "used": player.boats_in_use,
+                "total": player.boat_capacity,
+                "speed_percent": port_levels.min(30),
+            })
+        })
+    });
     serde_json::json!({
         "id": building.id,
         "kind": building.kind.as_str(),
         "level": active_level,
-        "name": building.kind.level_name(active_level),
-        "benefit": building.kind.level_benefit(active_level),
-        "next_level": (!maxed).then_some(next_level),
-        "next_name": (!maxed).then_some(building.kind.level_name(next_level)),
-        "next_benefit": (!maxed).then_some(building.kind.level_benefit(next_level)),
+        "name": if active_level == 0 {
+            building.kind.as_str()
+        } else {
+            building.kind.level_name(active_level)
+        },
+        "benefit": building_benefit_label(building.kind, active_level, &app.sim.config),
+        "construction_name": construction_name,
+        "next_level": (!building.under_construction && !maxed).then_some(next_level),
+        "next_name": (!building.under_construction && !maxed).then_some(building.kind.level_name(next_level)),
+        "next_benefit": (!building.under_construction && !maxed).then(|| building_benefit_label(building.kind, next_level, &app.sim.config)),
         "cost": cost,
-        "duration_ticks": (!maxed).then_some(sow_core::building::core::upgrade_duration_ticks(building.kind, next_level)),
+        "duration_seconds": (!building.under_construction && !maxed).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
+        "remaining_seconds": building.under_construction.then_some(building.ticks_until_complete as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
         "under_construction": building.under_construction,
+        "boat_slots": (building.kind == sow_core::game::BuildingKind::Port).then_some(boat_slots).flatten(),
         "owns": owns,
         "can_upgrade": owns && !building.under_construction && !maxed && factory_requirement && has_gold,
         "requirements": requirements
@@ -1843,13 +1973,40 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .iter()
         .map(|notification| {
             let text = localized_text_payload(&notification.text);
-            let avatar = notification.sender_avatar.as_deref();
+            let avatars: Vec<_> = notification
+                .players
+                .iter()
+                .enumerate()
+                .map(|(index, player_id)| {
+                    let player_id = (*player_id)?;
+                    if index > 0 && notification.players[0] == Some(player_id) {
+                        return None;
+                    }
+                    Some(
+                        hud.players
+                            .iter()
+                            .find(|player| player.id == player_id)
+                            .map(|player| {
+                                player
+                                    .campaign_avatar
+                                    .as_deref()
+                                    .filter(|avatar| !avatar.is_empty())
+                                    .map(str::to_owned)
+                                    .unwrap_or_else(|| leader_id(player.leader))
+                            })
+                            .unwrap_or_else(|| "null".to_string()),
+                    )
+                })
+                .collect();
             serde_json::json!({
                 "id": notification.id,
                 "key": text.get("key").cloned().unwrap_or(serde_json::Value::Null),
                 "values": text.get("values").cloned().unwrap_or(serde_json::Value::Null),
-                "avatar": avatar,
-                "premium": avatar.is_some(),
+                "avatars": avatars,
+                "priority": notification.priority,
+                "group": &notification.group,
+                "sum_values": notification.sum_values,
+                "age_ms": notification.spawned_at.elapsed().as_millis().min(u64::MAX as u128) as u64,
             })
         })
         .collect::<Vec<_>>();
@@ -2308,6 +2465,8 @@ mod tests {
             kills: 0,
             deaths: 0,
             assists: 0,
+            boats_in_use: 0,
+            boat_capacity: 1,
         }
     }
 
@@ -2369,6 +2528,19 @@ mod tests {
             sea_lanes: Arc::new(Vec::new()),
             debug_mem_info: String::new(),
         }
+    }
+
+    #[test]
+    fn port_benefit_label_scales_income_with_each_level() {
+        let label = building_benefit_label(
+            sow_core::game::BuildingKind::Port,
+            2,
+            &sow_core::game_config::GameConfig::default(),
+        );
+
+        assert!(label.contains("2 boat slots, +2% speed"));
+        assert!(label.contains("+25.00 troops/s, and +2.00 gold/s"));
+        assert!(label.contains("stops at 30%"));
     }
 
     #[test]

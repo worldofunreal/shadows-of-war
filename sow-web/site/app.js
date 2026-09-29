@@ -43,7 +43,20 @@
     }).catch(() => {});
   }
 
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const heroVideo = $('.hero-video');
+  if (heroVideo) {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function syncHeroVideo() {
+      if (prefersReducedMotion.matches || document.visibilityState === 'hidden') {
+        heroVideo.pause();
+        return;
+      }
+      heroVideo.play()?.catch(() => {});
+    }
+    prefersReducedMotion.addEventListener?.('change', syncHeroVideo);
+    document.addEventListener('visibilitychange', syncHeroVideo);
+    syncHeroVideo();
+  }
 
   const cards = $$('.leader-card[data-leader-id]');
   const leaders = cards.map(c => ({
@@ -60,7 +73,6 @@
   }));
 
   const asset = (leader, mobile = false) => `/assets/shell/leaders/${leader.image}_${mobile ? 'mobile' : 'desktop'}.webp`;
-  const avatar = leader => `/assets/gameplay/avatars/${leader.image}.webp`;
   let activeLeaderIndex = 0;
   const leaderName = leader => siteText(leader.nameKey, leader.name);
   const leaderCiv = leader => siteText(leader.civKey, leader.civ);
@@ -77,22 +89,6 @@
     const civ = leaderCiv(leader);
     const historical = leaderHistorical(leader);
 
-    // Trigger subtle glitch burst on hero frame
-    const glitch = $('.hologram-glitch');
-    if (glitch && !prefersReducedMotion.matches) {
-      glitch.style.opacity = '0.5';
-      setTimeout(() => { glitch.style.opacity = ''; }, 120);
-    }
-
-    const heroImage = $('[data-hero-image]');
-    if (heroImage) {
-      heroImage.src = asset(leader);
-      heroImage.alt = siteText('site.leader_artwork', `${name} leader artwork`, { name });
-    }
-    const heroName = $('[data-hero-name]');
-    if (heroName) heroName.textContent = name;
-    const heroCiv = $('[data-hero-civ]');
-    if (heroCiv) heroCiv.textContent = civ;
     const detailImage = $('[data-detail-image]');
     if (detailImage) {
       detailImage.src = asset(leader);
@@ -117,12 +113,6 @@
       detailDesc.textContent = siteText(leader.descriptionKey, '', {});
     }
 
-    $$('.leader-chip').forEach((item, itemIndex) => {
-      const active = itemIndex === index;
-      item.classList.toggle('is-active', active);
-      item.setAttribute('aria-pressed', String(active));
-      item.setAttribute('aria-label', siteText('site.inspect_leader', `Inspect ${leaderName(leaders[itemIndex])}`, { name: leaderName(leaders[itemIndex]) }));
-    });
     cards.forEach((item, itemIndex) => {
       const active = itemIndex === index;
       const itemLeader = leaders[itemIndex];
@@ -138,30 +128,8 @@
     });
   }
 
-  function renderLeaderRail() {
-    const rail = $('[data-leader-rail]');
-    if (!rail || !leaders.length) return;
-    rail.innerHTML = '';
-    leaders.forEach((leader, index) => {
-      const button = document.createElement('button');
-      button.className = `leader-chip${index === 0 ? ' is-active' : ''}`;
-      button.type = 'button';
-      button.setAttribute('aria-pressed', index === 0 ? 'true' : 'false');
-      button.title = leaderName(leader);
-      button.setAttribute('aria-label', siteText('site.select_leader', `Select ${leaderName(leader)}`, { name: leaderName(leader) }));
-      button.innerHTML = `<span class="sheen" aria-hidden="true"></span><img src="${avatar(leader)}" alt="" width="256" height="256" decoding="async">`;
-      button.addEventListener('click', () => updateLeader(index));
-      rail.appendChild(button);
-    });
-  }
-
   function bindLeaderGrid() {
     cards.forEach((card, index) => {
-      const sheen = document.createElement('span');
-      sheen.className = 'sheen';
-      sheen.setAttribute('aria-hidden', 'true');
-      card.appendChild(sheen);
-
       card.addEventListener('click', () => {
         updateLeader(index);
         $('[data-leader-detail]')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -176,7 +144,6 @@
     });
   }
 
-  renderLeaderRail();
   bindLeaderGrid();
   if (leaders.length) {
     updateLeader(0);

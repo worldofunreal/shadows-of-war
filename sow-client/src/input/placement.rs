@@ -58,6 +58,25 @@ pub fn resolve_building_placement_tile(query: &PlacementQuery) -> Result<u32, &'
     let terrain = query.terrain;
     let my_id = query.my_id;
     let buildings = query.buildings;
+
+    if kind == sow_core::game::BuildingKind::Farm {
+        if click_x < 0 || click_y < 0 || click_x >= map_w as i32 || click_y >= map_h as i32 {
+            return Err("Tap a lowland tile you own.");
+        }
+        let index = click_y as u32 * map_w + click_x as u32;
+        let Some(&terrain_byte) = terrain.get(index as usize) else {
+            return Err("Tap a lowland tile you own.");
+        };
+        let lowland = terrain_byte & 0x80 != 0 && terrain_byte & 0x1f < 10;
+        if owners.get(index as usize).copied() != Some(my_id)
+            || !lowland
+            || buildings.iter().any(|building| building.tile_idx == index)
+        {
+            return Err("Tap an empty lowland tile you own.");
+        }
+        return Ok(index);
+    }
+
     let pokayoke_dist = 25;
     let pokayoke_dist_sq = pokayoke_dist * pokayoke_dist;
 

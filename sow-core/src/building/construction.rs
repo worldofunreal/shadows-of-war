@@ -74,7 +74,7 @@ impl SowEngine {
 
                         let fid = self.state.next_fleet_id;
                         self.state.next_fleet_id = self.state.next_fleet_id.wrapping_add(1).max(1);
-                        new_fleets.push(crate::warp_fleet::WarpFleet::new(
+                        let mut fleet = crate::warp_fleet::WarpFleet::new(
                             fid,
                             owner_id,
                             0,
@@ -82,7 +82,10 @@ impl SowEngine {
                             prod.kind.max_health(), // Treat troops as health for ships
                             (spawn_tile, spawn_tile),
                             vec![],
-                        ));
+                        );
+                        fleet.speed_bonus_percent =
+                            crate::building::player_boat_speed_bonus(&self.buildings, owner_id);
+                        new_fleets.push(fleet);
                     }
                 }
             }

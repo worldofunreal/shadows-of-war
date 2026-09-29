@@ -232,20 +232,12 @@ impl SowApp {
 
         let my_id = self.sim.my_player_id.unwrap_or(1);
         let mut notifications = Vec::new();
-        let (mut notice_x, mut notice_y) = (0.5, 0.5);
-        if let Some(player) = snapshot.players.iter().find(|player| player.id == my_id)
-            && (player.centroid_x > 0.001 || player.centroid_y > 0.001)
-        {
-            notice_x = player.centroid_x + 0.5;
-            notice_y = player.centroid_y + 0.5;
-        }
-        let notice_time = Instant::now();
 
         for transfer in &snapshot.resource_transfers {
-            let (prefix, other_id, color) = if transfer.receiver_id == my_id {
-                ("received", transfer.sender_id, crate::rgb(74, 222, 128))
+            let (prefix, other_id, players, priority) = if transfer.receiver_id == my_id {
+                ("received", transfer.sender_id, [Some(transfer.sender_id), Some(my_id)], 3)
             } else if transfer.sender_id == my_id {
-                ("sent", transfer.receiver_id, crate::rgb(220, 220, 220))
+                ("sent", transfer.receiver_id, [Some(my_id), Some(transfer.receiver_id)], 2)
             } else {
                 continue;
             };
@@ -278,37 +270,15 @@ impl SowApp {
                     .with("name", name),
                 _ => continue,
             };
-            let campaign_support_avatar = (self.ui.tutorial_active && prefix == "received")
-                .then(|| {
-                    snapshot
-                        .players
-                        .iter()
-                        .find(|player| player.id == other_id)
-                        .and_then(|player| player.campaign_avatar.clone())
-                        .unwrap_or_else(|| "null".to_string())
-                });
-            notifications.push((text, color, campaign_support_avatar));
-
-            if transfer.receiver_id == my_id && transfer.gold > 0.0 {
-                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: format!("+{} Gold", crate::utils::format_number(transfer.gold)),
-                    world_x: notice_x,
-                    world_y: notice_y,
-                    start_time: notice_time,
-                    duration: web_time::Duration::from_millis(3000),
-                    color: crate::rgb(250, 204, 21),
-                });
+            if transfer.gold <= 0.0 && transfer.troops <= 0.0 {
+                continue;
             }
-            if transfer.receiver_id == my_id && transfer.troops > 0.0 {
-                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: format!("+{} Troops", crate::utils::format_number(transfer.troops)),
-                    world_x: notice_x,
-                    world_y: notice_y + 0.5,
-                    start_time: notice_time,
-                    duration: web_time::Duration::from_millis(3000),
-                    color: crate::rgb(6, 182, 212),
-                });
-            }
+            notifications.push((
+                text,
+                players,
+                priority,
+                format!("resource:{prefix}:{other_id}"),
+            ));
         }
 
         for rejection in &snapshot.resource_rejections {
@@ -323,20 +293,20 @@ impl SowApp {
                 .unwrap_or("Ally");
             notifications.push((
                 crate::ui::UiText::new("hud.resource_request_declined").with("name", name),
-                crate::rgb(239, 68, 68),
-                None,
+                [Some(rejection.rejector_id), Some(my_id)],
+                2,
+                format!("resource-rejected:{}", rejection.rejector_id),
             ));
         }
 
-        for (text, color, sender_avatar) in notifications {
-            if let Some(sender_avatar) = sender_avatar {
-                self.ui
-                    .app
-                    .hud_state
-                    .push_resource_notification(text, color, Some(sender_avatar));
-            } else {
-                self.ui.app.hud_state.push_notification(text, color);
-            }
+        for (text, players, priority, group) in notifications {
+            self.ui.app.hud_state.push_notification_for_players(
+                text,
+                players,
+                priority,
+                Some(group),
+                true,
+            );
         }
     }
 

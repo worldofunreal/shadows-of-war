@@ -995,7 +995,12 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     background: var(--sow-panel);
     box-shadow: var(--sow-surface-shadow);
     pointer-events: auto;
-    transition: opacity 160ms ease, transform 160ms ease;
+    animation: sow-building-card-in 180ms cubic-bezier(.2, 1, .35, 1) both;
+}
+
+@keyframes sow-building-card-in {
+    from { opacity: 0; transform: translate(-50%, 10px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .sow-hud__building-card.hidden {
@@ -1632,41 +1637,44 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 .sow-hud__notification {
-    padding: 8px 12px;
-    border: 1px solid var(--sow-line);
-    border-radius: 4px 7px 7px 4px;
-    background: var(--sow-panel);
-    color: #f5f1e8;
-    font-size: 11px;
-    font-weight: 700;
-    text-align: center;
-    box-shadow: var(--sow-surface-shadow);
-}
-
-.sow-hud__notification--support {
     position: relative;
     display: grid;
-    grid-template-columns: 28px 44px minmax(0, 1fr);
+    grid-template-columns: 28px auto minmax(0, 1fr);
     align-items: center;
     gap: 10px;
     min-height: 66px;
     padding: 9px 14px 9px 10px;
     overflow: hidden;
-    border: 1px solid rgb(238 194 104 / 72%);
+    border: 1px solid rgb(238 194 104 / 58%);
     border-radius: 8px 8px 16px 5px;
-    background: linear-gradient(112deg, rgb(91 67 31 / 96%), rgb(27 29 29 / 98%) 48%, rgb(14 20 23 / 98%));
+    background: linear-gradient(112deg, rgb(48 43 33 / 97%), rgb(27 29 29 / 98%) 48%, rgb(14 20 23 / 98%));
     color: #fff5d8;
     text-align: start;
-    box-shadow: 0 12px 34px rgb(0 0 0 / 44%), 0 0 20px rgb(233 187 100 / 18%), inset 0 1px rgb(255 243 205 / 16%);
-    animation: sow-support-arrive 280ms cubic-bezier(.18,.75,.26,1) both;
+    box-shadow: 0 12px 34px rgb(0 0 0 / 44%), 0 0 18px rgb(233 187 100 / 12%), inset 0 1px rgb(255 243 205 / 12%);
+    animation: sow-notification-arrive 260ms cubic-bezier(.18,.75,.26,1) both;
 }
 
-.sow-hud__notification--support::after {
+.sow-hud__notification[hidden] {
+    display: none;
+}
+
+.sow-hud__notification::after {
     position: absolute;
     inset: 0 auto 0 0;
     width: 2px;
     background: linear-gradient(transparent, #f4d28b, transparent);
     content: "";
+}
+
+.sow-hud__notification--support {
+    border: 1px solid rgb(238 194 104 / 72%);
+    background: linear-gradient(112deg, rgb(91 67 31 / 96%), rgb(27 29 29 / 98%) 48%, rgb(14 20 23 / 98%));
+}
+
+.sow-hud__notification--urgent {
+    border-color: rgb(246 116 104 / 78%);
+    background: linear-gradient(112deg, rgb(74 34 34 / 98%), rgb(27 25 27 / 98%) 48%, rgb(14 20 23 / 98%));
+    box-shadow: 0 12px 34px rgb(0 0 0 / 48%), 0 0 20px rgb(226 86 76 / 21%), inset 0 1px rgb(255 225 216 / 14%);
 }
 
 .sow-hud__notification-seal {
@@ -1691,6 +1699,18 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     stroke-width: 1.6;
 }
 
+.sow-hud__notification-icon {
+    width: 17px;
+    height: 17px;
+    object-fit: contain;
+}
+
+.sow-hud__notification-portraits {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
 .sow-hud__notification-portrait {
     width: 44px;
     height: 44px;
@@ -1701,6 +1721,11 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     box-shadow: 0 3px 10px rgb(0 0 0 / 32%);
 }
 
+.sow-hud__notification-portrait + .sow-hud__notification-portrait:not([hidden]) {
+    margin-left: -11px;
+    border-color: #24272a;
+}
+
 .sow-hud__notification-copy {
     font-size: 12px;
     font-weight: 700;
@@ -1708,13 +1733,17 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     text-wrap: pretty;
 }
 
-@keyframes sow-support-arrive {
-    from { opacity: 0; transform: translateY(-8px) scale(.985); }
+#sow-hud[data-overlay-open="true"] .sow-hud__notifications {
+    z-index: 191;
+}
+
+@keyframes sow-notification-arrive {
+    from { opacity: 0; transform: translateY(-7px) scale(.99); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-#sow-hud[data-overlay-open="true"] .sow-hud__notifications {
-    z-index: 191;
+#sow-hud.is-reduced-motion .sow-hud__notification {
+    animation: none;
 }
 
 .sow-hud__pin-btn,
@@ -1829,6 +1858,20 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 @media (max-width: 720px) {
+    .sow-hud__building-card {
+        bottom: calc(max(8px, var(--sow-sab)) + var(--sow-dock-reserve) + 8px);
+        width: calc(100vw - 16px);
+        max-height: 42vh;
+        overflow-y: auto;
+        padding: 14px;
+        border-radius: 16px 16px 10px 10px;
+    }
+
+    .sow-hud__building-card-head { font-size: 16px; }
+    .sow-hud__building-card-level,
+    .sow-hud__building-card-benefit,
+    .sow-hud__building-card-next { font-size: 13px; line-height: 1.35; }
+    .sow-hud__building-card-upgrade { min-height: 48px; }
     .sow-hud__topbar {
         top: max(8px, var(--sow-sat));
         inset-inline: max(8px, var(--sow-sal)) max(8px, var(--sow-sar));
@@ -2075,8 +2118,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
         bottom: calc(max(8px, var(--sow-sab)) + var(--sow-dock-reserve));
         width: min(300px, calc(100vw - 128px));
     }
-    .sow-hud__notification--support {
-        grid-template-columns: 24px 38px minmax(0, 1fr);
+    .sow-hud__notification {
+        grid-template-columns: 24px auto minmax(0, 1fr);
         gap: 7px;
         min-height: 58px;
         padding: 7px 9px;
@@ -2085,8 +2128,6 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     .sow-hud__notification-seal svg { width: 15px; height: 15px; }
     .sow-hud__notification-portrait { width: 38px; height: 38px; }
     .sow-hud__notification-copy { font-size: 10px; }
-    .sow-hud__notification:nth-last-child(n + 3) { display: none; }
-
     #sow-hud[data-overlay-open="true"] .sow-hud__left-rail,
     #sow-hud[data-overlay-open="true"] .sow-hud__right-rail,
     #sow-hud[data-overlay-open="true"] .sow-hud__hover-card,

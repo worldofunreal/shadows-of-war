@@ -129,6 +129,7 @@ impl SowEngine {
 
                 // Transfer ownership
                 b.owner_id = new_owner;
+                self.building_aggregates_dirty = true;
 
                 // Update player counts if necessary
                 if kind == crate::game::BuildingKind::City {

@@ -29,7 +29,22 @@ impl SowApp {
                 .filter(|attack| attack.target_owner == my_id && attack.troops > 0.0)
                 .map(|attack| attack.owner_id)
                 .collect();
+            let mut notifications = Vec::new();
             if my_id != 0 {
+                if let Some(attacker_id) = new_attackers
+                    .difference(&old_attackers)
+                    .copied()
+                    .min()
+                {
+                    notifications.push((
+                        crate::ui::UiText::new("hud.attack_incoming")
+                            .with("count", new_attackers.len().to_string()),
+                        [Some(attacker_id), Some(my_id)],
+                        4,
+                        format!("incoming-attack:{my_id}"),
+                        false,
+                    ));
+                }
                 // 1. Detect incoming attacks (UnderAttack)
                 for attack in &snap.attacks {
                     if attack.target_owner == my_id && attack.troops > 0.0 {
@@ -54,6 +69,88 @@ impl SowApp {
                             self.ui.trigger_viewport_alert(
                                 crate::app::ViewportAlertKind::AllianceRequest,
                             );
+                            if let Some(requester) = snap.players.iter().find(|p| p.id == *req) {
+                                notifications.push((
+                                    crate::ui::UiText::new("hud.alliance_request")
+                                        .with("name", sow_core::player::display_name(requester.id, &requester.name, requester.player_type)),
+                                    [Some(*req), Some(my_id)],
+                                    3,
+                                    format!("alliance-request:{req}"),
+                                    false,
+                                ));
+                            }
+                        }
+                    }
+                    for request in &my_info_new.resource_requests {
+                        if !my_info_old.resource_requests.iter().any(|old| old.requester == request.requester)
+                            && let Some(requester) = snap.players.iter().find(|p| p.id == request.requester)
+                        {
+                            notifications.push((
+                                crate::ui::UiText::new("hud.resource_request")
+                                    .with("name", sow_core::player::display_name(requester.id, &requester.name, requester.player_type))
+                                    .with("gold", crate::utils::format_number(request.gold))
+                                    .with("troops", crate::utils::format_number(request.troops)),
+                                [Some(request.requester), Some(my_id)],
+                                3,
+                                format!("resource-request:{}", request.requester),
+                                false,
+                            ));
+                        }
+                    }
+                    for other in &snap.players {
+                        let old_other = existing.players.iter().find(|p| p.id == other.id);
+                        let sent_alliance = other.alliance_requests.contains(&my_id)
+                            && !old_other.is_some_and(|p| p.alliance_requests.contains(&my_id));
+                        let sent_resources = other.resource_requests.iter().any(|request| request.requester == my_id)
+                            && !old_other.is_some_and(|p| p.resource_requests.iter().any(|request| request.requester == my_id));
+                        let name = sow_core::player::display_name(other.id, &other.name, other.player_type);
+                        if sent_alliance {
+                            notifications.push((
+                                crate::ui::UiText::new("hud.alliance_request_sent").with("name", name.clone()),
+                                [Some(my_id), Some(other.id)],
+                                2,
+                                format!("alliance-request-sent:{}", other.id),
+                                false,
+                            ));
+                        }
+                        if sent_resources {
+                            notifications.push((
+                                crate::ui::UiText::new("hud.resource_request_sent").with("name", name),
+                                [Some(my_id), Some(other.id)],
+                                2,
+                                format!("resource-request-sent:{}", other.id),
+                                false,
+                            ));
+                        }
+                    }
+
+                    for ally_id in &my_info_new.alliances {
+                        let Some(old_ally) = my_info_old.alliances.iter().find(|id| *id == ally_id) else {
+                            if let Some(ally) = snap.players.iter().find(|p| p.id == *ally_id) {
+                                notifications.push((
+                                    crate::ui::UiText::new("hud.alliance_formed")
+                                        .with("name", sow_core::player::display_name(ally.id, &ally.name, ally.player_type)),
+                                    [Some(my_id), Some(*ally_id)],
+                                    3,
+                                    format!("alliance-formed:{ally_id}"),
+                                    false,
+                                ));
+                            }
+                            continue;
+                        };
+                        let old_timer = my_info_old.alliance_timers.get(old_ally).copied().unwrap_or_default();
+                        let new_timer = my_info_new.alliance_timers.get(ally_id).copied().unwrap_or_default();
+                        if old_timer <= 300 && new_timer > old_timer && new_timer > 300
+                            && let Some(ally) = snap.players.iter().find(|p| p.id == *ally_id)
+                        {
+                            notifications.push((
+                                crate::ui::UiText::new("hud.alliance_renewed")
+                                    .with("name", sow_core::player::display_name(ally.id, &ally.name, ally.player_type)),
+                                [Some(my_id), Some(*ally_id)],
+                                3,
+                                format!("alliance-renewed:{ally_id}"),
+                                false,
+                            ));
                         }
                     }
                 }
@@ -71,9 +168,37 @@ impl SowApp {
                         {
                             self.ui
                                 .trigger_viewport_alert(crate::app::ViewportAlertKind::Betrayal);
+                            notifications.push((
+                                crate::ui::UiText::new("hud.betrayal")
+                                    .with("name", sow_core::player::display_name(other_player.id, &other_player.name, other_player.player_type)),
+                                [Some(*ally_id), Some(my_id)],
+                                4,
+                                format!("betrayal:{ally_id}"),
+                                false,
+                            ));
+                        } else if !my_info_new.alliances.contains(ally_id)
+                            && let Some(other_player) = snap.players.iter().find(|p| p.id == *ally_id)
+                        {
+                            notifications.push((
+                                crate::ui::UiText::new("hud.alliance_ended")
+                                    .with("name", sow_core::player::display_name(other_player.id, &other_player.name, other_player.player_type)),
+                                [Some(*ally_id), Some(my_id)],
+                                3,
+                                format!("alliance-ended:{ally_id}"),
+                                false,
+                            ));
                         }
                     }
                 }
+            }
+            for (text, players, priority, group, sum_values) in notifications {
+                self.ui.app.hud_state.push_notification_for_players(
+                    text,
+                    players,
+                    priority,
+                    Some(group),
+                    sum_values,
+                );
             }
             // Count unique attackers targeting us in the new snapshot
             let unique_attackers = new_attackers.len();
@@ -176,27 +301,23 @@ impl SowApp {
                     .unwrap_or_else(|| format!("Player {}", victim_id))
             };
 
-            let color = if victim_id == my_id && my_id != 0 {
-                crate::rgb(239, 68, 68)
-            } else if alert.owner_id == my_id {
-                crate::rgb(74, 222, 128)
-            } else if my_id != 0
-                && snap
-                    .players
-                    .iter()
-                    .find(|p| p.id == my_id)
-                    .map(|p| p.alliances.contains(&victim_id))
-                    .unwrap_or(false)
-                && victim_id != 0
-            {
-                crate::rgb(251, 191, 36)
-            } else {
-                crate::rgb(180, 180, 200)
-            };
             let text = crate::ui::UiText::new("hud.nuke_struck")
                 .with("attacker", attacker_name)
                 .with("victim", victim_name);
-            self.ui.app.hud_state.push_notification(text, color);
+            let priority = if victim_id == my_id && my_id != 0 {
+                4
+            } else if alert.owner_id == my_id {
+                3
+            } else {
+                2
+            };
+            self.ui.app.hud_state.push_notification_for_players(
+                text,
+                [Some(alert.owner_id), (victim_id != 0).then_some(victim_id)],
+                priority,
+                Some(format!("nuke:{}:{victim_id}", alert.owner_id)),
+                false,
+            );
         }
     }
 }

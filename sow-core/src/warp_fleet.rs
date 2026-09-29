@@ -475,13 +475,12 @@ impl WarpFleet {
         if let Some(&start) = path.first() {
             self.current_tile = start;
         }
-        self.path_cursor = if self.unit_type == crate::game::UnitType::TransportShip
-            && !path.is_empty()
-        {
-            1
-        } else {
-            0
-        };
+        self.path_cursor =
+            if self.unit_type == crate::game::UnitType::TransportShip && !path.is_empty() {
+                1
+            } else {
+                0
+            };
         self.movement_progress = 0.0;
         self.path = std::sync::Arc::new(path);
     }
@@ -494,7 +493,11 @@ impl WarpFleet {
             0.0
         };
         let speed = base_steps_per_tick * (1.0 + bonus).max(0.0);
-        if speed.is_finite() { speed } else { 0.0 }
+        if speed.is_finite() {
+            speed.max(0.0)
+        } else {
+            0.0
+        }
     }
 
     pub fn remaining_eta_seconds(
@@ -516,9 +519,57 @@ impl WarpFleet {
 
         let remaining_steps = self.path.len().saturating_sub(self.path_cursor) as f64
             - self.movement_progress.clamp(0.0, 1.0);
-        let seconds = remaining_steps.max(0.0) / steps_per_tick
-            * (f64::from(tick_rate_ms).max(0.0) / 1000.0);
+        let seconds =
+            remaining_steps.max(0.0) / steps_per_tick * (f64::from(tick_rate_ms).max(0.0) / 1000.0);
         seconds.is_finite().then_some(seconds as f32)
+    }
+}
+
+#[cfg(test)]
+mod movement_tests {
+    use super::{TRANSPORT_BASE_SPEED_TILES_PER_SECOND, WarpFleet};
+    use crate::game::UnitType;
+    use crate::game_config::GameConfig;
+
+    fn transport() -> WarpFleet {
+        WarpFleet::new(
+            1,
+            1,
+            2,
+            UnitType::TransportShip,
+            10.0,
+            (0, 10),
+            (0..=10).collect(),
+        )
+    }
+
+    #[test]
+    fn transport_ten_tiles_eta_matches_two_tiles_per_second_at_one_x() {
+        let mut config = GameConfig::default();
+        config.global_speed_multiplier = 1.0;
+        let fleet = transport();
+        let eta = fleet
+            .remaining_eta_seconds(
+                config.per_tick(TRANSPORT_BASE_SPEED_TILES_PER_SECOND),
+                config.tick_rate_ms,
+            )
+            .expect("moving transport has an ETA");
+
+        assert!((eta - 5.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn transport_eta_uses_updated_bonus_without_resetting_progress() {
+        let mut fleet = transport();
+        fleet.movement_progress = 0.5;
+        fleet.speed_bonus_percent = 0.25;
+
+        let steps_per_tick = fleet.movement_steps_per_tick(0.2);
+        let eta = fleet.remaining_eta_seconds(0.2, 100.0).unwrap();
+
+        assert!((steps_per_tick - 0.25).abs() < 1e-5);
+        assert!((eta - 3.8).abs() < 1e-5);
+        assert!((fleet.movement_progress - 0.5).abs() < 1e-5);
     }
 }
 

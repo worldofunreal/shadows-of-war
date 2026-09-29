@@ -95,9 +95,13 @@ pub(super) fn stack_build_decision(
         .iter()
         .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)
         ?;
+    let owned_levels = crate::building::count_kind(buildings, bot_id, kind);
+    let (_, factory_discount_levels, _) = crate::building::factory_perk_counts(buildings, bot_id);
     let cost = crate::building::structure_upgrade_cost_gold(
         kind,
         building.level.saturating_add(1),
+        owned_levels,
+        factory_discount_levels,
         cfg,
     );
     if player_gold < cost {
@@ -151,6 +155,34 @@ pub(super) fn resolve_structure_from_candidates(
         }
     }
     None
+}
+
+pub(super) fn resolve_farm_from_candidates(
+    map: &crate::map::GameMap,
+    owner_id: u16,
+    candidates: StructureCandidates<'_>,
+    buildings: &[crate::building::Building],
+) -> Option<u32> {
+    let suitable = |idx: u32| {
+        let x = idx % map.width;
+        let y = idx / map.width;
+        map.owner_id(x, y) == owner_id
+            && map.terrain_type(x, y) == crate::map::TerrainType::Land
+            && !buildings.iter().any(|building| building.tile_idx == idx)
+    };
+
+    candidates
+        .border
+        .iter()
+        .copied()
+        .find(|&idx| suitable(idx))
+        .or_else(|| {
+            candidates.interior.iter().find_map(|&(x, y)| {
+                map.is_valid_coord(x, y)
+                    .then_some(y as u32 * map.width + x as u32)
+                    .filter(|&idx| suitable(idx))
+            })
+        })
 }
 
 /// Cheapest possible gold cost for a building.

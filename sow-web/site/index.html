@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0a0a0e">
+  <meta name="theme-color" content="#0a1015">
   <title data-i18n="site.title">Shadows of War — Multiplayer Strategy</title>
   <meta name="description"
     content="Pick 1 of 12 leaders, take land, build cities and ports, ally and betray in live territory wars."
@@ -59,7 +59,7 @@
   <main>
     <section class="hero section-rule">
       <div class="hero-wash" aria-hidden="true">
-        <video class="hero-video" autoplay loop muted playsinline preload="auto"
+        <video class="hero-video" loop muted playsinline preload="metadata" aria-hidden="true"
           poster="/assets/shell/loader/sow-splash-desktop.webp">
           <source src="/assets/site/media/shadowsofwar-scroll.vp9.webm" type="video/webm;codecs=vp9">
         </video>
@@ -70,24 +70,10 @@
           <p class="hero-lede" data-i18n="site.hero_lede">Pick 1 of 12 leaders. Take land, build cities,
             factories, ports and bunkers, and fight for the map. 12 live now, roster growing.</p>
           <div class="hero-actions">
-            <a class="button button-orange" href="/play/"><span class="sheen" aria-hidden="true"></span><span data-i18n="site.play">Play</span></a>
-            <a class="button button-outline" href="#media"><span class="sheen" aria-hidden="true"></span><span data-i18n="site.watch_gameplay">Watch gameplay</span>
+            <a class="button button-orange" href="/play/"><span data-i18n="site.play">Play</span></a>
+            <a class="button button-outline" href="#media"><span data-i18n="site.watch_gameplay">Watch gameplay</span>
               <span aria-hidden="true">▶</span></a>
           </div>
-        </div>
-        <div class="hero-stage">
-          <div class="hero-frame">
-            <div class="hologram-scanlines" aria-hidden="true"></div>
-            <div class="hologram-glitch" aria-hidden="true"></div>
-            <img data-hero-image src="/assets/shell/leaders/caesar_desktop.webp" alt="Julius Caesar leader artwork" data-i18n="site.leader_artwork" data-i18n-values='{"name":"heroes.leader_caesar_name"}' data-i18n-attr="alt"
-              fetchpriority="high" decoding="async">
-            <div class="hero-frame-gradient"></div>
-            <div class="hero-leader-caption">
-              <h2 data-hero-name data-i18n="heroes.leader_caesar_name">Julius Caesar</h2>
-              <p data-hero-civ data-i18n="heroes.civilization_rome">Roman Empire</p>
-            </div>
-          </div>
-          <div class="leader-rail" data-leader-rail aria-label="Choose a leader" data-i18n="site.choose_leader" data-i18n-attr="aria-label"></div>
         </div>
       </div>
     </section>

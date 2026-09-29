@@ -1,8 +1,12 @@
-# Building sprite sheet
+# Optional building sprite sheet
 
-The first renderer uses one static transparent atlas. No animation frames are
-needed for construction or upgrades; Blade draws the progress ring and the
-completion pulse.
+The game currently uses the shared emoji atlas at
+`assets/gameplay/emoji/atlas_opt.webp` for building markers. Blade's GPU text
+renderer also draws level labels, construction rings, and a 300 ms completion
+sparkle. No new building sprites are required for the current upgrade system.
+
+If custom building art is made later, use this sheet as the replacement input.
+Keep the existing emoji fallback until every cell is ready and checked in game.
 
 ## Delivery format
 

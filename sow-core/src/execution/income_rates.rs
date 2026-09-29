@@ -2,8 +2,8 @@ use crate::building::BuildingAggregate;
 use crate::game_config::GameConfig;
 use crate::player::Leader;
 
-const ARMORY_TROOP_INCOME: f64 = 80.0;
-const FOUNDRY_GOLD_INCOME: f64 = 100.0;
+const ARMORY_TROOP_INCOME: f64 = 40.0;
+const FOUNDRY_GOLD_INCOME: f64 = 50.0;
 
 #[inline]
 fn territory_rate(tiles: u32, amount: f64, interval: u32) -> f64 {

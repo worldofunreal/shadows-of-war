@@ -121,7 +121,7 @@
       if (ariaLabel) toggle.setAttribute('aria-label', ariaLabel);
     });
     const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (themeColor) themeColor.content = light ? '#f5f0e6' : '#0a0a0e';
+    if (themeColor) themeColor.content = light ? '#f0eee7' : '#0a1015';
   }
 
   function closeLocaleDropdown(focusTarget) {

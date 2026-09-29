@@ -272,7 +272,6 @@ impl SowApp {
                 transport_impacts: std::collections::VecDeque::with_capacity(
                     crate::app::MAX_TRANSPORT_IMPACTS,
                 ),
-                floating_notices: Vec::new(),
                 death_nameplates: Vec::with_capacity(crate::app::MAX_DEATH_NAMEPLATES),
                 attack_badge_labels: std::collections::HashMap::new(),
                 attack_badge_style_key: None,
@@ -285,6 +284,8 @@ impl SowApp {
                 nameplate_visuals: std::collections::HashMap::new(),
                 nameplate_land_cache: Default::default(),
                 building_render_cache: crate::render::world::BuildingRenderCache::default(),
+                building_levels_seen: std::collections::HashMap::new(),
+                building_upgrade_flashes: std::collections::HashMap::new(),
                 last_resource_notice_tick: None,
                 border_flashes: Vec::new(),
                 border_flash_intensities: std::collections::HashMap::new(),

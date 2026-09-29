@@ -10,6 +10,21 @@ impl SowEngine {
             return;
         }
 
+        if self.building_aggregates_dirty {
+            let max_pid = self
+                .state
+                .players
+                .iter()
+                .map(|p| p.id as usize)
+                .max()
+                .unwrap_or(0);
+            self.building_aggregates = crate::building::aggregate_buildings_per_player(
+                self.buildings.iter().copied(),
+                max_pid,
+            );
+            self.building_aggregates_dirty = false;
+        }
+
         // Spatial hash of fleets: current_tile -> fleet indices
         let mut tile_to_fleets: std::collections::HashMap<u32, Vec<usize>> =
             std::collections::HashMap::new();
@@ -74,6 +89,14 @@ impl SowEngine {
                 continue;
             }
 
+            let port_levels = self
+                .building_aggregates
+                .get(fleet.owner_id as usize)
+                .map(|aggregate| aggregate.port_levels)
+                .unwrap_or_default();
+            fleet.speed_bonus_percent =
+                crate::building::cost::boat_speed_bonus_from_port_levels(port_levels);
+
             if fleet.retreating && fleet.retreat_dst.is_none() {
                 if let Some(player) = self.state.player(fleet.owner_id) {
                     let here_comp = self.water.component_of(fleet.current_tile);
@@ -120,7 +143,10 @@ impl SowEngine {
                 }
             }
 
-            if fleet.flow_target.is_none() && fleet.path.is_empty() {
+            if fleet.unit_type == crate::game::UnitType::TransportShip
+                && fleet.flow_target.is_none()
+                && fleet.path.is_empty()
+            {
                 refund_fleet_troops_to_player(&mut self.state, fleet.owner_id, fleet.troops);
                 to_remove.push(i);
                 continue;
@@ -148,36 +174,42 @@ impl SowEngine {
                     to_remove.push(i);
                     continue;
                 }
-            } else if fleet.unit_type == crate::game::UnitType::TransportShip
-                && fleet.path_cursor < fleet.path.len()
-            {
-                let speed = fleet.movement_steps_per_tick(transport_base_steps_per_tick);
+            } else if fleet.path_cursor < fleet.path.len() {
+                let base_speed = if fleet.unit_type == crate::game::UnitType::TransportShip {
+                    transport_base_steps_per_tick
+                } else {
+                    1.0
+                };
+                let speed = fleet.movement_steps_per_tick(base_speed);
                 let progress = fleet.movement_progress + speed;
                 let remaining = fleet.path.len() - fleet.path_cursor;
-                let advance = if progress.is_finite() {
-                    progress.floor().min(remaining as f64) as usize
+                if !progress.is_finite() {
+                    fleet.movement_progress = 0.0;
                 } else {
-                    remaining
-                };
-                if advance > 0 {
-                    fleet.path_cursor += advance;
-                    fleet.current_tile = fleet.path[fleet.path_cursor - 1];
-                    fleet.movement_progress = if fleet.path_cursor >= fleet.path.len() {
-                        0.0
+                    let advance = progress.floor().min(remaining as f64) as usize;
+                    if advance > 0 {
+                        fleet.path_cursor += advance;
+                        fleet.current_tile = fleet.path[fleet.path_cursor - 1];
+                        fleet.movement_progress = if fleet.path_cursor >= fleet.path.len() {
+                            0.0
+                        } else {
+                            (progress - advance as f64).clamp(0.0, 1.0)
+                        };
                     } else {
-                        (progress - advance as f64).clamp(0.0, 1.0)
-                    };
-                } else if progress.is_finite() {
-                    fleet.movement_progress = progress.max(0.0);
+                        fleet.movement_progress = progress.max(0.0);
+                    }
                 }
-            } else if fleet.path_cursor < fleet.path.len() {
-                fleet.current_tile = fleet.path[fleet.path_cursor];
-                fleet.path_cursor += 1;
             }
 
             if fleet.unit_type == crate::game::UnitType::TradeShip {
+                let trade_levels = self
+                    .building_aggregates
+                    .get(fleet.owner_id as usize)
+                    .map(|aggregate| aggregate.factory_trade_income_levels)
+                    .unwrap_or_default();
+                let bonus = (trade_levels.min(5) as f64 * 0.05).min(0.25);
                 if let Some(p) = self.state.player_mut(fleet.owner_id) {
-                    p.gold += 15.0; // Passive gold generation
+                    p.gold += 15.0 * (1.0 + bonus);
                 }
                 if fleet.path_cursor >= fleet.path.len() && !fleet.path.is_empty() {
                     // Loop back

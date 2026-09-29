@@ -120,8 +120,8 @@ fn shade_shape(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb, a);
 }
 
-// Progress arc (KIND_ARC). The CPU packs normalized progress in uv_rect.z because arcs do not
-// sample a texture. The arc starts at 12 o'clock and advances clockwise.
+// Progress arc (KIND_ARC). The CPU packs rotation phase in uv_rect.y and sweep in uv_rect.z.
+// Arcs do not sample a texture. The arc starts at 12 o'clock and advances clockwise.
 fn shade_arc(in: VertexOutput) -> vec4<f32> {
     let shape_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-5));
     let shape_uv = (in.local_uv - in.content_rect.xy) / shape_span;
@@ -139,11 +139,12 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
         angle -= tau;
     }
     let normalized_angle = angle / tau;
+    let rotated_angle = fract(normalized_angle - fract(in.uv_rect.y) + 1.0);
     let progress = clamp(in.uv_rect.z, 0.0, 1.0);
     var arc_alpha = 1.0;
     if (progress < 1.0) {
         let angular_aa = max(fwidth(normalized_angle), 1e-5);
-        arc_alpha = 1.0 - smoothstep(progress, progress + angular_aa, normalized_angle);
+        arc_alpha = 1.0 - smoothstep(progress, progress + angular_aa, rotated_angle);
     }
     return vec4<f32>(in.color.rgb, ring_alpha * arc_alpha * in.color.a);
 }

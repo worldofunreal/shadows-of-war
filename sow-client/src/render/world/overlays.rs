@@ -82,7 +82,7 @@ pub(crate) fn render_overlays(
     let zoom_scaled = input.camera_zoom / sf;
 
     if dev.vfx_world_buildings {
-        render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled);
+        render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
     }
     render_building_placement_preview(
         text,
@@ -1009,7 +1009,6 @@ struct RenderedBuilding {
     by: f32,
     kind: BuildingKind,
     level: u8,
-    queued_level: u8,
     modules: sow_core::building::CityModules,
     under_construction: bool,
     count: usize,
@@ -1087,18 +1086,21 @@ fn construction_progress(
         return None;
     }
 
-    let first_queued_level = active_level.saturating_add(2);
-    let queued_above_ticks = if first_queued_level <= target_level {
-        (first_queued_level..=target_level)
-            .map(|level| sow_core::building::core::upgrade_duration_ticks(kind, level))
-            .sum()
-    } else {
-        0
-    };
-    let ticks_current = ticks_until_complete.saturating_sub(queued_above_ticks);
     let duration_current =
         sow_core::building::core::upgrade_duration_ticks(kind, active_level.saturating_add(1));
-    Some(1.0 - (ticks_current as f32 / duration_current as f32).clamp(0.0, 1.0))
+    Some(1.0 - (ticks_until_complete as f32 / duration_current as f32).clamp(0.0, 1.0))
+}
+
+fn construction_status_label(
+    target_level: Option<u8>,
+    ticks_remaining: u32,
+    tick_rate_ms: f32,
+) -> String {
+    let time = format_construction_time(ticks_remaining, tick_rate_ms);
+    target_level.map_or_else(
+        || format!("🏗️ {time}"),
+        |level| format!("🏗️ {level} · {time}"),
+    )
 }
 
 fn building_visual_status(
@@ -1116,26 +1118,21 @@ fn building_visual_status(
         building.level,
         building.ticks_until_complete,
     )?;
-    let time = format_construction_time(building.ticks_until_complete, tick_rate_ms);
-
     if active_level == 0 {
         return Some(BuildingVisualStatus {
             progress,
-            label: format!("🏗️ {}", time),
+            label: construction_status_label(None, building.ticks_until_complete, tick_rate_ms),
             color: [0.0, 0.86, 1.0, 1.0],
         });
     }
 
-    let next_level = active_level.saturating_add(1);
-    let queued_after_current = building.level.saturating_sub(next_level);
-    let label = if queued_after_current > 0 {
-        format!("🏗️ Lvl {} · {} +{}", next_level, time, queued_after_current)
-    } else {
-        format!("🏗️ Lvl {} · {}", next_level, time)
-    };
     Some(BuildingVisualStatus {
         progress,
-        label,
+        label: construction_status_label(
+            Some(building.level),
+            building.ticks_until_complete,
+            tick_rate_ms,
+        ),
         color: [1.0, 0.82, 0.22, 1.0],
     })
 }
@@ -1149,6 +1146,7 @@ fn render_buildings(
     dev: &DevConfig,
     sf: f32,
     zoom_scaled: f32,
+    now: Instant,
 ) {
     if zoom_scaled < BUILDING_CULL_FLOOR {
         return;
@@ -1157,6 +1155,18 @@ fn render_buildings(
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
     let my_id = sim.my_player_id.unwrap_or(0);
+    for building in &snapshot.buildings {
+        let active_level = building.active_level();
+        if let Some(previous) = ui.building_levels_seen.insert(building.tile_idx, active_level)
+            && active_level > previous
+        {
+            ui.building_upgrade_flashes.insert(building.tile_idx, now);
+        }
+    }
+    ui.building_upgrade_flashes.retain(|_, started| {
+        now.duration_since(*started) < Duration::from_millis(300)
+    });
+    let building_upgrade_flashes = std::mem::take(&mut ui.building_upgrade_flashes);
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
 
@@ -1219,12 +1229,26 @@ fn render_buildings(
             1.0
         };
         let _ = text.push_emoji(
-            building_kind_emoji(building.kind, building.level),
+            building_kind_emoji(building.kind, building.level.max(1)),
             [center[0] * sf, center[1] * sf],
             marker_size * sf * 0.5,
             [1.0, 1.0, 1.0, alpha],
             crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]),
         );
+
+        if let Some(tile_idx) = building.tile_idx
+            && let Some(started) = building_upgrade_flashes.get(&tile_idx)
+        {
+            let t = (now.duration_since(*started).as_secs_f32() / 0.3).clamp(0.0, 1.0);
+            let alpha = 1.0 - t;
+            let _ = text.push_emoji(
+                "✨",
+                [center[0] * sf, center[1] * sf],
+                marker_size * sf * (0.5 + 0.35 * t),
+                [1.0, 0.88, 0.46, alpha],
+                crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha * 0.7]),
+            );
+        }
 
         if building.kind == BuildingKind::City && building.count == 1 && zoom_scaled >= 1.5 {
             render_city_modules(text, center, marker_size, building.modules, dev, sf);
@@ -1263,6 +1287,7 @@ fn render_buildings(
             );
         }
     }
+    ui.building_upgrade_flashes = building_upgrade_flashes;
 }
 
 fn render_building_placement_preview(
@@ -1308,8 +1333,6 @@ fn render_building_placement_preview(
             my_id,
             buildings: &snapshot.buildings,
         });
-    // Placement is always a new foundation. Upgrades come from the selected building card.
-    let stack_building: Option<&sow_core::protocol::BuildingSnapshot> = None;
     let preview_tile = target.unwrap_or(hovered_tile);
     let cost_index = sow_core::game::BuildingKind::ALL
         .iter()
@@ -1366,58 +1389,19 @@ fn render_building_placement_preview(
     }
 
     let marker_size = building_icon_size(zoom_scaled).max(20.0) * sf;
-    if let Some(building) = stack_building {
-        let active = building.active_level();
-        let status = building_visual_status(building, active, my_id, sim.config.tick_rate_ms);
-        text.push_ring(
-            center_px,
-            marker_size * 0.58,
-            if let Some(status) = &status {
-                status.color
-            } else if has_gold {
-                [1.0, 0.82, 0.22, 1.0]
-            } else {
-                color
-            },
-            (3.0 * sf).max(1.0),
-        );
-        if let Some(status) = status {
-            if status.progress > 0.0 {
-                text.push_arc(
-                    center_px,
-                    marker_size * 0.58,
-                    status.progress,
-                    status.color,
-                    (3.5 * sf).max(1.0),
-                );
-            }
-            render_building_preview_badge(text, center_px, &status.label, status.color, dev, sf);
-        } else {
-            let next_level = active.saturating_add(1);
-            let label = format!(
-                "🏗️ Lvl {} · {}",
-                next_level,
-                format_construction_time(
-                    sow_core::building::core::upgrade_duration_ticks(kind, next_level),
-                    sim.config.tick_rate_ms,
-                )
-            );
-            render_building_preview_badge(text, center_px, &label, color, dev, sf);
-        }
-    } else {
-        let _ = text.push_emoji(
+    let _ = text.push_emoji(
         building_kind_emoji(kind, 1),
-            center_px,
-            marker_size * 0.5,
-            [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
-            crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
-        );
-        let label = format!(
-            "🏗️ {}",
-            format_construction_time(kind.construction_duration_ticks(), sim.config.tick_rate_ms)
-        );
-        render_building_preview_badge(text, center_px, &label, color, dev, sf);
-    }
+        center_px,
+        marker_size * 0.5,
+        [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
+        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
+    );
+    let label = construction_status_label(
+        None,
+        kind.construction_duration_ticks(),
+        sim.config.tick_rate_ms,
+    );
+    render_building_preview_badge(text, center_px, &label, color, dev, sf);
 
     if kind == BuildingKind::Bunker {
         text.push_ring(
@@ -1457,13 +1441,11 @@ fn building_badge_label(building: &RenderedBuilding) -> Option<String> {
             "🔨".to_string()
         });
     }
-    if building.level == 1 && building.queued_level == 1 && building.count == 1 {
+    if building.level == 1 && building.count == 1 {
         return None;
     }
     Some(if building.count > 1 {
         format!("{} × {}", building.level, building.count)
-    } else if building.queued_level > building.level {
-        format!("{} -> {}", building.level, building.queued_level)
     } else {
         building.level.to_string()
     })
@@ -1667,7 +1649,6 @@ fn collect_buildings(
                     by,
                     kind: building.kind,
                     level: active_level,
-                    queued_level: building.level,
                     modules: building.modules,
                     under_construction: building.under_construction,
                     count: 1,
@@ -1713,7 +1694,6 @@ fn collect_buildings(
             by: sum_y / count as f32,
             kind: key.kind,
             level: key.level,
-            queued_level: key.level,
             modules: sow_core::building::CityModules::default(),
             under_construction: false,
             count,
@@ -1777,7 +1757,6 @@ mod tests {
             by: 0.0,
             kind: BuildingKind::City,
             level: 0,
-            queued_level: 0,
             modules: sow_core::building::CityModules::default(),
             under_construction: false,
             count: 4,
@@ -1788,7 +1767,6 @@ mod tests {
         assert_eq!(building_badge_label(&building).as_deref(), Some("🔨 × 4"));
 
         building.level = 3;
-        building.queued_level = 4;
         assert_eq!(building_badge_label(&building).as_deref(), Some("3 × 4"));
     }
 
@@ -1896,27 +1874,24 @@ mod tests {
         let upgrade = building_snapshot(BuildingKind::City, 2, true, upgrade_ticks);
         let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0)
             .expect("upgrade status");
-        assert_eq!(status.label, "🏗️ Lvl 2 · 2.2s");
+        assert_eq!(status.label, "🏗️ 2 · 2.2s");
         assert_eq!(status.color, [1.0, 0.82, 0.22, 1.0]);
         assert_eq!(status.progress, 0.0);
     }
 
     #[test]
-    fn building_status_reports_progress_and_queued_upgrades() {
+    fn building_status_reports_progress_for_one_upgrade() {
         let duration_two = sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 2);
-        let duration_three =
-            sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 3);
-        let queued = building_snapshot(
-            BuildingKind::City,
-            3,
-            true,
-            duration_two + duration_three - duration_two / 2,
+        let remaining = duration_two / 2;
+        let upgrade = building_snapshot(BuildingKind::City, 2, true, remaining);
+        let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0)
+            .expect("upgrade status");
+        assert_eq!(
+            status.label,
+            format!("🏗️ 2 · {}", format_construction_time(remaining, 100.0))
         );
-        let status = building_visual_status(&queued, queued.active_level(), 7, 100.0)
-            .expect("queued upgrade status");
-        assert!(status.label.starts_with("🏗️ Lvl 2 · "));
-        assert!(status.label.ends_with("+1"));
-        assert!((status.progress - 0.5).abs() < 0.001);
+        let expected_progress = 1.0 - (remaining as f32 / duration_two as f32);
+        assert!((status.progress - expected_progress).abs() < 0.001);
     }
 
     #[test]
@@ -1928,6 +1903,13 @@ mod tests {
 
         let ready = building_snapshot(BuildingKind::City, 1, false, 0);
         assert!(building_visual_status(&ready, ready.active_level(), 7, 100.0).is_none());
+    }
+
+    #[test]
+    fn unfinished_foundations_use_the_same_art_as_level_one() {
+        for kind in BuildingKind::ALL {
+            assert_eq!(building_kind_emoji(kind, 0), building_kind_emoji(kind, 1));
+        }
     }
 
     #[test]

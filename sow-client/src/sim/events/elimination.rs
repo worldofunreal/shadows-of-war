@@ -57,10 +57,6 @@ impl SowApp {
         let name = victim
             .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
             .unwrap_or_else(|| format!("Player {player_id}"));
-        let color = victim.map_or([1.0; 3], |p| {
-            readable_death_color(p.team.map_or(p.color, sow_core::player::team_territory_rgb))
-        });
-
         let seed = (player_id as u32)
             .wrapping_mul(2654435761)
             .wrapping_add(elimination_x.wrapping_mul(1597334977))
@@ -75,8 +71,6 @@ impl SowApp {
         crate::app::DeathNameplateAnimation::enqueue(
             &mut self.ui.death_nameplates,
             crate::app::DeathNameplateAnimation {
-                name,
-                color,
                 world_x: anim_x,
                 world_y: anim_y,
                 start_time: now_instant,
@@ -102,47 +96,34 @@ impl SowApp {
             }
         }
 
-        if conqueror_id == my_id && my_id != 0 && info.gold_bounty > 0 {
-            self.ui.floating_notices.push(crate::app::FloatingNotice {
-                text: format!(
-                    "+{} Gold",
-                    crate::utils::format_number(info.gold_bounty as f64)
-                ),
-                world_x: wx,
-                world_y: wy,
-                start_time: now_instant,
-                duration: web_time::Duration::from_millis(3000),
-                color: crate::rgb(250, 204, 21),
-            });
+        if conqueror_id == my_id && my_id != 0 {
+            let text = if info.gold_bounty > 0 {
+                crate::ui::UiText::new("hud.elimination_bounty")
+                    .with("victim", name.clone())
+                    .with("gold", crate::utils::format_number(info.gold_bounty as f64))
+            } else {
+                crate::ui::UiText::new("hud.elimination").with("victim", name.clone())
+            };
+            self.ui.app.hud_state.push_notification_for_players(
+                text,
+                [Some(my_id), Some(player_id)],
+                3,
+                Some(format!("elimination:{player_id}")),
+                false,
+            );
         }
         for (assist_id, assist_gold) in info.assists {
             if *assist_id == my_id && my_id != 0 && *assist_gold > 0 {
-                self.ui.floating_notices.push(crate::app::FloatingNotice {
-                    text: format!(
-                        "+{} Gold (Assist)",
-                        crate::utils::format_number(*assist_gold as f64)
-                    ),
-                    world_x: wx,
-                    world_y: wy + 0.5,
-                    start_time: now_instant,
-                    duration: web_time::Duration::from_millis(3000),
-                    color: crate::rgb(180, 220, 100),
-                });
+                self.ui.app.hud_state.push_notification_for_players(
+                    crate::ui::UiText::new("hud.elimination_assist")
+                        .with("victim", name.clone())
+                        .with("gold", crate::utils::format_number(*assist_gold as f64)),
+                    [Some(my_id), Some(player_id)],
+                    2,
+                    Some(format!("elimination-assist:{player_id}")),
+                    false,
+                );
             }
         }
     }
-}
-
-fn readable_death_color(rgb: [f32; 3]) -> [f32; 3] {
-    let luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-    let factor = if luminance < 0.60 {
-        (0.60 - luminance) / (1.0 - luminance).max(0.001)
-    } else {
-        0.0
-    };
-    [
-        rgb[0] + (1.0 - rgb[0]) * factor,
-        rgb[1] + (1.0 - rgb[1]) * factor,
-        rgb[2] + (1.0 - rgb[2]) * factor,
-    ]
 }

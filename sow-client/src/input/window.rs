@@ -199,10 +199,7 @@ impl SowApp {
                 self.mouse_to_tile(self.input.last_mouse_x, self.input.last_mouse_y)
             {
                 let idx = (row * self.sim.map_w as i32 + col) as usize;
-                self.launch_fleet_from_tile(
-                    idx as u32,
-                    (self.input.last_mouse_x, self.input.last_mouse_y),
-                );
+                self.launch_fleet_from_tile(idx as u32);
             }
         }
 

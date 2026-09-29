@@ -160,19 +160,14 @@ impl MapTarget {
 }
 
 impl SowApp {
-    fn show_observer_notice(&mut self, x: f64, y: f64) {
-        const MESSAGES: [&str; 8] = [
-            "Enjoying the view? 🍿",
-            "Best seat in the house! 🏟️",
-            "Wave at the players! 👋",
-            "The crowd goes wild! 🎉",
-            "Grab some popcorn! 🍿",
-            "Great game to watch! ⭐",
-            "Cheer them on! 📣",
-            "Spectating in style! 😎",
-        ];
-        let message = MESSAGES[(x + y) as usize % MESSAGES.len()];
-        self.add_notice_at_screen(message, x, y, 1500, crate::rgb(203, 213, 225));
+    fn show_observer_notice(&mut self) {
+        self.add_notice_for_players(
+            crate::ui::UiText::new("hud.observer_feedback"),
+            [self.sim.my_player_id, None],
+            1,
+            None,
+            false,
+        );
     }
 
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
@@ -201,12 +196,12 @@ impl SowApp {
         if !target.is_land || target.owner == target.my_id || target.is_friendly() {
             return false;
         }
-        self.attack_from_tile(tile_idx, (x, y))
+        self.attack_from_tile(tile_idx)
     }
 
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
         if self.ui.observing {
-            self.show_observer_notice(x, y);
+            self.show_observer_notice();
             self.clear_placement();
             return;
         }
@@ -219,7 +214,7 @@ impl SowApp {
         });
 
         if is_spawning {
-            self.spawn_at(col, row, (x, y));
+            self.spawn_at(col, row);
             return;
         }
 
@@ -229,7 +224,7 @@ impl SowApp {
             return;
         }
         if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
-            self.build_structure_at(kind, col, row, (x, y));
+            self.build_structure_at(kind, col, row);
             return;
         }
 
@@ -247,7 +242,7 @@ impl SowApp {
             if self.select_owned_building(tile_idx, x, y) {
                 return;
             }
-            self.primary_target(tile_idx, (x, y));
+            self.primary_target(tile_idx);
         }
     }
 
@@ -276,7 +271,7 @@ impl SowApp {
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
         if self.ui.observing {
-            self.show_observer_notice(x, y);
+            self.show_observer_notice();
             return;
         }
         if self.ui.app.phase != crate::ClientPhase::Playing {
@@ -288,7 +283,7 @@ impl SowApp {
         };
         let tile_idx = (row * self.sim.map_w as i32 + col) as u32;
         if self.map_menu_actions(tile_idx).is_empty() {
-            self.show_map_menu_unavailable(tile_idx, (x, y));
+            self.show_map_menu_unavailable(tile_idx);
         }
         self.set_map_context_menu(x, y, tile_idx, true);
     }
@@ -365,22 +360,44 @@ impl SowApp {
     fn show_fleet_unavailable(
         &mut self,
         error: sow_core::warp_fleet::FleetLaunchError,
-        anchor: (f64, f64),
+        target_owner: u16,
     ) {
-        self.add_notice_at_screen(
-            format!("Fleet unavailable: {error}."),
-            anchor.0,
-            anchor.1,
-            2000,
-            crate::rgb(248, 113, 113),
+        let text = match error {
+            sow_core::warp_fleet::FleetLaunchError::InvalidTile
+            | sow_core::warp_fleet::FleetLaunchError::TargetPlayerNotFound { .. } => {
+                crate::ui::UiText::new("hud.fleet_invalid_target")
+            }
+            sow_core::warp_fleet::FleetLaunchError::SelfTarget => {
+                crate::ui::UiText::new("hud.fleet_own_target")
+            }
+            sow_core::warp_fleet::FleetLaunchError::NoWaterAccess
+            | sow_core::warp_fleet::FleetLaunchError::NoLaunchShore { .. } => {
+                crate::ui::UiText::new("hud.fleet_no_water_access")
+            }
+            sow_core::warp_fleet::FleetLaunchError::NoLandingShore => {
+                crate::ui::UiText::new("hud.fleet_no_landing_shore")
+            }
+            sow_core::warp_fleet::FleetLaunchError::NoWaterPath => {
+                crate::ui::UiText::new("hud.fleet_no_water_path")
+            }
+            sow_core::warp_fleet::FleetLaunchError::NoPort => {
+                crate::ui::UiText::new("hud.fleet_no_port")
+            }
+        };
+        self.add_notice_for_players(
+            text,
+            [self.sim.my_player_id, (target_owner != 0).then_some(target_owner)],
+            1,
+            None,
+            false,
         );
     }
 
-    fn show_map_menu_unavailable(&mut self, tile_idx: u32, anchor: (f64, f64)) {
+    fn show_map_menu_unavailable(&mut self, tile_idx: u32) {
         let message = match self.map_target(tile_idx) {
             Some(target) if target.owner == 0 => {
                 match self.fleet_route_check(tile_idx, 0, FleetRouteCheck::Access) {
-                    Err(error) => format!("Fleet unavailable: {error}."),
+                    Err(_) => "Fleet unavailable: no shoreline water access.".to_string(),
                     Ok(()) => "No action is available here.".to_string(),
                 }
             }
@@ -410,7 +427,17 @@ impl SowApp {
             Some(_) => "No action is available here.".to_string(),
             None => "No action is available here.".to_string(),
         };
-        self.add_notice_at_screen(message, anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
+        let target_owner = self
+            .map_target(tile_idx)
+            .map(|target| target.owner)
+            .filter(|owner| *owner != 0);
+        self.add_notice_for_players(
+            action_notice(&message),
+            [self.sim.my_player_id, target_owner],
+            1,
+            None,
+            false,
+        );
     }
 
     pub(crate) fn map_menu_actions(&mut self, tile_idx: u32) -> Vec<MapMenuAction> {
@@ -420,7 +447,31 @@ impl SowApp {
         let spawning = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
             matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
         });
+        let has_boat_capacity = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == target.my_id))
+            .is_none_or(|player| player.boats_in_use < player.boat_capacity);
+        let city_level = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                snapshot
+                    .buildings
+                    .iter()
+                    .filter(|building| {
+                        building.owner_id == target.my_id
+                            && building.kind == sow_core::game::BuildingKind::City
+                    })
+                    .map(|building| building.active_level())
+                    .max()
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
         let can_fleet = !spawning
+            && has_boat_capacity
             && target.owner == 0
             && self
                 .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
@@ -449,14 +500,16 @@ impl SowApp {
                 if self.sim.config.tutorial && building.kind == sow_core::game::BuildingKind::City {
                     actions.push(MapMenuAction::UpgradeFoundry);
                 }
-                match building.kind {
-                    sow_core::game::BuildingKind::Port if building.level >= 4 => {
-                        actions.extend([MapMenuAction::BuildWarship, MapMenuAction::BuildTradeShip]);
+                if city_level >= 4 && has_boat_capacity {
+                    match building.kind {
+                        sow_core::game::BuildingKind::Port if building.level >= 3 => {
+                            actions.push(MapMenuAction::BuildTradeShip);
+                            if building.level >= 4 && city_level >= 5 {
+                                actions.push(MapMenuAction::BuildWarship);
+                            }
+                        }
+                        _ => {}
                     }
-                    sow_core::game::BuildingKind::Port if building.level >= 3 => {
-                        actions.push(MapMenuAction::BuildTradeShip);
-                    }
-                    _ => {}
                 }
             }
             Some(_) => {}
@@ -466,8 +519,51 @@ impl SowApp {
                     MapMenuAction::BuildFactory,
                     MapMenuAction::BuildPort,
                     MapMenuAction::BuildBunker,
-                    MapMenuAction::BuildFarm,
                 ]);
+                let farm_slots = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .map(|snapshot| {
+                        snapshot
+                            .buildings
+                            .iter()
+                            .filter(|building| {
+                                building.owner_id == target.my_id
+                                    && building.kind == sow_core::game::BuildingKind::City
+                            })
+                            .map(|building| {
+                                sow_core::building::farm_slots_for_city_level(
+                                    building.active_level(),
+                                )
+                            })
+                            .sum::<u32>()
+                    })
+                    .unwrap_or_default();
+                let farms = self
+                    .sim
+                    .current_snapshot
+                    .as_ref()
+                    .map(|snapshot| {
+                        snapshot
+                            .buildings
+                            .iter()
+                            .filter(|building| {
+                                building.owner_id == target.my_id
+                                    && building.kind == sow_core::game::BuildingKind::Farm
+                            })
+                            .count() as u32
+                    })
+                    .unwrap_or_default();
+                let lowland = self
+                    .gfx
+                    .map_renderer
+                    .as_ref()
+                    .and_then(|renderer| renderer.terrain.get(tile_idx as usize))
+                    .is_some_and(|terrain| terrain & 0x80 != 0 && terrain & 0x1f < 10);
+                if farms < farm_slots && lowland {
+                    actions.push(MapMenuAction::BuildFarm);
+                }
                 if self.sim.config.tutorial {
                     actions.push(MapMenuAction::UpgradeTile);
                 }
@@ -505,9 +601,8 @@ impl SowApp {
         if menu.session != session || menu.tile_idx != tile_idx {
             return;
         }
-        let anchor = (menu.x as f64, menu.y as f64);
         if !self.map_menu_actions(tile_idx).contains(&action) {
-            self.show_map_menu_unavailable(tile_idx, anchor);
+            self.show_map_menu_unavailable(tile_idx);
             self.close_map_context_menu();
             return;
         }
@@ -519,7 +614,11 @@ impl SowApp {
             } else {
                 "Action unavailable here.".to_string()
             };
-            self.add_notice_at_screen(message, anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
+            let target_owner = self
+                .map_target(tile_idx)
+                .map(|target| target.owner)
+                .filter(|owner| *owner != 0);
+            self.add_action_notice(message, [self.sim.my_player_id, target_owner]);
             self.close_map_context_menu();
             return;
         }
@@ -527,20 +626,20 @@ impl SowApp {
         match action {
             MapMenuAction::Spawn => {
                 if let Some((col, row)) = self.tile_coords(tile_idx) {
-                    self.spawn_at(col, row, anchor);
+                    self.spawn_at(col, row);
                 }
             }
             MapMenuAction::Attack => {
-                self.attack_from_tile(tile_idx, anchor);
+                self.attack_from_tile(tile_idx);
             }
             MapMenuAction::Fleet => {
-                self.launch_fleet_from_tile(tile_idx, anchor);
+                self.launch_fleet_from_tile(tile_idx);
             }
             MapMenuAction::Transfer => {
                 self.open_transfer_from_tile(tile_idx);
             }
             MapMenuAction::Alliance => {
-                self.alliance_from_tile(tile_idx, anchor);
+                self.alliance_from_tile(tile_idx);
             }
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
@@ -614,7 +713,7 @@ impl SowApp {
         true
     }
 
-    fn spawn_at(&mut self, col: i32, row: i32, anchor: (f64, f64)) {
+    fn spawn_at(&mut self, col: i32, row: i32) {
         let idx = (row * self.sim.map_w as i32 + col) as usize;
         let Some(renderer) = self.gfx.map_renderer.as_ref() else {
             return;
@@ -624,7 +723,7 @@ impl SowApp {
             .get(idx)
             .is_some_and(|terrain| terrain & 0x80 != 0);
         if !is_land {
-            self.show_water_feedback(col, row, anchor);
+            self.show_water_feedback(col, row);
             return;
         }
 
@@ -662,21 +761,12 @@ impl SowApp {
             }
             let Some(tile) = best_tile else {
                 self.add_click_marker(col, row);
-                const MESSAGES: [&str; 6] = [
-                    "Hey! Too close to another player! 🛡️",
-                    "Respect boundaries! 🤝",
-                    "Get your own space! 🏕️",
-                    "Social distancing! ↔️",
-                    "Spawning blocked! 🛑",
-                    "Private property! 🚫",
-                ];
-                let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
-                self.add_notice_at_screen(
-                    message,
-                    anchor.0,
-                    anchor.1,
-                    1500,
-                    crate::rgb(248, 113, 113),
+                self.add_notice_for_players(
+                    crate::ui::UiText::new("hud.spawn_too_close"),
+                    [self.sim.my_player_id, (owner != 0).then_some(owner)],
+                    1,
+                    None,
+                    false,
                 );
                 return;
             };
@@ -694,12 +784,40 @@ impl SowApp {
         kind: sow_core::game::BuildingKind,
         col: i32,
         row: i32,
-        anchor: (f64, f64),
     ) -> bool {
         let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
             return false;
         };
         let my_id = self.sim.my_player_id.unwrap_or(0);
+        if kind == sow_core::game::BuildingKind::Farm {
+            let slots = snapshot
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_id && building.kind == sow_core::game::BuildingKind::City
+                })
+                .map(|building| {
+                    sow_core::building::farm_slots_for_city_level(building.active_level())
+                })
+                .sum::<u32>();
+            let farms = snapshot
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_id && building.kind == sow_core::game::BuildingKind::Farm
+                })
+                .count() as u32;
+            if farms >= slots {
+                self.add_notice_for_players(
+                    crate::ui::UiText::new("hud.build_no_farm_plots"),
+                    [Some(my_id), None],
+                    1,
+                    None,
+                    false,
+                );
+                return false;
+            }
+        }
         let owners = self
             .gfx
             .map_renderer
@@ -732,19 +850,13 @@ impl SowApp {
                 "Need {} gold.",
                 crate::utils::format_number(self.ui.app.hud_state.building_costs[cost_index])
             );
-            self.add_notice_at_screen(text, anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
+            self.add_action_notice(text, [Some(my_id), None]);
             return false;
         }
         let target_tile = match target_res {
             Ok(target_tile) => target_tile,
             Err(message) => {
-                self.add_notice_at_screen(
-                    message,
-                    anchor.0,
-                    anchor.1,
-                    2000,
-                    crate::rgb(248, 113, 113),
-                );
+                self.add_action_notice(message, [Some(my_id), None]);
                 return false;
             }
         };
@@ -875,11 +987,42 @@ impl SowApp {
                     return (None, None);
                 };
                 (
-                    Some(sow_core::building::cost::structure_upgrade_cost_gold(
-                        building.kind,
-                        building.level.saturating_add(1),
-                        &self.sim.config,
-                    )),
+                    Some({
+                        let snapshot = self.sim.current_snapshot.as_ref();
+                        let owned_levels = snapshot
+                            .map(|snapshot| {
+                                snapshot
+                                    .buildings
+                                    .iter()
+                                    .filter(|candidate| {
+                                        candidate.owner_id == building.owner_id
+                                            && candidate.kind == building.kind
+                                    })
+                                    .map(|candidate| candidate.level as u32)
+                                    .sum()
+                            })
+                            .unwrap_or_default();
+                        let factory_discount_levels = snapshot
+                            .map(|snapshot| {
+                                snapshot
+                                    .buildings
+                                    .iter()
+                                    .filter(|candidate| {
+                                        candidate.owner_id == building.owner_id
+                                            && candidate.kind == sow_core::game::BuildingKind::Factory
+                                            && candidate.active_level() >= 3
+                                    })
+                                    .count() as u32
+                            })
+                            .unwrap_or_default();
+                        sow_core::building::cost::structure_upgrade_cost_gold(
+                            building.kind,
+                            building.level.saturating_add(1),
+                            owned_levels,
+                            factory_discount_levels,
+                            &self.sim.config,
+                        )
+                    }),
                     Some(building.level),
                 )
             }
@@ -973,13 +1116,13 @@ impl SowApp {
         true
     }
 
-    fn primary_target(&mut self, tile_idx: u32, anchor: (f64, f64)) {
+    fn primary_target(&mut self, tile_idx: u32) {
         let Some(target) = self.map_target(tile_idx) else {
             return;
         };
         if !target.is_land {
             if let Some((col, row)) = self.tile_coords(tile_idx) {
-                self.show_water_feedback(col, row, anchor);
+                self.show_water_feedback(col, row);
             }
             return;
         }
@@ -989,17 +1132,17 @@ impl SowApp {
         if target.is_friendly() {
             self.open_transfer_from_tile(tile_idx);
         } else {
-            self.attack_from_tile(tile_idx, anchor);
+            self.attack_from_tile(tile_idx);
         }
     }
 
-    fn attack_from_tile(&mut self, tile_idx: u32, anchor: (f64, f64)) -> bool {
+    fn attack_from_tile(&mut self, tile_idx: u32) -> bool {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
         if !target.is_land {
             if let Some((col, row)) = self.tile_coords(tile_idx) {
-                self.show_water_feedback(col, row, anchor);
+                self.show_water_feedback(col, row);
             }
             return false;
         }
@@ -1023,51 +1166,56 @@ impl SowApp {
             return true;
         }
         if !target.is_attackable() || !self.can_attack(tile_idx, target.owner) {
-            const MESSAGES: [&str; 5] = [
-                "Too far! 🌌",
-                "Out of reach! 🏃‍♂️",
-                "No border, no battle! ⚔️",
-                "Teleportation not researched! 📡",
-                "Build a path first! 🗺️",
-            ];
-            let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
-            self.add_notice_at_screen(message, anchor.0, anchor.1, 1500, crate::rgb(248, 113, 113));
+            self.add_notice_for_players(
+                crate::ui::UiText::new("hud.attack_out_of_range"),
+                [Some(target.my_id), (target.owner != 0).then_some(target.owner)],
+                1,
+                None,
+                false,
+            );
             return false;
         }
-        let text = format!("⚔️ +{}", crate::utils::format_number(troops));
-        self.add_notice_at_screen(text, anchor.0, anchor.1, 1500, crate::rgb(6, 182, 212));
+        let text = crate::ui::UiText::new("hud.attack_launched")
+            .with("troops", crate::utils::format_number(troops));
+        self.add_notice_for_players(
+            text,
+            [Some(target.my_id), (target.owner != 0).then_some(target.owner)],
+            2,
+            None,
+            false,
+        );
         self.send_intent(intent);
         true
     }
 
-    pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32, anchor: (f64, f64)) -> bool {
+    pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32) -> bool {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
         if target.is_teammate {
-            self.add_notice_at_screen("Teammates cannot be targeted. 🤝", anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
+            self.add_notice_for_players(action_notice("Teammates cannot be targeted. 🤝"), [Some(target.my_id), Some(target.owner)], 1, None, false);
             return false;
         }
         if target.is_allied {
-            self.add_notice_at_screen("Break the alliance before launching a fleet. 🛡️", anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
+            self.add_notice_for_players(action_notice("Break the alliance before launching a fleet. 🛡️"), [Some(target.my_id), Some(target.owner)], 1, None, false);
             return false;
         }
         if target.owner != 0 && !target.is_enemy() {
-            self.add_notice_at_screen("A fleet cannot target your own territory. 🛡️", anchor.0, anchor.1, 2000, crate::rgb(248, 113, 113));
+            self.add_notice_for_players(action_notice("A fleet cannot target your own territory. 🛡️"), [Some(target.my_id), Some(target.owner)], 1, None, false);
             return false;
         }
         if let Err(error) = self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Path) {
-            self.show_fleet_unavailable(error, anchor);
+            self.show_fleet_unavailable(error, target.owner);
             return false;
         }
         let troops = self.ui.app.hud_state.troops * self.ui.app.hud_state.attack_ratio as f64;
         if troops < self.sim.config.attack_cost_neutral {
-            self.add_notice_at_screen(
-                format!("Need at least {} troops for a fleet. 🚢", crate::utils::format_number(self.sim.config.attack_cost_neutral)),
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
+            self.add_notice_for_players(
+                action_notice(&format!("Need at least {} troops for a fleet. 🚢", crate::utils::format_number(self.sim.config.attack_cost_neutral))),
+                [Some(target.my_id), (target.owner != 0).then_some(target.owner)],
+                1,
+                None,
+                false,
             );
             return false;
         }
@@ -1083,12 +1231,12 @@ impl SowApp {
             return false;
         };
         if !target.is_friendly() {
-            self.add_notice_at_screen(
-                "Resources can only be sent to allies. ⚖️",
-                self.input.last_mouse_x,
-                self.input.last_mouse_y,
-                2000,
-                crate::rgb(248, 113, 113),
+            self.add_notice_for_players(
+                action_notice("Resources can only be sent to allies. ⚖️"),
+                [self.sim.my_player_id, Some(target.owner)],
+                1,
+                None,
+                false,
             );
             return false;
         }
@@ -1111,7 +1259,7 @@ impl SowApp {
         true
     }
 
-    fn alliance_from_tile(&mut self, tile_idx: u32, anchor: (f64, f64)) -> bool {
+    fn alliance_from_tile(&mut self, tile_idx: u32) -> bool {
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
@@ -1125,24 +1273,17 @@ impl SowApp {
                         target_player: target.owner,
                     });
                 } else if target.has_proposed_alliance {
-                    self.add_notice_at_screen(
-                        "Alliance renewal is already pending.",
-                        anchor.0,
-                        anchor.1,
-                        2000,
-                        crate::rgb(248, 113, 113),
+                    self.add_notice_for_players(
+                        action_notice("Alliance renewal is already pending."),
+                        [Some(target.my_id), Some(target.owner)],
+                        1,
+                        None,
+                        false,
                     );
                 } else {
                     self.send_intent(sow_core::protocol::GameplayIntent::ProposeAlliance {
                         target_player: target.owner,
                     });
-                    self.add_notice_at_screen(
-                        "Alliance renewal requested. 🤝",
-                        anchor.0,
-                        anchor.1,
-                        2000,
-                        crate::rgb(74, 222, 128),
-                    );
                 }
             } else {
                 self.send_intent(sow_core::protocol::GameplayIntent::BreakAlliance {
@@ -1154,24 +1295,17 @@ impl SowApp {
                 target_player: target.owner,
             });
         } else if target.has_proposed_alliance {
-            self.add_notice_at_screen(
-                "Alliance request already pending.",
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(248, 113, 113),
+            self.add_notice_for_players(
+                action_notice("Alliance request already pending."),
+                [Some(target.my_id), Some(target.owner)],
+                1,
+                None,
+                false,
             );
         } else {
             self.send_intent(sow_core::protocol::GameplayIntent::ProposeAlliance {
                 target_player: target.owner,
             });
-            self.add_notice_at_screen(
-                "Alliance requested. 🤝",
-                anchor.0,
-                anchor.1,
-                2000,
-                crate::rgb(74, 222, 128),
-            );
         }
         true
     }
@@ -1294,38 +1428,41 @@ impl SowApp {
         });
     }
 
-    fn show_water_feedback(&mut self, col: i32, row: i32, anchor: (f64, f64)) {
+    fn show_water_feedback(&mut self, col: i32, row: i32) {
         self.add_click_marker(col, row);
-        const MESSAGES: [&str; 7] = [
-            "Splat! That's water! 🌊",
-            "Do you have gills? 🐠",
-            "Boats are for later! 🚢",
-            "Cannot build Atlantis yet! 🏛️",
-            "Water deployment failed! 💧",
-            "Too wet! ☔",
-            "Glug glug... ⚓",
-        ];
-        let message = MESSAGES[(anchor.0 + anchor.1) as usize % MESSAGES.len()];
-        self.add_notice_at_screen(message, anchor.0, anchor.1, 1500, crate::rgb(96, 165, 250));
+        self.add_notice_for_players(
+            crate::ui::UiText::new("hud.water_feedback"),
+            [self.sim.my_player_id, None],
+            1,
+            None,
+            false,
+        );
     }
 
-    fn add_notice_at_screen(
+    fn add_action_notice(
         &mut self,
         text: impl Into<String>,
-        x: f64,
-        y: f64,
-        duration_ms: u64,
-        color: [f32; 4],
+        players: [Option<u16>; 2],
     ) {
-        let zoom = self.input.camera_zoom.max(0.01);
-        self.ui.floating_notices.push(crate::app::FloatingNotice {
-            text: text.into(),
-            world_x: (x as f32 - self.input.camera_x) / zoom,
-            world_y: (y as f32 - 60.0 - self.input.camera_y) / zoom,
-            start_time: web_time::Instant::now(),
-            duration: web_time::Duration::from_millis(duration_ms),
-            color,
-        });
+        let text = action_notice(&text.into());
+        self.add_notice_for_players(text, players, 1, None, false);
+    }
+
+    fn add_notice_for_players(
+        &mut self,
+        text: crate::ui::UiText,
+        players: [Option<u16>; 2],
+        priority: u8,
+        group: Option<String>,
+        sum_values: bool,
+    ) {
+        self.ui.app.hud_state.push_notification_for_players(
+            text,
+            players,
+            priority,
+            group,
+            sum_values,
+        );
     }
 
     pub(crate) fn clear_placement(&mut self) {
@@ -1347,6 +1484,61 @@ impl SowApp {
         *selected = (*selected != Some(kind)).then_some(kind);
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.cancel_hold_build();
+    }
+}
+
+fn action_notice(message: &str) -> crate::ui::UiText {
+    use crate::ui::UiText;
+
+    let message = message.trim();
+    if let Some(cost) = message
+        .strip_prefix("Need ")
+        .and_then(|value| value.strip_suffix(" gold."))
+    {
+        return UiText::new("hud.need_gold").with("cost", cost);
+    }
+    if let Some(troops) = message
+        .strip_prefix("Need at least ")
+        .and_then(|value| value.strip_suffix(" troops for a fleet. 🚢"))
+    {
+        return UiText::new("hud.fleet_need_troops").with("troops", troops);
+    }
+    if message.starts_with("Fleet unavailable:") {
+        return if message.contains("completed port") {
+            UiText::new("hud.fleet_no_port")
+        } else if message.contains("landing shore") {
+            UiText::new("hud.fleet_no_landing_shore")
+        } else if message.contains("water path") {
+            UiText::new("hud.fleet_no_water_path")
+        } else {
+            UiText::new("hud.fleet_no_water_access")
+        };
+    }
+    match message {
+        "No action is available here." | "Action unavailable here." => {
+            UiText::new("hud.action_unavailable")
+        }
+        "Teammates cannot be targeted. 🤝" => UiText::new("hud.fleet_teammate"),
+        "Break the alliance before launching a fleet. 🛡️" => {
+            UiText::new("hud.fleet_alliance")
+        }
+        "A fleet cannot target your own territory. 🛡️" => UiText::new("hud.fleet_own_target"),
+        "Resources can only be sent to allies. ⚖️" => UiText::new("hud.resources_allies_only"),
+        "Alliance renewal is already pending." => UiText::new("hud.alliance_renewal_pending"),
+        "Alliance request already pending." => UiText::new("hud.alliance_request_pending"),
+        "Buildings require owned land. 🗺️" | "Build inside your own land." => {
+            UiText::new("hud.build_owned_land")
+        }
+        "Structures go on land, not water." => UiText::new("hud.build_land"),
+        "Too close to another City! Minimum spacing is 6 tiles." => {
+            UiText::new("hud.build_spacing_city")
+        }
+        "Too close to another structure! Spacing rules: City requires 6, other structures require 4." => {
+            UiText::new("hud.build_spacing_structure")
+        }
+        "No space nearby!" => UiText::new("hud.build_no_space"),
+        "Building under construction. 🏗️" => UiText::new("hud.building_in_progress"),
+        _ => UiText::new("hud.action_unavailable"),
     }
 }
 

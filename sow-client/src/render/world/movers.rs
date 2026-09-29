@@ -223,40 +223,43 @@ impl MoverScene {
     }
 
     fn ingest_fleet(&mut self, fleet: &FleetSnapshot, map_w: u32) {
-        let (prev_x, prev_y, curr_x, curr_y, progress) =
-            if fleet.unit_type == UnitType::TransportShip
-                && fleet.path_cursor > 0
-                && !fleet.path.is_empty()
-            {
-                let from_idx = fleet.path_cursor.saturating_sub(1).min(fleet.path.len() - 1);
-                let (from_x, from_y) = tile_to_world(fleet.path[from_idx], map_w);
-                let (to_x, to_y) = fleet
-                    .path
-                    .get(fleet.path_cursor)
-                    .copied()
-                    .map(|tile| tile_to_world(tile, map_w))
-                    .unwrap_or((from_x, from_y));
-                let progress = fleet.movement_progress.clamp(0.0, 1.0);
-                (
-                    from_x,
-                    from_y,
-                    from_x + (to_x - from_x) * progress,
-                    from_y + (to_y - from_y) * progress,
-                    progress,
-                )
+        let (prev_x, prev_y, curr_x, curr_y, progress) = if fleet.unit_type
+            == UnitType::TransportShip
+            && fleet.path_cursor > 0
+            && !fleet.path.is_empty()
+        {
+            let from_idx = fleet
+                .path_cursor
+                .saturating_sub(1)
+                .min(fleet.path.len() - 1);
+            let (from_x, from_y) = tile_to_world(fleet.path[from_idx], map_w);
+            let (to_x, to_y) = fleet
+                .path
+                .get(fleet.path_cursor)
+                .copied()
+                .map(|tile| tile_to_world(tile, map_w))
+                .unwrap_or((from_x, from_y));
+            let progress = fleet.movement_progress.clamp(0.0, 1.0);
+            (
+                from_x,
+                from_y,
+                from_x + (to_x - from_x) * progress,
+                from_y + (to_y - from_y) * progress,
+                progress,
+            )
+        } else {
+            let (curr_x, curr_y) = tile_to_world(fleet.current_tile, map_w);
+            let (prev_x, prev_y) = if fleet.path_cursor > 1 && !fleet.path.is_empty() {
+                let prev_idx = fleet
+                    .path_cursor
+                    .saturating_sub(2)
+                    .min(fleet.path.len().saturating_sub(1));
+                tile_to_world(fleet.path[prev_idx], map_w)
             } else {
-                let (curr_x, curr_y) = tile_to_world(fleet.current_tile, map_w);
-                let (prev_x, prev_y) = if fleet.path_cursor > 1 && !fleet.path.is_empty() {
-                    let prev_idx = fleet
-                        .path_cursor
-                        .saturating_sub(2)
-                        .min(fleet.path.len().saturating_sub(1));
-                    tile_to_world(fleet.path[prev_idx], map_w)
-                } else {
-                    (curr_x, curr_y)
-                };
-                (prev_x, prev_y, curr_x, curr_y, 0.0)
+                (curr_x, curr_y)
             };
+            (prev_x, prev_y, curr_x, curr_y, 0.0)
+        };
 
         let sprite = match fleet.unit_type {
             UnitType::TransportShip => MoverSpriteId::TransportShip,

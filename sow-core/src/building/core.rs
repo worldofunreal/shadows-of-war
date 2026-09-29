@@ -95,27 +95,18 @@ pub struct Building {
 impl Building {
     #[inline]
     pub fn active_level(&self) -> u8 {
-        if !self.under_construction {
-            return self.level;
+        if self.under_construction {
+            self.level.saturating_sub(1)
+        } else {
+            self.level
         }
-        let mut ticks = self.ticks_until_complete;
-        let mut lvl = self.level;
-        while lvl > 1 {
-            let dur = upgrade_duration_ticks(self.kind, lvl);
-            if ticks > 0 {
-                ticks = ticks.saturating_sub(dur);
-                lvl -= 1;
-            } else {
-                break;
-            }
-        }
-        if lvl == 1 && ticks > 0 { 0 } else { lvl }
     }
 
     #[inline]
     pub fn defense_range_cfg(&self, cfg: &crate::game_config::GameConfig) -> i32 {
         if self.kind == BuildingKind::Bunker && !self.under_construction {
-            cfg.bunker_range.round() as i32
+            (cfg.bunker_range.round() as i32 + (self.active_level().saturating_sub(1) as i32 * 2))
+                .min(20)
         } else {
             0
         }
@@ -130,6 +121,10 @@ pub struct BuildingAggregate {
     pub factory_levels: u32,
     pub port_levels: u32,
     pub farm_levels: u32,
+    pub farm_slots: u32,
+    pub factory_time_levels: u32,
+    pub factory_upgrade_discount_levels: u32,
+    pub factory_trade_income_levels: u32,
     pub foundry_levels: u32,
     pub armory_levels: u32,
     pub intel_levels: u32,
@@ -201,6 +196,7 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::City => {
                 a.city_levels += active_lvl as u32;
                 a.ready_city_count += 1;
+                a.farm_slots += crate::building::cost::farm_slots_for_city_level(active_lvl);
             }
             BuildingKind::Bunker => {
                 a.bunker_levels += active_lvl as u32;
@@ -208,6 +204,9 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Factory => {
                 a.factory_levels += active_lvl as u32;
                 a.ready_factory_count += 1;
+                a.factory_time_levels += u32::from(active_lvl >= 2);
+                a.factory_upgrade_discount_levels += u32::from(active_lvl >= 3);
+                a.factory_trade_income_levels += u32::from(active_lvl >= 4);
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
@@ -301,7 +300,7 @@ impl DefenseGrid {
         cfg: &crate::game_config::GameConfig,
     ) -> i64 {
         let mut bonus: i64 = 0;
-        let max_range = 15;
+        let max_range = 24;
 
         let cx_min = tile_x.saturating_sub(max_range) / self.cell_size;
         let cx_max = (tile_x + max_range) / self.cell_size;

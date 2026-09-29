@@ -32,6 +32,15 @@ fn clamp_arc_progress(progress: f32) -> f32 {
     }
 }
 
+#[inline]
+fn clamp_arc_phase(phase: f32) -> f32 {
+    if phase.is_finite() {
+        phase.rem_euclid(1.0)
+    } else {
+        0.0
+    }
+}
+
 /// Layout bounds returned by the same atlas-aware measurement used by the GPU text path.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextMeasure {
@@ -547,11 +556,30 @@ impl TextRenderer {
         color: [f32; 4],
         thickness: f32,
     ) {
+        self.push_rotating_arc(center, radius, progress, 0.0, color, thickness);
+    }
+
+    /// Push an anti-aliased clockwise arc with a normalized rotational phase.
+    /// `rotation_phase` is measured in complete turns and wraps at 1.0.
+    pub fn push_rotating_arc(
+        &mut self,
+        center: [f32; 2],
+        radius: f32,
+        progress: f32,
+        rotation_phase: f32,
+        color: [f32; 4],
+        thickness: f32,
+    ) {
         let (screen_pos, size, content_rect) = ring_geometry(center, radius);
         self.push_inst(TextInstanceGpu {
             screen_pos,
             size,
-            uv_rect: [0.0, 0.0, clamp_arc_progress(progress), 1.0],
+            uv_rect: [
+                0.0,
+                clamp_arc_phase(rotation_phase),
+                clamp_arc_progress(progress),
+                1.0,
+            ],
             content_rect,
             color,
             outline_color: [0.0; 4],

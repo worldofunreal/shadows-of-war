@@ -16,6 +16,21 @@ impl SowEngine {
 
         let proposed = &self.alliances_proposed;
         let proposed_resources = &self.resource_requests_proposed;
+        let mut boats_in_use = std::collections::HashMap::<u16, u32>::new();
+        for fleet in &self.fleets {
+            if fleet.troops > 0.0 {
+                *boats_in_use.entry(fleet.owner_id).or_default() += 1;
+            }
+        }
+        for building in self
+            .buildings
+            .iter()
+            .filter(|building| building.kind == crate::game::BuildingKind::Port)
+        {
+            if let Some(queue) = self.port_queues.get(&building.id) {
+                *boats_in_use.entry(building.owner_id).or_default() += queue.len() as u32;
+            }
+        }
         let players = self
             .state
             .players
@@ -77,6 +92,8 @@ impl SowEngine {
                     kills: p.kills,
                     deaths: p.deaths,
                     assists: p.assists,
+                    boats_in_use: boats_in_use.get(&p.id).copied().unwrap_or_default(),
+                    boat_capacity: crate::building::player_fleet_capacity(&self.buildings, p.id),
                 }
             })
             .collect();

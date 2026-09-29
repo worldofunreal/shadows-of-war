@@ -5,8 +5,6 @@ pub const DEATH_NAMEPLATE_DURATION: f32 = 0.6;
 
 #[derive(Clone, Debug)]
 pub struct DeathNameplateAnimation {
-    pub name: String,
-    pub color: [f32; 3],
     pub world_x: f32,
     pub world_y: f32,
     pub start_time: Instant,
@@ -46,10 +44,8 @@ pub fn death_emoji(by_nuke: bool) -> &'static str {
 mod tests {
     use super::*;
 
-    fn animation(name: impl Into<String>) -> DeathNameplateAnimation {
+    fn animation() -> DeathNameplateAnimation {
         DeathNameplateAnimation {
-            name: name.into(),
-            color: [1.0; 3],
             world_x: 0.0,
             world_y: 0.0,
             start_time: Instant::now(),
@@ -74,12 +70,10 @@ mod tests {
     #[test]
     fn queue_caps_at_64_and_evicts_the_oldest() {
         let mut queue = Vec::with_capacity(MAX_DEATH_NAMEPLATES);
-        for index in 0..=MAX_DEATH_NAMEPLATES {
-            DeathNameplateAnimation::enqueue(&mut queue, animation(index.to_string()));
+        for _ in 0..=MAX_DEATH_NAMEPLATES {
+            DeathNameplateAnimation::enqueue(&mut queue, animation());
         }
         assert_eq!(queue.len(), MAX_DEATH_NAMEPLATES);
-        assert_eq!(queue.first().unwrap().name, "1");
-        assert_eq!(queue.last().unwrap().name, MAX_DEATH_NAMEPLATES.to_string());
         assert!(queue.capacity() >= MAX_DEATH_NAMEPLATES);
     }
 }

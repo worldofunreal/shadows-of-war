@@ -231,7 +231,7 @@ impl SowEngine {
                         } else {
                             0.0
                         };
-                        let dp_multiplier = 1.0 + (dp_bonus as f64 * scale);
+                        let dp_multiplier = 1.0 + (dp_bonus as f64 * scale).clamp(0.0, 0.50);
 
                         let atk_loss = (self.state.config.attack_cost_enemy
                             * terrain_multiplier

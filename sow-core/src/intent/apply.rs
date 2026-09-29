@@ -232,13 +232,15 @@ impl SowEngine {
                     })
                     .map(|b| b.id);
 
+                let boat_capacity = crate::building::player_fleet_capacity(&self.buildings, pid);
                 if has_city_requirement
+                    && self.boat_slots_used(pid) < boat_capacity
                     && let Some(port_id) = port_id
                     && let Some(player) = self.state.player_mut(pid)
                     && player.gold >= cost
                 {
                     player.gold -= cost;
-                    let queue = self.port_queues.entry(port_id).or_default();
+            let queue = self.port_queues.entry(port_id).or_default();
                     queue.push_back(crate::game::ShipProduction {
                         kind: *kind,
                         ticks_until_complete: kind.build_duration_ticks(),

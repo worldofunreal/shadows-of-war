@@ -10,9 +10,9 @@ use web_time::Instant;
 const CLICK_MARKER_DURATION: f32 = 0.16;
 const TRANSPORT_TARGET_FADE_IN_SECS: f32 = 0.2;
 const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
+const TRANSPORT_TARGET_ROTATIONS_PER_SEC: f32 = 1.0;
+const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 11.0;
 const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
-const NOTICE_FONT_SIZE: f32 = 14.0;
-const NOTICE_RISE: f32 = 6.5;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
@@ -29,11 +29,10 @@ pub(crate) fn render(
     now: Instant,
 ) {
     render_click_markers(text, ui, input, dev, sf, now);
-    render_transport_targets(text, snapshot, sim, ui, input, sf, now);
+    render_transport_targets(text, snapshot, sim, ui, input, dev, sf, now);
     render_transport_impacts(text, ui, input, sf, now);
     render_death_nameplates(text, ui, input, dev, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, sf, now);
-    render_floating_notices(text, ui, input, dev, sf, now);
 }
 
 fn render_transport_targets(
@@ -42,6 +41,7 @@ fn render_transport_targets(
     sim: &SimState,
     ui: &mut UiState,
     input: &InputState,
+    dev: &DevConfig,
     sf: f32,
     now: Instant,
 ) {
@@ -74,12 +74,22 @@ fn render_transport_targets(
                         .entry(fleet.id)
                         .or_insert(TransportTargetMarker {
                             tile_idx,
+                            eta_seconds: None,
+                            eta_text: String::new(),
                             start_time: now,
                             fade_out_at: None,
                         });
                 if marker.tile_idx != tile_idx || marker.fade_out_at.is_some() {
                     marker.tile_idx = tile_idx;
                     marker.start_time = now;
+                }
+                let eta_seconds = fleet
+                    .eta_seconds
+                    .filter(|seconds| seconds.is_finite())
+                    .map(|seconds| seconds.ceil().max(1.0) as u32);
+                if marker.eta_seconds != eta_seconds {
+                    marker.eta_seconds = eta_seconds;
+                    marker.eta_text = eta_seconds.map_or_else(String::new, |s| s.to_string());
                 }
                 marker.fade_out_at = None;
             }
@@ -94,22 +104,6 @@ fn render_transport_targets(
         ui.transport_target_snapshot_tick = Some(snapshot.tick);
     }
 
-    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    let player_color = snapshot
-        .players
-        .iter()
-        .find(|player| player.id == my_id)
-        .map(|player| {
-            player
-                .team
-                .map_or(player.color, sow_core::player::team_territory_rgb)
-        })
-        .unwrap_or([0.13, 0.83, 0.94]);
-    let color = [
-        player_color[0] * 0.68 + 0.32,
-        player_color[1] * 0.68 + 0.32,
-        player_color[2] * 0.68 + 0.32,
-    ];
     let sf = sf.max(0.01);
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
@@ -142,22 +136,35 @@ fn render_transport_targets(
         }
 
         let pulse = (age * 2.7).sin() * 0.5 + 0.5;
+        let rotation = (age * TRANSPORT_TARGET_ROTATIONS_PER_SEC).fract();
         let outer_radius = (19.0 + 2.0 * pulse) * sf;
         let inner_radius = (12.0 + pulse) * sf;
         let center_px = [center[0] * sf, center[1] * sf];
         text.push_ring(
             center_px,
             outer_radius,
-            [color[0], color[1], color[2], alpha * 0.42],
-            (1.25 * sf).max(1.0),
+            [1.0, 0.0, 0.0, alpha * 0.48],
+            (1.5 * sf).max(1.0),
         );
-        text.push_arc(
+        text.push_rotating_arc(
             center_px,
             inner_radius,
-            0.38 + pulse * 0.26,
-            [color[0], color[1], color[2], alpha * 0.92],
-            (1.8 * sf).max(1.0),
+            0.76,
+            rotation,
+            [1.0, 0.0, 0.0, alpha],
+            (2.4 * sf).max(1.0),
         );
+        if marker.eta_seconds.is_some() {
+            let font_size = TRANSPORT_TARGET_ETA_FONT_SIZE * sf;
+            text.push_string(
+                &marker.eta_text,
+                [center_px[0], center_px[1] + font_size * 0.34],
+                font_size,
+                [1.0, 1.0, 1.0, alpha],
+                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                (0.5, 0.0, INLINE_EMOJI_SCALE),
+            );
+        }
         true
     });
 }
@@ -237,7 +244,6 @@ fn render_death_nameplates(
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
     let font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale;
-    let char_spacing = dev.font_char_spacing.max(0.1);
 
     ui.death_nameplates.retain(|animation| {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
@@ -254,43 +260,20 @@ fn render_death_nameplates(
             input,
             sf,
         );
-        let measure = text.measure_string(
-            &animation.name,
-            font_size * sf,
-            char_spacing,
-            INLINE_EMOJI_SCALE,
-        );
-        let name_width = measure.width / sf;
-        let name_height = measure.height / sf;
         let icon_size = font_size * 0.8;
-        let icon_center = [
-            center[0],
-            center[1] - name_height * 0.5 - icon_size * 0.5 - 4.0,
-        ];
-        let margin_x = (name_width * 0.5).max(icon_size * 0.5) + 8.0;
-        let margin_y = name_height + icon_size + 8.0;
-        if center[0] < -margin_x
-            || center[0] > screen_w + margin_x
-            || center[1] < -margin_y
-            || center[1] > screen_h + margin_y
+        let margin = icon_size * 0.5 + 8.0;
+        if center[0] < -margin
+            || center[0] > screen_w + margin
+            || center[1] < -margin
+            || center[1] > screen_h + margin
         {
             return true;
         }
 
-        let color = [animation.color[0], animation.color[1], animation.color[2], alpha];
-        let text_style = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
         let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
-        text.push_string(
-            &animation.name,
-            [center[0] * sf, (center[1] + name_height * 0.35) * sf],
-            font_size * sf,
-            color,
-            text_style,
-            (0.5, char_spacing, INLINE_EMOJI_SCALE),
-        );
         text.push_emoji(
             death_emoji(animation.by_nuke),
-            [icon_center[0] * sf, icon_center[1] * sf],
+            [center[0] * sf, center[1] * sf],
             icon_size * sf * 0.5,
             [1.0, 1.0, 1.0, alpha],
             emoji_outline,
@@ -470,76 +453,6 @@ fn attack_badge_color(attack: &AttackSnapshot, my_id: u16) -> Option<[f32; 4]> {
     }
 }
 
-fn render_floating_notices(
-    text: &mut TextRenderer,
-    ui: &mut UiState,
-    input: &InputState,
-    dev: &DevConfig,
-    sf: f32,
-    now: Instant,
-) {
-    let sf = sf.max(0.01);
-    let screen_w = input.screen_w / sf;
-    let screen_h = input.screen_h / sf;
-    let font_scale = dev.font_size_scale.max(0.1);
-    let char_spacing = dev.font_char_spacing.max(0.1);
-
-    ui.floating_notices.retain(|notice| {
-        let elapsed = now.duration_since(notice.start_time).as_secs_f32();
-        let Some((t, rise, scale)) = notice_animation(elapsed, notice.duration.as_secs_f32())
-        else {
-            return false;
-        };
-
-        let screen = world_to_screen(notice.world_x, notice.world_y - rise, input, sf);
-        if screen[0] < -150.0
-            || screen[0] > screen_w + 150.0
-            || screen[1] < -150.0
-            || screen[1] > screen_h + 150.0
-        {
-            return true;
-        }
-
-        let alpha = (1.0 - t).clamp(0.0, 1.0) * notice.color[3];
-        let color = [notice.color[0], notice.color[1], notice.color[2], alpha];
-        let outline = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
-        let emoji_scale = if notice.text.contains('⚔') {
-            INLINE_EMOJI_SCALE * 0.65
-        } else {
-            INLINE_EMOJI_SCALE
-        };
-        text.push_string(
-            &notice.text,
-            [screen[0] * sf, screen[1] * sf],
-            NOTICE_FONT_SIZE * scale * font_scale * sf,
-            color,
-            outline,
-            (0.5, char_spacing, emoji_scale),
-        );
-        true
-    });
-}
-
-fn notice_animation(elapsed: f32, duration: f32) -> Option<(f32, f32, f32)> {
-    if !elapsed.is_finite() || !duration.is_finite() || duration <= 0.0 || elapsed >= duration {
-        return None;
-    }
-    let t = (elapsed / duration).clamp(0.0, 1.0);
-    let scale = if elapsed < 0.5 {
-        spring_overshoot(elapsed / 0.5)
-    } else if elapsed > duration - 0.5 {
-        spring_overshoot((duration - elapsed) / 0.5).clamp(0.0, 1.2)
-    } else {
-        1.0
-    };
-    Some((t, t * NOTICE_RISE, scale))
-}
-
-#[inline]
-fn spring_overshoot(t: f32) -> f32 {
-    1.0 - (t * 7.5).cos() * (-3.5 * t).exp()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,23 +471,6 @@ mod tests {
         assert_eq!(attack_badge_color(&base, 2), Some(crate::rgb(6, 182, 212)));
         assert_eq!(attack_badge_color(&base, 3), Some(crate::rgb(255, 90, 90)));
         assert_eq!(attack_badge_color(&base, 4), None);
-    }
-
-    #[test]
-    fn notice_animation_rises_and_expires() {
-        let start = notice_animation(0.0, 1.5).unwrap();
-        let middle = notice_animation(0.75, 1.5).unwrap();
-        assert_eq!(start.0, 0.0);
-        assert_eq!(start.1, 0.0);
-        assert_eq!(middle.0, 0.5);
-        assert_eq!(middle.1, NOTICE_RISE * 0.5);
-        assert_eq!(middle.2, 1.0);
-        assert!(notice_animation(1.5, 1.5).is_none());
-    }
-
-    #[test]
-    fn spring_starts_at_zero() {
-        assert_eq!(spring_overshoot(0.0), 0.0);
     }
 
 }

@@ -272,6 +272,8 @@ pub struct ClickMarker {
 #[derive(Clone, Debug)]
 pub struct TransportTargetMarker {
     pub tile_idx: u32,
+    pub eta_seconds: Option<u32>,
+    pub eta_text: String,
     pub start_time: web_time::Instant,
     pub fade_out_at: Option<web_time::Instant>,
 }
@@ -285,16 +287,6 @@ pub struct TransportImpact {
 }
 
 pub const MAX_TRANSPORT_IMPACTS: usize = 256;
-
-#[derive(Clone, Debug)]
-pub struct FloatingNotice {
-    pub text: String,
-    pub world_x: f32,
-    pub world_y: f32,
-    pub start_time: web_time::Instant,
-    pub duration: web_time::Duration,
-    pub color: [f32; 4],
-}
 
 #[derive(Clone, Debug)]
 pub struct AttackBadgeLabel {
@@ -354,7 +346,6 @@ pub struct UiState {
     pub transport_target_seen: std::collections::HashSet<u64>,
     pub transport_target_snapshot_tick: Option<u64>,
     pub transport_impacts: std::collections::VecDeque<TransportImpact>,
-    pub floating_notices: Vec<FloatingNotice>,
     pub death_nameplates: Vec<DeathNameplateAnimation>,
     pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,
     pub attack_badge_style_key: Option<[u32; 2]>,
@@ -367,6 +358,8 @@ pub struct UiState {
     pub nameplate_visuals: std::collections::HashMap<u16, NameplateVisualState>,
     pub(crate) nameplate_land_cache: crate::render::world::nameplate_placement::NameplateLandCache,
     pub(crate) building_render_cache: crate::render::world::BuildingRenderCache,
+    pub building_levels_seen: std::collections::HashMap<u32, u8>,
+    pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,
     pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
     pub border_flash_intensities: std::collections::HashMap<u16, f32>,
