@@ -19,13 +19,13 @@
 #sow-story { position: fixed; }
 .sow-story *, .sow-story *::before, .sow-story *::after { box-sizing: border-box; }
 .sow-story[hidden], .sow-story [hidden] { display: none !important; }
-.sow-story.is-modal { pointer-events: auto; }
+.sow-story.is-modal { pointer-events: none; }
 .sow-story button { font: inherit; cursor: pointer; touch-action: manipulation; }
 .sow-story button:focus-visible { outline: 2px solid var(--story-accent); outline-offset: 4px; }
 .sow-story__shade {
     position: absolute;
     inset: 0;
-    pointer-events: auto;
+    pointer-events: none;
     background: linear-gradient(0deg, rgb(4 9 12 / 88%), rgb(5 10 13 / 32%) 45%, rgb(5 10 13 / 8%) 72%);
     animation: story-fade 220ms ease-out both;
 }
@@ -46,8 +46,8 @@
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     overflow: hidden;
-    pointer-events: auto;
     animation: story-enter 240ms cubic-bezier(.2,.7,.2,1) both;
+    pointer-events: auto;
 }
 .sow-story__dialog:focus { outline: none; }
 .sow-story__dialog::before { content: ""; position: absolute; z-index: 2; inset: 0 0 auto; height: 2px; background: linear-gradient(90deg, transparent, rgb(233 187 100 / 75%), transparent); pointer-events: none; }

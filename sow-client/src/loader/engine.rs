@@ -71,6 +71,10 @@ impl SowApp {
         self.ui.border_flash_intensities.clear();
         self.ui.placement_scratch.clear();
         self.ui.click_markers.clear();
+        self.ui.transport_target_markers.clear();
+        self.ui.transport_target_seen.clear();
+        self.ui.transport_target_snapshot_tick = None;
+        self.ui.transport_impacts.clear();
         self.ui.floating_notices.clear();
         self.ui.death_nameplates.clear();
         self.ui.attack_badge_labels.clear();

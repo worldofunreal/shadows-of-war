@@ -170,7 +170,10 @@ pub struct SowEngine {
     pub resource_requests_proposed: Vec<ResourceRequestProposed>,
     /// Scripted roster portrait slugs, kept out of Player so ordinary matches stay unchanged.
     pub campaign_avatars: std::collections::HashMap<PlayerId, String>,
-    /// Next campaign-support send tick for each contacted ally.
+    /// Scripted campaign membership, kept out of Player and ordinary matches.
+    pub campaign_support_intervals: std::collections::HashMap<PlayerId, u32>,
+    pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
+    /// Next campaign-support send tick for each eligible ally.
     pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
     pub port_queues:
         std::collections::HashMap<u64, std::collections::VecDeque<crate::game::ShipProduction>>,
@@ -230,6 +233,8 @@ impl SowEngine {
             alliance_betray_cooldown_until: std::collections::HashMap::new(),
             resource_requests_proposed: Vec::new(),
             campaign_avatars: std::collections::HashMap::new(),
+            campaign_support_intervals: std::collections::HashMap::new(),
+            campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),

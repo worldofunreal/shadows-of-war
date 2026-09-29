@@ -63,16 +63,15 @@ impl TutorialObservation {
         let Some(me) = engine.state.player(my_id) else {
             return;
         };
-        if !self.alliances_initialized {
-            self.seen_alliances.extend(me.alliances.iter().copied());
-            self.alliances_initialized = true;
-        } else {
-            for ally_id in &me.alliances {
-                if self.seen_alliances.insert(*ally_id) {
-                    self.alliances_formed = self.alliances_formed.saturating_add(1);
-                }
+        for ally_id in &me.alliances {
+            if self.seen_alliances.insert(*ally_id) && self.alliances_initialized {
+                self.alliances_formed = self.alliances_formed.saturating_add(1);
+            }
+            if let Some(ally) = engine.state.player(*ally_id) {
+                self.seen_alliance_names.insert(ally.name.clone());
             }
         }
+        self.alliances_initialized = true;
         self.city_levels = self.city_levels.max(
             engine
                 .buildings
@@ -148,11 +147,10 @@ impl TutorialObservation {
                         engine.state.player(*sender_id),
                         engine.state.player(*receiver_id),
                     )
-                    && sender.team.is_some()
-                    && sender.team == receiver.team
+                    && ((sender.team.is_some() && sender.team == receiver.team)
+                        || sender.alliances.contains(receiver_id))
                 {
                     self.ally_support_deliveries = self.ally_support_deliveries.saturating_add(1);
-                    self.first_ally_support_sender.get_or_insert(*sender_id);
                 }
             }
             // Construction runs before combat. Keep a completion even if the building
@@ -475,11 +473,13 @@ mod tests {
 
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.alliances_formed, 0);
+        assert!(observation.seen_alliance_names.contains("Neighbor"));
 
         engine.state.player_mut(1).unwrap().alliances.push(3);
         observation.observe_sim(&engine, 1);
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.alliances_formed, 1);
+        assert!(observation.seen_alliance_names.contains("Distant"));
     }
 
     #[test]

@@ -69,7 +69,6 @@ pub struct TutorialObservation {
     pub seen_contact_names: std::collections::HashSet<String>,
     pub seen_nukes: std::collections::HashSet<u64>,
     pub ally_support_deliveries: u64,
-    pub first_ally_support_sender: Option<u16>,
     pub structure_upgrades: u64,
     pub city_upgrades: u64,
     pub city_levels: u64,
@@ -78,6 +77,7 @@ pub struct TutorialObservation {
     pub tile_upgrades: u64,
     pub resource_transfers: u64,
     pub seen_alliances: std::collections::HashSet<u16>,
+    pub seen_alliance_names: std::collections::HashSet<String>,
     pub alliances_formed: u64,
     pub alliances_initialized: bool,
     /// Sum of positive per-update territory changes, excluding the initial spawn.
@@ -251,6 +251,7 @@ pub struct MapContextMenu {
     pub y: f32,
     pub tile_idx: u32,
     pub session: u64,
+    pub show_radial: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -267,6 +268,23 @@ pub struct ClickMarker {
     pub world_y: f32,
     pub start_time: web_time::Instant,
 }
+
+#[derive(Clone, Debug)]
+pub struct TransportTargetMarker {
+    pub tile_idx: u32,
+    pub start_time: web_time::Instant,
+    pub fade_out_at: Option<web_time::Instant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TransportImpact {
+    pub tile_x: u32,
+    pub tile_y: u32,
+    pub color: [f32; 3],
+    pub start_time: web_time::Instant,
+}
+
+pub const MAX_TRANSPORT_IMPACTS: usize = 256;
 
 #[derive(Clone, Debug)]
 pub struct FloatingNotice {
@@ -332,6 +350,10 @@ pub struct UiState {
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,
     pub mover_scene: crate::render::world::movers::MoverScene,
     pub click_markers: Vec<ClickMarker>,
+    pub transport_target_markers: std::collections::HashMap<u64, TransportTargetMarker>,
+    pub transport_target_seen: std::collections::HashSet<u64>,
+    pub transport_target_snapshot_tick: Option<u64>,
+    pub transport_impacts: std::collections::VecDeque<TransportImpact>,
     pub floating_notices: Vec<FloatingNotice>,
     pub death_nameplates: Vec<DeathNameplateAnimation>,
     pub attack_badge_labels: std::collections::HashMap<u64, AttackBadgeLabel>,

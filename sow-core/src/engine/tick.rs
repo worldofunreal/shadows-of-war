@@ -220,7 +220,8 @@ impl SowEngine {
             return;
         };
         let receiver_id = receiver.id;
-        let Some(team) = receiver.team else { return };
+        let team = receiver.team;
+        let allied_ids = receiver.alliances.clone();
         let map_w = self.state.map.width;
         let mut contacted = std::collections::HashSet::new();
         for tile in receiver.border_tiles.ones() {
@@ -233,7 +234,7 @@ impl SowEngine {
                 }
             });
         }
-        let ally_ids: Vec<u16> = self
+        let eligible: Vec<(u16, u32)> = self
             .state
             .players
             .iter()
@@ -241,27 +242,64 @@ impl SowEngine {
                 player.id != receiver_id
                     && player.player_type != crate::player::PlayerType::Human
                     && player.alive
-                    && player.team == Some(team)
-                    && contacted.contains(&player.id)
-                    && self
-                        .campaign_support_next_tick
-                        .get(&player.id)
-                        .is_none_or(|next| self.state.tick >= *next)
+                    && self.campaign_support_intervals.contains_key(&player.id)
+                    && ((team.is_some()
+                        && player.team == team
+                        && contacted.contains(&player.id))
+                        || (self.campaign_alliance_groups.contains_key(&player.id)
+                            && player.alliances.contains(&receiver_id)
+                            && allied_ids.contains(&player.id)))
             })
-            .map(|player| player.id)
+            .map(|player| {
+                (
+                    player.id,
+                    self.campaign_support_intervals
+                        .get(&player.id)
+                        .copied()
+                        .unwrap_or(30),
+                )
+            })
             .collect();
-        let interval_ticks = (u64::from(support.interval_seconds) * 1000
-            / u64::from(self.state.config.tick_rate_ms.max(1.0) as u32))
-        .max(1);
-        for ally_id in ally_ids {
+        let eligible_ids: std::collections::HashSet<u16> =
+            eligible.iter().map(|(id, _)| *id).collect();
+        self.campaign_support_next_tick
+            .retain(|id, _| eligible_ids.contains(id));
+        let share = f64::from(support.share_percent) / 100.0;
+        for (ally_id, interval_seconds) in eligible {
+            let interval_ticks = (u64::from(interval_seconds) * 1000
+                / u64::from(self.state.config.tick_rate_ms.max(1.0) as u32))
+            .max(1);
+            let Some(next_tick) = self.campaign_support_next_tick.get(&ally_id).copied() else {
+                self.campaign_support_next_tick
+                    .insert(ally_id, self.state.tick.saturating_add(interval_ticks));
+                continue;
+            };
+            if self.state.tick < next_tick {
+                continue;
+            }
             self.campaign_support_next_tick
                 .insert(ally_id, self.state.tick.saturating_add(interval_ticks));
+            let Some(sender) = self.state.player(ally_id) else {
+                continue;
+            };
+            let gold = sender.gold * share;
+            let receiver_troop_capacity = self
+                .state
+                .player(receiver_id)
+                .map(|player| (player.max_troops - player.troops).max(0.0))
+                .unwrap_or(0.0);
+            let troops = (sender.troops * share)
+                .min((sender.troops - 1.0).max(0.0))
+                .min(receiver_troop_capacity);
+            if gold <= 0.0 && troops <= 0.0 {
+                continue;
+            }
             self.apply_intents(&[crate::protocol::StampedIntent {
                 player_id: ally_id,
                 intent: crate::protocol::GameplayIntent::SendResources {
                     target_player: receiver_id,
-                    gold: support.gold,
-                    troops: support.troops,
+                    gold,
+                    troops,
                 },
             }]);
         }
@@ -402,11 +440,11 @@ mod tests {
     use crate::game::{GameEvent, GamePhase, GameState};
     use crate::game_config::{CampaignSupport, GameConfig};
     use crate::player::{Player, PlayerType};
-    use crate::protocol::Team;
+    use crate::protocol::{GameplayIntent, StampedIntent, Team};
     use crate::water_components::WaterComponents;
 
     #[test]
-    fn campaign_support_waits_for_defeat_and_contact_then_repeats_from_ally_reserves() {
+    fn campaign_support_waits_for_defeat_and_contact_then_sends_half_each_interval() {
         let milestone = "The Iceni Despoilers";
         let config = GameConfig {
             tick_rate_ms: 1000.0,
@@ -414,9 +452,7 @@ mod tests {
             buildings_unlock_after_defeated: Some(milestone.to_string()),
             campaign_support: Some(CampaignSupport {
                 after_defeated: milestone.to_string(),
-                interval_seconds: 8,
-                gold: 100.0,
-                troops: 100.0,
+                share_percent: 50,
             }),
             ..GameConfig::default()
         };
@@ -443,6 +479,7 @@ mod tests {
         state.register_player(roman);
 
         let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_support_intervals.insert(2, 8);
         engine.state.tick = 1;
         engine.apply_campaign_unlocks_and_support();
         assert!(!engine.state.config.buildings_enabled);
@@ -455,10 +492,8 @@ mod tests {
 
         engine.state.map.set_owner_id(0, 1, 2);
         engine.apply_campaign_unlocks_and_support();
-        assert_eq!(engine.state.player(1).unwrap().gold, 100.0);
-        assert_eq!(engine.state.player(1).unwrap().troops, 100.0);
-        assert_eq!(engine.state.player(2).unwrap().gold, 400.0);
-        assert_eq!(engine.state.player(2).unwrap().troops, 400.0);
+        assert_eq!(engine.state.player(1).unwrap().gold, 0.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 500.0);
 
         engine.state.events.clear();
         engine.state.tick = 8;
@@ -467,10 +502,115 @@ mod tests {
 
         engine.state.tick = 9;
         engine.apply_campaign_unlocks_and_support();
+        assert_eq!(engine.state.player(1).unwrap().gold, 250.0);
+        assert_eq!(engine.state.player(1).unwrap().troops, 250.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 250.0);
+
+        engine.state.events.clear();
+        engine.state.tick = 16;
+        engine.apply_campaign_unlocks_and_support();
+        assert!(!engine.state.events.iter().any(|event| matches!(event, GameEvent::ResourceTransferred { .. })));
+
+        engine.state.tick = 17;
+        engine.apply_campaign_unlocks_and_support();
+        assert_eq!(engine.state.player(1).unwrap().gold, 375.0);
+        assert_eq!(engine.state.player(1).unwrap().troops, 375.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 125.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 125.0);
+    }
+
+    #[test]
+    fn campaign_support_reaches_neutral_members_of_a_pact_without_direct_contact() {
+        let config = GameConfig {
+            tick_rate_ms: 1000.0,
+            campaign_support: Some(CampaignSupport {
+                after_defeated: "Rome".into(),
+                share_percent: 50,
+            }),
+            ..GameConfig::default()
+        };
+        let mut state = GameState::new(2, 6, 6, config.clone());
+        state.phase = GamePhase::Playing;
+
+        let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
+        human.gold = 0.0;
+        human.troops = 0.0;
+        human.max_troops = 1000.0;
+        human.alliances = vec![2, 3];
+        state.register_player(human);
+
+        for id in [2, 3] {
+            let mut ally = Player::new_human(id, format!("Tribe {id}"), [0.5; 3], &config);
+            ally.player_type = PlayerType::Bot;
+            ally.gold = 200.0;
+            ally.troops = 200.0;
+            ally.alliances.push(1);
+            state.register_player(ally);
+        }
+
+        let mut rome = Player::new_human(4, "Rome".into(), [0.0; 3], &config);
+        rome.alive = false;
+        state.register_player(rome);
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_alliance_groups.insert(2, "trinovantes".into());
+        engine.campaign_alliance_groups.insert(3, "trinovantes".into());
+        engine.campaign_support_intervals.insert(2, 5);
+        engine.campaign_support_intervals.insert(3, 5);
+        engine.state.tick = 1;
+        engine.apply_campaign_unlocks_and_support();
+        engine.state.tick = 6;
+        engine.apply_campaign_unlocks_and_support();
+
         assert_eq!(engine.state.player(1).unwrap().gold, 200.0);
         assert_eq!(engine.state.player(1).unwrap().troops, 200.0);
-        assert_eq!(engine.state.player(2).unwrap().gold, 300.0);
-        assert_eq!(engine.state.player(2).unwrap().troops, 300.0);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(event, GameEvent::ResourceTransferred { receiver_id: 1, .. }))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn campaign_pact_forms_for_every_member_and_breaks_as_a_bloc() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(3, 6, 6, config.clone());
+        state.phase = GamePhase::Playing;
+        state.register_player(Player::new_human(1, "Boudica".into(), [1.0; 3], &config));
+        for id in [2, 3] {
+            let mut ally = Player::new_human(id, format!("Tribe {id}"), [0.5; 3], &config);
+            ally.player_type = PlayerType::Bot;
+            state.register_player(ally);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_alliance_groups.insert(2, "trinovantes".into());
+        engine.campaign_alliance_groups.insert(3, "trinovantes".into());
+        engine.push_alliance_proposal(1, 2);
+        engine.apply_intents(&[StampedIntent {
+            player_id: 2,
+            intent: GameplayIntent::AcceptAlliance { target_player: 1 },
+        }]);
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert!(engine.state.player(1).unwrap().alliances.contains(&3));
+        assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+        assert!(engine.state.player(3).unwrap().alliances.contains(&1));
+
+        engine.campaign_support_next_tick.insert(2, 100);
+        engine.campaign_support_next_tick.insert(3, 100);
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::BreakAlliance { target_player: 2 },
+        }]);
+        assert!(engine.state.player(1).unwrap().alliances.is_empty());
+        assert!(engine.state.player(2).unwrap().alliances.is_empty());
+        assert!(engine.state.player(3).unwrap().alliances.is_empty());
+        assert!(!engine.campaign_support_next_tick.contains_key(&2));
+        assert!(!engine.campaign_support_next_tick.contains_key(&3));
     }
 
     #[test]

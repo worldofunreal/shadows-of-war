@@ -146,12 +146,6 @@
         });
     }
 
-    function dynamicSpeakersFor(hud) {
-        var tutorial = hud && hud.tutorial, senderId = tutorial && tutorial.facts && tutorial.facts.first_ally_support_sender_id;
-        var sender = (hud && hud.players || []).find(function (player) { return player && Number(player.id) === Number(senderId); });
-        return sender ? { first_ally_support: { name: sender.name, avatar: sender.avatar || "null" } } : null;
-    }
-
     function startEpisode(episodeId, fromBoot) {
         episodeId = String(episodeId || "");
         if (!/^[a-z][a-z0-9_]{0,63}$/.test(episodeId) || runtime.starting === episodeId || (runtime.active && runtime.episodeId === episodeId)) return;
@@ -221,8 +215,9 @@
         });
     }
 
-    function anchorFor(step, hud) {
+    function anchorFor(step, hud, view) {
         if (!step || !step.guide) return null;
+        if (step.trigger && step.trigger.type === "territory" && step.guide.target === "expand" && view && view.progress.current > 0) return null;
         var guide = step.guide, tutorial = hud.tutorial || {};
         var result;
         if (guide.kind === "world") {
@@ -251,9 +246,10 @@
     }
 
     function markerTargetFor(step) {
-        var defeated = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts && runtime.latestHud.tutorial.facts.defeated_names || [];
+        var facts = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts || {};
         if (step.trigger && Array.isArray(step.trigger.targets)) {
-            var remaining = step.trigger.targets.find(function (target) { return !defeated.includes(target); });
+            var observed = step.trigger.type === "contact" ? facts.contact_names || [] : facts.defeated_names || [];
+            var remaining = step.trigger.targets.find(function (target) { return !observed.includes(target); });
             if (remaining) return remaining;
         }
         if (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target) {
@@ -288,7 +284,7 @@
             runtime.markerId = markerId;
             send("set_tutorial_marker", { player_id: markerId });
         }
-        if (!runtime.modalOpen) runtime.view.render(machineView, { anchor: anchorFor(machineView.step, hud), dynamicSpeakers: dynamicSpeakersFor(hud), reducedMotion: Boolean(hud.settings && hud.settings.reduced_motion), direction: document.documentElement.dir });
+        if (!runtime.modalOpen) runtime.view.render(machineView, { anchor: anchorFor(machineView.step, hud, machineView), reducedMotion: Boolean(hud.settings && hud.settings.reduced_motion), direction: document.documentElement.dir });
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
             if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
@@ -394,7 +390,7 @@
             root.hidden = true;
         } else if (runtime.machine) {
             if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false });
-            runtime.view.render(runtime.machine.view(), { anchor: anchorFor(runtime.machine.view().step, runtime.latestHud), dynamicSpeakers: dynamicSpeakersFor(runtime.latestHud) });
+            runtime.view.render(runtime.machine.view(), { anchor: anchorFor(runtime.machine.view().step, runtime.latestHud) });
         }
     }
 
@@ -405,7 +401,6 @@
         var model = runtime.machine.view();
         runtime.view.render(model, {
             anchor: anchorFor(model.step, runtime.latestHud),
-            dynamicSpeakers: dynamicSpeakersFor(runtime.latestHud),
             reducedMotion: Boolean(runtime.latestHud.settings && runtime.latestHud.settings.reduced_motion),
             direction: document.documentElement.dir
         });

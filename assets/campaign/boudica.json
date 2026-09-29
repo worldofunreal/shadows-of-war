@@ -11,49 +11,58 @@
       "x": 719,
       "y": 179,
       "role": "kin",
-      "iq": 100
+      "iq": 100,
+      "support_interval_seconds": 30
     },
     {
       "name": "Snettisham",
       "x": 667,
       "y": 65,
       "role": "kin",
-      "iq": 100
+      "iq": 100,
+      "support_interval_seconds": 15
     },
     {
       "name": "Thetford",
       "x": 690,
       "y": 190,
       "role": "kin",
-      "iq": 100
+      "iq": 100,
+      "support_interval_seconds": 20
     },
     {
       "name": "Stonea",
       "x": 697,
       "y": 95,
       "role": "kin",
-      "iq": 100
+      "iq": 100,
+      "support_interval_seconds": 30
     },
     {
       "name": "Trinovantes",
       "x": 700,
       "y": 250,
-      "role": "kin",
-      "iq": 100
+      "role": "neutral",
+      "iq": 85,
+      "support_interval_seconds": 20,
+      "alliance_group": "trinovantes"
     },
     {
       "name": "Trinovantian Farms",
       "x": 680,
       "y": 260,
-      "role": "kin",
-      "iq": 100
+      "role": "neutral",
+      "iq": 100,
+      "support_interval_seconds": 30,
+      "alliance_group": "trinovantes"
     },
     {
       "name": "Iceni Coast",
       "x": 726,
       "y": 73,
       "role": "kin",
-      "iq": 100
+      "iq": 100,
+      "support_interval_seconds": 20
     },
     {
       "name": "Colonia Veterans",

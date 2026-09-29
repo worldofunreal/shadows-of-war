@@ -7,6 +7,71 @@ use crate::player::PlayerType;
 use crate::protocol::{GameplayIntent, StampedIntent};
 
 impl SowEngine {
+    fn campaign_alliance_members(&self, player_id: u16) -> Vec<u16> {
+        let Some(group) = self.campaign_alliance_groups.get(&player_id) else {
+            return vec![player_id];
+        };
+        self.campaign_alliance_groups
+            .iter()
+            .filter_map(|(&member_id, member_group)| (member_group == group).then_some(member_id))
+            .collect()
+    }
+
+    fn form_campaign_alliance(&mut self, proposer: u16, target: u16) {
+        let proposers = self.campaign_alliance_members(proposer);
+        let targets = self.campaign_alliance_members(target);
+        for proposer_id in proposers {
+            for &target_id in &targets {
+                if proposer_id == target_id
+                    || !self.state.player(proposer_id).is_some_and(|player| player.alive)
+                    || !self.state.player(target_id).is_some_and(|player| player.alive)
+                {
+                    continue;
+                }
+                if let Some(player) = self.state.player_mut(proposer_id) {
+                    if !player.alliances.contains(&target_id) {
+                        player.alliances.push(target_id);
+                    }
+                    player
+                        .alliance_timers
+                        .insert(target_id, ALLIANCE_DURATION_TICKS);
+                }
+                if let Some(player) = self.state.player_mut(target_id) {
+                    if !player.alliances.contains(&proposer_id) {
+                        player.alliances.push(proposer_id);
+                    }
+                    player
+                        .alliance_timers
+                        .insert(proposer_id, ALLIANCE_DURATION_TICKS);
+                }
+                self.retreat_mutual_aggression(proposer_id, target_id);
+            }
+        }
+    }
+
+    fn break_campaign_alliance(&mut self, breaker: u16, target: u16) {
+        let breakers = self.campaign_alliance_members(breaker);
+        let targets = self.campaign_alliance_members(target);
+        for &breaker_id in &breakers {
+            for &target_id in &targets {
+                if breaker_id == target_id {
+                    continue;
+                }
+                if let Some(player) = self.state.player_mut(breaker_id) {
+                    player.alliances.retain(|&id| id != target_id);
+                    player.alliance_timers.remove(&target_id);
+                }
+                if let Some(player) = self.state.player_mut(target_id) {
+                    player.alliances.retain(|&id| id != breaker_id);
+                    player.alliance_timers.remove(&breaker_id);
+                }
+            }
+        }
+        for id in breakers.into_iter().chain(targets) {
+            self.campaign_support_next_tick.remove(&id);
+        }
+    }
+
     pub fn apply_intents(&mut self, intents: &[StampedIntent]) {
         for (i, stamped) in intents.iter().enumerate() {
             self.apply_stamped_intent(stamped, i as u32);
@@ -47,8 +112,7 @@ impl SowEngine {
             {
                 wf.retreating = true;
                 wf.retreat_dst = None;
-                wf.path = std::sync::Arc::new(Vec::new());
-                wf.path_cursor = 0;
+                wf.replace_path(Vec::new());
             }
         }
     }
@@ -66,8 +130,7 @@ impl SowEngine {
                     }
                     wf.retreating = true;
                     wf.retreat_dst = None;
-                    wf.path = std::sync::Arc::new(Vec::new());
-                    wf.path_cursor = 0;
+                    wf.replace_path(Vec::new());
                     break;
                 }
             }
@@ -242,8 +305,7 @@ impl SowEngine {
                         });
 
                         if let Some(path) = path {
-                            fleet.path = std::sync::Arc::new(path);
-                            fleet.path_cursor = 0;
+                            fleet.replace_path(path);
                             fleet.retreating = false;
                         }
                     }
@@ -351,19 +413,7 @@ impl SowEngine {
                                     .position(|p| p.proposer == target && p.target == proposer)
                                     .unwrap();
                                 self.alliances_proposed.remove(idx);
-                                if let Some(p1) = self.state.player_mut(proposer) {
-                                    if !p1.alliances.contains(&target) {
-                                        p1.alliances.push(target);
-                                    }
-                                    p1.alliance_timers.insert(target, ALLIANCE_DURATION_TICKS);
-                                }
-                                if let Some(p2) = self.state.player_mut(target) {
-                                    if !p2.alliances.contains(&proposer) {
-                                        p2.alliances.push(proposer);
-                                    }
-                                    p2.alliance_timers.insert(proposer, ALLIANCE_DURATION_TICKS);
-                                }
-                                self.retreat_mutual_aggression(proposer, target);
+                                self.form_campaign_alliance(proposer, target);
                             } else if self.can_send_alliance_request(proposer, target) {
                                 self.push_alliance_proposal(proposer, target);
                             }
@@ -387,19 +437,7 @@ impl SowEngine {
                     {
                         self.alliances_proposed.remove(rev_idx);
                     }
-                    if let Some(p1) = self.state.player_mut(acceptor) {
-                        if !p1.alliances.contains(&target) {
-                            p1.alliances.push(target);
-                        }
-                        p1.alliance_timers.insert(target, ALLIANCE_DURATION_TICKS);
-                    }
-                    if let Some(p2) = self.state.player_mut(target) {
-                        if !p2.alliances.contains(&acceptor) {
-                            p2.alliances.push(acceptor);
-                        }
-                        p2.alliance_timers.insert(acceptor, ALLIANCE_DURATION_TICKS);
-                    }
-                    self.retreat_mutual_aggression(acceptor, target);
+                    self.form_campaign_alliance(acceptor, target);
                 }
             }
             GameplayIntent::RejectAlliance { target_player } => {
@@ -430,18 +468,13 @@ impl SowEngine {
                     .unwrap_or(BOT_BETRAYAL_EMOJI_TICKS);
                 let traitor_until = self.current_tick_u32().saturating_add(TRAITOR_STATUS_TICKS);
                 if let Some(p1) = self.state.player_mut(breaker) {
-                    p1.alliances.retain(|&id| id != target);
-                    p1.alliance_timers.remove(&target);
                     p1.traitor = true;
                     p1.traitor_tick = traitor_until;
                     p1.active_emoji = Some("🗡️".to_string());
                     p1.emoji_timer = emoji_ticks;
                 }
                 self.mark_betrayal_cooldown(breaker);
-                if let Some(p2) = self.state.player_mut(target) {
-                    p2.alliances.retain(|&id| id != breaker);
-                    p2.alliance_timers.remove(&breaker);
-                }
+                self.break_campaign_alliance(breaker, target);
             }
             GameplayIntent::SendResources {
                 target_player,

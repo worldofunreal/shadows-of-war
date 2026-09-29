@@ -77,9 +77,6 @@
                 const faction = (roster && roster.factions || []).find(function (item) { return item.name === character.faction; });
                 if (faction) { character.name = faction.name; character.name_key = null; character.avatar = faction.avatar || "null"; }
             }
-            if (character.dynamic && context.dynamicSpeakers && context.dynamicSpeakers[character.dynamic]) {
-                Object.assign(character, context.dynamicSpeakers[character.dynamic]);
-            }
             const speakerName = character.name_key ? t(character.name_key) : character.name || "";
             const copyTitle = t(line.title_key || step.title_key), copyBody = t(line.body_key || step.body_key);
             const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key)])]);
@@ -166,16 +163,7 @@
             event.stopPropagation();
             if (!model) return;
             const button = event.target.closest("button");
-            if (!button || !root.contains(button) || button.disabled) {
-                if (model.paused && event.target === shade) {
-                    event.preventDefault();
-                    if (model.step.type !== "choice" && event.timeStamp - lastAction >= 220) {
-                        lastAction = event.timeStamp;
-                        options.onContinue();
-                    }
-                }
-                return;
-            }
+            if (!button || !root.contains(button) || button.disabled) return;
             event.preventDefault();
             if (event.timeStamp - lastAction < 220) return;
             lastAction = event.timeStamp;
@@ -183,6 +171,17 @@
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
             else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
             else if (button.hasAttribute("data-story-dismiss") && options.onDismiss) options.onDismiss();
+        }
+        function outsideClick(event) {
+            if (!model || root.hidden || !model.paused || root.contains(event.target)) return;
+            const control = event.target.closest && event.target.closest("button, a[href], input:not([type='hidden']), select, textarea, [role='button'], [data-command], [data-map-action]");
+            if (control) return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (model.step.type !== "choice" && event.timeStamp - lastAction >= 220) {
+                lastAction = event.timeStamp;
+                options.onContinue();
+            }
         }
         function stop(event) { event.stopPropagation(); }
         function keys(event) {
@@ -202,6 +201,7 @@
         }
         image.addEventListener("error", () => { portrait.hidden = true; root.classList.remove("has-portrait"); });
         root.addEventListener("click", click);
+        doc.addEventListener("click", outsideClick, true);
         ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.addEventListener(type, stop, { passive: true }));
         root.addEventListener("keydown", keys);
         return {
@@ -209,6 +209,7 @@
             destroy() {
                 releaseFocus();
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);
+                doc.removeEventListener("click", outsideClick, true);
                 ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.removeEventListener(type, stop));
                 root.replaceChildren(); root.classList.remove("sow-story", "is-modal"); root.hidden = true;
             }

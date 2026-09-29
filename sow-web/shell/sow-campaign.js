@@ -108,7 +108,7 @@
             if (settings.buildings_unlock_after_defeated != null && typeof settings.buildings_unlock_after_defeated !== "string") issue(null, "settings.buildings_unlock_after_defeated", "Choose a faction that unlocks construction.");
             if (settings.campaign_support != null) {
                 const support = settings.campaign_support;
-                if (!object(support) || Object.keys(support).some(key => !["after_defeated", "interval_seconds", "gold", "troops"].includes(key)) || typeof support.after_defeated !== "string" || !Number.isInteger(support.interval_seconds) || support.interval_seconds < 5 || support.interval_seconds > 600 || !Number.isFinite(support.gold) || support.gold < 0 || support.gold > 1000000000 || !Number.isFinite(support.troops) || support.troops < 0 || support.troops > 1000000000 || (support.gold === 0 && support.troops === 0)) issue(null, "settings.campaign_support", "Set a valid milestone, 5–600 second interval, and a positive gold or troop amount.");
+                if (!object(support) || Object.keys(support).some(key => !["after_defeated", "share_percent"].includes(key)) || typeof support.after_defeated !== "string" || !Number.isInteger(support.share_percent) || support.share_percent < 1 || support.share_percent > 100) issue(null, "settings.campaign_support", "Choose a valid milestone and 1–100 percent share.");
             }
         }
         const factions = new Set(["player"]), rosterFactions = new Set();
@@ -126,11 +126,14 @@
                     issue(null, "roster", "Faction names must be unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["name", "x", "y", "role", "iq", "civ", "leader", "avatar"], null, "roster.factions");
+                knownFields(faction, ["name", "x", "y", "role", "iq", "civ", "leader", "avatar", "support_interval_seconds", "alliance_group"], null, "roster.factions");
                 factions.add(faction.name);
                 rosterFactions.add(faction.name);
                 if (!["kin", "independent", "vassal", "boss", "big_boss", "neutral"].includes(faction.role) || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid faction role or spawn: " + faction.name);
                 else if (expectedMap && (faction.x >= expectedMap[1] || faction.y >= expectedMap[2])) issue(null, "roster", "Faction spawn is outside the campaign map: " + faction.name);
+                if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
+                if (faction.alliance_group != null && (typeof faction.alliance_group !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(faction.alliance_group))) issue(null, "roster.factions.alliance_group", "Use a lowercase alliance group ID.");
+                if (faction.support_interval_seconds != null && faction.role !== "kin" && !faction.alliance_group) issue(null, "roster.factions.support_interval_seconds", "Support needs a Kin ally or an alliance group.");
                 if (faction.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(faction.avatar) || faction.avatar !== "null" && options.hasAvatar && !options.hasAvatar(faction.avatar))) issue(null, "roster.factions.avatar", "Choose an existing portrait for " + faction.name + ".");
             });
             if (object(settings) && settings.buildings_unlock_after_defeated && !rosterFactions.has(settings.buildings_unlock_after_defeated)) issue(null, "settings.buildings_unlock_after_defeated", "Construction unlock refers to an unknown faction.");
@@ -154,12 +157,11 @@
         const speakers = definition.speakers || {};
         if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
         else Object.entries(speakers).forEach(([key, speaker]) => {
-            knownFields(speaker, ["name", "name_key", "avatar", "faction", "dynamic"], null, "speakers." + key);
+            knownFields(speaker, ["name", "name_key", "avatar", "faction"], null, "speakers." + key);
             if (!id(key) || !object(speaker) || !(typeof speaker.name === "string" && speaker.name.trim() || typeof speaker.name_key === "string" && speaker.name_key.trim() || typeof speaker.faction === "string" && factions.has(speaker.faction))) issue(null, "speakers", "Invalid character: " + key);
             else {
                 if (speaker.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(speaker.avatar) || speaker.avatar !== "null" && options.hasAvatar && !options.hasAvatar(speaker.avatar))) issue(null, "speakers", "Choose an existing avatar: " + key);
                 if (speaker.faction != null && !rosterFactions.has(speaker.faction)) issue(null, "speakers." + key + ".faction", "Choose an existing roster faction.");
-                if (speaker.dynamic != null && speaker.dynamic !== "first_ally_support") issue(null, "speakers." + key + ".dynamic", "Unknown dynamic speaker.");
                 text(null, "speakers", speaker.name_key, false);
             }
         });
@@ -266,7 +268,9 @@
                     knownFields(trigger, ["type", "scope", "value", "target", "targets", "action"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
                     if (trigger.type === "contact") {
-                        if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
+                        if (trigger.targets != null) {
+                            if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (roster && !rosterFactions.has(target)))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
+                        } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "defeated") {
                         if (trigger.targets != null) {
                             if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || !rosterFactions.has(target))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
@@ -362,7 +366,10 @@
             let current = 0, target = Number(trigger.value || 1);
             if (trigger.type === "contact" || trigger.type === "defeated") {
                 const field = trigger.type === "contact" ? "contact_names" : "defeated_names";
-                if (trigger.type === "defeated" && Array.isArray(trigger.targets)) {
+                if (trigger.type === "contact" && Array.isArray(trigger.targets)) {
+                    current = trigger.targets.some(name => (facts[field] || []).includes(name) && !(reference[field] || []).includes(name)) ? 1 : 0;
+                    target = 1;
+                } else if (trigger.type === "defeated" && Array.isArray(trigger.targets)) {
                     current = trigger.targets.filter(name => (facts[field] || []).includes(name) && !(reference[field] || []).includes(name)).length;
                     target = Number(trigger.value || trigger.targets.length);
                 } else {
@@ -372,6 +379,9 @@
             } else if (trigger.type === "ui") {
                 const uiReference = trigger.scope === "step" ? uiBaseline : trigger.scope === "episode" ? initialUi : {};
                 current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
+                target = 1;
+            } else if (trigger.type === "alliance" && trigger.target) {
+                current = (facts.alliance_names || []).includes(trigger.target) && !(reference.alliance_names || []).includes(trigger.target) ? 1 : 0;
                 target = 1;
             } else if (trigger.type === "troops") {
                 current = Number(facts.troops || 0);

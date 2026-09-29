@@ -776,7 +776,11 @@
         close.type = "button";
         close.textContent = "×";
         close.setAttribute("aria-label", SOW_t("menu.close"));
-        close.addEventListener("click", skip);
+        layer.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            skip();
+        });
         layer.addEventListener("keydown", function (event) {
             if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); skip(); }
         });

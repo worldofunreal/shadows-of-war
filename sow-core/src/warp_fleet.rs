@@ -408,7 +408,10 @@ pub fn best_shore_spawn_for_transport(
     best.map(|(_, i)| i)
 }
 
-/// Moving fleet over water (1 tile / tick).
+/// Baseline transport speed at 1x game speed.
+pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 2.0;
+
+/// Moving fleet over water.
 #[derive(Debug, Clone)]
 pub struct WarpFleet {
     pub id: u64,
@@ -420,7 +423,12 @@ pub struct WarpFleet {
     pub dst_tile: u32,
     pub retreat_dst: Option<u32>,
     pub path: std::sync::Arc<Vec<u32>>,
+    /// Next route tile to enter. Transport paths begin with their current tile already consumed.
     pub path_cursor: usize,
+    /// Fraction of a route edge already traversed, kept in `[0, 1)`.
+    pub movement_progress: f64,
+    /// Sum of active passive speed bonuses for this fleet (`0.2` means +20%).
+    pub speed_bonus_percent: f64,
     pub current_tile: u32,
     pub retreating: bool,
     pub flow_target: Option<u32>,
@@ -438,7 +446,11 @@ impl WarpFleet {
     ) -> Self {
         let (src_tile, dst_tile) = endpoints;
         let current_tile = path.first().copied().unwrap_or(src_tile);
-        let path_cursor = 0;
+        let path_cursor = if unit_type == crate::game::UnitType::TransportShip && !path.is_empty() {
+            1
+        } else {
+            0
+        };
         Self {
             id,
             owner_id,
@@ -450,10 +462,63 @@ impl WarpFleet {
             retreat_dst: None,
             path: std::sync::Arc::new(path),
             path_cursor,
+            movement_progress: 0.0,
+            speed_bonus_percent: 0.0,
             current_tile,
             retreating: false,
             flow_target: None,
         }
+    }
+
+    /// Replace a route and discard fractional progress from the previous one.
+    pub fn replace_path(&mut self, path: Vec<u32>) {
+        if let Some(&start) = path.first() {
+            self.current_tile = start;
+        }
+        self.path_cursor = if self.unit_type == crate::game::UnitType::TransportShip
+            && !path.is_empty()
+        {
+            1
+        } else {
+            0
+        };
+        self.movement_progress = 0.0;
+        self.path = std::sync::Arc::new(path);
+    }
+
+    #[inline]
+    pub fn movement_steps_per_tick(&self, base_steps_per_tick: f64) -> f64 {
+        let bonus = if self.speed_bonus_percent.is_finite() {
+            self.speed_bonus_percent
+        } else {
+            0.0
+        };
+        let speed = base_steps_per_tick * (1.0 + bonus).max(0.0);
+        if speed.is_finite() { speed } else { 0.0 }
+    }
+
+    pub fn remaining_eta_seconds(
+        &self,
+        base_steps_per_tick: f64,
+        tick_rate_ms: f32,
+    ) -> Option<f32> {
+        if self.unit_type != crate::game::UnitType::TransportShip
+            || self.retreating
+            || self.path_cursor >= self.path.len()
+        {
+            return None;
+        }
+
+        let steps_per_tick = self.movement_steps_per_tick(base_steps_per_tick);
+        if steps_per_tick <= 0.0 {
+            return None;
+        }
+
+        let remaining_steps = self.path.len().saturating_sub(self.path_cursor) as f64
+            - self.movement_progress.clamp(0.0, 1.0);
+        let seconds = remaining_steps.max(0.0) / steps_per_tick
+            * (f64::from(tick_rate_ms).max(0.0) / 1000.0);
+        seconds.is_finite().then_some(seconds as f32)
     }
 }
 

@@ -81,6 +81,10 @@ impl SowEngine {
             })
             .collect();
 
+        let transport_base_steps_per_tick = self
+            .state
+            .config
+            .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND);
         let fleets = self
             .fleets
             .iter()
@@ -92,6 +96,11 @@ impl SowEngine {
                 current_tile: f.current_tile,
                 path: f.path.clone(),
                 path_cursor: f.path_cursor,
+                movement_progress: f.movement_progress as f32,
+                eta_seconds: f.remaining_eta_seconds(
+                    transport_base_steps_per_tick,
+                    self.state.config.tick_rate_ms,
+                ),
                 retreating: f.retreating,
             })
             .collect();

@@ -14,9 +14,11 @@ pub struct SelectedTileInfo {
 }
 #[derive(Clone, Debug)]
 pub struct HudNotification {
+    pub id: u64,
     pub text: UiText,
     pub color: [f32; 4],
     pub spawned_at: Instant,
+    pub sender_avatar: Option<String>,
 }
 
 pub struct HudState {
@@ -95,15 +97,36 @@ impl Default for HudState {
 
 impl HudState {
     pub fn push_notification(&mut self, text: UiText, color: [f32; 4]) {
+        self.push_notification_with_avatar(text, color, None);
+    }
+
+    pub fn push_resource_notification(
+        &mut self,
+        text: UiText,
+        color: [f32; 4],
+        sender_avatar: Option<String>,
+    ) {
+        self.push_notification_with_avatar(text, color, sender_avatar);
+    }
+
+    fn push_notification_with_avatar(
+        &mut self,
+        text: UiText,
+        color: [f32; 4],
+        sender_avatar: Option<String>,
+    ) {
         if self.hud_notifications.len() == 32 {
             self.hud_notifications.pop_front();
         }
+        let id = self.notification_revision.wrapping_add(1);
         self.hud_notifications.push_back(HudNotification {
+            id,
             text,
             color,
             spawned_at: Instant::now(),
+            sender_avatar,
         });
-        self.notification_revision = self.notification_revision.wrapping_add(1);
+        self.notification_revision = id;
     }
 
     pub fn clear_notifications(&mut self) {
@@ -124,6 +147,19 @@ mod tests {
         }
         assert_eq!(hud.hud_notifications.len(), 32);
         assert_eq!(hud.notification_revision, 40);
+    }
+
+    #[test]
+    fn resource_receipts_keep_the_campaign_senders_portrait() {
+        let mut hud = HudState::default();
+        hud.push_resource_notification(
+            UiText::new("hud.resource_received_both"),
+            [1.0; 4],
+            Some("snettisham".into()),
+        );
+        let receipt = hud.hud_notifications.front().unwrap();
+        assert_eq!(receipt.id, 1);
+        assert_eq!(receipt.sender_avatar.as_deref(), Some("snettisham"));
     }
 
     #[test]

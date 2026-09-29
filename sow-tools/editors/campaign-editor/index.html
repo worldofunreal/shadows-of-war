@@ -307,6 +307,8 @@ function renderSide() {
     host.innerHTML = `<label>Name</label><input id="fn" value="${escapeHtml(f.name)}">
       <label>Role</label><select id="fr">${opts}</select>
       <label>Nameplate and dialogue portrait</label><select id="fa">${avatarHtml}</select>
+      <label>Ally support interval (seconds; blank disables)</label><input id="finterval" type="number" min="5" max="600" value="${f.support_interval_seconds ?? ""}" placeholder="Disabled">
+      <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
       <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
       <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
       <div class="row"><input id="fiq" type="range" min="85" max="180" step="5" value="${iq}" style="flex:3"><input id="fiqn" type="number" min="85" max="180" value="${iq}" style="flex:1;min-width:56px"></div>
@@ -323,6 +325,8 @@ function renderSide() {
     document.getElementById("fn").oninput = e => { f.name=e.target.value; renderList(); draw(); };
     document.getElementById("fr").onchange = e => { f.role=e.target.value; renderList(); renderSide(); draw(); };
     document.getElementById("fa").onchange = e => { if(e.target.value) f.avatar=e.target.value; else delete f.avatar; markRosterDirty(); };
+    document.getElementById("finterval").oninput = e => { if(e.target.value==="") delete f.support_interval_seconds; else f.support_interval_seconds=Number(e.target.value); markRosterDirty(); };
+    document.getElementById("fgroup").oninput = e => { if(e.target.value.trim()) f.alliance_group=e.target.value.trim(); else delete f.alliance_group; markRosterDirty(); };
     document.getElementById("fx").oninput = e => { f.x=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
     document.getElementById("fy").oninput = e => { f.y=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
     const setIq = v => { v=Math.max(85,Math.min(180,v|0)); f.iq=v; document.getElementById("fiq").value=v; document.getElementById("fiqn").value=v; document.getElementById("iqtier").textContent=iqTier(v); };
@@ -400,7 +404,7 @@ function serialize() {
     _comment: roster._comment || `${episodeId} campaign roster — edited via tools/campaign-editor.`,
     map: roster.map || "eastanglia",
     player_spawn: roster.player_spawn.map(n=>Math.round(n)),
-    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, iq:f.iq??100, ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
+    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
@@ -448,7 +452,7 @@ document.getElementById("fileIn").onchange = e => {
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 
 function normalize(j){
-  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], factions:(j.factions||[]).map(f=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",iq:(f.iq==null?100:f.iq|0),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
+  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], factions:(j.factions||[]).map(f=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
   validateRoster(result);
   return result;
 }
@@ -457,7 +461,8 @@ function validateRoster(value){
   const names = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
+    if(f.support_interval_seconds!=null && f.role!=="kin" && !f.alliance_group) throw new Error("ally support needs a Kin faction or alliance group");
+    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
     names.add(f.name);
   }
 }

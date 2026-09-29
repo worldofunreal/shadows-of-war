@@ -244,8 +244,34 @@ impl SowApp {
             .as_ref()
             .is_some_and(|snapshot| matches!(snapshot.phase, sow_core::game::GamePhase::Playing))
         {
+            if self.select_owned_building(tile_idx, x, y) {
+                return;
+            }
             self.primary_target(tile_idx, (x, y));
         }
+    }
+
+    fn select_owned_building(&mut self, tile_idx: u32, x: f64, y: f64) -> bool {
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if target.my_id == 0 || !target.is_land || target.owner != target.my_id {
+            return false;
+        }
+        let has_owned_building = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .is_some_and(|snapshot| {
+                snapshot.buildings.iter().any(|building| {
+                    building.tile_idx == tile_idx && building.owner_id == target.my_id
+                })
+            });
+        if !has_owned_building {
+            return false;
+        }
+        self.set_map_context_menu(x, y, tile_idx, false);
+        true
     }
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
@@ -264,6 +290,10 @@ impl SowApp {
         if self.map_menu_actions(tile_idx).is_empty() {
             self.show_map_menu_unavailable(tile_idx, (x, y));
         }
+        self.set_map_context_menu(x, y, tile_idx, true);
+    }
+
+    fn set_map_context_menu(&mut self, x: f64, y: f64, tile_idx: u32, show_radial: bool) {
         let session = self.input.map_context_menu_session.wrapping_add(1);
         self.input.map_context_menu_session = session;
         self.input.map_context_menu = Some(MapContextMenu {
@@ -271,6 +301,7 @@ impl SowApp {
             y: y as f32,
             tile_idx,
             session,
+            show_radial,
         });
     }
 

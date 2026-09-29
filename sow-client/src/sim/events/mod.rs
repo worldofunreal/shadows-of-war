@@ -18,6 +18,29 @@ impl SowApp {
         self.sfx.begin_tick();
         for event in events {
             match event {
+                sow_core::game::GameEvent::TransportShipLanded { owner_id, x, y } => {
+                    let color = snap
+                        .players
+                        .iter()
+                        .find(|player| player.id == owner_id)
+                        .map(|player| {
+                            player
+                                .team
+                                .map_or(player.color, sow_core::player::team_territory_rgb)
+                        })
+                        .unwrap_or([0.13, 0.83, 0.94]);
+                    if self.ui.transport_impacts.len() == crate::app::MAX_TRANSPORT_IMPACTS {
+                        self.ui.transport_impacts.pop_front();
+                    }
+                    self.ui
+                        .transport_impacts
+                        .push_back(crate::app::TransportImpact {
+                            tile_x: x,
+                            tile_y: y,
+                            color,
+                            start_time: now_instant,
+                        });
+                }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
                     conqueror_id,

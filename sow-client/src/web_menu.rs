@@ -65,6 +65,7 @@ enum WebMenuCommand {
         tile_idx: u32,
         action: crate::input::map_click::MapMenuAction,
     },
+    CloseMapContextMenu,
     CompleteCampaignEpisode {
         episode_id: String,
     },
@@ -274,6 +275,7 @@ struct HudPublishKey {
     hovered_tile: u32,
     hovered_owner: u16,
     map_menu_open: bool,
+    map_menu_show_radial: bool,
     map_menu_session: u64,
     map_menu_tile: u32,
 }
@@ -529,6 +531,7 @@ impl SowApp {
                 } => {
                     self.handle_map_menu_action(session, tile_idx, action);
                 }
+                WebMenuCommand::CloseMapContextMenu => self.close_map_context_menu(),
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
                     let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
                         self.ui.app.main_menu_state.error_message =
@@ -1003,6 +1006,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         hovered_tile,
         hovered_owner,
         map_menu_open: map_menu.is_some(),
+        map_menu_show_radial: map_menu.is_some_and(|menu| menu.show_radial),
         map_menu_session: map_menu.map(|menu| menu.session).unwrap_or(0),
         map_menu_tile: map_menu.map(|menu| menu.tile_idx).unwrap_or(u32::MAX),
     }
@@ -1376,6 +1380,12 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
         .unwrap_or(serde_json::Value::Null);
     let observation = &app.sim.tutorial_observation;
+    let mut alliance_names = observation
+        .seen_alliance_names
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+    alliance_names.sort_unstable();
     let me = snapshot.players.iter().find(|player| player.id == my_pid);
     let players = snapshot
         .players
@@ -1408,7 +1418,6 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
             "bunkers": observation.seen_buildings_by_kind.get("bunkers").map_or(0, |ids| ids.len()),
             "ally_support_deliveries": observation.ally_support_deliveries,
-            "first_ally_support_sender_id": observation.first_ally_support_sender,
             "structure_upgrades": observation.structure_upgrades,
             "city_upgrades": observation.city_upgrades,
             "city_levels": observation.city_levels,
@@ -1417,6 +1426,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "tile_upgrades": observation.tile_upgrades,
             "resource_transfers": observation.resource_transfers,
             "alliances_formed": observation.alliances_formed,
+            "alliance_names": alliance_names,
             "fleets": observation.seen_fleets.len(),
             "nukes": observation.seen_nukes.len(),
             "elapsed_ticks": snapshot.tick,
@@ -1758,6 +1768,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 .map(|building| building_detail_payload(app, building));
             serde_json::json!({
                 "open": true,
+                "show_radial": menu.show_radial,
                 "x": menu.x / sf,
                 "y": menu.y / sf,
                 "tile_idx": menu.tile_idx,
@@ -1827,6 +1838,21 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .get("building")
         .cloned()
         .unwrap_or(serde_json::Value::Null);
+    let notifications = hud
+        .hud_notifications
+        .iter()
+        .map(|notification| {
+            let text = localized_text_payload(&notification.text);
+            let avatar = notification.sender_avatar.as_deref();
+            serde_json::json!({
+                "id": notification.id,
+                "key": text.get("key").cloned().unwrap_or(serde_json::Value::Null),
+                "values": text.get("values").cloned().unwrap_or(serde_json::Value::Null),
+                "avatar": avatar,
+                "premium": avatar.is_some(),
+            })
+        })
+        .collect::<Vec<_>>();
     let mut payload = serde_json::json!({
         "gold": me.map(|player| player.gold).unwrap_or(hud.gold),
         "troops": me.map(|player| player.troops).unwrap_or(hud.troops),
@@ -1852,6 +1878,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "match_over": match_over,
         "is_spectating": app.ui.is_spectating,
         "tutorial": tutorial_state,
+        "notifications": notifications,
         "map_menu": map_menu,
         "dev_tools": dev_tools_payload(app),
         "is_winner": is_winner,

@@ -503,6 +503,12 @@ impl SowEngine {
             if let Some(avatar) = &s.campaign_avatar {
                 self.campaign_avatars.insert(bot_id, avatar.clone());
             }
+            if let Some(interval) = s.campaign_support_interval_seconds {
+                self.campaign_support_intervals.insert(bot_id, interval);
+            }
+            if let Some(group) = &s.campaign_alliance_group {
+                self.campaign_alliance_groups.insert(bot_id, group.clone());
+            }
             placed += 1;
             log::info!(
                 "spawn_scripted: [{}] '{}' team={:?} at ({},{})",

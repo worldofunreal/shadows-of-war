@@ -58,10 +58,7 @@ impl SowApp {
             .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
             .unwrap_or_else(|| format!("Player {player_id}"));
         let color = victim.map_or([1.0; 3], |p| {
-            readable_death_color(
-                p.team
-                    .map_or(p.color, sow_core::player::team_territory_rgb),
-            )
+            readable_death_color(p.team.map_or(p.color, sow_core::player::team_territory_rgb))
         });
 
         let seed = (player_id as u32)

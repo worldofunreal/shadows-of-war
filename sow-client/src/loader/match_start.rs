@@ -127,7 +127,7 @@ impl SowApp {
                     .as_object()
                     .ok_or_else(|| "Campaign support settings are invalid.".to_string())?;
                 if support.keys().any(|key| {
-                    !matches!(key.as_str(), "after_defeated" | "interval_seconds" | "gold" | "troops")
+                    !matches!(key.as_str(), "after_defeated" | "share_percent")
                 }) {
                     return Err("Campaign support contains an unknown setting.".to_string());
                 }
@@ -137,29 +137,15 @@ impl SowApp {
                     .filter(|name| faction_names.contains(name))
                     .ok_or_else(|| "Campaign support milestone is invalid.".to_string())?
                     .to_string();
-                let interval_seconds = support
-                    .get("interval_seconds")
+                let share_percent = support
+                    .get("share_percent")
                     .and_then(serde_json::Value::as_u64)
-                    .filter(|value| (5..=600).contains(value))
-                    .ok_or_else(|| "Campaign support interval must be 5–600 seconds.".to_string())?
-                    as u32;
-                let amount = |key: &str| {
-                    support
-                        .get(key)
-                        .and_then(serde_json::Value::as_f64)
-                        .filter(|value| value.is_finite() && (0.0..=1_000_000_000.0).contains(value))
-                        .ok_or_else(|| format!("Campaign support {key} is invalid."))
-                };
-                let gold = amount("gold")?;
-                let troops = amount("troops")?;
-                if gold == 0.0 && troops == 0.0 {
-                    return Err("Campaign support must send gold or troops.".to_string());
-                }
+                    .filter(|value| (1..=100).contains(value))
+                    .ok_or_else(|| "Campaign support share must be 1–100 percent.".to_string())?
+                    as u8;
                 Ok(sow_core::game_config::CampaignSupport {
                     after_defeated,
-                    interval_seconds,
-                    gold,
-                    troops,
+                    share_percent,
                 })
             })
             .transpose()?;
@@ -203,6 +189,7 @@ impl SowApp {
                 player_spawn: Some(player_spawn),
                 player_team: Some(crate::campaign::PLAYER_TEAM),
                 starting_troops,
+                global_speed_multiplier: 1.0,
                 buildings_enabled,
                 buildings_unlock_after_defeated,
                 campaign_support,

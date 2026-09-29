@@ -266,6 +266,12 @@ impl SowApp {
                 silo_cooldowns: std::collections::HashMap::new(),
                 mover_scene: crate::render::world::movers::MoverScene::new(),
                 click_markers: Vec::new(),
+                transport_target_markers: std::collections::HashMap::new(),
+                transport_target_seen: std::collections::HashSet::new(),
+                transport_target_snapshot_tick: None,
+                transport_impacts: std::collections::VecDeque::with_capacity(
+                    crate::app::MAX_TRANSPORT_IMPACTS,
+                ),
                 floating_notices: Vec::new(),
                 death_nameplates: Vec::with_capacity(crate::app::MAX_DEATH_NAMEPLATES),
                 attack_badge_labels: std::collections::HashMap::new(),

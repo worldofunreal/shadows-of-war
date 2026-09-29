@@ -538,6 +538,12 @@ pub struct FleetSnapshot {
     pub current_tile: u32,
     pub path: std::sync::Arc<Vec<u32>>,
     pub path_cursor: usize,
+    /// Fractional progress toward the next route tile, used for smooth ship interpolation.
+    #[serde(default)]
+    pub movement_progress: f32,
+    /// Authoritative seconds remaining at the fleet's current effective speed.
+    #[serde(default)]
+    pub eta_seconds: Option<f32>,
     pub retreating: bool,
 }
 

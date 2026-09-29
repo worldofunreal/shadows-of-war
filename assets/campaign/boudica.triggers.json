@@ -7,9 +7,7 @@
     "buildings_unlock_after_defeated": "The Iceni Despoilers",
     "campaign_support": {
       "after_defeated": "The Iceni Despoilers",
-      "interval_seconds": 8,
-      "gold": 100,
-      "troops": 100
+      "share_percent": 50
     },
     "starting_troops": 2000
   },
@@ -33,12 +31,29 @@
       "tutorial.boudica_first_victory_hint": "Send every troop against The Iceni Despoilers.",
       "tutorial.boudica_victory_title": "The First Blow",
       "tutorial.boudica_victory_body": "The outpost is broken. The tribes must see that the Iceni still stand.",
-      "tutorial.boudica_contact_title": "Call the Iceni",
-      "tutorial.boudica_contact_body": "Snettisham is within reach. Carry word: the Iceni are rising.",
-      "tutorial.boudica_contact_hint": "Find Snettisham; pan or zoom if needed, then claim land beside them.",
+      "tutorial.boudica_contact_title": "The Iceni Stand Together",
+      "tutorial.boudica_contact_body": "The villages must know Rome can be challenged. Bring each Iceni tribe into the rising.",
+      "tutorial.boudica_contact_hint": "Claim land beside the marked tribe to make contact.",
+      "tutorial.boudica_first_contact_response_title": "The First Oath",
+      "tutorial.boudica_first_contact_response_body": "One Iceni tribe has answered. Their neighbors will know the rising has begun.",
       "tutorial.boudica_support_title": "Aid Arrives",
       "tutorial.boudica_support_hint": "The tribes are sending gold and warriors.",
-      "tutorial.boudica_support_body": "You struck first. Our warriors and gold are yours.",
+      "tutorial.boudica_trinovantes_intro_title": "A Pact Beyond the Iceni",
+      "tutorial.boudica_trinovantes_intro_body": "The Trinovantes can join the rising. Offer one pact, and their whole tribe will stand with us.",
+      "tutorial.boudica_trinovantes_alliance_title": "Win the Trinovantes",
+      "tutorial.boudica_trinovantes_alliance_hint": "Open the map action on Trinovantes and choose Alliance.",
+      "tutorial.boudica_trinovantes_pact_title": "The Trinovantes Join",
+      "tutorial.boudica_trinovantes_pact_body": "One pact binds their tribes together. Their colors remain their own; their cause is ours.",
+      "tutorial.boudica_venta_pledge_title": "Venta Icenorum Answers",
+      "tutorial.boudica_venta_pledge_body": "Take our gold and warriors as tribute, Boudica. We fight Rome and every tribe that serves it.",
+      "tutorial.boudica_snettisham_pledge_title": "Snettisham Stands With You",
+      "tutorial.boudica_snettisham_pledge_body": "Take our tribute and warriors. No Iceni will stand with Rome or her allies.",
+      "tutorial.boudica_thetford_pledge_title": "Thetford Pledges Its Aid",
+      "tutorial.boudica_thetford_pledge_body": "Thetford pledges gold and warriors as tribute against Rome and every tribe in its service.",
+      "tutorial.boudica_stonea_pledge_title": "Stonea Keeps the Oath",
+      "tutorial.boudica_stonea_pledge_body": "Our tribute is yours. Stonea joins the fight against Rome and her allies.",
+      "tutorial.boudica_coast_pledge_title": "The Coast Joins the Rising",
+      "tutorial.boudica_coast_pledge_body": "Our stores and warriors are tribute. The coast stands against Rome and her allies.",
       "tutorial.boudica_aid_choice_title": "Return the Favor",
       "tutorial.boudica_aid_choice_body": "Our neighbors sent aid. Send some to Snettisham—or keep it for the march?",
       "tutorial.boudica_aid_choice_share": "Send aid",
@@ -75,9 +90,9 @@
       "tutorial.boudica_build_farm_hint": "Place a farm on your territory and let it finish.",
       "tutorial.boudica_farm_ready_title": "The Ranks Grow",
       "tutorial.boudica_farm_ready_body": "The fields will keep new warriors coming. Now we move.",
-      "tutorial.boudica_first_expansion_title": "Reach Snettisham",
-      "tutorial.boudica_first_expansion_body": "They must see the Iceni still stand. Take open ground toward them.",
-      "tutorial.boudica_first_expansion_hint": "Claim one neutral tile toward Snettisham. Pan or zoom if needed.",
+      "tutorial.boudica_first_expansion_title": "Claim the Wilderness",
+      "tutorial.boudica_first_expansion_body": "The rising needs room to grow. Take the unclaimed land and make it Iceni.",
+      "tutorial.boudica_first_expansion_hint": "Expand through neutral wilderness. The first tile teaches the action; keep growing to 256.",
       "tutorial.boudica_outposts_title": "Cut Rome's Supply Lines",
       "tutorial.boudica_outposts_hint": "Destroy the three passive Roman outposts. The marked target updates after each victory.",
       "tutorial.boudica_ratio_title": "Guard the Home Front",
@@ -205,12 +220,29 @@
       "tutorial.boudica_first_victory_hint": "Envía todas tus tropas contra The Iceni Despoilers.",
       "tutorial.boudica_victory_title": "El primer golpe",
       "tutorial.boudica_victory_body": "El puesto cayó. Las tribus deben ver que los icenos siguen en pie.",
-      "tutorial.boudica_contact_title": "Llama a los icenos",
-      "tutorial.boudica_contact_body": "Snettisham está al alcance. Lleva la noticia: los icenos se alzan.",
-      "tutorial.boudica_contact_hint": "Busca Snettisham; mueve o acerca el mapa si hace falta y reclama tierra junto a ellos.",
+      "tutorial.boudica_contact_title": "Los icenos se unen",
+      "tutorial.boudica_contact_body": "Cada tribu debe saber que Roma puede ser desafiada. Reúne a los icenos en el levantamiento.",
+      "tutorial.boudica_contact_hint": "Reclama tierra junto a la tribu marcada para entrar en contacto.",
+      "tutorial.boudica_first_contact_response_title": "El primer juramento",
+      "tutorial.boudica_first_contact_response_body": "Una tribu icena respondió. Sus vecinos sabrán que comenzó el levantamiento.",
       "tutorial.boudica_support_title": "Llega la ayuda",
       "tutorial.boudica_support_hint": "Las tribus envían oro y guerreros.",
-      "tutorial.boudica_support_body": "Diste el primer golpe. Nuestros guerreros y nuestro oro son tuyos.",
+      "tutorial.boudica_trinovantes_intro_title": "Un pacto más allá de los icenos",
+      "tutorial.boudica_trinovantes_intro_body": "Los trinovantes pueden sumarse al levantamiento. Un pacto bastará para unir a todas sus tribus.",
+      "tutorial.boudica_trinovantes_alliance_title": "Gana a los trinovantes",
+      "tutorial.boudica_trinovantes_alliance_hint": "Abre las acciones del mapa sobre Trinovantes y elige Alianza.",
+      "tutorial.boudica_trinovantes_pact_title": "Se unen los trinovantes",
+      "tutorial.boudica_trinovantes_pact_body": "Un pacto une a sus tribus. Conservan sus colores; ahora comparten nuestra causa.",
+      "tutorial.boudica_venta_pledge_title": "Venta Icenorum responde",
+      "tutorial.boudica_venta_pledge_body": "Recibe nuestro oro y guerreros como tributo, Boudica. Lucharemos contra Roma y toda tribu que la sirva.",
+      "tutorial.boudica_snettisham_pledge_title": "Snettisham está contigo",
+      "tutorial.boudica_snettisham_pledge_body": "Recibe nuestro tributo y nuestros guerreros. Ningún iceno apoyará a Roma ni a sus aliados.",
+      "tutorial.boudica_thetford_pledge_title": "Thetford ofrece su ayuda",
+      "tutorial.boudica_thetford_pledge_body": "Thetford ofrece oro y guerreros como tributo contra Roma y toda tribu que la sirva.",
+      "tutorial.boudica_stonea_pledge_title": "Stonea mantiene su juramento",
+      "tutorial.boudica_stonea_pledge_body": "Nuestro tributo es tuyo. Stonea luchará contra Roma y sus aliados.",
+      "tutorial.boudica_coast_pledge_title": "La costa se suma al alzamiento",
+      "tutorial.boudica_coast_pledge_body": "Nuestras reservas y guerreros son tributo. La costa luchará contra Roma y sus aliados.",
       "tutorial.boudica_aid_choice_title": "Devolver el apoyo",
       "tutorial.boudica_aid_choice_body": "Nuestros vecinos enviaron ayuda. ¿Devolvemos parte a Snettisham o la guardamos para la marcha?",
       "tutorial.boudica_aid_choice_share": "Enviar ayuda",
@@ -247,9 +279,9 @@
       "tutorial.boudica_build_farm_hint": "Coloca una granja en tu territorio y deja que termine.",
       "tutorial.boudica_farm_ready_title": "Crecen nuestras filas",
       "tutorial.boudica_farm_ready_body": "Los campos traerán nuevos guerreros. Ahora avanzamos.",
-      "tutorial.boudica_first_expansion_title": "Alcanza Snettisham",
-      "tutorial.boudica_first_expansion_body": "Deben ver que los icenos siguen en pie. Toma tierra libre en su dirección.",
-      "tutorial.boudica_first_expansion_hint": "Reclama una casilla neutral hacia Snettisham. Mueve o acerca el mapa si hace falta.",
+      "tutorial.boudica_first_expansion_title": "Conquista el territorio salvaje",
+      "tutorial.boudica_first_expansion_body": "El levantamiento necesita espacio para crecer. Reclama la tierra libre para los icenos.",
+      "tutorial.boudica_first_expansion_hint": "Expándete por el territorio neutral. La primera casilla enseña la acción; sigue hasta llegar a 256.",
       "tutorial.boudica_outposts_title": "Corta los suministros de Roma",
       "tutorial.boudica_outposts_hint": "Destruye los tres puestos romanos pasivos. El marcador avanzará tras cada victoria.",
       "tutorial.boudica_ratio_title": "Protege el hogar",
@@ -372,11 +404,12 @@
     "council": {
       "name_key": "tutorial.boudica_council_speaker"
     },
-    "first_ally_support": {
-      "name": "Allied envoy",
-      "avatar": "null",
-      "dynamic": "first_ally_support"
-    }
+    "venta_icenorum": { "faction": "Venta Icenorum" },
+    "snettisham": { "faction": "Snettisham" },
+    "thetford": { "faction": "Thetford" },
+    "stonea": { "faction": "Stonea" },
+    "iceni_coast": { "faction": "Iceni Coast" },
+    "trinovantes": { "faction": "Trinovantes" }
   },
   "steps": [
     {
@@ -457,7 +490,7 @@
       "speaker": "boudica",
       "trigger": {
         "type": "territory",
-        "value": 1,
+        "value": 256,
         "scope": "step"
       },
       "marker": {
@@ -487,6 +520,36 @@
       "speaker": "boudica",
       "trigger": {
         "type": "contact",
+        "targets": ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"],
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Snettisham"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_first_contact_response"
+    },
+    {
+      "id": "boudica_first_contact_response",
+      "type": "scene",
+      "title_key": "tutorial.boudica_first_contact_response_title",
+      "body_key": "tutorial.boudica_first_contact_response_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_contact_snettisham"
+    },
+    {
+      "id": "boudica_contact_snettisham",
+      "type": "objective",
+      "title_key": "tutorial.boudica_contact_title",
+      "hint_key": "tutorial.boudica_contact_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "contact",
         "target": "Snettisham",
         "scope": "total"
       },
@@ -498,6 +561,124 @@
         "target": "target_action",
         "gesture": "tap"
       },
+      "next": "boudica_snettisham_pledge"
+    },
+    {
+      "id": "boudica_snettisham_pledge",
+      "type": "scene",
+      "title_key": "tutorial.boudica_snettisham_pledge_title",
+      "body_key": "tutorial.boudica_snettisham_pledge_body",
+      "speaker": "snettisham",
+      "presentation": "dialogue",
+      "next": "boudica_contact_iceni_coast"
+    },
+    {
+      "id": "boudica_contact_iceni_coast",
+      "type": "objective",
+      "title_key": "tutorial.boudica_contact_title",
+      "hint_key": "tutorial.boudica_contact_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "contact", "target": "Iceni Coast", "scope": "total" },
+      "marker": { "target": "Iceni Coast" },
+      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
+      "next": "boudica_iceni_coast_pledge"
+    },
+    {
+      "id": "boudica_iceni_coast_pledge",
+      "type": "scene",
+      "title_key": "tutorial.boudica_coast_pledge_title",
+      "body_key": "tutorial.boudica_coast_pledge_body",
+      "speaker": "iceni_coast",
+      "presentation": "dialogue",
+      "next": "boudica_contact_stonea"
+    },
+    {
+      "id": "boudica_contact_stonea",
+      "type": "objective",
+      "title_key": "tutorial.boudica_contact_title",
+      "hint_key": "tutorial.boudica_contact_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "contact", "target": "Stonea", "scope": "total" },
+      "marker": { "target": "Stonea" },
+      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
+      "next": "boudica_stonea_pledge"
+    },
+    {
+      "id": "boudica_stonea_pledge",
+      "type": "scene",
+      "title_key": "tutorial.boudica_stonea_pledge_title",
+      "body_key": "tutorial.boudica_stonea_pledge_body",
+      "speaker": "stonea",
+      "presentation": "dialogue",
+      "next": "boudica_contact_venta"
+    },
+    {
+      "id": "boudica_contact_venta",
+      "type": "objective",
+      "title_key": "tutorial.boudica_contact_title",
+      "hint_key": "tutorial.boudica_contact_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "contact", "target": "Venta Icenorum", "scope": "total" },
+      "marker": { "target": "Venta Icenorum" },
+      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
+      "next": "boudica_venta_pledge"
+    },
+    {
+      "id": "boudica_venta_pledge",
+      "type": "scene",
+      "title_key": "tutorial.boudica_venta_pledge_title",
+      "body_key": "tutorial.boudica_venta_pledge_body",
+      "speaker": "venta_icenorum",
+      "presentation": "dialogue",
+      "next": "boudica_contact_thetford"
+    },
+    {
+      "id": "boudica_contact_thetford",
+      "type": "objective",
+      "title_key": "tutorial.boudica_contact_title",
+      "hint_key": "tutorial.boudica_contact_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "contact", "target": "Thetford", "scope": "total" },
+      "marker": { "target": "Thetford" },
+      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
+      "next": "boudica_thetford_pledge"
+    },
+    {
+      "id": "boudica_thetford_pledge",
+      "type": "scene",
+      "title_key": "tutorial.boudica_thetford_pledge_title",
+      "body_key": "tutorial.boudica_thetford_pledge_body",
+      "speaker": "thetford",
+      "presentation": "dialogue",
+      "next": "boudica_trinovantes_intro"
+    },
+    {
+      "id": "boudica_trinovantes_intro",
+      "type": "scene",
+      "title_key": "tutorial.boudica_trinovantes_intro_title",
+      "body_key": "tutorial.boudica_trinovantes_intro_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_trinovantes_alliance"
+    },
+    {
+      "id": "boudica_trinovantes_alliance",
+      "type": "objective",
+      "title_key": "tutorial.boudica_trinovantes_alliance_title",
+      "hint_key": "tutorial.boudica_trinovantes_alliance_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "alliance", "target": "Trinovantes", "value": 1, "scope": "total" },
+      "marker": { "target": "Trinovantes" },
+      "guide": { "kind": "world", "target": "target_action", "gesture": "hold" },
+      "next": "boudica_trinovantes_pact"
+    },
+    {
+      "id": "boudica_trinovantes_pact",
+      "type": "scene",
+      "title_key": "tutorial.boudica_trinovantes_pact_title",
+      "body_key": "tutorial.boudica_trinovantes_pact_body",
+      "speaker": "trinovantes",
+      "presentation": "dialogue",
       "next": "boudica_ally_support_wait"
     },
     {
@@ -511,15 +692,6 @@
         "value": 1,
         "scope": "total"
       },
-      "next": "boudica_ally_support_received"
-    },
-    {
-      "id": "boudica_ally_support_received",
-      "type": "scene",
-      "title_key": "tutorial.boudica_support_title",
-      "body_key": "tutorial.boudica_support_body",
-      "speaker": "first_ally_support",
-      "presentation": "dialogue",
       "next": "boudica_aid_choice"
     },
     {

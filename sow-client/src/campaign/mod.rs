@@ -197,6 +197,8 @@ pub struct Faction {
     pub leader: Option<Leader>,
     /// Shared by the map nameplate and story dialogue; absent uses the generic portrait.
     pub avatar: Option<String>,
+    pub support_interval_seconds: Option<u32>,
+    pub alliance_group: Option<String>,
 }
 
 impl Faction {
@@ -212,6 +214,8 @@ impl Faction {
             iq: None,
             leader: None,
             avatar: None,
+            support_interval_seconds: None,
+            alliance_group: None,
         }
     }
 }
@@ -328,6 +332,8 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 troop_cap: f.role.troop_cap(),
                 iq: f.iq,
                 campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
+                campaign_support_interval_seconds: f.support_interval_seconds,
+                campaign_alliance_group: f.alliance_group.clone(),
             }
         })
         .collect()
@@ -354,6 +360,10 @@ struct RosterEntry {
     leader: Option<String>,
     #[serde(default)]
     avatar: Option<String>,
+    #[serde(default)]
+    support_interval_seconds: Option<u32>,
+    #[serde(default)]
+    alliance_group: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -398,8 +408,20 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
             return None;
         }
         let role = Role::from_name(&e.role)?;
+        if (e.support_interval_seconds.is_some()
+            && role != Role::Kin
+            && e.alliance_group.is_none())
+            || e.support_interval_seconds.is_some_and(|seconds| !(5..=600).contains(&seconds))
+            || e.alliance_group
+                .as_deref()
+                .is_some_and(|group| !valid_campaign_group_id(group))
+        {
+            return None;
+        }
         let mut f = Faction::new(e.name.clone(), e.x, e.y, role);
         f.iq = e.iq;
+        f.support_interval_seconds = e.support_interval_seconds;
+        f.alliance_group = e.alliance_group.clone();
         if let Some(civ_name) = e.civ.as_deref() {
             f.civ = civ_from_id(civ_name)?;
         }
@@ -421,6 +443,12 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
 }
 
 fn valid_avatar_id(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+fn valid_campaign_group_id(value: &str) -> bool {
     let mut chars = value.chars();
     matches!(chars.next(), Some('a'..='z'))
         && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')

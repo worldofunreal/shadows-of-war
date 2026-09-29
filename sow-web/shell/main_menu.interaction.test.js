@@ -380,7 +380,7 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     ]);
     assert.equal(definition.settings.buildings_enabled, false);
     assert.equal(definition.settings.buildings_unlock_after_defeated, target.name);
-    assert.deepEqual(definition.settings.campaign_support, { after_defeated: target.name, interval_seconds: 8, gold: 100, troops: 100 });
+    assert.deepEqual(definition.settings.campaign_support, { after_defeated: target.name, share_percent: 50 });
     assert.match(campaignMapEditorHtml, /\.\.\.\(f\.civ\?\{civ:f\.civ\}:\{\}\)/);
     const attackStep = definition.steps.find(step => step.id === "boudica_first_victory");
     assert.equal(attackStep.trigger.target, target.name);
@@ -411,21 +411,64 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(victory.step.attack_ratio_on_enter, 0.5);
     direct.advance(null, victory.step.id);
     assert.equal(direct.view().step.id, "boudica_first_expansion");
-    direct.update({ ...victoryFacts, tiles_gained: 1 }, {}, 1000);
-    const expansion = direct.update({ ...victoryFacts, tiles_gained: 1 }, {}, 1800);
+    direct.update({ ...victoryFacts, tiles_gained: 256 }, {}, 1000);
+    const expansion = direct.update({ ...victoryFacts, tiles_gained: 256 }, {}, 1800);
     assert.equal(expansion.step.id, "boudica_first_contact_intro");
     direct.advance(null, direct.view().step.id);
     assert.equal(direct.view().step.id, "boudica_first_contact");
-    assert.equal(direct.view().step.trigger.target, "Snettisham");
-    direct.update({ ...victoryFacts, tiles_gained: 1, contact_names: ["Snettisham"] }, {}, 2000);
-    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 1, contact_names: ["Snettisham"] }, {}, 2800).step.id, "boudica_ally_support_wait");
+    assert.deepEqual(direct.view().step.trigger.targets, ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"]);
+    const firstContactFacts = { ...victoryFacts, tiles_gained: 256, contact_names: ["Iceni Coast"] };
+    direct.update(firstContactFacts, {}, 2000);
+    assert.equal(direct.update(firstContactFacts, {}, 2800).step.id, "boudica_first_contact_response");
+    direct.advance(null, direct.view().step.id);
+    assert.equal(direct.view().step.id, "boudica_contact_snettisham");
+    direct.update(firstContactFacts, {}, 3000);
+    assert.equal(direct.update(firstContactFacts, {}, 3800).step.id, "boudica_contact_snettisham");
+    const firstContactAndSnettisham = { ...firstContactFacts, contact_names: ["Iceni Coast", "Snettisham"] };
+    direct.update(firstContactAndSnettisham, {}, 4000);
+    assert.equal(direct.update(firstContactAndSnettisham, {}, 4800).step.id, "boudica_snettisham_pledge");
     const support = definition.steps.find(step => step.id === "boudica_ally_support_wait");
     assert.deepEqual(support.trigger, { type: "support", value: 1, scope: "total" });
-    assert.equal(definition.steps.find(step => step.id === "boudica_ally_support_received").speaker, "first_ally_support");
+    const iceniPledges = [
+        ["Snettisham", "snettisham", "boudica_snettisham_pledge"],
+        ["Iceni Coast", "iceni_coast", "boudica_iceni_coast_pledge"],
+        ["Stonea", "stonea", "boudica_stonea_pledge"],
+        ["Venta Icenorum", "venta_icenorum", "boudica_venta_pledge"],
+        ["Thetford", "thetford", "boudica_thetford_pledge"]
+    ];
+    for (const [name, speaker, stepId] of iceniPledges) {
+        const faction = roster.factions.find(item => item.name === name);
+        assert.equal(faction.role, "kin");
+        assert.ok(faction.support_interval_seconds >= 5);
+        assert.equal(definition.steps.find(step => step.id === stepId).speaker, speaker);
+    }
+    const pactFactions = roster.factions.filter(item => item.alliance_group === "trinovantes");
+    assert.deepEqual(pactFactions.map(item => item.name), ["Trinovantes", "Trinovantian Farms"]);
+    assert.ok(pactFactions.every(item => item.support_interval_seconds >= 5));
+    const unsupportedPayout = JSON.parse(JSON.stringify(roster));
+    unsupportedPayout.factions.find(item => item.name === "Colonia Veterans").support_interval_seconds = 20;
+    assert.ok(campaign.validate(definition, unsupportedPayout, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "roster.factions.support_interval_seconds"));
+    const trinovantesStep = definition.steps.find(step => step.id === "boudica_trinovantes_alliance");
+    assert.equal(trinovantesStep.trigger.target, "Trinovantes");
+    const pactCheck = campaign.create({
+        entry: "alliance_check",
+        steps: [{ id: "alliance_check", type: "objective", title_key: "tutorial.test", trigger: trinovantesStep.trigger }]
+    });
+    pactCheck.update({ alliance_names: ["Other tribe"], alliances_formed: 1 }, {}, 0);
+    assert.equal(pactCheck.view().progress.current, 0);
+    pactCheck.update({ alliance_names: ["Trinovantes"], alliances_formed: 2 }, {}, 1000);
+    assert.equal(pactCheck.view().progress.current, 1);
     assert.equal(definition.steps.find(step => step.id === "boudica_choose_city").guide.target, "dock_city");
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_build_city").trigger, { type: "city", value: 1, scope: "step" });
-    assert.deepEqual(definition.steps.find(step => step.id === "boudica_first_expansion").trigger, { type: "territory", value: 1, scope: "step" });
+    assert.deepEqual(definition.steps.find(step => step.id === "boudica_first_expansion").trigger, { type: "territory", value: 256, scope: "step" });
+    assert.match(tutorial, /step\.trigger\.type === "territory" && step\.guide\.target === "expand" && view && view\.progress\.current > 0\) return null/);
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_roman_outposts").trigger, { type: "defeated", targets: ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"], value: 3, scope: "total" });
+    assert.match(webMenu, /"notifications": notifications/);
+    assert.match(simUpdateSource, /push_resource_notification\(text, color, Some\(sender_avatar\)\)/);
+    assert.match(hud, /supportReceiptQueue/);
+    assert.match(hudCss, /\.sow-hud__notification--support/);
+    assert.match(campaignModule, /support_interval_seconds/);
+    assert.match(campaignMapEditorHtml, /support_interval_seconds/);
     const invalidRatio = JSON.parse(JSON.stringify(definition));
     invalidRatio.steps.find(step => step.id === attackStep.id).attack_ratio_on_enter = 1.01;
     assert.ok(campaign.validate(invalidRatio, roster, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "attack_ratio_on_enter"));
@@ -962,9 +1005,14 @@ test("campaign dialogue regains keyboard focus after the leave modal is canceled
     assert.match(campaignView, /else if \(focusModal\) focusAction\(\)/);
 });
 
-test("campaign dialogue blocks background clicks and only outside-continues non-choice scenes", () => {
-    assert.match(storyCss, /\.sow-story__shade \{[^}]*pointer-events: auto/s);
-    assert.match(campaignView, /event\.stopPropagation\(\);[\s\S]*?if \(model\.paused && event\.target === shade\) \{[\s\S]*?if \(model\.step\.type !== "choice"[\s\S]*?options\.onContinue\(\)/);
+test("campaign dialogue passes HUD controls through and outside-continues only non-choice scenes", () => {
+    assert.match(storyCss, /\.sow-story\.is-modal \{ pointer-events: none; \}/);
+    assert.match(storyCss, /\.sow-story__shade \{[^}]*pointer-events: none/s);
+    assert.match(storyCss, /\.sow-story__dialog \{[^}]*pointer-events: auto/s);
+    assert.match(campaignView, /doc\.addEventListener\("click", outsideClick, true\)/);
+    assert.match(campaignView, /doc\.removeEventListener\("click", outsideClick, true\)/);
+    assert.match(campaignView, /event\.target\.closest\("button, a\[href\], input:not\(\[type='hidden'\]\), select, textarea, \[role='button'\], \[data-command\], \[data-map-action\]"\)/);
+    assert.match(campaignView, /if \(control\) return;[\s\S]*?model\.step\.type !== "choice"[\s\S]*?options\.onContinue\(\)/);
 });
 
 test("campaign dialogue keeps a compact speaker portrait on narrow screens", () => {
@@ -1133,8 +1181,12 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     assert.equal(step("boudica_ratio_guide").attack_ratio_on_enter, 0.5);
     assert.equal(step("boudica_first_victory_scene").next, "boudica_first_expansion");
     assert.equal(step("boudica_first_expansion").next, "boudica_first_contact_intro");
-    assert.equal(step("boudica_first_contact").trigger.target, "Snettisham");
+    assert.deepEqual(step("boudica_first_contact").trigger.targets, ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"]);
+    assert.equal(step("boudica_first_contact").next, "boudica_first_contact_response");
+    assert.equal(step("boudica_contact_snettisham").trigger.target, "Snettisham");
     assert.equal(step("boudica_first_contact").guide.target, "target_action");
+    assert.match(campaignEditor, /Contact any selected faction/);
+    assert.match(campaignEditor, /\+1 faction/);
     assert.deepEqual(step("boudica_roman_outposts").trigger.targets, ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"]);
     assert.equal(step("boudica_roman_outposts").next, "boudica_posts_fall");
     assert.equal(step("boudica_structure_upgrade").trigger.type, "city_level");
@@ -1302,6 +1354,26 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hud, /menu\.dataset\.renderKey/);
     assert.match(hud, /Math\.min\(Math\.max\(x, minX\), maxX\)/);
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
+});
+
+test("primary click selects owned buildings without changing other map gestures", () => {
+    const clickStart = mapClick.indexOf("pub(crate) fn handle_map_click");
+    const clickEnd = mapClick.indexOf("pub(crate) fn open_map_context_menu", clickStart);
+    const clickBody = mapClick.slice(clickStart, clickEnd);
+    assert.ok(clickBody.indexOf("selected_nuke_kind") < clickBody.indexOf("select_owned_building"));
+    assert.ok(clickBody.indexOf("selected_building_kind") < clickBody.indexOf("select_owned_building"));
+    assert.ok(clickBody.indexOf("select_warships_at") < clickBody.indexOf("select_owned_building"));
+    assert.match(clickBody, /select_owned_building\(tile_idx, x, y\)[\s\S]*?primary_target\(tile_idx/);
+    assert.match(mapClick, /building\.tile_idx == tile_idx && building\.owner_id == target\.my_id/);
+    assert.match(mapClick, /self\.set_map_context_menu\(x, y, tile_idx, false\)/);
+    assert.match(mapClick, /self\.set_map_context_menu\(x, y, tile_idx, true\)/);
+    assert.match(windowInput, /if is_quick_tap\(elapsed_ms, distance_sq\)\s*\{\s*self\.handle_map_click/);
+    assert.match(windowInput, /else if right && pressed[\s\S]*?self\.open_map_context_menu\(x, y\)/);
+    assert.match(windowInput, /pub\(crate\) fn poll_pointer_hold[\s\S]*?self\.open_map_context_menu\(x, y\)/);
+    assert.match(webMenu, /"show_radial": menu\.show_radial/);
+    assert.match(hud, /var showRadial = Boolean\(open && mapMenu\.show_radial !== false\)/);
+    assert.match(hud, /send\("close_map_context_menu"\)/);
+    assert.match(webMenu, /WebMenuCommand::CloseMapContextMenu => self\.close_map_context_menu\(\)/);
 });
 
 test("WASM right-click opens on pointer press; touch hold stays intact", () => {

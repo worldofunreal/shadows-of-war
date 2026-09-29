@@ -4,7 +4,7 @@ use crate::game::{GameEvent, GamePhase};
 use crate::warp_fleet::best_shore_spawn_for_transport;
 
 impl SowEngine {
-    /// Transport ship: 1 tile/tick over water, retreat, landing → conquer + attack execution.
+    /// Fleet movement, retreat, landing, and naval combat.
     pub fn execute_fleets(&mut self) {
         if self.state.phase != GamePhase::Playing {
             return;
@@ -61,6 +61,10 @@ impl SowEngine {
         // fleets are sorted on insertion
         let mut to_remove = Vec::new();
         let mut elimination_candidates = Vec::new();
+        let transport_base_steps_per_tick = self
+            .state
+            .config
+            .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND);
 
         for i in 0..self.fleets.len() {
             let fleet = &mut self.fleets[i];
@@ -91,8 +95,7 @@ impl SowEngine {
                             &[fleet.current_tile],
                             r_dst,
                         ) {
-                            fleet.path = std::sync::Arc::new(path);
-                            fleet.path_cursor = 0;
+                            fleet.replace_path(path);
                         } else {
                             refund_fleet_troops_to_player(
                                 &mut self.state,
@@ -138,13 +141,34 @@ impl SowEngine {
                     fleet.current_tile = ny as u32 * w + nx as u32;
                 } else if dir == 8 {
                     // Reached destination!
-                    fleet.path = std::sync::Arc::new(Vec::new());
-                    fleet.path_cursor = 0;
+                    fleet.replace_path(Vec::new());
                 } else {
                     // Unreachable via FlowField
                     refund_fleet_troops_to_player(&mut self.state, fleet.owner_id, fleet.troops);
                     to_remove.push(i);
                     continue;
+                }
+            } else if fleet.unit_type == crate::game::UnitType::TransportShip
+                && fleet.path_cursor < fleet.path.len()
+            {
+                let speed = fleet.movement_steps_per_tick(transport_base_steps_per_tick);
+                let progress = fleet.movement_progress + speed;
+                let remaining = fleet.path.len() - fleet.path_cursor;
+                let advance = if progress.is_finite() {
+                    progress.floor().min(remaining as f64) as usize
+                } else {
+                    remaining
+                };
+                if advance > 0 {
+                    fleet.path_cursor += advance;
+                    fleet.current_tile = fleet.path[fleet.path_cursor - 1];
+                    fleet.movement_progress = if fleet.path_cursor >= fleet.path.len() {
+                        0.0
+                    } else {
+                        (progress - advance as f64).clamp(0.0, 1.0)
+                    };
+                } else if progress.is_finite() {
+                    fleet.movement_progress = progress.max(0.0);
                 }
             } else if fleet.path_cursor < fleet.path.len() {
                 fleet.current_tile = fleet.path[fleet.path_cursor];
@@ -159,8 +183,7 @@ impl SowEngine {
                     // Loop back
                     let mut p = (*fleet.path).clone();
                     p.reverse();
-                    fleet.path = std::sync::Arc::new(p);
-                    fleet.path_cursor = 0;
+                    fleet.replace_path(p);
                 }
                 continue;
             }
@@ -168,8 +191,7 @@ impl SowEngine {
             if fleet.unit_type == crate::game::UnitType::Warship {
                 // Stop at destination
                 if fleet.path_cursor >= fleet.path.len() {
-                    fleet.path = std::sync::Arc::new(Vec::new());
-                    fleet.path_cursor = 0;
+                    fleet.replace_path(Vec::new());
                 }
                 continue;
             }
@@ -195,6 +217,14 @@ impl SowEngine {
                 }
                 to_remove.push(i);
                 continue;
+            }
+
+            if fleet.unit_type == crate::game::UnitType::TransportShip {
+                self.state.events.push(GameEvent::TransportShipLanded {
+                    owner_id: fleet.owner_id,
+                    x: lx,
+                    y: ly,
+                });
             }
 
             if owner_here == fleet.owner_id {

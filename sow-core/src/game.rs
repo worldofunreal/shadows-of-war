@@ -268,6 +268,11 @@ pub enum GameEvent {
         rejector_id: u16,
         requester_id: u16,
     },
+    TransportShipLanded {
+        owner_id: u16,
+        x: u32,
+        y: u32,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

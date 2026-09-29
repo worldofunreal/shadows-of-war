@@ -24,6 +24,10 @@
     var leaderboardRenderKey = "";
     var lastLeaderboardPlayers = [];
     var inboxRenderKey = "";
+    var notificationCursor = 0;
+    var supportReceiptQueue = [];
+    var supportReceiptTimer = null;
+    var latestNotificationEntries = [];
     var mapMenuView = "root";
     var mapMenuStateKey = "";
     var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
@@ -702,15 +706,25 @@
         if (!hudRefs || !hudRefs.mapMenu) return false;
         var menu = hudRefs.mapMenu;
         var open = Boolean(mapMenu && mapMenu.open);
-        menu.classList.toggle("hidden", !open);
+        var showRadial = Boolean(open && mapMenu.show_radial !== false);
+        menu.classList.toggle("hidden", !showRadial);
         if (!open) {
             menu.dataset.renderKey = "";
             mapMenuStateKey = "";
             mapMenuView = "root";
             return false;
         }
+        menu.dataset.session = String(mapMenu.session);
+        menu.dataset.tileIdx = String(mapMenu.tile_idx);
+        if (!showRadial) {
+            if (menu.dataset.renderKey !== "building_details") menu.replaceChildren();
+            menu.dataset.renderKey = "building_details";
+            mapMenuStateKey = "";
+            mapMenuView = "root";
+            return true;
+        }
         var items = mapItems(mapMenu);
-        var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + JSON.stringify(items);
+        var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + String(showRadial) + ":" + JSON.stringify(items);
         if (stateKey !== mapMenuStateKey) {
             mapMenuStateKey = stateKey;
             mapMenuView = "root";
@@ -785,8 +799,6 @@
             menu.dataset.renderKey = renderKey;
         }
         updateDisabledMapActionReasons(menu, hudState && hudState.hud && hudState.hud.gold);
-        menu.dataset.session = String(mapMenu.session);
-        menu.dataset.tileIdx = String(mapMenu.tile_idx);
         var x = Number(mapMenu.x || 0);
         var y = Number(mapMenu.y || 0);
         var halfWidth = menu.offsetWidth * 0.5;
@@ -944,7 +956,43 @@
 
     function renderNotifications(entries) {
         if (!hudRefs || !hudRefs.notifications || !Array.isArray(entries)) return;
-        var visible = entries.slice(-3);
+        latestNotificationEntries = entries;
+        entries.forEach(function (entry) {
+            var id = Number(entry && entry.id);
+            if (!Number.isSafeInteger(id) || id <= notificationCursor) return;
+            notificationCursor = id;
+            if (entry.premium) supportReceiptQueue.push(entry);
+        });
+        if (supportReceiptTimer) return;
+        if (supportReceiptQueue.length) {
+            var receipt = supportReceiptQueue.shift();
+            var avatarId = /^[a-z][a-z0-9_]*$/.test(receipt.avatar || "") ? receipt.avatar : "null";
+            var card = document.createElement("div");
+            card.className = "sow-hud__notification sow-hud__notification--support";
+            card.dataset.receiptId = String(receipt.id);
+            var seal = document.createElement("span");
+            seal.className = "sow-hud__notification-seal";
+            seal.setAttribute("aria-hidden", "true");
+            seal.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
+            var portrait = document.createElement("img");
+            portrait.className = "sow-hud__notification-portrait";
+            portrait.src = asset("gameplay/avatars/" + avatarId + ".webp");
+            portrait.alt = "";
+            portrait.draggable = false;
+            var copy = document.createElement("span");
+            copy.className = "sow-hud__notification-copy";
+            copy.textContent = receipt.key ? SOW_t(receipt.key, receipt.values || {}) : SOW_t("hud.event");
+            card.append(seal, portrait, copy);
+            hudRefs.notifications.dataset.key = "support:" + receipt.id;
+            hudRefs.notifications.replaceChildren(card);
+            supportReceiptTimer = window.setTimeout(function () {
+                supportReceiptTimer = null;
+                renderNotifications(latestNotificationEntries);
+            }, 3600);
+            return;
+        }
+
+        var visible = entries.filter(function (entry) { return !entry || !entry.premium; }).slice(-3);
         var key = visible.map(function (entry) {
             return String(entry && entry.key || "") + JSON.stringify(entry && entry.values || {});
         }).join("\u001f");
@@ -981,6 +1029,11 @@
                 hudRefs.notifications.dataset.key = "";
                 hudRefs.notifications.replaceChildren();
             }
+            if (supportReceiptTimer) window.clearTimeout(supportReceiptTimer);
+            supportReceiptTimer = null;
+            supportReceiptQueue = [];
+            notificationCursor = 0;
+            latestNotificationEntries = [];
             return;
         }
         ensureHudDom();
@@ -1380,7 +1433,7 @@
             } else if (cmd === "select_building") {
                 send("select_building", { kind: btn.dataset.kind });
             } else if (cmd === "close_building_card") {
-                if (hudRefs && hudRefs.buildingCard) hudRefs.buildingCard.classList.add("hidden");
+                send("close_map_context_menu");
             } else if (cmd === "confirm_endgame_leave") {
                 send("return_to_menu");
             } else if (cmd === "open_store") {

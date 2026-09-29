@@ -84,14 +84,18 @@ pub struct ScriptedSpawn {
     /// Optional portrait asset for campaign factions; absent uses the generic avatar.
     #[serde(default)]
     pub campaign_avatar: Option<String>,
+    /// Per-faction repeat interval for campaign support.
+    #[serde(default)]
+    pub campaign_support_interval_seconds: Option<u32>,
+    /// Factions in this campaign bloc share a pact when one member forms an alliance.
+    #[serde(default)]
+    pub campaign_alliance_group: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CampaignSupport {
     pub after_defeated: String,
-    pub interval_seconds: u32,
-    pub gold: f64,
-    pub troops: f64,
+    pub share_percent: u8,
 }
 
 fn default_true() -> bool {

@@ -83,9 +83,9 @@
     function chooseFactionTarget(name) {
         var step = state.definition && state.definition.steps.find(function (item) { return item.id === state.selected; });
         if (!step || !["objective", "guide"].includes(step.type)) return;
-        if (step.trigger && step.trigger.type === "defeated" && Array.isArray(step.trigger.targets)) {
+        if (step.trigger && ["contact", "defeated"].includes(step.trigger.type) && Array.isArray(step.trigger.targets)) {
             if (!step.trigger.targets.includes(name)) step.trigger.targets.push(name);
-            step.trigger.value = step.trigger.targets.length;
+            if (step.trigger.type === "defeated") step.trigger.value = step.trigger.targets.length;
         } else if (["contact", "defeated", "attack"].includes(step.trigger && step.trigger.type)) step.trigger.target = name;
         else step.marker = { target: name };
         setFactionPicker(false);
@@ -228,6 +228,16 @@
         });
         select.value = current || "";
         select.addEventListener("change", function () { onChange(select.value); });
+        wrapper.appendChild(select); return wrapper;
+    }
+    function multiFactionField(label, selected, onChange) {
+        var wrapper = el("label", {}); wrapper.appendChild(el("span", {}, label));
+        var select = el("select", { multiple: "multiple", size: Math.min(8, Math.max(3, state.roster.factions.length)) });
+        factionOptions().forEach(function (option) {
+            var item = el("option", { value: option.value }, option.label);
+            item.selected = selected.includes(option.value); select.appendChild(item);
+        });
+        select.addEventListener("change", function () { onChange(Array.from(select.selectedOptions).map(function (item) { return item.value; })); });
         wrapper.appendChild(select); return wrapper;
     }
     function checkboxField(label, checked, onChange) {
@@ -464,13 +474,19 @@
                 if (value === "elapsed" && step.type === "objective") delete step.guide;
                 markDirty(); renderInspector();
             }));
-            if (step.trigger.type === "contact") objective.appendChild(selectField("Faction", step.trigger.target, factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
+            if (step.trigger.type === "contact") {
+                if (Array.isArray(step.trigger.targets)) {
+                    objective.appendChild(multiFactionField("Contact any selected faction", step.trigger.targets, function (targets) { step.trigger.targets = targets; markDirty(); }));
+                } else {
+                    objective.appendChild(selectField("Faction", step.trigger.target, factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
+                    var anyContact = el("button", { type: "button" }, "Accept contact with multiple factions");
+                    anyContact.addEventListener("click", function () { step.trigger.targets = step.trigger.target ? [step.trigger.target] : []; delete step.trigger.target; markDirty(); renderInspector(); });
+                    objective.appendChild(anyContact);
+                }
+            }
             else if (step.trigger.type === "defeated") {
                 if (Array.isArray(step.trigger.targets)) {
-                    var targets = el("select", { multiple: "multiple", size: Math.min(8, Math.max(3, state.roster.factions.length)) });
-                    factionOptions().forEach(function (option) { var item = el("option", { value: option.value }, option.label); item.selected = step.trigger.targets.includes(option.value); targets.appendChild(item); });
-                    targets.addEventListener("change", function () { step.trigger.targets = Array.from(targets.selectedOptions).map(function (item) { return item.value; }); step.trigger.value = step.trigger.targets.length; markDirty(); });
-                    objective.appendChild(el("label", {}, "Factions to defeat")); objective.appendChild(targets);
+                    objective.appendChild(multiFactionField("Factions to defeat", step.trigger.targets, function (targets) { step.trigger.targets = targets; step.trigger.value = targets.length; markDirty(); }));
                 } else {
                     objective.appendChild(selectField("Faction", step.trigger.target || "", factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
                     var groupTargets = el("button", { type: "button" }, "Track multiple factions (3/3)");
@@ -626,16 +642,14 @@
             if (!enabled) delete settings.campaign_support;
             else {
                 var defaultMilestone = settings.buildings_unlock_after_defeated || (state.roster.factions.find(function (faction) { return faction.name === "The Iceni Despoilers"; }) || {}).name || "";
-                settings.campaign_support = settings.campaign_support || { after_defeated: defaultMilestone, interval_seconds: 30, gold: 100, troops: 100 };
+                settings.campaign_support = settings.campaign_support || { after_defeated: defaultMilestone, share_percent: 50 };
             }
             markDirty(); renderSettings();
         }));
         if (settings.campaign_support) {
             var support = settings.campaign_support;
             host.appendChild(selectField("Support begins after", support.after_defeated || "", factionOptions(), function (value) { support.after_defeated = value; markDirty(); }));
-            host.appendChild(inputField("Repeat every (seconds)", support.interval_seconds, function (value) { support.interval_seconds = Number(value); markDirty(); }, { type: "number", min: 5, max: 600, step: 1 }));
-            host.appendChild(inputField("Gold per ally", support.gold, function (value) { support.gold = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000000, step: 25 }));
-            host.appendChild(inputField("Troops per ally", support.troops, function (value) { support.troops = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000000, step: 25 }));
+            host.appendChild(inputField("Current reserves given (%)", support.share_percent, function (value) { support.share_percent = Number(value); markDirty(); }, { type: "number", min: 1, max: 100, step: 1 }));
         }
         host.appendChild(selectField("Default story language", state.definition.default_locale, localeOptions(), function (value) { state.definition.default_locale = value; state.definition.strings[value] = state.definition.strings[value] || {}; markDirty(); renderSettings(); }));
         host.appendChild(selectField("Opening step", state.definition.entry, state.definition.steps.map(stepOption), function (value) { state.definition.entry = value; markDirty(); }));
@@ -644,27 +658,25 @@
         Object.keys(state.definition.speakers || {}).forEach(function (speakerId) {
             var speaker = state.definition.speakers[speakerId], card = el("div", { class: "form-card" });
             card.appendChild(el("strong", {}, "Character · " + speakerId));
-            var binding = speaker.faction ? "faction:" + speaker.faction : speaker.dynamic ? "dynamic:" + speaker.dynamic : "";
+            var binding = speaker.faction ? "faction:" + speaker.faction : "";
             var bindingOptions = [{ value: "", label: "Custom character" }].concat(
-                factionOptions().map(function (option) { return { value: "faction:" + option.value, label: "Roster · " + option.label }; }),
-                [{ value: "dynamic:first_ally_support", label: "First allied supporter" }]
+                factionOptions().map(function (option) { return { value: "faction:" + option.value, label: "Roster · " + option.label }; })
             );
             card.appendChild(selectField("Name and portrait source", binding, bindingOptions, function (value) {
-                delete speaker.faction; delete speaker.dynamic;
+                delete speaker.faction;
                 if (value.indexOf("faction:") === 0) { speaker.faction = value.slice(8); delete speaker.name_key; delete speaker.avatar; }
-                else if (value.indexOf("dynamic:") === 0) { speaker.dynamic = value.slice(8); speaker.name = speaker.name || "Allied envoy"; speaker.avatar = speaker.avatar || "null"; }
                 else speaker.name = speaker.name || "New character";
                 markDirty(); renderSettings();
             }));
-            if (speaker.faction || speaker.dynamic) {
+            if (speaker.faction) {
                 var boundFaction = speaker.faction && state.roster.factions.find(function (faction) { return faction.name === speaker.faction; });
-                var boundName = boundFaction ? boundFaction.name : speaker.name || "First allied supporter";
-                var boundAvatar = boundFaction ? boundFaction.avatar || "null" : speaker.avatar || "null";
+                var boundName = boundFaction ? boundFaction.name : speaker.faction;
+                var boundAvatar = boundFaction ? boundFaction.avatar || "null" : "null";
                 var boundPortrait = el("img", { class: "speaker-avatar", alt: boundName, loading: "lazy" });
                 boundPortrait.src = asset("gameplay/avatars/" + boundAvatar + ".webp");
                 boundPortrait.addEventListener("error", function () { boundPortrait.hidden = true; });
                 card.appendChild(boundPortrait);
-                card.appendChild(el("small", {}, speaker.faction ? "Uses the selected faction's name and portrait." : "At runtime, this speaker becomes the first ally who sends support."));
+                card.appendChild(el("small", {}, "Uses the selected faction's name and portrait."));
                 var removeBoundSpeaker = el("button", { type: "button", class: "danger" }, "Remove character");
                 removeBoundSpeaker.addEventListener("click", function () {
                     if (!confirm("Remove " + speakerId + "? Their dialogue will become narrator text.")) return;
@@ -761,7 +773,8 @@
         var trigger = step.trigger || {};
         var definition = triggerTypes.find(function (item) { return item.value === trigger.type; });
         var parts = [definition ? definition.label : "Set a condition"];
-        if (["contact", "defeated", "attack"].includes(trigger.type) && trigger.target) parts[0] += " · " + trigger.target;
+        if (trigger.type === "contact" && Array.isArray(trigger.targets)) parts[0] += " · any of " + trigger.targets.join(", ");
+        else if (["contact", "defeated", "attack"].includes(trigger.type) && trigger.target) parts[0] += " · " + trigger.target;
         else if (trigger.type === "ui" && typeof trigger.action === "string") parts[0] += " · " + trigger.action.replace(/_/g, " ");
         if (Number.isFinite(trigger.value)) parts.push((trigger.type === "elapsed" ? trigger.value + "s" : "≥ " + trigger.value.toLocaleString()));
         if (trigger.scope && trigger.type !== "troops") parts.push({ step: "this step", episode: "this episode", total: "all time" }[trigger.scope] || trigger.scope);
@@ -1101,9 +1114,9 @@
             var playerFaction = factions.find(function (item) { return item.name === playerTarget; });
             return playerFaction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionName === playerFaction.name; }) || null;
         }
-        var defeated = state.facts && state.facts.defeated_names || [];
+        var observed = step.trigger && step.trigger.type === "contact" ? state.facts && state.facts.contact_names || [] : state.facts && state.facts.defeated_names || [];
         var requested = target === "target_action" && (Array.isArray(step.trigger && step.trigger.targets)
-            ? step.trigger.targets.find(function (name) { return !defeated.includes(name); })
+            ? step.trigger.targets.find(function (name) { return !observed.includes(name); })
             : step.trigger && step.trigger.target || step.marker && step.marker.target !== "player" && step.marker.target);
         var faction = requested && factions.find(function (item) { return item.name === requested; });
         if (!faction && state.roster) {
@@ -1122,9 +1135,9 @@
     }
     function applyPreviewFocus() {
         if (!state.previewFocusActive || !state.machine) return;
-        var step = state.machine.view().step, defeated = state.facts && state.facts.defeated_names || [];
+        var step = state.machine.view().step, observed = step.trigger && step.trigger.type === "contact" ? state.facts && state.facts.contact_names || [] : state.facts && state.facts.defeated_names || [];
         var target = step.guide && step.guide.kind === "world" && step.guide.target === "target_action"
-            ? Array.isArray(step.trigger && step.trigger.targets) ? step.trigger.targets.find(function (name) { return !defeated.includes(name); }) : step.trigger && step.trigger.target || step.marker && step.marker.target
+            ? Array.isArray(step.trigger && step.trigger.targets) ? step.trigger.targets.find(function (name) { return !observed.includes(name); }) : step.trigger && step.trigger.target || step.marker && step.marker.target
             : step.marker && step.marker.target;
         var marker = target === "player" ? $("#campaignPreviewMarkers .player-base")
             : target ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(function (item) { return item.dataset.factionName === target; })
@@ -1186,8 +1199,8 @@
         }
         var progress = model.progress;
         host.appendChild(el("small", {}, trigger.type + " · " + progress.current + " / " + progress.target));
-        if (["contact", "troops", "elapsed"].includes(trigger.type)) return;
-        var button = el("button", { type: "button" }, trigger.type === "defeated" && Array.isArray(trigger.targets) ? "+1 faction" : "+1 " + trigger.type);
+        if (["troops", "elapsed"].includes(trigger.type)) return;
+        var button = el("button", { type: "button" }, ["contact", "defeated"].includes(trigger.type) ? "+1 faction" : "+1 " + trigger.type);
         button.disabled = model.ready;
         button.addEventListener("click", function () { simulateObjective(1); });
         host.appendChild(button);
@@ -1198,7 +1211,12 @@
         if (!trigger) return;
         if (amount == null) { var progress = state.machine.view().progress; amount = Math.max(1, progress.target - progress.current); }
         amount = Number(amount || 1);
-        if (trigger.type === "contact") state.facts.contact_names = Array.from(new Set((state.facts.contact_names || []).concat(trigger.target)));
+        if (trigger.type === "contact") {
+            var contacts = state.facts.contact_names || [];
+            var candidates = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
+            var contacted = candidates.find(function (name) { return name && !contacts.includes(name); }) || candidates[0];
+            if (contacted) state.facts.contact_names = Array.from(new Set(contacts.concat(contacted)));
+        }
         else if (trigger.type === "defeated") {
             var targets = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
             var defeated = state.facts.defeated_names || [];

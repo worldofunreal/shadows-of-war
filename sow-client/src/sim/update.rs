@@ -278,7 +278,16 @@ impl SowApp {
                     .with("name", name),
                 _ => continue,
             };
-            notifications.push((text, color));
+            let campaign_support_avatar = (self.ui.tutorial_active && prefix == "received")
+                .then(|| {
+                    snapshot
+                        .players
+                        .iter()
+                        .find(|player| player.id == other_id)
+                        .and_then(|player| player.campaign_avatar.clone())
+                        .unwrap_or_else(|| "null".to_string())
+                });
+            notifications.push((text, color, campaign_support_avatar));
 
             if transfer.receiver_id == my_id && transfer.gold > 0.0 {
                 self.ui.floating_notices.push(crate::app::FloatingNotice {
@@ -315,11 +324,19 @@ impl SowApp {
             notifications.push((
                 crate::ui::UiText::new("hud.resource_request_declined").with("name", name),
                 crate::rgb(239, 68, 68),
+                None,
             ));
         }
 
-        for (text, color) in notifications {
-            self.ui.app.hud_state.push_notification(text, color);
+        for (text, color, sender_avatar) in notifications {
+            if let Some(sender_avatar) = sender_avatar {
+                self.ui
+                    .app
+                    .hud_state
+                    .push_resource_notification(text, color, Some(sender_avatar));
+            } else {
+                self.ui.app.hud_state.push_notification(text, color);
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::app::{InputState, SimState, UiState};
+use crate::app::{InputState, SimState, TransportTargetMarker, UiState};
 use crate::death_nameplate::{death_animation, death_emoji};
 use crate::render::gpu::TextRenderer;
 use crate::render::world::overlays::{INLINE_EMOJI_SCALE, world_to_screen};
@@ -8,6 +8,9 @@ use sow_core::protocol::{AttackSnapshot, SimSnapshot};
 use web_time::Instant;
 
 const CLICK_MARKER_DURATION: f32 = 0.16;
+const TRANSPORT_TARGET_FADE_IN_SECS: f32 = 0.2;
+const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
+const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
 const NOTICE_FONT_SIZE: f32 = 14.0;
 const NOTICE_RISE: f32 = 6.5;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
@@ -26,9 +29,199 @@ pub(crate) fn render(
     now: Instant,
 ) {
     render_click_markers(text, ui, input, dev, sf, now);
+    render_transport_targets(text, snapshot, sim, ui, input, sf, now);
+    render_transport_impacts(text, ui, input, sf, now);
     render_death_nameplates(text, ui, input, dev, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, sf, now);
     render_floating_notices(text, ui, input, dev, sf, now);
+}
+
+fn render_transport_targets(
+    text: &mut TextRenderer,
+    snapshot: &SimSnapshot,
+    sim: &SimState,
+    ui: &mut UiState,
+    input: &InputState,
+    sf: f32,
+    now: Instant,
+) {
+    if ui.transport_target_snapshot_tick != Some(snapshot.tick) {
+        if ui
+            .transport_target_snapshot_tick
+            .is_some_and(|tick| snapshot.tick < tick)
+        {
+            ui.transport_target_markers.clear();
+            ui.transport_impacts.clear();
+        }
+
+        ui.transport_target_seen.clear();
+        let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
+        if my_id != 0 {
+            for fleet in &snapshot.fleets {
+                if fleet.owner_id != my_id
+                    || fleet.unit_type != sow_core::game::UnitType::TransportShip
+                    || fleet.retreating
+                {
+                    continue;
+                }
+                let Some(tile_idx) = fleet.path.last().copied() else {
+                    continue;
+                };
+
+                ui.transport_target_seen.insert(fleet.id);
+                let marker =
+                    ui.transport_target_markers
+                        .entry(fleet.id)
+                        .or_insert(TransportTargetMarker {
+                            tile_idx,
+                            start_time: now,
+                            fade_out_at: None,
+                        });
+                if marker.tile_idx != tile_idx || marker.fade_out_at.is_some() {
+                    marker.tile_idx = tile_idx;
+                    marker.start_time = now;
+                }
+                marker.fade_out_at = None;
+            }
+        }
+
+        let seen = &ui.transport_target_seen;
+        for (id, marker) in &mut ui.transport_target_markers {
+            if !seen.contains(id) && marker.fade_out_at.is_none() {
+                marker.fade_out_at = Some(now);
+            }
+        }
+        ui.transport_target_snapshot_tick = Some(snapshot.tick);
+    }
+
+    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
+    let player_color = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == my_id)
+        .map(|player| {
+            player
+                .team
+                .map_or(player.color, sow_core::player::team_territory_rgb)
+        })
+        .unwrap_or([0.13, 0.83, 0.94]);
+    let color = [
+        player_color[0] * 0.68 + 0.32,
+        player_color[1] * 0.68 + 0.32,
+        player_color[2] * 0.68 + 0.32,
+    ];
+    let sf = sf.max(0.01);
+    let screen_w = input.screen_w / sf;
+    let screen_h = input.screen_h / sf;
+    let map_w = sim.map_w.max(1);
+
+    ui.transport_target_markers.retain(|_, marker| {
+        let age = now.duration_since(marker.start_time).as_secs_f32();
+        let fade_in = (age / TRANSPORT_TARGET_FADE_IN_SECS).clamp(0.0, 1.0);
+        let fade_out = marker.fade_out_at.map_or(1.0, |start| {
+            1.0 - (now.duration_since(start).as_secs_f32() / TRANSPORT_TARGET_FADE_OUT_SECS)
+                .clamp(0.0, 1.0)
+        });
+        let alpha = fade_in.min(fade_out);
+        if fade_out <= 0.0 {
+            return false;
+        }
+        if alpha <= 0.0 {
+            return true;
+        }
+
+        let x = (marker.tile_idx % map_w) as f32 + 0.5;
+        let y = (marker.tile_idx / map_w) as f32 + 0.5;
+        let center = world_to_screen(x, y, input, sf);
+        if center[0] < -64.0
+            || center[0] > screen_w + 64.0
+            || center[1] < -64.0
+            || center[1] > screen_h + 64.0
+        {
+            return true;
+        }
+
+        let pulse = (age * 2.7).sin() * 0.5 + 0.5;
+        let outer_radius = (19.0 + 2.0 * pulse) * sf;
+        let inner_radius = (12.0 + pulse) * sf;
+        let center_px = [center[0] * sf, center[1] * sf];
+        text.push_ring(
+            center_px,
+            outer_radius,
+            [color[0], color[1], color[2], alpha * 0.42],
+            (1.25 * sf).max(1.0),
+        );
+        text.push_arc(
+            center_px,
+            inner_radius,
+            0.38 + pulse * 0.26,
+            [color[0], color[1], color[2], alpha * 0.92],
+            (1.8 * sf).max(1.0),
+        );
+        true
+    });
+}
+
+fn render_transport_impacts(
+    text: &mut TextRenderer,
+    ui: &mut UiState,
+    input: &InputState,
+    sf: f32,
+    now: Instant,
+) {
+    let sf = sf.max(0.01);
+    let screen_w = input.screen_w / sf;
+    let screen_h = input.screen_h / sf;
+
+    ui.transport_impacts.retain(|impact| {
+        let age = now.duration_since(impact.start_time).as_secs_f32();
+        if age >= TRANSPORT_IMPACT_DURATION_SECS {
+            return false;
+        }
+
+        let progress = (age / TRANSPORT_IMPACT_DURATION_SECS).clamp(0.0, 1.0);
+        let eased = 1.0 - (1.0 - progress).powi(3);
+        let fade = (1.0 - progress).powi(2);
+        let center = world_to_screen(
+            impact.tile_x as f32 + 0.5,
+            impact.tile_y as f32 + 0.5,
+            input,
+            sf,
+        );
+        if center[0] < -72.0
+            || center[0] > screen_w + 72.0
+            || center[1] < -72.0
+            || center[1] > screen_h + 72.0
+        {
+            return true;
+        }
+
+        let center_px = [center[0] * sf, center[1] * sf];
+        let radius = (5.0 + 25.0 * eased) * sf;
+        text.push_ring(
+            center_px,
+            radius,
+            [
+                impact.color[0],
+                impact.color[1],
+                impact.color[2],
+                0.9 * fade,
+            ],
+            (2.2 * sf).max(1.0),
+        );
+        text.push_ring(
+            center_px,
+            (radius * 0.62).max(2.0 * sf),
+            [1.0, 0.92, 0.72, 0.58 * fade],
+            (1.25 * sf).max(1.0),
+        );
+        text.push_disc(
+            center_px,
+            (4.5 * (1.0 - progress) * sf).max(0.5),
+            [1.0, 1.0, 1.0, 0.82 * fade],
+        );
+        true
+    });
 }
 
 fn render_death_nameplates(
