@@ -8,6 +8,7 @@
         building: "buildings", city: "cities", farm: "farms", factory: "factories",
         port: "ports", bunker: "bunkers", structure_upgrade: "structure_upgrades",
         city_upgrade: "city_upgrades", city_level: "city_levels",
+        foundry_level: "foundry_level",
         port_upgrade: "port_upgrades", port_level: "port_levels",
         tile_upgrade: "tile_upgrades", resource_transfer: "resource_transfers",
         alliance: "alliances_formed", support: "ally_support_deliveries",
@@ -97,7 +98,7 @@
             issue(null, "version", "Campaign logic must use version 2.");
             return { errors, warnings };
         }
-        knownFields(definition, ["version", "episode_id", "default_locale", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps"], null, "campaign");
+        knownFields(definition, ["version", "episode_id", "default_locale", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
         if (!id(definition.episode_id)) issue(null, "episode_id", "Invalid episode ID.");
         const settings = definition.settings;
         if (!object(settings) || typeof settings.buildings_enabled !== "boolean" || !Number.isInteger(settings.starting_troops) || settings.starting_troops < 1 || settings.starting_troops > 100000) {
@@ -265,11 +266,12 @@
                 const trigger = step.trigger;
                 if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "ui"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
-                    knownFields(trigger, ["type", "scope", "value", "target", "targets", "action"], step, "trigger");
+                    knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
                     if (trigger.type === "contact") {
                         if (trigger.targets != null) {
                             if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (roster && !rosterFactions.has(target)))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
+                            if (trigger.value != null && (!Number.isInteger(trigger.value) || trigger.value < 1 || trigger.value > trigger.targets.length)) issue(step, "trigger.value", "Choose how many of the selected factions must be contacted.");
                         } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "defeated") {
                         if (trigger.targets != null) {
@@ -278,7 +280,20 @@
                         } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
-                    } else if (!Number.isFinite(trigger.value) || trigger.value <= 0) issue(step, "trigger.value", "Objective value must be greater than zero.");
+                    } else {
+                        if (!Number.isFinite(trigger.value) || trigger.value <= 0) issue(step, "trigger.value", "Objective value must be greater than zero.");
+                        if (trigger.type === "fleet" && trigger.unit != null && !["TransportShip", "TradeShip", "Warship"].includes(trigger.unit)) issue(step, "trigger.unit", "Choose a ship type supported by the game.");
+                        if (trigger.type === "fleet" && trigger.target && trigger.unit && trigger.unit !== "TransportShip") issue(step, "trigger.target", "Only a transport can be tied to a landing target.");
+                        if (trigger.type === "resource_transfer" && trigger.resources != null && (!Array.isArray(trigger.resources) || !trigger.resources.length || new Set(trigger.resources).size !== trigger.resources.length || trigger.resources.some(resource => !["gold", "troops"].includes(resource)))) issue(step, "trigger.resources", "Choose gold, troops, or both.");
+                    }
+                    if (["contact", "defeated", "alliance", "resource_transfer"].includes(trigger.type)) {
+                        const factionTarget = trigger.target || trigger.recipient;
+                        if (trigger.recipient != null && trigger.type !== "resource_transfer") issue(step, "trigger.recipient", "Only resource transfers have a recipient.");
+                        if (factionTarget && roster && !factions.has(factionTarget)) issue(step, "trigger.target", "Unknown faction.");
+                    }
+                    if (trigger.unit != null && trigger.type !== "fleet") issue(step, "trigger.unit", "Only fleet objectives can select a ship type.");
+                    if (trigger.resources != null && trigger.type !== "resource_transfer") issue(step, "trigger.resources", "Only transfer objectives can require specific resources.");
+                    if (trigger.recipient != null && roster && !factions.has(trigger.recipient)) issue(step, "trigger.recipient", "Unknown transfer recipient.");
                     if (trigger.target && roster && !factions.has(trigger.target)) issue(step, "trigger.target", "Unknown faction.");
                 }
                 if (trigger && trigger.type === "elapsed" && step.guide) issue(step, "guide", "Timed waits do not need a hand guide.");
@@ -293,6 +308,27 @@
                 else if (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.target) : !own(UI_TARGETS, guide.target)) issue(step, "guide.target", "Unknown guide target.");
                 if (guide.gesture === "drag" && (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.to) : guide.to != null && !own(UI_TARGETS, guide.to))) issue(step, "guide.to", "Choose a valid drag destination.");
             } else if (step.type === "guide") issue(step, "guide", "A guide step needs a hand target.");
+        });
+        const reactions = Array.isArray(definition.reactions) ? definition.reactions : [];
+        if (definition.reactions != null && !Array.isArray(definition.reactions)) issue(null, "reactions", "Responses must be a list.");
+        const reactionIds = new Set(), reactionEvents = new Set();
+        reactions.forEach(reaction => {
+            if (!object(reaction)) return issue(null, "reactions", "Invalid story response.");
+            knownFields(reaction, ["id", "after", "when", "speaker", "title_key", "body_key"], null, "reactions");
+            if (!id(reaction.id) || byId.has(reaction.id) || reactionIds.has(reaction.id)) issue(null, "reactions.id", "Response IDs must be unique and distinct from story steps.");
+            reactionIds.add(reaction.id);
+            const gate = byId.get(reaction.after);
+            if (!gate || !["objective", "guide"].includes(gate.type)) issue(null, "reactions.after", "A response must wait for a completed game objective or guide.");
+            knownFields(reaction.when, ["type", "target"], null, "reactions.when");
+            if (!object(reaction.when) || reaction.when.type !== "support" || typeof reaction.when.target !== "string" || (roster && !rosterFactions.has(reaction.when.target))) issue(null, "reactions.when", "Choose a real ally whose first support delivery starts this response.");
+            const supportingFaction = (roster && roster.factions || []).find(faction => faction.name === (reaction.when && reaction.when.target));
+            if (roster && (!supportingFaction || !Number.isInteger(supportingFaction.support_interval_seconds))) issue(null, "reactions.when.target", "This faction is not configured to send campaign support.");
+            const eventKey = reaction.when && reaction.when.target;
+            if (eventKey && reactionEvents.has(eventKey)) issue(null, "reactions.when", "Each ally can have one first-support response.");
+            if (eventKey) reactionEvents.add(eventKey);
+            if (reaction.speaker && !own(speakers, reaction.speaker)) issue(null, "reactions.speaker", "Choose an existing character.");
+            text(null, "reactions.title_key", reaction.title_key, true);
+            text(null, "reactions.body_key", reaction.body_key, true);
         });
         const edges = step => [step.next].concat((Array.isArray(step.routes) ? step.routes : []).map(r => r && r.next), (Array.isArray(step.choices) ? step.choices : []).map(c => c && c.next)).filter(target => byId.has(target));
         const menuFlowReachable = new Set();
@@ -348,7 +384,7 @@
         // Each run owns its definition; editor changes cannot mutate an active game.
         definition = copy(definition);
         const byId = new Map(definition.steps.map(step => [step.id, step]));
-        const state = { id: null, line: 0, choices: Object.create(null), completed: [], done: false };
+        const state = { id: null, line: 0, choices: Object.create(null), completed: [], reactionsShown: [], done: false };
         let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, readyAt = null, pausedAt = null, now = 0;
         function enter(key) {
             if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
@@ -367,8 +403,8 @@
             if (trigger.type === "contact" || trigger.type === "defeated") {
                 const field = trigger.type === "contact" ? "contact_names" : "defeated_names";
                 if (trigger.type === "contact" && Array.isArray(trigger.targets)) {
-                    current = trigger.targets.some(name => (facts[field] || []).includes(name) && !(reference[field] || []).includes(name)) ? 1 : 0;
-                    target = 1;
+                    current = trigger.targets.filter(name => (facts[field] || []).includes(name) && !(reference[field] || []).includes(name)).length;
+                    target = Number(trigger.value || 1);
                 } else if (trigger.type === "defeated" && Array.isArray(trigger.targets)) {
                     current = trigger.targets.filter(name => (facts[field] || []).includes(name) && !(reference[field] || []).includes(name)).length;
                     target = Number(trigger.value || trigger.targets.length);
@@ -387,6 +423,17 @@
                 current = Number(facts.troops || 0);
             } else if (trigger.type === "attack" && trigger.target) {
                 current = Number((facts.attacks_by_target || {})[trigger.target] || 0) - Number((reference.attacks_by_target || {})[trigger.target] || 0);
+            } else if (trigger.type === "fleet" && trigger.target) {
+                const byTarget = Number((facts.transport_fleets_by_target || {})[trigger.target] || 0) - Number((reference.transport_fleets_by_target || {})[trigger.target] || 0);
+                const byType = trigger.unit ? Number((facts.fleets_by_type || {})[trigger.unit] || 0) - Number((reference.fleets_by_type || {})[trigger.unit] || 0) : byTarget;
+                current = Math.min(byTarget, byType);
+            } else if (trigger.type === "fleet" && trigger.unit) {
+                current = Number((facts.fleets_by_type || {})[trigger.unit] || 0) - Number((reference.fleets_by_type || {})[trigger.unit] || 0);
+            } else if (trigger.type === "resource_transfer" && trigger.recipient) {
+                const resources = trigger.resources && trigger.resources.slice().sort().join("_") || "total";
+                const currentCounts = (facts.resource_transfers_by_recipient || {})[trigger.recipient] || {};
+                const baselineCounts = (reference.resource_transfers_by_recipient || {})[trigger.recipient] || {};
+                current = Number(currentCounts[resources] || 0) - Number(baselineCounts[resources] || 0);
             } else {
                 let field = METRICS[trigger.type];
                 if (trigger.type === "territory" && trigger.scope === "total") field = "tiles";
@@ -394,8 +441,25 @@
             }
             return { current: Math.min(target, Math.max(0, current)), target };
         }
+        let activeReaction = null, reactionOpenedAt = null;
+        function nextReaction() {
+            const currentStep = byId.get(state.id);
+            if (!currentStep || !["objective", "guide"].includes(currentStep.type)) return null;
+            return (definition.reactions || []).map((reaction, index) => ({ reaction, index,
+                receipt: facts.support_deliveries_by_faction && facts.support_deliveries_by_faction[reaction.when.target]
+            })).filter(({ reaction, receipt }) => state.completed.includes(reaction.after)
+                && receipt && receipt.deliveries > 0 && !state.reactionsShown.includes(reaction.id))
+                .sort((a, b) => Number(a.receipt.first_tick || 0) - Number(b.receipt.first_tick || 0) || a.index - b.index)[0]?.reaction || null;
+        }
         function view() {
             const step = byId.get(state.id);
+            if (activeReaction) {
+                const response = {
+                    id: "reaction-" + activeReaction.id, type: "scene", speaker: activeReaction.speaker,
+                    title_key: activeReaction.title_key, body_key: activeReaction.body_key, presentation: "dialogue"
+                };
+                return { definition, step: response, line: response, progress: progress(), paused: true, ready: false, done: false, choices: [], state, reaction: activeReaction.id };
+            }
             const line = step.lines ? step.lines[state.line] : step;
             return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type), ready: readyAt != null, done: state.done, choices: step.choices || [], state };
         }
@@ -409,7 +473,15 @@
             }
         }
         function advance(choiceId, expectedStepId) {
-            if (state.done || pausedAt != null || (expectedStepId && expectedStepId !== state.id)) return false;
+            if (state.done || pausedAt != null) return false;
+            if (activeReaction) {
+                if (expectedStepId !== "reaction-" + activeReaction.id) return false;
+                if (!state.reactionsShown.includes(activeReaction.id)) state.reactionsShown.push(activeReaction.id);
+                if (readyAt != null) readyAt += Math.max(0, now - reactionOpenedAt) + 800;
+                activeReaction = null; reactionOpenedAt = null;
+                return true;
+            }
+            if (expectedStepId && expectedStepId !== state.id) return false;
             const step = byId.get(state.id);
             if (step.type === "scene" && step.lines && state.line + 1 < step.lines.length) { state.line++; return true; }
             if (["objective", "guide"].includes(step.type) && readyAt == null) return false;
@@ -438,6 +510,8 @@
             facts = copy(nextFacts || {}); ui = { ...(nextUi || {}) };
             if (initial == null) { initial = copy(facts); initialUi = { ...ui }; baseline = copy(facts); uiBaseline = { ...ui }; }
             if (state.done || pausedAt != null) return view();
+            if (!activeReaction && (activeReaction = nextReaction())) reactionOpenedAt = now;
+            if (activeReaction) return view();
             const step = byId.get(state.id);
             if (["objective", "guide"].includes(step.type)) {
                 const result = progress();

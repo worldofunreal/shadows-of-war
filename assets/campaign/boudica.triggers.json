@@ -16,6 +16,13 @@
     "entry": "boudica_return_campaign",
     "dismissible": true
   },
+  "reactions": [
+    { "id": "aid_snettisham", "after": "boudica_first_contact", "when": { "type": "support", "target": "Snettisham" }, "speaker": "snettisham", "title_key": "tutorial.boudica_snettisham_pledge_title", "body_key": "tutorial.boudica_snettisham_pledge_body" },
+    { "id": "aid_iceni_coast", "after": "boudica_first_contact", "when": { "type": "support", "target": "Iceni Coast" }, "speaker": "iceni_coast", "title_key": "tutorial.boudica_coast_pledge_title", "body_key": "tutorial.boudica_coast_pledge_body" },
+    { "id": "aid_stonea", "after": "boudica_first_contact", "when": { "type": "support", "target": "Stonea" }, "speaker": "stonea", "title_key": "tutorial.boudica_stonea_pledge_title", "body_key": "tutorial.boudica_stonea_pledge_body" },
+    { "id": "aid_venta", "after": "boudica_first_contact", "when": { "type": "support", "target": "Venta Icenorum" }, "speaker": "venta_icenorum", "title_key": "tutorial.boudica_venta_pledge_title", "body_key": "tutorial.boudica_venta_pledge_body" },
+    { "id": "aid_thetford", "after": "boudica_first_contact", "when": { "type": "support", "target": "Thetford" }, "speaker": "thetford", "title_key": "tutorial.boudica_thetford_pledge_title", "body_key": "tutorial.boudica_thetford_pledge_body" }
+  ],
   "strings": {
     "en": {
       "tutorial.boudica_council_title": "A Queen's Answer",
@@ -33,9 +40,9 @@
       "tutorial.boudica_victory_body": "The outpost is broken. The tribes must see that the Iceni still stand.",
       "tutorial.boudica_contact_title": "The Iceni Stand Together",
       "tutorial.boudica_contact_body": "The villages must know Rome can be challenged. Bring each Iceni tribe into the rising.",
-      "tutorial.boudica_contact_hint": "Claim land beside the marked tribe to make contact.",
-      "tutorial.boudica_first_contact_response_title": "The First Oath",
-      "tutorial.boudica_first_contact_response_body": "One Iceni tribe has answered. Their neighbors will know the rising has begun.",
+      "tutorial.boudica_contact_hint": "Claim land beside any marked Iceni tribe to make contact.",
+      "tutorial.boudica_first_contact_response_title": "The Iceni Stand Together",
+      "tutorial.boudica_first_contact_response_body": "All five Iceni tribes have answered. The rebellion has its allies.",
       "tutorial.boudica_support_title": "Aid Arrives",
       "tutorial.boudica_support_hint": "The tribes are sending gold and warriors.",
       "tutorial.boudica_trinovantes_intro_title": "A Pact Beyond the Iceni",
@@ -222,9 +229,9 @@
       "tutorial.boudica_victory_body": "El puesto cayó. Las tribus deben ver que los icenos siguen en pie.",
       "tutorial.boudica_contact_title": "Los icenos se unen",
       "tutorial.boudica_contact_body": "Cada tribu debe saber que Roma puede ser desafiada. Reúne a los icenos en el levantamiento.",
-      "tutorial.boudica_contact_hint": "Reclama tierra junto a la tribu marcada para entrar en contacto.",
-      "tutorial.boudica_first_contact_response_title": "El primer juramento",
-      "tutorial.boudica_first_contact_response_body": "Una tribu icena respondió. Sus vecinos sabrán que comenzó el levantamiento.",
+      "tutorial.boudica_contact_hint": "Reclama tierra junto a cualquier tribu icena marcada para entrar en contacto.",
+      "tutorial.boudica_first_contact_response_title": "Los icenos se unen",
+      "tutorial.boudica_first_contact_response_body": "Las cinco tribus icenas respondieron. La rebelión ya tiene aliados.",
       "tutorial.boudica_support_title": "Llega la ayuda",
       "tutorial.boudica_support_hint": "Las tribus envían oro y guerreros.",
       "tutorial.boudica_trinovantes_intro_title": "Un pacto más allá de los icenos",
@@ -519,9 +526,10 @@
       "hint_key": "tutorial.boudica_contact_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "contact",
-        "targets": ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"],
-        "scope": "total"
+      "type": "contact",
+      "targets": ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"],
+        "value": 5,
+      "scope": "total"
       },
       "marker": {
         "target": "Snettisham"
@@ -539,116 +547,6 @@
       "title_key": "tutorial.boudica_first_contact_response_title",
       "body_key": "tutorial.boudica_first_contact_response_body",
       "speaker": "boudica",
-      "presentation": "dialogue",
-      "next": "boudica_contact_snettisham"
-    },
-    {
-      "id": "boudica_contact_snettisham",
-      "type": "objective",
-      "title_key": "tutorial.boudica_contact_title",
-      "hint_key": "tutorial.boudica_contact_hint",
-      "speaker": "boudica",
-      "trigger": {
-        "type": "contact",
-        "target": "Snettisham",
-        "scope": "total"
-      },
-      "marker": {
-        "target": "Snettisham"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "target_action",
-        "gesture": "tap"
-      },
-      "next": "boudica_snettisham_pledge"
-    },
-    {
-      "id": "boudica_snettisham_pledge",
-      "type": "scene",
-      "title_key": "tutorial.boudica_snettisham_pledge_title",
-      "body_key": "tutorial.boudica_snettisham_pledge_body",
-      "speaker": "snettisham",
-      "presentation": "dialogue",
-      "next": "boudica_contact_iceni_coast"
-    },
-    {
-      "id": "boudica_contact_iceni_coast",
-      "type": "objective",
-      "title_key": "tutorial.boudica_contact_title",
-      "hint_key": "tutorial.boudica_contact_hint",
-      "speaker": "boudica",
-      "trigger": { "type": "contact", "target": "Iceni Coast", "scope": "total" },
-      "marker": { "target": "Iceni Coast" },
-      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
-      "next": "boudica_iceni_coast_pledge"
-    },
-    {
-      "id": "boudica_iceni_coast_pledge",
-      "type": "scene",
-      "title_key": "tutorial.boudica_coast_pledge_title",
-      "body_key": "tutorial.boudica_coast_pledge_body",
-      "speaker": "iceni_coast",
-      "presentation": "dialogue",
-      "next": "boudica_contact_stonea"
-    },
-    {
-      "id": "boudica_contact_stonea",
-      "type": "objective",
-      "title_key": "tutorial.boudica_contact_title",
-      "hint_key": "tutorial.boudica_contact_hint",
-      "speaker": "boudica",
-      "trigger": { "type": "contact", "target": "Stonea", "scope": "total" },
-      "marker": { "target": "Stonea" },
-      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
-      "next": "boudica_stonea_pledge"
-    },
-    {
-      "id": "boudica_stonea_pledge",
-      "type": "scene",
-      "title_key": "tutorial.boudica_stonea_pledge_title",
-      "body_key": "tutorial.boudica_stonea_pledge_body",
-      "speaker": "stonea",
-      "presentation": "dialogue",
-      "next": "boudica_contact_venta"
-    },
-    {
-      "id": "boudica_contact_venta",
-      "type": "objective",
-      "title_key": "tutorial.boudica_contact_title",
-      "hint_key": "tutorial.boudica_contact_hint",
-      "speaker": "boudica",
-      "trigger": { "type": "contact", "target": "Venta Icenorum", "scope": "total" },
-      "marker": { "target": "Venta Icenorum" },
-      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
-      "next": "boudica_venta_pledge"
-    },
-    {
-      "id": "boudica_venta_pledge",
-      "type": "scene",
-      "title_key": "tutorial.boudica_venta_pledge_title",
-      "body_key": "tutorial.boudica_venta_pledge_body",
-      "speaker": "venta_icenorum",
-      "presentation": "dialogue",
-      "next": "boudica_contact_thetford"
-    },
-    {
-      "id": "boudica_contact_thetford",
-      "type": "objective",
-      "title_key": "tutorial.boudica_contact_title",
-      "hint_key": "tutorial.boudica_contact_hint",
-      "speaker": "boudica",
-      "trigger": { "type": "contact", "target": "Thetford", "scope": "total" },
-      "marker": { "target": "Thetford" },
-      "guide": { "kind": "world", "target": "target_action", "gesture": "tap" },
-      "next": "boudica_thetford_pledge"
-    },
-    {
-      "id": "boudica_thetford_pledge",
-      "type": "scene",
-      "title_key": "tutorial.boudica_thetford_pledge_title",
-      "body_key": "tutorial.boudica_thetford_pledge_body",
-      "speaker": "thetford",
       "presentation": "dialogue",
       "next": "boudica_trinovantes_intro"
     },
@@ -751,7 +649,7 @@
       "title_key": "tutorial.boudica_transfer_send_title",
       "hint_key": "tutorial.boudica_transfer_send_hint",
       "speaker": "boudica",
-      "trigger": { "type": "resource_transfer", "value": 1, "scope": "step" },
+      "trigger": { "type": "resource_transfer", "recipient": "Snettisham", "resources": ["gold", "troops"], "value": 1, "scope": "step" },
       "guide": { "kind": "ui", "target": "transfer_send", "gesture": "tap" },
       "next": "boudica_share_sent"
     },
@@ -993,7 +891,7 @@
       "title_key": "tutorial.boudica_foundry_title",
       "hint_key": "tutorial.boudica_foundry_upgrade_hint",
       "speaker": "council",
-      "trigger": { "type": "city_upgrade", "value": 1, "scope": "step" },
+      "trigger": { "type": "foundry_level", "value": 1, "scope": "step" },
       "marker": { "target": "player" },
       "guide": { "kind": "ui", "target": "map_upgrade_foundry", "gesture": "tap" },
       "next": "boudica_foundry_ready"
@@ -1243,7 +1141,7 @@
       "type": "objective",
       "title_key": "tutorial.boudica_pact_target_title",
       "speaker": "council",
-      "trigger": { "type": "alliance", "value": 1, "scope": "step" },
+      "trigger": { "type": "alliance", "target": "Catuvellauni", "value": 1, "scope": "step" },
       "marker": { "target": "Catuvellauni" },
       "next": "boudica_pact_success"
     },
@@ -1333,7 +1231,7 @@
       "title_key": "tutorial.boudica_fleet_target_title",
       "hint_key": "tutorial.boudica_fleet_target_hint",
       "speaker": "council",
-      "trigger": { "type": "fleet", "value": 1, "scope": "step" },
+      "trigger": { "type": "fleet", "unit": "TransportShip", "target": "Legio XIV Gemina", "value": 1, "scope": "step" },
       "marker": { "target": "Legio XIV Gemina" },
       "guide": { "kind": "world", "target": "player", "gesture": "tap" },
       "next": "boudica_fleet_ready"
@@ -1397,7 +1295,7 @@
       "title_key": "tutorial.boudica_trade_ship_title",
       "hint_key": "tutorial.boudica_trade_ship_hint",
       "speaker": "council",
-      "trigger": { "type": "fleet", "value": 1, "scope": "step" },
+      "trigger": { "type": "fleet", "unit": "TradeShip", "value": 1, "scope": "step" },
       "marker": { "target": "player" },
       "guide": { "kind": "ui", "target": "map_build_trade_ship", "gesture": "tap" },
       "next": "boudica_trade_ready"

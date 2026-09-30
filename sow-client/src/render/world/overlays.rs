@@ -2,8 +2,8 @@ use super::feedback;
 use super::nameplate_placement::{
     NameplateLandCache, NameplateLayout, NameplateStatus, fit_bounds_to_land, fit_size_to_land,
 };
-use crate::app::{InputState, SimState, UiState};
-use crate::render::gpu::{BuildingSpriteId, TextRenderer};
+use crate::app::{InputState, MapContextMenuView, SimState, UiState};
+use crate::render::gpu::{AVATAR_CORNER_RADIUS_RATIO, BuildingSpriteId, TextRenderer};
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
 use sow_core::player::{Leader, PlayerType};
@@ -82,6 +82,7 @@ pub(crate) fn render_overlays(
     let dev = DevConfig::get();
     let zoom_scaled = input.camera_zoom / sf;
 
+    render_building_selection_focus(text, sim, input, sf);
     if dev.vfx_world_buildings {
         render_buildings(text, snapshot, sim, ui, input, &dev, sf, zoom_scaled, now);
     }
@@ -429,8 +430,17 @@ fn refresh_nameplate_text_cache(
     if identity_changed {
         state.source_name = player.name.clone();
         state.player_type = player.player_type;
-        state.display_name =
+        let display_name =
             sow_core::player::display_name(player.id, &player.name, player.player_type);
+        state.display_name = if player.player_type == PlayerType::Bot {
+            display_name
+                .strip_prefix(sow_core::player::tribe_animal(player.id, &player.name))
+                .unwrap_or(&display_name)
+                .trim_start()
+                .to_owned()
+        } else {
+            display_name
+        };
     }
     let troops_bits = player.troops.to_bits();
     let troops_changed = troops_bits != state.troops_bits;
@@ -854,47 +864,36 @@ fn draw_avatar(
                 .unwrap_or(Leader::ALL.len())
         }
     });
+    let mut sprite_uv = None;
     let frame = if let Some(slot) = campaign_slot {
-        if let Some(uv) = text
+        sprite_uv = text
             .avatar_uv(slot)
-            .or_else(|| text.avatar_uv(Leader::ALL.len()))
-        {
-            text.push_sprite(center, radius, uv, [1.0; 4]);
-        } else {
-            text.push_disc(center, radius, color);
-        }
+            .or_else(|| text.avatar_uv(Leader::ALL.len()));
         color
     } else if player.player_type == PlayerType::Human {
         let rgb = player.leader.filler_rgb();
         let frame = [rgb[0], rgb[1], rgb[2], 1.0];
-        if let Some(uv) = text
+        sprite_uv = text
             .avatar_uv(avatar_slot(Some(player.leader)))
-            .or_else(|| text.avatar_uv(avatar_slot(None)))
-        {
-            text.push_sprite(center, radius, uv, [1.0; 4]);
-        } else {
-            text.push_disc(center, radius, frame);
-        }
+            .or_else(|| text.avatar_uv(avatar_slot(None)));
         frame
     } else {
-        text.push_disc(center, radius, color);
         color
     };
 
     let border = (radius * 0.12).max(fit_scale * sf);
-    text.push_ring(
+    let frame_radius = radius + border * 0.3;
+    text.push_rounded_rect(
         center,
-        radius + border * 0.3,
+        [frame_radius * 2.0; 2],
+        AVATAR_CORNER_RADIUS_RATIO,
+        frame,
         [0.0, 0.0, 0.0, 160.0 / 255.0],
-        border,
+        border * 0.5,
     );
-    text.push_ring(center, radius, frame, border * 0.8);
-    text.push_ring(
-        center,
-        radius - border * 0.15,
-        [1.0, 1.0, 1.0, 80.0 / 255.0],
-        border * 0.35,
-    );
+    if let Some(uv) = sprite_uv {
+        text.push_sprite(center, radius, uv, [1.0; 4]);
+    }
 
     let glyph = if campaign_slot.is_some() {
         None
@@ -1411,6 +1410,88 @@ fn building_marker_size(building: &RenderedBuilding, lod: BuildingLod, zoom_scal
         natural_size.max(BUILDING_MIN_MARKER_SIZE)
     } else {
         natural_size
+    }
+}
+
+fn render_building_selection_focus(
+    text: &mut TextRenderer,
+    sim: &SimState,
+    input: &InputState,
+    sf: f32,
+) {
+    let Some(menu) = input
+        .map_context_menu
+        .filter(|menu| menu.view == MapContextMenuView::BuildingDetails)
+    else {
+        return;
+    };
+    if sim.map_w == 0 || sim.map_h == 0 || !input.camera_zoom.is_finite() || input.camera_zoom <= 0.0
+    {
+        return;
+    }
+    let Some(kind) = menu.building_kind else {
+        return;
+    };
+
+    let zoom = input.camera_zoom;
+    let tile_x = menu.tile_idx % sim.map_w;
+    let tile_y = menu.tile_idx / sim.map_w;
+    let left_tile = tile_x.saturating_sub(1);
+    let top_tile = tile_y.saturating_sub(1);
+    let right_tile = tile_x.saturating_add(2).min(sim.map_w);
+    let bottom_tile = tile_y.saturating_add(2).min(sim.map_h);
+    let left = input.camera_x + left_tile as f32 * zoom;
+    let top = input.camera_y + top_tile as f32 * zoom;
+    let width = (right_tile - left_tile) as f32 * zoom;
+    let height = (bottom_tile - top_tile) as f32 * zoom;
+    let line = (1.25 * sf).min((zoom * 0.2).max(1.0)).max(1.0);
+    let selected_left = input.camera_x + tile_x as f32 * zoom;
+    let selected_top = input.camera_y + tile_y as f32 * zoom;
+    let selected_center = [selected_left + zoom * 0.5, selected_top + zoom * 0.5];
+
+    if zoom >= 4.0 * sf {
+        text.push_rect([left, top], [width, height], [0.84, 0.68, 0.38, 0.045]);
+        text.push_rect(
+            [selected_left + line, selected_top + line],
+            [(zoom - 2.0 * line).max(1.0), (zoom - 2.0 * line).max(1.0)],
+            [0.17, 0.78, 0.86, 0.15],
+        );
+        for col in left_tile..=right_tile {
+            let x = input.camera_x + col as f32 * zoom - line * 0.5;
+            text.push_rect([x, top], [line, height], [0.89, 0.77, 0.54, 0.36]);
+        }
+        for row in top_tile..=bottom_tile {
+            let y = input.camera_y + row as f32 * zoom - line * 0.5;
+            text.push_rect([left, y], [width, line], [0.89, 0.77, 0.54, 0.36]);
+        }
+        for (x, y, w, h) in [
+            (selected_left, selected_top, zoom, line * 1.6),
+            (selected_left, selected_top + zoom - line * 1.6, zoom, line * 1.6),
+            (selected_left, selected_top, line * 1.6, zoom),
+            (selected_left + zoom - line * 1.6, selected_top, line * 1.6, zoom),
+        ] {
+            text.push_rect([x, y], [w, h], [0.42, 0.91, 0.94, 0.88]);
+        }
+    } else {
+        text.push_ring(
+            selected_center,
+            (building_icon_size(input.camera_zoom / sf) * sf * 0.65).max(9.0 * sf),
+            [0.42, 0.91, 0.94, 0.85],
+            (1.8 * sf).max(1.0),
+        );
+    }
+
+    if kind == BuildingKind::Bunker && menu.building_level > 0 && !menu.building_under_construction
+    {
+        let range = (sim.config.bunker_range.round() as u32
+            + u32::from(menu.building_level.saturating_sub(1)) * 2)
+        .min(20);
+        text.push_ring(
+            selected_center,
+            range as f32 * zoom,
+            [0.91, 0.71, 0.34, 0.30],
+            (1.4 * sf).max(1.0),
+        );
     }
 }
 

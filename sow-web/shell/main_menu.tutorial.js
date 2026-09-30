@@ -217,8 +217,12 @@
 
     function anchorFor(step, hud, view) {
         if (!step || !step.guide) return null;
-        if (step.trigger && step.trigger.type === "territory" && step.guide.target === "expand" && view && view.progress.current > 0) return null;
         var guide = step.guide, tutorial = hud.tutorial || {};
+        if (step.trigger && step.trigger.type === "territory" && step.guide.target === "expand" && view && view.progress.current > 0) return null;
+        if (step.id === "boudica_first_victory" && step.trigger && step.trigger.type === "defeated" && step.trigger.target) {
+            var attacks = tutorial.facts && tutorial.facts.attacks_by_target;
+            if (Number(attacks && attacks[step.trigger.target]) > 0) return null;
+        }
         var result;
         if (guide.kind === "world") {
             var point = tutorial[guide.target];

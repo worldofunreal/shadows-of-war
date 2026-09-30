@@ -2,7 +2,6 @@
 (function (host) {
     "use strict";
     let instance = 0;
-    const hand = '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M25 5c-3 0-5 2-5 5v23l-6-5c-3-2-6-1-8 1s-1 6 1 8l13 12c3 3 7 5 11 5h10c8 0 14-7 14-15V25c0-3-2-5-5-5-2 0-3 1-4 2v-3c0-3-2-5-5-5-2 0-3 1-4 2v-3c0-3-2-5-5-5-1 0-2 0-3 1-1-3-2-4-4-4Z"/></svg>';
     function mount(root, options) {
         const doc = root.ownerDocument;
         const uid = "sow-story-" + (++instance);
@@ -20,7 +19,7 @@
                 '<div class="sow-story__objective-copy"><div class="sow-story__objective-speaker" hidden><img alt="" draggable="false"><span></span></div><h3></h3><p></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
                 '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
-            '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand">' + hand + '</span></div>';
+            '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
         const portrait = find(".sow-story__portrait"), image = portrait.querySelector("img");
@@ -31,6 +30,7 @@
         const objectiveSpeaker = find(".sow-story__objective-speaker"), objectiveSpeakerImage = objectiveSpeaker.querySelector("img"), objectiveSpeakerName = objectiveSpeaker.querySelector("span");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), spotlight = find(".sow-story__spotlight");
+        find(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
         const dismissButtons = Array.from(root.querySelectorAll("[data-story-dismiss]"));
         const t = key => key ? options.translate(key) : "";
         function setText(node, value) { if (node.textContent !== value) node.textContent = value; }

@@ -1,6 +1,7 @@
 use crate::ui::UiText;
 use sow_core::protocol::{AttackSnapshot, FleetSnapshot, PlayerSnapshot};
 use std::collections::VecDeque;
+use std::time::Duration;
 use web_time::Instant;
 
 #[derive(Clone, Debug)]
@@ -21,6 +22,14 @@ pub struct HudNotification {
     pub priority: u8,
     pub group: Option<String>,
     pub sum_values: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct HudMapFeedback {
+    pub id: u64,
+    pub text: UiText,
+    pub spawned_at: Instant,
+    pub position: [f32; 2],
 }
 
 pub struct HudState {
@@ -50,6 +59,7 @@ pub struct HudState {
     pub building_costs: [f64; 9],
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
     pub hud_notifications: VecDeque<HudNotification>,
+    pub map_feedback: Option<HudMapFeedback>,
     pub notification_revision: u64,
     pub show_ask_panel: Option<u16>,
     pub ask_gold: f64,
@@ -87,6 +97,7 @@ impl Default for HudState {
             building_costs: [0.0; 9],
             selected_nuke_kind: None,
             hud_notifications: VecDeque::with_capacity(32),
+            map_feedback: None,
             notification_revision: 0,
             show_ask_panel: None,
             ask_gold: 0.0,
@@ -98,6 +109,26 @@ impl Default for HudState {
 }
 
 impl HudState {
+    pub fn push_map_feedback(&mut self, text: UiText, position: [f32; 2]) {
+        let same_visible_message = self.map_feedback.as_ref().is_some_and(|feedback| {
+            feedback.spawned_at.elapsed() < Duration::from_millis(3600)
+                && feedback.text.key == text.key
+                && feedback.text.values == text.values
+        });
+        if same_visible_message {
+            return;
+        }
+
+        let id = self.notification_revision.wrapping_add(1);
+        self.map_feedback = Some(HudMapFeedback {
+            id,
+            text,
+            spawned_at: Instant::now(),
+            position: position.map(|value| if value.is_finite() { value } else { 0.0 }),
+        });
+        self.notification_revision = id;
+    }
+
     pub fn push_notification(&mut self, text: UiText) {
         self.push_notification_for_players(text, [None, None], 1, None, false);
     }
@@ -133,6 +164,7 @@ impl HudState {
 
     pub fn clear_notifications(&mut self) {
         self.hud_notifications.clear();
+        self.map_feedback = None;
         self.notification_revision = self.notification_revision.wrapping_add(1);
     }
 }
@@ -172,9 +204,31 @@ mod tests {
     fn clearing_notifications_advances_the_revision() {
         let mut hud = HudState::default();
         hud.push_notification(UiText::new("hud.event"));
+        hud.push_map_feedback(UiText::new("hud.build_land"), [10.0, 20.0]);
         let revision = hud.notification_revision;
         hud.clear_notifications();
         assert!(hud.hud_notifications.is_empty());
+        assert!(hud.map_feedback.is_none());
         assert_eq!(hud.notification_revision, revision + 1);
+    }
+
+    #[test]
+    fn map_feedback_uses_one_slot_and_deduplicates_visible_repeats() {
+        let mut hud = HudState::default();
+        hud.push_map_feedback(
+            UiText::new("hud.need_gold").with("cost", "100"),
+            [10.0, 20.0],
+        );
+        let revision = hud.notification_revision;
+        hud.push_map_feedback(
+            UiText::new("hud.need_gold").with("cost", "100"),
+            [30.0, 40.0],
+        );
+        assert_eq!(hud.notification_revision, revision);
+        assert_eq!(hud.map_feedback.as_ref().unwrap().position, [10.0, 20.0]);
+
+        hud.push_map_feedback(UiText::new("hud.build_land"), [30.0, 40.0]);
+        assert_eq!(hud.notification_revision, revision + 1);
+        assert_eq!(hud.map_feedback.as_ref().unwrap().text.key, "hud.build_land");
     }
 }

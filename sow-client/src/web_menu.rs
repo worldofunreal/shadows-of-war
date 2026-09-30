@@ -1390,6 +1390,46 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .iter()
         .map(|player| player_json(player, my_pid, snapshot.total_land_tiles, None))
         .collect::<Vec<_>>();
+    let fleets_by_type = observation
+        .seen_fleets_by_type
+        .iter()
+        .map(|(kind, count)| (kind.clone(), count))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let transport_fleets_by_target = observation
+        .seen_transport_fleets_by_target
+        .iter()
+        .map(|(name, count)| (name.clone(), count))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let support_deliveries_by_faction = observation
+        .support_deliveries_by_faction
+        .iter()
+        .map(|(name, receipt)| {
+            (
+                name.clone(),
+                serde_json::json!({
+                    "deliveries": receipt.deliveries,
+                    "gold": receipt.gold,
+                    "troops": receipt.troops,
+                    "first_tick": receipt.first_tick,
+                }),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let resource_transfers_by_recipient = observation
+        .resource_transfers_by_recipient
+        .iter()
+        .map(|(name, counts)| {
+            (
+                name.clone(),
+                serde_json::json!({
+                    "total": counts.total,
+                    "gold": counts.gold,
+                    "troops": counts.troops,
+                    "gold_troops": counts.gold_troops,
+                }),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
     serde_json::json!({
         "active": true,
         "episode_id": app.ui.tutorial_campaign.episode_id(),
@@ -1416,16 +1456,21 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
             "bunkers": observation.seen_buildings_by_kind.get("bunkers").map_or(0, |ids| ids.len()),
             "ally_support_deliveries": observation.ally_support_deliveries,
+            "support_deliveries_by_faction": support_deliveries_by_faction,
             "structure_upgrades": observation.structure_upgrades,
             "city_upgrades": observation.city_upgrades,
             "city_levels": observation.city_levels,
+            "foundry_level": observation.foundry_level,
             "port_upgrades": observation.port_upgrades,
             "port_levels": observation.port_levels,
             "tile_upgrades": observation.tile_upgrades,
             "resource_transfers": observation.resource_transfers,
+            "resource_transfers_by_recipient": resource_transfers_by_recipient,
             "alliances_formed": observation.alliances_formed,
             "alliance_names": alliance_names,
             "fleets": observation.seen_fleets.len(),
+            "fleets_by_type": fleets_by_type,
+            "transport_fleets_by_target": transport_fleets_by_target,
             "nukes": observation.seen_nukes.len(),
             "elapsed_ticks": snapshot.tick,
             "elapsed_seconds": snapshot.tick as f64 * f64::from(app.sim.config.tick_rate_ms) / 1000.0,
@@ -1726,6 +1771,102 @@ fn building_benefit_label(
     }
 }
 
+fn building_metric(
+    icon: &'static str,
+    label: &'static str,
+    value: f64,
+    prefix: &'static str,
+    unit: &'static str,
+) -> serde_json::Value {
+    serde_json::json!({ "icon": icon, "label": label, "value": value, "prefix": prefix, "unit": unit })
+}
+
+fn building_metrics(
+    kind: sow_core::game::BuildingKind,
+    level: u8,
+    config: &sow_core::game_config::GameConfig,
+) -> Vec<serde_json::Value> {
+    use sow_core::game::BuildingKind as Kind;
+    if level == 0 {
+        return Vec::new();
+    }
+    let level = f64::from(level);
+    let mut metrics = match kind {
+        Kind::City => vec![
+            building_metric("troops", "Troop capacity", config.city_max_troops * level, "+", ""),
+            building_metric("troops", "Troop income", config.city_troop_income * level, "+", "/s"),
+            building_metric("gold", "Gold income", config.city_gold_income * level, "+", "/s"),
+            building_metric(
+                "farm",
+                "Farm plots",
+                f64::from(sow_core::building::farm_slots_for_city_level(level as u8)),
+                "",
+                "",
+            ),
+        ],
+        Kind::Port => vec![
+            building_metric("port", "Boat slots", level, "+", ""),
+            building_metric("speed", "Boat speed", level, "+", "%"),
+            building_metric("troops", "Troop income", config.port_troop_income * level, "+", "/s"),
+            building_metric("gold", "Gold income", config.port_gold_income * level, "+", "/s"),
+        ],
+        Kind::Factory => {
+            let mut stats = vec![building_metric(
+                "gold",
+                "Gold income",
+                config.factory_gold_income * level,
+                "+",
+                "/s",
+            )];
+            if level >= 2.0 {
+                stats.push(building_metric("speed", "Construction speed", 5.0, "+", "%"));
+            }
+            if level >= 3.0 {
+                stats.push(building_metric("discount", "Upgrade cost", 5.0, "−", "%"));
+            }
+            if level >= 4.0 {
+                stats.push(building_metric("trade_ship", "Trade ship income", 5.0, "+", "%"));
+            }
+            stats
+        }
+        Kind::Bunker => {
+            let range = (config.bunker_range.round() as u32 + (level as u32 - 1) * 2).min(20);
+            let mut stats = vec![
+                building_metric("defense", "Enemy attack losses", level * 5.0, "+", "%"),
+                building_metric("range", "Defense range", f64::from(range), "", ""),
+            ];
+            if level as u8 >= Kind::Bunker.max_level() {
+                stats.push(serde_json::json!({
+                    "icon": "nuke",
+                    "label": "Nuclear interception",
+                    "value": "✓",
+                }));
+            }
+            stats
+        }
+        Kind::Farm => vec![building_metric(
+            "troops",
+            "Troop income",
+            config.farm_troop_income * level,
+            "+",
+            "/s",
+        )],
+    };
+    if kind == Kind::City {
+        let unlock = match level as u8 {
+            3 => Some(("factory", "Factories unlocked")),
+            4 => Some(("trade_ship", "Trade ships unlocked")),
+            5 => Some(("warship", "Warships unlocked")),
+            6 => Some(("nuke", "Nuclear bombs unlocked")),
+            _ => None,
+        };
+        if let Some((icon, label)) = unlock {
+            metrics.push(serde_json::json!({ "icon": icon, "label": label, "value": "✓" }));
+        }
+    }
+    metrics
+}
+
 fn building_detail_payload(
     app: &SowApp,
     building: &sow_core::protocol::BuildingSnapshot,
@@ -1799,9 +1940,6 @@ fn building_detail_payload(
         next_level,
         factory_time_levels,
     );
-    let construction_name = building
-        .under_construction
-        .then(|| building.kind.level_name(building.level));
     let boat_slots = snapshot.and_then(|snapshot| {
         snapshot.players.iter().find(|player| player.id == my_id).map(|player| {
             let port_levels = snapshot
@@ -1829,11 +1967,13 @@ fn building_detail_payload(
         } else {
             building.kind.level_name(active_level)
         },
-        "benefit": building_benefit_label(building.kind, active_level, &app.sim.config),
-        "construction_name": construction_name,
+        "benefit_label": building_benefit_label(building.kind, active_level, &app.sim.config),
+        "metrics": building_metrics(building.kind, active_level, &app.sim.config),
         "next_level": (!building.under_construction && !maxed).then_some(next_level),
-        "next_name": (!building.under_construction && !maxed).then_some(building.kind.level_name(next_level)),
-        "next_benefit": (!building.under_construction && !maxed).then(|| building_benefit_label(building.kind, next_level, &app.sim.config)),
+        "next_benefit_label": (!building.under_construction && !maxed)
+            .then(|| building_benefit_label(building.kind, next_level, &app.sim.config)),
+        "next_metrics": (!building.under_construction && !maxed)
+            .then(|| building_metrics(building.kind, next_level, &app.sim.config)),
         "cost": cost,
         "duration_seconds": (!building.under_construction && !maxed).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
         "remaining_seconds": building.under_construction.then_some(building.ticks_until_complete as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
@@ -1862,11 +2002,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     let tutorial_players = tutorial_state
         .as_object_mut()
         .and_then(|tutorial| tutorial.remove("players"));
+    let screen_scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let map_menu = app
         .input
         .map_context_menu
         .map(|menu| {
-            let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
             let items = app
                 .map_menu_items(menu.tile_idx)
                 .into_iter()
@@ -1900,8 +2040,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                     MapContextMenuView::BuildingDetails => "building_details",
                     MapContextMenuView::Radial => "radial",
                 },
-                "x": menu.x / sf,
-                "y": menu.y / sf,
+                "x": menu.x / screen_scale,
+                "y": menu.y / screen_scale,
                 "tile_idx": menu.tile_idx,
                 "session": menu.session,
                 "actions": actions,
@@ -2011,6 +2151,17 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             })
         })
         .collect::<Vec<_>>();
+    let map_feedback = hud.map_feedback.as_ref().map(|feedback| {
+        let text = localized_text_payload(&feedback.text);
+        serde_json::json!({
+            "id": feedback.id,
+            "key": text.get("key").cloned().unwrap_or(serde_json::Value::Null),
+            "values": text.get("values").cloned().unwrap_or(serde_json::Value::Null),
+            "x": feedback.position[0] / screen_scale,
+            "y": feedback.position[1] / screen_scale,
+            "age_ms": feedback.spawned_at.elapsed().as_millis().min(u64::MAX as u128) as u64,
+        })
+    });
     let mut payload = serde_json::json!({
         "gold": me.map(|player| player.gold).unwrap_or(hud.gold),
         "troops": me.map(|player| player.troops).unwrap_or(hud.troops),
@@ -2037,6 +2188,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "is_spectating": app.ui.is_spectating,
         "tutorial": tutorial_state,
         "notifications": notifications,
+        "map_feedback": map_feedback,
         "map_menu": map_menu,
         "dev_tools": dev_tools_payload(app),
         "is_winner": is_winner,
@@ -2501,7 +2653,7 @@ mod tests {
                 me.id,
                 ally.id,
                 &me,
-                &[me, ally],
+                &[me.clone(), ally],
             ),
             Some(12)
         );
@@ -2532,16 +2684,29 @@ mod tests {
     }
 
     #[test]
-    fn port_benefit_label_scales_income_with_each_level() {
-        let label = building_benefit_label(
+    fn building_metrics_keep_effect_values_compact_and_accurate() {
+        let port = building_metrics(
             sow_core::game::BuildingKind::Port,
             2,
             &sow_core::game_config::GameConfig::default(),
         );
-
-        assert!(label.contains("2 boat slots, +2% speed"));
-        assert!(label.contains("+25.00 troops/s, and +2.00 gold/s"));
-        assert!(label.contains("stops at 30%"));
+        assert!(port.iter().any(|metric| {
+            metric["icon"] == "port" && metric["value"] == 2.0
+        }));
+        assert!(port.iter().any(|metric| {
+            metric["icon"] == "troops" && metric["value"] == 25.0 && metric["unit"] == "/s"
+        }));
+        let bunker = building_metrics(
+            sow_core::game::BuildingKind::Bunker,
+            2,
+            &sow_core::game_config::GameConfig::default(),
+        );
+        assert!(bunker.iter().any(|metric| {
+            metric["icon"] == "defense" && metric["value"] == 10.0
+        }));
+        assert!(bunker.iter().any(|metric| {
+            metric["icon"] == "range" && metric["value"] == 16.0
+        }));
     }
 
     #[test]

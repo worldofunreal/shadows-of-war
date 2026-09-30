@@ -3,7 +3,6 @@ mod elimination;
 
 use crate::app::SowApp;
 use sow_core::protocol::SimSnapshot;
-use std::collections::BTreeMap;
 
 impl SowApp {
     pub(crate) fn process_tick_events(
@@ -14,8 +13,6 @@ impl SowApp {
     ) -> crate::player_progress::SessionDefeats {
         let mut turn_defeats = crate::player_progress::SessionDefeats::default();
         let mut played_combat_this_tick = false;
-        let mut wilderness_tiles = 0_u32;
-        let mut enemy_tiles = BTreeMap::<u16, u32>::new();
         let now_instant = web_time::Instant::now();
         self.sfx.sync_server_phase(&snap.phase);
         self.sfx.begin_tick();
@@ -43,15 +40,6 @@ impl SowApp {
                             color,
                             start_time: now_instant,
                         });
-                    if my_id != 0 && owner_id == my_id {
-                        self.ui.app.hud_state.push_notification_for_players(
-                            crate::ui::UiText::new("hud.transport_landed"),
-                            [Some(my_id), None],
-                            2,
-                            Some("transport-landed".into()),
-                            false,
-                        );
-                    }
                 }
                 sow_core::game::GameEvent::PlayerEliminated {
                     player_id,
@@ -88,14 +76,6 @@ impl SowApp {
                     previous_owner,
                     troops,
                 } => {
-                    if new_owner == my_id && my_id != 0 {
-                        if previous_owner == 0 {
-                            wilderness_tiles = wilderness_tiles.saturating_add(1);
-                        } else {
-                            let count = enemy_tiles.entry(previous_owner).or_default();
-                            *count = count.saturating_add(1);
-                        }
-                    }
                     self.handle_tile_captured(
                         snap,
                         my_id,
@@ -108,72 +88,8 @@ impl SowApp {
                         },
                     );
                 }
-                sow_core::game::GameEvent::StructureSpawned { owner_id, .. }
-                    if my_id != 0 && owner_id == my_id =>
-                {
-                    self.ui.app.hud_state.push_notification_for_players(
-                        crate::ui::UiText::new("hud.structure_started"),
-                        [Some(my_id), None],
-                        2,
-                        None,
-                        false,
-                    );
-                }
-                sow_core::game::GameEvent::StructureReady { id, .. }
-                    if my_id != 0 && snap.buildings.iter().any(|building| building.id == id && building.owner_id == my_id) =>
-                {
-                    self.ui.app.hud_state.push_notification_for_players(
-                        crate::ui::UiText::new("hud.structure_ready"),
-                        [Some(my_id), None],
-                        2,
-                        None,
-                        false,
-                    );
-                }
-                sow_core::game::GameEvent::StructureUpgraded { id, .. }
-                    if my_id != 0 && snap.buildings.iter().any(|building| building.id == id && building.owner_id == my_id) =>
-                {
-                    self.ui.app.hud_state.push_notification_for_players(
-                        crate::ui::UiText::new("hud.structure_upgraded"),
-                        [Some(my_id), None],
-                        2,
-                        None,
-                        false,
-                    );
-                }
-                sow_core::game::GameEvent::TileUpgraded { tile_idx, .. }
-                    if my_id != 0 && snap.dirty_tiles.iter().any(|tile| tile.index == tile_idx && tile.new_owner == my_id) =>
-                {
-                    self.ui.app.hud_state.push_notification_for_players(
-                        crate::ui::UiText::new("hud.tile_upgraded"),
-                        [Some(my_id), None],
-                        2,
-                        None,
-                        false,
-                    );
-                }
                 _ => {}
             }
-        }
-        if wilderness_tiles > 0 {
-            self.ui.app.hud_state.push_notification_for_players(
-                crate::ui::UiText::new("hud.wilderness_expanded")
-                    .with("count", wilderness_tiles.to_string()),
-                [Some(my_id), None],
-                2,
-                Some("wilderness-expanded".into()),
-                true,
-            );
-        }
-        for (enemy_id, count) in enemy_tiles {
-            self.ui.app.hud_state.push_notification_for_players(
-                crate::ui::UiText::new("hud.enemy_territory_captured")
-                    .with("count", count.to_string()),
-                [Some(my_id), Some(enemy_id)],
-                2,
-                Some(format!("enemy-territory:{enemy_id}")),
-                true,
-            );
         }
         self.sfx.flush_tick(now_instant);
         turn_defeats

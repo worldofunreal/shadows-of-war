@@ -79,6 +79,16 @@ fn median(r: f32, g: f32, b: f32) -> f32 {
     return max(min(r, g), min(max(r, g), b));
 }
 
+fn rounded_rect_distance(local: vec2<f32>, corner_radius_ratio: f32) -> f32 {
+    let pixel_step = max(fwidth(local), vec2<f32>(1e-5));
+    let pixels_per_local = 1.0 / pixel_step;
+    let half_size = pixels_per_local * 0.5;
+    let radius = clamp(corner_radius_ratio, 0.0, 0.5) * min(pixels_per_local.x, pixels_per_local.y);
+    let p = abs(local - vec2<f32>(0.5, 0.5)) * pixels_per_local;
+    let q = p - (half_size - vec2<f32>(radius, radius));
+    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+}
+
 fn sample_atlas(uv: vec2<f32>, uv_rect: vec4<f32>) -> vec3<f32> {
     let clamped_uv = clamp(uv, uv_rect.xy, uv_rect.zw);
     let sampled = textureSample(font_atlas, font_sampler, clamped_uv).rgb;
@@ -150,14 +160,14 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(in.color.rgb, ring_alpha * arc_alpha * in.color.a);
 }
 
-// Circle-clipped image sprite (KIND_SPRITE) sampled from the avatar atlas. `in.uv` is the
-// atlas uv; deriving local 0..1 from uv_rect gives the disc mask. `color` tints the texels.
+// Rounded-square image sprite (KIND_SPRITE) sampled from the avatar atlas. `face_dilate`
+// carries its corner radius ratio; `color` tints the texels.
 fn shade_sprite(in: VertexOutput) -> vec4<f32> {
     let span = max(in.uv_rect.zw - in.uv_rect.xy, vec2<f32>(1e-6));
     let local = (in.uv - in.uv_rect.xy) / span;
-    let d = length(local - vec2<f32>(0.5, 0.5));
+    let d = rounded_rect_distance(local, in.face_dilate);
     let aa = max(fwidth(d), 1e-5);
-    let mask = 1.0 - smoothstep(0.5 - aa, 0.5, d);
+    let mask = 1.0 - smoothstep(-aa, aa, d);
     let tex = textureSample(avatar_atlas, avatar_sampler, clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw));
     return vec4<f32>(tex.rgb * in.color.rgb, tex.a * mask * in.color.a);
 }
@@ -178,6 +188,21 @@ fn shade_rect(in: VertexOutput) -> vec4<f32> {
     let y_alpha = smoothstep(0.0, aa.y, in.uv.y) * (1.0 - smoothstep(1.0 - aa.y, 1.0, in.uv.y));
     let alpha = x_alpha * y_alpha * in.color.a;
     return vec4<f32>(in.color.rgb, alpha);
+}
+
+fn shade_rounded_rect(in: VertexOutput) -> vec4<f32> {
+    let dist = rounded_rect_distance(in.local_uv, in.face_dilate);
+    let aa = max(fwidth(dist), 1e-5);
+    let outer = 1.0 - smoothstep(-aa, aa, dist);
+    let border_width = max(in.outline_thickness, 0.0);
+    let inner = 1.0 - smoothstep(-aa, aa, dist + border_width);
+    let edge = max(outer - inner, 0.0);
+    let alpha = in.color.a * inner + in.outline_color.a * edge;
+    if (alpha <= 1e-5) {
+        return vec4<f32>(0.0);
+    }
+    let rgb = (in.color.rgb * in.color.a * inner + in.outline_color.rgb * in.outline_color.a * edge) / alpha;
+    return vec4<f32>(rgb, alpha);
 }
 
 // Anti-aliased filled downward triangle (KIND_TRIANGLE). `local_uv` is the full quad; the
@@ -208,6 +233,9 @@ fn shade_cross(in: VertexOutput) -> vec4<f32> {
 }
 
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 9.5) {
+        return shade_rounded_rect(in);
+    }
     if (in.kind > 8.5) {
         return shade_building_sprite(in);
     }

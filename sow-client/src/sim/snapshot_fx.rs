@@ -97,33 +97,6 @@ impl SowApp {
                             ));
                         }
                     }
-                    for other in &snap.players {
-                        let old_other = existing.players.iter().find(|p| p.id == other.id);
-                        let sent_alliance = other.alliance_requests.contains(&my_id)
-                            && !old_other.is_some_and(|p| p.alliance_requests.contains(&my_id));
-                        let sent_resources = other.resource_requests.iter().any(|request| request.requester == my_id)
-                            && !old_other.is_some_and(|p| p.resource_requests.iter().any(|request| request.requester == my_id));
-                        let name = sow_core::player::display_name(other.id, &other.name, other.player_type);
-                        if sent_alliance {
-                            notifications.push((
-                                crate::ui::UiText::new("hud.alliance_request_sent").with("name", name.clone()),
-                                [Some(my_id), Some(other.id)],
-                                2,
-                                format!("alliance-request-sent:{}", other.id),
-                                false,
-                            ));
-                        }
-                        if sent_resources {
-                            notifications.push((
-                                crate::ui::UiText::new("hud.resource_request_sent").with("name", name),
-                                [Some(my_id), Some(other.id)],
-                                2,
-                                format!("resource-request-sent:{}", other.id),
-                                false,
-                            ));
-                        }
-                    }
-
                     for ally_id in &my_info_new.alliances {
                         let Some(old_ally) = my_info_old.alliances.iter().find(|id| *id == ally_id) else {
                             if let Some(ally) = snap.players.iter().find(|p| p.id == *ally_id) {
@@ -291,6 +264,9 @@ impl SowApp {
                 .as_ref()
                 .and_then(|mr| mr.owners.get(tile_idx as usize).copied())
                 .unwrap_or(0);
+            if !nuke_alert_targets_player(alert.owner_id, victim_id, my_id) {
+                continue;
+            }
             let victim_name = if victim_id == 0 {
                 format!("({}, {})", alert.tile_x, alert.tile_y)
             } else {
@@ -319,5 +295,23 @@ impl SowApp {
                 false,
             );
         }
+    }
+}
+
+fn nuke_alert_targets_player(attacker_id: u16, victim_id: u16, my_id: u16) -> bool {
+    my_id != 0 && (attacker_id == my_id || victim_id == my_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::nuke_alert_targets_player;
+
+    #[test]
+    fn nuke_alerts_reach_only_the_attacker_or_affected_player() {
+        assert!(nuke_alert_targets_player(4, 7, 4));
+        assert!(nuke_alert_targets_player(4, 7, 7));
+        assert!(!nuke_alert_targets_player(4, 7, 8));
+        assert!(!nuke_alert_targets_player(4, 0, 0));
+        assert!(!nuke_alert_targets_player(4, 0, 9));
     }
 }

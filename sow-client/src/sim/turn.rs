@@ -17,13 +17,30 @@ impl TutorialObservation {
                 *count = count.saturating_add(1);
             }
         }
-        self.seen_fleets.extend(
-            engine
-                .fleets
-                .iter()
-                .filter(|fleet| fleet.owner_id == my_id)
-                .map(|fleet| fleet.id),
-        );
+        for fleet in engine.fleets.iter().filter(|fleet| fleet.owner_id == my_id) {
+            if !self.seen_fleets.insert(fleet.id) {
+                continue;
+            }
+            let kind = match fleet.unit_type {
+                sow_core::game::UnitType::TransportShip => "TransportShip",
+                sow_core::game::UnitType::TradeShip => "TradeShip",
+                sow_core::game::UnitType::Warship => "Warship",
+            };
+            let count = self
+                .seen_fleets_by_type
+                .entry(kind.to_string())
+                .or_default();
+            *count = count.saturating_add(1);
+            if fleet.unit_type == sow_core::game::UnitType::TransportShip
+                && let Some(target) = engine.state.player(fleet.target_owner)
+            {
+                let count = self
+                    .seen_transport_fleets_by_target
+                    .entry(target.name.clone())
+                    .or_default();
+                *count = count.saturating_add(1);
+            }
+        }
         self.seen_nukes.extend(
             engine
                 .projectiles
@@ -84,6 +101,19 @@ impl TutorialObservation {
                 .max()
                 .unwrap_or_default(),
         );
+        self.foundry_level = self.foundry_level.max(
+            engine
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_id
+                        && building.kind == sow_core::game::BuildingKind::City
+                        && !building.under_construction
+                })
+                .map(|building| u64::from(building.modules.foundry))
+                .max()
+                .unwrap_or_default(),
+        );
         self.port_levels = self.port_levels.max(
             engine
                 .buildings
@@ -136,11 +166,28 @@ impl TutorialObservation {
             if let GameEvent::ResourceTransferred {
                 sender_id,
                 receiver_id,
-                ..
+                gold,
+                troops,
             } = event
             {
                 if *sender_id == my_id {
                     self.resource_transfers = self.resource_transfers.saturating_add(1);
+                    if let Some(receiver) = engine.state.player(*receiver_id) {
+                        let counts = self
+                            .resource_transfers_by_recipient
+                            .entry(receiver.name.clone())
+                            .or_default();
+                        counts.total = counts.total.saturating_add(1);
+                        if *gold > 0.0 {
+                            counts.gold = counts.gold.saturating_add(1);
+                        }
+                        if *troops > 0.0 {
+                            counts.troops = counts.troops.saturating_add(1);
+                        }
+                        if *gold > 0.0 && *troops > 0.0 {
+                            counts.gold_troops = counts.gold_troops.saturating_add(1);
+                        }
+                    }
                 }
                 if *receiver_id == my_id
                     && let (Some(sender), Some(receiver)) = (
@@ -151,6 +198,16 @@ impl TutorialObservation {
                         || sender.alliances.contains(receiver_id))
                 {
                     self.ally_support_deliveries = self.ally_support_deliveries.saturating_add(1);
+                    let receipt = self
+                        .support_deliveries_by_faction
+                        .entry(sender.name.clone())
+                        .or_default();
+                    if receipt.deliveries == 0 {
+                        receipt.first_tick = engine.state.tick;
+                    }
+                    receipt.deliveries = receipt.deliveries.saturating_add(1);
+                    receipt.gold += (*gold).max(0.0);
+                    receipt.troops += (*troops).max(0.0);
                 }
             }
             // Construction runs before combat. Keep a completion even if the building
@@ -512,6 +569,105 @@ mod tests {
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.city_levels, 3);
         assert_eq!(observation.port_levels, 2);
+    }
+
+    #[test]
+    fn campaign_fleet_facts_distinguish_unit_and_transport_destination_once() {
+        let mut engine = engine();
+        let mut observation = TutorialObservation::default();
+        for (id, kind, target) in [
+            (40, UnitType::TransportShip, 2),
+            (41, UnitType::TradeShip, 2),
+            (42, UnitType::Warship, 3),
+        ] {
+            engine.add_fleet(WarpFleet::new(
+                id,
+                1,
+                target,
+                kind,
+                100.0,
+                (9, 10),
+                vec![9, 10],
+            ));
+        }
+
+        observation.observe_sim(&engine, 1);
+        observation.observe_sim(&engine, 1);
+        assert_eq!(
+            observation.seen_fleets_by_type.get("TransportShip"),
+            Some(&1)
+        );
+        assert_eq!(observation.seen_fleets_by_type.get("TradeShip"), Some(&1));
+        assert_eq!(observation.seen_fleets_by_type.get("Warship"), Some(&1));
+        assert_eq!(
+            observation.seen_transport_fleets_by_target.get("Neighbor"),
+            Some(&1)
+        );
+        assert_eq!(observation.seen_transport_fleets_by_target.len(), 1);
+    }
+
+    #[test]
+    fn campaign_foundry_fact_tracks_its_own_highest_completed_module_level() {
+        let mut engine = engine();
+        let mut observation = TutorialObservation::default();
+        for (id, level, under_construction) in [(50, 2, false), (51, 3, true)] {
+            let mut modules = CityModules::default();
+            modules.foundry = level;
+            engine.add_building(Building {
+                id,
+                owner_id: 1,
+                tile_idx: 9,
+                kind: BuildingKind::City,
+                level: 1,
+                under_construction,
+                ticks_until_complete: u32::from(under_construction),
+                modules,
+            });
+        }
+
+        observation.observe_sim(&engine, 1);
+        assert_eq!(observation.foundry_level, 2);
+        engine.buildings[0].modules.foundry = 1;
+        observation.observe_sim(&engine, 1);
+        assert_eq!(observation.foundry_level, 2);
+    }
+
+    #[test]
+    fn campaign_support_receipts_are_attributed_to_the_allied_sender_and_resources() {
+        let mut engine = engine();
+        let mut observation = TutorialObservation::default();
+        engine.state.player_mut(2).unwrap().alliances.push(1);
+        engine.state.events.extend([
+            GameEvent::ResourceTransferred {
+                sender_id: 2,
+                receiver_id: 1,
+                gold: 10.0,
+                troops: 5.0,
+            },
+            GameEvent::ResourceTransferred {
+                sender_id: 2,
+                receiver_id: 1,
+                gold: 10.0,
+                troops: 0.0,
+            },
+            GameEvent::ResourceTransferred {
+                sender_id: 3,
+                receiver_id: 1,
+                gold: 100.0,
+                troops: 100.0,
+            },
+        ]);
+
+        observation.observe_events(&engine, 1);
+        let receipt = observation
+            .support_deliveries_by_faction
+            .get("Neighbor")
+            .unwrap();
+        assert_eq!(receipt.deliveries, 2);
+        assert_eq!(receipt.gold, 20.0);
+        assert_eq!(receipt.troops, 5.0);
+        assert_eq!(observation.ally_support_deliveries, 2);
+        assert_eq!(observation.resource_transfers, 0);
     }
 
     #[test]

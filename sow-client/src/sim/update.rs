@@ -234,50 +234,35 @@ impl SowApp {
         let mut notifications = Vec::new();
 
         for transfer in &snapshot.resource_transfers {
-            let (prefix, other_id, players, priority) = if transfer.receiver_id == my_id {
-                ("received", transfer.sender_id, [Some(transfer.sender_id), Some(my_id)], 3)
-            } else if transfer.sender_id == my_id {
-                ("sent", transfer.receiver_id, [Some(my_id), Some(transfer.receiver_id)], 2)
-            } else {
+            if transfer.receiver_id != my_id {
                 continue;
-            };
+            }
+            let other_id = transfer.sender_id;
+            let players = [Some(transfer.sender_id), Some(my_id)];
             let name = snapshot
                 .players
                 .iter()
                 .find(|player| player.id == other_id)
                 .map(|player| player.name.as_str())
                 .unwrap_or("Ally");
-            let text = match (prefix, transfer.gold > 0.0, transfer.troops > 0.0) {
-                ("received", true, true) => crate::ui::UiText::new("hud.resource_received_both")
+            let text = match (transfer.gold > 0.0, transfer.troops > 0.0) {
+                (true, true) => crate::ui::UiText::new("hud.resource_received_both")
                     .with("gold", crate::utils::format_number(transfer.gold))
                     .with("troops", crate::utils::format_number(transfer.troops))
                     .with("name", name),
-                ("received", true, false) => crate::ui::UiText::new("hud.resource_received_gold")
+                (true, false) => crate::ui::UiText::new("hud.resource_received_gold")
                     .with("gold", crate::utils::format_number(transfer.gold))
                     .with("name", name),
-                ("received", false, true) => crate::ui::UiText::new("hud.resource_received_troops")
-                    .with("troops", crate::utils::format_number(transfer.troops))
-                    .with("name", name),
-                ("sent", true, true) => crate::ui::UiText::new("hud.resource_sent_both")
-                    .with("gold", crate::utils::format_number(transfer.gold))
-                    .with("troops", crate::utils::format_number(transfer.troops))
-                    .with("name", name),
-                ("sent", true, false) => crate::ui::UiText::new("hud.resource_sent_gold")
-                    .with("gold", crate::utils::format_number(transfer.gold))
-                    .with("name", name),
-                ("sent", false, true) => crate::ui::UiText::new("hud.resource_sent_troops")
+                (false, true) => crate::ui::UiText::new("hud.resource_received_troops")
                     .with("troops", crate::utils::format_number(transfer.troops))
                     .with("name", name),
                 _ => continue,
             };
-            if transfer.gold <= 0.0 && transfer.troops <= 0.0 {
-                continue;
-            }
             notifications.push((
                 text,
                 players,
-                priority,
-                format!("resource:{prefix}:{other_id}"),
+                3,
+                format!("resource:received:{other_id}"),
             ));
         }
 

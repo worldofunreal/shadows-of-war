@@ -78,7 +78,6 @@ body.logic-editor {
 .port-row { border-color: #313b38; }
 .form-card { border-radius: 8px; background: linear-gradient(145deg, #182120, #121819); }
 .form-section { border-color: #303a37; }
-.inspector-scroll { scrollbar-width: thin; scrollbar-color: #53605a transparent; }
 .speaker-avatar {
     display: block;
     width: 74px;

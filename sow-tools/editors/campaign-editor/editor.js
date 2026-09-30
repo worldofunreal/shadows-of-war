@@ -14,7 +14,7 @@
         { value: "farm", label: "Complete a farm" }, { value: "factory", label: "Complete a factory" },
         { value: "port", label: "Complete a port" }, { value: "bunker", label: "Complete a bunker" },
         { value: "structure_upgrade", label: "Upgrade a structure" }, { value: "city_upgrade", label: "Upgrade a city" },
-        { value: "city_level", label: "Reach a city level" },
+        { value: "city_level", label: "Reach a city level" }, { value: "foundry_level", label: "Reach a foundry level" },
         { value: "port_upgrade", label: "Upgrade a port" }, { value: "port_level", label: "Reach port level" }, { value: "tile_upgrade", label: "Upgrade territory" },
         { value: "resource_transfer", label: "Send resources" }, { value: "alliance", label: "Form an alliance" },
         { value: "support", label: "Receive allied support" }, { value: "fleet", label: "Launch a fleet" },
@@ -161,7 +161,7 @@
         var status = $("#saveStatus");
         status.textContent = "Unsaved changes";
         status.className = "status dirty";
-        if (state.renderer) { refresh(true); syncPreview(); }
+        if (state.renderer) { refresh(true); syncPreview(); renderGraph(); }
         else refresh();
     }
     function status(message, kind) {
@@ -465,6 +465,8 @@
             objective.appendChild(selectField("Complete when", step.trigger.type, availableTriggers, function (value) {
                 step.trigger = { type: value, scope: value === "troops" ? "total" : step.trigger.scope || "step" };
                 if (["contact", "defeated"].includes(value)) step.trigger.target = "";
+                if (value === "fleet") step.trigger.unit = "TransportShip";
+                if (value === "resource_transfer") { step.trigger.recipient = ""; step.trigger.resources = ["gold", "troops"]; }
                 else if (value === "ui") {
                     step.trigger.action = state.flow === "menu" ? inGameUiTargets()[0] || "menu_campaign" : "map_attack";
                     if (step.guide) Object.assign(step.guide, { kind: "ui", target: step.trigger.action });
@@ -476,7 +478,8 @@
             }));
             if (step.trigger.type === "contact") {
                 if (Array.isArray(step.trigger.targets)) {
-                    objective.appendChild(multiFactionField("Contact any selected faction", step.trigger.targets, function (targets) { step.trigger.targets = targets; markDirty(); }));
+                    objective.appendChild(multiFactionField("Factions to contact", step.trigger.targets, function (targets) { step.trigger.targets = targets; if (step.trigger.value > targets.length) step.trigger.value = targets.length; markDirty(); renderInspector(); }));
+                    objective.appendChild(inputField("How many must be contacted", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, max: step.trigger.targets.length, step: 1 }));
                 } else {
                     objective.appendChild(selectField("Faction", step.trigger.target, factionOptions(), function (value) { step.trigger.target = value; markDirty(); }));
                     var anyContact = el("button", { type: "button" }, "Accept contact with multiple factions");
@@ -495,6 +498,18 @@
                 }
             }
             else if (step.trigger.type === "attack") objective.appendChild(selectField("Attack target", step.trigger.target || "", [{ value: "", label: "Any faction" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); }));
+            else if (step.trigger.type === "fleet") {
+                objective.appendChild(selectField("Ship type", step.trigger.unit || "", ["TransportShip", "TradeShip", "Warship"], function (value) { step.trigger.unit = value; if (value !== "TransportShip") delete step.trigger.target; markDirty(); renderInspector(); }));
+                if (step.trigger.unit === "TransportShip") objective.appendChild(selectField("Landing target", step.trigger.target || "", [{ value: "", label: "Any target" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); }));
+                objective.appendChild(inputField("Required amount", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
+            }
+            else if (step.trigger.type === "resource_transfer") {
+                objective.appendChild(selectField("Recipient", step.trigger.recipient || "", [{ value: "", label: "Any faction" }].concat(factionOptions()), function (value) { if (value) step.trigger.recipient = value; else delete step.trigger.recipient; markDirty(); }));
+                var requiredResources = step.trigger.resources || [];
+                objective.appendChild(checkboxField("Must include gold", requiredResources.includes("gold"), function (enabled) { step.trigger.resources = requiredResources.filter(function (item) { return item !== "gold"; }); if (enabled) step.trigger.resources.push("gold"); if (!step.trigger.resources.length) delete step.trigger.resources; markDirty(); renderInspector(); }));
+                objective.appendChild(checkboxField("Must include troops", requiredResources.includes("troops"), function (enabled) { step.trigger.resources = requiredResources.filter(function (item) { return item !== "troops"; }); if (enabled) step.trigger.resources.push("troops"); if (!step.trigger.resources.length) delete step.trigger.resources; markDirty(); renderInspector(); }));
+                objective.appendChild(inputField("Required amount", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
+            }
             else if (step.trigger.type === "ui") objective.appendChild(selectField("Control action", step.trigger.action, inGameUiTargets(), function (value) { step.trigger.action = value; markDirty(); }));
             else objective.appendChild(inputField(step.trigger.type === "troops" ? "Minimum troops" : step.trigger.type === "elapsed" ? "Wait (seconds)" : "Required amount", step.trigger.value, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             if (step.trigger.type !== "troops") objective.appendChild(selectField("Count from", step.trigger.scope || "step", ["step", "episode", "total"], function (value) { step.trigger.scope = value; markDirty(); }));
@@ -617,6 +632,7 @@
         return state.definition.steps.filter(function (step) { return step.id !== except; }).map(stepOption);
     }
     function factionOptions() { return state.roster.factions.map(function (faction) { return { value: faction.name, label: faction.name }; }); }
+    function supportFactionOptions() { return state.roster.factions.filter(function (faction) { return Number.isInteger(faction.support_interval_seconds); }).map(function (faction) { return { value: faction.name, label: faction.name }; }); }
     function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id]; return { value: id, label: speaker.faction || speaker.name || id }; })); }
     function inGameUiTargets() { return Object.keys(window.SOWCampaign.UI_TARGETS).filter(function (key) { return state.flow === "menu" ? key.startsWith("menu_") || key === "campaign_replay" : !key.startsWith("menu_") && key !== "campaign_replay"; }); }
     function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : "expand"; }
@@ -651,6 +667,47 @@
             host.appendChild(selectField("Support begins after", support.after_defeated || "", factionOptions(), function (value) { support.after_defeated = value; markDirty(); }));
             host.appendChild(inputField("Current reserves given (%)", support.share_percent, function (value) { support.share_percent = Number(value); markDirty(); }, { type: "number", min: 1, max: 100, step: 1 }));
         }
+        var reactions = section("First support responses");
+        (state.definition.reactions || []).forEach(function (reaction) {
+            var card = el("div", { class: "form-card" });
+            card.appendChild(el("strong", {}, "Response · " + reaction.id));
+            card.appendChild(selectField("Show after", reaction.after, state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption), function (value) { reaction.after = value; markDirty(); }));
+            card.appendChild(selectField("First aid from", reaction.when.target, supportFactionOptions(), function (value) { reaction.when.target = value; markDirty(); }));
+            card.appendChild(selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) { if (value) reaction.speaker = value; else delete reaction.speaker; markDirty(); }));
+            Object.keys(state.definition.strings || {}).sort().forEach(function (locale) {
+                var dictionary = state.definition.strings[locale] || (state.definition.strings[locale] = {});
+                [["Title · " + locale, "title_key"], ["Dialogue · " + locale, "body_key"]].forEach(function (entry) {
+                    var field = el("textarea", { "aria-label": entry[0] });
+                    field.rows = entry[1] === "title_key" ? 2 : 4;
+                    field.value = dictionary[reaction[entry[1]]] || "";
+                    field.addEventListener("input", function () { dictionary[reaction[entry[1]]] = field.value; markDirty(); });
+                    card.appendChild(el("label", {}, entry[0])); card.appendChild(field);
+                });
+            });
+            var remove = el("button", { type: "button", class: "danger" }, "Remove response");
+            remove.addEventListener("click", function () { state.definition.reactions = state.definition.reactions.filter(function (item) { return item !== reaction; }); markDirty(); renderSettings(); });
+            card.appendChild(remove); reactions.appendChild(card);
+        });
+        var addReaction = el("button", { type: "button" }, "Add ally response");
+        addReaction.addEventListener("click", function () {
+            var used = new Set((state.definition.reactions || []).map(function (item) { return item.when.target; }));
+            var faction = state.roster.factions.find(function (item) { return Number.isInteger(item.support_interval_seconds) && !used.has(item.name); });
+            var after = state.definition.steps.find(function (step) { return step.type === "objective" || step.type === "guide"; });
+            if (!faction || !after) return;
+            var responseId = "support_" + faction.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+            while (state.definition.steps.some(function (step) { return step.id === responseId; }) || (state.definition.reactions || []).some(function (item) { return item.id === responseId; })) responseId += "_2";
+            var speakerId = Object.keys(state.definition.speakers || {}).find(function (key) { return state.definition.speakers[key].faction === faction.name; });
+            var reaction = { id: responseId, after: after.id, when: { type: "support", target: faction.name }, title_key: "tutorial." + responseId + "_title", body_key: "tutorial." + responseId + "_body" };
+            if (speakerId) reaction.speaker = speakerId;
+            state.definition.reactions = (state.definition.reactions || []).concat(reaction);
+            Object.keys(state.definition.strings || {}).forEach(function (locale) {
+                var spanish = locale.toLowerCase().split("-")[0] === "es";
+                state.definition.strings[locale][reaction.title_key] = spanish ? faction.name + " envía apoyo" : faction.name + " sends support";
+                state.definition.strings[locale][reaction.body_key] = spanish ? "Han llegado tropas y oro." : "Troops and gold have arrived.";
+            });
+            markDirty(); renderSettings();
+        });
+        reactions.appendChild(addReaction); host.appendChild(reactions);
         host.appendChild(selectField("Default story language", state.definition.default_locale, localeOptions(), function (value) { state.definition.default_locale = value; state.definition.strings[value] = state.definition.strings[value] || {}; markDirty(); renderSettings(); }));
         host.appendChild(selectField("Opening step", state.definition.entry, state.definition.steps.map(stepOption), function (value) { state.definition.entry = value; markDirty(); }));
         host.appendChild(selectField("Menu guide opening", state.definition.menu_guide && state.definition.menu_guide.entry || "", [{ value: "", label: "Not set" }].concat(state.definition.steps.map(stepOption)), function (value) { if (!value) delete state.definition.menu_guide; else state.definition.menu_guide = Object.assign({}, state.definition.menu_guide, { entry: value, dismissible: true }); markDirty(); if (state.flow === "menu") resetPreview(); }));
@@ -773,8 +830,10 @@
         var trigger = step.trigger || {};
         var definition = triggerTypes.find(function (item) { return item.value === trigger.type; });
         var parts = [definition ? definition.label : "Set a condition"];
-        if (trigger.type === "contact" && Array.isArray(trigger.targets)) parts[0] += " · any of " + trigger.targets.join(", ");
+        if (trigger.type === "contact" && Array.isArray(trigger.targets)) parts[0] += " · " + (trigger.value || 1) + " of " + trigger.targets.join(", ");
         else if (["contact", "defeated", "attack"].includes(trigger.type) && trigger.target) parts[0] += " · " + trigger.target;
+        if (trigger.type === "fleet" && trigger.unit) parts[0] += " · " + trigger.unit + (trigger.target ? " to " + trigger.target : "");
+        if (trigger.type === "resource_transfer") parts[0] += (trigger.recipient ? " · to " + trigger.recipient : "") + (trigger.resources && trigger.resources.length ? " · " + trigger.resources.join(" + ") : "");
         else if (trigger.type === "ui" && typeof trigger.action === "string") parts[0] += " · " + trigger.action.replace(/_/g, " ");
         if (Number.isFinite(trigger.value)) parts.push((trigger.type === "elapsed" ? trigger.value + "s" : "≥ " + trigger.value.toLocaleString()));
         if (trigger.scope && trigger.type !== "troops") parts.push({ step: "this step", episode: "this episode", total: "all time" }[trigger.scope] || trigger.scope);
@@ -1038,6 +1097,7 @@
         if (!state.machine || state.validation.errors.length) return;
         $("#previewFrame").dataset.device = $("#device").value;
         var model;
+        var previousStep = state.playingStep;
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui, performance.now()); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.playingStep = model.step.id;
@@ -1050,7 +1110,7 @@
         var anchor = previewAnchor(model.step);
         try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage) }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
-        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, progress: model.progress, choices: model.state.choices }, null, 2);
+        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
         var requiredMenu = /^map_(?:build|upgrade)_/.test(guideTarget) ? "build" : "";
         var menuHint = requiredMenu && $("#sow-hud").dataset.previewMapMenu !== requiredMenu ? " · open the " + requiredMenu + " submenu in the preview to reveal this guide" : "";
@@ -1060,7 +1120,7 @@
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
         $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.ready ? " · objective complete" : "") + menuHint + (state.validation.errors.length ? " · draft needs fixes before export" : "");
-        renderGraph();
+        if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
         if (model.ready && updateMachine !== false) window.setTimeout(function () { if (state.machine) paintPreview(); }, 840);
     }
@@ -1168,6 +1228,7 @@
         }
         var requestedEntry = flowEntry() || state.definition.entry;
         if (!steps.some(function (step) { return step && step.id === requestedEntry; })) requestedEntry = start;
+        state.playingStep = null;
         try { state.machine = window.SOWCampaign.create(state.definition, requestedEntry); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.previewActionStep = null; state.previewActionRatio = null;
@@ -1193,28 +1254,86 @@
         simulateButton.disabled = !trigger || model.ready;
         tickButton.hidden = !canTick;
         tickButton.disabled = !canTick || model.ready;
-        if (!trigger) {
-            host.appendChild(el("small", {}, timedRoute ? "Advance game time to test this route." : "Select an objective or guide to simulate game facts."));
-            return;
+        if (!trigger) host.appendChild(el("small", {}, timedRoute ? "Advance game time to test this route." : "This beat waits for dialogue, a decision or an incoming story event."));
+        else {
+            var progress = model.progress, description = trigger.type;
+            if (trigger.type === "contact" && trigger.targets) description += " · contact " + (trigger.value || 1) + " of " + trigger.targets.length + " tribes";
+            if (trigger.type === "fleet") description += " · " + (trigger.unit || "any ship") + (trigger.target ? " to " + trigger.target : "");
+            if (trigger.type === "resource_transfer") description += (trigger.recipient ? " · to " + trigger.recipient : " · any recipient") + (trigger.resources ? " · " + trigger.resources.join(" + ") : " · any resources");
+            host.appendChild(el("small", {}, "Waiting for " + description + " · " + progress.current + " / " + progress.target));
+            if (!["troops", "elapsed", "contact", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
+                var button = el("button", { type: "button" }, "+1 " + trigger.type);
+                button.disabled = model.ready;
+                button.addEventListener("click", function () { simulateObjective(1); });
+                host.appendChild(button);
+            }
+            if (trigger.type === "contact") (trigger.targets || [trigger.target]).filter(Boolean).forEach(function (name) {
+                var contact = el("button", { type: "button" }, "Contact · " + name);
+                contact.disabled = model.ready || (state.facts.contact_names || []).includes(name);
+                contact.addEventListener("click", function () { simulateObjective(1, { faction: name }); });
+                host.appendChild(contact);
+            });
+            if (trigger.type === "alliance") factionOptions().forEach(function (option) {
+                var alliance = el("button", { type: "button" }, "Alliance · " + option.label);
+                alliance.disabled = model.ready || (state.facts.alliance_names || []).includes(option.value);
+                alliance.addEventListener("click", function () { simulateObjective(1, { faction: option.value }); });
+                host.appendChild(alliance);
+            });
+            if (trigger.type === "fleet") ["TransportShip", "TradeShip", "Warship"].forEach(function (unit) {
+                if (trigger.target && unit === "TransportShip") {
+                    [trigger.target, factionOptions().find(function (option) { return option.value !== trigger.target; })?.value].filter(Boolean).forEach(function (target) {
+                        var ship = el("button", { type: "button" }, "Simulate · " + unit + " to " + target);
+                        ship.disabled = model.ready;
+                        ship.addEventListener("click", function () { simulateObjective(1, { unit: unit, target: target }); });
+                        host.appendChild(ship);
+                    });
+                } else {
+                    var ship = el("button", { type: "button" }, "Simulate · " + unit);
+                    ship.disabled = model.ready;
+                    ship.addEventListener("click", function () { simulateObjective(1, { unit: unit }); });
+                    host.appendChild(ship);
+                }
+            });
+            if (trigger.type === "resource_transfer") {
+                var recipient = trigger.recipient || (state.roster.factions[0] && state.roster.factions[0].name);
+                var wrongRecipient = state.roster.factions.find(function (faction) { return faction.name !== recipient; });
+                if (wrongRecipient) {
+                    var wrongTarget = el("button", { type: "button" }, "Simulate wrong recipient · " + wrongRecipient.name);
+                    wrongTarget.disabled = model.ready;
+                    wrongTarget.addEventListener("click", function () { simulateObjective(1, { recipient: wrongRecipient.name, resources: ["gold", "troops"] }); });
+                    host.appendChild(wrongTarget);
+                }
+                [["gold"], ["troops"], ["gold", "troops"]].forEach(function (resources) {
+                    var transfer = el("button", { type: "button" }, "Simulate " + resources.join(" + ") + " to " + recipient);
+                    transfer.disabled = model.ready;
+                    transfer.addEventListener("click", function () { simulateObjective(1, { recipient: recipient, resources: resources }); });
+                    host.appendChild(transfer);
+                });
+            }
         }
-        var progress = model.progress;
-        host.appendChild(el("small", {}, trigger.type + " · " + progress.current + " / " + progress.target));
-        if (["troops", "elapsed"].includes(trigger.type)) return;
-        var button = el("button", { type: "button" }, ["contact", "defeated"].includes(trigger.type) ? "+1 faction" : "+1 " + trigger.type);
-        button.disabled = model.ready;
-        button.addEventListener("click", function () { simulateObjective(1); });
-        host.appendChild(button);
+        (state.definition.reactions || []).forEach(function (reaction) {
+            var button = el("button", { type: "button" }, "Simulate first support · " + reaction.when.target);
+            button.disabled = Boolean((state.facts.support_deliveries_by_faction || {})[reaction.when.target]);
+            button.addEventListener("click", function () {
+                state.facts.support_deliveries_by_faction = state.facts.support_deliveries_by_faction || {};
+                state.facts.support_deliveries_by_faction[reaction.when.target] = { deliveries: 1, gold: 100, troops: 100, first_tick: ++state.facts.elapsed_ticks };
+                state.facts.ally_support_deliveries = Number(state.facts.ally_support_deliveries || 0) + 1;
+                paintPreview();
+            });
+            host.appendChild(button);
+        });
     }
-    function simulateObjective(amount) {
+    function simulateObjective(amount, sample) {
         if (!state.machine) return;
         var step = state.machine.view().step, trigger = step.trigger;
         if (!trigger) return;
+        sample = sample || {};
         if (amount == null) { var progress = state.machine.view().progress; amount = Math.max(1, progress.target - progress.current); }
         amount = Number(amount || 1);
         if (trigger.type === "contact") {
             var contacts = state.facts.contact_names || [];
             var candidates = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
-            var contacted = candidates.find(function (name) { return name && !contacts.includes(name); }) || candidates[0];
+            var contacted = sample.faction || candidates.find(function (name) { return name && !contacts.includes(name); }) || candidates[0];
             if (contacted) state.facts.contact_names = Array.from(new Set(contacts.concat(contacted)));
         }
         else if (trigger.type === "defeated") {
@@ -1223,6 +1342,26 @@
             state.facts.defeated_names = Array.from(new Set(defeated.concat(targets.filter(function (name) { return name && !defeated.includes(name); }).slice(0, amount))));
         }
         else if (trigger.type === "ui") state.ui[trigger.action] = Number(state.ui[trigger.action] || 0) + amount;
+        else if (trigger.type === "alliance") {
+            state.facts.alliance_names = Array.from(new Set((state.facts.alliance_names || []).concat(sample.faction || trigger.target || "Simulated ally")));
+            state.facts.alliances_formed = state.facts.alliance_names.length;
+        }
+        else if (trigger.type === "fleet") {
+            var unit = sample.unit || trigger.unit || "TransportShip";
+            state.facts.fleets_by_type[unit] = Number(state.facts.fleets_by_type[unit] || 0) + amount;
+            var target = sample.target || trigger.target;
+            if (unit === "TransportShip" && target) state.facts.transport_fleets_by_target[target] = Number(state.facts.transport_fleets_by_target[target] || 0) + amount;
+            state.facts.fleets += amount;
+        }
+        else if (trigger.type === "resource_transfer") {
+            var receiver = sample.recipient || trigger.recipient || "Simulated ally", received = sample.resources || trigger.resources || ["gold", "troops"];
+            var sent = state.facts.resource_transfers_by_recipient[receiver] || (state.facts.resource_transfers_by_recipient[receiver] = { total: 0, gold: 0, troops: 0, gold_troops: 0 });
+            sent.total += amount;
+            if (received.includes("gold")) sent.gold += amount;
+            if (received.includes("troops")) sent.troops += amount;
+            if (received.includes("gold") && received.includes("troops")) sent.gold_troops += amount;
+            state.facts.resource_transfers += amount;
+        }
         else {
             var metric = window.SOWCampaign.METRICS[trigger.type];
             if (trigger.type === "attack" && trigger.target) { state.facts.attacks_by_target = state.facts.attacks_by_target || {}; state.facts.attacks_by_target[trigger.target] = Number(state.facts.attacks_by_target[trigger.target] || 0) + amount; }
@@ -1231,7 +1370,7 @@
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, fleets: 0, nukes: 0, attacks: 0, attacks_by_target: {}, contact_names: [], defeated_names: [], elapsed_seconds: 0 }; }
+    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_target: {}, nukes: 0, attacks: 0, attacks_by_target: {}, contact_names: [], defeated_names: [], resource_transfers: 0, resource_transfers_by_recipient: {}, alliance_names: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;

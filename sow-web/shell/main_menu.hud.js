@@ -28,6 +28,10 @@
     var notificationTimer = null;
     var activeNotifications = [];
     var notificationCards = [];
+    var mapFeedbackCursor = 0;
+    var mapFeedbackTimer = null;
+    var activeMapFeedback = null;
+    var mapFeedbackCard = null;
     var mapMenuView = "root";
     var mapMenuStateKey = "";
     var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
@@ -99,7 +103,15 @@
         factory: '<path d="M3 21V9l6 3V8l6 4V5h6v16H3ZM17 8h1M17 11h1M7 17h2M12 17h2M17 17h1"/>',
         warship: '<path d="M3 15h18l-3 5H7l-4-5ZM7 12V7h10v5M10 7V4h4v3M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0"/>',
         trade_ship: '<path d="M3 15h18l-3 5H7l-4-5ZM6 12l6-9 6 9M12 3v12M2 21c2 1 3 1 5 0s3-1 5 0 3 1 5 0 3-1 5 0M8 10h8"/>',
-        farm: '<path d="M12 21V8M12 12c-4-1-6-3-6-6 4 0 6 2 6 6ZM12 15c4-1 6-3 6-6-4 0-6 2-6 6Z"/>'
+        farm: '<path d="M12 21V8M12 12c-4-1-6-3-6-6 4 0 6 2 6 6ZM12 15c4-1 6-3 6-6-4 0-6 2-6 6Z"/>',
+        gold: '<circle cx="12" cy="12" r="8"/><path d="M14.5 8.5c-.6-.6-1.4-.9-2.5-.9-1.4 0-2.4.7-2.4 1.8 0 2.9 4.8 1.1 4.8 4 0 1.2-1 2-2.5 2-1 0-2-.4-2.7-1.1M12 6v12"/>',
+        defense: '<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/>',
+        range: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M22 12h-3M12 22v-3M2 12h3"/>',
+        speed: '<path d="m13 2-3 8h7l-6 12 1-9H5l8-11Z"/>',
+        discount: '<circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/><path d="m19 5-14 14"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        construction: '<path d="M14.5 6.5a5 5 0 0 0-6.7 6.7L3 18l3 3 4.8-4.8a5 5 0 0 0 6.7-6.7L14 13l-3-3 3.5-3.5Z"/>',
+        lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/>'
     };
 
     function hudIcon(name, cls) {
@@ -295,7 +307,7 @@
             + '</div>'
             + '<div class="sow-hud__map-menu hidden" id="sow-hud-map-menu" role="menu" aria-label="' + SOW_t("hud.map_actions") + '"></div>'
             + '<aside class="sow-hud__building-card hidden" id="sow-hud-building-card" aria-live="polite">'
-            + '  <div class="sow-hud__building-card-head"><span id="sow-hud-building-card-kind"></span><button type="button" class="sow-hud__close-btn" data-command="close_building_card" aria-label="Close">✕</button></div>'
+            + '  <div class="sow-hud__building-card-head"><span class="sow-hud__building-card-title"><span class="sow-hud__building-card-icon" id="sow-hud-building-card-icon"></span><span id="sow-hud-building-card-kind"></span></span><button type="button" class="sow-hud__close-btn" data-command="close_building_card" aria-label="Close">✕</button></div>'
             + '  <div class="sow-hud__building-card-level" id="sow-hud-building-card-level"></div>'
             + '  <div class="sow-hud__building-card-benefit" id="sow-hud-building-card-benefit"></div>'
             + '  <div class="sow-hud__building-card-next" id="sow-hud-building-card-next"></div>'
@@ -379,46 +391,28 @@
             endgameObserve: document.getElementById("sow-hud-endgame-observe"),
             mapMenu: document.getElementById("sow-hud-map-menu"),
             buildingCard: document.getElementById("sow-hud-building-card"),
+            buildingCardIcon: document.getElementById("sow-hud-building-card-icon"),
             buildingCardKind: document.getElementById("sow-hud-building-card-kind"),
             buildingCardLevel: document.getElementById("sow-hud-building-card-level"),
             buildingCardBenefit: document.getElementById("sow-hud-building-card-benefit"),
             buildingCardNext: document.getElementById("sow-hud-building-card-next"),
             buildingCardUpgrade: document.getElementById("sow-hud-building-card-upgrade"),
-            notifications: document.createElement("div")
+            notifications: document.createElement("div"),
+            mapFeedback: document.createElement("div")
         };
 
 
         hudRefs.notifications.className = "sow-hud__notifications";
         hudRefs.notifications.setAttribute("aria-live", "polite");
         hudRoot.appendChild(hudRefs.notifications);
+        hudRefs.mapFeedback.className = "sow-hud__map-feedback";
+        hudRefs.mapFeedback.setAttribute("aria-live", "polite");
+        hudRefs.mapFeedback.hidden = true;
+        hudRoot.appendChild(hudRefs.mapFeedback);
         notificationCards = Array.from({ length: 3 }, function () {
-            var card = document.createElement("div");
-            card.className = "sow-hud__notification sow-hud__notification--premium";
-            card.hidden = true;
-            var seal = document.createElement("span");
-            seal.className = "sow-hud__notification-seal";
-            seal.setAttribute("aria-hidden", "true");
-            var portraits = document.createElement("span");
-            portraits.className = "sow-hud__notification-portraits";
-            var portraitA = document.createElement("img");
-            var portraitB = document.createElement("img");
-            [portraitA, portraitB].forEach(function (portrait) {
-                portrait.className = "sow-hud__notification-portrait";
-                portrait.alt = "";
-                portrait.draggable = false;
-                portrait.hidden = true;
-                portrait.onerror = function () {
-                    var fallback = asset("gameplay/avatars/null.webp");
-                    if (this.getAttribute("src") !== fallback) this.src = fallback;
-                };
-                portraits.appendChild(portrait);
-            });
-            var copy = document.createElement("span");
-            copy.className = "sow-hud__notification-copy";
-            card.append(seal, portraits, copy);
-            hudRefs.notifications.appendChild(card);
-            return { card: card, seal: seal, portraits: [portraitA, portraitB], copy: copy };
+            return createNotificationCard(hudRefs.notifications, false);
         });
+        mapFeedbackCard = createNotificationCard(hudRefs.mapFeedback, true);
 
         if (hudRefs.slider) hudRefs.slider.style.setProperty("--sow-crossed-swords", 'url("' + asset(HUD_ICONS.troops) + '")');
         if (hudRefs.slider) {
@@ -841,6 +835,47 @@
         return true;
     }
 
+    function escapeHudText(value) {
+        return String(value).replace(/[&<>"']/g, function (character) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[character];
+        });
+    }
+
+    function buildingMetricMarkup(metrics) {
+        if (!Array.isArray(metrics)) return "";
+        return metrics.map(function (metric) {
+            var icon = String(metric.icon || "upgrade");
+            var label = String(metric.label || "");
+            var rawValue = metric.value;
+            var value = typeof rawValue === "number" && Number.isFinite(rawValue)
+                ? rawValue.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                : String(rawValue == null ? "" : rawValue);
+            value = String(metric.prefix || "") + value + String(metric.unit || "");
+            var safeLabel = escapeHudText(label);
+            var safeValue = escapeHudText(value);
+            return '<span class="sow-hud__building-metric" title="' + safeLabel + '" aria-label="' + safeLabel + ': ' + safeValue + '">'
+                + hudIcon(icon, "sow-hud__building-metric-icon") + '<b>' + safeValue + '</b></span>';
+        }).join("");
+    }
+
+    function positionBuildingCard(mapMenu) {
+        var card = hudRefs.buildingCard;
+        var width = card.offsetWidth;
+        var height = card.offsetHeight;
+        var anchorX = Number(mapMenu.x) || 0;
+        var anchorY = Number(mapMenu.y) || 0;
+        var gap = 14;
+        var side = anchorX + gap + width <= window.innerWidth - 8 ? "right" : "left";
+        var left = side === "right" ? anchorX + gap : anchorX - width - gap;
+        var top = anchorY - height * 0.5;
+        left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+        top = Math.max(8, Math.min(top, window.innerHeight - height - 8));
+        card.dataset.anchorSide = side;
+        card.style.left = left + "px";
+        card.style.top = top + "px";
+        card.style.bottom = "auto";
+    }
+
     function renderBuildingCard(mapMenu) {
         if (!hudRefs || !hudRefs.buildingCard) return;
         var detail = mapMenu && mapMenu.building;
@@ -849,37 +884,75 @@
         if (!open) return;
         hudRefs.buildingCard.dataset.session = String(mapMenu.session);
         hudRefs.buildingCard.dataset.tileIdx = String(mapMenu.tile_idx);
+        hudRefs.buildingCardIcon.innerHTML = buildingIcon(detail.kind);
         hudRefs.buildingCardKind.textContent = detail.name || detail.kind || "Building";
         var underConstruction = Boolean(detail.under_construction);
-        hudRefs.buildingCardLevel.textContent = underConstruction
-            ? "🏗️ " + String(detail.construction_name || detail.kind || "Building")
-                + " · " + Math.max(0, Number(detail.remaining_seconds) || 0).toFixed(1) + "s left"
-            : "Level " + String(detail.level || 0);
-        var activeBenefit = String(detail.benefit || "");
+        hudRefs.buildingCardLevel.innerHTML = underConstruction
+            ? buildingMetricMarkup([{
+                icon: "construction",
+                label: "Under construction",
+                value: Math.max(0, Number(detail.remaining_seconds) || 0),
+                unit: "s"
+            }])
+            : '<span class="sow-hud__building-level">Lv ' + escapeHudText(detail.level || 1) + '</span>';
+        var activeMetrics = Array.isArray(detail.metrics) ? detail.metrics.slice() : [];
         if (detail.boat_slots) {
-            activeBenefit += " · Boats " + String(detail.boat_slots.used) + "/" + String(detail.boat_slots.total)
-                + " · Speed +" + String(detail.boat_slots.speed_percent) + "%";
+            activeMetrics.push({
+                icon: "port",
+                label: "Boats in use / capacity",
+                value: String(detail.boat_slots.used) + "/" + String(detail.boat_slots.total)
+            });
+            activeMetrics.push({
+                icon: "speed",
+                label: "Combined boat speed",
+                value: Number(detail.boat_slots.speed_percent) || 0,
+                prefix: "+",
+                unit: "%"
+            });
         }
-        hudRefs.buildingCardBenefit.textContent = activeBenefit;
-        hudRefs.buildingCardBenefit.hidden = underConstruction;
+        hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
+        hudRefs.buildingCardBenefit.setAttribute("aria-label", detail.benefit_label || "Building effects");
+        hudRefs.buildingCardBenefit.hidden = underConstruction || !activeMetrics.length;
         var unmet = Array.isArray(detail.requirements) ? detail.requirements.filter(function (item) { return !item.met; }) : [];
         if (underConstruction) {
-            hudRefs.buildingCardNext.textContent = "";
+            hudRefs.buildingCardNext.innerHTML = "";
+            hudRefs.buildingCardNext.hidden = true;
             hudRefs.buildingCardUpgrade.disabled = true;
             hudRefs.buildingCardUpgrade.hidden = true;
+            positionBuildingCard(mapMenu);
             return;
         }
         if (detail.next_level) {
-            hudRefs.buildingCardNext.textContent = "Next: " + detail.next_name + " · " + String(detail.next_benefit || "")
-                + " · " + Math.max(0, Number(detail.duration_seconds) || 0).toFixed(1) + "s"
-                + (unmet.length ? " · Requires " + unmet[0].key : "");
-            hudRefs.buildingCardUpgrade.textContent = "Upgrade · " + Math.floor(Number(detail.cost) || 0).toLocaleString() + "g";
+            var nextMetrics = Array.isArray(detail.next_metrics) ? detail.next_metrics.slice() : [];
+            nextMetrics.push({
+                icon: "clock",
+                label: "Upgrade time",
+                value: Math.max(0, Number(detail.duration_seconds) || 0),
+                unit: "s"
+            });
+            var requirementMarkup = unmet.length
+                ? '<span class="sow-hud__building-requirement" title="Requirement not met">'
+                    + hudIcon("lock", "sow-hud__building-metric-icon") + escapeHudText(unmet[0].key) + '</span>'
+                : "";
+            hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-next-level" title="Next level">'
+                + hudIcon("upgrade", "sow-hud__building-metric-icon") + 'Lv ' + escapeHudText(detail.next_level)
+                + '</span><span class="sow-hud__building-metrics">' + buildingMetricMarkup(nextMetrics)
+                + requirementMarkup + '</span>';
+            hudRefs.buildingCardNext.setAttribute("aria-label", detail.next_benefit_label || "Upgrade effects");
+            hudRefs.buildingCardNext.hidden = false;
+            var cost = Math.floor(Number(detail.cost) || 0).toLocaleString();
+            hudRefs.buildingCardUpgrade.innerHTML = hudIcon("upgrade", "sow-hud__building-upgrade-icon")
+                + '<span>' + hudIcon("gold", "sow-hud__building-metric-icon") + escapeHudText(cost) + '</span>';
+            hudRefs.buildingCardUpgrade.setAttribute("aria-label", "Upgrade for " + cost + " gold");
+            hudRefs.buildingCardUpgrade.title = "Upgrade for " + cost + " gold";
             hudRefs.buildingCardUpgrade.disabled = !detail.can_upgrade;
             hudRefs.buildingCardUpgrade.hidden = false;
         } else {
-            hudRefs.buildingCardNext.textContent = "Maximum level";
+            hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-level sow-hud__building-level--max" title="Maximum level">MAX</span>';
+            hudRefs.buildingCardNext.hidden = false;
             hudRefs.buildingCardUpgrade.hidden = true;
         }
+        positionBuildingCard(mapMenu);
     }
 
 
@@ -967,6 +1040,156 @@
         row.className = "sow-hud__panel-row";
         row.textContent = text;
         return row;
+    }
+
+    function createNotificationCard(container, contextual) {
+        var card = document.createElement("div");
+        card.className = "sow-hud__notification sow-hud__notification--premium"
+            + (contextual ? " sow-hud__notification--contextual" : "");
+        card.hidden = true;
+        var seal = document.createElement("span");
+        seal.className = "sow-hud__notification-seal";
+        seal.setAttribute("aria-hidden", "true");
+        var portraits = document.createElement("span");
+        portraits.className = "sow-hud__notification-portraits";
+        var portraitA = document.createElement("img");
+        var portraitB = document.createElement("img");
+        [portraitA, portraitB].forEach(function (portrait) {
+            portrait.className = "sow-hud__notification-portrait";
+            portrait.alt = "";
+            portrait.draggable = false;
+            portrait.hidden = true;
+            portrait.onerror = function () {
+                var fallback = asset("gameplay/avatars/null.webp");
+                if (this.getAttribute("src") !== fallback) this.src = fallback;
+            };
+            portraits.appendChild(portrait);
+        });
+        var copy = document.createElement("span");
+        copy.className = "sow-hud__notification-copy";
+        card.append(seal, portraits, copy);
+        container.appendChild(card);
+        return { card: card, seal: seal, portraits: [portraitA, portraitB], copy: copy, renderKey: "" };
+    }
+
+    function clearNotificationCard(parts) {
+        parts.card.hidden = true;
+        parts.renderKey = "";
+        parts.seal.innerHTML = "";
+        parts.copy.textContent = "";
+        parts.portraits.forEach(function (portrait) {
+            portrait.hidden = true;
+            if (portrait.removeAttribute) portrait.removeAttribute("src");
+            else portrait.src = "";
+        });
+    }
+
+    function notificationIcon(key) {
+        if (key.indexOf("nuke") >= 0) return hudIcon("nuke", "sow-hud__notification-icon");
+        if (key.indexOf("betrayal") >= 0) return hudIcon("betray", "sow-hud__notification-icon");
+        if (/attack|elimination/.test(key)) return hudIcon("attack", "sow-hud__notification-icon");
+        if (key.indexOf("fleet") >= 0) return hudIcon("fleet", "sow-hud__notification-icon");
+        if (key.indexOf("request") >= 0) return hudIcon("inbox", "sow-hud__notification-icon");
+        if (key.indexOf("alliance") >= 0) return hudIcon("alliance", "sow-hud__notification-icon");
+        if (key.indexOf("resource") >= 0) return hudIcon("transfer", "sow-hud__notification-icon");
+        if (/build|building|gold/.test(key)) return hudIcon("tools", "sow-hud__notification-icon");
+        return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
+    }
+
+    function renderNotificationCard(parts, item, contextual) {
+        var entry = item.entry || {};
+        var key = String(entry.key || "hud.event");
+        var avatars = contextual ? [] : (Array.isArray(entry.avatars) ? entry.avatars : []);
+        var renderKey = String(entry.id) + ":" + key + ":" + JSON.stringify(entry.values || {})
+            + ":" + JSON.stringify(avatars) + ":" + item.priority;
+        parts.card.hidden = false;
+        if (parts.renderKey === renderKey) return;
+        parts.renderKey = renderKey;
+        parts.card.className = "sow-hud__notification sow-hud__notification--premium"
+            + (contextual ? " sow-hud__notification--contextual" : "")
+            + (item.priority >= 4 ? " sow-hud__notification--urgent" : "")
+            + (/resource_received|ally_support/.test(key) ? " sow-hud__notification--support" : "");
+        parts.seal.innerHTML = notificationIcon(key);
+        parts.portraits.forEach(function (portrait, portraitIndex) {
+            var rawId = String(avatars[portraitIndex] || "");
+            var slug = rawId ? leaderById(rawId).slug : "";
+            var valid = /^[a-z][a-z0-9_]*$/.test(slug || "");
+            portrait.hidden = !rawId;
+            if (rawId) {
+                var src = asset("gameplay/avatars/" + (valid ? slug : "null") + ".webp");
+                if (portrait.getAttribute("src") !== src) portrait.src = src;
+            } else if (portrait.removeAttribute) {
+                portrait.removeAttribute("src");
+            }
+        });
+        parts.copy.textContent = SOW_t(key, entry.values || {});
+    }
+
+    function positionMapFeedback(entry) {
+        var width = Math.max(1, window.innerWidth || 1);
+        var height = Math.max(1, window.innerHeight || 1);
+        var rect = mapFeedbackCard.card.getBoundingClientRect
+            ? mapFeedbackCard.card.getBoundingClientRect()
+            : null;
+        var cardWidth = Math.min(rect && rect.width ? rect.width : 320, width - 16);
+        var cardHeight = rect && rect.height ? rect.height : 52;
+        var dockReserve = 0;
+        if (width <= 720 && window.getComputedStyle && hudRoot) {
+            dockReserve = Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-dock-reserve")) || 128;
+        }
+        var x = Number(entry.x);
+        var y = Number(entry.y);
+        if (!Number.isFinite(x)) x = width * 0.5;
+        if (!Number.isFinite(y)) y = height * 0.5;
+        var halfWidth = cardWidth * 0.5;
+        var maxLeft = Math.max(halfWidth + 8, width - halfWidth - 8);
+        var left = Math.max(halfWidth + 8, Math.min(maxLeft, x));
+        var safeTop = Math.min(72, Math.max(8, height - cardHeight - 8));
+        var maxTop = Math.max(safeTop, height - cardHeight - dockReserve - 8);
+        var top = y - cardHeight - 14;
+        if (top < safeTop) top = y + 14;
+        top = Math.max(safeTop, Math.min(maxTop, top));
+        hudRefs.mapFeedback.style.left = left + "px";
+        hudRefs.mapFeedback.style.top = top + "px";
+    }
+
+    function clearMapFeedback() {
+        if (mapFeedbackTimer) window.clearTimeout(mapFeedbackTimer);
+        mapFeedbackTimer = null;
+        activeMapFeedback = null;
+        if (hudRefs && hudRefs.mapFeedback) {
+            hudRefs.mapFeedback.hidden = true;
+            hudRefs.mapFeedback.style.removeProperty("left");
+            hudRefs.mapFeedback.style.removeProperty("top");
+        }
+        if (mapFeedbackCard) clearNotificationCard(mapFeedbackCard);
+    }
+
+    function renderMapFeedback(entry) {
+        if (!hudRefs || !hudRefs.mapFeedback || !mapFeedbackCard) return;
+        if (!entry) {
+            if (activeMapFeedback || mapFeedbackTimer) clearMapFeedback();
+            return;
+        }
+        var id = Number(entry.id);
+        if (!Number.isSafeInteger(id) || id <= mapFeedbackCursor) return;
+        mapFeedbackCursor = id;
+        var age = Math.max(0, Number(entry.age_ms) || 0);
+        clearMapFeedback();
+        if (age >= 3600) return;
+        var now = Date.now();
+        activeMapFeedback = {
+            entry: entry,
+            priority: 1,
+            expiresAt: now + 3600 - age
+        };
+        hudRefs.mapFeedback.hidden = false;
+        renderNotificationCard(mapFeedbackCard, activeMapFeedback, true);
+        positionMapFeedback(entry);
+        mapFeedbackTimer = window.setTimeout(function () {
+            mapFeedbackTimer = null;
+            clearMapFeedback();
+        }, Math.max(0, activeMapFeedback.expiresAt - Date.now()));
     }
 
     function renderInbox(requests) {
@@ -1083,34 +1306,11 @@
         activeNotifications.sort(function (a, b) { return b.priority - a.priority || a.createdAt - b.createdAt; });
         notificationCards.forEach(function (parts, index) {
             var item = activeNotifications[index];
-            parts.card.hidden = !item;
             if (!item) {
-                parts.renderKey = "";
+                clearNotificationCard(parts);
                 return;
             }
-            var entry = item.entry || {};
-            var key = String(entry.key || "hud.event");
-            var renderKey = String(entry.id) + ":" + key + ":" + JSON.stringify(entry.values || {}) + ":" + JSON.stringify(entry.avatars || []) + ":" + item.priority;
-            if (parts.renderKey === renderKey) return;
-            parts.renderKey = renderKey;
-            parts.card.className = "sow-hud__notification sow-hud__notification--premium"
-                + (item.priority >= 4 ? " sow-hud__notification--urgent" : "")
-                + (/resource_received|ally_support/.test(key) ? " sow-hud__notification--support" : "");
-            parts.seal.innerHTML = key.indexOf("nuke") >= 0 ? hudIcon("nuke", "sow-hud__notification-icon")
-                : key.indexOf("elimination") >= 0 ? hudIcon("attack", "sow-hud__notification-icon")
-                    : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v10M7 12h10"></path></svg>';
-            var avatars = Array.isArray(entry.avatars) ? entry.avatars : [];
-            parts.portraits.forEach(function (portrait, portraitIndex) {
-                var rawId = String(avatars[portraitIndex] || "");
-                var slug = rawId ? leaderById(rawId).slug : "";
-                var valid = /^[a-z][a-z0-9_]*$/.test(slug || "");
-                portrait.hidden = !rawId;
-                if (rawId) {
-                    var src = asset("gameplay/avatars/" + (valid ? slug : "null") + ".webp");
-                    if (portrait.getAttribute("src") !== src) portrait.src = src;
-                }
-            });
-            parts.copy.textContent = SOW_t(key, entry.values || {});
+            renderNotificationCard(parts, item, false);
         });
         if (notificationTimer) window.clearTimeout(notificationTimer);
         notificationTimer = null;
@@ -1145,8 +1345,10 @@
             if (notificationTimer) window.clearTimeout(notificationTimer);
             notificationTimer = null;
             activeNotifications = [];
-            notificationCards.forEach(function (parts) { parts.card.hidden = true; });
+            notificationCards.forEach(clearNotificationCard);
             notificationCursor = 0;
+            mapFeedbackCursor = 0;
+            clearMapFeedback();
             return;
         }
         ensureHudDom();
@@ -1334,6 +1536,7 @@
         }
 
         renderNotifications(hud.notifications, forceNotifications);
+        renderMapFeedback(hud.map_feedback);
 
         // Leaderboard
         if (hudRefs.leaderboard) {

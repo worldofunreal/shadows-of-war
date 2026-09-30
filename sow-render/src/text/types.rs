@@ -118,6 +118,8 @@ pub const KIND_TRIANGLE: f32 = 6.0;
 pub const KIND_CROSS: f32 = 7.0;
 pub const KIND_ARC: f32 = 8.0;
 pub const KIND_BUILDING_SPRITE: f32 = 9.0;
+pub const KIND_ROUNDED_RECT: f32 = 10.0;
+pub const AVATAR_CORNER_RADIUS_RATIO: f32 = 0.14;
 
 pub const AVATAR_CELL: u32 = 128;
 pub const AVATAR_COLS: u32 = 8;

@@ -58,6 +58,8 @@ pub struct TutorialObservation {
     pub seen_attacks: std::collections::HashSet<u64>,
     pub attacks_by_target: std::collections::BTreeMap<String, u64>,
     pub seen_fleets: std::collections::HashSet<u64>,
+    pub seen_fleets_by_type: std::collections::BTreeMap<String, u64>,
+    pub seen_transport_fleets_by_target: std::collections::BTreeMap<String, u64>,
     pub seen_structures: std::collections::HashSet<u64>,
     pub seen_buildings_by_kind: std::collections::BTreeMap<String, std::collections::HashSet<u64>>,
     pub owned_structures: std::collections::HashSet<u64>,
@@ -69,6 +71,7 @@ pub struct TutorialObservation {
     pub seen_contact_names: std::collections::HashSet<String>,
     pub seen_nukes: std::collections::HashSet<u64>,
     pub ally_support_deliveries: u64,
+    pub support_deliveries_by_faction: std::collections::BTreeMap<String, CampaignSupportReceipt>,
     pub structure_upgrades: u64,
     pub city_upgrades: u64,
     pub city_levels: u64,
@@ -76,6 +79,8 @@ pub struct TutorialObservation {
     pub port_levels: u64,
     pub tile_upgrades: u64,
     pub resource_transfers: u64,
+    pub resource_transfers_by_recipient: std::collections::BTreeMap<String, ResourceTransferCounts>,
+    pub foundry_level: u64,
     pub seen_alliances: std::collections::HashSet<u16>,
     pub seen_alliance_names: std::collections::HashSet<String>,
     pub alliances_formed: u64,
@@ -88,6 +93,22 @@ pub struct TutorialObservation {
     pub guide_expand: Option<u32>,
     pub guide_assault: Option<u32>,
     pub guide_target_action: Option<u32>,
+}
+
+#[derive(Default)]
+pub struct CampaignSupportReceipt {
+    pub deliveries: u64,
+    pub gold: f64,
+    pub troops: f64,
+    pub first_tick: u64,
+}
+
+#[derive(Default)]
+pub struct ResourceTransferCounts {
+    pub total: u64,
+    pub gold: u64,
+    pub troops: u64,
+    pub gold_troops: u64,
 }
 
 impl TutorialObservation {
@@ -252,6 +273,9 @@ pub struct MapContextMenu {
     pub tile_idx: u32,
     pub session: u64,
     pub view: MapContextMenuView,
+    pub building_kind: Option<sow_core::game::BuildingKind>,
+    pub building_level: u8,
+    pub building_under_construction: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

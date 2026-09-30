@@ -3,9 +3,9 @@ use crate::text::msdf::FontAtlas;
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_CROSS, KIND_DISC,
-    BuildingSpriteId, KIND_BUILDING_SPRITE, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING,
-    KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle,
-    TextShaderData, avatar_slot_uv,
+    AVATAR_CORNER_RADIUS_RATIO, BuildingSpriteId, KIND_BUILDING_SPRITE, KIND_EMOJI, KIND_GLYPH,
+    KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle,
+    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -644,7 +644,7 @@ impl TextRenderer {
         });
     }
 
-    /// Push a circle-clipped image sprite from the avatar atlas. `center`/`radius` are physical
+    /// Push a rounded-square image sprite from the avatar atlas. `center`/`radius` are physical
     /// pixels; `uv_rect` comes from [`avatar_uv`](Self::avatar_uv); `tint` multiplies the texels.
     pub fn push_sprite(
         &mut self,
@@ -660,7 +660,7 @@ impl TextRenderer {
             content_rect: [0.0, 0.0, 1.0, 1.0],
             color: tint,
             outline_color: [0.0; 4],
-            face_dilate: 0.0,
+            face_dilate: AVATAR_CORNER_RADIUS_RATIO,
             outline_thickness: 0.0,
             underlay_offset_y: 0.0,
             underlay_softness: 0.0,
@@ -706,6 +706,38 @@ impl TextRenderer {
             underlay_offset_y: 0.0,
             underlay_softness: 0.0,
             kind: KIND_RECT,
+        });
+    }
+
+    /// Push a filled rounded rectangle with an optional inward outline.
+    /// `size` and `outline_thickness` are physical pixels; `corner_radius_ratio` is
+    /// relative to the shorter side.
+    pub fn push_rounded_rect(
+        &mut self,
+        center: [f32; 2],
+        size: [f32; 2],
+        corner_radius_ratio: f32,
+        color: [f32; 4],
+        outline_color: [f32; 4],
+        outline_thickness: f32,
+    ) {
+        let size = [size[0].max(0.0), size[1].max(0.0)];
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
+            size,
+            uv_rect: [0.0; 4],
+            content_rect: [0.0, 0.0, 1.0, 1.0],
+            color,
+            outline_color,
+            face_dilate: if corner_radius_ratio.is_finite() {
+                corner_radius_ratio.clamp(0.0, 0.5)
+            } else {
+                0.0
+            },
+            outline_thickness: outline_thickness.max(0.0),
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_ROUNDED_RECT,
         });
     }
 

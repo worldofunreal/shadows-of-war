@@ -1,2 +1,2 @@
 pub mod state;
-pub use state::{HudNotification, HudState, SelectedTileInfo};
+pub use state::{HudMapFeedback, HudNotification, HudState, SelectedTileInfo};

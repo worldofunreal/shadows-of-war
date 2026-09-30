@@ -519,17 +519,22 @@ impl MoverScene {
         head: [f32; 2],
         width: f32,
         color: [f32; 4],
+        fade_tail: bool,
     ) {
         if points.is_empty() {
             return;
         }
         let mut prev = points[0];
-        for pt in &points[1..] {
+        for (i, pt) in points[1..].iter().enumerate() {
+            let mut segment_color = color;
+            if fade_tail {
+                segment_color[3] *= (i + 1) as f32 / points.len() as f32;
+            }
             renderer.push_trail_segment(TrailSegmentGpu {
                 p0: prev,
                 p1: *pt,
                 width,
-                color,
+                color: segment_color,
             });
             prev = *pt;
         }
@@ -650,6 +655,7 @@ impl MoverScene {
                                 world_pos,
                                 trail_width,
                                 slot.trail_color,
+                                false,
                             );
                         }
                     }
@@ -670,6 +676,7 @@ impl MoverScene {
                         world_pos,
                         trail_width,
                         slot.trail_color,
+                        slot.is_fleet,
                     );
                 }
             }
