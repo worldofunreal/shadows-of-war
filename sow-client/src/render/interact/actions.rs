@@ -173,14 +173,10 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.error = None;
                     self.ui.app.main_menu_state.profile.view = None;
                     self.ui.app.main_menu_state.profile.history.clear();
-                    self.ui.app.main_menu_state.profile.ratings.clear();
                     self.ui.app.main_menu_state.profile.search_results.clear();
                     self.ui.app.main_menu_state.profile.history_cursor = 0;
                     self.ui.app.main_menu_state.profile.history_has_next = false;
-                    self.ui.app.main_menu_state.profile.ratings_loaded = false;
                     self.ui.app.main_menu_state.profile.match_detail = None;
-                    self.ui.app.main_menu_state.profile.active_tab =
-                        crate::ui::main_menu::profile::ProfileTab::Overview;
                     self.ui.app.main_menu_state.profile.loading = false;
                 }
                 UiAction::LoadOwnProfile => {
@@ -194,19 +190,14 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.account_id = Some(account_id);
                     self.ui.app.main_menu_state.profile.view = None;
                     self.ui.app.main_menu_state.profile.history.clear();
-                    self.ui.app.main_menu_state.profile.ratings.clear();
                     self.ui.app.main_menu_state.profile.history_cursor = 0;
                     self.ui.app.main_menu_state.profile.history_has_next = false;
-                    self.ui.app.main_menu_state.profile.ratings_loaded = false;
                     self.ui.app.main_menu_state.profile.match_detail = None;
                     self.ui.app.main_menu_state.profile.error = None;
                     self.ui.app.main_menu_state.profile.loading = false;
                 }
                 UiAction::LoadProfileHistory => {
                     self.load_profile_history();
-                }
-                UiAction::LoadProfileRatings => {
-                    self.load_profile_ratings();
                 }
                 UiAction::SearchProfiles(query) => {
                     self.search_profiles(query);

@@ -517,7 +517,9 @@
             createPassword = "";
         }
         previousScreen = screen;
-        var nextHero = heroImage();
+        var nextHero = screen === "profile"
+            ? heroImage(profileData && profileData.preferred_leader)
+            : heroImage();
         if (root.dataset.hero !== nextHero) {
             root.style.setProperty("--sow-hero", "url(\"" + nextHero + "\")");
             root.dataset.hero = nextHero;
@@ -1212,7 +1214,6 @@
             profileAccountId = null;
             profileData = null;
             profileSearchResults = [];
-            profileRatings = null;
             profileMatchDetail = null;
             profileDetailLoading = false;
             profileDetailRequestKey = null;
@@ -1225,8 +1226,6 @@
             if (profileTab === "history") {
                 var historyEntry = activeProfileEntry();
                 if (historyEntry && (historyEntry.historyHasMore || historyEntry.historyError || !historyEntry.historyLoaded || historyEntry.stale)) loadMoreProfileHistory();
-            } else if (profileTab === "ranked") {
-                loadProfileRatings();
             } else if (profileTab === "victories") {
                 loadVictoryLeaderboard();
             }
@@ -1242,11 +1241,14 @@
             loadMoreProfileHistory();
             return;
         }
+        if (command === "load_victory_more") {
+            loadVictoryLeaderboard(true);
+            return;
+        }
         if (command === "retry_profile") {
             invalidateProfileCache(profileAccountId);
             profileSnapshotLoading = false;
             profileHistoryLoading = false;
-            profileRatingsLoading = false;
             loadProfile(profileAccountId);
             syncProfileDom();
             return;

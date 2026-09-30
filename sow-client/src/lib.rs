@@ -62,7 +62,6 @@ pub enum UiAction {
     LoadOwnProfile,
     OpenPublicProfilePage(String),
     LoadProfileHistory,
-    LoadProfileRatings,
     SearchProfiles(String),
     LoadMatchDetail(String),
     CloseMatchDetail,

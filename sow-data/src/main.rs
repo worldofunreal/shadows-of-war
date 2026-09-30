@@ -12,6 +12,7 @@ use axum::{
 use hmac::Mac;
 use log::{error, info, warn};
 use rand::RngCore;
+use redb::ReadableTableMetadata;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -4401,11 +4402,19 @@ async fn handle_direct_save(
 async fn handle_internal_stats(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let db_path = std::path::Path::new(&state.redb_path);
     let file_size = std::fs::metadata(db_path).map(|m| m.len()).unwrap_or(0);
+    let season_rating_rows = state.db.metadata_db.as_ref().and_then(|db| {
+        let read_txn = db.begin_read().ok()?;
+        let table = read_txn
+            .open_table(sow_data::metadata_db::SEASON_RATINGS_TABLE)
+            .ok()?;
+        table.len().ok()
+    });
 
     Json(serde_json::json!({
         "redb": {
             "path": state.redb_path,
             "file_size_bytes": file_size,
+            "season_rating_rows": season_rating_rows,
         }
     }))
 }

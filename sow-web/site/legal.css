@@ -1,5 +1,4 @@
 :root { --bg: #0a0a0e; --surface: #12121a; --ink: #f0f0f8; --muted: #9090a8; --line: #2a2a39; --orange: #ff5500; --font: 'Work Sans', system-ui, sans-serif; --mono: 'Work Sans', system-ui, sans-serif; --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px); }
-html[data-theme="light"] { --bg: #f5f0e6; --surface: #ede7d8; --ink: #0f0f0f; --muted: #684e40; --line: #0f0f0f; --orange: #ff7a00; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.7 var(--font); }
 a { color: var(--orange); }

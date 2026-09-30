@@ -400,8 +400,6 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.history_cursor = view.recent_matches.len();
                     self.ui.app.main_menu_state.profile.history_has_next =
                         view.matches_played > view.recent_matches.len() as u32;
-                    self.ui.app.main_menu_state.profile.ratings.clear();
-                    self.ui.app.main_menu_state.profile.ratings_loaded = false;
                     self.ui.app.main_menu_state.profile.view = Some(view);
                 }
                 crate::player_progress::DbEvent::ProfileLoadFailed { account_id, status } => {
@@ -433,17 +431,6 @@ impl SowApp {
                     self.ui.app.main_menu_state.profile.history_cursor =
                         next_cursor.unwrap_or(self.ui.app.main_menu_state.profile.history_cursor);
                     self.ui.app.main_menu_state.profile.history_has_next = next_cursor.is_some();
-                }
-                crate::player_progress::DbEvent::ProfileRatingsLoaded { account_id, items } => {
-                    if self.ui.app.main_menu_state.profile.account_id.as_deref()
-                        != Some(account_id.as_str())
-                    {
-                        continue;
-                    }
-                    self.ui.app.main_menu_state.profile.loading = false;
-                    self.ui.app.main_menu_state.profile.error = None;
-                    self.ui.app.main_menu_state.profile.ratings = items;
-                    self.ui.app.main_menu_state.profile.ratings_loaded = true;
                 }
                 crate::player_progress::DbEvent::ProfileSearchLoaded { query, items } => {
                     self.ui.app.main_menu_state.profile.loading = false;

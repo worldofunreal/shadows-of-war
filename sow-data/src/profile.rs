@@ -48,6 +48,7 @@ pub struct RewardReceipt {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AchievementView {
     pub id: String,
+    pub category: String,
     pub title: String,
     pub description: String,
     pub points: u64,
@@ -107,6 +108,8 @@ pub struct MatchRecord {
     pub winner_account_id: Option<String>,
     pub winning_team: Option<String>,
     pub verified: bool,
+    #[serde(default)]
+    pub provisional: bool,
     pub rating_eligible: bool,
     pub participants: Vec<MatchParticipantRecord>,
 }
@@ -233,6 +236,8 @@ pub struct PublicMatchSummary {
     pub assists: u32,
     pub players_defeated: u32,
     pub verified: bool,
+    #[serde(default)]
+    pub provisional: bool,
     pub rating_delta: Option<i16>,
 }
 
@@ -264,6 +269,8 @@ pub struct PublicMatchDetail {
     pub winner_account_id: Option<String>,
     pub winning_team: Option<String>,
     pub verified: bool,
+    #[serde(default)]
+    pub provisional: bool,
     pub rating_eligible: bool,
     pub participants: Vec<PublicMatchParticipant>,
 }

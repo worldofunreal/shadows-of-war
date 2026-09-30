@@ -1499,10 +1499,34 @@ fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
             bail!("dynamic localization key is missing: {key}");
         }
     }
-    for tab in ["overview", "leaders", "history", "ranked"] {
+    for tab in ["overview", "commanders", "history", "achievements"] {
         let key = format!("profile.tab_{tab}");
         if web_catalog_value(catalog, &key).is_none() {
             bail!("dynamic localization key is missing: {key}");
+        }
+    }
+    for category in ["battles", "victories", "commanders", "laurels"] {
+        let key = format!("profile.achievement_category_{category}");
+        if web_catalog_value(catalog, &key).is_none() {
+            bail!("dynamic localization key is missing: {key}");
+        }
+    }
+    for id in [
+        "first_command",
+        "first_victory",
+        "battle_hardened",
+        "victory_march",
+        "laurel_hoard",
+        "commander_victorious",
+        "veteran_commander",
+        "banner_collector",
+        "leader_path",
+    ] {
+        for suffix in ["title", "description"] {
+            let key = format!("profile.achievement_{id}_{suffix}");
+            if web_catalog_value(catalog, &key).is_none() {
+                bail!("dynamic localization key is missing: {key}");
+            }
         }
     }
     for slug in LEADER_SLUGS {
@@ -4036,6 +4060,16 @@ mod tests {
             &catalog
         )
         .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn profile_achievement_localization_exists_in_every_language() -> Result<()> {
+        for &(language, code, _, _) in sow_i18n::Language::registry() {
+            let catalog = serde_json::to_value(&sow_i18n::web(language))?;
+            validate_dynamic_web_keys(&catalog)
+                .with_context(|| format!("validate profile labels for {code}"))?;
+        }
         Ok(())
     }
 

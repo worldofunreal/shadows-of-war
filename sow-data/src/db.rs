@@ -358,6 +358,7 @@ impl PlayerProfile {
             .iter()
             .map(|achievement| crate::profile::AchievementView {
                 id: achievement.id.to_string(),
+                category: achievement.category.to_string(),
                 title: achievement.title.to_string(),
                 description: achievement.description.to_string(),
                 points: achievement.points,
@@ -685,22 +686,73 @@ impl PlayerDb {
         &self,
         record: &MatchRecord,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.persist_match_record(record, false)
+    }
+
+    fn save_provisional_match_record(
+        &self,
+        record: &MatchRecord,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.persist_match_record(record, true)
+    }
+
+    fn persist_match_record(
+        &self,
+        record: &MatchRecord,
+        merge_provisional: bool,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let Some(db) = &self.metadata_db else {
             return Err("profile metadata database unavailable".into());
         };
         let write_txn = db.begin_write()?;
         let mut matches = write_txn.open_table(MATCHES_TABLE)?;
-        let json = serde_json::to_vec(record)?;
-        matches.insert(record.match_id.as_str(), json.as_slice())?;
-        drop(matches);
-
+        let previous = matches
+            .get(record.match_id.as_str())?
+            .map(|value| serde_json::from_slice::<MatchRecord>(value.value()))
+            .transpose()?;
+        if merge_provisional && previous.as_ref().is_some_and(|saved| !saved.provisional) {
+            return Ok(());
+        }
+        let mut next = record.clone();
+        if merge_provisional {
+            if let Some(saved) = &previous {
+                next = saved.clone();
+                next.completed_at = record.completed_at;
+                next.duration_seconds = record.duration_seconds;
+                for participant in &record.participants {
+                    if let Some(existing) = next
+                        .participants
+                        .iter_mut()
+                        .find(|existing| existing.account_id == participant.account_id)
+                    {
+                        *existing = participant.clone();
+                    } else {
+                        next.participants.push(participant.clone());
+                    }
+                }
+            }
+            next.provisional = true;
+            next.verified = false;
+        }
         let mut index = write_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
-        for participant in &record.participants {
+        if let Some(previous) = &previous {
+            for participant in &previous.participants {
+                let old_key = format!(
+                    "player:{}:{:020}:{}",
+                    participant.account_id, previous.completed_at, previous.match_id
+                );
+                index.remove(old_key.as_str())?;
+            }
+        }
+        let json = serde_json::to_vec(&next)?;
+        matches.insert(next.match_id.as_str(), json.as_slice())?;
+        drop(matches);
+        for participant in &next.participants {
             let key = format!(
                 "player:{}:{:020}:{}",
-                participant.account_id, record.completed_at, record.match_id
+                participant.account_id, next.completed_at, next.match_id
             );
-            index.insert(key.as_str(), record.match_id.as_bytes())?;
+            index.insert(key.as_str(), next.match_id.as_bytes())?;
         }
         drop(index);
         write_txn.commit()?;
@@ -724,160 +776,6 @@ impl PlayerDb {
         table.insert(key.as_str(), json.as_slice())?;
         drop(table);
         write_txn.commit()?;
-        Ok(())
-    }
-
-    fn load_season_rating(
-        &self,
-        account_id: &str,
-        queue: &str,
-        mode: &str,
-    ) -> Result<Option<SeasonRating>, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(db) = &self.metadata_db else {
-            return Ok(None);
-        };
-        let key = format!(
-            "rating:{}:{}:{}:{}",
-            account_id,
-            crate::profile::CURRENT_SEASON_ID,
-            queue,
-            mode
-        );
-        let read_txn = db.begin_read()?;
-        let table = read_txn.open_table(SEASON_RATINGS_TABLE)?;
-        let Some(value) = table.get(key.as_str())? else {
-            return Ok(None);
-        };
-        Ok(Some(serde_json::from_slice(value.value())?))
-    }
-
-    fn pair_update(winner: &mut SeasonRating, loser: &mut SeasonRating) {
-        // Weng-Lin/OpenSkill update for one decisive comparison. FFA and team
-        // results are reduced to pairwise comparisons, keeping the stored
-        // ladder independent of client-provided UI values.
-        let beta = 25.0 / 6.0;
-        let c = (2.0 * beta * beta + winner.sigma * winner.sigma + loser.sigma * loser.sigma)
-            .sqrt()
-            .max(0.0001);
-        let t = (winner.mu - loser.mu) / c;
-        let normal = |x: f64| (-x * x / 2.0).exp() / (2.0 * std::f64::consts::PI).sqrt();
-        let cdf = |x: f64| 1.0 / (1.0 + (-1.702 * x).exp());
-        let v = normal(t) / cdf(t).max(1e-9);
-        let w = v * (v + t);
-        let winner_var = winner.sigma * winner.sigma;
-        let loser_var = loser.sigma * loser.sigma;
-        winner.mu += winner_var / c * v;
-        loser.mu -= loser_var / c * v;
-        winner.sigma *= (1.0 - winner_var / (c * c) * w).max(0.01).sqrt();
-        loser.sigma *= (1.0 - loser_var / (c * c) * w).max(0.01).sqrt();
-    }
-
-    fn apply_ratings(
-        &self,
-        record: &mut MatchRecord,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if !record.rating_eligible {
-            return Ok(());
-        }
-        let human_indexes = record
-            .participants
-            .iter()
-            .enumerate()
-            .filter(|(_, participant)| !participant.is_bot)
-            .map(|(index, _)| index)
-            .collect::<Vec<_>>();
-        let mut ratings = human_indexes
-            .iter()
-            .map(|index| {
-                let participant = &record.participants[*index];
-                let rating = self
-                    .load_season_rating(&participant.account_id, &record.queue, &record.mode)?
-                    .unwrap_or(SeasonRating {
-                        schema_version: 1,
-                        account_id: participant.account_id.clone(),
-                        season_id: record.season_id,
-                        queue: record.queue.clone(),
-                        mode: record.mode.clone(),
-                        games_played: 0,
-                        wins: 0,
-                        mu: 25.0,
-                        sigma: 8.333,
-                        score: 0,
-                        tier: "Provisional".to_string(),
-                        division: None,
-                        peak_score: 0,
-                        placements_complete: false,
-                        updated_at: 0,
-                    });
-                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(rating)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        if record.mode == "HumansVsNations" && human_indexes.len() == 1 {
-            let mut ai = SeasonRating {
-                mu: 25.0,
-                sigma: 1.0,
-                ..ratings[0].clone()
-            };
-            ai.account_id.clear();
-            let human_won = record.participants[human_indexes[0]].won;
-            if human_won {
-                Self::pair_update(&mut ratings[0], &mut ai);
-            } else {
-                Self::pair_update(&mut ai, &mut ratings[0]);
-            }
-        } else {
-            for left in 0..ratings.len() {
-                for right in left + 1..ratings.len() {
-                    let left_won = record.participants[human_indexes[left]].won;
-                    let right_won = record.participants[human_indexes[right]].won;
-                    if left_won == right_won {
-                        continue;
-                    }
-                    if left_won {
-                        let (winner, loser) = ratings.split_at_mut(right);
-                        Self::pair_update(&mut winner[left], &mut loser[0]);
-                    } else {
-                        let (winner, loser) = ratings.split_at_mut(right);
-                        Self::pair_update(&mut loser[0], &mut winner[left]);
-                    }
-                }
-            }
-        }
-
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        for (index, rating) in ratings.iter_mut().enumerate() {
-            let old_score = if rating.games_played == 0 {
-                crate::profile::ladder_score(25.0, 8.333)
-            } else {
-                rating.score
-            };
-            let participant = &mut record.participants[human_indexes[index]];
-            rating.games_played = rating.games_played.saturating_add(1);
-            if participant.won {
-                rating.wins = rating.wins.saturating_add(1);
-            }
-            rating.score = crate::profile::ladder_score(rating.mu, rating.sigma);
-            rating.placements_complete = rating.games_played >= 5;
-            let (tier, division) = crate::profile::tier_for_score(rating.score);
-            rating.tier = if rating.placements_complete {
-                tier.to_string()
-            } else {
-                "Provisional".to_string()
-            };
-            rating.division = if rating.placements_complete {
-                division
-            } else {
-                None
-            };
-            rating.peak_score = rating.peak_score.max(rating.score);
-            rating.updated_at = now;
-            participant.rating_delta = Some(rating.score as i16 - old_score as i16);
-            self.save_season_rating(rating)?;
-        }
         Ok(())
     }
 
@@ -940,20 +838,24 @@ impl PlayerDb {
             return Ok(Vec::new());
         };
         let prefix = format!("player:{account_id}:");
+        let upper = format!("{prefix}\u{10ffff}");
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
         let mut match_ids = Vec::new();
-        for item in table.iter()? {
+        let mut seen = std::collections::HashSet::new();
+        for item in table.range(prefix.as_str()..upper.as_str())?.rev() {
             let (key, value) = item?;
-            if key.value().starts_with(&prefix)
-                && let Ok(match_id) = std::str::from_utf8(value.value())
+            if !key.value().starts_with(&prefix) {
+                break;
+            }
+            if let Ok(match_id) = std::str::from_utf8(value.value())
+                && seen.insert(match_id.to_string())
             {
                 match_ids.push(match_id.to_string());
             }
         }
         drop(table);
         drop(read_txn);
-        match_ids.sort_by(|left, right| right.cmp(left));
         let mut skipped = 0usize;
         let mut records = Vec::with_capacity(limit.min(match_ids.len().saturating_sub(offset)));
         for match_id in match_ids {
@@ -994,6 +896,7 @@ impl PlayerDb {
             assists: participant.assists,
             players_defeated: participant.players_defeated,
             verified: record.verified,
+            provisional: record.provisional,
             rating_delta: participant.rating_delta,
         })
     }
@@ -1048,7 +951,13 @@ impl PlayerDb {
                 xp: stats.xp,
             })
             .collect::<Vec<_>>();
-        leaders.sort_by_key(|left| std::cmp::Reverse(left.xp));
+        leaders.sort_by(|left, right| {
+            right
+                .matches_played
+                .cmp(&left.matches_played)
+                .then_with(|| right.wins.cmp(&left.wins))
+                .then_with(|| right.xp.cmp(&left.xp))
+        });
         let recent_matches = self
             .match_history_for_account(&account.id, 0, 10, None, None)?
             .iter()
@@ -1228,6 +1137,7 @@ impl PlayerDb {
             winner_account_id,
             winning_team: record.winning_team,
             verified: record.verified,
+            provisional: record.provisional,
             rating_eligible: record.rating_eligible,
             participants,
         }))
@@ -2339,15 +2249,13 @@ impl PlayerDb {
         if account.kind == AccountKind::Bot {
             return Ok(None);
         }
-        if account.profile.reward_receipts.contains_key(match_id) {
-            return Ok(Some(account));
-        }
+        let settled = account.profile.reward_receipts.contains_key(match_id);
         drop(con);
 
         let start = self
             .match_start_record(match_id)?
             .ok_or("trusted match registration unavailable")?;
-        let leader = start
+        let relay_player = start
             .metadata
             .get("relay_players")
             .and_then(serde_json::Value::as_array)
@@ -2358,13 +2266,71 @@ impl PlayerDb {
                         .and_then(serde_json::Value::as_str)
                         == Some(account_id)
                 })
-            })
+            });
+        let leader = relay_player
             .and_then(|player| player.get("leader"))
             .and_then(serde_json::Value::as_str)
             .and_then(crate::rewards::canonical_leader_name);
-        self.record_match_participation(account_id, leader, match_id)
-            .await
-            .map(Some)
+        let account = if settled {
+            account
+        } else {
+            self.record_match_participation(account_id, leader.clone(), match_id)
+                .await?
+        };
+        let config = start.metadata.get("config");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let started_at = start
+            .metadata
+            .get("started_at")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(now);
+        let participant = crate::profile::MatchParticipantRecord {
+            account_id: account.id.clone(),
+            display_name: account.display_name.clone(),
+            is_bot: false,
+            leader,
+            team: relay_player
+                .and_then(|player| player.get("team"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+            ..Default::default()
+        };
+        let record = MatchRecord {
+            schema_version: 1,
+            match_id: match_id.to_string(),
+            season_id: crate::profile::CURRENT_SEASON_ID,
+            queue: start
+                .metadata
+                .get("kind")
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Matchmaking")
+                .to_string(),
+            mode: config
+                .and_then(|value| value.get("game_mode"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("FFA")
+                .to_string(),
+            map_name: config
+                .and_then(|value| value.get("map_name"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("world")
+                .to_string(),
+            started_at,
+            completed_at: now,
+            duration_seconds: now.saturating_sub(started_at).min(u32::MAX as u64) as u32,
+            winner_account_id: None,
+            winning_team: None,
+            verified: false,
+            provisional: true,
+            rating_eligible: false,
+            participants: vec![participant],
+        };
+        self.save_provisional_match_record(&record)?;
+        Ok(Some(account))
     }
 
     /// Record exact daily activity for an account (retention cohorts).
@@ -3994,7 +3960,10 @@ impl PlayerDb {
         if con.exists(&finalized_key).await? {
             return Ok(Vec::new());
         }
-        if self.load_match_record(match_id)?.is_some() {
+        if self
+            .load_match_record(match_id)?
+            .is_some_and(|record| !record.provisional)
+        {
             let _: () = con.set(&finalized_key, "1").await?;
             return Ok(Vec::new());
         }
@@ -4150,10 +4119,13 @@ impl PlayerDb {
             map_name,
             started_at,
             completed_at,
-            duration_seconds: 0,
+            duration_seconds: completed_at
+                .saturating_sub(started_at)
+                .min(u32::MAX as u64) as u32,
             winner_account_id: winner,
             winning_team,
             verified: false,
+            provisional: false,
             rating_eligible: false,
             participants: participant_records,
         };
@@ -4437,6 +4409,7 @@ impl PlayerDb {
             .map(|participant| participant.account_id.clone());
         record.winning_team = result.winning_team.clone();
         record.verified = true;
+        record.provisional = false;
         self.save_match_record(&record)?;
         Ok((playgames_outcomes, mirrored_accounts))
     }
@@ -4499,9 +4472,10 @@ fn is_valid_gem_grant_request_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, PlayerAccount, PlayerDb,
-        PlayerProfile, PurchaseRecord, generated_display_name, is_valid_account_id,
+        AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
+        PlayerDb, PlayerProfile, PurchaseRecord, generated_display_name, is_valid_account_id,
         is_valid_gem_grant_request_id, normalize_display_name, validate_lobby_match_id,
+        verified_victory_key,
     };
 
     fn test_account(kind: AccountKind) -> PlayerAccount {
@@ -4518,6 +4492,30 @@ mod tests {
     }
 
     #[test]
+    fn achievement_views_expose_nine_categorized_server_achievements() {
+        let mut profile = PlayerProfile::default();
+        profile.matches_played = 1;
+        let views = profile.achievement_views();
+        assert_eq!(views.len(), 9);
+        assert_eq!(
+            views.iter().map(|view| view.category.as_str()).collect::<Vec<_>>(),
+            [
+                "battles",
+                "victories",
+                "battles",
+                "victories",
+                "laurels",
+                "victories",
+                "commanders",
+                "commanders",
+                "commanders",
+            ]
+        );
+        assert_eq!(views[0].progress, 1);
+        assert!(!views[0].unlocked);
+    }
+
+    #[test]
     fn validates_canonical_account_ids() {
         assert!(is_valid_account_id("0123456789abcdef0123456789abcdef"));
         assert!(is_valid_account_id("52948534-1c9f-4def-bc8e-80390d3287a6"));
@@ -4527,6 +4525,119 @@ mod tests {
             "guest_0123456789abcdef0123456789abcdef"
         ));
         assert!(!is_valid_account_id("not-an-account"));
+    }
+
+    #[test]
+    fn profile_match_index_is_account_scoped_chronological_and_updates_one_provisional_row() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::metadata_db::init_database(temp.path().join("profile.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        let alice = "0123456789abcdef0123456789abcdef";
+        let bob = "fedcba9876543210fedcba9876543210";
+        let make_record = |id: &str, at: u64, accounts: &[&str], provisional: bool| {
+            MatchRecord {
+                schema_version: 1,
+                match_id: id.to_string(),
+                season_id: 1,
+                queue: "Matchmaking".to_string(),
+                mode: "FFA".to_string(),
+                map_name: "world".to_string(),
+                started_at: at.saturating_sub(60),
+                completed_at: at,
+                duration_seconds: 60,
+                winner_account_id: None,
+                winning_team: None,
+                verified: !provisional,
+                provisional,
+                rating_eligible: false,
+                participants: accounts
+                    .iter()
+                    .map(|account_id| crate::profile::MatchParticipantRecord {
+                        account_id: (*account_id).to_string(),
+                        display_name: (*account_id).to_string(),
+                        ..Default::default()
+                    })
+                    .collect(),
+            }
+        };
+
+        db.save_provisional_match_record(&make_record("m1", 100, &[alice], true))
+            .unwrap();
+        db.save_provisional_match_record(&make_record("m2", 200, &[bob], true))
+            .unwrap();
+        db.save_provisional_match_record(&make_record("m3", 300, &[alice], true))
+            .unwrap();
+        db.save_provisional_match_record(&make_record("m1", 400, &[alice, bob], true))
+            .unwrap();
+
+        let alice_history = db.match_history_for_account(alice, 0, 10, None, None).unwrap();
+        assert_eq!(
+            alice_history
+                .iter()
+                .map(|record| record.match_id.as_str())
+                .collect::<Vec<_>>(),
+            ["m1", "m3"]
+        );
+        let bob_history = db.match_history_for_account(bob, 0, 10, None, None).unwrap();
+        assert_eq!(
+            bob_history
+                .iter()
+                .map(|record| record.match_id.as_str())
+                .collect::<Vec<_>>(),
+            ["m1", "m2"]
+        );
+
+        db.save_match_record(&make_record("m1", 500, &[alice, bob], false))
+            .unwrap();
+        db.save_provisional_match_record(&make_record("m1", 600, &[alice], true))
+            .unwrap();
+        let saved = db.load_match_record("m1").unwrap().unwrap();
+        assert!(!saved.provisional);
+        assert!(saved.verified);
+        assert_eq!(saved.completed_at, 500);
+        let history = db.match_history_for_account(alice, 0, 10, None, None).unwrap();
+        assert_eq!(history.iter().filter(|record| record.match_id == "m1").count(), 1);
+        assert_eq!(history[0].match_id, "m1");
+    }
+
+    #[tokio::test]
+    async fn verified_victory_leaderboard_pages_keep_order_and_global_ranks() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::metadata_db::init_database(temp.path().join("profile.redb")).unwrap(),
+        );
+        let write_txn = metadata.begin_write().unwrap();
+        {
+            let mut table = write_txn
+                .open_table(crate::metadata_db::VERIFIED_VICTORY_BOARD_TABLE)
+                .unwrap();
+            for (account_id, wins) in [("alice", 20), ("bob", 10), ("carol", 3)] {
+                let entry = crate::profile::PublicVictoryLeaderboardEntry {
+                    rank: 0,
+                    account_id: account_id.to_string(),
+                    handle: account_id.to_string(),
+                    level: 1,
+                    matches_played: wins,
+                    wins,
+                };
+                let json = serde_json::to_vec(&entry).unwrap();
+                let key = verified_victory_key(wins, account_id);
+                table
+                    .insert(key.as_str(), json.as_slice())
+                    .unwrap();
+            }
+        }
+        write_txn.commit().unwrap();
+
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        let first = db.public_victory_leaderboard(0, 2).await.unwrap();
+        let second = db.public_victory_leaderboard(2, 2).await.unwrap();
+        assert_eq!(first.iter().map(|entry| entry.wins).collect::<Vec<_>>(), [20, 10]);
+        assert_eq!(first.iter().map(|entry| entry.rank).collect::<Vec<_>>(), [1, 2]);
+        assert_eq!(second.iter().map(|entry| entry.wins).collect::<Vec<_>>(), [3]);
+        assert_eq!(second[0].rank, 3);
     }
 
     #[test]

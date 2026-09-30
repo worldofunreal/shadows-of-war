@@ -32,24 +32,13 @@ pub mod profile {
         pub account_id: Option<String>,
         pub view: Option<sow_data::profile::PublicProfileView>,
         pub history: Vec<sow_data::profile::PublicMatchSummary>,
-        pub ratings: Vec<sow_data::profile::PublicRatingView>,
         pub search_results: Vec<sow_data::profile::PublicProfileSummary>,
         pub search_query: String,
         pub history_cursor: usize,
         pub history_has_next: bool,
         pub match_detail: Option<sow_data::profile::PublicMatchDetail>,
-        pub ratings_loaded: bool,
         pub loading: bool,
         pub error: Option<crate::ui::UiText>,
-        pub active_tab: ProfileTab,
-    }
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub enum ProfileTab {
-        #[default]
-        Overview,
-        Leaders,
-        History,
-        Ranked,
     }
 }
 

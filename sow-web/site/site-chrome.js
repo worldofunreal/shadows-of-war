@@ -1,14 +1,9 @@
 (() => {
   const root = document.documentElement;
-  const toggles = [...document.querySelectorAll('[data-theme-toggle]')];
   const localeControls = [...document.querySelectorAll('[data-locale-select]')];
   let openLocaleKey = null;
 
   const translate = (key, values) => typeof window.SOW_t === 'function' ? window.SOW_t(key, values) : key;
-  const translated = (key, fallback) => {
-    const value = translate(key);
-    return value === key || value === `[${key}]` ? fallback : value;
-  };
 
   const translationValues = element => {
     if (!element.dataset.i18nValues) return undefined;
@@ -105,36 +100,12 @@
     });
     const codes = typeof window.SOW_getSupportedLocales === 'function' ? window.SOW_getSupportedLocales() : [];
     renderLocaleControls(locale, codes);
-    setTheme(root.dataset.theme || 'dark');
-  }
-
-  function setTheme(theme) {
-    root.dataset.theme = theme;
-    localStorage.setItem('sow-theme', theme);
-    const light = theme === 'light';
-    toggles.forEach(toggle => {
-      const icon = toggle.querySelector('.theme-icon');
-      const label = toggle.querySelector('.theme-label');
-      if (icon) icon.textContent = light ? '☾' : '☼';
-      if (label) label.textContent = translated(light ? 'site.dark_mode' : 'site.light_mode', label.textContent);
-      const ariaLabel = translated(light ? 'site.switch_to_dark' : 'site.switch_to_light', toggle.getAttribute('aria-label'));
-      if (ariaLabel) toggle.setAttribute('aria-label', ariaLabel);
-    });
-    const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (themeColor) themeColor.content = light ? '#f0eee7' : '#0a1015';
   }
 
   function closeLocaleDropdown(focusTarget) {
     openLocaleKey = null;
     syncLocaleDropdowns(focusTarget);
   }
-
-  const saved = localStorage.getItem('sow-theme');
-  const preferred = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  setTheme(saved || preferred);
-  toggles.forEach(toggle => toggle.addEventListener('click', () => {
-    setTheme(root.dataset.theme === 'light' ? 'dark' : 'light');
-  }));
 
   document.addEventListener('click', event => {
     const option = event.target.closest('[data-locale-select] [data-command="select_dropdown"]');

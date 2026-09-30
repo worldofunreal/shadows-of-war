@@ -32,7 +32,6 @@ impl UiText {
     pub fn profile_operation(operation: &str) -> Self {
         let key = match operation {
             "match history" => "profile.match_history_unavailable",
-            "ranked records" => "profile.ranked_records_unavailable",
             "profile search" => "profile.player_search_unavailable",
             "match detail" => "profile.match_detail_unavailable",
             _ => "profile.profile_unavailable",

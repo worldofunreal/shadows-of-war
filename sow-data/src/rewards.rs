@@ -30,6 +30,7 @@ pub struct MatchReward {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AchievementDefinition {
     pub id: &'static str,
+    pub category: &'static str,
     pub title: &'static str,
     pub description: &'static str,
     pub points: u64,
@@ -87,6 +88,7 @@ pub fn achievement_card_token_id(achievement_id: &str) -> String {
 pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     AchievementDefinition {
         id: "first_command",
+        category: "battles",
         title: "First Command",
         description: "Complete your first match.",
         points: 10,
@@ -94,13 +96,15 @@ pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     },
     AchievementDefinition {
         id: "first_victory",
+        category: "victories",
         title: "First Victory",
-        description: "Win an authoritative match.",
+        description: "Win a verified match.",
         points: 25,
         target: 1,
     },
     AchievementDefinition {
         id: "battle_hardened",
+        category: "battles",
         title: "Battle Hardened",
         description: "Complete 10 matches.",
         points: 25,
@@ -108,13 +112,15 @@ pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     },
     AchievementDefinition {
         id: "victory_march",
+        category: "victories",
         title: "Victory March",
-        description: "Win 10 authoritative matches.",
+        description: "Win 10 verified matches.",
         points: 50,
         target: 10,
     },
     AchievementDefinition {
         id: "laurel_hoard",
+        category: "laurels",
         title: "Laurel Hoard",
         description: "Earn 100 achievement points.",
         points: 50,
@@ -122,6 +128,7 @@ pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     },
     AchievementDefinition {
         id: "commander_victorious",
+        category: "victories",
         title: "Commander Victorious",
         description: "Win with a commander.",
         points: 25,
@@ -129,6 +136,7 @@ pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     },
     AchievementDefinition {
         id: "veteran_commander",
+        category: "commanders",
         title: "Veteran Commander",
         description: "Complete 10 matches with commanders.",
         points: 50,
@@ -136,6 +144,7 @@ pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     },
     AchievementDefinition {
         id: "banner_collector",
+        category: "commanders",
         title: "Banner Collector",
         description: "Command three different leaders.",
         points: 50,
@@ -143,6 +152,7 @@ pub const ACHIEVEMENTS: &[AchievementDefinition] = &[
     },
     AchievementDefinition {
         id: "leader_path",
+        category: "commanders",
         title: "Leader Path",
         description: "Earn 1,000 leader experience.",
         points: 100,

@@ -29,13 +29,11 @@
     var profileTab = "overview";
     var profileData = null;
     var profileHistory = [];
-    var profileRatings = null;
     var profileMatchDetail = null;
     var profileSearchResults = [];
     var profileCache = Object.create(null);
     var profileSnapshotLoading = false;
     var profileHistoryLoading = false;
-    var profileRatingsLoading = false;
     var profileDetailLoading = false;
     var profileDetailError = "";
     var profileDetailId = null;
@@ -261,8 +259,10 @@
         while (pendingCommands.length) window.SOW_menu_command(pendingCommands.shift());
     };
 
-    function heroImage() {
-        var leader = leaderById(state && state.selected_leader);
+    function heroImage(leaderId) {
+        var leader = arguments.length
+            ? leaderById(leaderId || "Caesar")
+            : leaderById(state && state.selected_leader);
         return asset("shell/leaders/" + leader.slug + "_desktop.webp");
     }
 

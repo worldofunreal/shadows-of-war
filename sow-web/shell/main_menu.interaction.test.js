@@ -10,6 +10,16 @@ const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf
 const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.js"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
 const profileCss = fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
+const profileSource = fs.readFileSync(path.join(shell, "main_menu.profile.js"), "utf8");
+const nativeProfileSource = [
+    "../../sow-client/src/app/account.rs",
+    "../../sow-client/src/asset.rs",
+    "../../sow-client/src/lib.rs",
+    "../../sow-client/src/player_progress.rs",
+    "../../sow-client/src/render/interact/actions.rs",
+    "../../sow-client/src/ui/main_menu/mod.rs",
+    "../../sow-client/src/ui.rs"
+].map((file) => fs.readFileSync(path.join(shell, file), "utf8")).join("\n");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.js"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
@@ -23,6 +33,10 @@ const campaignEditorServer = fs.readFileSync(path.join(shell, "../../sow-tools/e
 const campaignEditorHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/logic.html"), "utf8");
 const campaignEditorCss = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.css"), "utf8");
 const gameFonts = fs.readFileSync(path.join(shell, "../../sow-web/site/fonts/fonts.css"), "utf8");
+const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
+const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
+const siteApp = fs.readFileSync(path.join(shell, "../../sow-web/site/app.js"), "utf8");
+const siteCss = fs.readFileSync(path.join(shell, "../../sow-web/site/styles.css"), "utf8");
 const campaignMapEditorHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/index.html"), "utf8");
 const campaignMapPreview = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.js"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.js"), "utf8");
@@ -71,6 +85,16 @@ function renderSettingsBody(source, endMarker) {
     assert.notEqual(end, -1);
     return source.slice(start, end);
 }
+
+test("public landing keeps its leader showcase and visible FAQ entry point", () => {
+    assert.match(landingHtml, /class="hero-stage"[\s\S]*data-hero-image[\s\S]*data-leader-rail/);
+    assert.match(siteApp, /function renderLeaderRail\(\)/);
+    assert.match(siteApp, /heroImage\.src = asset\(leader\)/);
+    assert.match(siteHeader, /href="\/#faq"/);
+    assert.match(landingHtml, /id="faq"[\s\S]*class="faq-list"/);
+    assert.match(siteCss, /\.hero-stage[\s\S]*\.hero-frame/);
+    assert.match(siteCss, /\.faq-list \{ display: grid/);
+});
 
 test("menu CSS keeps shared layout separate from live screen domains", () => {
     for (const file of menuCssFiles) assert.ok(menuCss[file].length > 0, file);
@@ -213,6 +237,28 @@ test("game exit resets Battle and replays the screen entrance after the loader",
     assert.match(loaderSource, /if \(!loaderReadyDispatched\)/);
     assert.ok(shellSource.indexOf("if (returnedFromGame)") < shellSource.indexOf("SOW_open_store_after_match"));
     assert.match(menuCss["main_menu.layout.css"], /sow-screen-panel-enter 240ms/);
+});
+
+test("profile presents verified history, career commanders, localized achievements, and a paged global board", () => {
+    const matchRowStart = profileSource.indexOf("function profileMatchRow");
+    const matchRowEnd = profileSource.indexOf("function profileHeaderMarkup", matchRowStart);
+    assert.ok(matchRowStart >= 0 && matchRowEnd > matchRowStart);
+    const matchRow = profileSource.slice(matchRowStart, matchRowEnd);
+    assert.match(matchRow, /match\.verified[\s\S]*profile\.match_pending[\s\S]*profile\.match_unverified/);
+    assert.match(matchRow, /var verified = !!match\.verified;/);
+    assert.match(matchRow, /var result = verified\s+\? \(match\.won \? SOW_t\("profile\.win"\) : SOW_t\("profile\.loss"\)\)/);
+    assert.match(profileSource, /profile\.achievement_category_/);
+    assert.match(profileSource, /profile\.achievement_" \+ achievement\.id/);
+    assert.match(profileSource, /sort\(function \(left, right\) \{ return \(right\.matches_played/);
+    assert.match(profileSource, /leaderboard\?kind=victories&cursor=/);
+    assert.match(profileSource, /profileVictoryLeaderboardCursor = data\.next_cursor/);
+    assert.match(profileSource, /data-command='load_victory_more'/);
+    assert.match(profileSource, /profile\.preferred_commander/);
+    assert.match(profileCss, /sow-profile__victory-row > b:first-child[\s\S]*color: #38bdf8/);
+    assert.match(shellSource, /heroImage\(profileData && profileData\.preferred_leader\)/);
+    assert.doesNotMatch(profileSource, /loadProfileRatings|profileTab === "ranked"|profileRecentLeadersPanel/);
+    assert.doesNotMatch(profileCss, /sow-profile__favorites|sow-profile__rating/);
+    assert.doesNotMatch(nativeProfileSource, /LoadProfileRatings|ProfileRatingsLoaded|ratings_loaded|ProfileTab::Ranked|ranked records/i);
 });
 
 test("settings panel keeps only useful controls and real account state", () => {

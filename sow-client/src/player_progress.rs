@@ -131,10 +131,6 @@ pub enum DbEvent {
         items: Vec<sow_data::profile::PublicMatchSummary>,
         next_cursor: Option<usize>,
     },
-    ProfileRatingsLoaded {
-        account_id: String,
-        items: Vec<sow_data::profile::PublicRatingView>,
-    },
     ProfileSearchLoaded {
         query: String,
         items: Vec<sow_data::profile::PublicProfileSummary>,

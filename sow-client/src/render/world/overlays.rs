@@ -224,8 +224,6 @@ fn render_nameplates(
         if fit_scale <= 0.0 || !fit_scale.is_finite() {
             continue;
         }
-        let fit_scale = fit_scale_with_human_minimum(fit_scale, scaled_size, is_human);
-
         if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
             let dot_scale = fit_size_to_land(
                 2.0 * (LOD_DOT_RADIUS + 1.0),
@@ -237,7 +235,14 @@ fn render_nameplates(
             continue;
         }
 
-        let show_full = is_human || (scaled_size >= 7.0 && full_labels_drawn < 80);
+        let fitted_font_size = fitted_nameplate_font_px(
+            scaled_size,
+            fit_scale,
+            dev.font_size_scale,
+            dev.vfx_nameplate_names,
+            dev.vfx_nameplate_troops,
+        );
+        let show_full = fitted_font_size >= 7.0 && (is_human || full_labels_drawn < 80);
         if !show_full {
             let dot_scale = fit_size_to_land(
                 2.0 * (LOD_DOT_RADIUS + 1.0),
@@ -530,11 +535,20 @@ fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
 }
 
 #[inline]
-fn fit_scale_with_human_minimum(fit_scale: f32, scaled_size: f32, is_human: bool) -> f32 {
-    if is_human {
-        fit_scale.max(NAMEPLATE_MIN_FONT / scaled_size.max(NAMEPLATE_MIN_FONT))
+fn fitted_nameplate_font_px(
+    scaled_size: f32,
+    fit_scale: f32,
+    font_scale: f32,
+    show_names: bool,
+    show_troops: bool,
+) -> f32 {
+    let font_px = scaled_size.max(7.0) * font_scale.max(0.1) * fit_scale;
+    if show_names {
+        font_px
+    } else if show_troops {
+        font_px * TROOPS_SCALE
     } else {
-        fit_scale
+        f32::INFINITY
     }
 }
 
@@ -1985,11 +1999,11 @@ mod tests {
     }
 
     #[test]
-    fn land_fit_preserves_human_minimum_and_keeps_other_scales() {
-        assert_eq!(fit_scale_with_human_minimum(0.2, 8.0, true), 1.0);
-        assert_eq!(fit_scale_with_human_minimum(0.2, 16.0, true), 0.5);
-        assert_eq!(fit_scale_with_human_minimum(0.75, 16.0, true), 0.75);
-        assert_eq!(fit_scale_with_human_minimum(0.2, 8.0, false), 0.2);
+    fn nameplate_lod_uses_the_final_fitted_font_size() {
+        assert_eq!(fitted_nameplate_font_px(8.0, 1.0, 1.0, true, true), 8.0);
+        assert!(fitted_nameplate_font_px(8.0, 0.5, 1.0, true, true) < 7.0);
+        assert!(fitted_nameplate_font_px(8.0, 0.5, 1.0, false, true) >= 7.0);
+        assert!(fitted_nameplate_font_px(8.0, 0.1, 1.0, false, false).is_infinite());
     }
 
     #[test]
