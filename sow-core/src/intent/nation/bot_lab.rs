@@ -880,6 +880,88 @@ impl serde::Serialize for S16TracePlayers<'_> {
     }
 }
 
+struct S16TraceConfig<'a>(&'a crate::game_config::GameConfig);
+
+impl serde::Serialize for S16TraceConfig<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let config = self.0;
+        // Keep the original S16 schema; later map/campaign options are absent
+        // from this fixed lab setup.
+        (
+            (
+                &config.max_players,
+                &config.bot_count,
+                &config.nation_count,
+                &config.bot_difficulty,
+                &config.seed,
+                &config.map_name,
+                &config.game_mode,
+                &config.map_width,
+                &config.map_height,
+                &config.random_spawn,
+                &config.map_control_win_percentage,
+                &config.tick_rate_ms,
+                &config.global_speed_multiplier,
+                &config.attack_cost_enemy,
+                &config.attack_cost_neutral,
+                &config.terrain_multiplier_highland,
+            ),
+            (
+                &config.terrain_multiplier_mountain,
+                &config.max_tiles_per_tick,
+                &config.max_tiles_per_tick_reference_troops,
+                &config.max_tiles_per_tick_at_reference,
+                &config.momentum_divisor,
+                &config.starting_troops,
+                &config.starting_gold,
+                &config.gold_base_income,
+                &config.troop_base_income,
+                &config.max_troops_base,
+                &config.max_troops_scale,
+                &config.territory_gold_amount,
+                &config.territory_gold_tiles,
+                &config.territory_troop_amount,
+                &config.territory_troop_tiles,
+                &config.city_max_troops,
+            ),
+            (
+                &config.city_gold_income,
+                &config.city_troop_income,
+                &config.farm_troop_income,
+                &config.bunker_range,
+                &config.bunker_priority,
+                &config.bunker_strength,
+                &config.factory_gold_income,
+                &config.port_troop_income,
+                &config.port_gold_income,
+                &config.cost_city,
+                &config.cost_bunker,
+                &config.cost_factory,
+                &config.cost_port,
+                &config.cost_farm,
+                &config.structure_upgrade_scale,
+                &config.cost_scale_cap_multiplier,
+            ),
+            (
+                &config.nuke_cost,
+                &config.player_civilization,
+                &config.player_leader,
+                &config.scripted_spawns,
+                &config.player_spawn,
+                &config.player_team,
+                &config.buildings_enabled,
+                &config.buildings_unlock_after_defeated,
+                &config.campaign_support,
+                &config.tutorial,
+            ),
+        )
+            .serialize(serializer)
+    }
+}
+
 struct S16TraceMap<'a>(&'a crate::map::GameMap);
 
 impl serde::Serialize for S16TraceMap<'_> {
@@ -901,7 +983,7 @@ impl serde::Serialize for S16TraceMap<'_> {
         trace.serialize_field("width", &map.width)?;
         trace.serialize_field("height", &map.height)?;
         trace.serialize_field("terrain", &map.terrain)?;
-        trace.serialize_field("state", &map.state)?;
+        trace.serialize_field("state", &map.owner_states())?;
         trace.serialize_field("tile_upgrades", &tile_upgrades)?;
         trace.end()
     }
@@ -919,7 +1001,7 @@ impl serde::Serialize for S16TraceGameState<'_> {
         let state = self.0;
         let mut trace = serializer.serialize_struct("GameState", 15)?;
         trace.serialize_field("seed", &state.seed)?;
-        trace.serialize_field("config", &state.config)?;
+        trace.serialize_field("config", &S16TraceConfig(&state.config))?;
         trace.serialize_field("phase", &state.phase)?;
         trace.serialize_field("map", &S16TraceMap(&state.map))?;
         trace.serialize_field("players", &S16TracePlayers(&state.players))?;
@@ -2396,15 +2478,14 @@ fn s16_checkpoint_decision_and_state_reference() {
         checkpoints.push((ticks, hash));
     }
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x4e6d45d67c4dad86),
-        (500, 0xea9474236ab356f0),
-        (750, 0x51490f142860df6a),
-        (1000, 0x902e55c8695b55ea),
-        (1250, 0xb16e6bccb0488b61),
-        (1500, 0x5916094f61e899d6),
-        (1750, 0x6ea860e0ecd98994),
-        (2000, 0x055233d4834f495e),
-        (S16_REFERENCE_TICKS, 0x0e9edf5d0305dac0),
+        (250, 0x2b2690367b8be3bb),
+        (500, 0x7b9ae9c13a356237),
+        (750, 0x31a70ca44f24b921),
+        (1000, 0xa8e392763d56b824),
+        (1250, 0x00280b91c73f7c24),
+        (1500, 0xf3afa58e731ca940),
+        (1750, 0x7dec40642511851a),
+        (1998, 0xffda6c8c22bd1205),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

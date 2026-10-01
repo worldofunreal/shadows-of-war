@@ -42,6 +42,8 @@ struct AuditReport {
     recipe_present: bool,
     recipe_artifacts_match: Option<bool>,
     recipe_reproducible: Option<bool>,
+    land_entity_corrections_valid: Option<bool>,
+    unlanded_entity_corrections: Vec<String>,
     valid: bool,
 }
 
@@ -60,6 +62,8 @@ struct RecipeRecord {
     map_bin_sha256: String,
     map_bin_br_sha256: String,
     thumbnail_sha256: String,
+    #[serde(default)]
+    land_entity_corrections: Vec<String>,
 }
 
 pub fn run(args: MapAuditArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -103,7 +107,7 @@ pub fn run(args: MapAuditArgs) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         for report in &reports {
             println!(
-                "{} {}x{} land={} water={} ocean={} shore={} water4={} (<16:{}) water8={} (<16:{}) recipe={} valid={}",
+                "{} {}x{} land={} water={} ocean={} shore={} water4={} (<16:{}) water8={} (<16:{}) recipe={} geo_entities={} valid={}",
                 report.map,
                 report.width,
                 report.height,
@@ -116,8 +120,15 @@ pub fn run(args: MapAuditArgs) -> Result<(), Box<dyn std::error::Error>> {
                 report.water_components_8,
                 report.tiny_water_components_8_lt16,
                 report.recipe_artifacts_match.unwrap_or(false),
+                report.land_entity_corrections_valid.unwrap_or(true),
                 report.valid,
             );
+            if !report.unlanded_entity_corrections.is_empty() {
+                println!(
+                    "  entity locations still on water/outside map: {}",
+                    report.unlanded_entity_corrections.join(", ")
+                );
+            }
         }
     }
 
@@ -188,9 +199,14 @@ fn audit_map(
             && map_bin_br_sha256.as_deref() == Some(record.map_bin_br_sha256.as_str())
             && thumbnail_sha256.as_deref() == Some(record.thumbnail_sha256.as_str())
     });
+    let unlanded_entity_corrections = recipe
+        .map(|record| find_unlanded_entity_corrections(&map, &record.land_entity_corrections))
+        .unwrap_or_default();
+    let land_entity_corrections_valid = recipe.map(|_| unlanded_entity_corrections.is_empty());
     let valid = map.num_land_tiles as usize == land_tiles
         && compressed_payload_matches.unwrap_or(true)
         && recipe_artifacts_match.unwrap_or(true)
+        && land_entity_corrections_valid.unwrap_or(true)
         && source_present.unwrap_or(true)
         && source_hash_matches.unwrap_or(true);
 
@@ -223,8 +239,29 @@ fn audit_map(
         recipe_present: recipe.is_some(),
         recipe_artifacts_match,
         recipe_reproducible: recipe.map(|record| record.reproducible),
+        land_entity_corrections_valid,
+        unlanded_entity_corrections,
         valid,
     })
+}
+
+fn find_unlanded_entity_corrections(map: &map_file::MapFile, ids: &[String]) -> Vec<String> {
+    ids.iter()
+        .filter(|id| {
+            let Some(entity) = sow_core::geo_entities::by_id(id) else {
+                return true;
+            };
+            let (Some(lat), Some(lon), Some(bounds)) = (entity.lat, entity.lon, map.geo_bounds)
+            else {
+                return true;
+            };
+            let Some((x, y)) = bounds.project(lat as f64, lon as f64, map.width, map.height) else {
+                return true;
+            };
+            map.terrain[(y * map.width + x) as usize] & LAND_BIT == 0
+        })
+        .cloned()
+        .collect()
 }
 
 fn resolve_source_path(repo_root: &Path, source_path: &Path) -> PathBuf {

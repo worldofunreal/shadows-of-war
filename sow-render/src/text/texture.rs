@@ -11,12 +11,12 @@ pub struct FontAtlasTexture {
 impl FontAtlasTexture {
     pub fn from_bytes(
         context: &gpu::Context,
-        png_bytes: &[u8],
+        image_bytes: &[u8],
         name: &str,
         format: gpu::TextureFormat,
     ) -> Self {
-        let img = image::load_from_memory(png_bytes)
-            .expect("Failed to load atlas PNG")
+        let img = image::load_from_memory(image_bytes)
+            .expect("Failed to load atlas image")
             .to_rgba8();
         let (width, height) = img.dimensions();
         let bytes_per_row = width * 4;
@@ -144,6 +144,39 @@ impl FontAtlasTexture {
             gpu::Extent {
                 width: self.width,
                 height: self.height,
+                depth: 1,
+            },
+        );
+    }
+
+    pub fn upload_region(
+        &self,
+        encoder: &mut gpu::CommandEncoder,
+        context: &gpu::Context,
+        origin: [u32; 2],
+        size: [u32; 2],
+    ) {
+        if size[0] == 0 || size[1] == 0 {
+            return;
+        }
+        let bytes_per_pixel = 4;
+        let bytes_per_row = self.width * bytes_per_pixel;
+        let source_offset = (origin[1] * bytes_per_row + origin[0] * bytes_per_pixel) as u64;
+        let source_size = ((size[1] - 1) * bytes_per_row + size[0] * bytes_per_pixel) as u64;
+        context.sync_buffer(self.buffer, source_offset, source_size);
+        let mut transfer = encoder.transfer("avatar_cell_upload");
+        transfer.copy_buffer_to_texture(
+            self.buffer.at(source_offset),
+            bytes_per_row,
+            gpu::TexturePiece {
+                texture: self.texture,
+                mip_level: 0,
+                array_layer: 0,
+                origin: [origin[0], origin[1], 0],
+            },
+            gpu::Extent {
+                width: size[0],
+                height: size[1],
                 depth: 1,
             },
         );

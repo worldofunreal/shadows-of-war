@@ -279,6 +279,11 @@
                 createDraft[field.name] = field.value;
             }
         });
+        var selected = mapInfo(createDraft.map_name || "world");
+        var presets = Array.isArray(selected.roster_presets) ? selected.roster_presets : [];
+        if (!presets.some(function (preset) { return preset.id === createDraft.map_roster_preset; })) {
+            createDraft.map_roster_preset = selected.default_roster || null;
+        }
     }
 
     function renderPasswordModal() {
@@ -326,6 +331,14 @@
         var mapCatalogOptions = (state && state.map_catalog || []).map(function (m) {
             return { value: m.key, label: formatMapName(m) + " (" + m.width + "×" + m.height + ")" };
         });
+        var rosterPresets = Array.isArray(selectedMap.roster_presets) ? selectedMap.roster_presets : [];
+        if (!rosterPresets.some(function (preset) { return preset.id === config.map_roster_preset; })) {
+            config.map_roster_preset = selectedMap.default_roster || (rosterPresets[0] && rosterPresets[0].id) || null;
+        }
+        var rosterControl = rosterPresets.length ?
+            "<label class='sow-menu__form-field sow-create__map-select'>Roster" +
+                SOW_renderDropdown({ key: "create-map-roster", name: "map_roster_preset", value: config.map_roster_preset || selectedMap.default_roster || "", options: rosterPresets.map(function (preset) { return { value: preset.id, label: preset.name + (preset.id === selectedMap.default_roster ? " (map default)" : "") }; }) }) +
+            "</label>" : "";
 
         var spControls = isSp ?
             "<div class='sow-menu__slider-field'>" +
@@ -370,6 +383,7 @@
                                             "<label class='sow-menu__form-field sow-create__map-select'>" + esc(SOW_t("lobbies.select_map")) +
                                                 SOW_renderDropdown({ key: "create-map", name: "map_name", value: selectedMap.key, options: mapCatalogOptions }) +
                                             "</label>" +
+                                            rosterControl +
                                         "</section>" +
                                         "<section class='sow-menu__custom-card'>" +
                                             "<label class='sow-menu__form-field'>" + esc(SOW_t("lobbies.game_type")) +

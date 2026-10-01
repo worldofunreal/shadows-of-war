@@ -101,6 +101,7 @@ attribution, and Shadows of War modifications are recorded in
 | PNG classification/downsampling | `sow-map/src/image_pipeline.rs` |
 | `image-map` authoring | `sow-tools/src/image_map.rs`, `sow-tools/src/main.rs` |
 | Map-source import | `sow-tools/src/map_source_import.rs` |
+| Curated world land points | `assets/maps/SOURCES.toml` + `sow-tools::stamp_geo` |
 | Grid export, compression, catalog refresh | `sow-tools/src/exporter.rs` |
 | Palette, terrain preview, source framing, WebP output | `sow-map/src/thumbnail.rs` |
 | Staged thumbnail regeneration | `sow-dist/src/main.rs::refresh_map_thumbnails` |
@@ -120,6 +121,11 @@ the same 16:9 aspect ratio and the existing single thumbnail URL.
 hash and revision, target dimensions, pipeline settings, and hashes for
 `map.bin`, `map.bin.br`, and `thumbnail.webp`. The image pipeline uses
 water-wins downscale and removes inland water components smaller than 16 tiles.
+The world recipe separately lists confirmed island/coastal entity IDs whose
+exact projected tile was removed by source filtering. `stamp-geo` restores one
+shoreline land tile at each unique catalog coordinate, and `map-audit` checks
+that those coordinates remain land. This does not change the 1000×500 grid or
+the global island filter.
 East Anglia is reproducible from the pinned Britannia frame and keeps the
 Boudica campaign spawn set. Pangaea uses the same pipeline and receives the
 standard 16:9 fallback thumbnail with the depth water palette.

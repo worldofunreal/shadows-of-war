@@ -24,6 +24,7 @@
         uiPaused: false,
         completionSent: false,
         lastActionStepId: null,
+        resolvedReactions: new Set(),
         priorChoices: Object.create(null),
         failedEpisode: null,
         bootEpisode: null,
@@ -168,6 +169,7 @@
             runtime.markerId = undefined;
             runtime.completionSent = false;
             runtime.lastActionStepId = null;
+            runtime.resolvedReactions = new Set();
             if (!send("start_campaign_episode", { episode_id: episodeId, roster: data.roster, match: data.definition.settings })) {
                 throw new Error("Campaign could not reach the game.");
             }
@@ -199,13 +201,14 @@
             runtime.episodeId = episodeId;
             runtime.roster = data.roster;
             runtime.definition = data.definition;
-            runtime.machine = window.SOWCampaign.create(data.definition);
+            runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster);
             runtime.active = true;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
             runtime.markerId = undefined;
             runtime.completionSent = false;
             runtime.lastActionStepId = null;
+            runtime.resolvedReactions = new Set();
             makeView();
             update(runtime.latestHud);
         }).catch(function (error) {
@@ -266,7 +269,17 @@
         if (!runtime.machine || runtime.modalOpen || !hud || !hud.tutorial || !hud.tutorial.active) return;
         if (!root.isConnected) document.body.appendChild(root);
         var tutorial = hud.tutorial;
-        var machineView = runtime.machine.update(tutorial.facts || {}, runtime.uiCounts, performance.now());
+        var machineView = runtime.machine.update(tutorial.facts || {}, runtime.uiCounts);
+        if (machineView.reactionData && machineView.reactionData.outcome) {
+            resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
+        }
+        if (machineView.choices && machineView.choices.length) {
+            var player = (hud.players || []).find(function (item) { return item && item.is_me; });
+            var gold = player ? Number(player.gold || 0) : 0;
+            machineView.choices = machineView.choices.map(function (choice) {
+                return Object.assign({}, choice, { disabled: Number(choice.gold_cost || 0) > gold });
+            });
+        }
         runtime.priorChoices = Object.assign(Object.create(null), runtime.machine.state.choices);
         if (machineView.step.id !== runtime.lastActionStepId) {
             runtime.lastActionStepId = machineView.step.id;
@@ -331,7 +344,7 @@
             runtime.active = false;
             runtime.menuGuide = true;
             runtime.completionSent = true;
-            runtime.machine = window.SOWCampaign.create(data.definition, data.definition.menu_guide.entry);
+            runtime.machine = window.SOWCampaign.create(data.definition, data.definition.menu_guide.entry, data.roster);
             runtime.machine.jump(data.definition.menu_guide.entry, null, runtime.priorChoices);
             runtime.priorChoices = Object.create(null);
             makeView();
@@ -364,8 +377,29 @@
 
     function choose(choiceId) {
         if (!runtime.machine) return;
-        var step = runtime.machine.view().step;
+        var model = runtime.machine.view();
+        var step = model.step;
+        if (model.reactionData) {
+            var answer = (model.reactionData.choices || []).find(function (choice) { return choice.id === choiceId; });
+            if (!answer || !resolveReaction(model.reactionData, model.reactionTarget, answer, runtime.latestHud)) return;
+        }
         if (runtime.machine.advance(choiceId, step.id)) runtime.menuGuide ? updateMenuGuide() : update(runtime.latestHud);
+    }
+
+    function resolveReaction(reaction, targetName, choice, hud) {
+        var outcome = choice ? choice.relation : reaction.outcome;
+        if (!outcome) return true;
+        var key = reaction.id + "@" + targetName;
+        if (runtime.resolvedReactions.has(key)) return true;
+        var target = (hud && hud.players || []).find(function (player) { return player && player.name === targetName; });
+        var human = (hud && hud.players || []).find(function (player) { return player && player.is_me; });
+        var goldCost = Number(choice ? choice.gold_cost || 0 : reaction.gold_cost || 0);
+        if (!target || !human || Number(human.gold || 0) < goldCost) return false;
+        if (!send("resolve_campaign_diplomacy", {
+            target_player_id: Number(target.id), relation: outcome, gold_cost: goldCost
+        })) return false;
+        runtime.resolvedReactions.add(key);
+        return true;
     }
 
     function focusMarker() {
@@ -387,7 +421,7 @@
         var open = Boolean(modal && !modal.classList.contains("hidden"));
         if (open === runtime.modalOpen) return;
         runtime.modalOpen = open;
-        if (runtime.machine) runtime.machine.setPaused(open, performance.now());
+        if (runtime.machine) runtime.machine.setPaused(open);
         if (open) {
             runtime.resumeAfterModal = runtime.machine ? runtime.machine.view().paused : false;
             if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: true });
@@ -484,6 +518,7 @@
         runtime.modalOpen = false;
         runtime.resumeAfterModal = false;
         runtime.completionSent = false;
+        runtime.resolvedReactions = new Set();
         runtime.lastActionStepId = null;
         runtime.failedEpisode = null;
         runtime.markerId = undefined;

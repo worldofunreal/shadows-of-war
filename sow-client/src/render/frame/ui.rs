@@ -113,11 +113,6 @@ impl SowApp {
                 &render_ctx.context,
             );
         }
-        #[cfg(target_arch = "wasm32")]
-        if !self.web_loader_hidden && self.ui.app.phase != ClientPhase::Splash {
-            crate::loader::hide_web_loader();
-            self.web_loader_hidden = true;
-        }
         render_ctx.command_encoder.present(frame);
         let sync_point = render_ctx.context.submit(&mut render_ctx.command_encoder);
         self.net.load_telemetry.mark_gpu_upload_complete();

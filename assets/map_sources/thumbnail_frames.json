@@ -10,6 +10,12 @@
       "width": 4110,
       "height": 1948,
       "projection": "equirectangular",
+      "map_grid_frame": [
+        16,
+        16,
+        4094,
+        1932
+      ],
       "longitude": [
         -180,
         180

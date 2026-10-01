@@ -31,12 +31,10 @@ render/frame/mod.rs  -->  world/overlays.rs::render_overlays
                                  |        |          (grid_x, grid_y, owner, kind, level)
                                  |        |        - non-compact: exact individual records
                                  |        |
-                                 |        +--> building image markers:
-                                 |        |    Blade GPU TextRenderer using the 8×4 atlas at
-                                 |        |    assets/gameplay/buildings/building_atlas.png
-                                 |        +--> level labels and 300 ms completion sparkle:
-                                 |             shared text/emoji atlas at
-                                 |             assets/gameplay/emoji/atlas_opt.webp
+                                 |        +--> emoji building markers:
+                                 |        |    Blade GPU TextRenderer using the shared emoji atlas
+                                 |        +--> construction labels and completion sparkle:
+                                 |             the same text/emoji rendering batch
                                  |
                                  +--> BuildingRenderCache
                                           - reuses the clustered building set while
@@ -57,10 +55,9 @@ render/frame/mod.rs  -->  world/overlays.rs::render_overlays
   `BuildingRenderCache` path so preview and live markers stay consistent.
 - Hover/hit-testing reads `snapshot.buildings` directly (same source as
   `crate::input::find_building_*`); rendering never mutates gameplay state.
-- Building levels use their fixed cell in the 22-sprite image atlas and stay in
-  the same GPU text batch as labels and markers. A 300 ms GPU-rendered sparkle
-  marks a finished upgrade using the existing emoji atlas. The animation is
-  tracked per building, not per map tile.
+- Building levels use the historical emoji mapping in `overlays.rs`; every
+  mapped glyph must exist in the generated shared emoji atlas. Buildings,
+  labels, and feedback remain in the same GPU text batch.
 
 When changing this pipeline, update `BuildingLod` first, then the callers in
 `render_buildings`.

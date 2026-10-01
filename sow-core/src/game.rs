@@ -304,6 +304,10 @@ pub struct GameState {
     /// City-state spawn anchors from the loaded `map.bin` (not serialized over the wire).
     #[serde(skip)]
     pub map_spawns: Vec<crate::map_file::MapSpawn>,
+    /// Map-authored identity rosters parsed from the active map.bin.
+    #[serde(skip)]
+    /// Only the selected map roster is carried into simulation initialization.
+    pub map_rosters: Vec<crate::map_file::MapRosterPreset>,
     /// Geographic bounds from the loaded `map.bin` (v2), None on fictional maps.
     #[serde(skip)]
     pub geo_bounds: Option<crate::map_file::GeoBounds>,
@@ -338,6 +342,7 @@ impl GameState {
             total_land_tiles: 0,
             sea_lanes: std::sync::Arc::new(Vec::new()),
             map_spawns: Vec::new(),
+            map_rosters: Vec::new(),
             geo_bounds: None,
         }
     }

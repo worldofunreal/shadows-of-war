@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://shadowsofwar.io/play/"><strong>▶ Play now</strong></a>
-  · <a href="https://shadowsofwar.io/how-to-play/">How to play</a>
+  · <a href="https://shadowsofwar.io/">Website</a>
   · <a href="https://discord.gg/d6ZDeChSE">Discord</a>
 </p>
 
@@ -84,7 +84,7 @@ The native build and the browser preview use the same client. The desktop shell 
 ## Links
 
 - [Play Shadows of War](https://shadowsofwar.io/play/)
-- [How to play](https://shadowsofwar.io/how-to-play/)
+- [Website](https://shadowsofwar.io/)
 - [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)
 

@@ -2452,9 +2452,10 @@ async fn handle_public_leaderboard(
     if query.kind.as_deref() == Some("victories") {
         let limit = query.limit.unwrap_or(100).clamp(1, 100);
         let cursor = query.cursor.unwrap_or(0).min(10_000);
-        return match state.db.public_victory_leaderboard(cursor, limit).await {
-            Ok(items) => {
-                let next_cursor = (items.len() == limit).then_some(cursor + limit);
+        return match state.db.public_victory_leaderboard(cursor, limit + 1).await {
+            Ok(mut items) => {
+                let next_cursor = leaderboard_next_cursor(cursor, limit, items.len());
+                items.truncate(limit);
                 (
                     StatusCode::OK,
                     Json(serde_json::json!({
@@ -2484,7 +2485,7 @@ async fn handle_public_leaderboard(
     let cursor = query.cursor.unwrap_or(0).min(10_000);
     match state
         .db
-        .public_leaderboard(queue, mode, cursor.saturating_add(limit))
+        .public_leaderboard(queue, mode, cursor.saturating_add(limit).saturating_add(1))
         .await
     {
         Ok(mut items) => {
@@ -2493,9 +2494,11 @@ async fn handle_public_leaderboard(
             } else {
                 items.clear();
             }
+            let next_cursor = leaderboard_next_cursor(cursor, limit, items.len());
+            for (index, item) in items.iter_mut().enumerate() {
+                item.rank = cursor.saturating_add(index + 1).min(u32::MAX as usize) as u32;
+            }
             items.truncate(limit);
-            let has_next = items.len() == limit;
-            let next_cursor = has_next.then_some(cursor.saturating_add(limit));
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -2518,6 +2521,23 @@ async fn handle_public_leaderboard(
             )
                 .into_response()
         }
+    }
+}
+
+fn leaderboard_next_cursor(cursor: usize, limit: usize, fetched: usize) -> Option<usize> {
+    (fetched > limit).then(|| cursor.saturating_add(limit))
+}
+
+#[cfg(test)]
+mod leaderboard_pagination_tests {
+    use super::leaderboard_next_cursor;
+
+    #[test]
+    fn next_cursor_exists_only_when_the_lookahead_finds_another_row() {
+        assert_eq!(leaderboard_next_cursor(0, 25, 0), None);
+        assert_eq!(leaderboard_next_cursor(0, 25, 25), None);
+        assert_eq!(leaderboard_next_cursor(0, 25, 26), Some(25));
+        assert_eq!(leaderboard_next_cursor(25, 25, 26), Some(50));
     }
 }
 

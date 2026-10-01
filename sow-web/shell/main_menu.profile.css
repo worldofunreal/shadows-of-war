@@ -17,9 +17,11 @@
 /* Profile screen: the player dossier owns its layout instead of inheriting
    the two-column home screen grid. */
 #sow-menu[data-screen="profile"] {
-    --sow-profile-surface: rgba(10, 13, 18, 0.94);
-    --sow-profile-surface-soft: rgba(18, 22, 29, 0.88);
-    --sow-profile-line: rgba(243, 177, 43, 0.24);
+    --sow-profile-surface: #0b0e13;
+    --sow-profile-surface-soft: rgba(19, 24, 31, 0.88);
+    --sow-profile-line: rgba(220, 225, 232, 0.12);
+    --sow-profile-gold-line: rgba(243, 177, 43, 0.36);
+    --sow-profile-panel: rgba(12, 15, 20, 0.94);
     color-scheme: dark;
 }
 
@@ -27,10 +29,8 @@
     position: fixed;
     background-image:
         linear-gradient(90deg, rgba(6, 8, 12, 0.96) 0%, rgba(6, 8, 12, 0.82) 48%, rgba(6, 8, 12, 0.72) 100%),
-        linear-gradient(0deg, rgba(6, 8, 12, 0.94) 0%, rgba(6, 8, 12, 0.42) 68%, rgba(6, 8, 12, 0.7) 100%),
-        var(--sow-hero);
-    background-position: center;
-    background-size: cover;
+        linear-gradient(0deg, rgba(6, 8, 12, 0.94) 0%, rgba(6, 8, 12, 0.42) 68%, rgba(6, 8, 12, 0.7) 100%);
+    background-color: #06080c;
 }
 
 #sow-menu[data-screen="profile"] .sow-menu__backdrop::after {
@@ -38,19 +38,38 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
-    width: min(1180px, calc(100% - 48px));
+    width: min(1240px, calc(100% - 48px));
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__main {
     display: block;
-    flex: 1 0 auto;
+    flex: 1 1 auto;
     min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__page {
     display: grid;
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(228px, 272px);
+    align-items: start;
+    gap: clamp(20px, 2.5vw, 32px);
     min-width: 0;
+    min-height: min-content;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__dossier,
+#sow-menu[data-screen="profile"] .sow-profile__tools {
+    display: grid;
+    align-content: start;
+    gap: 0;
+    min-width: 0;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools {
+    gap: 12px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__content {
@@ -59,19 +78,26 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__heading {
     display: block;
-    min-height: 190px;
+    min-height: 268px;
     padding: 0;
     overflow: hidden;
-    border: 1px solid var(--sow-profile-line);
-    background: var(--sow-profile-surface);
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+    border: 1px solid var(--sow-profile-gold-line);
+    background-color: var(--sow-profile-surface);
+    background-image:
+        linear-gradient(90deg, rgba(8, 11, 15, 0.98) 0%, rgba(8, 11, 15, 0.88) 34%, rgba(8, 11, 15, 0.18) 100%),
+        linear-gradient(0deg, rgba(8, 11, 15, 0.8), rgba(8, 11, 15, 0.02) 68%),
+        var(--sow-hero);
+    background-position: center, center, 78% 30%;
+    background-size: cover;
+    box-shadow: 0 22px 52px rgba(0, 0, 0, 0.36);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__identity-card {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    padding: clamp(22px, 4vw, 42px);
+    min-height: inherit;
+    padding: clamp(24px, 4vw, 44px);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__heading-top {
@@ -82,7 +108,11 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__kicker {
-    color: var(--sow-gold);
+    width: fit-content;
+    padding: 6px 9px;
+    border-inline-start: 2px solid var(--sow-cyan);
+    background: rgba(8, 11, 15, 0.68);
+    color: var(--sow-cyan);
     font-size: 11px;
     font-weight: 800;
     letter-spacing: 0.16em;
@@ -118,6 +148,7 @@
     gap: 18px;
     min-width: 0;
     margin-top: auto;
+    padding-top: 30px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__identity-copy {
@@ -129,7 +160,7 @@
     margin: 0;
     overflow-wrap: anywhere;
     color: #fff;
-    font-size: clamp(34px, 5vw, 64px);
+    font-size: clamp(38px, 5.6vw, 72px);
     font-weight: 900;
     line-height: 0.94;
     letter-spacing: -0.04em;
@@ -147,8 +178,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 14px 0 0;
-    color: var(--sow-gold-bright);
+    width: fit-content;
+    margin: 16px 0 0;
+    padding: 6px 10px 6px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(7, 9, 13, 0.6);
+    color: #f5d38b;
     font-size: 12px;
     font-weight: 700;
 }
@@ -156,7 +192,7 @@
 #sow-menu[data-screen="profile"] .sow-profile__preferred img {
     width: 40px;
     height: 40px;
-    border: 1px solid var(--sow-gold);
+    border: 1px solid var(--sow-profile-gold-line);
     border-radius: 50%;
     object-fit: cover;
 }
@@ -179,9 +215,15 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__level {
-    min-width: 74px;
-    padding-inline-start: 16px;
-    border-inline-start: 1px solid var(--sow-line);
+    display: grid;
+    width: 78px;
+    aspect-ratio: 1;
+    align-content: center;
+    justify-items: center;
+    border: 1px solid rgba(243, 177, 43, 0.7);
+    border-radius: 50%;
+    background: rgba(8, 11, 15, 0.82);
+    box-shadow: 0 0 0 6px rgba(8, 11, 15, 0.28), inset 0 0 20px rgba(243, 177, 43, 0.08);
     text-align: center;
 }
 
@@ -203,19 +245,25 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__tabs {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 6px;
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
     margin: 0;
-    overflow: visible;
+    padding: 0 10px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--sow-profile-line);
+    background: linear-gradient(180deg, rgba(17, 21, 28, 0.7), rgba(9, 12, 16, 0.42));
+    scrollbar-width: thin;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__tab {
-    min-height: 48px;
-    padding: 0 16px;
-    border: 1px solid var(--sow-line);
-    background: rgba(10, 13, 18, 0.82);
-    color: var(--sow-muted);
+    flex: 1 0 auto;
+    min-height: 52px;
+    padding: 0 10px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #aeb6c1;
     font-size: 12px;
     font-weight: var(--sow-button-weight);
     letter-spacing: var(--sow-button-tracking);
@@ -226,9 +274,8 @@
 #sow-menu[data-screen="profile"] .sow-profile__tab:hover,
 #sow-menu[data-screen="profile"] .sow-profile__tab:focus-visible,
 #sow-menu[data-screen="profile"] .sow-profile__tab.is-active {
-    border-color: var(--sow-gold);
-    background: rgba(243, 177, 43, 0.1);
-    color: var(--sow-gold-bright);
+    border-bottom-color: var(--sow-gold);
+    color: #fff;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__panel-content {
@@ -238,8 +285,11 @@
 #sow-menu[data-screen="profile"] .sow-profile__stats {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    margin: 0 0 14px;
+    gap: 0;
+    margin: 0;
+    border: 1px solid var(--sow-profile-line);
+    border-top: 0;
+    background: linear-gradient(110deg, rgba(22, 27, 35, 0.96), rgba(13, 17, 23, 0.92));
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__stats > div {
@@ -248,15 +298,20 @@
     min-height: 96px;
     flex-direction: column;
     justify-content: center;
-    padding: 18px;
-    border: 1px solid var(--sow-profile-line);
-    background: var(--sow-profile-surface-soft);
+    padding: 16px 14px;
+    border-inline-end: 1px solid var(--sow-profile-line);
+    background: transparent;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__stats > div:last-child {
+    border-inline-end: 0;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__stats strong {
     display: block;
     color: #fff;
-    font-size: clamp(23px, 3vw, 34px);
+    font-size: clamp(24px, 3vw, 36px);
+    font-weight: 850;
     font-variant-numeric: tabular-nums;
     line-height: 1;
 }
@@ -265,7 +320,7 @@
     display: block;
     margin-top: 9px;
     color: var(--sow-muted);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -284,6 +339,10 @@
     text-align: center;
 }
 
+#sow-menu[data-screen="profile"] .sow-profile__overview > .sow-profile__section {
+    margin-top: 26px;
+}
+
 #sow-menu[data-screen="profile"] .sow-profile__stat-laurels strong {
     color: var(--sow-laurel-bright);
 }
@@ -291,16 +350,20 @@
 #sow-menu[data-screen="profile"] .sow-profile__achievement-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 10px;
+    gap: 12px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement {
     display: grid;
-    gap: 4px;
-    padding: 12px;
-    border: 1px solid var(--sow-line);
-    border-radius: 10px;
-    opacity: 0.48;
+    align-content: start;
+    gap: 8px;
+    min-height: 132px;
+    padding: 16px;
+    border: 1px solid rgba(210, 219, 230, 0.14);
+    border-radius: 4px;
+    background: linear-gradient(145deg, rgba(22, 27, 35, 0.9), rgba(12, 15, 20, 0.82));
+    opacity: 0.62;
+    transition: opacity 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement-group + .sow-profile__achievement-group {
@@ -309,16 +372,27 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement-group h3 {
     margin: 0 0 10px;
-    color: var(--sow-gold-bright);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--sow-profile-line);
+    color: #f2cb79;
     font-size: 12px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement.is-unlocked {
-    border-color: rgba(243, 177, 43, 0.5);
-    background: rgba(243, 177, 43, 0.08);
+    border-color: rgba(243, 177, 43, 0.48);
+    background: linear-gradient(145deg, rgba(90, 64, 22, 0.28), rgba(17, 20, 25, 0.92));
     opacity: 1;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement.is-unlocked:hover {
+    transform: translateY(-2px);
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__achievement strong {
+    color: #fff;
+    font-size: 14px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement span {
@@ -327,28 +401,33 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__achievement b {
-    color: var(--sow-gold-bright);
+    align-self: end;
+    margin-top: 4px;
+    color: #f2cb79;
     font-size: 11px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__victory-list {
     display: grid;
-    gap: 8px;
+    gap: 0;
+    border-top: 1px solid var(--sow-profile-line);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__victory-row {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) auto auto;
+    grid-template-columns: 48px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 12px;
-    padding: 12px;
-    border: 1px solid var(--sow-profile-line);
-    border-radius: 10px;
-    background: var(--sow-profile-surface);
+    padding: 14px 10px;
+    border: 0;
+    border-bottom: 1px solid var(--sow-profile-line);
+    background: transparent;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__victory-row > b:first-child {
-    color: #38bdf8;
+    color: var(--sow-cyan);
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__victory-row div {
@@ -364,9 +443,10 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__section {
     min-width: 0;
-    padding: 22px;
-    border: 1px solid var(--sow-profile-line);
-    background: var(--sow-profile-surface);
+    padding: 24px 0;
+    border: 0;
+    border-top: 1px solid var(--sow-profile-line);
+    background: transparent;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__section-head {
@@ -374,14 +454,14 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__section h2,
 #sow-menu[data-screen="profile"] .sow-profile__directory h2 {
     margin: 0;
-    color: #fff;
-    font-size: 16px;
+    color: #f5f6f7;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: 0.03em;
 }
@@ -418,7 +498,7 @@
     min-width: 0;
     gap: 12px;
     border: 0;
-    border-top: 1px solid rgba(255, 221, 153, 0.14);
+    border-top: 1px solid var(--sow-profile-line);
     background: transparent;
     color: var(--sow-text);
     text-align: start;
@@ -426,15 +506,16 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__leader {
     grid-template-columns: 48px minmax(0, 1fr) auto;
-    padding: 12px 0;
+    min-height: 76px;
+    padding: 12px 10px;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__leader img {
     display: block;
     width: 48px;
     height: 48px;
-    border: 1px solid var(--sow-line);
-    border-radius: 8px;
+    border: 1px solid rgba(243, 177, 43, 0.34);
+    border-radius: 50%;
     background: #151922;
     object-fit: cover;
 }
@@ -458,7 +539,7 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__leader > b {
-    color: var(--sow-gold);
+    color: #f2cb79;
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -466,17 +547,20 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__match {
     grid-template-columns: minmax(100px, 0.72fr) 44px minmax(0, 1.2fr) minmax(110px, 0.8fr) auto;
-    min-height: 66px;
-    padding: 10px 0;
+    min-height: 76px;
+    padding: 12px 10px;
     cursor: pointer;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match:hover,
 #sow-menu[data-screen="profile"] .sow-profile__match:focus-visible {
-    background: rgba(243, 177, 43, 0.07);
+    background: rgba(255, 255, 255, 0.035);
+    outline: none;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__match-result {
+    padding-inline-start: 8px;
+    border-inline-start: 2px solid currentColor;
     font-size: 11px;
     font-weight: 900;
     letter-spacing: 0.08em;
@@ -562,13 +646,43 @@
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__directory {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 18px 22px;
+    display: block;
+    padding: 18px;
     border: 1px solid var(--sow-profile-line);
-    background: rgba(10, 13, 18, 0.82);
+    border-inline-start: 2px solid var(--sow-cyan);
+    background: var(--sow-profile-panel);
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section {
+    padding: 18px;
+    border: 1px solid var(--sow-profile-line);
+    background: var(--sow-profile-panel);
+    min-width: 0;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section-head {
+    margin-bottom: 10px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__search-results {
+    grid-column: 1 / -1;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section h2,
+#sow-menu[data-screen="profile"] .sow-profile__directory h2 {
+    font-size: 14px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__actions {
+    display: grid;
+    gap: 8px;
+}
+
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__actions > button,
+#sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section > button {
+    width: 100%;
+    min-height: 42px;
+    text-align: start;
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__directory p {
@@ -579,9 +693,8 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__search {
     display: flex;
-    flex: 0 1 440px;
+    width: 100%;
     gap: 8px;
-    max-width: none;
     margin: 0;
 }
 
@@ -627,6 +740,7 @@
     margin: -6px 0 0;
     border: 1px solid var(--sow-profile-line);
     background: var(--sow-profile-surface);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__search-result {
@@ -649,7 +763,7 @@
 
 #sow-menu[data-screen="profile"] .sow-profile__search-result:hover,
 #sow-menu[data-screen="profile"] .sow-profile__search-result:focus-visible {
-    background: rgba(243, 177, 43, 0.08);
+    background: rgba(255, 255, 255, 0.045);
 }
 
 #sow-menu[data-screen="profile"] .sow-profile__search-result strong,
@@ -681,7 +795,7 @@
     overflow: auto;
     overscroll-behavior: contain;
     padding: 28px;
-    border: 1px solid var(--sow-gold);
+    border: 1px solid var(--sow-profile-gold-line);
     background: #0c1015;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
@@ -780,8 +894,22 @@
         width: min(100% - 28px, 720px);
     }
 
+    #sow-menu[data-screen="profile"] .sow-profile__page {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__tools {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__directory {
+        grid-column: 1 / -1;
+    }
+
     #sow-menu[data-screen="profile"] .sow-profile__identity-card {
-        padding: 24px;
+        padding: 30px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-main {
@@ -792,7 +920,6 @@
     #sow-menu[data-screen="profile"] .sow-profile__stats {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-
 }
 
 @media (max-width: 700px), (orientation: portrait) {
@@ -802,6 +929,11 @@
 
     #sow-menu[data-screen="profile"] .sow-profile__heading {
         min-height: 0;
+        background-position: center, center, 74% center;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__identity-card {
+        padding: 22px 18px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-main {
@@ -809,6 +941,7 @@
         align-items: center;
         gap: 12px;
         margin-top: 20px;
+        padding-top: 16px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-copy h1 {
@@ -821,8 +954,7 @@
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__level {
-        min-width: 52px;
-        padding-inline-start: 10px;
+        width: 56px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__level strong {
@@ -830,36 +962,54 @@
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__tabs {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 5px;
+        gap: 8px;
+        padding-inline: 6px;
+        scrollbar-width: none;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__tab {
-        min-height: 44px;
-        padding: 0 8px;
+        min-height: 48px;
+        padding: 0 7px;
         font-size: 10px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__stats {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 6px;
+        gap: 0;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__stats > div {
-        min-height: 82px;
-        padding: 14px;
+        min-height: 72px;
+        padding: 12px;
+        border-inline-end: 0;
+        border-bottom: 1px solid var(--sow-profile-line);
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__stats > div:nth-child(odd):not(:last-child) {
+        border-inline-end: 1px solid var(--sow-profile-line);
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__stat-kda {
+        grid-column: 1 / -1;
+        border-inline-end: 0 !important;
+        text-align: center;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__stat-kda strong {
+        width: min(100%, 280px);
+        align-self: center;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__stats > div:last-child {
+        border-bottom: 0;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__stats strong {
         font-size: 24px;
     }
 
-    #sow-menu[data-screen="profile"] .sow-profile__stat-kda {
-        grid-column: 1 / -1;
-    }
-
     #sow-menu[data-screen="profile"] .sow-profile__section {
-        padding: 16px 14px;
+        padding: 20px 0;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__match {
@@ -868,16 +1018,17 @@
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__match-kda {
-        display: none;
+        grid-column: 3;
+        grid-row: 2;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__match-result {
-        grid-row: 1 / span 2;
+        grid-row: 1 / span 3;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__match-avatar {
         grid-column: 2;
-        grid-row: 1 / span 2;
+        grid-row: 1 / span 3;
         width: 34px;
         height: 34px;
     }
@@ -889,13 +1040,21 @@
 
     #sow-menu[data-screen="profile"] .sow-profile__match-time {
         grid-column: 3;
-        grid-row: 2;
+        grid-row: 3;
         text-align: start;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__directory {
         display: block;
-        padding: 16px 14px;
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__tools {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #sow-menu[data-screen="profile"] .sow-profile__tools .sow-profile__section,
+    #sow-menu[data-screen="profile"] .sow-profile__directory {
+        padding: 16px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__directory p {
@@ -952,7 +1111,7 @@
 }
 
 @media (orientation: landscape) and (max-height: 560px) {
-    #sow-menu[data-screen="profile"] .sow-profile__heading { min-height: 160px; }
+    #sow-menu[data-screen="profile"] .sow-profile__heading { min-height: 184px; }
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-card {
         padding: 18px;
@@ -960,6 +1119,7 @@
 
     #sow-menu[data-screen="profile"] .sow-profile__identity-main {
         margin-top: 18px;
+        padding-top: 10px;
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__stats > div {
@@ -968,9 +1128,8 @@
     }
 
     #sow-menu[data-screen="profile"] .sow-profile__section {
-        padding: 14px;
+        padding: 18px 0;
     }
-
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -981,35 +1140,9 @@
     }
 }
 
-/* Profile stays inside the menu viewport; only the dossier content scrolls. */
-#sow-menu[data-screen="profile"] .sow-profile__main {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-}
-
-#sow-menu[data-screen="profile"] .sow-profile__page {
-    min-height: min-content;
-}
-
-@media (orientation: portrait) {
-    #sow-menu[data-screen="profile"] .sow-profile__main {
-        min-height: 0;
-        overflow-y: auto;
-    }
-}
-
-@media (max-width: 599px) and (orientation: portrait) {
-    #sow-menu[data-screen="profile"] .sow-menu__footer {
-        display: none;
-    }
-
-    #sow-menu[data-screen="profile"] .sow-profile__main {
-        min-height: 0;
-    }
+#sow-menu[data-screen="profile"] :is(button, input, textarea):focus-visible {
+    outline: 2px solid var(--sow-cyan);
+    outline-offset: 2px;
 }
 
 /* Store: leader art carries the visual weight; cards carry the commerce state. */

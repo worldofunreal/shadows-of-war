@@ -6,7 +6,8 @@ use sow_data::leader_for_civilization;
 mod colors;
 
 pub use colors::{
-    bot_territory_color, human_shader_territory_rgb, premium_color, team_territory_rgb,
+    bot_territory_color, campaign_relation_rgb, human_shader_territory_rgb, premium_color,
+    team_territory_rgb,
 };
 pub use sow_data::{Civilization, Leader, NamedColor, PREMIUM_COLORS};
 
@@ -19,6 +20,89 @@ pub enum PlayerType {
     Human,
     Bot,
     Nation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AvatarIdentity {
+    Portrait {
+        slug: String,
+        #[serde(skip)]
+        leader: Option<Leader>,
+    },
+    Emblem {
+        symbol: &'static str,
+    },
+    Fallback,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AvatarIdentityRef<'a> {
+    Portrait {
+        slug: &'a str,
+        leader: Option<Leader>,
+    },
+    Emblem {
+        symbol: &'static str,
+    },
+    Fallback,
+}
+
+pub fn avatar_identity_ref(player: &crate::protocol::PlayerSnapshot) -> AvatarIdentityRef<'_> {
+    if let Some(slug) = player.campaign_avatar.as_deref() {
+        if slug.is_empty() || slug == "null" {
+            return AvatarIdentityRef::Fallback;
+        }
+        return AvatarIdentityRef::Portrait { slug, leader: None };
+    }
+
+    match player.player_type {
+        PlayerType::Human => AvatarIdentityRef::Portrait {
+            slug: sow_data::commerce::leader_id(player.leader),
+            leader: Some(player.leader),
+        },
+        PlayerType::Bot => AvatarIdentityRef::Emblem {
+            symbol: tribe_animal(player.id, &player.name),
+        },
+        PlayerType::Nation => AvatarIdentityRef::Emblem {
+            symbol: empire_emoji(player.id, &player.name),
+        },
+    }
+}
+
+pub fn avatar_identity(player: &crate::protocol::PlayerSnapshot) -> AvatarIdentity {
+    match avatar_identity_ref(player) {
+        AvatarIdentityRef::Portrait { slug, leader } => AvatarIdentity::Portrait {
+            slug: slug.to_owned(),
+            leader,
+        },
+        AvatarIdentityRef::Emblem { symbol } => AvatarIdentity::Emblem { symbol },
+        AvatarIdentityRef::Fallback => AvatarIdentity::Fallback,
+    }
+}
+
+pub fn avatar_identity_for_player_id(
+    players: &[crate::protocol::PlayerSnapshot],
+    player_id: PlayerId,
+) -> AvatarIdentity {
+    players
+        .iter()
+        .find(|player| player.id == player_id)
+        .map(avatar_identity)
+        .unwrap_or(AvatarIdentity::Fallback)
+}
+
+pub fn notification_avatar_identities(
+    players: &[crate::protocol::PlayerSnapshot],
+    player_ids: [Option<PlayerId>; 2],
+) -> [Option<AvatarIdentity>; 2] {
+    let [first, second] = player_ids;
+    [
+        first.map(|player_id| avatar_identity_for_player_id(players, player_id)),
+        second
+            .filter(|player_id| first != Some(*player_id))
+            .map(|player_id| avatar_identity_for_player_id(players, player_id)),
+    ]
 }
 
 fn default_player_gold() -> f64 {
@@ -310,5 +394,161 @@ pub fn display_name(id: u16, name: &str, player_type: PlayerType) -> String {
             PlayerType::Bot => format!("{} {}", tribe_animal(id, name), name),
             _ => name.to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod avatar_identity_tests {
+    use super::*;
+    use crate::protocol::PlayerSnapshot;
+
+    fn player(
+        id: PlayerId,
+        name: &str,
+        player_type: PlayerType,
+        campaign_avatar: Option<&str>,
+    ) -> PlayerSnapshot {
+        PlayerSnapshot {
+            id,
+            name: name.to_owned(),
+            troops: 0.0,
+            max_troops: 0.0,
+            gold: 0.0,
+            tile_count: 0,
+            centroid_x: 0.0,
+            centroid_y: 0.0,
+            player_type,
+            color: [0.0; 3],
+            team: None,
+            has_spawned: true,
+            alive: true,
+            iq: 100,
+            alliances: Vec::new(),
+            alliance_timers: Default::default(),
+            alliance_requests: Vec::new(),
+            resource_requests: Vec::new(),
+            disconnected: false,
+            active_emoji: None,
+            traitor: false,
+            civilization: Civilization::Rome,
+            leader: Leader::Caesar,
+            campaign_avatar: campaign_avatar.map(str::to_owned),
+            skin_style: 0,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            boats_in_use: 0,
+            boat_capacity: 0,
+        }
+    }
+
+    #[test]
+    fn resolves_each_entity_from_its_own_identity_and_falls_back_only_when_missing() {
+        let human = player(1, "Player", PlayerType::Human, None);
+        let tribe = player(2, "Trinovantes", PlayerType::Bot, None);
+        let nation = player(3, "Rome", PlayerType::Nation, None);
+        let campaign = player(4, "Tutorial", PlayerType::Bot, Some("boudica_campaign"));
+        let missing_campaign = player(5, "Tutorial", PlayerType::Human, Some("null"));
+        let players = [human, tribe, nation, campaign, missing_campaign];
+
+        assert_eq!(
+            avatar_identity_ref(&players[0]),
+            AvatarIdentityRef::Portrait {
+                slug: "caesar",
+                leader: Some(Leader::Caesar),
+            }
+        );
+        assert_eq!(
+            avatar_identity_ref(&players[1]),
+            AvatarIdentityRef::Emblem {
+                symbol: tribe_animal(2, "Trinovantes"),
+            }
+        );
+        assert_eq!(
+            avatar_identity_ref(&players[2]),
+            AvatarIdentityRef::Emblem {
+                symbol: empire_emoji(3, "Rome"),
+            }
+        );
+        assert_eq!(
+            avatar_identity_ref(&players[3]),
+            AvatarIdentityRef::Portrait {
+                slug: "boudica_campaign",
+                leader: None,
+            }
+        );
+        assert_eq!(
+            avatar_identity_ref(&players[4]),
+            AvatarIdentityRef::Fallback
+        );
+
+        assert_eq!(
+            avatar_identity_for_player_id(&players, 1),
+            AvatarIdentity::Portrait {
+                slug: "caesar".into(),
+                leader: Some(Leader::Caesar)
+            }
+        );
+        assert_eq!(
+            avatar_identity_for_player_id(&players, 2),
+            AvatarIdentity::Emblem {
+                symbol: tribe_animal(2, "Trinovantes")
+            }
+        );
+        assert_eq!(
+            avatar_identity_for_player_id(&players, 3),
+            AvatarIdentity::Emblem {
+                symbol: empire_emoji(3, "Rome")
+            }
+        );
+        assert_eq!(
+            avatar_identity_for_player_id(&players, 4),
+            AvatarIdentity::Portrait {
+                slug: "boudica_campaign".into(),
+                leader: None
+            }
+        );
+        assert_eq!(
+            avatar_identity_for_player_id(&players, 5),
+            AvatarIdentity::Fallback
+        );
+        assert_eq!(
+            avatar_identity_for_player_id(&players, 99),
+            AvatarIdentity::Fallback
+        );
+        let repeated = notification_avatar_identities(&players, [Some(2), Some(2)]);
+        assert_eq!(
+            repeated[0],
+            Some(AvatarIdentity::Emblem {
+                symbol: tribe_animal(2, "Trinovantes")
+            })
+        );
+        assert_eq!(repeated[1], None);
+        assert_eq!(
+            notification_avatar_identities(&players, [None, Some(3)])[1],
+            Some(AvatarIdentity::Emblem {
+                symbol: empire_emoji(3, "Rome")
+            })
+        );
+    }
+
+    #[test]
+    fn avatar_payload_matches_the_hud_union_without_leaking_renderer_state() {
+        assert_eq!(
+            serde_json::to_value(AvatarIdentity::Portrait {
+                slug: "caesar".into(),
+                leader: Some(Leader::Caesar),
+            })
+            .unwrap(),
+            serde_json::json!({ "kind": "portrait", "slug": "caesar" })
+        );
+        assert_eq!(
+            serde_json::to_value(AvatarIdentity::Emblem { symbol: "🐺" }).unwrap(),
+            serde_json::json!({ "kind": "emblem", "symbol": "🐺" })
+        );
+        assert_eq!(
+            serde_json::to_value(AvatarIdentity::Fallback).unwrap(),
+            serde_json::json!({ "kind": "fallback" })
+        );
     }
 }

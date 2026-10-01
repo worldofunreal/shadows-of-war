@@ -1,34 +1,21 @@
-//! Historical geo-entity database: tribes, city-states, kingdoms, empires and
-//! countries with real-world coordinates. Spawn logic projects these onto any
-//! map that carries geographic bounds, so AI names match the map's geography.
-//!
-//! Authoring rules (enforced by tests):
-//! - names unique across the whole database
-//! - lat in [-90, 90], lon in [-180, 180] (approximate historical centroid)
-//! - flag is an ISO-2 country code or "" for entities without one
-//!
-//! Iteration order of [`ALL_GEO_ENTITIES`] is part of the deterministic
-//! lockstep simulation: append new entries, never reorder wholesale within a
-//! release cycle unless every client ships the change together (same rule as
-//! any other sim change).
+use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
-mod africa;
-mod americas;
-mod asia;
-mod europe;
-mod oceania;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EntityKind {
     Tribe,
     CityState,
     Kingdom,
     Empire,
     Country,
+    StateRegion,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Era {
+    Unspecified,
     Ancient,
     Classical,
     Medieval,
@@ -36,8 +23,10 @@ pub enum Era {
     Modern,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Region {
+    Unassigned,
     Europe,
     Africa,
     Asia,
@@ -45,57 +34,86 @@ pub enum Region {
     Oceania,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeoEntity {
-    pub name: &'static str,
+    pub id: String,
+    pub name: String,
     pub kind: EntityKind,
     pub era: Era,
     pub region: Region,
-    pub lat: f32,
-    pub lon: f32,
-    /// ISO-2 flag code, or "" for entities predating modern flags.
-    pub flag: &'static str,
+    #[serde(default)]
+    pub lat: Option<f32>,
+    #[serde(default)]
+    pub lon: Option<f32>,
+    #[serde(default)]
+    pub flag: String,
+    #[serde(default)]
+    pub avatar: Option<String>,
+    #[serde(default)]
+    pub maps: Vec<String>,
+    #[serde(default)]
+    pub fallback_nation_order: Option<u32>,
+    #[serde(default)]
+    pub fallback_tribe_order: Option<u32>,
 }
 
-/// One-line entry constructor used by the per-continent data files.
-macro_rules! geo_entity {
-    ($region:ident: $name:literal, $kind:ident, $era:ident, $lat:expr, $lon:expr) => {
-        $crate::geo_entities::geo_entity!($region: $name, $kind, $era, $lat, $lon, "")
-    };
-    ($region:ident: $name:literal, $kind:ident, $era:ident, $lat:expr, $lon:expr, $flag:literal) => {
-        $crate::geo_entities::GeoEntity {
-            name: $name,
-            kind: $crate::geo_entities::EntityKind::$kind,
-            era: $crate::geo_entities::Era::$era,
-            region: $crate::geo_entities::Region::$region,
-            lat: $lat,
-            lon: $lon,
-            flag: $flag,
-        }
-    };
+#[derive(Debug, Deserialize)]
+struct CatalogFile {
+    version: u32,
+    entities: Vec<GeoEntity>,
 }
-pub(crate) use geo_entity;
 
-/// All entities in fixed declaration order (determinism-critical).
-pub static ALL_GEO_ENTITIES: &[&[GeoEntity]] = &[
-    europe::EUROPE,
-    africa::AFRICA,
-    asia::ASIA,
-    americas::AMERICAS,
-    oceania::OCEANIA,
-];
+static CATALOG: OnceLock<CatalogFile> = OnceLock::new();
 
-/// Iterate every entity in stable order.
+fn catalog() -> &'static CatalogFile {
+    CATALOG.get_or_init(|| {
+        let catalog: CatalogFile =
+            serde_json::from_str(include_str!("../../../assets/geo_entities.json"))
+                .expect("invalid assets/geo_entities.json");
+        assert_eq!(catalog.version, 1, "unsupported entity catalog version");
+        catalog
+    })
+}
+
+/// Read the shared JSON once; all gameplay consumers use this stable ordering.
 pub fn all() -> impl Iterator<Item = &'static GeoEntity> {
-    ALL_GEO_ENTITIES.iter().flat_map(|s| s.iter())
+    catalog().entities.iter()
 }
 
-/// Flag code for a named entity, for nameplate use ("" and misses map to None).
+pub fn by_id(id: &str) -> Option<&'static GeoEntity> {
+    all().find(|entity| entity.id == id)
+}
+
+pub fn by_name(name: &str) -> Option<&'static GeoEntity> {
+    all().find(|entity| entity.name.eq_ignore_ascii_case(name))
+}
+
 pub fn flag_for_name(name: &str) -> Option<&'static str> {
-    all()
-        .find(|e| e.name == name)
-        .map(|e| e.flag)
-        .filter(|f| !f.is_empty())
+    by_name(name)
+        .map(|entity| entity.flag.as_str())
+        .filter(|flag| !flag.is_empty())
+}
+
+pub fn fallback_nations() -> Vec<&'static GeoEntity> {
+    ordered_pool(|entity| {
+        if entity.kind == EntityKind::StateRegion {
+            None
+        } else {
+            entity.fallback_nation_order
+        }
+    })
+}
+
+pub fn fallback_tribes() -> Vec<&'static GeoEntity> {
+    ordered_pool(|entity| entity.fallback_tribe_order)
+}
+
+fn ordered_pool(order: impl Fn(&GeoEntity) -> Option<u32>) -> Vec<&'static GeoEntity> {
+    let mut entries: Vec<_> = all()
+        .filter_map(|entity| order(entity).map(|position| (position, entity)))
+        .collect();
+    entries.sort_unstable_by_key(|(position, _)| *position);
+    entries.into_iter().map(|(_, entity)| entity).collect()
 }
 
 #[cfg(test)]
@@ -103,49 +121,87 @@ mod tests {
     use super::*;
 
     #[test]
-    fn entries_are_valid_and_unique() {
-        let mut seen = std::collections::HashSet::new();
-        for e in all() {
-            assert!(!e.name.is_empty(), "empty entity name");
-            assert!(seen.insert(e.name), "duplicate geo entity name: {}", e.name);
+    fn catalog_entries_are_valid_and_stable() {
+        let mut ids = std::collections::HashSet::new();
+        let mut names = std::collections::HashSet::new();
+        let entities: Vec<_> = all().collect();
+        assert!(entities.len() >= 1840, "catalog entity list shrank");
+
+        for entity in &entities {
+            assert!(!entity.id.is_empty());
             assert!(
-                (-90.0..=90.0).contains(&e.lat),
-                "{}: lat {} out of range",
-                e.name,
-                e.lat
+                entity
+                    .id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
             );
+            assert!(ids.insert(entity.id.as_str()), "duplicate ID {}", entity.id);
             assert!(
-                (-180.0..=180.0).contains(&e.lon),
-                "{}: lon {} out of range",
-                e.name,
-                e.lon
+                names.insert(entity.name.to_lowercase()),
+                "duplicate name {}",
+                entity.name
             );
-            assert!(
-                e.flag.is_empty() || e.flag.len() == 2,
-                "{}: flag must be ISO-2 or empty, got '{}'",
-                e.name,
-                e.flag
-            );
+            assert_eq!(entity.lat.is_some(), entity.lon.is_some(), "{}", entity.id);
+            if let (Some(lat), Some(lon)) = (entity.lat, entity.lon) {
+                assert!((-90.0..=90.0).contains(&lat), "{} latitude", entity.id);
+                assert!((-180.0..=180.0).contains(&lon), "{} longitude", entity.id);
+            }
+            if let Some(avatar) = &entity.avatar {
+                assert!(
+                    !avatar.is_empty()
+                        && avatar.bytes().all(|byte| byte.is_ascii_lowercase()
+                            || byte.is_ascii_digit()
+                            || byte == b'_'),
+                    "invalid avatar slug {}",
+                    avatar
+                );
+            }
         }
-        assert!(seen.len() >= 250, "database shrank: {} entries", seen.len());
+
+        let nations = fallback_nations();
+        let tribes = fallback_tribes();
+        assert!(nations.len() >= 229);
+        assert!(tribes.len() >= 670);
+        assert!(
+            nations
+                .iter()
+                .all(|entity| entity.kind != EntityKind::StateRegion)
+        );
+        assert!(
+            nations
+                .iter()
+                .enumerate()
+                .all(|(i, e)| e.fallback_nation_order == Some(i as u32))
+        );
+        assert!(
+            tribes
+                .iter()
+                .enumerate()
+                .all(|(i, e)| e.fallback_tribe_order == Some(i as u32))
+        );
     }
 
     #[test]
-    fn every_continent_has_all_kinds() {
-        use EntityKind::*;
-        for (slice, region) in [
-            (europe::EUROPE, Region::Europe),
-            (africa::AFRICA, Region::Africa),
-            (asia::ASIA, Region::Asia),
-            (americas::AMERICAS, Region::Americas),
-            (oceania::OCEANIA, Region::Oceania),
-        ] {
-            assert!(slice.iter().all(|e| e.region == region));
-            for kind in [Tribe, CityState, Kingdom, Empire, Country] {
-                assert!(
-                    slice.iter().any(|e| e.kind == kind),
-                    "{region:?} has no {kind:?} entries"
-                );
+    fn every_campaign_faction_is_in_the_catalog() {
+        let campaign_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/campaign");
+        for entry in std::fs::read_dir(campaign_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if !path.extension().is_some_and(|ext| ext == "json")
+                || path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .ends_with(".triggers.json")
+            {
+                continue;
+            }
+            let value: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+            for faction in value["factions"].as_array().unwrap() {
+                let name = faction["name"].as_str().unwrap();
+                assert!(by_name(name).is_some(), "campaign entity missing: {name}");
             }
         }
     }

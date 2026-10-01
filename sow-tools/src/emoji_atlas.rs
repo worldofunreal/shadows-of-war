@@ -11,7 +11,8 @@ const MOJI_BASE: &str = "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/asse
 /// Canonical list of all gameplay, HUD, leader, tribe, and reaction emojis.
 pub const CANONICAL_GAMEPLAY_EMOJIS: &[&str] = &[
     // Core Buildings & Infrastructure
-    "🏛", "🏭", "⚓", "🛡", // Units, Movers, Combat & Weapons
+    "🏛", "🏭", "⚓", "🛡", "🏘", "🏡", "🏙", "🌆", "🏰", "🏯", "🗼", "👁", "🌱", "🚜", "🛶", "🛳",
+    // Units, Movers, Combat & Weapons
     "🚢", "⛵", "⚔", "💣", "🚀", "☢", "💥", "🪖", "🏹", "🪓", // Resources & Economy
     "🪙", "🌾", "⚙", "🌽", "🍞", "🧂", // Diplomacy, Rankings & Match Status
     "👑", "⭐", "🤝", "🕊", "💔", "🏳", "🔌", "🔒", "📨", "📩", "📋", "✅", "❌", "ℹ", "⚠️", "🎖",
@@ -146,7 +147,12 @@ fn scan_source_for_emojis(
                         let is_line_drawing =
                             (0x2500..=0x257F).contains(&cp) || cp == 0x2500 || cp == 0x2550;
 
+                        let is_japanese_text = (0x3000..=0x302F).contains(&cp)
+                            || (0x3040..=0x30FF).contains(&cp)
+                            || (0x31F0..=0x31FF).contains(&cp);
+
                         let is_emoji = !is_line_drawing
+                            && !is_japanese_text
                             && ((0x203C..=0x3299).contains(&cp)
                                 || (0x1F000..=0x1FAFF).contains(&cp)
                                 || cp == 0xFE0F
@@ -262,20 +268,20 @@ fn moji_filenames(emoji: &str) -> Vec<String> {
     names
 }
 
-struct PackedGlyph {
-    emoji: String,
-    x: u32,
-    y: u32,
-    w: u32,
-    h: u32,
+pub(super) struct PackedGlyph {
+    pub(super) name: String,
+    pub(super) x: u32,
+    pub(super) y: u32,
+    pub(super) w: u32,
+    pub(super) h: u32,
 }
 
-struct PackAtlasResult {
-    atlas: RgbaImage,
-    rects: Vec<PackedGlyph>,
+pub(super) struct PackAtlasResult {
+    pub(super) atlas: RgbaImage,
+    pub(super) rects: Vec<PackedGlyph>,
 }
 
-fn pack_grid(
+pub(super) fn pack_grid(
     entries: &[(String, RgbaImage)],
     cell: u32,
     gutter: u32,
@@ -288,14 +294,14 @@ fn pack_grid(
     let h = rows * tile;
     let mut atlas: RgbaImage = ImageBuffer::from_pixel(w, h, Rgba([0, 0, 0, 0]));
     let mut rects = Vec::new();
-    for (i, (emoji, img)) in entries.iter().enumerate() {
+    for (i, (name, img)) in entries.iter().enumerate() {
         let col = (i as u32) % cols;
         let row = (i as u32) / cols;
         let x = col * tile + gutter;
         let y = row * tile + gutter;
         image::imageops::overlay(&mut atlas, img, x.into(), y.into());
         rects.push(PackedGlyph {
-            emoji: emoji.clone(),
+            name: name.clone(),
             x,
             y,
             w: cell,
@@ -305,21 +311,29 @@ fn pack_grid(
     Ok(PackAtlasResult { atlas, rects })
 }
 
-fn write_webp(
+pub(super) fn write_webp(
     atlas: &RgbaImage,
     path: &Path,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let encoder = image::codecs::webp::WebPEncoder::new_lossless(fs::File::create(path)?);
+    fs::write(path, encode_webp(atlas)?)?;
+    Ok(())
+}
+
+pub(super) fn encode_webp(
+    atlas: &RgbaImage,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut bytes = Vec::new();
+    let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut bytes);
     encoder.write_image(
         atlas.as_raw(),
         atlas.width(),
         atlas.height(),
         image::ExtendedColorType::Rgba8,
     )?;
-    Ok(())
+    Ok(bytes)
 }
 
 fn write_manifest_rs(
@@ -347,7 +361,7 @@ fn write_manifest_rs(
     out.push_str("fn match_canonical(emoji: &str) -> Option<AtlasRect> {\n");
     out.push_str("    match emoji {\n");
     for rect in rects {
-        let escaped = rect.emoji.replace('\\', "\\\\").replace('"', "\\\"");
+        let escaped = rect.name.replace('\\', "\\\\").replace('"', "\\\"");
         out.push_str(&format!(
             "        \"{escaped}\" => Some(AtlasRect {{ x: {}, y: {}, w: {}, h: {} }}),\n",
             rect.x, rect.y, rect.w, rect.h

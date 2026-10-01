@@ -1,7 +1,6 @@
 use crate::ui::UiText;
-use sow_core::protocol::{AttackSnapshot, FleetSnapshot, PlayerSnapshot};
+use sow_core::protocol::{AttackSnapshot, FleetSnapshot};
 use std::collections::VecDeque;
-use std::time::Duration;
 use web_time::Instant;
 
 #[derive(Clone, Debug)]
@@ -44,7 +43,6 @@ pub struct HudState {
     pub map_w: u32,
     pub attacks: Vec<AttackSnapshot>,
     pub fleets: Vec<FleetSnapshot>,
-    pub players: Vec<PlayerSnapshot>,
     pub safe_area_top: f32,
     pub safe_area_bottom: f32,
     pub selected_tile: Option<SelectedTileInfo>,
@@ -82,7 +80,6 @@ impl Default for HudState {
             map_w: 0,
             attacks: Vec::new(),
             fleets: Vec::new(),
-            players: Vec::new(),
             safe_area_top: 0.0,
             safe_area_bottom: 0.0,
             selected_tile: None,
@@ -110,15 +107,6 @@ impl Default for HudState {
 
 impl HudState {
     pub fn push_map_feedback(&mut self, text: UiText, position: [f32; 2]) {
-        let same_visible_message = self.map_feedback.as_ref().is_some_and(|feedback| {
-            feedback.spawned_at.elapsed() < Duration::from_millis(3600)
-                && feedback.text.key == text.key
-                && feedback.text.values == text.values
-        });
-        if same_visible_message {
-            return;
-        }
-
         let id = self.notification_revision.wrapping_add(1);
         self.map_feedback = Some(HudMapFeedback {
             id,
@@ -213,22 +201,25 @@ mod tests {
     }
 
     #[test]
-    fn map_feedback_uses_one_slot_and_deduplicates_visible_repeats() {
+    fn map_feedback_uses_one_slot_and_retriggers_identical_messages() {
         let mut hud = HudState::default();
         hud.push_map_feedback(
             UiText::new("hud.need_gold").with("cost", "100"),
             [10.0, 20.0],
         );
-        let revision = hud.notification_revision;
+        let first_id = hud.map_feedback.as_ref().unwrap().id;
         hud.push_map_feedback(
             UiText::new("hud.need_gold").with("cost", "100"),
             [30.0, 40.0],
         );
-        assert_eq!(hud.notification_revision, revision);
-        assert_eq!(hud.map_feedback.as_ref().unwrap().position, [10.0, 20.0]);
+        let repeated = hud.map_feedback.as_ref().unwrap();
+        assert_eq!(repeated.id, first_id + 1);
+        assert_eq!(repeated.position, [30.0, 40.0]);
 
-        hud.push_map_feedback(UiText::new("hud.build_land"), [30.0, 40.0]);
-        assert_eq!(hud.notification_revision, revision + 1);
-        assert_eq!(hud.map_feedback.as_ref().unwrap().text.key, "hud.build_land");
+        hud.push_map_feedback(UiText::new("hud.build_land"), [50.0, 60.0]);
+        let replaced = hud.map_feedback.as_ref().unwrap();
+        assert_eq!(replaced.id, first_id + 2);
+        assert_eq!(replaced.text.key, "hud.build_land");
+        assert_eq!(replaced.position, [50.0, 60.0]);
     }
 }

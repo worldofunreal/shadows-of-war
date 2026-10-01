@@ -1,5 +1,5 @@
 use crate::metadata_db::{
-    MATCHES_TABLE, MATCH_STARTS_TABLE, PENDING_REPLAY_VERIFICATIONS_TABLE,
+    MATCH_STARTS_TABLE, MATCHES_TABLE, PENDING_REPLAY_VERIFICATIONS_TABLE,
     PLAYER_MATCH_INDEX_TABLE, PLAYERS_TABLE, PUBLIC_PROFILES_TABLE, SEASON_RATINGS_TABLE,
     SEASONS_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
 };
@@ -348,7 +348,8 @@ impl PlayerProfile {
         for achievement in
             crate::rewards::newly_unlocked_achievements(totals, &self.unlocked_achievements)
         {
-            self.unlocked_achievements.insert(achievement.id.to_string());
+            self.unlocked_achievements
+                .insert(achievement.id.to_string());
             self.laurels = self.laurels.saturating_add(achievement.points);
         }
     }
@@ -909,7 +910,10 @@ impl PlayerDb {
             level: account.profile.level,
             matches_played: account.profile.matches_played,
             wins: account.profile.verified_wins,
-            win_rate: win_rate(account.profile.verified_wins, account.profile.matches_played),
+            win_rate: win_rate(
+                account.profile.verified_wins,
+                account.profile.matches_played,
+            ),
             kills: account.profile.kills,
             deaths: account.profile.deaths,
             assists: account.profile.assists,
@@ -970,7 +974,10 @@ impl PlayerDb {
             level: account.profile.level,
             matches_played: account.profile.matches_played,
             wins: account.profile.verified_wins,
-            win_rate: win_rate(account.profile.verified_wins, account.profile.matches_played),
+            win_rate: win_rate(
+                account.profile.verified_wins,
+                account.profile.matches_played,
+            ),
             kills: account.profile.kills,
             deaths: account.profile.deaths,
             assists: account.profile.assists,
@@ -1312,7 +1319,9 @@ impl PlayerDb {
             return Ok(Vec::new());
         };
         let offset = offset.min(100_000);
-        let limit = limit.min(100);
+        // The public handler asks for one lookahead row to avoid advertising
+        // an empty final page when the result count is an exact multiple.
+        let limit = limit.min(101);
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(VERIFIED_VICTORY_BOARD_TABLE)?;
         let mut entries = Vec::with_capacity(limit);
@@ -1463,10 +1472,7 @@ impl PlayerDb {
         Ok(updated)
     }
 
-    fn apply_welcome_grant(
-        account: &mut PlayerAccount,
-        now: u64,
-    ) -> Result<bool, &'static str> {
+    fn apply_welcome_grant(account: &mut PlayerAccount, now: u64) -> Result<bool, &'static str> {
         if account.kind != AccountKind::Human
             || account
                 .profile
@@ -3348,19 +3354,16 @@ impl PlayerDb {
         let mut granted = false;
         let mut grant_error = None;
         let mut con = self.get_connection().await?;
-        let account = Self::update_account_atomic(
-            &mut con,
-            &Self::account_key(account_id),
-            |account| {
+        let account =
+            Self::update_account_atomic(&mut con, &Self::account_key(account_id), |account| {
                 granted = false;
                 grant_error = None;
                 match Self::apply_manual_gem_grant(account, gems, request_id, now) {
                     Ok(applied) => granted = applied,
                     Err(error) => grant_error = Some(error),
                 }
-            },
-        )
-        .await?;
+            })
+            .await?;
         if let Some(error) = grant_error {
             return Err(error.into());
         }
@@ -3704,7 +3707,9 @@ impl PlayerDb {
             })
             .await?;
             if conflicting_status {
-                return Err(format!("match reward verification already resolved for {account_id}").into());
+                return Err(
+                    format!("match reward verification already resolved for {account_id}").into(),
+                );
             }
             if changed {
                 self.save_player_account_to_redb_checked(&updated)?;
@@ -3775,7 +3780,12 @@ impl PlayerDb {
                 .preferred_leader
                 .as_deref()
                 .and_then(crate::commerce::leader_from_id)
-                .unwrap_or(crate::leaders::Leader::Boudica);
+                .unwrap_or_else(|| {
+                    crate::commerce::assigned_leader_for_account(
+                        account_id,
+                        crate::commerce::current_rotation_period(),
+                    )
+                });
             account.profile.preferred_leader =
                 Some(crate::commerce::leader_wire_id(leader).to_string());
             let reward = crate::rewards::calculate(crate::rewards::RewardInput {
@@ -3813,7 +3823,10 @@ impl PlayerDb {
             || match_id.len() > 20
             || player_ids.is_empty()
             || player_ids.len() > crate::MAX_MATCH_PARTICIPANTS
-            || player_ids.iter().collect::<std::collections::BTreeSet<_>>().len()
+            || player_ids
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
                 != player_ids.len()
         {
             return Err("invalid match registration".into());
@@ -4119,9 +4132,7 @@ impl PlayerDb {
             map_name,
             started_at,
             completed_at,
-            duration_seconds: completed_at
-                .saturating_sub(started_at)
-                .min(u32::MAX as u64) as u32,
+            duration_seconds: completed_at.saturating_sub(started_at).min(u32::MAX as u64) as u32,
             winner_account_id: winner,
             winning_team,
             verified: false,
@@ -4147,7 +4158,10 @@ impl PlayerDb {
     pub async fn apply_verified_match_result(
         &self,
         result: &VerifiedMatchResult,
-    ) -> Result<(Vec<PlayGamesMatchOutcome>, Vec<PlayerAccount>), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<
+        (Vec<PlayGamesMatchOutcome>, Vec<PlayerAccount>),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         let start = self
             .match_start_record(&result.match_id)?
             .ok_or("trusted match registration unavailable")?;
@@ -4201,19 +4215,27 @@ impl PlayerDb {
                 return Err("invalid verified result: duplicate participant".into());
             }
             let Some((account_id, team, leader)) = trusted.get(&participant.player_id) else {
-                return Err("invalid verified result: player is not in the registered roster".into());
+                return Err(
+                    "invalid verified result: player is not in the registered roster".into(),
+                );
             };
             if account_id != &participant.account_id
                 || team.as_deref() != participant.team.as_deref()
                 || leader.as_deref() != participant.leader.as_deref()
             {
-                return Err("invalid verified result: participant differs from registered roster".into());
+                return Err(
+                    "invalid verified result: participant differs from registered roster".into(),
+                );
             }
             let should_win = match (result.winner_player_id, result.winning_team.as_deref()) {
                 (Some(_), Some(team)) => participant.team.as_deref() == Some(team),
                 (Some(winner), None) => participant.player_id == winner,
                 (None, None) => false,
-                (None, Some(_)) => return Err("invalid verified result: winning team has no winning player".into()),
+                (None, Some(_)) => {
+                    return Err(
+                        "invalid verified result: winning team has no winning player".into(),
+                    );
+                }
             };
             if participant.won != should_win {
                 return Err("invalid verified result: victory differs from registered team".into());
@@ -4233,7 +4255,9 @@ impl PlayerDb {
                 .and_then(|(_, team, _)| team.as_deref())
                 != Some(winning_team)
         {
-            return Err("invalid verified result: winner does not belong to the winning team".into());
+            return Err(
+                "invalid verified result: winner does not belong to the winning team".into(),
+            );
         }
         let registered_accounts = start
             .player_ids
@@ -4260,8 +4284,12 @@ impl PlayerDb {
             .iter()
             .map(|participant| participant.account_id.as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        if record_accounts.len() != record.participants.len() || record_accounts != registered_accounts {
-            return Err("invalid verified result: match history roster differs from registration".into());
+        if record_accounts.len() != record.participants.len()
+            || record_accounts != registered_accounts
+        {
+            return Err(
+                "invalid verified result: match history roster differs from registration".into(),
+            );
         }
         let mut playgames_outcomes = Vec::new();
         let mut mirrored_accounts = Vec::new();
@@ -4365,8 +4393,13 @@ impl PlayerDb {
                     .saturating_add(participant.tribes_defeated);
                 account.profile.kills = account.profile.kills.saturating_add(participant.kills);
                 account.profile.deaths = account.profile.deaths.saturating_add(participant.deaths);
-                account.profile.assists = account.profile.assists.saturating_add(participant.assists);
-                let leader_stats = account.profile.leader_stats.entry(leader.clone()).or_default();
+                account.profile.assists =
+                    account.profile.assists.saturating_add(participant.assists);
+                let leader_stats = account
+                    .profile
+                    .leader_stats
+                    .entry(leader.clone())
+                    .or_default();
                 leader_stats.kills = leader_stats.kills.saturating_add(participant.kills);
                 leader_stats.deaths = leader_stats.deaths.saturating_add(participant.deaths);
                 leader_stats.assists = leader_stats.assists.saturating_add(participant.assists);
@@ -4376,7 +4409,13 @@ impl PlayerDb {
                     leader_stats.wins = leader_stats.wins.saturating_add(1);
                     leader_stats.verified_wins = leader_stats.verified_wins.saturating_add(1);
                 }
-                account.profile.apply_reward_receipt(&bonus_id, &result.match_id, &leader, bonus, now);
+                account.profile.apply_reward_receipt(
+                    &bonus_id,
+                    &result.match_id,
+                    &leader,
+                    bonus,
+                    now,
+                );
                 if let Some(receipt) = account.profile.reward_receipts.get_mut(&bonus_id) {
                     receipt.verification_status = Some(ReplayVerificationStatus::Verified);
                 }
@@ -4392,7 +4431,12 @@ impl PlayerDb {
                 won: participant.won,
                 wins: updated.profile.verified_wins,
                 sync_revision: updated.profile.playgames_sync_revision,
-                unlocked_achievements: updated.profile.unlocked_achievements.iter().cloned().collect(),
+                unlocked_achievements: updated
+                    .profile
+                    .unlocked_achievements
+                    .iter()
+                    .cloned()
+                    .collect(),
             });
             mirrored_accounts.push(updated);
         }
@@ -4498,7 +4542,10 @@ mod tests {
         let views = profile.achievement_views();
         assert_eq!(views.len(), 9);
         assert_eq!(
-            views.iter().map(|view| view.category.as_str()).collect::<Vec<_>>(),
+            views
+                .iter()
+                .map(|view| view.category.as_str())
+                .collect::<Vec<_>>(),
             [
                 "battles",
                 "victories",
@@ -4536,31 +4583,29 @@ mod tests {
         let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
         let alice = "0123456789abcdef0123456789abcdef";
         let bob = "fedcba9876543210fedcba9876543210";
-        let make_record = |id: &str, at: u64, accounts: &[&str], provisional: bool| {
-            MatchRecord {
-                schema_version: 1,
-                match_id: id.to_string(),
-                season_id: 1,
-                queue: "Matchmaking".to_string(),
-                mode: "FFA".to_string(),
-                map_name: "world".to_string(),
-                started_at: at.saturating_sub(60),
-                completed_at: at,
-                duration_seconds: 60,
-                winner_account_id: None,
-                winning_team: None,
-                verified: !provisional,
-                provisional,
-                rating_eligible: false,
-                participants: accounts
-                    .iter()
-                    .map(|account_id| crate::profile::MatchParticipantRecord {
-                        account_id: (*account_id).to_string(),
-                        display_name: (*account_id).to_string(),
-                        ..Default::default()
-                    })
-                    .collect(),
-            }
+        let make_record = |id: &str, at: u64, accounts: &[&str], provisional: bool| MatchRecord {
+            schema_version: 1,
+            match_id: id.to_string(),
+            season_id: 1,
+            queue: "Matchmaking".to_string(),
+            mode: "FFA".to_string(),
+            map_name: "world".to_string(),
+            started_at: at.saturating_sub(60),
+            completed_at: at,
+            duration_seconds: 60,
+            winner_account_id: None,
+            winning_team: None,
+            verified: !provisional,
+            provisional,
+            rating_eligible: false,
+            participants: accounts
+                .iter()
+                .map(|account_id| crate::profile::MatchParticipantRecord {
+                    account_id: (*account_id).to_string(),
+                    display_name: (*account_id).to_string(),
+                    ..Default::default()
+                })
+                .collect(),
         };
 
         db.save_provisional_match_record(&make_record("m1", 100, &[alice], true))
@@ -4572,7 +4617,9 @@ mod tests {
         db.save_provisional_match_record(&make_record("m1", 400, &[alice, bob], true))
             .unwrap();
 
-        let alice_history = db.match_history_for_account(alice, 0, 10, None, None).unwrap();
+        let alice_history = db
+            .match_history_for_account(alice, 0, 10, None, None)
+            .unwrap();
         assert_eq!(
             alice_history
                 .iter()
@@ -4580,7 +4627,9 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["m1", "m3"]
         );
-        let bob_history = db.match_history_for_account(bob, 0, 10, None, None).unwrap();
+        let bob_history = db
+            .match_history_for_account(bob, 0, 10, None, None)
+            .unwrap();
         assert_eq!(
             bob_history
                 .iter()
@@ -4597,8 +4646,16 @@ mod tests {
         assert!(!saved.provisional);
         assert!(saved.verified);
         assert_eq!(saved.completed_at, 500);
-        let history = db.match_history_for_account(alice, 0, 10, None, None).unwrap();
-        assert_eq!(history.iter().filter(|record| record.match_id == "m1").count(), 1);
+        let history = db
+            .match_history_for_account(alice, 0, 10, None, None)
+            .unwrap();
+        assert_eq!(
+            history
+                .iter()
+                .filter(|record| record.match_id == "m1")
+                .count(),
+            1
+        );
         assert_eq!(history[0].match_id, "m1");
     }
 
@@ -4624,9 +4681,7 @@ mod tests {
                 };
                 let json = serde_json::to_vec(&entry).unwrap();
                 let key = verified_victory_key(wins, account_id);
-                table
-                    .insert(key.as_str(), json.as_slice())
-                    .unwrap();
+                table.insert(key.as_str(), json.as_slice()).unwrap();
             }
         }
         write_txn.commit().unwrap();
@@ -4634,9 +4689,18 @@ mod tests {
         let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
         let first = db.public_victory_leaderboard(0, 2).await.unwrap();
         let second = db.public_victory_leaderboard(2, 2).await.unwrap();
-        assert_eq!(first.iter().map(|entry| entry.wins).collect::<Vec<_>>(), [20, 10]);
-        assert_eq!(first.iter().map(|entry| entry.rank).collect::<Vec<_>>(), [1, 2]);
-        assert_eq!(second.iter().map(|entry| entry.wins).collect::<Vec<_>>(), [3]);
+        assert_eq!(
+            first.iter().map(|entry| entry.wins).collect::<Vec<_>>(),
+            [20, 10]
+        );
+        assert_eq!(
+            first.iter().map(|entry| entry.rank).collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(
+            second.iter().map(|entry| entry.wins).collect::<Vec<_>>(),
+            [3]
+        );
         assert_eq!(second[0].rank, 3);
     }
 
@@ -4687,7 +4751,13 @@ mod tests {
         assert!(PlayerDb::apply_manual_gem_grant(&mut account, 450, request_id, 3).is_err());
         assert_eq!(account.profile.gems, 475);
         assert_eq!(
-            account.profile.purchase_history.values().next().unwrap().provider,
+            account
+                .profile
+                .purchase_history
+                .values()
+                .next()
+                .unwrap()
+                .provider,
             "operator"
         );
         assert!(PlayerDb::apply_manual_gem_grant(&mut account, 0, request_id, 4).is_err());

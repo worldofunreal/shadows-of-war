@@ -32,6 +32,8 @@
     var mapFeedbackTimer = null;
     var activeMapFeedback = null;
     var mapFeedbackCard = null;
+    var MAP_FEEDBACK_DURATION_MS = 2000;
+    var MAP_FEEDBACK_FADE_OUT_MS = 180;
     var mapMenuView = "root";
     var mapMenuStateKey = "";
     var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
@@ -82,6 +84,14 @@
         warship: "gameplay/icons/port_galley_1to1.webp"
     };
 
+    var BUILDING_EMOJIS = {
+        city: "🏕️",
+        factory: "🛠️",
+        port: "⚓",
+        bunker: "👁️",
+        farm: "🌱"
+    };
+
     var HUD_GLYPHS = {
         plus: '<path d="M12 4v16M4 12h16"/>',
         minus: '<path d="M4 12h16"/>',
@@ -120,8 +130,28 @@
         return '<img class="' + (cls || "sow-hud__action-icon") + '" src="' + asset(HUD_ICONS[name]) + '" alt="" aria-hidden="true">';
     }
 
-    function buildingIcon(kind) {
-        return hudIcon(String(kind || "").toLowerCase(), "sow-hud__building-icon");
+    function emojiIcon(emoji, cls) {
+        return '<span class="' + cls + ' is-emoji" aria-hidden="true">' + emoji + '</span>';
+    }
+
+    function buildingIcon(kind, level) {
+        var name = String(kind || "");
+        var art = window.SOW_BUILDING_ART;
+        var canonical = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        var atlas = art && art.sprites && art.sprites[canonical];
+        var sprite = atlas && atlas[String(Number(level) || 1)];
+        if (sprite && art.cell_size > 0 && art.atlas_width > art.cell_size && art.atlas_height > art.cell_size) {
+            var backgroundWidth = (art.atlas_width * 100 / art.cell_size).toFixed(4);
+            var backgroundHeight = (art.atlas_height * 100 / art.cell_size).toFixed(4);
+            var positionX = (sprite.x * 100 / (art.atlas_width - art.cell_size)).toFixed(4);
+            var positionY = (sprite.y * 100 / (art.atlas_height - art.cell_size)).toFixed(4);
+            var style = 'background-image:url(&quot;' + escapeHudText(asset(art.atlas)) + '&quot;);'
+                + 'background-size:' + backgroundWidth + '% ' + backgroundHeight + '%;'
+                + 'background-position:' + positionX + '% ' + positionY + '%;';
+            return '<span class="sow-hud__building-icon is-pixel-art" style="' + style + '" aria-hidden="true"></span>';
+        }
+        var emoji = BUILDING_EMOJIS[name.toLowerCase()];
+        return emoji ? emojiIcon(emoji, "sow-hud__building-icon") : "";
     }
 
     function leaderById(id) {
@@ -786,14 +816,12 @@
                 if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance");
                 else mapDisabledSector(radial, 2, radialCount, "alliance", hudIcon("alliance", "sow-hud__map-action-icon"), mapLabel("alliance"));
                 if (buildItems.length) {
-                    var buildIcon = buildItems.some(function (item) {
-                        return item.action === "build_warship" || item.action === "build_trade_ship";
-                    }) ? hudIcon("port", "sow-hud__map-action-icon") : hudIcon("tools", "sow-hud__map-action-icon");
+                    var buildIcon = emojiIcon("🏗️", "sow-hud__map-action-icon");
                     mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, "Build");
                 } else if (nukeItem) {
                     mapSector(radial, nukeItem, 3, radialCount, "nuke");
                 } else {
-                    mapDisabledSector(radial, 3, radialCount, "build", hudIcon("tools", "sow-hud__map-action-icon"), "Build");
+                    mapDisabledSector(radial, 3, radialCount, "build", emojiIcon("🏗️", "sow-hud__map-action-icon"), "Build");
                 }
                 menu.appendChild(radial);
             } else {
@@ -803,7 +831,7 @@
                 header.className = "sow-hud__map-submenu-header";
                 var heading = document.createElement("span");
                 heading.className = "sow-hud__map-submenu-icon";
-                heading.innerHTML = hudIcon("tools", "sow-hud__map-action-icon");
+                heading.innerHTML = emojiIcon("🏗️", "sow-hud__map-action-icon");
                 heading.setAttribute("aria-hidden", "true");
                 header.appendChild(heading);
                 var back = document.createElement("button");
@@ -884,7 +912,7 @@
         if (!open) return;
         hudRefs.buildingCard.dataset.session = String(mapMenu.session);
         hudRefs.buildingCard.dataset.tileIdx = String(mapMenu.tile_idx);
-        hudRefs.buildingCardIcon.innerHTML = buildingIcon(detail.kind);
+        hudRefs.buildingCardIcon.innerHTML = buildingIcon(detail.kind, detail.level);
         hudRefs.buildingCardKind.textContent = detail.name || detail.kind || "Building";
         var underConstruction = Boolean(detail.under_construction);
         hudRefs.buildingCardLevel.innerHTML = underConstruction
@@ -1052,24 +1080,32 @@
         seal.setAttribute("aria-hidden", "true");
         var portraits = document.createElement("span");
         portraits.className = "sow-hud__notification-portraits";
-        var portraitA = document.createElement("img");
-        var portraitB = document.createElement("img");
-        [portraitA, portraitB].forEach(function (portrait) {
-            portrait.className = "sow-hud__notification-portrait";
-            portrait.alt = "";
-            portrait.draggable = false;
-            portrait.hidden = true;
-            portrait.onerror = function () {
+        var avatars = [];
+        for (var index = 0; index < 2; index += 1) {
+            var wrapper = document.createElement("span");
+            wrapper.className = "sow-hud__notification-avatar";
+            wrapper.hidden = true;
+            var image = document.createElement("img");
+            image.className = "sow-hud__notification-portrait";
+            image.alt = "";
+            image.draggable = false;
+            image.hidden = true;
+            image.onerror = function () {
                 var fallback = asset("gameplay/avatars/null.webp");
                 if (this.getAttribute("src") !== fallback) this.src = fallback;
             };
-            portraits.appendChild(portrait);
-        });
+            var emblem = document.createElement("span");
+            emblem.className = "sow-hud__notification-emblem";
+            emblem.hidden = true;
+            wrapper.append(image, emblem);
+            portraits.appendChild(wrapper);
+            avatars.push({ wrapper: wrapper, image: image, emblem: emblem });
+        }
         var copy = document.createElement("span");
         copy.className = "sow-hud__notification-copy";
         card.append(seal, portraits, copy);
         container.appendChild(card);
-        return { card: card, seal: seal, portraits: [portraitA, portraitB], copy: copy, renderKey: "" };
+        return { card: card, seal: seal, avatars: avatars, copy: copy, renderKey: "" };
     }
 
     function clearNotificationCard(parts) {
@@ -1077,10 +1113,14 @@
         parts.renderKey = "";
         parts.seal.innerHTML = "";
         parts.copy.textContent = "";
-        parts.portraits.forEach(function (portrait) {
-            portrait.hidden = true;
-            if (portrait.removeAttribute) portrait.removeAttribute("src");
-            else portrait.src = "";
+        parts.avatars.forEach(function (avatar) {
+            avatar.wrapper.hidden = true;
+            avatar.wrapper.className = "sow-hud__notification-avatar";
+            avatar.image.hidden = true;
+            if (avatar.image.removeAttribute) avatar.image.removeAttribute("src");
+            else avatar.image.src = "";
+            avatar.emblem.hidden = true;
+            avatar.emblem.textContent = "";
         });
     }
 
@@ -1110,17 +1150,31 @@
             + (item.priority >= 4 ? " sow-hud__notification--urgent" : "")
             + (/resource_received|ally_support/.test(key) ? " sow-hud__notification--support" : "");
         parts.seal.innerHTML = notificationIcon(key);
-        parts.portraits.forEach(function (portrait, portraitIndex) {
-            var rawId = String(avatars[portraitIndex] || "");
-            var slug = rawId ? leaderById(rawId).slug : "";
-            var valid = /^[a-z][a-z0-9_]*$/.test(slug || "");
-            portrait.hidden = !rawId;
-            if (rawId) {
-                var src = asset("gameplay/avatars/" + (valid ? slug : "null") + ".webp");
-                if (portrait.getAttribute("src") !== src) portrait.src = src;
-            } else if (portrait.removeAttribute) {
-                portrait.removeAttribute("src");
+        parts.avatars.forEach(function (slot, index) {
+            var presentation = avatars[index] || null;
+            var kind = presentation && String(presentation.kind || "");
+            slot.wrapper.hidden = !presentation;
+            slot.wrapper.className = "sow-hud__notification-avatar"
+                + (index > 0 && avatars[index - 1] ? " sow-hud__notification-avatar--overlap" : "");
+            slot.image.hidden = true;
+            if (slot.image.removeAttribute) slot.image.removeAttribute("src");
+            else slot.image.src = "";
+            slot.emblem.hidden = true;
+            slot.emblem.textContent = "";
+            if (!presentation) return;
+
+            if (kind === "emblem" && typeof presentation.symbol === "string" && presentation.symbol) {
+                slot.emblem.textContent = presentation.symbol;
+                slot.emblem.hidden = false;
+                return;
             }
+
+            var slug = kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
+                ? presentation.slug
+                : "null";
+            var src = asset("gameplay/avatars/" + slug + ".webp");
+            slot.image.hidden = false;
+            if (slot.image.getAttribute("src") !== src) slot.image.src = src;
         });
         parts.copy.textContent = SOW_t(key, entry.values || {});
     }
@@ -1162,7 +1216,10 @@
             hudRefs.mapFeedback.style.removeProperty("left");
             hudRefs.mapFeedback.style.removeProperty("top");
         }
-        if (mapFeedbackCard) clearNotificationCard(mapFeedbackCard);
+        if (mapFeedbackCard) {
+            mapFeedbackCard.card.classList.remove("sow-hud__map-feedback-card--visible");
+            clearNotificationCard(mapFeedbackCard);
+        }
     }
 
     function renderMapFeedback(entry) {
@@ -1176,19 +1233,25 @@
         mapFeedbackCursor = id;
         var age = Math.max(0, Number(entry.age_ms) || 0);
         clearMapFeedback();
-        if (age >= 3600) return;
+        if (age >= MAP_FEEDBACK_DURATION_MS) return;
         var now = Date.now();
         activeMapFeedback = {
             entry: entry,
             priority: 1,
-            expiresAt: now + 3600 - age
+            expiresAt: now + MAP_FEEDBACK_DURATION_MS - age
         };
         hudRefs.mapFeedback.hidden = false;
         renderNotificationCard(mapFeedbackCard, activeMapFeedback, true);
         positionMapFeedback(entry);
+        mapFeedbackCard.card.classList.remove("sow-hud__map-feedback-card--visible");
+        void mapFeedbackCard.card.offsetWidth;
+        mapFeedbackCard.card.classList.add("sow-hud__map-feedback-card--visible");
         mapFeedbackTimer = window.setTimeout(function () {
-            mapFeedbackTimer = null;
-            clearMapFeedback();
+            mapFeedbackCard.card.classList.remove("sow-hud__map-feedback-card--visible");
+            mapFeedbackTimer = window.setTimeout(function () {
+                mapFeedbackTimer = null;
+                clearMapFeedback();
+            }, MAP_FEEDBACK_FADE_OUT_MS);
         }, Math.max(0, activeMapFeedback.expiresAt - Date.now()));
     }
 

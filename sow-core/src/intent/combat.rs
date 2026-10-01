@@ -1,4 +1,5 @@
 use crate::engine::SowEngine;
+use crate::building::DefenseGrid;
 use crate::execution::{AttackExecution, PrioritizedTile};
 use crate::game::GameState;
 use crate::map::TerrainType;
@@ -19,6 +20,7 @@ pub fn merge_frontiers(
 
 pub fn build_attack_frontier(
     game: &GameState,
+    defense_grid: &DefenseGrid,
     player_id: u16,
     target_owner: u16,
     border_tiles: &crate::bitset::DenseBitSet,
@@ -52,8 +54,17 @@ pub fn build_attack_frontier(
             };
             let r = rng.next_int(0, 7) as i64;
             // Formula scaled by 4 to maintain quartiles in integer space
-            let prio =
+            let mut prio =
                 (r + 10) * (4 - (num_owned_by_me as i64 * 2) + mag_x2) + (game.tick as i64 * 4);
+            prio += defense_grid.priority_bonus(
+                nx,
+                ny,
+                map_w,
+                target_owner,
+                player_id,
+                game.seed,
+                &game.config,
+            ) as i64;
 
             let seq = *insert_seq_counter;
             *insert_seq_counter = insert_seq_counter.wrapping_add(1);
@@ -91,11 +102,13 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
         .wrapping_add(0xB04F_0000);
     let mut rng = WyRand::new(exec_seed);
     let mut initial_seq = 0u32;
+    engine.refresh_defense_grid();
     let Some(player) = engine.state.player(owner_id) else {
         return;
     };
     let fresh = build_attack_frontier(
         &engine.state,
+        &engine.defense_grid,
         owner_id,
         target_owner,
         &player.border_tiles,
@@ -235,6 +248,7 @@ impl SowEngine {
             return;
         }
 
+        self.refresh_defense_grid();
         let mut rng = WyRand::new(
             self.state
                 .seed
@@ -245,6 +259,7 @@ impl SowEngine {
         let player = self.state.player(player_id).unwrap();
         let fresh = build_attack_frontier(
             &self.state,
+            &self.defense_grid,
             player_id,
             target_owner,
             &player.border_tiles,
@@ -288,5 +303,126 @@ impl SowEngine {
             rng,
             retreating: false,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_attack_frontier, spawn_or_merge_attack_for_fleet_arrival_pure};
+    use crate::building::{Building, CityModules, DefenseGrid, DEFENSE_GRID_CELL_SIZE};
+    use crate::game::{BuildingKind, GamePhase, GameState};
+    use crate::game_config::GameConfig;
+    use crate::map::MapTile;
+    use crate::player::Player;
+    use crate::water_components::WaterComponents;
+    use crate::rng::NextIntExt;
+    use wyrand::WyRand;
+
+    #[test]
+    fn initial_frontier_uses_the_same_tower_priority_sample() {
+        let width = 8;
+        let mut game = GameState::new(77, width, width, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            game.register_player(Player::new_human(
+                id,
+                format!("P{id}"),
+                [0.5; 3],
+                &game.config,
+            ));
+        }
+        game.set_tile_owner(2, 3, 1);
+        game.set_tile_owner(3, 3, 2);
+
+        let tower = Building {
+            id: 1,
+            owner_id: 2,
+            tile_idx: 3 * width + 3,
+            kind: BuildingKind::Bunker,
+            level: 2,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: CityModules::default(),
+        };
+        let mut grid = DefenseGrid::default();
+        grid.rebuild(&[tower], width, width, DEFENSE_GRID_CELL_SIZE, &game.config);
+        let border = game.player(1).unwrap().border_tiles.clone();
+        let mut rng = WyRand::new(91);
+        let mut sequence = 0;
+        let frontier = build_attack_frontier(
+            &game,
+            &grid,
+            1,
+            2,
+            &border,
+            &mut rng,
+            &mut sequence,
+        );
+        assert_eq!(frontier.len(), 1);
+
+        let influence = grid.influence(3, 3, width, 2, 1, game.seed, &game.config);
+        let mut base_rng = WyRand::new(91);
+        let random = base_rng.next_int(0, 7) as i64;
+        let expected_base = (random + 10) * 4 + (game.tick as i64 * 4);
+        assert_eq!(frontier.peek().unwrap().priority, expected_base + influence.priority_bonus as i64);
+    }
+
+    #[test]
+    fn fleet_arrival_frontier_uses_tower_priority() {
+        let width = 8;
+        let mut game = GameState::new(77, width, width, GameConfig::default());
+        game.phase = GamePhase::Playing;
+        game.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            game.register_player(Player::new_human(
+                id,
+                format!("P{id}"),
+                [0.5; 3],
+                &game.config,
+            ));
+        }
+        game.set_tile_owner(2, 3, 1);
+        game.set_tile_owner(3, 3, 2);
+
+        let mut engine = crate::engine::SowEngine::new(game, WaterComponents::default());
+        engine.add_building(Building {
+            id: 1,
+            owner_id: 2,
+            tile_idx: 3 * width + 3,
+            kind: BuildingKind::Bunker,
+            level: 2,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: CityModules::default(),
+        });
+        let fleet_id = 9;
+        spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, fleet_id);
+
+        let frontier = &engine.attacks[0].to_conquer;
+        assert_eq!(frontier.len(), 1);
+        let tile = frontier.peek().unwrap();
+        assert_eq!((tile.x, tile.y), (3, 3));
+
+        let mut rng = WyRand::new(
+            engine
+                .state
+                .seed
+                .wrapping_add(engine.state.tick)
+                .wrapping_add(fleet_id)
+                .wrapping_add(0xB04F_0000),
+        );
+        let random = rng.next_int(0, 7) as i64;
+        let base_priority = (random + 10) * 4 + engine.state.tick as i64 * 4;
+        let influence = engine.defense_grid.influence(
+            tile.x,
+            tile.y,
+            width,
+            2,
+            1,
+            engine.state.seed,
+            &engine.state.config,
+        );
+        assert_eq!(tile.priority, base_priority + influence.priority_bonus as i64);
     }
 }

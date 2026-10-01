@@ -32,21 +32,33 @@ const localeRuntime = fs.readFileSync(path.join(shell, "sow-i18n.js"), "utf8");
 const campaignEditorServer = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/server.mjs"), "utf8");
 const campaignEditorHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/logic.html"), "utf8");
 const campaignEditorCss = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.css"), "utf8");
+const mapRostersHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/map-rosters.html"), "utf8");
+const mapRosterWriter = fs.readFileSync(path.join(shell, "../../sow-tools/src/map_roster.rs"), "utf8");
 const gameFonts = fs.readFileSync(path.join(shell, "../../sow-web/site/fonts/fonts.css"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
+const siteChrome = fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.js"), "utf8");
+const siteDropdown = fs.readFileSync(path.join(shell, "sow-dropdown.js"), "utf8");
 const siteApp = fs.readFileSync(path.join(shell, "../../sow-web/site/app.js"), "utf8");
 const siteCss = fs.readFileSync(path.join(shell, "../../sow-web/site/styles.css"), "utf8");
+const siteFooterPages = ["support", "privacy", "terms", "cookies"].map((page) =>
+    fs.readFileSync(path.join(shell, `../../sow-web/site/${page}/index.html`), "utf8")
+);
+const siteRedirectConfig = fs.readFileSync(path.join(shell, "../../sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf"), "utf8");
 const campaignMapEditorHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/index.html"), "utf8");
 const campaignMapPreview = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.js"), "utf8");
+const campaignMapPreviewApi = require(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.js"));
+const atlasHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/atlas.html"), "utf8");
 const hud = fs.readFileSync(path.join(shell, "main_menu.hud.js"), "utf8");
 const hudCss = fs.readFileSync(path.join(shell, "main_menu.hud.css"), "utf8");
 const indexTemplate = fs.readFileSync(path.join(shell, "index.html.template"), "utf8");
 const windowInput = fs.readFileSync(path.join(shell, "../../sow-client/src/input/window.rs"), "utf8");
 const hudStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/ui/hud/state.rs"), "utf8");
+const avatarIdentitySource = fs.readFileSync(path.join(shell, "../../sow-core/src/player/mod.rs"), "utf8");
 const matchStartSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/match_start.rs"), "utf8");
 const campaignModule = fs.readFileSync(path.join(shell, "../../sow-client/src/campaign/mod.rs"), "utf8");
 const sessionSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/session.rs"), "utf8");
+const netMessagesSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/messages.rs"), "utf8");
 const simUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/update.rs"), "utf8");
 const simEventsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/events/mod.rs"), "utf8");
 const eliminationSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/events/elimination.rs"), "utf8");
@@ -56,6 +68,7 @@ const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/n
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
 const buildingOverlaySource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/overlays.rs"), "utf8");
+const nameplatesSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/world/nameplates.rs"), "utf8");
 const progressSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/progress.rs"), "utf8");
 const dataDbSource = fs.readFileSync(path.join(shell, "../../sow-data/src/db.rs"), "utf8");
 const dataMainSource = fs.readFileSync(path.join(shell, "../../sow-data/src/main.rs"), "utf8");
@@ -86,14 +99,165 @@ function renderSettingsBody(source, endMarker) {
     return source.slice(start, end);
 }
 
-test("public landing keeps its leader showcase and visible FAQ entry point", () => {
-    assert.match(landingHtml, /class="hero-stage"[\s\S]*data-hero-image[\s\S]*data-leader-rail/);
-    assert.match(siteApp, /function renderLeaderRail\(\)/);
-    assert.match(siteApp, /heroImage\.src = asset\(leader\)/);
-    assert.match(siteHeader, /href="\/#faq"/);
+test("public landing keeps the video hero, interactive leader roster, community links, and FAQ", () => {
+    assert.match(landingHtml, /<section class="hero section-rule">[\s\S]*class="hero-video"[\s\S]*class="hero-copy"[\s\S]*href="\/play\/"[\s\S]*href="#media"[\s\S]*<\/section>/);
+    assert.doesNotMatch(landingHtml, /hero-stage|data-leader-rail/);
+    assert.match(siteApp, /new IntersectionObserver\(/);
+    assert.match(siteApp, /document\.visibilityState === 'hidden' \|\| !heroVisible/);
+    assert.match(siteApp, /const cards = \$\$\('\.leader-card\[data-leader-id\]'\)/);
+    assert.match(siteApp, /const leaders = cards\.map/);
     assert.match(landingHtml, /id="faq"[\s\S]*class="faq-list"/);
-    assert.match(siteCss, /\.hero-stage[\s\S]*\.hero-frame/);
-    assert.match(siteCss, /\.faq-list \{ display: grid/);
+    const updates = landingHtml.slice(landingHtml.indexOf('<div class="footer-updates">'), landingHtml.indexOf('<div class="footer-top">'));
+    assert.match(updates, /href="https:\/\/discord\.gg\//);
+    assert.match(updates, /href="https:\/\/t\.me\//);
+    assert.doesNotMatch(updates, /disabled|type="email"/);
+    assert.match(siteCss, /\.hero-grid[^\n]*760px/);
+    assert.match(siteCss, /\.faq-list \{ display: grid; grid-template-columns: 1fr;/);
+});
+
+test("retired marketing pages stay deleted and redirect to the landing", () => {
+    const siteRoot = path.join(shell, "../../sow-web/site");
+    assert.equal(fs.existsSync(path.join(siteRoot, "leaders/index.html")), false);
+    assert.equal(fs.existsSync(path.join(siteRoot, "how-to-play/index.html")), false);
+    assert.doesNotMatch(siteHeader, /href=["']\/(?:leaders|how-to-play)\//);
+    assert.doesNotMatch(siteHeader, /href=["']\/#(?:leaders|faq)["']/);
+    const mobileMenu = siteHeader.match(/<nav class="mobile-menu"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    for (const [href, key] of [["/", "nav_home"], ["/support/", "support"], ["/privacy/", "privacy"], ["/terms/", "terms"], ["/cookies/", "cookies"]]) {
+        assert.match(mobileMenu, new RegExp(`href="${href}" data-i18n="site\\.${key}"`));
+    }
+    assert.match(mobileMenu, /<div class="mobile-menu-actions">\s*<div class="site-locale" data-locale-select[\s\S]*?<\/div>\s*<\/div>\s*<a href="\/" data-i18n="site\.nav_home">Home<\/a>/);
+    const mobileActionsCss = siteCss.match(/\.mobile-menu-actions \{[^}]+\}/)?.[0] ?? "";
+    assert.match(mobileActionsCss, /padding-bottom: 2px;/);
+    assert.match(mobileActionsCss, /border-bottom: 1px solid var\(--line\);/);
+    assert.doesNotMatch(mobileActionsCss, /padding-top|border-top/);
+    assert.match(siteCss, /\.mobile-menu-actions \.site-locale \.sow-control-dropdown__trigger \{ height: 48px; \}/);
+    assert.match(siteCss, /\.site-locale-dropdown \.sow-control-dropdown__menu:not\(\[hidden\]\) \{\s*max-height: min\(560px, calc\(100dvh - 140px\)\);\s*\}/);
+    assert.doesNotMatch(siteChrome, /syncCurrentNavigation/);
+    assert.match(siteChrome, /control\.innerHTML = window\.SOW_renderDropdown/);
+    assert.match(siteChrome, /window\.SOW_I18N_READY\.then\(applyLocale\)/);
+    assert.match(landingHtml, /id="leaders"/);
+    assert.match(landingHtml, /href="\/#faq"/);
+    for (const html of siteFooterPages) {
+        assert.doesNotMatch(html, /href=["']\/(?:leaders|how-to-play)\//);
+    }
+    for (const html of [landingHtml, ...siteFooterPages]) {
+        const footer = html.match(/<div class="footer-links">([\s\S]*?)<\/div>/)?.[1] ?? "";
+        assert.ok(footer);
+        assert.doesNotMatch(footer, /site\.nav_leaders|href=["']\/#leaders["']/);
+    }
+    assert.match(shellSource, /href='\/#faq'/);
+    assert.doesNotMatch(shellSource, /\/how-to-play\//);
+    assert.ok(siteRedirectConfig.includes("location ~ ^/(leaders|how-to-play)/?$"));
+    assert.ok(siteRedirectConfig.includes("return 301 https://shadowsofwar.io/;"));
+    assert.doesNotMatch(siteCss, /compendium-|stat-meters-grid|stat-meter/);
+});
+
+test("mobile navigation and footers reuse the same localization key per link", () => {
+    const mobileMenu = siteHeader.match(/<nav class="mobile-menu"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    const localizedLinks = (markup) => new Map(
+        Array.from(markup.matchAll(/<a\b([^>]*)>/g), ([, attributes]) => {
+            const href = attributes.match(/\bhref=["']([^"']+)["']/)?.[1];
+            const key = attributes.match(/\bdata-i18n=["']([^"']+)["']/)?.[1];
+            return href && key ? [href, key] : null;
+        }).filter(Boolean)
+    );
+    const mobileLinks = localizedLinks(mobileMenu);
+
+    for (const [href, mobileKey] of mobileLinks) {
+        const footerKeys = [landingHtml, ...siteFooterPages].flatMap((html) => {
+            const footer = html.match(/<div class="footer-links">([\s\S]*?)<\/div>/)?.[1] ?? "";
+            const key = localizedLinks(footer).get(href);
+            return key ? [key] : [];
+        });
+        assert.ok(footerKeys.length, `footer has no localized link for ${href}`);
+        assert.ok(footerKeys.every((key) => key === mobileKey), `${href} uses different menu/footer localization keys`);
+    }
+});
+
+test("mobile menu renders its language selector after locale bootstrap", async () => {
+    const controls = Array.from({ length: 2 }, () => ({ className: "", innerHTML: "", querySelector: () => null }));
+    const menu = { classList: { toggle() {} }, setAttribute() {}, querySelectorAll: () => [] };
+    const menuToggle = { setAttribute() {}, addEventListener() {} };
+    const document = {
+        documentElement: {},
+        querySelectorAll: selector => selector === "[data-locale-select]" ? controls : [],
+        querySelector: selector => selector === "#mobile-menu" ? menu : selector === "[data-menu-toggle]" ? menuToggle : null,
+        addEventListener() {}
+    };
+    const window = {
+        SOW_I18N_READY: Promise.resolve(),
+        SOW_t: key => key,
+        SOW_getLocale: () => "en",
+        SOW_getLocaleTag: locale => locale,
+        SOW_getSupportedLocales: () => ["en", "es"],
+        SOW_getLocaleLabel: locale => locale,
+        addEventListener() {}
+    };
+    const context = { document, window };
+    vm.runInNewContext(siteDropdown, context);
+    vm.runInNewContext(siteChrome, context);
+    await window.SOW_I18N_READY;
+    await Promise.resolve();
+    assert.match(controls[1].innerHTML, /sow-control-dropdown__trigger/);
+});
+
+test("landing background video follows hero visibility and motion settings", () => {
+    let observeHero;
+    let onVisibilityChange;
+    let onMotionChange;
+    let plays = 0;
+    let pauses = 0;
+    const hero = {};
+    const video = {
+        closest: () => hero,
+        play() { plays += 1; return Promise.resolve(); },
+        pause() { pauses += 1; }
+    };
+    const motion = {
+        matches: false,
+        addEventListener: (_event, callback) => { onMotionChange = callback; }
+    };
+    class IntersectionObserverMock {
+        constructor(callback) { observeHero = callback; }
+        observe(target) { assert.equal(target, hero); }
+    }
+    const window = {
+        IntersectionObserver: IntersectionObserverMock,
+        matchMedia: () => motion,
+        addEventListener() {}
+    };
+    const document = {
+        visibilityState: "visible",
+        querySelector: selector => selector === ".hero-video" ? video : null,
+        querySelectorAll: () => [],
+        addEventListener: (_event, callback) => { onVisibilityChange = callback; }
+    };
+
+    vm.runInNewContext(siteApp, {
+        window,
+        document,
+        IntersectionObserver: IntersectionObserverMock,
+        location: { hostname: "localhost" },
+        sessionStorage: { getItem: () => null, setItem() {} }
+    });
+    assert.equal(pauses, 1, "starts paused until the hero is observed");
+
+    observeHero([{ isIntersecting: true }]);
+    assert.equal(plays, 1);
+    document.visibilityState = "hidden";
+    onVisibilityChange();
+    assert.equal(pauses, 2);
+    document.visibilityState = "visible";
+    onVisibilityChange();
+    assert.equal(plays, 2);
+    motion.matches = true;
+    onMotionChange();
+    assert.equal(pauses, 3);
+    motion.matches = false;
+    onMotionChange();
+    assert.equal(plays, 3);
+    observeHero([{ isIntersecting: false }]);
+    assert.equal(pauses, 4);
 });
 
 test("menu CSS keeps shared layout separate from live screen domains", () => {
@@ -151,7 +315,9 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.match(serverSource, /SubmitStatsWithLeader \{ \.\. \}[\s\S]*SubmitMatchReport \{ \.\. \} => \{\}/);
     assert.doesNotMatch(webMenu, /hud\.rewards/);
     assert.match(coreSource, /receipt\.leader_xp/);
-    assert.match(heroesSource, /var portraitAsset = asset\([\s\S]*_mobile\.webp[\s\S]*var landscapeAsset = asset\([\s\S]*_desktop\.webp[\s\S]*srcset='" \+ esc\(landscapeAsset\)[\s\S]*img src='" \+ esc\(portraitAsset\)/);
+    assert.match(coreSource, /return leaderArtUrl\(leader\.slug\);/);
+    assert.match(heroesSource, /var portraitAsset = leaderArtUrl\([\s\S]*"mobile"[\s\S]*var landscapeAsset = leaderArtUrl\([\s\S]*"desktop"[\s\S]*source\.srcset = portraitAsset[\s\S]*image\.src = landscapeAsset/);
+    assert.match(heroesSource, /source media='\(orientation: portrait\)' srcset='" \+ esc\(portraitAsset\)[\s\S]*img src='" \+ esc\(landscapeAsset\)/);
 });
 
 test("participation receipt stays synced until replay verification resolves", () => {
@@ -239,6 +405,416 @@ test("game exit resets Battle and replays the screen entrance after the loader",
     assert.match(menuCss["main_menu.layout.css"], /sow-screen-panel-enter 240ms/);
 });
 
+test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
+    assert.match(loaderSource, /window\.SOW_leaderArtUrl = leaderArtUrl/);
+    assert.match(loaderSource, /window\.SOW_prepareLeaderArt = prepareLeaderArt/);
+    assert.match(loaderSource, /if \(loaderArtKey === 'boot' && state && state\.loader_job === 'EnterGame'\) \{\s*const slug = leaderSlugForState\(state\);\s*if \(slug\) prepareLeaderArt\(slug\);\s*return;/,
+        "tutorial hero art is prepared behind the original boot splash");
+    assert.match(loaderSource, /if \(state\.loader_done === true\) \{\s*if \(state\.loader_job === 'ExitGame'\) syncLoaderArt\(state\);\s*finish\(\);/,
+        "exit art is attached before the loader begins closing");
+    assert.match(coreSource, /return window\.SOW_leaderArtUrl\(slug, variant\)/);
+    assert.match(heroesSource, /prepareLeaderArt\(activeLeader\)/);
+    assert.match(shellSource, /state\.phase === "Playing" && state\.loader_leader[\s\S]*prepareLeaderArt\(leaderById\(state\.loader_leader\)\)/);
+    for (const source of [coreSource, heroesSource, storeSource, profileSource]) {
+        assert.doesNotMatch(source, /asset\(["']shell\/leaders\//, "leader art must use the same versioned URL as the loader");
+    }
+    const introStart = matchStartSource.indexOf('log::info!("Portal boot: new player -> JavaScript campaign bootstrap")');
+    const introEnd = matchStartSource.indexOf("crate::store_portals::gameplay_stop();", introStart);
+    assert.ok(introStart >= 0 && introEnd > introStart);
+    const bootIntro = matchStartSource.slice(introStart, introEnd);
+    assert.match(bootIntro, /let campaign = crate::campaign::CampaignId::Boudica/);
+    assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
+    assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
+    assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
+    assert.match(webMenu, /"phase": "Playing",\s*"loader_job": splash_job_name\(&app\.ui\.app\.splash_state\.job\),\s*"loader_leader": app\.ui\.app\.splash_state\.loader_leader\.map\(leader_id\),\s*"loader_progress": app\.ui\.app\.splash_state\.progress\.clamp\(0\.0, 1\.0\),\s*"loader_done": app\.ui\.app\.splash_state\.done/);
+    assert.match(loaderSource, /loaderArtKey === key \+ ':unready'[\s\S]*preparedLeaderArt\.ready/,
+        "a completed existing preload can recover from an earlier pending state");
+    assert.doesNotMatch(loaderSource, /state\.phase !== 'MainMenu' && state\.phase !== 'Playing'/);
+    assert.doesNotMatch(loaderSource, /window\.hideWebLoader/);
+    assert.doesNotMatch(appStateSource, /web_loader_hidden/);
+    assert.match(tutorial, /state\.boot_campaign && runtime\.bootEpisode !== state\.boot_campaign\) startEpisode\(state\.boot_campaign, true\)/);
+    const tutorialStateUpdate = shellSource.indexOf("window.SOW_tutorial_menu_state_update(state)");
+    const loaderStateSync = shellSource.indexOf("syncWebLoaderForState(state)", tutorialStateUpdate);
+    assert.ok(tutorialStateUpdate >= 0 && loaderStateSync > tutorialStateUpdate,
+        "the same menu-state update starts the tutorial request before syncing the existing loader");
+    const campaignCommandStart = webMenu.indexOf("WebMenuCommand::StartCampaignEpisode {");
+    const campaignCommandEnd = webMenu.indexOf("WebMenuCommand::CompleteCampaignEpisode {", campaignCommandStart);
+    assert.ok(campaignCommandStart >= 0 && campaignCommandEnd > campaignCommandStart);
+    assert.match(webMenu.slice(campaignCommandStart, campaignCommandEnd),
+        /start_campaign_episode_from_web\(campaign, roster, match_config\)/);
+    assert.match(matchStartSource, /self\.start_offline_match\([\s\S]*?\},\s*true,\s*\);/);
+    const campaignStartStart = matchStartSource.indexOf("pub(crate) fn start_campaign_episode_from_web");
+    const offlineStartStart = matchStartSource.indexOf("pub(crate) fn start_offline_match", campaignStartStart);
+    const campaignStart = matchStartSource.slice(campaignStartStart, offlineStartStart);
+    const offlineStart = matchStartSource.slice(offlineStartStart);
+    assert.doesNotMatch(campaignStart, /set_selected_leader\(/,
+        "starting a campaign does not replace the account's menu leader");
+    assert.doesNotMatch(offlineStart, /set_selected_leader\(/,
+        "starting a tutorial match keeps its leader separate from menu selection");
+    assert.match(offlineStart, /color: leader\.filler_rgb\(\)/);
+    assert.match(offlineStart, /civilization: leader\.civilization\(\),\s*leader,/,
+        "the tutorial's actual game player still uses its campaign leader");
+    const serverStartStart = netMessagesSource.indexOf("ServerMessage::Start(start_msg) =>");
+    const serverStartEnd = netMessagesSource.indexOf("self.ui.app.main_menu_state.is_waiting = false;", serverStartStart);
+    assert.ok(serverStartStart >= 0 && serverStartEnd > serverStartStart);
+    assert.match(netMessagesSource.slice(serverStartStart, serverStartEnd),
+        /sync_selected_leader_from_match\(\s*player\.leader,\s*start_msg\.config\.tutorial,?\s*\)/,
+        "the initialized tutorial player cannot overwrite the account leader");
+    const exitStart = sessionSource.indexOf("pub(crate) fn begin_exit_to_main_menu");
+    const exitEnd = sessionSource.indexOf("/// Enter the EnterGame splash", exitStart);
+    assert.match(sessionSource.slice(exitStart, exitEnd),
+        /sync_selected_leader_from_match\(\s*player\.leader,\s*was_offline && self\.ui\.tutorial_active,?\s*\)/,
+        "leaving a tutorial keeps its leader for the splash but not as the menu selection");
+    assert.match(nativeProfileSource,
+        /fn sync_selected_leader_from_match\([\s\S]*?if !tutorial \{[\s\S]*?set_selected_leader\(leader, false\)/,
+        "MainMenuState owns the rule for keeping campaign heroes separate from account selection");
+    const tutorialCompleteStart = dataDbSource.indexOf("pub async fn complete_tutorial(");
+    const tutorialCompleteEnd = dataDbSource.indexOf("/// Register expected players", tutorialCompleteStart);
+    const tutorialComplete = dataDbSource.slice(tutorialCompleteStart, tutorialCompleteEnd);
+    assert.match(tutorialComplete,
+        /assigned_leader_for_account\(\s*account_id,\s*crate::commerce::current_rotation_period\(\)\s*,?\s*\)/,
+        "an account missing its preference receives its normal free-rotation assignment");
+    assert.doesNotMatch(tutorialComplete, /Leader::Boudica/);
+    const engineLoaderSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
+    assert.match(engineLoaderSource,
+        /if step == 3 && self\.sim\.current_snapshot\.is_some\(\) \{[\s\S]*?if ready_to_release \{[\s\S]*?self\.ui\.app\.splash_state\.done = true;/,
+        "Rust reports done only after the initialized game snapshot is ready");
+    const enterLoaderStart = sessionSource.indexOf("pub(crate) fn begin_enter_game_loader");
+    const enterLoaderEnd = sessionSource.indexOf("/// Whether the map/mover GPU path", enterLoaderStart);
+    assert.ok(enterLoaderStart >= 0 && enterLoaderEnd > enterLoaderStart);
+    const enterLoader = sessionSource.slice(enterLoaderStart, enterLoaderEnd);
+    assert.match(enterLoader, /job == SplashJob::EnterGame[\s\S]*loader_leader == Some\(leader\)[\s\S]*!self\.ui\.app\.splash_state\.done[\s\S]*return;/);
+    assert.match(sessionSource.slice(enterLoaderStart, enterLoaderEnd), /SplashJob::Boot[\s\S]*?&& !self\.ui\.app\.splash_state\.done/);
+
+    class Element {
+        constructor(tagName) {
+            this.tagName = tagName;
+            this.children = [];
+            this.style = {};
+            this.dataset = {};
+            this.attributes = {};
+            this.parentNode = null;
+        }
+        appendChild(child) {
+            if (child.parentNode) child.remove();
+            this.children.push(child);
+            child.parentNode = this;
+            return child;
+        }
+        insertBefore(child, before) {
+            if (child.parentNode) child.remove();
+            const index = this.children.indexOf(before);
+            this.children.splice(index < 0 ? this.children.length : index, 0, child);
+            child.parentNode = this;
+            return child;
+        }
+        replaceChild(next, previous) {
+            const index = this.children.indexOf(previous);
+            if (index < 0) throw new Error("old loader picture is not attached");
+            this.children[index] = next;
+            next.parentNode = this;
+            previous.parentNode = null;
+            return previous;
+        }
+        remove() {
+            if (!this.parentNode) return;
+            const siblings = this.parentNode.children;
+            siblings.splice(siblings.indexOf(this), 1);
+            this.parentNode = null;
+        }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) {
+            if (Object.prototype.hasOwnProperty.call(this.attributes, name)) return this.attributes[name];
+            return this[name] == null ? null : String(this[name]);
+        }
+        removeAttribute(name) { delete this.attributes[name]; }
+        get firstChild() { return this.children[0] || null; }
+    }
+
+    const root = new Element("div");
+    root.id = "web-loader";
+    const initialPicture = new Element("picture");
+    initialPicture.className = "splash-picture";
+    const initialSource = new Element("source");
+    initialSource.id = "splash-mobile";
+    const initialImage = new Element("img");
+    initialImage.id = "splash-bg";
+    const embeddedSplash = "data:image/webp;base64,embedded-splash";
+    initialImage.setAttribute("src", embeddedSplash);
+    initialImage.src = embeddedSplash;
+    initialPicture.appendChild(initialSource);
+    initialPicture.appendChild(initialImage);
+    root.appendChild(initialPicture);
+    for (const id of ["loader-bar-wrap", "loader-bar-fill", "loader-bar-full", "loader-bar-empty", "loader-text"]) {
+        const child = new Element("div");
+        child.id = id;
+        root.appendChild(child);
+    }
+    const find = (node, predicate) => predicate(node) ? node : node.children.map(child => find(child, predicate)).find(Boolean) || null;
+    const findPicture = () => find(root, node => node.className === "splash-picture");
+    const document = {
+        readyState: "loading",
+        body: new Element("body"),
+        createElement: tagName => new Element(tagName),
+        getElementById: id => find(root, node => node.id === id),
+        querySelector: selector => selector === "#web-loader .splash-picture" ? findPicture() : null,
+        addEventListener() {}
+    };
+    const timers = new Map();
+    const events = [];
+    const leaderPreloads = [];
+    class PreloadImage {
+        constructor() { this.parentNode = null; }
+        set src(value) { this._src = value; leaderPreloads.push(this); }
+        get src() { return this._src; }
+        decode() { return Promise.resolve(); }
+        remove() {
+            if (!this.parentNode) return;
+            const siblings = this.parentNode.children;
+            siblings.splice(siblings.indexOf(this), 1);
+            this.parentNode = null;
+        }
+    }
+    let nextTimer = 0;
+    const window = {
+        SOW_BOOT_UI_BASE: "/assets/shell/loader",
+        SOW_BUILD_TS: "regression",
+        SOW_PORTAL: "jest",
+        innerWidth: 1024,
+        innerHeight: 768,
+        matchMedia: () => ({ matches: window.innerHeight >= window.innerWidth }),
+        location: { href: "https://game.test/", origin: "https://game.test" },
+        addEventListener() {},
+        dispatchEvent(event) { events.push(event.type); }
+    };
+    const context = {
+        window, document, URL, Image: PreloadImage,
+        Event: class { constructor(type) { this.type = type; } },
+        performance: { now: () => 0 },
+        requestAnimationFrame: () => 1,
+        cancelAnimationFrame() {},
+        setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
+        clearTimeout(id) { timers.delete(id); }
+    };
+    vm.runInNewContext(loaderSource, context);
+    window.SOW_initWebLoader();
+    assert.equal(findPicture(), initialPicture, "initialization preserves the HTML splash picture");
+    assert.equal(findPicture().children[1], initialImage, "initialization preserves the embedded splash image node");
+    assert.equal(initialImage.src, embeddedSplash, "initialization does not replace the embedded splash with a network URL");
+    assert.equal(leaderPreloads.length, 0, "initialization creates no duplicate hero-image request");
+
+    const leaders = [
+        { id: "Boudica", slug: "boudica" },
+        { id: "Caesar", slug: "caesar" },
+        { id: "Ragnar", slug: "ragnar" }
+    ];
+    const state = (job, leader, progress = 0.4, phase = "Splash", done = false) => ({
+        phase, loader_job: job, loader_leader: leader,
+        loader_progress: progress, loader_done: done, leaders
+    });
+    window.SOW_syncWebLoader(state("Boot", null, 0.2, "Splash"));
+    const bootPicture = findPicture();
+    const bootImage = bootPicture.children[1];
+    assert.equal(bootPicture, initialPicture, "Boot updates keep the original splash picture");
+    assert.equal(bootImage, initialImage, "Boot updates keep the original splash image");
+    const loaderBar = document.getElementById("loader-bar-fill");
+
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const pendingTutorialFetches = [];
+    const tutorialCommands = [];
+    window.SOW_t = key => key;
+    window.SOW_menu_command = message => tutorialCommands.push(JSON.parse(message));
+    window.SOWCampaign = campaign;
+    window.SOWCampaignView = { mount: () => ({ render() {}, destroy() {} }) };
+    vm.runInNewContext(tutorial, {
+        window, document, performance: { now: () => 0 }, console,
+        fetch(url) {
+            return new Promise(resolve => pendingTutorialFetches.push({ url, resolve }));
+        }
+    });
+    const bootCampaignState = {
+        ...state("EnterGame", "Boudica", 0.95, "Splash"),
+        boot_campaign: "boudica"
+    };
+    window.SOW_tutorial_menu_state_update(bootCampaignState);
+    assert.equal(pendingTutorialFetches.length, 2, "the tutorial's paired files are genuinely pending");
+    assert.deepEqual(
+        pendingTutorialFetches.map(request => request.url).sort(),
+        ["/assets/campaign/boudica.json", "/assets/campaign/boudica.triggers.json"].sort()
+    );
+    window.SOW_syncWebLoader(bootCampaignState);
+    assert.equal(findPicture(), bootPicture, "Boot -> EnterGame keeps the original picture node");
+    assert.equal(findPicture().children[1], bootImage, "the tutorial does not replace the startup image");
+    assert.equal(bootImage.src, embeddedSplash, "Boot states do not reload the embedded splash image");
+    assert.equal(leaderPreloads.length, 1, "Boudica is preloaded during the tutorial's existing loader");
+    const boudicaReady = window.SOW_prepareLeaderArt("boudica");
+    const boudicaPreload = leaderPreloads[0];
+    assert.equal(boudicaPreload.src, window.SOW_leaderArtUrl("boudica", "desktop"));
+    boudicaPreload.onload();
+    assert.equal(await boudicaReady, true);
+    assert.equal(leaderPreloads.length, 1, "the tutorial loader owns one Boudica image request");
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.96, "Splash"));
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.97, "Playing"));
+    assert.equal(findPicture(), bootPicture, "the same splash remains while tutorial and game initialization are pending");
+    assert.equal(document.getElementById("loader-bar-fill"), loaderBar, "the progress bar node is never recreated");
+    assert.equal(root.style.visibility, "visible");
+    assert.equal(loaderBar.style.width, "97.0%", "progress advances monotonically through tutorial startup");
+    assert.equal(events.length, 0, "phase changes cannot close the loader before Rust reports done");
+
+    const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    for (const request of pendingTutorialFetches) {
+        request.resolve({
+            ok: true,
+            json: () => Promise.resolve(request.url.endsWith(".triggers.json") ? definition : roster)
+        });
+    }
+    await new Promise(setImmediate);
+    assert.equal(tutorialCommands.length, 1, "the resolved tutorial data starts the campaign through the existing command");
+    assert.equal(tutorialCommands[0].type, "start_campaign_episode");
+    assert.equal(tutorialCommands[0].episode_id, "boudica");
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.98, "Playing"));
+    assert.equal(findPicture(), bootPicture, "the splash remains through game initialization after tutorial download");
+    assert.equal(root.style.visibility, "visible");
+    assert.equal(events.length, 0);
+
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 1, "Playing", true));
+    [...timers.values()][0]();
+    timers.clear();
+    assert.equal(findPicture(), null, "the art is released after the tutorial finishes loading");
+    assert.ok(events.includes("sow:loader-ready"));
+    assert.equal(window.SOW_leaderArtUrl("boudica", "desktop"), "/assets/shell/leaders/boudica_desktop.webp?v=regression");
+    assert.equal(window.SOW_leaderArtUrl("boudica", "mobile"), "/assets/shell/leaders/boudica_mobile.webp?v=regression");
+    assert.equal(window.SOW_leaderArtUrl("boudica"), "/assets/shell/leaders/boudica_desktop.webp?v=regression",
+        "the menu backdrop resolver defaults to the landscape variant on a landscape screen");
+    assert.equal(window.SOW_prepareLeaderArt("boudica"), boudicaReady,
+        "the post-entry warmup reuses the boot-time image instead of creating another");
+    assert.equal(leaderPreloads.length, 1);
+
+    window.SOW_syncWebLoader(state("ExitGame", "Boudica", 0.6));
+    const exitBoudicaPicture = findPicture();
+    const exitBoudicaImage = exitBoudicaPicture.children[0];
+    assert.equal(exitBoudicaImage, boudicaPreload, "the loader adopts the decoded tutorial art instead of requesting it again");
+    assert.match(exitBoudicaImage.src, /leaders\/boudica_desktop\.webp/);
+    assert.equal(leaderPreloads.length, 1, "showing the loader starts no additional hero-image request");
+    window.SOW_syncWebLoader(state("ExitGame", "Boudica", 1, "MainMenu", true));
+    [...timers.values()][0]();
+    timers.clear();
+    const reusedBoudicaReady = window.SOW_prepareLeaderArt("boudica");
+    assert.equal(reusedBoudicaReady, boudicaReady, "the decoded image remains prepared after the loader cycle");
+    assert.equal(leaderPreloads.length, 1, "the finished cycle does not trigger another Boudica image");
+    assert.equal(await reusedBoudicaReady, true);
+
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.45));
+    const normalEntryPicture = findPicture();
+    assert.equal(normalEntryPicture.children[0], boudicaPreload,
+        "a normal game entry displays the already-decoded selected hero");
+    assert.equal(leaderPreloads.length, 1);
+    window.SOW_syncWebLoader(state("EnterGame", "Boudica", 1, "Playing", true));
+    [...timers.values()][0]();
+    timers.clear();
+    window.SOW_syncWebLoader(state("ExitGame", "Boudica", 0.45));
+    const normalExitPicture = findPicture();
+    assert.equal(normalExitPicture.children[0], boudicaPreload,
+        "the same decoded image is reused for game exit");
+    window.SOW_syncWebLoader(state("ExitGame", "Boudica", 1, "MainMenu", true));
+    assert.equal(findPicture().children[0], boudicaPreload,
+        "the final done update adopts the exit image before closing");
+    assert.equal(leaderPreloads.length, 1, "entry and exit create no second Boudica image");
+    [...timers.values()][0]();
+    timers.clear();
+
+    const failedReady = window.SOW_prepareLeaderArt("caesar");
+    const failedPreload = leaderPreloads[leaderPreloads.length - 1];
+    failedPreload.onerror();
+    assert.equal(await failedReady, false);
+    const requestCountBeforeUnreadyLoader = leaderPreloads.length;
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 0.35));
+    assert.equal(findPicture(), null, "failed preload keeps the dark fallback instead of starting a loader-time request");
+    assert.equal(root.style.visibility, "visible");
+    assert.equal(loaderBar.style.width, "35.0%");
+    assert.equal(leaderPreloads.length, requestCountBeforeUnreadyLoader);
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 1, "Playing", true));
+    [...timers.values()][0]();
+    timers.clear();
+
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    assert.equal(window.SOW_leaderArtUrl("caesar"), "/assets/shell/leaders/caesar_mobile.webp?v=regression",
+        "the menu backdrop resolver defaults to the portrait variant on a portrait screen");
+    const caesarReady = window.SOW_prepareLeaderArt("caesar");
+    const caesarPreload = leaderPreloads.at(-1);
+    assert.match(caesarPreload.src, /leaders\/caesar_mobile\.webp\?v=regression/);
+    caesarPreload.onload();
+    assert.equal(await caesarReady, true);
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 0.45));
+    const caesarPicture = findPicture();
+    const caesarImage = caesarPicture.children[0];
+    assert.notEqual(caesarPicture, exitBoudicaPicture, "a separate game load gets fresh art");
+    assert.equal(exitBoudicaPicture.parentNode, null, "finished-cycle art is removed");
+    assert.equal(caesarImage, caesarPreload, "the selected hero's decoded art is adopted by the loader");
+    assert.match(caesarImage.src, /leaders\/caesar_mobile\.webp/);
+    assert.equal(leaderPreloads.length, 3, "the loader adds no request after the selection preload");
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 0.55));
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 0.65));
+    assert.equal(findPicture(), caesarPicture, "repeated progress updates do not replace the active hero picture");
+    assert.equal(findPicture().children[0], caesarImage, "repeated progress updates preserve the decoded image node");
+    assert.equal(leaderPreloads.length, 3, "repeated progress updates create no new Image");
+    assert.equal(loaderBar.style.width, "65.0%");
+    exitBoudicaImage.onerror();
+    assert.equal(findPicture(), caesarPicture, "a delayed old-image error cannot touch the current hero");
+
+    caesarImage.onerror();
+    assert.equal(findPicture(), null, "a failed current image leaves the dark loader background");
+    assert.equal(root.style.visibility, "visible", "art failure does not close the loader");
+    assert.equal(document.getElementById("loader-bar-fill").style.width, "65.0%");
+
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 1, "Playing", true));
+    [...timers.values()][0]();
+    timers.clear();
+    assert.equal(events.filter(event => event === "sow:loader-ready").length, 1);
+    assert.equal(events.filter(event => event === "sow:loader-cycle-ready").length, 6,
+        "each completed loader cycle emits one ready event");
+
+    window.innerWidth = 1024;
+    window.innerHeight = 768;
+    const nextCaesarReady = window.SOW_prepareLeaderArt("caesar");
+    const nextCaesarPreload = leaderPreloads.at(-1);
+    nextCaesarPreload.onload();
+    assert.equal(await nextCaesarReady, true);
+    window.SOW_syncWebLoader(state("EnterGame", "Caesar", 0.45));
+    const nextCaesarPicture = findPicture();
+    assert.equal(nextCaesarPicture.children[0], nextCaesarPreload);
+    assert.match(nextCaesarPreload.src, /leaders\/caesar_desktop\.webp\?v=regression/,
+        "the loader follows the same landscape resolver after orientation changes");
+    caesarImage.onerror();
+    assert.equal(findPicture(), nextCaesarPicture, "an old cycle cannot invalidate the same hero in a new cycle");
+    nextCaesarPicture.children[0].onerror();
+    assert.equal(findPicture(), null, "a failed current image leaves the dark loader background");
+    assert.equal(root.style.visibility, "visible", "art failure does not close the loader");
+    assert.equal(document.getElementById("loader-bar-fill").style.width, "45.0%");
+
+    const pendingExitReady = window.SOW_prepareLeaderArt("ragnar");
+    const pendingExitImage = leaderPreloads.at(-1);
+    window.SOW_syncWebLoader(state("ExitGame", "Ragnar", 0.45));
+    assert.equal(findPicture(), null, "a pending exit art uses the dark fallback until that same request is ready");
+    const imageCountBeforePendingExitReady = leaderPreloads.length;
+    pendingExitImage.onload();
+    assert.equal(await pendingExitReady, true);
+    window.SOW_syncWebLoader(state("ExitGame", "Ragnar", 1, "MainMenu", true));
+    assert.equal(findPicture().children[0], pendingExitImage,
+        "a completed pending preload recovers from unready and is attached before finish");
+    assert.equal(leaderPreloads.length, imageCountBeforePendingExitReady,
+        "the final exit sync reuses the in-flight image");
+    [...timers.values()][0]();
+    timers.clear();
+    assert.equal(findPicture(), null);
+    assert.equal(document.getElementById("loader-bar-fill"), loaderBar,
+        "entry and exit preserve the same single progress bar");
+    assert.equal(events.filter(event => event === "sow:loader-ready").length, 1);
+    assert.equal(events.filter(event => event === "sow:loader-cycle-ready").length, 7);
+});
+
 test("profile presents verified history, career commanders, localized achievements, and a paged global board", () => {
     const matchRowStart = profileSource.indexOf("function profileMatchRow");
     const matchRowEnd = profileSource.indexOf("function profileHeaderMarkup", matchRowStart);
@@ -249,16 +825,65 @@ test("profile presents verified history, career commanders, localized achievemen
     assert.match(matchRow, /var result = verified\s+\? \(match\.won \? SOW_t\("profile\.win"\) : SOW_t\("profile\.loss"\)\)/);
     assert.match(profileSource, /profile\.achievement_category_/);
     assert.match(profileSource, /profile\.achievement_" \+ achievement\.id/);
-    assert.match(profileSource, /sort\(function \(left, right\) \{ return \(right\.matches_played/);
+    assert.match(profileSource, /\(data\.leaders \|\| \[\]\)\.map\(profileLeaderCard\)/);
+    assert.doesNotMatch(profileSource, /achievement\.id === "first_command"|achievement\.id === "first_victory"/);
     assert.match(profileSource, /leaderboard\?kind=victories&cursor=/);
     assert.match(profileSource, /profileVictoryLeaderboardCursor = data\.next_cursor/);
     assert.match(profileSource, /data-command='load_victory_more'/);
     assert.match(profileSource, /profile\.preferred_commander/);
-    assert.match(profileCss, /sow-profile__victory-row > b:first-child[\s\S]*color: #38bdf8/);
+    assert.match(profileSource, /sow-profile__dossier/);
+    assert.match(profileSource, /sow-profile__tools/);
+    assert.match(profileSource, /aria-controls='sow-profile-panel-active'/);
+    assert.match(profileSource, /id='sow-profile-panel-active'[\s\S]*role='tabpanel'[\s\S]*aria-labelledby='sow-profile-tab-/);
+    assert.match(shellSource, /\["ArrowLeft", "ArrowRight", "Home", "End"\][\s\S]*profileTabs\[nextProfileTabIndex\]\.click\(\)[\s\S]*selectedProfileTab\.focus\(\)/);
+    assert.match(profileCss, /--sow-profile-gold-line/);
+    assert.match(profileCss, /grid-template-columns: minmax\(0, 1fr\) minmax\(228px, 272px\)/);
+    assert.match(profileCss, /@media \(max-width: 900px\)[\s\S]*sow-profile__page[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+    assert.match(profileCss, /sow-profile__tools \.sow-profile__section[\s\S]*background: var\(--sow-profile-panel\)/);
+    assert.match(profileCss, /@media \(max-width: 700px\), \(orientation: portrait\)[\s\S]*sow-profile__stats[\s\S]*repeat\(2, minmax\(0, 1fr\)\)/);
+    assert.match(profileCss, /:focus-visible\s*\{\s*outline: 2px solid var\(--sow-cyan\)/);
+    assert.match(profileCss, /sow-profile__victory-row > b:first-child[\s\S]*color: var\(--sow-cyan\)/);
+    assert.match(profileCss, /\.sow-profile__heading[\s\S]*var\(--sow-hero\)/);
+    assert.match(profileCss, /\.sow-profile__match-kda\s*\{\s*grid-column: 3;\s*grid-row: 2;/);
+    assert.doesNotMatch(profileCss, /\.sow-profile__match-kda\s*\{\s*display:\s*none/);
     assert.match(shellSource, /heroImage\(profileData && profileData\.preferred_leader\)/);
+    assert.doesNotMatch(profileSource.slice(profileSource.indexOf('profileTab === "overview"'), profileSource.indexOf('profileTab === "leaders"')), /profileLeaderCard|profileAchievementsMarkup/);
     assert.doesNotMatch(profileSource, /loadProfileRatings|profileTab === "ranked"|profileRecentLeadersPanel/);
     assert.doesNotMatch(profileCss, /sow-profile__favorites|sow-profile__rating/);
     assert.doesNotMatch(nativeProfileSource, /LoadProfileRatings|ProfileRatingsLoaded|ratings_loaded|ProfileTab::Ranked|ranked records/i);
+});
+
+test("match history row shows the leader and verified KDA while provisional exits never become losses", () => {
+    const rowStart = profileSource.indexOf("function profileMatchRow");
+    const rowEnd = profileSource.indexOf("function profileHeaderMarkup", rowStart);
+    const context = {
+        SOW_t: (key, values) => key === "profile.kda_value"
+            ? `${values.kills}/${values.deaths}/${values.assists}`
+            : key,
+        asset: (path) => `/assets/${path}`,
+        esc: (value) => String(value),
+        formatMapName: () => "Britain",
+        leaderById: (id) => ({ slug: id.toLowerCase() }),
+        leaderDisplayName: () => "Boudica",
+        profileMatchDate: () => "Today",
+        profileMatchDuration: () => "12m 4s"
+    };
+    vm.runInNewContext(`${profileSource.slice(rowStart, rowEnd)}; this.profileMatchRow = profileMatchRow;`, context);
+
+    const verified = context.profileMatchRow({
+        match_id: "verified-match", verified: true, won: false,
+        leader: "Boudica", kills: 4, deaths: 2, assists: 1
+    });
+    assert.match(verified, /Boudica/);
+    assert.match(verified, /4\/2\/1/);
+    assert.match(verified, /profile\.loss/);
+
+    const provisional = context.profileMatchRow({
+        match_id: "provisional-match", verified: false, provisional: true,
+        leader: "Boudica", kills: 0, deaths: 0, assists: 0
+    });
+    assert.match(provisional, /profile\.match_pending/);
+    assert.doesNotMatch(provisional, /profile\.loss/);
 });
 
 test("settings panel keeps only useful controls and real account state", () => {
@@ -411,6 +1036,16 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         assert.equal(definition.episode_id, episodeId);
         assert.equal(roster.map, expected[episodeId][0], episodeId + " card map");
         assert.ok(Object.values(definition.speakers || {}).some(speaker => speaker.avatar === expected[episodeId][1]), episodeId + " card leader portrait");
+        for (const faction of roster.factions) {
+            assert.ok(["allied", "neutral", "enemy"].includes(faction.relation), `${episodeId}/${faction.name}: relationship`);
+            assert.ok(["passive", "aggressive"].includes(faction.hostility), `${episodeId}/${faction.name}: hostility`);
+            assert.ok(["never", "opportunistic"].includes(faction.betrayal), `${episodeId}/${faction.name}: betrayal`);
+            assert.match(faction.color, /^#[0-9a-f]{6}$/i, `${episodeId}/${faction.name}: map color`);
+        }
+        if (episodeId.startsWith("six_sky")) {
+            const roleRelation = { kin: "allied", independent: "neutral", neutral: "neutral", vassal: "enemy", boss: "enemy", big_boss: "enemy" };
+            for (const faction of roster.factions) assert.equal(faction.relation, roleRelation[faction.role], `${episodeId}/${faction.name}: migrated relationship`);
+        }
     }
 });
 
@@ -420,6 +1055,8 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true, hasAvatar: () => true }).errors, []);
     assert.equal(definition.settings.starting_troops, 2000);
+    assert.equal(roster.factions.some(faction => faction.relation === "allied"), false, "Boudica starts without pre-made allies");
+    assert.equal(roster.factions.filter(faction => faction.relation === "enemy").length, 11, "declared Roman enemies start red");
     const target = roster.factions.find(faction => faction.name === "The Iceni Despoilers");
     assert.deepEqual({ role: target.role, civ: target.civ, x: target.x, y: target.y }, { role: "vassal", civ: "Roman Empire", x: 706, y: 64 });
     for (const name of ["Colonia Veterans", "Tax Collectors"]) {
@@ -442,7 +1079,7 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(attackStep.attack_ratio_on_enter, 1);
 
     function attackAfter(choice) {
-        const machine = campaign.create(definition);
+        const machine = campaign.create(definition, undefined, roster);
         machine.update({}, {}, 0);
         machine.advance(null, "boudica_rise_of_the_iceni_intro");
         machine.advance(choice, "boudica_council_decision");
@@ -458,58 +1095,68 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     const reluctant = attackAfter("wait");
     assert.equal(reluctant.view().step.id, attackStep.id);
     const victoryFacts = { defeated_names: [target.name] };
-    direct.update(victoryFacts, {}, 0);
-    const victory = direct.update(victoryFacts, {}, 800);
+    const victory = direct.update(victoryFacts, {});
     assert.equal(victory.step.id, "boudica_first_victory_scene");
     assert.equal(victory.step.attack_ratio_on_enter, 0.5);
     direct.advance(null, victory.step.id);
     assert.equal(direct.view().step.id, "boudica_first_expansion");
-    direct.update({ ...victoryFacts, tiles_gained: 256 }, {}, 1000);
-    const expansion = direct.update({ ...victoryFacts, tiles_gained: 256 }, {}, 1800);
+    const expansion = direct.update({ ...victoryFacts, tiles_gained: 250 }, {});
     assert.equal(expansion.step.id, "boudica_first_contact_intro");
     direct.advance(null, direct.view().step.id);
     assert.equal(direct.view().step.id, "boudica_first_contact");
     assert.deepEqual(direct.view().step.trigger.targets, ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"]);
-    const fourContacts = { ...victoryFacts, tiles_gained: 256, contact_names: ["Thetford", "Stonea", "Iceni Coast", "Venta Icenorum"] };
-    assert.equal(direct.update(fourContacts, {}, 2000).progress.current, 4);
-    assert.equal(direct.view().progress.target, 5);
+    const firstContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham"] }, {});
+    assert.equal(firstContact.reaction, "first_iceni_contact");
+    assert.equal(firstContact.reactionTarget, "Snettisham");
+    assert.equal(direct.advance(null, "reaction-first_iceni_contact@Snettisham"), true);
+    const secondContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham", "Thetford"] }, {});
+    assert.equal(secondContact.reaction, "contact_thetford");
+    assert.equal(secondContact.choices.length, 2);
+    assert.equal(secondContact.choices.find(choice => choice.id === "accept").gold_cost, 200);
+    assert.equal(direct.advance("refuse", "reaction-contact_thetford@Thetford"), true);
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham", "Thetford"] }, {}).progress.current, 2);
+    const contactsOnly = campaign.create({ ...definition, reactions: [] }, "boudica_first_contact");
+    contactsOnly.update({ ...victoryFacts, tiles_gained: 250, contact_names: [] }, {});
+    const fourContacts = { ...victoryFacts, tiles_gained: 250, contact_names: ["Thetford", "Stonea", "Iceni Coast", "Venta Icenorum"] };
+    assert.equal(contactsOnly.update(fourContacts, {}).progress.current, 4);
+    assert.equal(contactsOnly.view().progress.target, 5);
     const fiveContacts = { ...fourContacts, contact_names: fourContacts.contact_names.concat("Snettisham") };
-    direct.update(fiveContacts, {}, 2800);
-    assert.equal(direct.update(fiveContacts, {}, 3600).step.id, "boudica_first_contact_response");
-    direct.advance(null, direct.view().step.id);
-    assert.equal(direct.view().step.id, "boudica_trinovantes_intro");
-    direct.advance(null, direct.view().step.id);
-    assert.equal(direct.view().step.id, "boudica_trinovantes_alliance");
+    assert.equal(contactsOnly.update(fiveContacts, {}).step.id, "boudica_first_contact_response");
+    contactsOnly.advance(null, contactsOnly.view().step.id);
+    assert.equal(contactsOnly.view().step.id, "boudica_trinovantes_intro");
+    contactsOnly.advance(null, contactsOnly.view().step.id);
+    assert.equal(contactsOnly.view().step.id, "boudica_trinovantes_alliance");
     const support = definition.steps.find(step => step.id === "boudica_ally_support_wait");
     assert.deepEqual(support.trigger, { type: "support", value: 1, scope: "total" });
-    assert.equal(definition.reactions.length, 5);
-    for (const reaction of definition.reactions) {
+    const iceniReactions = definition.reactions.filter(reaction => reaction.when.type === "contact" && reaction.when.target);
+    assert.equal(iceniReactions.length, 5);
+    for (const reaction of iceniReactions) {
         const name = reaction.when.target;
         const faction = roster.factions.find(item => item.name === name);
         assert.equal(faction.role, "kin");
         assert.ok(faction.support_interval_seconds >= 5);
         assert.equal(definition.steps.some(step => step.id === reaction.id), false);
-        assert.equal(reaction.after, "boudica_first_contact");
+        assert.equal(reaction.when.type, "contact");
+        assert.equal(reaction.after, undefined);
     }
-    const pactFactions = roster.factions.filter(item => item.alliance_group === "trinovantes");
-    assert.deepEqual(pactFactions.map(item => item.name), ["Trinovantes", "Trinovantian Farms"]);
-    assert.ok(pactFactions.every(item => item.support_interval_seconds >= 5));
+    const pactFactions = roster.factions.filter(item => ["Trinovantes", "Trinovantian Farms"].includes(item.name));
+    assert.ok(pactFactions.every(item => item.relation === "neutral" && !item.alliance_group));
     const unsupportedPayout = JSON.parse(JSON.stringify(roster));
     unsupportedPayout.factions.find(item => item.name === "Colonia Veterans").support_interval_seconds = 20;
-    assert.ok(campaign.validate(definition, unsupportedPayout, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "roster.factions.support_interval_seconds"));
+    assert.deepEqual(campaign.validate(definition, unsupportedPayout, { hasText: () => true, hasAvatar: () => true }).errors, [], "any contacted campaign entity may be configured to send support");
     const trinovantesStep = definition.steps.find(step => step.id === "boudica_trinovantes_alliance");
     assert.equal(trinovantesStep.trigger.target, "Trinovantes");
     const pactCheck = campaign.create({
         entry: "alliance_check",
         steps: [{ id: "alliance_check", type: "objective", title_key: "tutorial.test", trigger: trinovantesStep.trigger }]
     });
-    pactCheck.update({ alliance_names: ["Other tribe"], alliances_formed: 1 }, {}, 0);
+    pactCheck.update({ contact_names: ["Other tribe"] }, {}, 0);
     assert.equal(pactCheck.view().progress.current, 0);
-    pactCheck.update({ alliance_names: ["Trinovantes"], alliances_formed: 2 }, {}, 1000);
+    pactCheck.update({ contact_names: ["Trinovantes"] }, {}, 1000);
     assert.equal(pactCheck.view().progress.current, 1);
     assert.equal(definition.steps.find(step => step.id === "boudica_choose_city").guide.target, "dock_city");
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_build_city").trigger, { type: "city", value: 1, scope: "step" });
-    assert.deepEqual(definition.steps.find(step => step.id === "boudica_first_expansion").trigger, { type: "territory", value: 256, scope: "step" });
+    assert.deepEqual(definition.steps.find(step => step.id === "boudica_first_expansion").trigger, { type: "territory", value: 250, scope: "step" });
     assert.match(tutorial, /step\.trigger\.type === "territory" && step\.guide\.target === "expand" && view && view\.progress\.current > 0\) return null/);
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_roman_outposts").trigger, { type: "defeated", targets: ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"], value: 3, scope: "total" });
     assert.match(webMenu, /"notifications": notifications/);
@@ -524,6 +1171,15 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.match(hudStateSource, /push_map_feedback/);
     assert.match(hud, /function renderMapFeedback\(entry\)/);
     assert.match(webMenu, /"avatars": avatars/);
+    assert.match(webMenu, /notification_avatar_identities\(\s*players,\s*notification\.players/);
+    assert.match(webMenu, /serde_json::to_value\(avatar\)/);
+    assert.doesNotMatch(webMenu, /hud\.players/);
+    assert.doesNotMatch(webMenu, /notification\.players\[0\] == Some\(player_id\)/);
+    assert.doesNotMatch(hudStateSource, /pub players: Vec<PlayerSnapshot>/);
+    assert.match(avatarIdentitySource, /serde\(tag = "kind", rename_all = "snake_case"\)[\s\S]*pub enum AvatarIdentity/);
+    assert.match(avatarIdentitySource, /pub fn avatar_identity_for_player_id/);
+    assert.match(avatarIdentitySource, /pub fn notification_avatar_identities/);
+    assert.match(nameplatesSource, /sow_core::player::avatar_identity_ref\(player\)/);
     assert.match(hud, /notificationCards = Array\.from\(\{ length: 3 \}/);
     assert.match(hud, /activeNotifications\.length < 3/);
     assert.match(hud, /function renderNotifications\(entries, forceRefresh\)/);
@@ -531,7 +1187,11 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.match(hud, /renderNotifications\(\[\], true\)/);
     assert.match(hud, /renderHud\(true\)/);
     assert.match(hud, /gameplay\/avatars\/null\.webp/);
-    assert.match(hud, /portrait\.hidden = !rawId/);
+    assert.match(hud, /kind === "portrait"/);
+    assert.match(hud, /kind === "emblem"/);
+    assert.match(hudCss, /\.sow-hud__notification-avatar--overlap/);
+    assert.match(hud, /var slug = kind === "portrait"/);
+    assert.match(hud, /slot\.image\.hidden = false/);
     assert.match(hudCss, /\.sow-hud__notification--support/);
     assert.match(hudCss, /\.sow-hud__notification--contextual/);
     assert.match(campaignModule, /support_interval_seconds/);
@@ -566,30 +1226,100 @@ test("campaign support reactions queue by delivery order, wait for their gate an
         A: { deliveries: 2, first_tick: 9 },
         B: { deliveries: 1, first_tick: 3 }
     };
-    machine.update({ tiles_gained: 0, support_deliveries_by_faction: {} }, {}, 0);
+    machine.update({ tiles_gained: 0, support_deliveries_by_faction: {} }, {});
     assert.equal(machine.view().step.id, "gate");
-    machine.update({ tiles_gained: 1, support_deliveries_by_faction: {} }, {}, 10);
-    machine.update({ tiles_gained: 1, support_deliveries_by_faction: {} }, {}, 810);
+    machine.update({ tiles_gained: 1, support_deliveries_by_faction: {} }, {});
     assert.equal(machine.view().step.id, "talk");
-    const deferred = machine.update({ contact_names: [], support_deliveries_by_faction: receipts }, {}, 900);
+    const deferred = machine.update({ contact_names: [], support_deliveries_by_faction: receipts }, {});
     assert.equal(deferred.reaction, undefined, "support received during a scene waits until gameplay resumes");
     assert.equal(deferred.step.id, "talk");
     machine.advance(null, "talk");
     assert.equal(machine.view().step.id, "contact");
 
-    const firstReaction = machine.update({ contact_names: ["A"], support_deliveries_by_faction: receipts }, {}, 1000);
+    const firstReaction = machine.update({ contact_names: ["A"], support_deliveries_by_faction: receipts }, {});
     assert.equal(firstReaction.reaction, "aid_b");
     assert.equal(firstReaction.paused, true);
     assert.equal(firstReaction.progress.current, 1);
     assert.equal(machine.advance(null, "reaction-aid_b"), true);
     assert.equal(machine.advance(null, "reaction-aid_b"), false);
-    const secondReaction = machine.update({ contact_names: ["A"], support_deliveries_by_faction: receipts }, {}, 1000);
+    const secondReaction = machine.update({ contact_names: ["A"], support_deliveries_by_faction: receipts }, {});
     assert.equal(secondReaction.reaction, "aid_a");
     machine.advance(null, "reaction-aid_a");
-    assert.equal(machine.update({ contact_names: ["A"], support_deliveries_by_faction: receipts }, {}, 1100).step.id, "contact");
+    assert.equal(machine.update({ contact_names: ["A"], support_deliveries_by_faction: receipts }, {}).step.id, "contact");
     assert.equal(machine.view().progress.current, 1);
     assert.deepEqual(machine.state.reactionsShown, ["aid_b", "aid_a"]);
     assert.deepEqual(campaign.create(definition).state.reactionsShown, [], "a new run starts with no previous ally responses shown");
+});
+
+test("first-contact responses open on the contact fact and queue each faction once", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const machine = campaign.create({
+        version: 2, episode_id: "instant_contact", entry: "objective",
+        settings: { buildings_enabled: false, starting_troops: 1000 },
+        steps: [
+            { id: "objective", type: "objective", title_key: "objective", trigger: { type: "territory", value: 10, scope: "total" }, next: "after" },
+            { id: "after", type: "scene", title_key: "after", next: "end" },
+            { id: "end", type: "end", title_key: "end" }
+        ],
+        reactions: [
+            { id: "contact_a", when: { type: "contact", target: "A" }, title_key: "a", body_key: "a_body" },
+            { id: "contact_b", when: { type: "contact", target: "B" }, title_key: "b", body_key: "b_body" }
+        ]
+    });
+    machine.update({ tiles_gained: 0, contact_names: [] }, {});
+    const first = machine.update({ tiles_gained: 0, contact_names: ["B"] }, {});
+    assert.equal(first.reaction, "contact_b");
+    machine.advance(null, "reaction-contact_b@B");
+    const second = machine.update({ tiles_gained: 0, contact_names: ["B", "A"] }, {});
+    assert.equal(second.reaction, "contact_a");
+    machine.advance(null, "reaction-contact_a@A");
+    assert.equal(machine.update({ tiles_gained: 0, contact_names: ["B", "A"] }, {}).step.id, "objective");
+    assert.match(campaignEditor, /Add contact response/);
+    assert.match(campaignEditor, /On contact with/);
+    assert.match(campaignEditor, /Simulate first " \+ \(isContact \? "contact"/);
+});
+
+test("first Iceni contact is friendly, then each neutral contact negotiates independently", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const roster = { factions: [
+        { name: "Kin One", role: "kin", relation: "neutral" },
+        { name: "Kin Two", role: "kin", relation: "neutral" },
+        { name: "Neutral", role: "neutral", relation: "neutral" },
+        { name: "Neutral Two", role: "neutral", relation: "neutral" },
+        { name: "Rome", role: "vassal", relation: "enemy" }
+    ] };
+    const definition = {
+        version: 2, episode_id: "contact_order", entry: "objective",
+        settings: { buildings_enabled: false, starting_troops: 1000 },
+        steps: [
+            { id: "objective", type: "objective", title_key: "objective", trigger: { type: "territory", value: 10, scope: "total" }, next: "end" },
+            { id: "end", type: "end", title_key: "end" }
+        ],
+        reactions: [
+            { id: "first", when: { type: "first_contact", role: "kin" }, outcome: "allied", title_key: "first_title", body_key: "first_body" },
+            { id: "kin_two", when: { type: "contact", target: "Kin Two" }, choices: [{ id: "pay", label_key: "pay", relation: "allied", gold_cost: 200 }, { id: "refuse", label_key: "refuse", relation: "enemy" }], title_key: "kin_title", body_key: "kin_body" },
+            { id: "neutral_terms", when: { type: "contact", relation: "neutral" }, choices: [{ id: "pay", label_key: "pay", relation: "allied", gold_cost: 200 }, { id: "refuse", label_key: "refuse", relation: "enemy" }], title_key: "neutral_title", body_key: "neutral_body" }
+        ]
+    };
+    const machine = campaign.create(definition, undefined, roster);
+    const contacts = { tiles_gained: 0, contact_names: ["Rome", "Neutral", "Neutral Two", "Kin Two", "Kin One"] };
+    const first = machine.update(contacts, {});
+    assert.equal(first.reaction, "first");
+    assert.equal(first.reactionTarget, "Kin One");
+    assert.equal(machine.advance(null, "reaction-first@Kin One"), true);
+    const second = machine.update(contacts, {});
+    assert.equal(second.reaction, "kin_two", "specific faction dialogue takes precedence over the neutral template");
+    assert.equal(second.reactionTarget, "Kin Two");
+    assert.equal(machine.advance("pay", "reaction-kin_two@Kin Two"), true);
+    const third = machine.update(contacts, {});
+    assert.equal(third.reaction, "neutral_terms");
+    assert.equal(third.reactionTarget, "Neutral");
+    assert.equal(third.choices.find(choice => choice.id === "pay").gold_cost, 200);
+    assert.equal(machine.update(contacts, {}).reactionTarget, "Neutral", "a pending choice stays active until selected");
+    assert.equal(machine.advance("refuse", "reaction-neutral_terms@Neutral"), true);
+    const fourth = machine.update(contacts, {});
+    assert.equal(fourth.reaction, "neutral_terms");
+    assert.equal(fourth.reactionTarget, "Neutral Two", "each initially neutral faction negotiates on its own first contact");
 });
 
 test("campaign objectives distinguish the intended contact, alliance, fleet, transfer and foundry action", () => {
@@ -599,12 +1329,11 @@ test("campaign objectives distinguish the intended contact, alliance, fleet, tra
             version: 2, episode_id: "fact_test", entry: "objective",
             settings: { buildings_enabled: false, starting_troops: 1000 },
             steps: [
-                { id: "objective", type: "objective", title_key: "test", trigger: trigger, next: "end" },
-                { id: "end", type: "end", title_key: "end" }
+                { id: "objective", type: "objective", title_key: "test", trigger: trigger, next: "pending" }
             ]
         });
-        machine.update(before, {}, 0);
-        return machine.update(after, {}, 1).progress.current;
+        machine.update(before, {});
+        return machine.update(after, {}).progress.current;
     }
     assert.equal(currentFor({ type: "contact", targets: ["Snettisham", "Stonea"], scope: "total" }, { contact_names: [] }, { contact_names: ["Stonea"] }), 1, "legacy multi-contact targets default to any one faction");
     assert.equal(currentFor({ type: "alliance", target: "Catuvellauni", value: 1, scope: "total" }, { alliance_names: [] }, { alliance_names: ["Other tribe"] }), 0);
@@ -626,7 +1355,7 @@ test("campaign objectives distinguish the intended contact, alliance, fleet, tra
     assert.equal(currentFor({ type: "foundry_level", value: 1, scope: "step" }, { city_levels: 0, foundry_level: 0 }, { city_levels: 0, foundry_level: 1 }), 1);
 });
 
-test("campaign validation rejects unsupported ship, recipient, resource and duplicate ally-response rules", () => {
+test("campaign validation rejects unsupported rules and duplicate event responses", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const roster = { map: "test", player_spawn: [0, 0], factions: [{ name: "Ally", x: 1, y: 0, role: "kin", support_interval_seconds: 5 }] };
     const definition = {
@@ -658,6 +1387,15 @@ test("campaign validation rejects unsupported ship, recipient, resource and dupl
     const duplicate = JSON.parse(JSON.stringify(definition));
     duplicate.reactions.push({ ...duplicate.reactions[0], id: "aid_again" });
     assert.ok(campaign.validate(duplicate, roster).errors.some(issue => issue.field === "reactions.when"));
+    const contactResponse = JSON.parse(JSON.stringify(definition));
+    contactResponse.reactions.push({ id: "contact", when: { type: "contact", target: "Ally" }, title_key: "tutorial.aid_title", body_key: "tutorial.aid_body" });
+    assert.deepEqual(campaign.validate(contactResponse, roster).errors, [], "contact and support can each have their own response");
+    const duplicateContact = JSON.parse(JSON.stringify(contactResponse));
+    duplicateContact.reactions.push({ ...duplicateContact.reactions[1], id: "contact_again" });
+    assert.ok(campaign.validate(duplicateContact, roster).errors.some(issue => issue.field === "reactions.when"));
+    const delayedContact = JSON.parse(JSON.stringify(contactResponse));
+    delayedContact.reactions[1].after = "objective";
+    assert.ok(campaign.validate(delayedContact, roster).errors.some(issue => issue.field === "reactions.after"));
 });
 
 test("all 53 HUD message classes have one explicit presentation", () => {
@@ -692,19 +1430,24 @@ test("all 53 HUD message classes have one explicit presentation", () => {
     for (const key of silent) assert.ok(!emitters.includes(`hud.${key}`), `silent message still emitted: ${key}`);
 });
 
-test("HUD notifications coalesce, prioritize, reuse both portraits, and expire within fixed bounds", () => {
+test("HUD notifications coalesce, prioritize, reuse both entity avatars, and expire within fixed bounds", () => {
     const start = hud.indexOf("    function createNotificationCard(container, contextual) {");
     const end = hud.indexOf("\n    function renderHud(", start);
     assert.ok(start >= 0 && end > start);
-    const cards = Array.from({ length: 3 }, () => ({
-        card: { hidden: true, className: "" },
-        seal: { innerHTML: "" },
-        portraits: Array.from({ length: 2 }, () => ({
+    const avatarSlot = () => ({
+        wrapper: { hidden: true, className: "" },
+        image: {
             hidden: true,
             src: "",
             getAttribute(name) { return name === "src" ? this.src : null; },
             removeAttribute(name) { if (name === "src") this.src = ""; }
-        })),
+        },
+        emblem: { hidden: true, textContent: "" }
+    });
+    const cards = Array.from({ length: 3 }, () => ({
+        card: { hidden: true, className: "" },
+        seal: { innerHTML: "" },
+        avatars: [avatarSlot(), avatarSlot()],
         copy: { textContent: "" },
         renderKey: ""
     }));
@@ -718,7 +1461,6 @@ test("HUD notifications coalesce, prioritize, reuse both portraits, and expire w
         notificationCards: cards,
         Date: { now: () => now },
         asset: path => "/assets/" + path,
-        leaderById: id => ({ slug: String(id) }),
         hudIcon: name => name,
         SOW_t: key => key,
         window: {
@@ -741,21 +1483,30 @@ test("HUD notifications coalesce, prioritize, reuse both portraits, and expire w
         }]);
     };
 
-    add(1, "hud.resource_received_gold", 3, "resource:received:7", { gold: "100" }, ["boudica", "caesar"], true);
+    add(1, "hud.resource_received_gold", 3, "resource:received:7", { gold: "100" }, [
+        { kind: "portrait", slug: "boudica" }, { kind: "portrait", slug: "caesar" }
+    ], true);
     const firstTimerCount = timers.length;
     context.renderNotifications([], false);
     assert.equal(timers.length, firstTimerCount, "unchanged HUD updates must not reset the expiry timer");
-    add(2, "hud.resource_received_troops", 3, "resource:received:7", { troops: "25" }, ["boudica", "caesar"], true);
+    add(2, "hud.resource_received_troops", 3, "resource:received:7", { troops: "25" }, [
+        { kind: "portrait", slug: "boudica" }, { kind: "portrait", slug: "caesar" }
+    ], true);
     assert.equal(context.activeNotifications.length, 1);
     assert.equal(context.activeNotifications[0].entry.key, "hud.resource_received_both");
     assert.equal(context.activeNotifications[0].entry.values.gold, "100");
     assert.equal(context.activeNotifications[0].entry.values.troops, "25");
-    assert.deepEqual(cards[0].portraits.map(item => item.hidden), [false, false]);
-    assert.deepEqual(cards[0].portraits.map(item => item.src), [
+    assert.deepEqual(cards[0].avatars.map(item => item.wrapper.hidden), [false, false]);
+    assert.deepEqual(cards[0].avatars.map(item => item.image.src), [
         "/assets/gameplay/avatars/boudica.webp", "/assets/gameplay/avatars/caesar.webp"
     ]);
+    assert.deepEqual(cards[0].avatars.map(item => item.emblem.hidden), [true, true]);
+    assert.match(cards[0].avatars[1].wrapper.className, /--overlap/);
 
-    add(3, "hud.nuke_struck", 4, "nuke:9:7", {}, ["caesar", "boudica"]);
+    const portraitPair = [
+        { kind: "portrait", slug: "caesar" }, { kind: "portrait", slug: "boudica" }
+    ];
+    add(3, "hud.nuke_struck", 4, "nuke:9:7", {}, portraitPair);
     add(4, "hud.structure_ready", 2, "building:7", {});
     add(5, "hud.resource_request_declined", 1, "resource-rejected:7", {});
     assert.equal(context.activeNotifications.length, 3, "a burst must never create a backlog");
@@ -763,21 +1514,21 @@ test("HUD notifications coalesce, prioritize, reuse both portraits, and expire w
     assert.ok(context.activeNotifications.some(item => item.group === "resource:received:7"));
     assert.ok(!context.activeNotifications.some(item => item.group === "resource-rejected:7"), "lower-priority feedback must yield to active event cards");
     const timersBeforeAttack = timers.length;
-    add(6, "hud.attack_incoming", 4, "incoming-attack:7", { count: "2" }, ["caesar", "boudica"]);
-    add(7, "hud.attack_incoming", 4, "incoming-attack:7", { count: "3" }, ["caesar", "boudica"]);
+    add(6, "hud.attack_incoming", 4, "incoming-attack:7", { count: "2" }, portraitPair);
+    add(7, "hud.attack_incoming", 4, "incoming-attack:7", { count: "3" }, portraitPair);
     assert.equal(context.activeNotifications.length, 3);
     assert.equal(context.activeNotifications.find(item => item.group === "incoming-attack:7").entry.values.count, "3");
     const timersBeforeDuplicate = timers.length;
     context.renderNotifications([{
         id: 7, key: "hud.attack_incoming", priority: 4, group: "incoming-attack:7",
-        values: { count: "3" }, avatars: ["caesar", "boudica"], age_ms: 0
+        values: { count: "3" }, avatars: portraitPair, age_ms: 0
     }]);
     assert.equal(timers.length, timersBeforeDuplicate, "duplicate IDs must not refresh or duplicate cards");
     assert.ok(timersBeforeAttack < timersBeforeDuplicate);
 
     const burst = Array.from({ length: 100 }, (_, index) => ({
         id: index + 8, key: "hud.resource_request_declined", priority: 1, group: "resource-rejected:" + index,
-        values: {}, avatars: ["boudica"], age_ms: 0
+        values: {}, avatars: [{ kind: "portrait", slug: "boudica" }], age_ms: 0
     }));
     const timersBeforeBurst = timers.length;
     context.renderNotifications(burst);
@@ -788,25 +1539,157 @@ test("HUD notifications coalesce, prioritize, reuse both portraits, and expire w
     timers.at(-1).callback();
     assert.equal(context.activeNotifications.length, 0);
     assert.ok(cards.every(parts => parts.card.hidden), "expired cards release their visible slots");
+
+    add(108, "hud.attack_incoming", 4, "tribe-attack", {}, [
+        { kind: "emblem", symbol: "🐺" }, { kind: "emblem", symbol: "🦅" }
+    ]);
+    const emblemCard = cards.find(parts => !parts.card.hidden);
+    assert.deepEqual(emblemCard.avatars.map(item => item.emblem.textContent), ["🐺", "🦅"]);
+    assert.deepEqual(emblemCard.avatars.map(item => item.image.hidden), [true, true]);
+    assert.deepEqual(emblemCard.avatars.map(item => item.image.src), ["", ""]);
+    assert.match(emblemCard.avatars[1].wrapper.className, /--overlap/);
+
+    add(109, "hud.nuke_struck", 4, "single-avatar", {}, [
+        null, { kind: "emblem", symbol: "🏛️" }
+    ]);
+    const singleAvatarCard = cards.find(parts => parts.copy.textContent === "hud.nuke_struck");
+    assert.deepEqual(singleAvatarCard.avatars.map(item => item.wrapper.hidden), [true, false]);
+    assert.doesNotMatch(singleAvatarCard.avatars[1].wrapper.className, /--overlap/);
+    assert.equal(singleAvatarCard.avatars[0].emblem.textContent, "");
+
+    add(110, "hud.resource_received_gold", 4, "missing-avatar", {}, [
+        { kind: "fallback" }, { kind: "future-avatar-kind" }
+    ]);
+    const fallbackCard = cards.find(parts => parts.copy.textContent === "hud.resource_received_gold");
+    assert.deepEqual(fallbackCard.avatars.map(item => item.image.src), [
+        "/assets/gameplay/avatars/null.webp", "/assets/gameplay/avatars/null.webp"
+    ]);
+});
+
+test("notification cards render typed avatars, recover failed art, and clear reused slots", () => {
+    const start = hud.indexOf("    function createNotificationCard(container, contextual) {");
+    const end = hud.indexOf("\n    function renderHud(", start);
+    assert.ok(start >= 0 && end > start);
+    class Element {
+        constructor(tagName) {
+            this.tagName = tagName;
+            this.children = [];
+            this.attributes = Object.create(null);
+            this.hidden = false;
+            this.className = "";
+            this.src = "";
+        }
+        append(...items) { this.children.push(...items); }
+        appendChild(item) { this.children.push(item); }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) {
+            if (name === "src") return this.src || null;
+            return this.attributes[name] || null;
+        }
+        removeAttribute(name) {
+            delete this.attributes[name];
+            if (name === "src") this.src = "";
+        }
+    }
+    const container = new Element("container");
+    const context = {
+        document: { createElement: tagName => new Element(tagName) },
+        asset: path => "/assets/" + path,
+        hudIcon: name => name,
+        SOW_t: key => key
+    };
+    const renderer = hud.slice(start, end)
+        + "\nthis.createNotificationCard = createNotificationCard;"
+        + "\nthis.renderNotificationCard = renderNotificationCard;"
+        + "\nthis.clearNotificationCard = clearNotificationCard;";
+    vm.runInNewContext(renderer, context);
+
+    const parts = context.createNotificationCard(container, false);
+    context.renderNotificationCard(parts, {
+        entry: {
+            id: 1, key: "hud.attack_incoming", values: {},
+            avatars: [
+                { kind: "portrait", slug: "boudica" },
+                { kind: "emblem", symbol: "🐺" }
+            ]
+        },
+        priority: 4
+    }, false);
+    assert.equal(container.children.length, 1);
+    assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/boudica.webp");
+    assert.equal(parts.avatars[0].emblem.hidden, true);
+    assert.equal(parts.avatars[1].image.hidden, true);
+    assert.equal(parts.avatars[1].emblem.textContent, "🐺");
+    assert.match(parts.avatars[1].wrapper.className, /--overlap/);
+
+    parts.avatars[0].image.onerror.call(parts.avatars[0].image);
+    assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/null.webp");
+
+    context.renderNotificationCard(parts, {
+        entry: { id: 2, key: "hud.alliance_formed", values: {}, avatars: [{ kind: "emblem", symbol: "🏛️" }] },
+        priority: 2
+    }, false);
+    assert.equal(parts.avatars[0].image.src, "");
+    assert.equal(parts.avatars[0].emblem.textContent, "🏛️");
+    assert.equal(parts.avatars[1].wrapper.hidden, true);
+    assert.equal(parts.avatars[1].emblem.textContent, "");
+
+    context.renderNotificationCard(parts, {
+        entry: { id: 3, key: "hud.nuke_struck", values: {}, avatars: [null, { kind: "emblem", symbol: "🏺" }] },
+        priority: 4
+    }, false);
+    assert.equal(parts.avatars[0].wrapper.hidden, true);
+    assert.equal(parts.avatars[1].emblem.textContent, "🏺");
+    assert.doesNotMatch(parts.avatars[1].wrapper.className, /--overlap/);
+
+    context.clearNotificationCard(parts);
+    assert.equal(parts.avatars[0].wrapper.hidden, true);
+    assert.equal(parts.avatars[1].wrapper.hidden, true);
+    assert.equal(parts.avatars[1].emblem.textContent, "");
 });
 
 test("map feedback reuses one compact card, clamps to the viewport, and releases message data", () => {
     const start = hud.indexOf("    function createNotificationCard(container, contextual) {");
     const end = hud.indexOf("\n    function renderHud(", start);
+    const durationMatch = hud.match(/var MAP_FEEDBACK_DURATION_MS = (\d+);/);
+    const fadeOutMatch = hud.match(/var MAP_FEEDBACK_FADE_OUT_MS = (\d+);/);
+    assert.ok(durationMatch, "map feedback duration is declared");
+    assert.ok(fadeOutMatch, "map feedback fade-out duration is declared");
+    const durationMs = Number(durationMatch[1]);
+    const fadeOutMs = Number(fadeOutMatch[1]);
+    assert.equal(durationMs, 2000, "map feedback stays brief");
+    assert.equal(fadeOutMs, 180, "map feedback fades out gently");
+    assert.match(hudCss, /\.sow-hud__notification--contextual\s*\{[^}]*opacity: 0;[^}]*transition: opacity 180ms ease, transform 180ms cubic-bezier/);
+    assert.match(hudCss, /\.sow-hud__notification--contextual\.sow-hud__map-feedback-card--visible\s*\{[^}]*opacity: 1;/);
     assert.ok(start >= 0 && end > start);
+    let showTransitions = 0;
+    const classes = new Set();
     const card = {
         hidden: true,
         className: "",
+        classList: {
+            add(name) {
+                classes.add(name);
+                if (name === "sow-hud__map-feedback-card--visible") showTransitions += 1;
+            },
+            remove(name) { classes.delete(name); },
+            contains(name) { return classes.has(name); }
+        },
+        get offsetWidth() { return 220; },
         getBoundingClientRect() { return { width: 220, height: 46 }; }
     };
     const parts = {
         card,
         seal: { innerHTML: "" },
-        portraits: Array.from({ length: 2 }, () => ({
-            hidden: true,
-            src: "",
-            getAttribute(name) { return name === "src" ? this.src : null; },
-            removeAttribute(name) { if (name === "src") this.src = ""; }
+        avatars: Array.from({ length: 2 }, () => ({
+            wrapper: { hidden: true, className: "" },
+            image: {
+                hidden: true,
+                src: "",
+                getAttribute(name) { return name === "src" ? this.src : null; },
+                removeAttribute(name) { if (name === "src") this.src = ""; }
+            },
+            emblem: { hidden: true, textContent: "" }
         })),
         copy: { textContent: "" },
         renderKey: ""
@@ -825,9 +1708,10 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
         mapFeedbackTimer: null,
         activeMapFeedback: null,
         mapFeedbackCard: parts,
+        MAP_FEEDBACK_DURATION_MS: durationMs,
+        MAP_FEEDBACK_FADE_OUT_MS: fadeOutMs,
         Date: { now: () => now },
         asset: path => "/assets/" + path,
-        leaderById: id => ({ slug: String(id) }),
         hudIcon: name => name,
         SOW_t: key => key,
         window: {
@@ -847,21 +1731,39 @@ test("map feedback reuses one compact card, clamps to the viewport, and releases
     context.renderMapFeedback({ id: 1, key: "hud.build_no_space", values: {}, x: 0, y: 0, age_ms: 0 });
     assert.equal(container.hidden, false);
     assert.equal(parts.copy.textContent, "hud.build_no_space");
+    assert.ok(card.classList.contains("sow-hud__map-feedback-card--visible"), "the card fades in");
     assert.ok(Number.parseFloat(style.left) >= 118, "card stays inside the left edge");
     assert.equal(style.top, "72px", "card clears the HUD top bar");
     const timerCount = timers.length;
     context.renderMapFeedback({ id: 1, key: "hud.build_no_space", values: {}, x: 200, y: 300, age_ms: 0 });
-    assert.equal(timers.length, timerCount, "the same feedback does not restart its timer");
+    assert.equal(timers.length, timerCount, "the same event is not rendered twice");
 
-    context.renderMapFeedback({ id: 2, key: "hud.build_land", values: {}, x: 375, y: 650, age_ms: 0 });
+    context.renderMapFeedback({ id: 2, key: "hud.build_no_space", values: {}, x: 200, y: 300, age_ms: 0 });
+    assert.equal(timers.length, timerCount + 1, "a repeated click restarts the feedback timer");
+    assert.ok(timers.at(-2).cleared, "repeated feedback releases its previous timer");
+    assert.equal(style.left, "200px", "repeated feedback follows the latest click");
+    assert.equal(style.top, "240px");
+    assert.equal(timers.at(-1).delay, 2000);
+    assert.equal(showTransitions, 2, "repeated feedback restarts its entrance");
+
+    context.renderMapFeedback({ id: 3, key: "hud.build_land", values: {}, x: 375, y: 650, age_ms: 0 });
     assert.equal(parts.copy.textContent, "hud.build_land");
     assert.ok(timers.at(-2).cleared, "replaced feedback releases its previous timer");
     assert.ok(Number.parseFloat(style.left) <= 257, "card stays inside the right edge");
-    now += 3600;
+    now += 2000;
+    timers.at(-1).callback();
+    assert.equal(container.hidden, false, "the card remains during its fade-out");
+    assert.equal(parts.copy.textContent, "hud.build_land");
+    assert.equal(card.classList.contains("sow-hud__map-feedback-card--visible"), false);
+    assert.equal(timers.at(-1).delay, fadeOutMs);
+    now += fadeOutMs;
     timers.at(-1).callback();
     assert.equal(container.hidden, true);
     assert.equal(parts.copy.textContent, "");
-    assert.ok(parts.portraits.every(portrait => portrait.src === ""));
+    assert.ok(parts.avatars.every(avatar => avatar.wrapper.hidden && avatar.image.src === ""));
+
+    context.renderMapFeedback({ id: 4, key: "hud.build_land", values: {}, x: 375, y: 650, age_ms: 2000 });
+    assert.equal(container.hidden, true, "expired feedback is not displayed");
 });
 
 test("campaign editor refresh serves current source files without browser caching", () => {
@@ -1163,6 +2065,32 @@ test("campaign validator rejects speakers without a display name", () => {
     assert.ok(report.errors.some(issue => issue.field === "speakers" && /empty/.test(issue.message)));
 });
 
+test("map edits can remove factions before their story references are updated", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = {
+        version: 2, episode_id: "roster_edit", default_locale: "en",
+        settings: { buildings_enabled: false, starting_troops: 1000 },
+        strings: { en: {
+            "tutorial.open": "Opening", "tutorial.contact": "Contact the tribe", "tutorial.end": "The end",
+            "tutorial.response_title": "An ally answers", "tutorial.response_body": "We stand together."
+        } },
+        speakers: { removed_ally: { faction: "Removed Tribe" } }, entry: "opening",
+        steps: [
+            { id: "opening", type: "scene", speaker: "removed_ally", title_key: "tutorial.open", next: "contact" },
+            { id: "contact", type: "objective", title_key: "tutorial.contact", trigger: { type: "contact", targets: ["Existing Tribe", "Removed Tribe"], value: 2, scope: "episode" }, next: "ending" },
+            { id: "ending", type: "end", title_key: "tutorial.end" }
+        ],
+        reactions: [{ id: "removed_ally_contact", when: { type: "contact", target: "Removed Tribe" }, speaker: "removed_ally", title_key: "tutorial.response_title", body_key: "tutorial.response_body" }]
+    };
+    const roster = { map: "eastanglia", player_spawn: [10, 10], factions: [{ name: "Existing Tribe", x: 20, y: 20, role: "kin" }] };
+
+    assert.deepEqual(campaign.validate(definition, roster, { allowMissingFactionReferences: true }).errors, []);
+    assert.ok(campaign.validate(definition, roster).errors.length > 0);
+
+    roster.factions[0].role = "invalid";
+    assert.ok(campaign.validate(definition, roster, { allowMissingFactionReferences: true }).errors.length > 0);
+});
+
 test("campaign editor rejects maps and spawns that the game would refuse", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
@@ -1313,7 +2241,7 @@ test("campaign map editor renders faction names as text in its HTML templates", 
     assert.match(campaignMapEditorHtml, /inWater\.map\(escapeHtml\)/);
 });
 
-test("troop objectives check current force against a minimum", () => {
+test("troop objectives advance on the first update that satisfies the minimum", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
         version: 2, episode_id: "troop_minimum_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
@@ -1323,10 +2251,10 @@ test("troop objectives check current force against a minimum", () => {
         ]
     });
     assert.deepEqual(machine.update({ troops: 1400 }, {}, 0).progress, { current: 1400, target: 1500 });
-    assert.equal(machine.update({ troops: 1500 }, {}, 100).ready, true);
+    assert.equal(machine.update({ troops: 1500 }, {}).step.id, "ending");
 });
 
-test("campaign completion beat stays paused while an exit modal is open", () => {
+test("a completed objective advances immediately after an exit modal closes", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
         version: 2, episode_id: "modal_pause_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
@@ -1335,19 +2263,17 @@ test("campaign completion beat stays paused while an exit modal is open", () => 
             { id: "ending", type: "end", title_key: "tutorial.ending" }
         ]
     });
-    machine.update({ tiles_gained: 0 }, {}, 0);
-    assert.equal(machine.update({ tiles_gained: 1 }, {}, 100).ready, true);
-    machine.setPaused(true, 200);
+    machine.update({ tiles_gained: 0 }, {});
+    machine.setPaused(true);
+    assert.equal(machine.update({ tiles_gained: 1 }, {}).step.id, "objective");
     assert.equal(machine.advance(null, "objective"), false);
-    assert.equal(machine.update({ tiles_gained: 1 }, {}, 9000).step.id, "objective");
-    machine.setPaused(false, 10000);
-    assert.equal(machine.update({ tiles_gained: 1 }, {}, 10699).step.id, "objective");
-    assert.equal(machine.update({ tiles_gained: 1 }, {}, 10700).step.id, "ending");
+    machine.setPaused(false);
+    assert.equal(machine.update({ tiles_gained: 1 }, {}).step.id, "ending");
 });
 
 test("UI objectives respect step, episode, and total scope", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
-    const progress = scope => {
+    const completed = scope => {
         const machine = campaign.create({
             version: 2, episode_id: "ui_scope_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 0 },
             strings: { en: {} }, speakers: {}, entry: "opening", steps: [
@@ -1359,12 +2285,12 @@ test("UI objectives respect step, episode, and total scope", () => {
         machine.update({}, { attack_ratio: 0 }, 0);
         machine.update({}, { attack_ratio: 1 }, 100);
         machine.advance(null, "opening");
-        return machine.update({}, { attack_ratio: 1 }, 200).progress;
+        return machine.update({}, { attack_ratio: 1 }, 200).step.id === "ending";
     };
 
-    assert.deepEqual(progress("step"), { current: 0, target: 1 });
-    assert.deepEqual(progress("episode"), { current: 1, target: 1 });
-    assert.deepEqual(progress("total"), { current: 1, target: 1 });
+    assert.equal(completed("step"), false);
+    assert.equal(completed("episode"), true);
+    assert.equal(completed("total"), true);
 });
 
 test("campaign studio authors cinematic endings and navigable validation notes", () => {
@@ -1428,9 +2354,11 @@ test("campaign scene transitions are brief, shared, and disabled for reduced mot
     assert.match(campaignView, /duration: 180, easing: "cubic-bezier\(\.2,\.7,\.2,1\)"/);
 });
 
-test("objective completion gets a short confirmation pulse", () => {
-    assert.match(storyCss, /\.sow-story\.is-ready \.sow-story__objective \{[^}]*animation: story-objective-complete 800ms/);
-    assert.match(storyCss, /@keyframes story-objective-complete/);
+test("objective completion has no artificial wait or delayed preview timer", () => {
+    assert.doesNotMatch(campaignEngine, /readyAt|reactionOpenedAt|now - readyAt/);
+    assert.doesNotMatch(campaignView, /is-ready|model\.ready/);
+    assert.doesNotMatch(storyCss, /story-objective-complete|is-ready/);
+    assert.doesNotMatch(campaignEditor, /setTimeout\(function \(\) \{ if \(state\.machine\) paintPreview\(\); \}, 840\)/);
     assert.match(storyCss, /\.sow-story\.is-reduced [^{]*\{ animation: none !important/);
     assert.match(storyCss, /\.sow-story__meter progress \{[^}]*height: 10px[^}]*border-radius: 999px/);
 });
@@ -1485,10 +2413,126 @@ test("campaign story preview uses the selected episode map and faction positions
     assert.match(campaignEditorHtml, /id="campaignPreviewMarkers"/);
     assert.match(campaignEditor, /SOWCampaignMapPreview\.load\(mapId\)/);
     assert.match(campaignEditor, /dataset: \{ factionName: faction\.name, role: faction\.role \}/);
+    assert.match(campaignEditor, /Number\(faction\.x\) \/ map\.width \* 100/);
     assert.match(campaignEditor, /function previewWorldMarker\(frame, target, step\)/);
-    assert.match(campaignMapEditorHtml, /SOWCampaignMapPreview\.parse\(buf\)/);
+    assert.match(campaignMapEditorHtml, /SOWCampaignMapPreview\.load\(mapId\)/);
     assert.match(campaignMapPreview, /!== "SOWM"/);
     assert.match(campaignMapPreview, /function terrainCanvas\(terrain, width, height\)/);
+    assert.match(campaignMapEditorHtml, /SOWCampaignMapPreview\.isLand\(terrain, MAPW, MAPH, mx, my\)/);
+    assert.match(campaignMapEditorHtml, /sel=\+el\.dataset\.i; focusFaction\(sel\)/);
+    assert.match(atlasHtml, /button\.onclick=\(\)=>select\(entity\.id,true\)/);
+    assert.match(atlasHtml, /SOWCampaignMapPreview\.load\("world"\)/);
+    assert.match(atlasHtml, /thumbnail_frames\.json/);
+    assert.match(atlasHtml, /giantworldmap\.png/);
+    assert.match(atlasHtml, /const frame=worldReference&&!worldReferenceError&&worldReference\.source\.map_grid_frame/);
+    assert.match(atlasHtml, /ctx\.drawImage\(worldReference\.image,frame\[0\],frame\[1\],frame\[2\],frame\[3\],0,0,world\.width,world\.height\)/);
+    assert.doesNotMatch(atlasHtml, /drawEquirectangularImage/);
+    assert.match(atlasHtml, /ctx\.globalAlpha=0\.2/);
+    assert.match(atlasHtml, /Math\.min\(minScale\*64/);
+    assert.match(atlasHtml, /mapPointToGeo/);
+    assert.match(atlasHtml, /world_island_guides\.json/);
+    assert.match(atlasHtml, /new Path2D\(\)/);
+    assert.match(atlasHtml, /ctx\.globalAlpha=1;ctx\.fillStyle=[^;]+;ctx\.fill\(worldIslandPath,"evenodd"\);ctx\.strokeStyle=[^;]+;ctx\.lineWidth=0\.75\/scale;[^;]+;[^;]+;ctx\.stroke\(worldIslandPath\)/);
+    assert.match(atlasHtml, /pointerStart=pointer\.slice\(\)/);
+    assert.match(atlasHtml, /Math\.hypot\(point\[0\]-pointerStart\[0\],point\[1\]-pointerStart\[1\]\)>Math\.min\(2,scale\*0\.5\)/);
+    assert.match(atlasHtml, /body:JSON\.stringify\(catalog\)/);
+    assert.match(campaignEditorServer, /JSON\.stringify\(value, null, 2\)/);
+    const atlasScript = atlasHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
+    assert.ok(atlasScript, "Atlas inline script exists");
+    assert.doesNotThrow(() => new vm.Script(atlasScript[1]));
+    assert.match(atlasHtml, /geoToTile\(entity\.lat,entity\.lon,world\.geoBounds/);
+    assert.match(atlasHtml, /SOWCampaignMapPreview\.isLand\(world\.terrain,world\.width,world\.height,tile\.x,tile\.y\)/);
+
+    const islandGuides = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/map_sources/world_island_guides.json"), "utf8"));
+    assert.equal(islandGuides.coordinate_reference, "WGS84 longitude,latitude");
+    assert.ok(islandGuides.sources.some(source => source.name === "Natural Earth 10m Land"));
+    assert.ok(islandGuides.sources.some(source => source.name === "Natural Earth 10m Minor Islands"));
+    const entities = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/geo_entities.json"), "utf8")).entities;
+    for (const id of ["rapa_nui", "tahitians", "marquesans"]) {
+        const entity = entities.find(item => item.id === id);
+        const rings = islandGuides.features.filter(feature => feature.properties.entity_ids.includes(id)).map(feature => feature.geometry.coordinates);
+        assert.ok(entity && rings.length, `${id} has a sourced island outline`);
+        const nearestVertex = Math.min(...rings.flatMap(ring => ring.map(([lon, lat]) => Math.hypot(lon - entity.lon, lat - entity.lat))));
+        assert.ok(nearestVertex < 0.2, `${id} outline remains anchored to its catalog coordinates`);
+    }
+});
+
+test("selecting a map entity centers it in the current view", () => {
+    const offsets = campaignMapPreviewApi.centerMapOffsets({ x: 120, y: 40 }, 2, 800, 600);
+    assert.deepEqual(offsets, { x: 160, y: 220 });
+    assert.equal(120 * 2 + offsets.x, 400);
+    assert.equal(40 * 2 + offsets.y, 300);
+});
+
+test("Atlas deletes the selected entity with Delete outside editable fields", () => {
+    assert.match(atlasHtml, /function deleteSelected\(\)[\s\S]*?catalog\.entities\.splice\(index,1\);[\s\S]*?selectedId=null;[\s\S]*?markDirty\(\)/);
+    assert.match(atlasHtml, /document\.addEventListener\("keydown",event=>\{[\s\S]*?event\.key!=="Delete"[\s\S]*?event\.key!=="Backspace"[\s\S]*?input,textarea,select,\[contenteditable='true'\][\s\S]*?event\.preventDefault\(\);deleteSelected\(\)/);
+});
+
+test("playable map preview shares game geography and land checks", () => {
+    function encodeMap(bounds) {
+        const width = 4, height = 2, name = Buffer.from("test"), terrain = Buffer.from([0x80, 0, 0x80, 0, 0, 0x80, 0x80, 0]);
+        const bytes = Buffer.alloc(4 + 2 + 2 + 4 + 4 + 4 + 2 + name.length + 2 + terrain.length + (bounds ? 17 : 0));
+        let offset = 0;
+        bytes.write("SOWM", offset); offset += 4;
+        bytes.writeUInt16LE(1, offset); offset += 4;
+        bytes.writeUInt32LE(width, offset); offset += 4;
+        bytes.writeUInt32LE(height, offset); offset += 4;
+        bytes.writeUInt32LE(4, offset); offset += 4;
+        bytes.writeUInt16LE(name.length, offset); offset += 2;
+        name.copy(bytes, offset); offset += name.length;
+        bytes.writeUInt16LE(0, offset); offset += 2;
+        terrain.copy(bytes, offset); offset += terrain.length;
+        if (bounds) {
+            bytes.writeUInt8(1, offset++);
+            for (const value of bounds) { bytes.writeInt32LE(Math.round(value * 1e6), offset); offset += 4; }
+        }
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    }
+
+    const bounds = { minLon: 170, minLat: -10, maxLon: 190, maxLat: 10 };
+    const map = campaignMapPreviewApi.parse(encodeMap([170, -10, 190, 10]));
+    assert.deepEqual(map.geoBounds, bounds);
+    assert.deepEqual(campaignMapPreviewApi.geoToTile(0, -180, map.geoBounds, map.width, map.height), { x: 2, y: 1 });
+    assert.deepEqual(campaignMapPreviewApi.geoToTile(10, 190, map.geoBounds, map.width, map.height), { x: 3, y: 0 });
+    const preciseGeo = campaignMapPreviewApi.mapPointToGeo(2.25, 0.4, map.geoBounds, map.width, map.height);
+    assert.ok(Math.abs(preciseGeo.lat - 6) < 1e-12);
+    assert.ok(Math.abs(preciseGeo.lon + 178.75) < 1e-12);
+    const precisePoints = campaignMapPreviewApi.geoToMapPoints(preciseGeo.lat, preciseGeo.lon, map.geoBounds, map.width, map.height);
+    assert.ok(precisePoints.some(point => Math.abs(point.x - 2.25) < 1e-9 && Math.abs(point.y - 0.4) < 1e-9));
+    assert.equal(campaignMapPreviewApi.mapPointToGeo(map.width, 0, map.geoBounds, map.width, map.height), null);
+    const geo = campaignMapPreviewApi.tileToGeo(2, 1, map.geoBounds, map.width, map.height);
+    assert.deepEqual(campaignMapPreviewApi.geoToTile(geo.lat, geo.lon, map.geoBounds, map.width, map.height), { x: 2, y: 1 });
+    assert.equal(campaignMapPreviewApi.isLand(map.terrain, map.width, map.height, 2, 1), true);
+    assert.equal(campaignMapPreviewApi.isLand(map.terrain, map.width, map.height, 3, 1), false);
+    assert.equal(campaignMapPreviewApi.isLand(map.terrain, map.width, map.height, map.width, 0), false);
+    assert.equal(campaignMapPreviewApi.parse(encodeMap(null)).geoBounds, null);
+    assert.equal(campaignMapPreviewApi.geoToTile(0, 0, map.geoBounds, map.width, map.height), null);
+
+    const worldBytes = fs.readFileSync(path.join(shell, "../../assets/maps/world/map.bin"));
+    const worldBuffer = worldBytes.buffer.slice(worldBytes.byteOffset, worldBytes.byteOffset + worldBytes.byteLength);
+    const world = campaignMapPreviewApi.parse(worldBuffer);
+    assert.deepEqual(world.geoBounds, { minLon: -168.69, minLat: -78.8, maxLon: 192.37, maxLat: 82.78 });
+    const london = campaignMapPreviewApi.geoToTile(51.51, -0.13, world.geoBounds, world.width, world.height);
+    assert.deepEqual(london, { x: 466, y: 96 });
+    assert.equal(campaignMapPreviewApi.isLand(world.terrain, world.width, world.height, london.x, london.y), true);
+    assert.equal(campaignMapPreviewApi.tileToGeo(999, 200, world.geoBounds, world.width, world.height), null);
+    const wrappedGeo = campaignMapPreviewApi.mapPointToGeo(999.25, 250, world.geoBounds, world.width, world.height);
+    const wrappedPoints = campaignMapPreviewApi.geoToMapPoints(wrappedGeo.lat, wrappedGeo.lon, world.geoBounds, world.width, world.height);
+    assert.ok(wrappedPoints.some(point => Math.abs(point.x - 999.25) < 1e-9 && Math.abs(point.y - 250) < 1e-9));
+
+    const source = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/map_sources/thumbnail_frames.json"), "utf8")).sources["giantworldmap.png"];
+    assert.deepEqual(source.map_grid_frame, [16, 16, 4094, 1932]);
+    const sourceBytes = fs.readFileSync(path.join(shell, "../../assets/map_sources/giantworldmap.png"));
+    assert.equal(sourceBytes.toString("hex", 0, 8), "89504e470d0a1a0a");
+    assert.equal(sourceBytes.readUInt32BE(16), source.width);
+    assert.equal(sourceBytes.readUInt32BE(20), source.height);
+    const referenceImage = { naturalWidth: source.width, naturalHeight: source.height };
+    const icelandSource = { x: 1717, y: 237 }, icelandTarget = campaignMapPreviewApi.geoToMapPoint(65, -18.5, world.geoBounds, world.width, world.height);
+    const [sx, sy, sw, sh] = source.map_grid_frame;
+    const icelandAligned = { x: (icelandSource.x - sx) / sw * world.width, y: (icelandSource.y - sy) / sh * world.height };
+    assert.ok(Math.abs(icelandAligned.x - icelandTarget.x) < 1, "Iceland source anchor aligns to its catalog coordinate");
+    assert.ok(Math.abs(icelandAligned.y - icelandTarget.y) < 2.5, "Iceland source anchor aligns to its catalog coordinate");
 });
 
 test("invalid campaign drafts preserve the last valid preview and disable simulation", () => {
@@ -1511,6 +2555,38 @@ test("campaign map preview accepts valid SOWM terrain and rejects a truncated ma
     assert.equal(map.height, 1);
     assert.deepEqual(Array.from(map.terrain), [0x80, 0]);
     assert.throws(() => mapPreview.parse(buffer.slice(0, 25)), /Invalid SOW map dimensions/);
+});
+
+test("Map Rosters reads binary presets and leaves unmatched map anchors intact", () => {
+    const mapPreview = require(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.js"));
+    const u16 = value => { const b = Buffer.alloc(2); b.writeUInt16LE(value); return b; };
+    const u32 = value => { const b = Buffer.alloc(4); b.writeUInt32LE(value); return b; };
+    const string = value => { const b = Buffer.from(value); return Buffer.concat([u16(b.length), b]); };
+    const spawn = Buffer.concat([string("Unlinked local anchor"), string(""), u32(0), u32(0)]);
+    const terrain = Buffer.from([0x80, 0x80, 0x80, 0x80]);
+    const roster = Buffer.concat([
+        u16(1), string("historical"), u16(1), string("historical"), string("Historical"), u16(1),
+        string("iceland"), Buffer.from([0]), u32(2), u32(0), u16(0)
+    ]);
+    const bytes = Buffer.concat([
+        Buffer.from("SOWM"), u16(1), u16(0), u32(4), u32(1), u32(4), string("Test map"),
+        u16(1), spawn, terrain, Buffer.from([0, 2]), u32(roster.length), roster
+    ]);
+    const parsed = mapPreview.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+
+    assert.equal(parsed.defaultRoster, "historical");
+    assert.deepEqual(parsed.spawns, [{ name: "Unlinked local anchor", flag: "", x: 0, y: 0 }]);
+    assert.deepEqual(parsed.rosters, [{
+        id: "historical", name: "Historical", entries: [
+            { entity_id: "iceland", role: "nation", x: 2, y: 0, legacy_anchor: 0 }
+        ]
+    }]);
+    assert.match(mapRostersHtml, /SOWCampaignMapPreview\.load\(id\)/);
+    assert.match(mapRostersHtml, /assets\/gameplay\/avatars/);
+    assert.match(mapRostersHtml, /SOWCampaignMapPreview\.drawMapLabel/);
+    assert.match(mapRosterWriter, /map_file::encode\(&map\)/);
+    assert.match(mapRosterWriter, /map\.bin\.br/);
+    assert.doesNotMatch(mapRosterWriter.split("#[cfg(test)]")[0], /roster\.json/i);
 });
 
 test("campaign studio preserves edits made while a save is in flight", () => {
@@ -1558,7 +2634,9 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     const episode = path.join(shell, "../../assets/campaign");
     const definition = JSON.parse(fs.readFileSync(path.join(episode, "boudica.triggers.json"), "utf8"));
     const roster = JSON.parse(fs.readFileSync(path.join(episode, "boudica.json"), "utf8"));
-    const report = campaign.validate(definition, roster, { hasText: () => true, hasAvatar: avatar => avatar === "boudica" });
+    const avatarDir = path.join(shell, "../../assets/gameplay/avatars");
+    const avatars = new Set(fs.readdirSync(avatarDir).filter(file => file.endsWith(".webp")).map(file => file.slice(0, -5)));
+    const report = campaign.validate(definition, roster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) });
     assert.deepEqual(report.errors, []);
     assert.deepEqual(report.warnings, []);
     assert.equal(definition.menu_guide.dismissible, true);
@@ -1582,15 +2660,24 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     assert.equal(step("boudica_first_contact").next, "boudica_first_contact_response");
     assert.equal(definition.steps.some(candidate => /boudica_contact_.*pledge/.test(candidate.id)), false);
     assert.equal(step("boudica_first_contact").guide.target, "target_action");
+    assert.equal(definition.reactions.find(reaction => reaction.id === "first_iceni_contact").when.role, "kin");
+    assert.equal(definition.reactions.find(reaction => reaction.id === "first_iceni_contact").outcome, "allied");
+    assert.equal(definition.reactions.find(reaction => reaction.id === "neutral_contact_terms").when.relation, "neutral");
+    assert.ok(roster.factions.filter(faction => faction.civ === "Roman Empire" || ["boss", "big_boss"].includes(faction.role)).every(faction => faction.relation === "enemy"));
+    assert.ok(roster.factions.filter(faction => faction.role === "kin").every(faction => faction.relation === "neutral"));
     assert.match(campaignEditor, /Factions to contact/);
     assert.match(campaignEditor, /Contact · " \+ name/);
+    assert.match(campaignMapEditorHtml, /factionColor\(f\).*ALLY_COLOR.*ENEMY_COLOR/s);
+    assert.match(campaignMapEditorHtml, /ctx\.fillStyle = roster\.player_color \|\| PLAYER_COLOR/);
+    assert.match(campaignMapEditorHtml, /Alliance betrayal/);
+    assert.match(campaignMapEditorHtml, /const BETRAYALS = \{ never:"Never", opportunistic:"Opportunistic" \}/);
     assert.deepEqual(step("boudica_roman_outposts").trigger.targets, ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"]);
     assert.equal(step("boudica_roman_outposts").next, "boudica_posts_fall");
     assert.equal(step("boudica_structure_upgrade").trigger.type, "city_level");
     assert.equal(step("boudica_structure_upgrade").trigger.value, 3);
-    assert.equal(step("boudica_pact_offer").trigger.action, "map_alliance");
-    assert.equal(step("boudica_pact_formed").trigger.type, "alliance");
-    assert.equal(step("boudica_pact_formed").trigger.target, "Catuvellauni");
+    assert.deepEqual(step("boudica_pact_offer").trigger, { type: "contact", target: "Catuvellauni", value: 1, scope: "total" });
+    assert.equal(step("boudica_pact_formed").type, "scene");
+    assert.equal(step("boudica_pact_formed").next, "boudica_port_choice");
     assert.ok(step("boudica_factory_choice").choices.some(choice => choice.id === "foundry"));
     assert.deepEqual(step("boudica_foundry_select_menu").trigger, { type: "ui", action: "map_build", scope: "step" });
     assert.deepEqual(step("boudica_foundry_upgrade").trigger, { type: "foundry_level", value: 1, scope: "step" });
@@ -1736,7 +2823,7 @@ test("tutorial hand selectors stay tied to controls rendered by the game", () =>
 test("tutorial dismiss opens the existing leave-match modal and menu exit clears runtime", () => {
     assert.match(tutorial, /data-command=.*prompt_surrender/);
     assert.match(tutorial, /function update\(hud\) \{\s*if \(!runtime\.machine \|\| runtime\.modalOpen \|\|/);
-    assert.match(tutorial, /runtime\.machine\.setPaused\(open, performance\.now\(\)\)/);
+    assert.match(tutorial, /runtime\.machine\.setPaused\(open\)/);
     assert.match(tutorial, /SOW_tutorial_menu_state_update/);
     assert.match(tutorial, /function reset\(\)/);
     assert.match(hud, /id="sow-hud-surrender-modal"/);
@@ -1873,9 +2960,11 @@ test("primary click selects owned buildings without changing other map gestures"
     assert.match(buildingOverlaySource, /pub\(crate\) fn building_at_pointer/);
     assert.match(buildingOverlaySource, /cached_buildings\(/);
     assert.match(buildingOverlaySource, /if building\.owner_id != my_id/);
-    assert.match(buildingOverlaySource, /hit_radius = .*\.max\(12\.0\)/);
+    assert.match(buildingOverlaySource, /building\.kind\.footprint_dimensions\(\)/);
+    assert.match(buildingOverlaySource, /pointer_world_x - building\.bx\).*width as f32 \* 0\.5/);
+    assert.match(buildingOverlaySource, /pointer_world_y - building\.by\).*height as f32 \* 0\.5/);
     assert.match(buildingOverlaySource, /nearest_building_in_cluster/);
-    assert.match(buildingOverlaySource, /building_marker_size\(building, lod, zoom_scaled\)/);
+    assert.match(buildingOverlaySource, /building_marker_size\(building, zoom_scaled\)/);
     assert.match(appStateSource, /pub enum MapContextMenuView\s*\{\s*BuildingDetails,\s*Radial/);
     assert.match(mapClick, /MapContextMenuView::BuildingDetails/);
     assert.match(mapClick, /MapContextMenuView::Radial/);
@@ -1963,10 +3052,46 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.doesNotMatch(hudCss, /sow-hud__map-sector-caption|sow-hud__map-close/);
 });
 
-test("building dock exposes four emoji selectors without a cancel button", () => {
-    const kinds = [...hud.matchAll(/data-command="select_building" data-kind="(City|Factory|Port|Bunker)"/g)]
+test("building menus use generated pixel-art sprites with emoji fallback", () => {
+    const iconStart = hud.indexOf("var BUILDING_EMOJIS = {");
+    const iconEnd = hud.indexOf("function leaderById(id)", iconStart);
+    const artManifest = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/gameplay/buildings/atlas.json"), "utf8"));
+    const buildingIcon = vm.runInNewContext(hud.slice(iconStart, iconEnd) + "\nbuildingIcon;", {
+        window: { SOW_BUILDING_ART: artManifest, SOW_ASSETS_URL: "/assets" },
+        asset: (name) => "/assets/" + name,
+        escapeHudText: (value) => String(value),
+    });
+    const expected = { City: "🏕️", Factory: "🛠️", Port: "⚓", Bunker: "👁️" };
+    for (const [kind, emoji] of Object.entries(expected)) {
+        assert.equal(buildingIcon(kind), '<span class="sow-hud__building-icon is-emoji" aria-hidden="true">' + emoji + "</span>");
+        assert.ok(buildingOverlaySource.includes('(BuildingKind::' + kind + ', 1) => "' + emoji + '"'));
+    }
+    for (const level of [1, 2, 3]) {
+        const icon = buildingIcon("Farm", level);
+        const sprite = artManifest.sprites.Farm[String(level)];
+        assert.match(icon, /class="sow-hud__building-icon is-pixel-art"/);
+        assert.match(icon, /assets\/gameplay\/buildings\/atlas\.webp/);
+        const x = (sprite.x * 100 / (artManifest.atlas_width - artManifest.cell_size)).toFixed(4);
+        const y = (sprite.y * 100 / (artManifest.atlas_height - artManifest.cell_size)).toFixed(4);
+        assert.ok(icon.includes("background-position:" + x + "% " + y + "%"));
+        assert.equal(sprite.width, 64);
+        assert.equal(sprite.height, 64);
+        assert.match(sprite.sha256, /^[a-f0-9]{64}$/);
+    }
+    assert.equal(buildingIcon("Farm", 4), '<span class="sow-hud__building-icon is-emoji" aria-hidden="true">🌱</span>');
+    assert.match(buildingOverlaySource, /building_sprite_uv/);
+    assert.match(hudCss, /\.sow-hud__building-icon\.is-pixel-art[\s\S]*?image-rendering: pixelated/);
+    assert.match(hud, /var buildIcon = emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
+    assert.match(hud, /mapDisabledSector\(radial, 3, radialCount, "build", emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
+    assert.match(hud, /heading\.innerHTML = emojiIcon\("🏗️", "sow-hud__map-action-icon"\)/);
+    assert.match(hud, /var buildingImg = buildingKind \? buildingIcon\(buildingKind\) : ""/);
+    assert.match(hud, /buildingIcon\(detail\.kind, detail\.level\)/);
+    assert.match(hudCss, /\.sow-hud__building-icon[\s\S]*?font-size: 30px/);
+    assert.match(hudCss, /\.sow-hud__map-action-icon\.is-emoji/);
+
+    const kinds = [...hud.matchAll(/data-command="select_building" data-kind="(City|Factory|Port|Bunker|Farm)"/g)]
         .map((match) => match[1]);
-    assert.deepEqual(kinds, ["City", "Factory", "Port", "Bunker"]);
+    assert.deepEqual(kinds, ["City", "Factory", "Port", "Bunker", "Farm"]);
     assert.match(hud, /send\("select_building", \{ kind: btn\.dataset\.kind \}\)/);
     assert.match(webMenu, /SelectBuilding\s*\{\s*kind: sow_core::game::BuildingKind/);
     assert.match(webMenu, /WebMenuCommand::SelectBuilding\s*\{\s*kind\s*\}\s*=>\s*\{\s*self\.select_building_kind\(kind\)/);

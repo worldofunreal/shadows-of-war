@@ -94,7 +94,11 @@ pub fn factory_perk_counts(buildings: &[Building], player_id: u16) -> (u32, u32,
         .filter(|b| b.owner_id == player_id && b.kind == BuildingKind::Factory)
         .filter_map(|b| {
             let level = b.active_level();
-            (level > 0).then_some((u32::from(level >= 2), u32::from(level >= 3), u32::from(level >= 4)))
+            (level > 0).then_some((
+                u32::from(level >= 2),
+                u32::from(level >= 3),
+                u32::from(level >= 4),
+            ))
         })
         .fold((0, 0, 0), |(time, cost, trade), (t, c, r)| {
             (time + t, cost + c, trade + r)
@@ -131,10 +135,9 @@ pub fn structure_kind_enabled(_kind: BuildingKind) -> bool {
 /// Whether `player_id` owns a finished Port; the AI uses this for naval strategy.
 #[inline]
 pub fn player_has_completed_port(buildings: &[Building], player_id: u16) -> bool {
-    buildings.iter().any(|b| {
-        b.owner_id == player_id
-            && (b.kind == BuildingKind::Port && !b.under_construction)
-    })
+    buildings
+        .iter()
+        .any(|b| b.owner_id == player_id && (b.kind == BuildingKind::Port && !b.under_construction))
 }
 
 pub fn module_upgrade_cost_gold(kind: crate::building::ModuleKind, level: u8) -> f64 {

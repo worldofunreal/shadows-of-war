@@ -3598,6 +3598,7 @@ dependencies = [
  "libm",
  "log",
  "serde",
+ "serde_json",
  "sow-data",
  "wyrand",
 ]

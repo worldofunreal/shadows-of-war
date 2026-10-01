@@ -19,17 +19,28 @@ pub fn initialize_match_engine(
     players: Vec<crate::protocol::PlayerInfo>,
     fallback_spawns: Vec<crate::map_file::MapSpawn>,
     fallback_geo_bounds: Option<crate::map_file::GeoBounds>,
+    fallback_rosters: Vec<crate::map_file::MapRosterPreset>,
     fallback_land_tiles: u32,
 ) -> SowEngine {
     let mut state = GameState::new(seed, config.map_width, config.map_height, config);
     state.map_spawns = fallback_spawns;
     state.geo_bounds = fallback_geo_bounds;
+    let selected_roster = state.config.map_roster_preset.clone();
+    state.map_rosters = fallback_rosters
+        .into_iter()
+        .filter(|preset| selected_roster.as_deref() == Some(preset.id.as_str()))
+        .collect();
     state.total_land_tiles = fallback_land_tiles;
 
     if let Ok(map_file) = crate::maps::load_map_from_payload(map_bytes) {
         state.total_land_tiles = map_file.num_land_tiles;
         state.map_spawns = map_file.spawns;
         state.geo_bounds = map_file.geo_bounds;
+        state.map_rosters = map_file
+            .rosters
+            .into_iter()
+            .filter(|preset| selected_roster.as_deref() == Some(preset.id.as_str()))
+            .collect();
         if map_file.terrain.len() == state.map.terrain.len() {
             for (tile, byte) in state
                 .map
@@ -173,6 +184,13 @@ pub struct SowEngine {
     /// Scripted campaign membership, kept out of Player and ordinary matches.
     pub campaign_support_intervals: std::collections::HashMap<PlayerId, u32>,
     pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
+    pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
+    pub campaign_hostilities:
+        std::collections::HashMap<PlayerId, crate::game_config::CampaignHostility>,
+    pub campaign_betrayal:
+        std::collections::HashMap<PlayerId, crate::game_config::CampaignBetrayal>,
+    pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
+    pub campaign_alliance_started_tick: std::collections::HashMap<PlayerId, u32>,
     /// Next campaign-support send tick for each eligible ally.
     pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
     pub port_queues:
@@ -235,6 +253,11 @@ impl SowEngine {
             campaign_avatars: std::collections::HashMap::new(),
             campaign_support_intervals: std::collections::HashMap::new(),
             campaign_alliance_groups: std::collections::HashMap::new(),
+            campaign_relations: std::collections::HashMap::new(),
+            campaign_hostilities: std::collections::HashMap::new(),
+            campaign_betrayal: std::collections::HashMap::new(),
+            campaign_contact_resolved: std::collections::HashSet::new(),
+            campaign_alliance_started_tick: std::collections::HashMap::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
@@ -337,12 +360,26 @@ impl SowEngine {
         self.building_grid.rebuild(self.buildings.iter(), w, h);
     }
 
+    pub(crate) fn refresh_defense_grid(&mut self) {
+        if !self.defense_grid_dirty && self.defense_grid.grid_w > 0 {
+            return;
+        }
+        self.defense_grid.rebuild(
+            &self.buildings,
+            self.state.map.width,
+            self.state.map.height,
+            crate::building::DEFENSE_GRID_CELL_SIZE,
+            &self.state.config,
+        );
+        self.defense_grid_dirty = false;
+    }
+
     pub fn kill_player(&mut self, player_id: u16) {
         if let Some(player) = self.state.player_mut(player_id) {
             player.alive = false;
         }
         let mut to_clear = Vec::new();
-        for (i, &owner) in self.state.map.state.iter().enumerate() {
+        for (i, &owner) in self.state.map.owner_states().iter().enumerate() {
             if owner == player_id {
                 let x = (i % self.state.map.width as usize) as u32;
                 let y = (i / self.state.map.width as usize) as u32;
@@ -471,7 +508,12 @@ impl SowEngine {
         let is_ready_defense = b.kind == crate::game::BuildingKind::Bunker && !b.under_construction;
         let pos = self.buildings.partition_point(|x| x.id < b.id);
         self.buildings.insert(pos, b);
-        self.building_grid.mark_dirty();
+        self.building_grid.insert(
+            b.tile_idx,
+            b.kind,
+            self.state.map.width,
+            self.state.map.height,
+        );
         self.building_aggregates_dirty = true;
         self.bot_sam_tiles_cache = None;
         if !b.under_construction && b.kind == crate::game::BuildingKind::Port {
@@ -571,6 +613,14 @@ mod tests {
             engine.state.players.iter().all(|p| p.name == "Testland"),
             "anchored spawns use map.bin spawn names"
         );
+        assert_eq!(
+            engine.state.map.owner_id(10, 10),
+            engine.state.players[0].id
+        );
+        assert_eq!(
+            engine.state.map.owner_id(20, 20),
+            engine.state.players[1].id
+        );
 
         let mut state = GameState::new(42, 1000, 800, config);
         for t in &mut state.map.terrain {
@@ -579,6 +629,331 @@ mod tests {
         let mut engine = SowEngine::new(state, WaterComponents::default());
         engine.spawn_ai(3, 0);
         assert_eq!(engine.state.players.len(), 3);
+    }
+
+    fn exercise_roster_on_map(bytes: &[u8], map_name: &str) -> Vec<(String, (u32, u32))> {
+        use crate::map_file::{MapRosterEntry, MapRosterPreset, MapRosterRole};
+
+        let mut map = crate::map_file::parse(bytes).unwrap();
+        let mut entries = Vec::new();
+        let mut ids = std::collections::HashSet::new();
+        let mut names = std::collections::HashSet::new();
+        let mut positions = Vec::new();
+        let far_enough = |x: u32, y: u32, used: &[(u32, u32)]| {
+            used.iter().all(|&(other_x, other_y)| {
+                let dx = x as i64 - other_x as i64;
+                let dy = y as i64 - other_y as i64;
+                dx * dx + dy * dy > 121
+            })
+        };
+
+        for (index, anchor) in map.spawns.iter().enumerate() {
+            let Some(entity) = crate::geo_entities::all().find(|entity| entity.name == anchor.name)
+            else {
+                continue;
+            };
+            if anchor.x >= map.width || anchor.y >= map.height {
+                continue;
+            }
+            let tile = (anchor.y * map.width + anchor.x) as usize;
+            if !crate::map::MapTile::from_byte(map.terrain[tile]).is_land()
+                || !far_enough(anchor.x, anchor.y, &positions)
+                || !ids.insert(entity.id.clone())
+                || !names.insert(entity.name.clone())
+            {
+                continue;
+            }
+            entries.push(MapRosterEntry {
+                entity_id: entity.id.clone(),
+                role: MapRosterRole::Nation,
+                x: anchor.x,
+                y: anchor.y,
+                legacy_anchor: Some(index as u16),
+            });
+            positions.push((anchor.x, anchor.y));
+            if entries
+                .iter()
+                .filter(|entry| entry.role == MapRosterRole::Nation)
+                .count()
+                == 2
+            {
+                break;
+            }
+        }
+
+        let tribe_entities: Vec<_> = crate::geo_entities::all()
+            .filter(|entity| {
+                entity.kind == crate::geo_entities::EntityKind::Tribe
+                    && !ids.contains(&entity.id)
+                    && !names.contains(&entity.name)
+            })
+            .take(2)
+            .collect();
+        let mut tribe_positions = Vec::with_capacity(2);
+        for y in 0..map.height {
+            for x in 0..map.width {
+                let tile = (y * map.width + x) as usize;
+                if crate::map::MapTile::from_byte(map.terrain[tile]).is_land()
+                    && far_enough(x, y, &positions)
+                {
+                    positions.push((x, y));
+                    tribe_positions.push((x, y));
+                    if tribe_positions.len() == tribe_entities.len() {
+                        break;
+                    }
+                }
+            }
+            if tribe_positions.len() == tribe_entities.len() {
+                break;
+            }
+        }
+        assert_eq!(tribe_entities.len(), 2, "{map_name} needs two Atlas tribes");
+        assert_eq!(
+            tribe_positions.len(),
+            2,
+            "{map_name} needs two spaced land tiles"
+        );
+        for (entity, (x, y)) in tribe_entities.into_iter().zip(tribe_positions) {
+            assert!(ids.insert(entity.id.clone()));
+            assert!(names.insert(entity.name.clone()));
+            entries.push(MapRosterEntry {
+                entity_id: entity.id.clone(),
+                role: MapRosterRole::Tribe,
+                x,
+                y,
+                legacy_anchor: None,
+            });
+        }
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry.role == MapRosterRole::Nation)
+                .count(),
+            2,
+            "{map_name} needs two exactly linked Nation anchors"
+        );
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry.role == MapRosterRole::Tribe)
+                .count(),
+            2,
+            "{map_name} needs two on-land Atlas tribes"
+        );
+
+        let original_anchors = map.spawns.clone();
+        map.default_roster = Some("historical".into());
+        map.rosters = vec![MapRosterPreset {
+            id: "historical".into(),
+            name: "Historical".into(),
+            entries: entries.clone(),
+        }];
+        crate::map_file::validate_rosters(&map, true).unwrap();
+        let map_bytes = crate::map_file::encode(&map);
+        assert_eq!(
+            crate::map_file::parse(&map_bytes).unwrap().spawns,
+            original_anchors
+        );
+
+        let config = GameConfig {
+            map_name: map_name.into(),
+            map_width: map.width,
+            map_height: map.height,
+            map_roster_preset: Some("historical".into()),
+            nation_count: 2,
+            bot_count: 2,
+            ..Default::default()
+        };
+        let engine = initialize_match_engine(
+            config,
+            0x51_16_2026,
+            &map_bytes,
+            Vec::new(),
+            Vec::new(),
+            None,
+            Vec::new(),
+            map.num_land_tiles,
+        );
+        assert_eq!(engine.state.players.len(), 4, "{map_name}");
+        let mut spawned = Vec::new();
+        for player in &engine.state.players {
+            let entity =
+                crate::geo_entities::by_name(&player.name).expect("roster uses Atlas identities");
+            let placed = entries
+                .iter()
+                .find(|entry| entry.entity_id == entity.id)
+                .unwrap();
+            assert_eq!(
+                engine.state.map.owner_id(placed.x, placed.y),
+                player.id,
+                "{map_name}: {} must start at its authored tile",
+                player.name
+            );
+            assert_eq!(
+                player.player_type == crate::player::PlayerType::Bot,
+                placed.role == MapRosterRole::Tribe
+            );
+            spawned.push((player.name.clone(), (placed.x, placed.y)));
+        }
+        spawned
+    }
+
+    #[test]
+    fn world_and_regional_map_bins_spawn_map_roster_entries() {
+        let world = exercise_roster_on_map(
+            include_bytes!("../../../assets/maps/world/map.bin"),
+            "world",
+        );
+        let europe = exercise_roster_on_map(
+            include_bytes!("../../../assets/maps/europe/map.bin"),
+            "europe",
+        );
+        assert_eq!(world.len(), 4);
+        assert_eq!(europe.len(), 4);
+    }
+
+    #[test]
+    fn map_roster_selection_is_seeded_unique_and_uses_saved_tiles() {
+        fn run(seed: u64) -> Vec<(String, (u32, u32))> {
+            let preset = crate::map_file::MapRosterPreset {
+                id: "historical".into(),
+                name: "Historical".into(),
+                entries: vec![
+                    crate::map_file::MapRosterEntry {
+                        entity_id: "iceland".into(),
+                        role: crate::map_file::MapRosterRole::Nation,
+                        x: 15,
+                        y: 15,
+                        legacy_anchor: Some(1),
+                    },
+                    crate::map_file::MapRosterEntry {
+                        entity_id: "ireland".into(),
+                        role: crate::map_file::MapRosterRole::Nation,
+                        x: 45,
+                        y: 15,
+                        legacy_anchor: None,
+                    },
+                    crate::map_file::MapRosterEntry {
+                        entity_id: "united_kingdom".into(),
+                        role: crate::map_file::MapRosterRole::Nation,
+                        x: 75,
+                        y: 15,
+                        legacy_anchor: None,
+                    },
+                    crate::map_file::MapRosterEntry {
+                        entity_id: "maya".into(),
+                        role: crate::map_file::MapRosterRole::Tribe,
+                        x: 115,
+                        y: 15,
+                        legacy_anchor: None,
+                    },
+                    crate::map_file::MapRosterEntry {
+                        entity_id: "mapuche".into(),
+                        role: crate::map_file::MapRosterRole::Tribe,
+                        x: 145,
+                        y: 15,
+                        legacy_anchor: None,
+                    },
+                    crate::map_file::MapRosterEntry {
+                        entity_id: "moche".into(),
+                        role: crate::map_file::MapRosterRole::Tribe,
+                        x: 175,
+                        y: 15,
+                        legacy_anchor: None,
+                    },
+                ],
+            };
+            let width = 220;
+            let height = 100;
+            let config = GameConfig {
+                map_name: "world".into(),
+                map_width: width,
+                map_height: height,
+                map_roster_preset: Some("historical".into()),
+                nation_count: 4,
+                bot_count: 2,
+                ..Default::default()
+            };
+            let map = crate::map_file::MapFile {
+                display_name: "World test".into(),
+                width,
+                height,
+                num_land_tiles: width * height,
+                spawns: vec![
+                    crate::map_file::MapSpawn {
+                        name: "Legacy spare".into(),
+                        flag: String::new(),
+                        x: 15,
+                        y: 75,
+                    },
+                    crate::map_file::MapSpawn {
+                        name: "Iceland".into(),
+                        flag: "is".into(),
+                        x: 45,
+                        y: 75,
+                    },
+                ],
+                geo_bounds: None,
+                default_roster: Some("historical".into()),
+                rosters: vec![preset.clone()],
+                terrain: vec![0x80; (width * height) as usize],
+            };
+            let map_bytes = crate::map_file::encode(&map);
+            let engine = initialize_match_engine(
+                config,
+                seed,
+                &map_bytes,
+                Vec::new(),
+                Vec::new(),
+                None,
+                Vec::new(),
+                width * height,
+            );
+            assert_eq!(engine.state.players.len(), 6);
+            let names: std::collections::HashSet<_> = engine
+                .state
+                .players
+                .iter()
+                .map(|player| player.name.as_str())
+                .collect();
+            assert_eq!(
+                names.len(),
+                engine.state.players.len(),
+                "roster entries must not repeat"
+            );
+
+            engine
+                .state
+                .players
+                .iter()
+                .map(|player| {
+                    let position = if let Some(entity) = crate::geo_entities::by_name(&player.name)
+                    {
+                        let placed = preset
+                            .entries
+                            .iter()
+                            .find(|entry| entry.entity_id == entity.id)
+                            .expect("spawned Atlas entity must come from the selected roster");
+                        assert_eq!(engine.state.map.owner_id(placed.x, placed.y), player.id);
+                        assert_eq!(
+                            player.player_type == crate::player::PlayerType::Bot,
+                            placed.role == crate::map_file::MapRosterRole::Tribe
+                        );
+                        (placed.x, placed.y)
+                    } else {
+                        assert_eq!(
+                            engine.state.map.owner_id(15, 75),
+                            player.id,
+                            "only the missing nation slot uses the spare anchor"
+                        );
+                        (15, 75)
+                    };
+                    (player.name.clone(), position)
+                })
+                .collect()
+        }
+
+        assert_eq!(run(1234), run(1234));
     }
 
     #[test]
@@ -745,41 +1120,83 @@ mod tests {
                 player.name
             );
 
-            if player.player_type == crate::player::PlayerType::Nation {
-                let (x, y) = bounds
-                    .project(entity.lat as f64, entity.lon as f64, 1000, 800)
-                    .expect("spawned geo entity must project inside bounds");
-                // Nations are anchored to their geo homeland coordinates
-                assert!(
-                    owned_tile_near(&engine.state, player.id, x, y, 12),
-                    "Nation {} spawned far from its homeland tile ({x}, {y})",
-                    player.name
-                );
-            } else {
-                // Tribes spawn dynamically across available land with territorial presence
-                assert!(
-                    player.tile_count > 0,
-                    "Tribe {} must have spawned on valid land tiles",
-                    player.name
-                );
+            let (lat, lon) = entity
+                .lat
+                .zip(entity.lon)
+                .expect("spawned geo entity has coordinates");
+            let (x, y) = bounds
+                .project(lat as f64, lon as f64, 1000, 800)
+                .expect("spawned geo entity must project inside bounds");
+            assert!(
+                owned_tile_near(&engine.state, player.id, x, y, 120),
+                "{} spawned far from its homeland tile ({x}, {y})",
+                player.name
+            );
+            if let Some(avatar) = &entity.avatar {
+                assert_eq!(engine.campaign_avatars.get(&player.id), Some(avatar));
             }
         }
     }
 
     #[test]
+    fn first_geographic_tribe_uses_its_projected_tile_when_land_is_free() {
+        let state = geo_test_state(29);
+        let bounds = state.geo_bounds.unwrap();
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.spawn_ai(0, 1);
+        let player = &engine.state.players[0];
+        let entity = crate::geo_entities::by_name(&player.name).unwrap();
+        let (lat, lon) = entity.lat.zip(entity.lon).unwrap();
+        let (x, y) = bounds.project(lat as f64, lon as f64, 1000, 800).unwrap();
+        assert_eq!(engine.state.map.owner_id(x, y), player.id);
+    }
+
+    #[test]
+    fn non_geographic_map_uses_its_curated_entity_pool() {
+        let config = GameConfig {
+            map_name: "pangaea".to_string(),
+            map_width: 1000,
+            map_height: 800,
+            ..Default::default()
+        };
+        let mut state = GameState::new(31, 1000, 800, config);
+        for tile in &mut state.map.terrain {
+            *tile = crate::map::MapTile::from_byte(0b1000_0000);
+        }
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.spawn_ai(5, 5);
+        assert_eq!(engine.state.players.len(), 10);
+        for player in &engine.state.players {
+            let entity = crate::geo_entities::by_name(&player.name).unwrap();
+            assert!(entity.maps.iter().any(|map| map == "pangaea"));
+        }
+    }
+
+    #[test]
     fn test_spawn_ai_geo_deterministic() {
-        let names = |seed: u64| -> Vec<String> {
+        let spawns = |seed: u64| {
             let mut engine = SowEngine::new(geo_test_state(seed), WaterComponents::default());
             engine.spawn_ai(15, 25);
             engine
                 .state
                 .players
                 .iter()
-                .map(|p| p.name.clone())
-                .collect()
+                .map(|p| {
+                    (
+                        p.name.clone(),
+                        p.sum_x,
+                        p.sum_y,
+                        engine.campaign_avatars.get(&p.id).cloned(),
+                    )
+                })
+                .collect::<Vec<_>>()
         };
-        assert_eq!(names(1234), names(1234), "same seed must give same spawns");
-        assert_ne!(names(1234), names(5678), "different seed should differ");
+        assert_eq!(
+            spawns(1234),
+            spawns(1234),
+            "same seed must give same spawns"
+        );
+        assert_ne!(spawns(1234), spawns(5678), "different seed should differ");
     }
 
     #[test]

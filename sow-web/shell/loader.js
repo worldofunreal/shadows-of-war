@@ -1,5 +1,5 @@
 /**
- * Web boot loader — splash + progress bar until the game calls hideWebLoader().
+ * Web boot loader — splash + progress bar until Rust publishes loader_done.
  */
 (function () {
     'use strict';
@@ -67,6 +67,61 @@
         return path;
     }
 
+    function leaderArtUrl(slug, variant) {
+        if (!/^[a-z0-9_]+$/.test(String(slug || ''))) return '';
+        variant = variant || leaderArtVariant();
+        if (variant !== 'desktop' && variant !== 'mobile') return '';
+        return assetUrl(assetPathVariants(encodeURIComponent(slug) + '_' + variant + '.webp', 'leaders')[0]);
+    }
+
+    function leaderArtVariant() {
+        return window.matchMedia
+            ? (window.matchMedia(LEADER_ART_MEDIA).matches ? 'mobile' : 'desktop')
+            : (window.innerHeight >= window.innerWidth ? 'mobile' : 'desktop');
+    }
+
+    function prepareLeaderArt(slug) {
+        slug = String(slug || '');
+        if (!/^[a-z0-9_]+$/.test(slug)) return Promise.resolve(false);
+
+        const variant = leaderArtVariant();
+        const url = leaderArtUrl(slug, variant);
+        if (preparedLeaderArt && preparedLeaderArt.url === url) return preparedLeaderArt.promise;
+
+        const image = new Image();
+        image.decoding = 'async';
+        image.fetchPriority = 'high';
+        const prepared = { slug, variant, url, image, ready: false, promise: null };
+        preparedLeaderArt = prepared;
+        prepared.promise = new Promise((resolve) => {
+            let settled = false;
+            const finish = (ready) => {
+                if (settled) return;
+                settled = true;
+                image.onload = null;
+                image.onerror = null;
+                if (preparedLeaderArt === prepared) {
+                    if (ready) prepared.ready = true;
+                    else preparedLeaderArt = null;
+                }
+                if (!ready && activeMatchArt === prepared) activeMatchArt = null;
+                resolve(ready);
+            };
+            image.onload = function () {
+                if (typeof image.decode !== 'function') return finish(true);
+                try {
+                    image.decode().then(() => finish(true), () => finish(false));
+                } catch (error) {
+                    finish(false);
+                }
+            };
+            image.onerror = function () { finish(false); };
+            if (isCrossOriginAssetUrl(url)) image.crossOrigin = 'anonymous';
+            image.src = url;
+        });
+        return prepared.promise;
+    }
+
     function localizedLoaderText() {
         if (typeof window.SOW_t === 'function') {
             const value = window.SOW_t('menu.loading');
@@ -101,21 +156,58 @@
         img.src = url;
     }
 
-    function splashMobileSource() {
-        return document.getElementById('splash-mobile')
-            || document.querySelector('#web-loader .splash-picture source');
+    function replaceLoaderPicture(media, mobileUrl, preparedImage) {
+        const picture = document.createElement('picture');
+        picture.className = 'splash-picture';
+        let image = preparedImage;
+        if (!image) {
+            const source = document.createElement('source');
+            source.id = 'splash-mobile';
+            source.media = media;
+            source.srcset = mobileUrl;
+            picture.appendChild(source);
+            image = document.createElement('img');
+        }
+        image.id = 'splash-bg';
+        image.className = 'splash-bg';
+        image.alt = '';
+        image.decoding = 'async';
+        image.fetchPriority = 'high';
+        picture.appendChild(image);
+
+        const previous = document.querySelector('#web-loader .splash-picture');
+        if (previous && previous.parentNode) {
+            previous.parentNode.replaceChild(picture, previous);
+        } else if (root) {
+            root.insertBefore(picture, root.firstChild);
+        }
+        return { picture, image };
+    }
+
+    function clearLoaderPicture(key) {
+        const picture = document.querySelector('#web-loader .splash-picture');
+        if (picture) picture.remove();
+        loaderArtKey = key;
+    }
+
+    function showBootSplash(key) {
+        if (!bootSplashPicture || !root) {
+            clearLoaderPicture(key);
+            return;
+        }
+        const current = document.querySelector('#web-loader .splash-picture');
+        if (current !== bootSplashPicture) {
+            if (current) current.remove();
+            root.insertBefore(bootSplashPicture, root.firstChild);
+        }
+        loaderArtKey = key;
     }
 
     function applySplashArt() {
-        const image = document.getElementById('splash-bg');
-        if (!image) return;
-        const mobileSource = splashMobileSource();
         const desktopSplash = assetUrl(assetPathVariants('sow-splash-desktop.webp')[0]);
         const mobileSplash = assetUrl(assetPathVariants('sow-splash-mobile.webp')[0]);
-        if (mobileSource) {
-            mobileSource.media = BOOT_SPLASH_MEDIA;
-            mobileSource.srcset = mobileSplash;
-        }
+        const { picture, image } = replaceLoaderPicture(BOOT_SPLASH_MEDIA, mobileSplash);
+        if (!bootSplashPicture) bootSplashPicture = picture;
         wireAssetFallback(image, isMobile() ? 'sow-splash-mobile.webp' : 'sow-splash-desktop.webp');
         setImgSrc(image, isMobile() ? mobileSplash : desktopSplash);
         loaderArtKey = 'boot';
@@ -132,34 +224,93 @@
         return /^[a-z0-9_]+$/.test(slug) ? slug : null;
     }
 
+    function waitForExitLeaderArt(prepared, slug) {
+        if (pendingExitArt === prepared) return;
+        pendingExitArt = prepared;
+        prepared.promise.then(() => {
+            if (pendingExitArt !== prepared) return;
+            pendingExitArt = null;
+            const current = latestLoaderState;
+            if (!current || current.loader_job !== 'ExitGame' || leaderSlugForState(current) !== slug) return;
+            if (prepared.ready && activeMatchArt !== prepared && preparedLeaderArt !== prepared) return;
+            const stillPending = syncLoaderArt(current);
+            if (current.loader_done === true && !stillPending) finish();
+        });
+    }
+
     function syncLoaderArt(state) {
+        if (loaderArtKey === 'boot' && state && state.loader_job === 'EnterGame') {
+            const slug = leaderSlugForState(state);
+            if (slug) {
+                prepareLeaderArt(slug);
+                if (preparedLeaderArt && preparedLeaderArt.slug === slug) {
+                    activeMatchArt = preparedLeaderArt;
+                    activeMatchStartedFromBoot = true;
+                }
+            }
+            return null;
+        }
+
         const transition = state && (state.loader_job === 'EnterGame' || state.loader_job === 'ExitGame');
-        const slug = transition ? leaderSlugForState(state) : null;
+        const hasBootLeader = state && state.loader_job === 'Boot' && state.loader_leader;
+        const slug = transition || hasBootLeader ? leaderSlugForState(state) : null;
         if (!slug) {
-            if (loaderArtKey !== 'boot') applySplashArt();
-            return;
-        }
-
-        const key = state.loader_job + ':' + slug;
-        if (loaderArtKey === key || loaderArtKey === key + ':fallback') return;
-
-        const image = document.getElementById('splash-bg');
-        const mobileSource = splashMobileSource();
-        if (!image) return;
-        const desktopArt = assetUrl(assetPathVariants(slug + '_desktop.webp', 'leaders')[0]);
-        const mobileArt = assetUrl(assetPathVariants(slug + '_mobile.webp', 'leaders')[0]);
-        loaderArtKey = key;
-        if (mobileSource) {
-            mobileSource.media = LEADER_ART_MEDIA;
-            mobileSource.srcset = mobileArt;
-        }
-        image.onerror = function () {
-            if (loaderArtKey === key) {
+            if (transition) {
+                const key = state.loader_job + ':none';
+                if (loaderArtKey !== key) clearLoaderPicture(key);
+            } else if (loaderArtKey !== 'boot') {
                 applySplashArt();
-                loaderArtKey = key + ':fallback';
+            }
+            return null;
+        }
+
+        const key = slug;
+        if (state.loader_job === 'EnterGame') {
+            activeMatchStartedFromBoot = false;
+            if (!activeMatchArt || activeMatchArt.slug !== slug) {
+                activeMatchArt = preparedLeaderArt && preparedLeaderArt.slug === slug
+                    ? preparedLeaderArt : null;
+            }
+        }
+
+        if (loaderArtKey === key || loaderArtKey === key + ':failed') return null;
+
+        const prepared = state.loader_job === 'ExitGame' && activeMatchArt && activeMatchArt.slug === slug
+            ? activeMatchArt
+            : preparedLeaderArt && preparedLeaderArt.slug === slug ? preparedLeaderArt : null;
+        if (!prepared) {
+            if (loaderArtKey !== key + ':unready') {
+                if (state.loader_job === 'ExitGame' && activeMatchStartedFromBoot) showBootSplash(key + ':unready');
+                else clearLoaderPicture(key + ':unready');
+            }
+            return null;
+        }
+        if (state.loader_job !== 'ExitGame' && prepared.variant !== leaderArtVariant()) {
+            if (preparedLeaderArt === prepared) preparedLeaderArt = null;
+            if (loaderArtKey !== key + ':unready') clearLoaderPicture(key + ':unready');
+            return null;
+        }
+        if (!prepared.ready) {
+            if (loaderArtKey !== key + ':unready') {
+                if (state.loader_job === 'ExitGame' && activeMatchStartedFromBoot) showBootSplash(key + ':unready');
+                else clearLoaderPicture(key + ':unready');
+            }
+            if (state.loader_job === 'ExitGame') waitForExitLeaderArt(prepared, slug);
+            return state.loader_job === 'ExitGame' ? prepared : null;
+        }
+
+        const image = prepared.image;
+        const { picture } = replaceLoaderPicture(null, null, image);
+        loaderArtKey = key;
+        image.onerror = function () {
+            if (preparedLeaderArt && preparedLeaderArt.image === image) preparedLeaderArt = null;
+            if (activeMatchArt && activeMatchArt.image === image) activeMatchArt = null;
+            if (loaderArtKey === key && document.querySelector('#web-loader .splash-picture') === picture) {
+                picture.remove();
+                loaderArtKey = key + ':failed';
             }
         };
-        setImgSrc(image, desktopArt);
+        return null;
     }
 
     let root = null;
@@ -175,6 +326,12 @@
     let loaderVisible = false;
     let loaderReadyDispatched = false;
     let loaderArtKey = null;
+    let preparedLeaderArt = null;
+    let activeMatchArt = null;
+    let activeMatchStartedFromBoot = false;
+    let bootSplashPicture = null;
+    let latestLoaderState = null;
+    let pendingExitArt = null;
 
     function isMobile() {
         return window.innerWidth < MOBILE_BREAKPOINT;
@@ -256,7 +413,7 @@
         }
     }
 
-    /** Slow creep toward 88% while WASM loads; never claims done until hideWebLoader. */
+    /** Slow creep toward 88% while WASM loads; Rust owns completion. */
     function startProgress() {
         if (!barFill) return;
         const t0 = performance.now();
@@ -305,7 +462,6 @@
                 </div>
             `;
             document.body.appendChild(root);
-
         }
 
         barFill = document.getElementById('loader-bar-fill');
@@ -313,7 +469,10 @@
         loaderText = document.getElementById('loader-text');
 
         if (!initialized) {
-            applySplashArt();
+            const splashImage = document.getElementById('splash-bg');
+            if (!splashImage || !splashImage.getAttribute('src')) applySplashArt();
+            else loaderArtKey = 'boot';
+            if (!bootSplashPicture) bootSplashPicture = document.querySelector('#web-loader .splash-picture');
             setImgSrc(document.getElementById('loader-bar-empty'), assetUrl(assetPathVariants('loader_empty.webp')[0]));
             setImgSrc(document.getElementById('loader-bar-full'), assetUrl(assetPathVariants('loader_full.webp')[0]));
             wireAssetFallback(document.getElementById('loader-bar-empty'), 'loader_empty.webp');
@@ -414,6 +573,12 @@
             root.setAttribute('aria-busy', 'false');
             loaderVisible = false;
             finishing = false;
+            clearLoaderPicture(null);
+            if (latestLoaderState && latestLoaderState.loader_job === 'ExitGame') {
+                activeMatchArt = null;
+                activeMatchStartedFromBoot = false;
+                pendingExitArt = null;
+            }
             if (!loaderReadyDispatched) {
                 loaderReadyDispatched = true;
                 window.dispatchEvent(new Event('sow:loader-ready'));
@@ -424,8 +589,10 @@
 
     function sync(state) {
         if (!state) return;
-        const active = state.phase !== 'MainMenu' && state.phase !== 'Playing';
-        if (!active) {
+        latestLoaderState = state;
+        if (state.loader_job !== 'ExitGame') pendingExitArt = null;
+        if (state.loader_done === true && state.loader_job !== 'ExitGame') {
+            if (state.loader_job === 'EnterGame') syncLoaderArt(state);
             finish();
             return;
         }
@@ -444,7 +611,7 @@
             loaderVisible = true;
             startProgress();
         }
-        syncLoaderArt(state);
+        const pendingArt = syncLoaderArt(state);
         const progress = Number(state.loader_progress);
         if (Number.isFinite(progress)) {
             const nextProgress = Math.max(0, Math.min(1, progress));
@@ -457,15 +624,20 @@
             loaderText.textContent = status || localizedLoaderText();
         }
         if (root) root.setAttribute('aria-busy', 'true');
+        if (state.loader_done === true) {
+            if (pendingArt) return;
+            finish();
+        }
     }
 
     function initWebLoader() {
         buildDom();
     }
 
-    window.hideWebLoader = finish;
     window.SOW_initWebLoader = initWebLoader;
     window.SOW_refreshWebLoaderText = refreshLoaderText;
+    window.SOW_leaderArtUrl = leaderArtUrl;
+    window.SOW_prepareLeaderArt = prepareLeaderArt;
     window.addEventListener('sow:locale-change', refreshLoaderText);
     window.SOW_syncWebLoader = sync;
 

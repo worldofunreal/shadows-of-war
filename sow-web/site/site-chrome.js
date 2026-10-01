@@ -16,17 +16,6 @@
     }
   };
 
-  function syncCurrentNavigation() {
-    const path = window.location.pathname.replace(/\/+$/, '') || '/';
-    document.querySelectorAll('[data-site-nav]').forEach(link => {
-      const active = path === `/${link.dataset.siteNav}`;
-      if (active) link.setAttribute('aria-current', 'page');
-      else link.removeAttribute('aria-current');
-    });
-  }
-
-  syncCurrentNavigation();
-
   const localeOptions = codes => codes.map(code => ({
     value: code,
     label: typeof window.SOW_getLocaleLabel === 'function'
@@ -83,7 +72,6 @@
 
   function applyLocale() {
     if (typeof window.SOW_getLocale !== 'function' || typeof window.SOW_t !== 'function') return;
-    syncCurrentNavigation();
     const locale = window.SOW_getLocale();
     root.lang = typeof window.SOW_getLocaleTag === 'function'
       ? window.SOW_getLocaleTag(locale)

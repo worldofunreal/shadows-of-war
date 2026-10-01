@@ -15,8 +15,7 @@ pub const SEASON_RATINGS_TABLE: TableDefinition<&str, &[u8]> =
 pub const SEASONS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("seasons");
 pub const PUBLIC_PROFILES_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("public_profiles");
-pub const MATCH_STARTS_TABLE: TableDefinition<&str, &[u8]> =
-    TableDefinition::new("match_starts");
+pub const MATCH_STARTS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("match_starts");
 pub const PENDING_REPLAY_VERIFICATIONS_TABLE: TableDefinition<&str, &[u8]> =
     TableDefinition::new("pending_replay_verifications");
 pub const VERIFIED_VICTORY_BOARD_TABLE: TableDefinition<&str, &[u8]> =
@@ -76,13 +75,16 @@ pub fn init_database<P: AsRef<Path>>(path: P) -> Result<Database, Box<dyn std::e
         {
             let mut geo_table = write_txn.open_table(GEO_TABLE)?;
             for entity in crate::geo_entities::all() {
+                let (Some(lat), Some(lon)) = (entity.lat, entity.lon) else {
+                    continue;
+                };
                 let rec = GeoEntityRecord {
                     name: entity.name.to_string(),
                     kind: format!("{:?}", entity.kind),
                     era: format!("{:?}", entity.era),
                     region: format!("{:?}", entity.region),
-                    lat: entity.lat,
-                    lon: entity.lon,
+                    lat: lat as f32,
+                    lon: lon as f32,
                     flag: entity.flag.to_string(),
                 };
                 let bytes = bincode::serialize(&rec)?;

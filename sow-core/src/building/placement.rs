@@ -9,129 +9,57 @@ const STRUCTURE_SEARCH_RADIUS_SQ: i64 = STRUCTURE_MIN_DIST_SQ;
 
 /// Universal minimum spacing between any two buildings.
 const BUILDING_MIN_DIST: i32 = 4;
-/// Extra spacing from cities (cities are large anchors).
-const CITY_MIN_DIST: i32 = STRUCTURE_MIN_DIST;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SpacingRule {
-    pub target_kind: BuildingKind,
-    pub min_distance: i32,
+pub struct BuildingFootprint {
+    pub left: i32,
+    pub top: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl BuildingFootprint {
+    #[inline]
+    pub const fn at(kind: BuildingKind, anchor_x: u32, anchor_y: u32) -> Self {
+        let (width, height) = kind.footprint_dimensions();
+        Self {
+            left: anchor_x as i32 - (width as i32 / 2),
+            top: anchor_y as i32 - (height as i32 / 2),
+            width,
+            height,
+        }
+    }
+
+    #[inline]
+    pub const fn intersects(self, other: Self) -> bool {
+        self.left < other.left + other.width as i32
+            && other.left < self.left + self.width as i32
+            && self.top < other.top + other.height as i32
+            && other.top < self.top + self.height as i32
+    }
+
+    #[inline]
+    pub const fn contains(self, x: i32, y: i32) -> bool {
+        x >= self.left
+            && x < self.left + self.width as i32
+            && y >= self.top
+            && y < self.top + self.height as i32
+    }
 }
 
 impl BuildingKind {
-    pub fn spacing_rules(self) -> &'static [SpacingRule] {
-        match self {
-            BuildingKind::City => &[
-                SpacingRule {
-                    target_kind: BuildingKind::City,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Bunker,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Factory,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Port,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Farm,
-                    min_distance: CITY_MIN_DIST,
-                },
-            ],
-            BuildingKind::Bunker => &[
-                SpacingRule {
-                    target_kind: BuildingKind::City,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Bunker,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Factory,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Port,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Farm,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-            ],
-            BuildingKind::Factory => &[
-                SpacingRule {
-                    target_kind: BuildingKind::City,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Bunker,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Factory,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Port,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Farm,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-            ],
-            BuildingKind::Port => &[
-                SpacingRule {
-                    target_kind: BuildingKind::City,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Bunker,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Factory,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Port,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Farm,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-            ],
-            BuildingKind::Farm => &[
-                SpacingRule {
-                    target_kind: BuildingKind::City,
-                    min_distance: CITY_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Bunker,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Factory,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Port,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-                SpacingRule {
-                    target_kind: BuildingKind::Farm,
-                    min_distance: BUILDING_MIN_DIST,
-                },
-            ],
-        }
+    #[inline]
+    pub const fn footprint_dimensions(self) -> (u32, u32) {
+        (4, 4)
+    }
+}
+
+#[inline]
+pub const fn minimum_building_spacing(a: BuildingKind, b: BuildingKind) -> i32 {
+    if matches!(a, BuildingKind::City) || matches!(b, BuildingKind::City) {
+        STRUCTURE_MIN_DIST
+    } else {
+        BUILDING_MIN_DIST
     }
 }
 
@@ -180,6 +108,37 @@ fn is_land_structure_tile(map: &GameMap, x: u32, y: u32) -> bool {
         map.terrain_type(x, y),
         TerrainType::Land | TerrainType::Highland | TerrainType::Mountain
     )
+}
+
+pub fn footprint_fits(map: &GameMap, owner_id: u16, footprint: BuildingFootprint) -> bool {
+    for y in footprint.top..footprint.top + footprint.height as i32 {
+        for x in footprint.left..footprint.left + footprint.width as i32 {
+            if !map.is_valid_coord(x, y)
+                || map.owner_id(x as u32, y as u32) != owner_id
+                || !is_land_structure_tile(map, x as u32, y as u32)
+            {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn footprint_touches_water(map: &GameMap, footprint: BuildingFootprint) -> bool {
+    let mut touches_water = false;
+    for y in footprint.top..footprint.top + footprint.height as i32 {
+        for x in footprint.left..footprint.left + footprint.width as i32 {
+            if !map.is_valid_coord(x, y) {
+                continue;
+            }
+            map.for_each_neighbor(x as u32, y as u32, |nx, ny| {
+                if !map.terrain[map.ref_id(nx, ny)].is_land() {
+                    touches_water = true;
+                }
+            });
+        }
+    }
+    touches_water
 }
 
 fn for_each_valid_land_structure_index(
@@ -237,72 +196,24 @@ fn for_each_valid_land_structure_index(
             scratch.candidates_examined += 1;
         }
 
-        let city_min_d_sq = (CITY_MIN_DIST as i64) * (CITY_MIN_DIST as i64);
-        let building_min_d_sq = (BUILDING_MIN_DIST as i64) * (BUILDING_MIN_DIST as i64);
-        let mut too_close = if kind == BuildingKind::City {
-            existing
-                .iter_in_range(x, y, CITY_MIN_DIST as u32)
-                .any(|(bx, by)| {
+        let footprint = BuildingFootprint::at(kind, x, y);
+        let valid_placement = footprint_fits(map, owner_id, footprint)
+            && !existing
+                .iter_all_in_range(x, y, STRUCTURE_MIN_DIST as u32)
+                .any(|building| {
                     #[cfg(feature = "ai-metrics")]
                     {
                         scratch.building_checks += 1;
                     }
-                    euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
+                    let dx = xi - building.x as i64;
+                    let dy = yi - building.y as i64;
+                    let min_dist = minimum_building_spacing(kind, building.kind) as i64;
+                    let too_close = dx * dx + dy * dy < min_dist * min_dist;
+                    let other = BuildingFootprint::at(building.kind, building.x, building.y);
+                    too_close || footprint.intersects(other)
                 })
-                || existing
-                    .iter_non_city_in_range(x, y, CITY_MIN_DIST as u32)
-                    .any(|(bx, by)| {
-                        #[cfg(feature = "ai-metrics")]
-                        {
-                            scratch.building_checks += 1;
-                        }
-                        euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
-                    })
-        } else {
-            existing
-                .iter_in_range(x, y, CITY_MIN_DIST as u32)
-                .any(|(bx, by)| {
-                    #[cfg(feature = "ai-metrics")]
-                    {
-                        scratch.building_checks += 1;
-                    }
-                    euclid_sq(xi, yi, bx as i64, by as i64) < city_min_d_sq
-                })
-                || existing
-                    .iter_non_city_in_range(x, y, BUILDING_MIN_DIST as u32)
-                    .any(|(bx, by)| {
-                        #[cfg(feature = "ai-metrics")]
-                        {
-                            scratch.building_checks += 1;
-                        }
-                        euclid_sq(xi, yi, bx as i64, by as i64) < building_min_d_sq
-                    })
-        };
-
-        if !too_close && kind == BuildingKind::Port {
-            let mut near_water = false;
-            for dy in -2..=2 {
-                for dx in -2..=2 {
-                    let nx = xi + dx;
-                    let ny = yi + dy;
-                    if nx >= 0 && nx < w as i64 && ny >= 0 && ny < map.height as i64 {
-                        let t = map.terrain[map.ref_id(nx as u32, ny as u32)];
-                        if !t.is_land() {
-                            near_water = true;
-                            break;
-                        }
-                    }
-                }
-                if near_water {
-                    break;
-                }
-            }
-            if !near_water {
-                too_close = true;
-            }
-        }
-
-        if !too_close {
+            && (kind != BuildingKind::Port || footprint_touches_water(map, footprint));
+        if valid_placement {
             visit(idx);
         }
 

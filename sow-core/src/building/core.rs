@@ -1,6 +1,7 @@
-use super::placement::{hex_distance, idx_xy};
+use super::placement::hex_distance;
 use crate::game::BuildingKind;
 use serde::{Deserialize, Serialize};
+use wyrand::WyRand;
 
 #[inline]
 pub fn upgrade_duration_ticks(kind: BuildingKind, target_level: u8) -> u32 {
@@ -220,34 +221,54 @@ pub fn aggregate_buildings_per_player(
     out
 }
 
-/// Extra frontier priority when conquering a tile near an enemy DefensePost (defender `target_owner`).
-#[inline]
-pub fn defense_post_priority_bonus(
-    buildings: &[Building],
-    tile_x: u32,
-    tile_y: u32,
-    map_width: u32,
-    cfg: &crate::game_config::GameConfig,
-) -> i64 {
-    let mut bonus: i64 = 0;
-    for b in buildings {
-        let (bx, by) = idx_xy(b.tile_idx, map_width);
-        let d = hex_distance(tile_x as i32, tile_y as i32, bx as i32, by as i32);
-        if d <= b.defense_range_cfg(cfg) {
-            bonus += cfg.bunker_priority as i64 * b.active_level() as i64;
-        }
-    }
-    bonus
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DefenseInfluence {
+    pub capture_multiplier: f64,
+    pub priority_bonus: f64,
+    pub attacker_loss_multiplier: f64,
 }
 
-/// A spatial grid specifically designed to optimize `defense_post_priority_bonus` from O(N) to O(1).
-/// This should be cached in a `Local` within the combat execution system to avoid allocations.
+impl DefenseInfluence {
+    const NONE: Self = Self {
+        capture_multiplier: 1.0,
+        priority_bonus: 0.0,
+        attacker_loss_multiplier: 1.0,
+    };
+}
+
+#[derive(Clone, Copy)]
+struct DefenseTower {
+    owner_id: u16,
+    x: u32,
+    y: u32,
+    active_level: u8,
+    range: i32,
+}
+
+/// A spatial grid that limits defense queries to nearby cells.
 #[derive(Default, Clone)]
 pub struct DefenseGrid {
-    pub cells: Vec<Vec<Building>>,
+    cells: Vec<Vec<DefenseTower>>,
     pub grid_w: u32,
     pub grid_h: u32,
     pub cell_size: u32,
+}
+
+pub const DEFENSE_GRID_CELL_SIZE: u32 = 16;
+
+#[inline]
+fn defense_sample(
+    match_seed: u64,
+    attacker_id: u16,
+    target_owner: u16,
+    tile_idx: u64,
+) -> f64 {
+    let key = match_seed
+        .wrapping_add((attacker_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+        .wrapping_add((target_owner as u64).wrapping_mul(0xD1B5_4A32_D192_ED03))
+        .wrapping_add(tile_idx.wrapping_mul(0x94D0_49BB_1331_11EB));
+    let mut rng = WyRand::new(key);
+    (rng.rand() >> 11) as f64 / 9_007_199_254_740_992.0
 }
 
 impl DefenseGrid {
@@ -260,6 +281,7 @@ impl DefenseGrid {
         map_width: u32,
         map_height: u32,
         cell_size: u32,
+        cfg: &crate::game_config::GameConfig,
     ) {
         let grid_w = map_width.div_ceil(cell_size);
         let grid_h = map_height.div_ceil(cell_size);
@@ -282,14 +304,68 @@ impl DefenseGrid {
                 let by = b.tile_idx / map_width;
                 let cx = bx / cell_size;
                 let cy = by / cell_size;
-                if cx < grid_w && cy < grid_h {
-                    self.cells[(cy * grid_w + cx) as usize].push(b);
+                let active_level = b.active_level();
+                let range = b.defense_range_cfg(cfg);
+                if range > 0 && cx < grid_w && cy < grid_h {
+                    self.cells[(cy * grid_w + cx) as usize].push(DefenseTower {
+                        owner_id: b.owner_id,
+                        x: bx,
+                        y: by,
+                        active_level,
+                        range,
+                    });
                 }
             }
         }
     }
 
-    /// Calculate priority bonus querying only cells within `DEFENSE_POST_RANGE`.
+    #[inline]
+    fn weighted_coverage<const NEED_CAPTURE_FALLOFF: bool>(
+        &self,
+        tile_x: u32,
+        tile_y: u32,
+        map_width: u32,
+        target_owner: u16,
+    ) -> (f64, f64) {
+        if map_width == 0 || self.cell_size == 0 || self.grid_w == 0 {
+            return (0.0, 0.0);
+        }
+
+        let max_range = 20;
+        let cx_min = tile_x.saturating_sub(max_range) / self.cell_size;
+        let cx_max = ((tile_x + max_range) / self.cell_size).min(self.grid_w - 1);
+        let cy_min = tile_y.saturating_sub(max_range) / self.cell_size;
+        let cy_max = ((tile_y + max_range) / self.cell_size).min(self.grid_h - 1);
+
+        let mut weighted_levels = 0.0;
+        let mut strongest_coverage: f64 = 0.0;
+        for cy in cy_min..=cy_max {
+            for cx in cx_min..=cx_max {
+                for b in &self.cells[(cy * self.grid_w + cx) as usize] {
+                    if b.owner_id != target_owner {
+                        continue;
+                    }
+                    let d = hex_distance(tile_x as i32, tile_y as i32, b.x as i32, b.y as i32);
+                    let range = b.range;
+                    if range > 0 && d <= range {
+                        let coverage = if d * 4 <= range * 3 {
+                            1.0
+                        } else {
+                            (4 * (range - d)) as f64 / range as f64
+                        };
+                        weighted_levels += coverage * b.active_level as f64;
+                        if NEED_CAPTURE_FALLOFF {
+                            strongest_coverage = strongest_coverage.max(coverage);
+                        }
+                    }
+                }
+            }
+        }
+
+        (weighted_levels, strongest_coverage)
+    }
+
+    /// Calculate only the defense contribution needed to order a frontier tile.
     #[inline]
     pub fn priority_bonus(
         &self,
@@ -297,49 +373,69 @@ impl DefenseGrid {
         tile_y: u32,
         map_width: u32,
         target_owner: u16,
+        attacker_id: u16,
+        match_seed: u64,
         cfg: &crate::game_config::GameConfig,
-    ) -> i64 {
-        let mut bonus: i64 = 0;
-        let max_range = 24;
-
-        let cx_min = tile_x.saturating_sub(max_range) / self.cell_size;
-        let cx_max = (tile_x + max_range) / self.cell_size;
-        let cy_min = tile_y.saturating_sub(max_range) / self.cell_size;
-        let cy_max = (tile_y + max_range) / self.cell_size;
-
-        let cx_max = cx_max.min(self.grid_w.saturating_sub(1));
-        let cy_max = cy_max.min(self.grid_h.saturating_sub(1));
-
-        for cy in cy_min..=cy_max {
-            for cx in cx_min..=cx_max {
-                let idx = (cy * self.grid_w + cx) as usize;
-                for b in &self.cells[idx] {
-                    if b.owner_id != target_owner {
-                        continue;
-                    }
-                    let bx = b.tile_idx % map_width;
-                    let by = b.tile_idx / map_width;
-                    let d = hex_distance(tile_x as i32, tile_y as i32, bx as i32, by as i32);
-                    if d <= b.defense_range_cfg(cfg) {
-                        bonus += cfg.bunker_priority as i64 * b.active_level() as i64;
-                    }
-                }
-            }
+    ) -> f64 {
+        let (weighted_levels, _) =
+            self.weighted_coverage::<false>(tile_x, tile_y, map_width, target_owner);
+        if weighted_levels == 0.0 {
+            return 0.0;
         }
-        bonus
+
+        let tile_idx = u64::from(tile_y) * u64::from(map_width) + u64::from(tile_x);
+        let sample = defense_sample(match_seed, attacker_id, target_owner, tile_idx);
+        cfg.bunker_priority * weighted_levels * (0.5 + sample)
+    }
+
+    /// Calculate one deterministic, distance-weighted defense sample for a tile.
+    #[inline]
+    pub fn influence(
+        &self,
+        tile_x: u32,
+        tile_y: u32,
+        map_width: u32,
+        target_owner: u16,
+        attacker_id: u16,
+        match_seed: u64,
+        cfg: &crate::game_config::GameConfig,
+    ) -> DefenseInfluence {
+        let (weighted_levels, strongest_coverage) =
+            self.weighted_coverage::<true>(tile_x, tile_y, map_width, target_owner);
+
+        if weighted_levels == 0.0 {
+            return DefenseInfluence::NONE;
+        }
+
+        let tile_idx = u64::from(tile_y) * u64::from(map_width) + u64::from(tile_x);
+        let sample = defense_sample(match_seed, attacker_id, target_owner, tile_idx);
+
+        DefenseInfluence {
+            capture_multiplier: 1.0 + 3.0 * strongest_coverage * sample,
+            priority_bonus: cfg.bunker_priority * weighted_levels * (0.5 + sample),
+            attacker_loss_multiplier: 1.0
+                + (cfg.bunker_strength * weighted_levels * (0.5 + sample)).clamp(0.0, 0.50),
+        }
     }
 }
 
 /// Cell side length for spatial indexing of structure centers. Must match `STRUCTURE_MIN_DIST` in `placement.rs`.
 pub const BUILDING_GRID_CELL_SIZE: u32 = 6;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BuildingGridEntry {
+    pub x: u32,
+    pub y: u32,
+    pub kind: BuildingKind,
+}
+
 /// Spatial grid of structure tile coordinates `(x, y)` for O(local) minimum-distance checks during placement.
 #[derive(Clone)]
 pub struct BuildingGrid {
     /// City positions, kept separate because cities use the larger spacing rule.
-    pub cells: Vec<Vec<(u32, u32)>>,
+    pub cells: Vec<Vec<BuildingGridEntry>>,
     /// Non-city positions, which share the smaller spacing rule.
-    pub non_city_cells: Vec<Vec<(u32, u32)>>,
+    pub non_city_cells: Vec<Vec<BuildingGridEntry>>,
     pub grid_w: u32,
     pub grid_h: u32,
     pub cell_size: u32,
@@ -413,10 +509,38 @@ impl BuildingGrid {
                 } else {
                     &mut self.non_city_cells
                 };
-                cells[(cy * grid_w + cx) as usize].push((bx, by));
+                cells[(cy * grid_w + cx) as usize].push(BuildingGridEntry {
+                    x: bx,
+                    y: by,
+                    kind: b.kind,
+                });
             }
         }
         self.dirty = false;
+    }
+
+    pub fn insert(&mut self, tile_idx: u32, kind: BuildingKind, map_w: u32, map_h: u32) {
+        let grid_w = map_w.div_ceil(self.cell_size);
+        let grid_h = map_h.div_ceil(self.cell_size);
+        if self.dirty
+            || self.grid_w != grid_w
+            || self.grid_h != grid_h
+            || map_w == 0
+            || tile_idx >= map_w.saturating_mul(map_h)
+        {
+            self.mark_dirty();
+            return;
+        }
+
+        let x = tile_idx % map_w;
+        let y = tile_idx / map_w;
+        let cells = if kind == BuildingKind::City {
+            &mut self.cells
+        } else {
+            &mut self.non_city_cells
+        };
+        cells[((y / self.cell_size) * grid_w + x / self.cell_size) as usize]
+            .push(BuildingGridEntry { x, y, kind });
     }
 
     /// Rebuild from raw tile coordinates (tests / tooling; no `Building` structs).
@@ -444,7 +568,11 @@ impl BuildingGrid {
             let cx = bx / cell_size;
             let cy = by / cell_size;
             if cx < grid_w && cy < grid_h {
-                self.cells[(cy * grid_w + cx) as usize].push((bx, by));
+                self.cells[(cy * grid_w + cx) as usize].push(BuildingGridEntry {
+                    x: bx,
+                    y: by,
+                    kind: BuildingKind::City,
+                });
             }
         }
         self.dirty = false;
@@ -456,7 +584,7 @@ impl BuildingGrid {
         tile_x: u32,
         tile_y: u32,
         range: u32,
-    ) -> impl Iterator<Item = (u32, u32)> + '_ {
+    ) -> impl Iterator<Item = BuildingGridEntry> + '_ {
         let cx_min = tile_x.saturating_sub(range) / self.cell_size;
         let cx_max = (tile_x + range) / self.cell_size;
         let cy_min = tile_y.saturating_sub(range) / self.cell_size;
@@ -478,7 +606,7 @@ impl BuildingGrid {
         tile_x: u32,
         tile_y: u32,
         range: u32,
-    ) -> impl Iterator<Item = (u32, u32)> + '_ {
+    ) -> impl Iterator<Item = BuildingGridEntry> + '_ {
         let cx_min = tile_x.saturating_sub(range) / self.cell_size;
         let cx_max = (tile_x + range) / self.cell_size;
         let cy_min = tile_y.saturating_sub(range) / self.cell_size;
@@ -492,5 +620,101 @@ impl BuildingGrid {
                 self.non_city_cells[idx].iter().copied()
             })
         })
+    }
+
+    pub fn iter_all_in_range(
+        &self,
+        tile_x: u32,
+        tile_y: u32,
+        range: u32,
+    ) -> impl Iterator<Item = BuildingGridEntry> + '_ {
+        self.iter_in_range(tile_x, tile_y, range)
+            .chain(self.iter_non_city_in_range(tile_x, tile_y, range))
+    }
+}
+
+#[cfg(test)]
+mod defense_influence_tests {
+    use super::*;
+
+    fn tower(x: u32, y: u32, width: u32, owner_id: u16, level: u8) -> Building {
+        Building {
+            id: 1,
+            owner_id,
+            tile_idx: y * width + x,
+            kind: BuildingKind::Bunker,
+            level,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: CityModules::default(),
+        }
+    }
+
+    #[test]
+    fn influence_matches_weighted_formula_and_stays_repeatable() {
+        let width = 64;
+        let tower = tower(32, 32, width, 2, 2);
+        let cfg = crate::game_config::GameConfig::default();
+        assert_eq!(tower.defense_range_cfg(&cfg), 16);
+        let mut grid = DefenseGrid::default();
+        grid.rebuild(&[tower], width, width, DEFENSE_GRID_CELL_SIZE, &cfg);
+
+        let seed = 0x1234_5678;
+        let center = grid.influence(32, 32, width, 2, 1, seed, &cfg);
+        assert_eq!(center, grid.influence(32, 32, width, 2, 1, seed, &cfg));
+        let center_sample = defense_sample(seed, 1, 2, 32 * width as u64 + 32);
+        assert_eq!(center.capture_multiplier, 1.0 + 3.0 * center_sample);
+        assert_eq!(
+            center.priority_bonus,
+            cfg.bunker_priority * 2.0 * (0.5 + center_sample)
+        );
+        assert_eq!(
+            center.priority_bonus,
+            grid.priority_bonus(32, 32, width, 2, 1, seed, &cfg)
+        );
+        assert_eq!(
+            center.attacker_loss_multiplier,
+            1.0 + (cfg.bunker_strength * 2.0 * (0.5 + center_sample)).clamp(0.0, 0.50)
+        );
+        assert!((1.0..=4.0).contains(&center.capture_multiplier));
+
+        let at_three_quarters = grid.influence(44, 32, width, 2, 1, seed, &cfg);
+        let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 44);
+        assert_eq!(at_three_quarters.capture_multiplier, 1.0 + 3.0 * sample);
+
+        let fading = grid.influence(45, 32, width, 2, 1, seed, &cfg);
+        let sample = defense_sample(seed, 1, 2, 32 * width as u64 + 45);
+        assert_eq!(fading.capture_multiplier, 1.0 + 3.0 * 0.75 * sample);
+        assert_eq!(
+            fading.priority_bonus,
+            cfg.bunker_priority * 1.5 * (0.5 + sample)
+        );
+        assert_eq!(
+            fading.attacker_loss_multiplier,
+            1.0 + (cfg.bunker_strength * 1.5 * (0.5 + sample)).clamp(0.0, 0.50)
+        );
+
+        let edge = grid.influence(48, 32, width, 2, 1, seed, &cfg);
+        assert_eq!(edge, DefenseInfluence::NONE);
+        let outside = grid.influence(49, 32, width, 2, 1, seed, &cfg);
+        assert_eq!(outside, DefenseInfluence::NONE);
+
+        let mut no_towers = DefenseGrid::default();
+        no_towers.rebuild(&[], width, width, DEFENSE_GRID_CELL_SIZE, &cfg);
+        assert_eq!(
+            no_towers.influence(32, 32, width, 2, 1, seed, &cfg),
+            DefenseInfluence::NONE
+        );
+        assert_eq!(
+            grid.influence(32, 32, width, 3, 1, seed, &cfg),
+            DefenseInfluence::NONE
+        );
+    }
+
+    #[test]
+    fn influence_keeps_the_existing_capped_tower_range() {
+        let cfg = crate::game_config::GameConfig::default();
+        let tower = tower(32, 32, 64, 2, 4);
+        assert_eq!(tower.defense_range_cfg(&cfg), 20);
     }
 }

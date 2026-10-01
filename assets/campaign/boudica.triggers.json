@@ -17,11 +17,171 @@
     "dismissible": true
   },
   "reactions": [
-    { "id": "aid_snettisham", "after": "boudica_first_contact", "when": { "type": "support", "target": "Snettisham" }, "speaker": "snettisham", "title_key": "tutorial.boudica_snettisham_pledge_title", "body_key": "tutorial.boudica_snettisham_pledge_body" },
-    { "id": "aid_iceni_coast", "after": "boudica_first_contact", "when": { "type": "support", "target": "Iceni Coast" }, "speaker": "iceni_coast", "title_key": "tutorial.boudica_coast_pledge_title", "body_key": "tutorial.boudica_coast_pledge_body" },
-    { "id": "aid_stonea", "after": "boudica_first_contact", "when": { "type": "support", "target": "Stonea" }, "speaker": "stonea", "title_key": "tutorial.boudica_stonea_pledge_title", "body_key": "tutorial.boudica_stonea_pledge_body" },
-    { "id": "aid_venta", "after": "boudica_first_contact", "when": { "type": "support", "target": "Venta Icenorum" }, "speaker": "venta_icenorum", "title_key": "tutorial.boudica_venta_pledge_title", "body_key": "tutorial.boudica_venta_pledge_body" },
-    { "id": "aid_thetford", "after": "boudica_first_contact", "when": { "type": "support", "target": "Thetford" }, "speaker": "thetford", "title_key": "tutorial.boudica_thetford_pledge_title", "body_key": "tutorial.boudica_thetford_pledge_body" }
+    {
+      "id": "first_iceni_contact",
+      "when": {
+        "type": "first_contact",
+        "role": "kin"
+      },
+      "outcome": "allied",
+      "title_key": "tutorial.first_iceni_contact_title",
+      "body_key": "tutorial.first_iceni_contact_body"
+    },
+    {
+      "id": "contact_snettisham",
+      "when": {
+        "type": "contact",
+        "target": "Snettisham"
+      },
+      "speaker": "snettisham",
+      "title_key": "tutorial.boudica_snettisham_pledge_title",
+      "body_key": "tutorial.boudica_snettisham_pledge_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.neutral_terms_accept",
+          "body_key": "tutorial.neutral_terms_accept_detail",
+          "relation": "allied",
+          "gold_cost": 200
+        },
+        {
+          "id": "refuse",
+          "label_key": "tutorial.neutral_terms_refuse",
+          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    },
+    {
+      "id": "contact_iceni_coast",
+      "when": {
+        "type": "contact",
+        "target": "Iceni Coast"
+      },
+      "speaker": "iceni_coast",
+      "title_key": "tutorial.boudica_coast_pledge_title",
+      "body_key": "tutorial.boudica_coast_pledge_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.neutral_terms_accept",
+          "body_key": "tutorial.neutral_terms_accept_detail",
+          "relation": "allied",
+          "gold_cost": 200
+        },
+        {
+          "id": "refuse",
+          "label_key": "tutorial.neutral_terms_refuse",
+          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    },
+    {
+      "id": "contact_stonea",
+      "when": {
+        "type": "contact",
+        "target": "Stonea"
+      },
+      "speaker": "stonea",
+      "title_key": "tutorial.boudica_stonea_pledge_title",
+      "body_key": "tutorial.boudica_stonea_pledge_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.neutral_terms_accept",
+          "body_key": "tutorial.neutral_terms_accept_detail",
+          "relation": "allied",
+          "gold_cost": 200
+        },
+        {
+          "id": "refuse",
+          "label_key": "tutorial.neutral_terms_refuse",
+          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    },
+    {
+      "id": "contact_venta",
+      "when": {
+        "type": "contact",
+        "target": "Venta Icenorum"
+      },
+      "speaker": "venta_icenorum",
+      "title_key": "tutorial.boudica_venta_pledge_title",
+      "body_key": "tutorial.boudica_venta_pledge_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.neutral_terms_accept",
+          "body_key": "tutorial.neutral_terms_accept_detail",
+          "relation": "allied",
+          "gold_cost": 200
+        },
+        {
+          "id": "refuse",
+          "label_key": "tutorial.neutral_terms_refuse",
+          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    },
+    {
+      "id": "contact_thetford",
+      "when": {
+        "type": "contact",
+        "target": "Thetford"
+      },
+      "speaker": "thetford",
+      "title_key": "tutorial.boudica_thetford_pledge_title",
+      "body_key": "tutorial.boudica_thetford_pledge_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.neutral_terms_accept",
+          "body_key": "tutorial.neutral_terms_accept_detail",
+          "relation": "allied",
+          "gold_cost": 200
+        },
+        {
+          "id": "refuse",
+          "label_key": "tutorial.neutral_terms_refuse",
+          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    },
+    {
+      "id": "neutral_contact_terms",
+      "when": {
+        "type": "contact",
+        "relation": "neutral"
+      },
+      "title_key": "tutorial.neutral_contact_terms_title",
+      "body_key": "tutorial.neutral_contact_terms_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.neutral_terms_accept",
+          "body_key": "tutorial.neutral_terms_accept_detail",
+          "relation": "allied",
+          "gold_cost": 200
+        },
+        {
+          "id": "refuse",
+          "label_key": "tutorial.neutral_terms_refuse",
+          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    }
   ],
   "strings": {
     "en": {
@@ -39,28 +199,28 @@
       "tutorial.boudica_victory_title": "The First Blow",
       "tutorial.boudica_victory_body": "The outpost is broken. The tribes must see that the Iceni still stand.",
       "tutorial.boudica_contact_title": "The Iceni Stand Together",
-      "tutorial.boudica_contact_body": "The villages must know Rome can be challenged. Bring each Iceni tribe into the rising.",
-      "tutorial.boudica_contact_hint": "Claim land beside any marked Iceni tribe to make contact.",
+      "tutorial.boudica_contact_body": "The Iceni clans will decide whether to rise with us—or name their price.",
+      "tutorial.boudica_contact_hint": "Touch an Iceni clan to hear its answer.",
       "tutorial.boudica_first_contact_response_title": "The Iceni Stand Together",
-      "tutorial.boudica_first_contact_response_body": "All five Iceni tribes have answered. The rebellion has its allies.",
+      "tutorial.boudica_first_contact_response_body": "One clan pledged support. The others will decide for themselves.",
       "tutorial.boudica_support_title": "Aid Arrives",
       "tutorial.boudica_support_hint": "The tribes are sending gold and warriors.",
       "tutorial.boudica_trinovantes_intro_title": "A Pact Beyond the Iceni",
       "tutorial.boudica_trinovantes_intro_body": "The Trinovantes can join the rising. Offer one pact, and their whole tribe will stand with us.",
       "tutorial.boudica_trinovantes_alliance_title": "Win the Trinovantes",
-      "tutorial.boudica_trinovantes_alliance_hint": "Open the map action on Trinovantes and choose Alliance.",
+      "tutorial.boudica_trinovantes_alliance_hint": "Touch Trinovantian land to hear their terms.",
       "tutorial.boudica_trinovantes_pact_title": "The Trinovantes Join",
-      "tutorial.boudica_trinovantes_pact_body": "One pact binds their tribes together. Their colors remain their own; their cause is ours.",
-      "tutorial.boudica_venta_pledge_title": "Venta Icenorum Answers",
-      "tutorial.boudica_venta_pledge_body": "Take our gold and warriors as tribute, Boudica. We fight Rome and every tribe that serves it.",
-      "tutorial.boudica_snettisham_pledge_title": "Snettisham Stands With You",
-      "tutorial.boudica_snettisham_pledge_body": "Take our tribute and warriors. No Iceni will stand with Rome or her allies.",
-      "tutorial.boudica_thetford_pledge_title": "Thetford Pledges Its Aid",
-      "tutorial.boudica_thetford_pledge_body": "Thetford pledges gold and warriors as tribute against Rome and every tribe in its service.",
-      "tutorial.boudica_stonea_pledge_title": "Stonea Keeps the Oath",
-      "tutorial.boudica_stonea_pledge_body": "Our tribute is yours. Stonea joins the fight against Rome and her allies.",
-      "tutorial.boudica_coast_pledge_title": "The Coast Joins the Rising",
-      "tutorial.boudica_coast_pledge_body": "Our stores and warriors are tribute. The coast stands against Rome and her allies.",
+      "tutorial.boudica_trinovantes_pact_body": "The Trinovantes have chosen: stand with us or against us.",
+      "tutorial.boudica_venta_pledge_title": "Venta Icenorum sets its terms",
+      "tutorial.boudica_venta_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
+      "tutorial.boudica_snettisham_pledge_title": "Snettisham sets its terms",
+      "tutorial.boudica_snettisham_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
+      "tutorial.boudica_thetford_pledge_title": "Thetford sets its terms",
+      "tutorial.boudica_thetford_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
+      "tutorial.boudica_stonea_pledge_title": "Stonea sets its terms",
+      "tutorial.boudica_stonea_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
+      "tutorial.boudica_coast_pledge_title": "Iceni Coast sets its terms",
+      "tutorial.boudica_coast_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
       "tutorial.boudica_aid_choice_title": "Return the Favor",
       "tutorial.boudica_aid_choice_body": "Our neighbors sent aid. Send some to Snettisham—or keep it for the march?",
       "tutorial.boudica_aid_choice_share": "Send aid",
@@ -99,7 +259,7 @@
       "tutorial.boudica_farm_ready_body": "The fields will keep new warriors coming. Now we move.",
       "tutorial.boudica_first_expansion_title": "Claim the Wilderness",
       "tutorial.boudica_first_expansion_body": "The rising needs room to grow. Take the unclaimed land and make it Iceni.",
-      "tutorial.boudica_first_expansion_hint": "Expand through neutral wilderness. The first tile teaches the action; keep growing to 256.",
+      "tutorial.boudica_first_expansion_hint": "Expand through neutral wilderness and claim 250 tiles.",
       "tutorial.boudica_outposts_title": "Cut Rome's Supply Lines",
       "tutorial.boudica_outposts_hint": "Destroy the three passive Roman outposts. The marked target updates after each victory.",
       "tutorial.boudica_ratio_title": "Guard the Home Front",
@@ -151,9 +311,9 @@
       "tutorial.boudica_pact_choice_offer": "Offer a pact",
       "tutorial.boudica_pact_choice_skip": "Keep marching",
       "tutorial.boudica_pact_target_title": "Win the Catuvellauni",
-      "tutorial.boudica_pact_target_hint": "Center their banner, tap their land, choose Alliance.",
+      "tutorial.boudica_pact_target_hint": "Touch Catuvellaunian land to hear their answer.",
       "tutorial.boudica_pact_success_title": "A New Ally",
-      "tutorial.boudica_pact_success_body": "The Catuvellauni stand with us; their border no longer threatens our march.",
+      "tutorial.boudica_pact_success_body": "The Catuvellauni have chosen their path. Every clan demands an answer.",
       "tutorial.boudica_port_choice_title": "Across the Sea",
       "tutorial.boudica_port_choice_body": "Build a harbor for the coast—or march west by land?",
       "tutorial.boudica_port_choice_build": "Build a harbor",
@@ -211,7 +371,15 @@
       "tutorial.boudica_menu_multiplayer_title": "Multiplayer",
       "tutorial.boudica_menu_multiplayer_hint": "Choose Multiplayer whenever you're ready for a live match.",
       "tutorial.boudica_menu_ready_title": "You're ready",
-      "tutorial.boudica_menu_ready_body": "Continue the campaign, replay this tutorial, or jump into multiplayer."
+      "tutorial.boudica_menu_ready_body": "Continue the campaign, replay this tutorial, or jump into multiplayer.",
+      "tutorial.first_iceni_contact_title": "An Iceni clan answers",
+      "tutorial.first_iceni_contact_body": "We know what Rome did. We stand with you, Boudica.",
+      "tutorial.neutral_contact_terms_title": "A clan asks for terms",
+      "tutorial.neutral_contact_terms_body": "Pay 200 gold for our support. Refuse, and we will stand against you.",
+      "tutorial.neutral_terms_accept": "Pay the tribute",
+      "tutorial.neutral_terms_accept_detail": "Pay 200 gold and form an alliance.",
+      "tutorial.neutral_terms_refuse": "Refuse",
+      "tutorial.neutral_terms_refuse_detail": "The clan ends talks and becomes an enemy."
     },
     "es": {
       "tutorial.boudica_council_title": "La respuesta de una reina",
@@ -228,28 +396,28 @@
       "tutorial.boudica_victory_title": "El primer golpe",
       "tutorial.boudica_victory_body": "El puesto cayó. Las tribus deben ver que los icenos siguen en pie.",
       "tutorial.boudica_contact_title": "Los icenos se unen",
-      "tutorial.boudica_contact_body": "Cada tribu debe saber que Roma puede ser desafiada. Reúne a los icenos en el levantamiento.",
-      "tutorial.boudica_contact_hint": "Reclama tierra junto a cualquier tribu icena marcada para entrar en contacto.",
+      "tutorial.boudica_contact_body": "Las tribus Iceni decidirán si se alzan con nosotros... o qué precio exigirán.",
+      "tutorial.boudica_contact_hint": "Toca el territorio de una tribu Iceni para conocer su respuesta.",
       "tutorial.boudica_first_contact_response_title": "Los icenos se unen",
-      "tutorial.boudica_first_contact_response_body": "Las cinco tribus icenas respondieron. La rebelión ya tiene aliados.",
+      "tutorial.boudica_first_contact_response_body": "Una tribu juró apoyarnos. Las demás decidirán por sí mismas.",
       "tutorial.boudica_support_title": "Llega la ayuda",
       "tutorial.boudica_support_hint": "Las tribus envían oro y guerreros.",
       "tutorial.boudica_trinovantes_intro_title": "Un pacto más allá de los icenos",
       "tutorial.boudica_trinovantes_intro_body": "Los trinovantes pueden sumarse al levantamiento. Un pacto bastará para unir a todas sus tribus.",
       "tutorial.boudica_trinovantes_alliance_title": "Gana a los trinovantes",
-      "tutorial.boudica_trinovantes_alliance_hint": "Abre las acciones del mapa sobre Trinovantes y elige Alianza.",
+      "tutorial.boudica_trinovantes_alliance_hint": "Toca el territorio trinovante para escuchar sus condiciones.",
       "tutorial.boudica_trinovantes_pact_title": "Se unen los trinovantes",
-      "tutorial.boudica_trinovantes_pact_body": "Un pacto une a sus tribus. Conservan sus colores; ahora comparten nuestra causa.",
-      "tutorial.boudica_venta_pledge_title": "Venta Icenorum responde",
-      "tutorial.boudica_venta_pledge_body": "Recibe nuestro oro y guerreros como tributo, Boudica. Lucharemos contra Roma y toda tribu que la sirva.",
-      "tutorial.boudica_snettisham_pledge_title": "Snettisham está contigo",
-      "tutorial.boudica_snettisham_pledge_body": "Recibe nuestro tributo y nuestros guerreros. Ningún iceno apoyará a Roma ni a sus aliados.",
-      "tutorial.boudica_thetford_pledge_title": "Thetford ofrece su ayuda",
-      "tutorial.boudica_thetford_pledge_body": "Thetford ofrece oro y guerreros como tributo contra Roma y toda tribu que la sirva.",
-      "tutorial.boudica_stonea_pledge_title": "Stonea mantiene su juramento",
-      "tutorial.boudica_stonea_pledge_body": "Nuestro tributo es tuyo. Stonea luchará contra Roma y sus aliados.",
-      "tutorial.boudica_coast_pledge_title": "La costa se suma al alzamiento",
-      "tutorial.boudica_coast_pledge_body": "Nuestras reservas y guerreros son tributo. La costa luchará contra Roma y sus aliados.",
+      "tutorial.boudica_trinovantes_pact_body": "Los Trinovantes ya eligieron: estar con nosotros o enfrentarnos.",
+      "tutorial.boudica_venta_pledge_title": "Venta Icenorum exige condiciones",
+      "tutorial.boudica_venta_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
+      "tutorial.boudica_snettisham_pledge_title": "Snettisham exige condiciones",
+      "tutorial.boudica_snettisham_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
+      "tutorial.boudica_thetford_pledge_title": "Thetford exige condiciones",
+      "tutorial.boudica_thetford_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
+      "tutorial.boudica_stonea_pledge_title": "Stonea exige condiciones",
+      "tutorial.boudica_stonea_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
+      "tutorial.boudica_coast_pledge_title": "Iceni Coast exige condiciones",
+      "tutorial.boudica_coast_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
       "tutorial.boudica_aid_choice_title": "Devolver el apoyo",
       "tutorial.boudica_aid_choice_body": "Nuestros vecinos enviaron ayuda. ¿Devolvemos parte a Snettisham o la guardamos para la marcha?",
       "tutorial.boudica_aid_choice_share": "Enviar ayuda",
@@ -288,7 +456,7 @@
       "tutorial.boudica_farm_ready_body": "Los campos traerán nuevos guerreros. Ahora avanzamos.",
       "tutorial.boudica_first_expansion_title": "Conquista el territorio salvaje",
       "tutorial.boudica_first_expansion_body": "El levantamiento necesita espacio para crecer. Reclama la tierra libre para los icenos.",
-      "tutorial.boudica_first_expansion_hint": "Expándete por el territorio neutral. La primera casilla enseña la acción; sigue hasta llegar a 256.",
+      "tutorial.boudica_first_expansion_hint": "Expándete por la tierra neutral. Conquista 250 casillas.",
       "tutorial.boudica_outposts_title": "Corta los suministros de Roma",
       "tutorial.boudica_outposts_hint": "Destruye los tres puestos romanos pasivos. El marcador avanzará tras cada victoria.",
       "tutorial.boudica_ratio_title": "Protege el hogar",
@@ -340,9 +508,9 @@
       "tutorial.boudica_pact_choice_offer": "Ofrecer un pacto",
       "tutorial.boudica_pact_choice_skip": "Seguir la marcha",
       "tutorial.boudica_pact_target_title": "Gana a los catuvellaunos",
-      "tutorial.boudica_pact_target_hint": "Centra su estandarte, toca su territorio y elige Alianza.",
+      "tutorial.boudica_pact_target_hint": "Toca el territorio catuvellauno para escuchar su respuesta.",
       "tutorial.boudica_pact_success_title": "Una nueva alianza",
-      "tutorial.boudica_pact_success_body": "Los catuvellaunos se unen; su frontera ya no amenaza nuestra marcha.",
+      "tutorial.boudica_pact_success_body": "Los Catuvellaunos han elegido su camino. Ahora sabes que cada tribu exige una respuesta.",
       "tutorial.boudica_port_choice_title": "Al otro lado del mar",
       "tutorial.boudica_port_choice_body": "¿Construimos un puerto o marchamos al oeste por tierra?",
       "tutorial.boudica_port_choice_build": "Construir un puerto",
@@ -400,7 +568,15 @@
       "tutorial.boudica_menu_multiplayer_title": "Multijugador",
       "tutorial.boudica_menu_multiplayer_hint": "Elige Multijugador cuando quieras entrar a una partida en vivo.",
       "tutorial.boudica_menu_ready_title": "Ya estás listo",
-      "tutorial.boudica_menu_ready_body": "Continúa la campaña, repite este tutorial o entra al multijugador."
+      "tutorial.boudica_menu_ready_body": "Continúa la campaña, repite este tutorial o entra al multijugador.",
+      "tutorial.first_iceni_contact_title": "Una tribu Iceni responde",
+      "tutorial.first_iceni_contact_body": "Sabemos lo que Roma hizo. Estamos contigo, Boudica.",
+      "tutorial.neutral_contact_terms_title": "Una tribu pide condiciones",
+      "tutorial.neutral_contact_terms_body": "Paga 200 de oro y tendrás nuestra ayuda. Si te niegas, nos opondremos a ti.",
+      "tutorial.neutral_terms_accept": "Pagar el tributo",
+      "tutorial.neutral_terms_accept_detail": "Entregar 200 de oro y formar una alianza.",
+      "tutorial.neutral_terms_refuse": "Rechazar",
+      "tutorial.neutral_terms_refuse_detail": "La tribu rompe relaciones y se vuelve enemiga."
     }
   },
   "speakers": {
@@ -409,14 +585,27 @@
       "avatar": "boudica"
     },
     "council": {
-      "name_key": "tutorial.boudica_council_speaker"
+      "name_key": "tutorial.boudica_council_speaker",
+      "avatar": "iceni_council"
     },
-    "venta_icenorum": { "faction": "Venta Icenorum" },
-    "snettisham": { "faction": "Snettisham" },
-    "thetford": { "faction": "Thetford" },
-    "stonea": { "faction": "Stonea" },
-    "iceni_coast": { "faction": "Iceni Coast" },
-    "trinovantes": { "faction": "Trinovantes" }
+    "venta_icenorum": {
+      "faction": "Venta Icenorum"
+    },
+    "snettisham": {
+      "faction": "Snettisham"
+    },
+    "thetford": {
+      "faction": "Thetford"
+    },
+    "stonea": {
+      "faction": "Stonea"
+    },
+    "iceni_coast": {
+      "faction": "Iceni Coast"
+    },
+    "trinovantes": {
+      "faction": "Trinovantes"
+    }
   },
   "steps": [
     {
@@ -497,7 +686,7 @@
       "speaker": "boudica",
       "trigger": {
         "type": "territory",
-        "value": 256,
+        "value": 250,
         "scope": "step"
       },
       "marker": {
@@ -526,10 +715,16 @@
       "hint_key": "tutorial.boudica_contact_hint",
       "speaker": "boudica",
       "trigger": {
-      "type": "contact",
-      "targets": ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"],
+        "type": "contact",
+        "targets": [
+          "Snettisham",
+          "Iceni Coast",
+          "Stonea",
+          "Venta Icenorum",
+          "Thetford"
+        ],
         "value": 5,
-      "scope": "total"
+        "scope": "total"
       },
       "marker": {
         "target": "Snettisham"
@@ -565,9 +760,20 @@
       "title_key": "tutorial.boudica_trinovantes_alliance_title",
       "hint_key": "tutorial.boudica_trinovantes_alliance_hint",
       "speaker": "boudica",
-      "trigger": { "type": "alliance", "target": "Trinovantes", "value": 1, "scope": "total" },
-      "marker": { "target": "Trinovantes" },
-      "guide": { "kind": "world", "target": "target_action", "gesture": "hold" },
+      "trigger": {
+        "type": "contact",
+        "target": "Trinovantes",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Trinovantes"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
       "next": "boudica_trinovantes_pact"
     },
     {
@@ -599,8 +805,16 @@
       "body_key": "tutorial.boudica_aid_choice_body",
       "speaker": "boudica",
       "choices": [
-        { "id": "share", "label_key": "tutorial.boudica_aid_choice_share", "next": "boudica_share_intro" },
-        { "id": "keep", "label_key": "tutorial.boudica_aid_choice_keep", "next": "boudica_aid_kept" }
+        {
+          "id": "share",
+          "label_key": "tutorial.boudica_aid_choice_share",
+          "next": "boudica_share_intro"
+        },
+        {
+          "id": "keep",
+          "label_key": "tutorial.boudica_aid_choice_keep",
+          "next": "boudica_aid_kept"
+        }
       ]
     },
     {
@@ -618,9 +832,19 @@
       "title_key": "tutorial.boudica_transfer_target_title",
       "hint_key": "tutorial.boudica_transfer_target_hint",
       "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "map_transfer", "scope": "step" },
-      "marker": { "target": "Snettisham" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "map_transfer",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "Snettisham"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
       "next": "boudica_transfer_troops"
     },
     {
@@ -629,8 +853,16 @@
       "title_key": "tutorial.boudica_transfer_troops_title",
       "hint_key": "tutorial.boudica_transfer_troops_hint",
       "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "transfer_troops", "scope": "step" },
-      "guide": { "kind": "ui", "target": "transfer_troops", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "transfer_troops",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "transfer_troops",
+        "gesture": "tap"
+      },
       "next": "boudica_transfer_gold"
     },
     {
@@ -639,8 +871,16 @@
       "title_key": "tutorial.boudica_transfer_gold_title",
       "hint_key": "tutorial.boudica_transfer_gold_hint",
       "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "transfer_gold", "scope": "step" },
-      "guide": { "kind": "ui", "target": "transfer_gold", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "transfer_gold",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "transfer_gold",
+        "gesture": "tap"
+      },
       "next": "boudica_transfer_send"
     },
     {
@@ -649,8 +889,21 @@
       "title_key": "tutorial.boudica_transfer_send_title",
       "hint_key": "tutorial.boudica_transfer_send_hint",
       "speaker": "boudica",
-      "trigger": { "type": "resource_transfer", "recipient": "Snettisham", "resources": ["gold", "troops"], "value": 1, "scope": "step" },
-      "guide": { "kind": "ui", "target": "transfer_send", "gesture": "tap" },
+      "trigger": {
+        "type": "resource_transfer",
+        "recipient": "Snettisham",
+        "resources": [
+          "gold",
+          "troops"
+        ],
+        "value": 1,
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "transfer_send",
+        "gesture": "tap"
+      },
       "next": "boudica_share_sent"
     },
     {
@@ -726,8 +979,16 @@
       "body_key": "tutorial.boudica_farm_choice_body",
       "speaker": "boudica",
       "choices": [
-        { "id": "farm", "label_key": "tutorial.boudica_farm_choice_build", "next": "boudica_farm_intro" },
-        { "id": "march", "label_key": "tutorial.boudica_farm_choice_skip", "next": "boudica_ratio_intro" }
+        {
+          "id": "farm",
+          "label_key": "tutorial.boudica_farm_choice_build",
+          "next": "boudica_farm_intro"
+        },
+        {
+          "id": "march",
+          "label_key": "tutorial.boudica_farm_choice_skip",
+          "next": "boudica_ratio_intro"
+        }
       ]
     },
     {
@@ -745,8 +1006,16 @@
       "title_key": "tutorial.boudica_choose_farm_title",
       "hint_key": "tutorial.boudica_choose_farm_hint",
       "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "dock_farm", "scope": "step" },
-      "guide": { "kind": "ui", "target": "dock_farm", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_farm",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_farm",
+        "gesture": "tap"
+      },
       "next": "boudica_build_farm"
     },
     {
@@ -755,9 +1024,19 @@
       "title_key": "tutorial.boudica_build_farm_title",
       "hint_key": "tutorial.boudica_build_farm_hint",
       "speaker": "boudica",
-      "trigger": { "type": "farm", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "farm",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
       "next": "boudica_farm_ready"
     },
     {
@@ -784,9 +1063,17 @@
       "title_key": "tutorial.boudica_ratio_title",
       "hint_key": "tutorial.boudica_ratio_hint",
       "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "attack_ratio", "scope": "step" },
+      "trigger": {
+        "type": "ui",
+        "action": "attack_ratio",
+        "scope": "step"
+      },
       "attack_ratio_on_enter": 0.5,
-      "guide": { "kind": "ui", "target": "attack_ratio", "gesture": "drag" },
+      "guide": {
+        "kind": "ui",
+        "target": "attack_ratio",
+        "gesture": "drag"
+      },
       "next": "boudica_roman_outposts"
     },
     {
@@ -797,7 +1084,11 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "targets": ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"],
+        "targets": [
+          "Colonia Veterans",
+          "Tax Collectors",
+          "Roman Supply Depot"
+        ],
         "value": 3,
         "scope": "total"
       },
@@ -824,9 +1115,21 @@
       "body_key": "tutorial.boudica_upgrade_choice_body",
       "speaker": "council",
       "choices": [
-        { "id": "city", "label_key": "tutorial.boudica_upgrade_choice_city", "next": "boudica_structure_upgrade" },
-        { "id": "tile", "label_key": "tutorial.boudica_upgrade_choice_tile", "next": "boudica_tile_upgrade_menu" },
-        { "id": "skip", "label_key": "tutorial.boudica_upgrade_choice_skip", "next": "boudica_bunker_choice" }
+        {
+          "id": "city",
+          "label_key": "tutorial.boudica_upgrade_choice_city",
+          "next": "boudica_structure_upgrade"
+        },
+        {
+          "id": "tile",
+          "label_key": "tutorial.boudica_upgrade_choice_tile",
+          "next": "boudica_tile_upgrade_menu"
+        },
+        {
+          "id": "skip",
+          "label_key": "tutorial.boudica_upgrade_choice_skip",
+          "next": "boudica_bunker_choice"
+        }
       ]
     },
     {
@@ -835,9 +1138,19 @@
       "title_key": "tutorial.boudica_structure_upgrade_title",
       "hint_key": "tutorial.boudica_structure_upgrade_hint",
       "speaker": "boudica",
-      "trigger": { "type": "city_level", "value": 3, "scope": "total" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "trigger": {
+        "type": "city_level",
+        "value": 3,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
       "next": "boudica_factory_choice"
     },
     {
@@ -846,9 +1159,19 @@
       "title_key": "tutorial.boudica_tile_upgrade_title",
       "hint_key": "tutorial.boudica_tile_upgrade_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "map_build", "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "map_build", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "map_build",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_build",
+        "gesture": "tap"
+      },
       "next": "boudica_tile_upgrade"
     },
     {
@@ -857,9 +1180,19 @@
       "title_key": "tutorial.boudica_tile_upgrade_title",
       "hint_key": "tutorial.boudica_tile_upgrade_hint",
       "speaker": "council",
-      "trigger": { "type": "tile_upgrade", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "map_upgrade_tile", "gesture": "tap" },
+      "trigger": {
+        "type": "tile_upgrade",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_upgrade_tile",
+        "gesture": "tap"
+      },
       "next": "boudica_bunker_choice"
     },
     {
@@ -869,9 +1202,21 @@
       "body_key": "tutorial.boudica_factory_choice_body",
       "speaker": "council",
       "choices": [
-        { "id": "build", "label_key": "tutorial.boudica_factory_choice_build", "next": "boudica_factory_intro" },
-        { "id": "foundry", "label_key": "tutorial.boudica_factory_choice_foundry", "next": "boudica_foundry_select_menu" },
-        { "id": "skip", "label_key": "tutorial.boudica_factory_choice_skip", "next": "boudica_bunker_choice" }
+        {
+          "id": "build",
+          "label_key": "tutorial.boudica_factory_choice_build",
+          "next": "boudica_factory_intro"
+        },
+        {
+          "id": "foundry",
+          "label_key": "tutorial.boudica_factory_choice_foundry",
+          "next": "boudica_foundry_select_menu"
+        },
+        {
+          "id": "skip",
+          "label_key": "tutorial.boudica_factory_choice_skip",
+          "next": "boudica_bunker_choice"
+        }
       ]
     },
     {
@@ -880,9 +1225,19 @@
       "title_key": "tutorial.boudica_foundry_title",
       "hint_key": "tutorial.boudica_foundry_menu_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "map_build", "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "map_build", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "map_build",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_build",
+        "gesture": "tap"
+      },
       "next": "boudica_foundry_upgrade"
     },
     {
@@ -891,9 +1246,19 @@
       "title_key": "tutorial.boudica_foundry_title",
       "hint_key": "tutorial.boudica_foundry_upgrade_hint",
       "speaker": "council",
-      "trigger": { "type": "foundry_level", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "map_upgrade_foundry", "gesture": "tap" },
+      "trigger": {
+        "type": "foundry_level",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_upgrade_foundry",
+        "gesture": "tap"
+      },
       "next": "boudica_foundry_ready"
     },
     {
@@ -920,8 +1285,16 @@
       "title_key": "tutorial.boudica_choose_factory_title",
       "hint_key": "tutorial.boudica_choose_factory_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "dock_factory", "scope": "step" },
-      "guide": { "kind": "ui", "target": "dock_factory", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_factory",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_factory",
+        "gesture": "tap"
+      },
       "next": "boudica_build_factory"
     },
     {
@@ -930,9 +1303,19 @@
       "title_key": "tutorial.boudica_build_factory_title",
       "hint_key": "tutorial.boudica_build_factory_hint",
       "speaker": "council",
-      "trigger": { "type": "factory", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "factory",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
       "next": "boudica_factory_ready"
     },
     {
@@ -951,8 +1334,16 @@
       "body_key": "tutorial.boudica_bunker_choice_body",
       "speaker": "council",
       "choices": [
-        { "id": "build", "label_key": "tutorial.boudica_bunker_choice_build", "next": "boudica_bunker_intro" },
-        { "id": "skip", "label_key": "tutorial.boudica_bunker_choice_skip", "next": "boudica_camulodunum_intro" }
+        {
+          "id": "build",
+          "label_key": "tutorial.boudica_bunker_choice_build",
+          "next": "boudica_bunker_intro"
+        },
+        {
+          "id": "skip",
+          "label_key": "tutorial.boudica_bunker_choice_skip",
+          "next": "boudica_camulodunum_intro"
+        }
       ]
     },
     {
@@ -970,8 +1361,16 @@
       "title_key": "tutorial.boudica_choose_bunker_title",
       "hint_key": "tutorial.boudica_choose_bunker_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "dock_bunker", "scope": "step" },
-      "guide": { "kind": "ui", "target": "dock_bunker", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_bunker",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_bunker",
+        "gesture": "tap"
+      },
       "next": "boudica_build_bunker"
     },
     {
@@ -980,9 +1379,19 @@
       "title_key": "tutorial.boudica_build_bunker_title",
       "hint_key": "tutorial.boudica_build_bunker_hint",
       "speaker": "council",
-      "trigger": { "type": "bunker", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "bunker",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
       "next": "boudica_bunker_ready"
     },
     {
@@ -1121,8 +1530,16 @@
       "body_key": "tutorial.boudica_pact_choice_body",
       "speaker": "council",
       "choices": [
-        { "id": "offer", "label_key": "tutorial.boudica_pact_choice_offer", "next": "boudica_pact_offer" },
-        { "id": "march", "label_key": "tutorial.boudica_pact_choice_skip", "next": "boudica_port_choice" }
+        {
+          "id": "offer",
+          "label_key": "tutorial.boudica_pact_choice_offer",
+          "next": "boudica_pact_offer"
+        },
+        {
+          "id": "march",
+          "label_key": "tutorial.boudica_pact_choice_skip",
+          "next": "boudica_port_choice"
+        }
       ]
     },
     {
@@ -1131,28 +1548,30 @@
       "title_key": "tutorial.boudica_pact_target_title",
       "hint_key": "tutorial.boudica_pact_target_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "map_alliance", "scope": "step" },
-      "marker": { "target": "Catuvellauni" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "contact",
+        "target": "Catuvellauni",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "Catuvellauni"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
       "next": "boudica_pact_formed"
     },
     {
       "id": "boudica_pact_formed",
-      "type": "objective",
+      "type": "scene",
       "title_key": "tutorial.boudica_pact_target_title",
       "speaker": "council",
-      "trigger": { "type": "alliance", "target": "Catuvellauni", "value": 1, "scope": "step" },
-      "marker": { "target": "Catuvellauni" },
-      "next": "boudica_pact_success"
-    },
-    {
-      "id": "boudica_pact_success",
-      "type": "scene",
-      "title_key": "tutorial.boudica_pact_success_title",
+      "next": "boudica_port_choice",
       "body_key": "tutorial.boudica_pact_success_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "next": "boudica_port_choice"
+      "presentation": "dialogue"
     },
     {
       "id": "boudica_port_choice",
@@ -1161,8 +1580,16 @@
       "body_key": "tutorial.boudica_port_choice_body",
       "speaker": "council",
       "choices": [
-        { "id": "build", "label_key": "tutorial.boudica_port_choice_build", "next": "boudica_port_intro" },
-        { "id": "skip", "label_key": "tutorial.boudica_port_choice_skip", "next": "boudica_final_battle_intro" }
+        {
+          "id": "build",
+          "label_key": "tutorial.boudica_port_choice_build",
+          "next": "boudica_port_intro"
+        },
+        {
+          "id": "skip",
+          "label_key": "tutorial.boudica_port_choice_skip",
+          "next": "boudica_final_battle_intro"
+        }
       ]
     },
     {
@@ -1180,8 +1607,16 @@
       "title_key": "tutorial.boudica_choose_port_title",
       "hint_key": "tutorial.boudica_choose_port_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "dock_port", "scope": "step" },
-      "guide": { "kind": "ui", "target": "dock_port", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "dock_port",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "dock_port",
+        "gesture": "tap"
+      },
       "next": "boudica_build_port"
     },
     {
@@ -1190,9 +1625,19 @@
       "title_key": "tutorial.boudica_build_port_title",
       "hint_key": "tutorial.boudica_build_port_hint",
       "speaker": "council",
-      "trigger": { "type": "port", "value": 1, "scope": "total" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "port",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
       "next": "boudica_port_upgrade"
     },
     {
@@ -1201,9 +1646,19 @@
       "title_key": "tutorial.boudica_port_upgrade_title",
       "hint_key": "tutorial.boudica_port_upgrade_hint",
       "speaker": "council",
-      "trigger": { "type": "port_upgrade", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "trigger": {
+        "type": "port_upgrade",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
       "next": "boudica_port_ready"
     },
     {
@@ -1212,8 +1667,14 @@
       "title_key": "tutorial.boudica_port_upgrade_title",
       "hint_key": "tutorial.boudica_port_ready_hint",
       "speaker": "council",
-      "trigger": { "type": "port_level", "value": 2, "scope": "total" },
-      "marker": { "target": "player" },
+      "trigger": {
+        "type": "port_level",
+        "value": 2,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
       "next": "boudica_fleet_intro"
     },
     {
@@ -1231,9 +1692,21 @@
       "title_key": "tutorial.boudica_fleet_target_title",
       "hint_key": "tutorial.boudica_fleet_target_hint",
       "speaker": "council",
-      "trigger": { "type": "fleet", "unit": "TransportShip", "target": "Legio XIV Gemina", "value": 1, "scope": "step" },
-      "marker": { "target": "Legio XIV Gemina" },
-      "guide": { "kind": "world", "target": "player", "gesture": "tap" },
+      "trigger": {
+        "type": "fleet",
+        "unit": "TransportShip",
+        "target": "Legio XIV Gemina",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "Legio XIV Gemina"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "tap"
+      },
       "next": "boudica_fleet_ready"
     },
     {
@@ -1252,8 +1725,16 @@
       "body_key": "tutorial.boudica_ship_choice_body",
       "speaker": "council",
       "choices": [
-        { "id": "trade", "label_key": "tutorial.boudica_ship_choice_trade", "next": "boudica_trade_city" },
-        { "id": "march", "label_key": "tutorial.boudica_ship_choice_march", "next": "boudica_final_battle_intro" }
+        {
+          "id": "trade",
+          "label_key": "tutorial.boudica_ship_choice_trade",
+          "next": "boudica_trade_city"
+        },
+        {
+          "id": "march",
+          "label_key": "tutorial.boudica_ship_choice_march",
+          "next": "boudica_final_battle_intro"
+        }
       ]
     },
     {
@@ -1262,9 +1743,19 @@
       "title_key": "tutorial.boudica_trade_city_title",
       "hint_key": "tutorial.boudica_trade_city_hint",
       "speaker": "council",
-      "trigger": { "type": "city_level", "value": 4, "scope": "total" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "trigger": {
+        "type": "city_level",
+        "value": 4,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
       "next": "boudica_trade_port"
     },
     {
@@ -1273,9 +1764,19 @@
       "title_key": "tutorial.boudica_trade_port_title",
       "hint_key": "tutorial.boudica_trade_port_hint",
       "speaker": "council",
-      "trigger": { "type": "port_level", "value": 3, "scope": "total" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "upgrade_structure", "gesture": "tap" },
+      "trigger": {
+        "type": "port_level",
+        "value": 3,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
       "next": "boudica_trade_menu"
     },
     {
@@ -1284,9 +1785,19 @@
       "title_key": "tutorial.boudica_trade_menu_title",
       "hint_key": "tutorial.boudica_trade_menu_hint",
       "speaker": "council",
-      "trigger": { "type": "ui", "action": "map_build", "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "map_build", "gesture": "tap" },
+      "trigger": {
+        "type": "ui",
+        "action": "map_build",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_build",
+        "gesture": "tap"
+      },
       "next": "boudica_trade_ship"
     },
     {
@@ -1295,9 +1806,20 @@
       "title_key": "tutorial.boudica_trade_ship_title",
       "hint_key": "tutorial.boudica_trade_ship_hint",
       "speaker": "council",
-      "trigger": { "type": "fleet", "unit": "TradeShip", "value": 1, "scope": "step" },
-      "marker": { "target": "player" },
-      "guide": { "kind": "ui", "target": "map_build_trade_ship", "gesture": "tap" },
+      "trigger": {
+        "type": "fleet",
+        "unit": "TradeShip",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_build_trade_ship",
+        "gesture": "tap"
+      },
       "next": "boudica_trade_ready"
     },
     {
@@ -1414,8 +1936,17 @@
     }
   ],
   "layout": {
-    "boudica_return_campaign": { "x": 70, "y": 1580 },
-    "boudica_return_replay": { "x": 350, "y": 1580 },
-    "boudica_return_end": { "x": 630, "y": 1580 }
+    "boudica_return_campaign": {
+      "x": 70,
+      "y": 1580
+    },
+    "boudica_return_replay": {
+      "x": 350,
+      "y": 1580
+    },
+    "boudica_return_end": {
+      "x": 630,
+      "y": 1580
+    }
   }
 }

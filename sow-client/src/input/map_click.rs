@@ -1,4 +1,4 @@
-use super::placement::{PlacementQuery, resolve_build_target_tile};
+use super::placement::PlacementQuery;
 use crate::app::{MapContextMenu, MapContextMenuView, SowApp};
 use serde::Deserialize;
 
@@ -276,13 +276,7 @@ impl SowApp {
         self.set_map_context_menu(x, y, tile_idx, MapContextMenuView::Radial);
     }
 
-    fn set_map_context_menu(
-        &mut self,
-        x: f64,
-        y: f64,
-        tile_idx: u32,
-        view: MapContextMenuView,
-    ) {
+    fn set_map_context_menu(&mut self, x: f64, y: f64, tile_idx: u32, view: MapContextMenuView) {
         let session = self.input.map_context_menu_session.wrapping_add(1);
         self.input.map_context_menu_session = session;
         let building = (view == MapContextMenuView::BuildingDetails)
@@ -445,7 +439,12 @@ impl SowApp {
             .sim
             .current_snapshot
             .as_ref()
-            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == target.my_id))
+            .and_then(|snapshot| {
+                snapshot
+                    .players
+                    .iter()
+                    .find(|player| player.id == target.my_id)
+            })
             .is_none_or(|player| player.boats_in_use < player.boat_capacity);
         let city_level = self
             .sim
@@ -647,11 +646,10 @@ impl SowApp {
                 self.select_building_kind(kind);
             }
             MapMenuAction::UpgradeStructure => {
-                if let Some(building) = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
+                if let Some(building) =
+                    self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                        snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx)
+                    })
                 {
                     self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
                         building_id: building.id,
@@ -778,7 +776,8 @@ impl SowApp {
                 .buildings
                 .iter()
                 .filter(|building| {
-                    building.owner_id == my_id && building.kind == sow_core::game::BuildingKind::City
+                    building.owner_id == my_id
+                        && building.kind == sow_core::game::BuildingKind::City
                 })
                 .map(|building| {
                     sow_core::building::farm_slots_for_city_level(building.active_level())
@@ -788,7 +787,8 @@ impl SowApp {
                 .buildings
                 .iter()
                 .filter(|building| {
-                    building.owner_id == my_id && building.kind == sow_core::game::BuildingKind::Farm
+                    building.owner_id == my_id
+                        && building.kind == sow_core::game::BuildingKind::Farm
                 })
                 .count() as u32;
             if farms >= slots {
@@ -808,17 +808,20 @@ impl SowApp {
             .as_ref()
             .map(|renderer| renderer.terrain.as_slice())
             .unwrap_or(&[]);
-        let target_res = resolve_build_target_tile(&PlacementQuery {
-            kind,
-            click_x: col,
-            click_y: row,
-            map_w: self.sim.map_w,
-            map_h: self.sim.map_h,
-            owners,
-            terrain,
-            my_id,
-            buildings: &snapshot.buildings,
-        });
+        let target_res = self.ui.building_placement_cache.resolve(
+            snapshot.tick,
+            &PlacementQuery {
+                kind,
+                click_x: col,
+                click_y: row,
+                map_w: self.sim.map_w,
+                map_h: self.sim.map_h,
+                owners,
+                terrain,
+                my_id,
+                buildings: &snapshot.buildings,
+            },
+        );
         let cost_index = sow_core::game::BuildingKind::ALL
             .iter()
             .position(|candidate| *candidate == kind)
@@ -870,12 +873,7 @@ impl SowApp {
     fn map_menu_cost(&self, action: MapMenuAction, tile_idx: u32) -> (Option<f64>, Option<u8>) {
         match action {
             MapMenuAction::UpgradeTile => {
-                let level = self
-                    .sim
-                    .tile_upgrades
-                    .get(&tile_idx)
-                    .copied()
-                    .unwrap_or(0) as i32;
+                let level = self.sim.tile_upgrades.get(&tile_idx).copied().unwrap_or(0) as i32;
                 let cost = (1000.0 * 1.5_f64.powi(level)) / sow_core::config::GOLD_SCALE.max(1.0);
                 (Some(cost), Some(level as u8))
             }
@@ -951,16 +949,12 @@ impl SowApp {
                 )
             }
             MapMenuAction::UpgradeStructure => {
-                let building = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| {
-                        snapshot
-                            .buildings
-                            .iter()
-                            .find(|building| building.tile_idx == tile_idx)
-                    });
+                let building = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                    snapshot
+                        .buildings
+                        .iter()
+                        .find(|building| building.tile_idx == tile_idx)
+                });
                 let Some(building) = building else {
                     return (None, None);
                 };
@@ -987,7 +981,8 @@ impl SowApp {
                                     .iter()
                                     .filter(|candidate| {
                                         candidate.owner_id == building.owner_id
-                                            && candidate.kind == sow_core::game::BuildingKind::Factory
+                                            && candidate.kind
+                                                == sow_core::game::BuildingKind::Factory
                                             && candidate.active_level() >= 3
                                     })
                                     .count() as u32
@@ -1440,9 +1435,7 @@ fn action_notice(message: &str) -> crate::ui::UiText {
             UiText::new("hud.action_unavailable")
         }
         "Teammates cannot be targeted. 🤝" => UiText::new("hud.fleet_teammate"),
-        "Break the alliance before launching a fleet. 🛡️" => {
-            UiText::new("hud.fleet_alliance")
-        }
+        "Break the alliance before launching a fleet. 🛡️" => UiText::new("hud.fleet_alliance"),
         "A fleet cannot target your own territory. 🛡️" => UiText::new("hud.fleet_own_target"),
         "Resources can only be sent to allies. ⚖️" => UiText::new("hud.resources_allies_only"),
         "Alliance renewal is already pending." => UiText::new("hud.alliance_renewal_pending"),

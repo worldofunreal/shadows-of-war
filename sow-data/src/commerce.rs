@@ -376,7 +376,6 @@ pub fn catalog_for_profile(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,7 +429,10 @@ mod tests {
         let mut owned = BTreeSet::new();
         owned.insert("royal_lattice".to_string());
         assert_eq!(skin_style_for_profile(&owned, Some("royal_lattice")), 3);
-        assert_eq!(skin_style_for_profile(&BTreeSet::new(), Some("royal_lattice")), 0);
+        assert_eq!(
+            skin_style_for_profile(&BTreeSet::new(), Some("royal_lattice")),
+            0
+        );
     }
 
     #[test]
@@ -482,5 +484,4 @@ mod tests {
         assert!(owned_offer.available);
         assert!(owned_offer.owned);
     }
-
 }

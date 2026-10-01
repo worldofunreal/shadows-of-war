@@ -217,8 +217,13 @@ impl AssetLoader {
         let image = image::load_from_memory(bytes)
             .map_err(|error| format!("decode avatar: {error}"))?
             .to_rgba8();
-        let cell = image::imageops::resize(&image, 128, 128, image::imageops::FilterType::Triangle)
-            .into_raw();
+        let cell = image::imageops::resize(
+            &image,
+            sow_render::text::AVATAR_CELL,
+            sow_render::text::AVATAR_CELL,
+            image::imageops::FilterType::Triangle,
+        )
+        .into_raw();
         self.gpu_avatar_cells
             .retain(|(loaded_key, _)| loaded_key != &key);
         self.gpu_avatar_cells.push((key.clone(), cell));
@@ -271,4 +276,39 @@ fn valid_avatar_id(value: &str) -> bool {
     let mut chars = value.chars();
     matches!(chars.next(), Some('a'..='z'))
         && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn avatar_slots_cover_builtin_and_geo_entity_portraits_without_dropping_them() {
+        let mut loader = AssetLoader::new();
+        let entity_avatars = sow_data::geo_entities::all()
+            .filter_map(|entity| entity.avatar.as_deref())
+            .collect::<HashSet<_>>();
+        assert!(
+            entity_avatars.len() + Leader::ALL.len() + 1 <= sow_render::text::AVATAR_SLOT_COUNT
+        );
+        for avatar in &entity_avatars {
+            loader.queue_campaign_avatar(avatar);
+        }
+        assert_eq!(loader.campaign_avatar_slots.len(), entity_avatars.len());
+        assert!(
+            loader
+                .campaign_avatar_slots
+                .values()
+                .all(|slot| *slot < sow_render::text::AVATAR_SLOT_COUNT)
+        );
+        assert_eq!(
+            loader
+                .campaign_avatar_slots
+                .values()
+                .copied()
+                .collect::<HashSet<_>>()
+                .len(),
+            entity_avatars.len()
+        );
+    }
 }

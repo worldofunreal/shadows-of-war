@@ -1,6 +1,6 @@
 use crate::building::{
     Building, CityModules, ModuleKind, resolve_structure_spawn_tile, structure_build_cost_gold,
-    structure_upgrade_cost_gold, structure_kind_enabled,
+    structure_kind_enabled, structure_upgrade_cost_gold,
 };
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase};
@@ -29,7 +29,8 @@ impl SowEngine {
         }
         if kind == BuildingKind::Factory
             && !self.buildings.iter().any(|building| {
-                building.owner_id == player_id && building.kind == BuildingKind::City
+                building.owner_id == player_id
+                    && building.kind == BuildingKind::City
                     && building.active_level() >= 3
             })
         {
@@ -40,11 +41,13 @@ impl SowEngine {
         if area == 0 || target_tile >= area {
             return;
         }
+        self.refresh_building_grid();
 
         if kind == BuildingKind::Farm {
             let map = &self.state.map;
             let x = target_tile % w;
             let y = target_tile / w;
+            let footprint = crate::building::BuildingFootprint::at(kind, x, y);
             let farm_count = self
                 .buildings
                 .iter()
@@ -53,7 +56,17 @@ impl SowEngine {
             let farm_slots = crate::building::player_farm_slots(&self.buildings, player_id);
             if map.owner_id(x, y) != player_id
                 || map.terrain_type(x, y) != crate::map::TerrainType::Land
-                || self.buildings.iter().any(|b| b.tile_idx == target_tile)
+                || !crate::building::footprint_fits(map, player_id, footprint)
+                || self
+                    .building_grid
+                    .iter_all_in_range(x, y, 3)
+                    .any(|building| {
+                        footprint.intersects(crate::building::BuildingFootprint::at(
+                            building.kind,
+                            building.x,
+                            building.y,
+                        ))
+                    })
                 || farm_count >= farm_slots
             {
                 return;
@@ -62,7 +75,6 @@ impl SowEngine {
 
         // Placement is intentionally separate from upgrades. A nearby building
         // never absorbs a new foundation order.
-        self.refresh_building_grid();
         let spawn_idx = if kind == BuildingKind::Farm {
             target_tile
         } else {
@@ -171,6 +183,9 @@ impl SowEngine {
             target_level,
             factory_time_levels,
         );
+        if b.kind == BuildingKind::Bunker {
+            self.defense_grid_dirty = true;
+        }
         self.building_aggregates_dirty = true;
         self.bot_sam_tiles_cache = None;
         self.sea_lanes_dirty = true;
@@ -346,20 +361,27 @@ mod tests {
         }
 
         let mut players = Vec::new();
-        for (id, x0, y0) in [(1u16, 0u32, 0u32), (2, 14, 8)] {
+        for (id, y0) in [(1u16, 0u32), (2, 8)] {
             let mut player =
                 Player::new_human(id, format!("Player {id}"), [0.4, 0.6, 0.8], &config);
             player.has_spawned = true;
-            player.tile_count = 24;
+            player.tile_count = 32;
             player.gold = config.starting_gold;
             player.troops = config.starting_troops;
+            let x_ranges: &[(u32, u32)] = if id == 1 {
+                &[(0, 4), (6, 10)]
+            } else {
+                &[(12, 20)]
+            };
             for y in y0..y0 + 4 {
-                for x in x0..x0 + 6 {
-                    let tile = y * game.map.width + x;
-                    game.map.set_owner_id(x, y, id);
-                    player.border_insert(tile);
-                    player.sum_x += u64::from(x);
-                    player.sum_y += u64::from(y);
+                for &(x_start, x_end) in x_ranges {
+                    for x in x_start..x_end {
+                        let tile = y * game.map.width + x;
+                        game.map.set_owner_id(x, y, id);
+                        player.border_insert(tile);
+                        player.sum_x += u64::from(x);
+                        player.sum_y += u64::from(y);
+                    }
                 }
             }
             players.push(player);
@@ -400,7 +422,10 @@ mod tests {
         assert_eq!(campaign.buildings[0].modules.foundry, 1);
         assert!(campaign.state.events.iter().any(|event| matches!(
             event,
-            GameEvent::StructureUpgraded { kind: BuildingKind::City, .. }
+            GameEvent::StructureUpgraded {
+                kind: BuildingKind::City,
+                ..
+            }
         )));
 
         let mut multiplayer = engine(false);
@@ -450,29 +475,42 @@ mod tests {
     #[test]
     fn farms_require_owned_lowland_and_stop_at_city_plot_limit() {
         let mut game = engine(false);
+        game.state.map = crate::map::GameMap::new(16, 16);
         game.state.next_building_id = 2;
         game.buildings.push(building(1, BuildingKind::City, 1));
-        for y in 0..5 {
-            for x in 0..5 {
+        game.buildings[0].tile_idx = game.state.map.ref_id(8, 8) as u32;
+        for y in 0..16 {
+            for x in 0..16 {
                 let idx = game.state.map.ref_id(x, y);
                 game.state.map.terrain[idx] = crate::map::MapTile::from_byte(0b1000_0000);
                 game.state.map.set_owner_id(x, y, 1);
             }
         }
-        game.state.map.set_owner_id(4, 0, 0);
-        let water = game.state.map.ref_id(1, 0);
-        game.state.map.terrain[water] = crate::map::MapTile::from_byte(0);
+        game.state.map.set_owner_id(2, 2, 0);
+        let water_anchor = game.state.map.ref_id(4, 4);
+        game.state.map.terrain[water_anchor] = crate::map::MapTile::from_byte(0);
+        let water_in_footprint = game.state.map.ref_id(0, 3);
+        game.state.map.terrain[water_in_footprint] = crate::map::MapTile::from_byte(0);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, 4);
-        game.apply_build_structure_intent(1, BuildingKind::Farm, 1);
+        let unowned_tile = game.state.map.ref_id(2, 2) as u32;
+        let water_tile = game.state.map.ref_id(4, 4) as u32;
+        let invalid_footprint_tile = game.state.map.ref_id(2, 5) as u32;
+        game.apply_build_structure_intent(1, BuildingKind::Farm, unowned_tile);
+        game.apply_build_structure_intent(1, BuildingKind::Farm, water_tile);
+        game.apply_build_structure_intent(1, BuildingKind::Farm, invalid_footprint_tile);
         assert_eq!(game.buildings.len(), 1);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, 2);
+        let valid_farm = game.state.map.ref_id(2, 12) as u32;
+        game.apply_build_structure_intent(1, BuildingKind::Farm, valid_farm);
         assert_eq!(game.buildings.len(), 2);
-        assert_eq!(game.buildings[1].tile_idx, 2);
+        assert_eq!(game.buildings[1].tile_idx, valid_farm);
         assert!(game.buildings[1].under_construction);
 
-        game.apply_build_structure_intent(1, BuildingKind::Farm, 3);
+        game.apply_build_structure_intent(
+            1,
+            BuildingKind::Farm,
+            game.state.map.ref_id(12, 12) as u32,
+        );
         assert_eq!(game.buildings.len(), 2);
     }
 
@@ -511,7 +549,7 @@ mod tests {
         let checkpoints = [(1_200u64, 2u8), (3_600, 6), (6_000, 10)];
         let mut next_checkpoint = 0;
         let city_tile = 2 * game.state.map.width + 2;
-        let farm_tile = 0;
+        let farm_tile = 2 * game.state.map.width + 8;
         for _ in 0..6_000 {
             let city = game
                 .buildings

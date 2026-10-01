@@ -10,6 +10,7 @@ const NUKE_ARC_SAMPLES: usize = 128;
 const NUKE_CURVE_MIN_SAMPLES: usize = 64;
 const NUKE_CURVE_MAX_SAMPLES: usize = 4096;
 const MIN_PROJECTILE_SCREEN_PX: f32 = 11.0;
+const MIN_TRANSPORT_SCREEN_PX: f32 = 12.0;
 const PROJECTILE_TRAIL_WIDTH_MIN: f32 = 3.0;
 const PROJECTILE_TRAIL_WIDTH_MAX: f32 = 10.0;
 
@@ -720,7 +721,12 @@ impl MoverScene {
             };
 
             let mut sprite_size = slot.size * scale;
-            if !slot.is_fleet {
+            if slot.is_fleet && slot.sprite == MoverSpriteId::TransportShip {
+                let screen_size = sprite_size * params.camera_zoom;
+                if screen_size < MIN_TRANSPORT_SCREEN_PX {
+                    sprite_size = MIN_TRANSPORT_SCREEN_PX / params.camera_zoom;
+                }
+            } else if !slot.is_fleet {
                 let screen_size = sprite_size * params.camera_zoom;
                 if screen_size < MIN_PROJECTILE_SCREEN_PX {
                     sprite_size = MIN_PROJECTILE_SCREEN_PX / params.camera_zoom;

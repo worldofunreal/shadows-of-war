@@ -1825,6 +1825,7 @@ fn verify_replay(
         players,
         map_file.spawns.clone(),
         map_file.geo_bounds.clone(),
+        map_file.rosters.clone(),
         map_file.num_land_tiles,
     );
 

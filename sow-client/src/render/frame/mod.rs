@@ -192,10 +192,6 @@ impl SowApp {
                         .as_ref()
                         .map(|s| s.dirty_tiles.as_slice())
                         .unwrap_or(&[]);
-                    if !dirty.is_empty() {
-                        self.ui.nameplate_land_cache.mark_dirty();
-                    }
-
                     thread_local! {
                         static LAST_FOG_OF_WAR_TOGGLE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
                     }
@@ -318,21 +314,12 @@ impl SowApp {
                                 let bx = (b.tile_idx % self.sim.map_w) as i32;
                                 let by = (b.tile_idx / self.sim.map_w) as i32;
 
-                                let mut radius = None;
-                                for rule in kind.spacing_rules() {
-                                    if b.kind == rule.target_kind {
-                                        radius = Some(rule.min_distance as f32);
-                                        break;
-                                    }
-                                }
-
-                                if let Some(r_val) = radius {
-                                    let dx = (bx - col).abs();
-                                    let dy = (by - row).abs();
-                                    let dist = dx.max(dy);
-
-                                    self.ui.placement_scratch.push((bx, by, r_val, dist));
-                                }
+                                let radius = sow_core::building::minimum_building_spacing(kind, b.kind)
+                                    as f32;
+                                let dx = (bx - col).abs();
+                                let dy = (by - row).abs();
+                                let dist = dx.max(dy);
+                                self.ui.placement_scratch.push((bx, by, radius, dist));
                             }
 
                             self.ui

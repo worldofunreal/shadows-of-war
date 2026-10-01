@@ -93,8 +93,7 @@ pub(super) fn stack_build_decision(
     let stack_tile = pick_stack_click_tile(buildings, bot_id, kind)?;
     let building = buildings
         .iter()
-        .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)
-        ?;
+        .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)?;
     let owned_levels = crate::building::count_kind(buildings, bot_id, kind);
     let (_, factory_discount_levels, _) = crate::building::factory_perk_counts(buildings, bot_id);
     let cost = crate::building::structure_upgrade_cost_gold(
@@ -179,7 +178,7 @@ pub(super) fn resolve_farm_from_candidates(
         .or_else(|| {
             candidates.interior.iter().find_map(|&(x, y)| {
                 map.is_valid_coord(x, y)
-                    .then_some(y as u32 * map.width + x as u32)
+                    .then(|| y as u32 * map.width + x as u32)
                     .filter(|&idx| suitable(idx))
             })
         })

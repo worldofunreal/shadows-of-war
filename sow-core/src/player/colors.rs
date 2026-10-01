@@ -62,6 +62,16 @@ pub fn team_territory_rgb(team: crate::protocol::Team) -> [f32; 3] {
     }
 }
 
+/// Campaign diplomacy colors are visual state only; they do not assign gameplay teams.
+#[inline]
+pub fn campaign_relation_rgb(relation: crate::protocol::CampaignRelation) -> Option<[f32; 3]> {
+    match relation {
+        crate::protocol::CampaignRelation::Neutral => None,
+        crate::protocol::CampaignRelation::Allied => Some([0.2, 0.5, 1.0]),
+        crate::protocol::CampaignRelation::Enemy => Some([1.0, 0.2, 0.2]),
+    }
+}
+
 /// RGB used for human-owned territory in the sow-render map shader (`map.wgsl`).
 /// Matches WGSL `owner_id <= 16` branch so UI (nameplates) matches the map tint.
 #[inline]

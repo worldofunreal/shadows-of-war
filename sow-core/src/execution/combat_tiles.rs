@@ -5,6 +5,26 @@ use crate::game_config::max_tiles_cap_for_troops;
 use crate::map::TerrainType;
 use crate::rng::NextIntExt;
 
+#[inline]
+fn terrain_capture_speed(terrain: TerrainType) -> f64 {
+    match terrain {
+        TerrainType::Land => 16.5,
+        TerrainType::Highland => 20.0,
+        TerrainType::Mountain => 25.0,
+        _ => 16.5,
+    }
+}
+
+#[inline]
+fn terrain_loss_multiplier(terrain: TerrainType, config: &crate::game_config::GameConfig) -> f64 {
+    match terrain {
+        TerrainType::Land => 1.0,
+        TerrainType::Highland => config.terrain_multiplier_highland,
+        TerrainType::Mountain => config.terrain_multiplier_mountain,
+        _ => 1.0,
+    }
+}
+
 // Attack execution tick (territory expansion and combat resolution)
 impl SowEngine {
     pub fn execute_combat(&mut self) {
@@ -18,10 +38,9 @@ impl SowEngine {
 
         let tick_now = self.state.tick;
 
-        // Pre-filter all active defense posts globally ONCE per tick when grid is stale.
-        if !self.attacks.is_empty() && (self.defense_grid_dirty || self.defense_grid.grid_w == 0) {
-            self.defense_grid.rebuild(&self.buildings, map_w, map_h, 16);
-            self.defense_grid_dirty = false;
+        // Rebuild only when buildings changed; each tile then queries nearby cells.
+        if !self.attacks.is_empty() {
+            self.refresh_defense_grid();
         }
 
         // attacks are sorted on insertion
@@ -145,21 +164,17 @@ impl SowEngine {
                     }
 
                     // Determine conquest cost for this specific tile (matching OpenFront's terrain & Bunker coefficients)
-                    let base_speed: f64 = match terrain_type {
-                        TerrainType::Land => 16.5,
-                        TerrainType::Highland => 20.0,
-                        TerrainType::Mountain => 25.0,
-                        _ => 16.5,
-                    };
+                    let base_speed = terrain_capture_speed(terrain_type);
 
-                    let dp_bonus = self.defense_grid.priority_bonus(
+                    let defense = self.defense_grid.influence(
                         target_tile.x,
                         target_tile.y,
                         map_w,
                         execution.target_owner,
+                        execution.owner_id,
+                        self.state.seed,
                         &self.state.config,
                     );
-                    let dp_multiplier = if dp_bonus > 0 { 3.0 } else { 1.0 };
 
                     let tile_cost = if execution.target_owner == 0 {
                         let speed_term = base_speed.max(10.0);
@@ -174,7 +189,7 @@ impl SowEngine {
                             .max(1.0);
                         let ratio = defender_troops / (5.0 * effective_troops);
                         let ratio_clamp = ratio.clamp(0.2, 1.5);
-                        ratio_clamp * base_speed * dp_multiplier
+                        ratio_clamp * base_speed * defense.capture_multiplier
                     };
 
                     // Check if we can afford this tile on this tick using expectation-invariant deterministic RNG
@@ -192,12 +207,8 @@ impl SowEngine {
                         budget -= tile_cost;
                     }
 
-                    let terrain_multiplier = match terrain_type {
-                        TerrainType::Land => 1.0,
-                        TerrainType::Highland => self.state.config.terrain_multiplier_highland,
-                        TerrainType::Mountain => self.state.config.terrain_multiplier_mountain,
-                        _ => 1.0,
-                    };
+                    let terrain_multiplier =
+                        terrain_loss_multiplier(terrain_type, &self.state.config);
 
                     if execution.target_owner == 0 {
                         // Neutral: attacker pays constant base cost scaled by terrain multiplier
@@ -219,23 +230,9 @@ impl SowEngine {
                         }
 
                         // Defense posts increase attacker losses slightly
-                        let dp_bonus = self.defense_grid.priority_bonus(
-                            target_tile.x,
-                            target_tile.y,
-                            map_w,
-                            execution.target_owner,
-                            &self.state.config,
-                        );
-                        let scale = if self.state.config.bunker_priority > 0.0 {
-                            self.state.config.bunker_strength / self.state.config.bunker_priority
-                        } else {
-                            0.0
-                        };
-                        let dp_multiplier = 1.0 + (dp_bonus as f64 * scale).clamp(0.0, 0.50);
-
                         let atk_loss = (self.state.config.attack_cost_enemy
                             * terrain_multiplier
-                            * dp_multiplier)
+                            * defense.attacker_loss_multiplier)
                             / troop_strength;
 
                         execution.troops -= atk_loss;
@@ -298,8 +295,10 @@ impl SowEngine {
                                 ny,
                                 map_w,
                                 execution.target_owner,
+                                execution.owner_id,
+                                self.state.seed,
                                 &self.state.config,
-                            );
+                            ) as i64;
                             let seq = execution.insert_seq_counter;
                             execution.insert_seq_counter =
                                 execution.insert_seq_counter.wrapping_add(1);
@@ -364,5 +363,145 @@ impl SowEngine {
         for (victim, conqueror, x, y) in elimination_candidates {
             self.eliminate_player(victim, conqueror, x, y, false);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{terrain_capture_speed, terrain_loss_multiplier};
+    use crate::building::{Building, CityModules};
+    use crate::execution::{AttackExecution, PrioritizedTile};
+    use crate::game::{BuildingKind, GamePhase, GameState};
+    use crate::game_config::{GameConfig, max_tiles_cap_for_troops};
+    use crate::map::{MapTile, TerrainType};
+    use crate::player::Player;
+    use crate::rng::NextIntExt;
+    use crate::water_components::WaterComponents;
+    use std::collections::BinaryHeap;
+    use wyrand::WyRand;
+
+    #[test]
+    fn tower_defense_keeps_height_costs() {
+        let config = crate::game_config::GameConfig::default();
+        assert_eq!(terrain_capture_speed(TerrainType::Land), 16.5);
+        assert_eq!(terrain_capture_speed(TerrainType::Highland), 20.0);
+        assert_eq!(terrain_capture_speed(TerrainType::Mountain), 25.0);
+        assert_eq!(terrain_loss_multiplier(TerrainType::Land, &config), 1.0);
+        assert_eq!(
+            terrain_loss_multiplier(TerrainType::Highland, &config),
+            config.terrain_multiplier_highland
+        );
+        assert_eq!(
+            terrain_loss_multiplier(TerrainType::Mountain, &config),
+            config.terrain_multiplier_mountain
+        );
+    }
+
+    #[test]
+    fn advancing_frontier_uses_the_current_tower_priority_sample() {
+        let width = 8;
+        let mut config = GameConfig::default();
+        config.tick_rate_ms = 100.0;
+        let mut state = GameState::new(77, width, width, config);
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            state.register_player(Player::new_human(
+                id,
+                format!("P{id}"),
+                [0.5; 3],
+                &state.config,
+            ));
+        }
+        for (x, y, owner) in [(2, 3, 1), (3, 3, 2), (4, 3, 2)] {
+            state.set_tile_owner(x, y, owner);
+        }
+        state.player_mut(1).unwrap().troops = 10_000.0;
+        state.player_mut(2).unwrap().troops = 1_000.0;
+
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        engine.add_building(Building {
+            id: 1,
+            owner_id: 2,
+            tile_idx: 3 * width + 4,
+            kind: BuildingKind::Bunker,
+            level: 2,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: CityModules::default(),
+        });
+        engine.refresh_defense_grid();
+
+        let current_influence = engine.defense_grid.influence(
+            3,
+            3,
+            width,
+            2,
+            1,
+            engine.state.seed,
+            &engine.state.config,
+        );
+        let tile_cost = (1_000.0_f64 / (5.0 * 10_000.0_f64))
+            .clamp(0.2, 1.5)
+            * terrain_capture_speed(TerrainType::Land)
+            * current_influence.capture_multiplier;
+        let mut base_budget = 1.5;
+        match engine.state.player(1).unwrap().leader {
+            crate::player::Leader::Alexander => base_budget *= 1.15,
+            crate::player::Leader::Napoleon => base_budget *= 1.20,
+            _ => {}
+        }
+        engine.state.config.global_speed_multiplier =
+            (tile_cost / base_budget) * (1.0 - 1e-8);
+        let troops = 10_000.0;
+        let speed = engine
+            .state
+            .player(1)
+            .unwrap()
+            .leader
+            .troop_strength_multiplier();
+        let max_cap = max_tiles_cap_for_troops(troops * speed, &engine.state.config);
+        assert!(
+            max_cap * engine.state.config.global_speed_multiplier > tile_cost,
+            "the test must reach the capture-cost branch without the per-tick cap"
+        );
+
+        engine.add_attack(AttackExecution {
+            id: 1,
+            owner_id: 1,
+            target_owner: 2,
+            troops,
+            to_conquer: BinaryHeap::from([PrioritizedTile {
+                priority: 0,
+                insert_seq: 0,
+                x: 3,
+                y: 3,
+            }]),
+            insert_seq_counter: 0,
+            rng: WyRand::new(1),
+            retreating: false,
+        });
+        engine.execute_combat();
+
+        assert_eq!(engine.state.map.owner_id(3, 3), 1);
+        let next_tile = engine.attacks[0].to_conquer.peek().unwrap();
+        assert_eq!((next_tile.x, next_tile.y), (4, 3));
+        let mut rng = WyRand::new(1);
+        rng.next_int(0, 1_000); // capture-budget roll
+        let random = rng.next_int(0, 7) as i64;
+        let base_priority = (random + 10) * 6;
+        let next_influence = engine.defense_grid.influence(
+            4,
+            3,
+            width,
+            2,
+            1,
+            engine.state.seed,
+            &engine.state.config,
+        );
+        assert_eq!(
+            next_tile.priority,
+            base_priority + next_influence.priority_bonus as i64
+        );
     }
 }

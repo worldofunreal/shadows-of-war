@@ -1,39 +1,21 @@
 use super::feedback;
-use super::nameplate_placement::{
-    NameplateLandCache, NameplateLayout, NameplateStatus, fit_bounds_to_land, fit_size_to_land,
-};
 use crate::app::{InputState, MapContextMenuView, SimState, UiState};
-use crate::render::gpu::{AVATAR_CORNER_RADIUS_RATIO, BuildingSpriteId, TextRenderer};
+use crate::render::gpu::TextRenderer;
 use crate::theme::dev_config::DevConfig;
 use sow_core::game::BuildingKind;
-use sow_core::player::{Leader, PlayerType};
-use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
-use std::collections::{HashMap, HashSet};
+use sow_core::player::Leader;
+use sow_core::protocol::SimSnapshot;
+use std::collections::HashMap;
 use web_time::{Duration, Instant};
 
-const NAMEPLATE_WORLD_SCALE: f32 = 0.05;
-const NAMEPLATE_MIN_FONT: f32 = 8.0;
-const NAMEPLATE_MAX_FONT: f32 = 32.0;
-const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
-const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
-const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
-const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
-const LOD_DOT_RADIUS: f32 = 2.0;
-
-const HUMAN_AVATAR_SCALE: f32 = 4.0;
-const BOT_AVATAR_SCALE: f32 = 3.0;
-const NATION_AVATAR_SCALE: f32 = 3.6;
-const BADGE_SCALE: f32 = 1.8;
-const TROOPS_SCALE: f32 = 1.30;
-const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
 pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
-const BUILDING_SCALE: f32 = 0.5;
 const BUILDING_CULL_FLOOR: f32 = 0.25;
-const BUILDING_LOD_START_ZOOM: f32 = 1.0;
-const BUILDING_LOD_ZOOM_RANGE: f32 = 9.0;
+const BUILDING_FULL_DETAIL_SIZE: f32 = 28.0;
 const BUILDING_MIN_MARKER_SIZE: f32 = 14.0;
 const BUILDING_CLUSTER_TARGET_SIZE: f32 = 40.0;
+const BUILDING_ZOOM_STEPS_PER_OCTAVE: f32 = 8.0;
+const BUILDING_FOOTPRINT_FILL: f32 = 0.9;
 const BUILDING_LEVEL_FONT_RATIO: f32 = 0.58;
 
 #[inline]
@@ -49,7 +31,7 @@ pub(crate) fn world_to_screen(world_x: f32, world_y: f32, input: &InputState, sf
 }
 
 #[inline]
-fn world_to_screen_values(
+pub(super) fn world_to_screen_values(
     world_x: f32,
     world_y: f32,
     camera_x: f32,
@@ -95,21 +77,24 @@ pub(crate) fn render_overlays(
         map_renderer,
         &dev,
         sf,
-        zoom_scaled,
         time_secs,
         now,
     );
-    render_nameplates(
+    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
+    let leaderboard_top_three = ui.leaderboard_top_three;
+    super::nameplates::render_nameplates(
         text,
         snapshot,
         sim,
-        ui,
+        &mut ui.nameplates,
         input,
         &dev,
         campaign_avatar_slots,
         sf,
         zoom_scaled,
         now,
+        my_id,
+        leaderboard_top_three,
     );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 
@@ -118,872 +103,7 @@ pub(crate) fn render_overlays(
     }
 }
 
-fn render_nameplates(
-    text: &mut TextRenderer,
-    snapshot: &SimSnapshot,
-    sim: &SimState,
-    ui: &mut UiState,
-    input: &InputState,
-    dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    sf: f32,
-    zoom_scaled: f32,
-    now: Instant,
-) {
-    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
-    sample_nameplates(text, snapshot, sim, ui, dev, sf, my_id, now);
-
-    let my_player = snapshot.players.iter().find(|player| player.id == my_id);
-    let mut full_labels_drawn = 0usize;
-    let screen_w = input.screen_w / sf;
-    let screen_h = input.screen_h / sf;
-    let fog_hidden = matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. });
-    let alpha = nameplate_sample_alpha(ui.nameplate_sample_at, now, nameplate_sample_duration(sim));
-    let inverse_alpha = 1.0 - alpha;
-
-    for &player_index in &ui.nameplate_order {
-        let player = &snapshot.players[player_index];
-        let is_me = player.id == my_id;
-        let is_human = player.player_type == PlayerType::Human;
-        let Some(state) = ui.nameplate_visuals.get(&player.id) else {
-            continue;
-        };
-        let center_world = state.to_center;
-        if dev.fog_of_war && !is_me && !fog_hidden && !player_at_explored_tile(center_world, sim) {
-            continue;
-        }
-        let world_size = if state.from_size == state.to_size {
-            state.to_size
-        } else {
-            lerp(state.from_size, state.to_size, inverse_alpha)
-        };
-        let center = world_to_screen_values(
-            center_world[0],
-            center_world[1],
-            input.camera_x,
-            input.camera_y,
-            input.camera_zoom,
-            sf,
-        );
-        if center[0] < -160.0
-            || center[0] > screen_w + 160.0
-            || center[1] < -160.0
-            || center[1] > screen_h + 160.0
-        {
-            continue;
-        }
-
-        let scaled_size = nameplate_font_px(world_size, zoom_scaled, is_human);
-
-        let is_allied = my_player
-            .filter(|me| me.id != player.id)
-            .is_some_and(|me| me.alliances.contains(&player.id));
-        let has_request = my_player
-            .filter(|me| me.id != player.id)
-            .is_some_and(|me| me.alliance_requests.contains(&player.id));
-        let rank = ui
-            .leaderboard_top_three
-            .iter()
-            .position(|id| *id == Some(player.id))
-            .map(|index| index + 1);
-        let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
-        let layout = compute_nameplate_layout(
-            player.player_type,
-            show_bot_avatars,
-            center,
-            scaled_size,
-            state.name_measure_unit,
-            state.troops_measure_unit,
-            dev,
-            sf,
-        );
-        let status = NameplateStatus {
-            show_names: dev.vfx_nameplate_names,
-            show_troops: dev.vfx_nameplate_troops,
-            is_me,
-            is_allied,
-            has_request,
-            has_rank: rank.is_some(),
-            has_traitor: player.traitor,
-            has_active_emoji: player
-                .active_emoji
-                .as_deref()
-                .is_some_and(|emoji| emoji != "🗡️"),
-            has_disconnected: player.disconnected,
-        };
-        let glyph_padding = (dev.font_face_dilate + dev.font_outline_thickness)
-            .max(dev.font_face_dilate)
-            .max(0.0);
-        let shadow_padding = dev.font_underlay_softness.max(0.0) + dev.font_shadow_y.abs();
-        let text_padding = glyph_padding
-            .max(shadow_padding)
-            .max(layout.badge_effect_padding);
-        let layout_bounds =
-            layout.visual_bounds(center, status, layout.badge_effect_padding, text_padding);
-        let fit_scale = fit_bounds_to_land(layout_bounds, center, state.land_bounds, zoom_scaled);
-        if fit_scale <= 0.0 || !fit_scale.is_finite() {
-            continue;
-        }
-        if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
-            let dot_scale = fit_size_to_land(
-                2.0 * (LOD_DOT_RADIUS + 1.0),
-                2.0 * (LOD_DOT_RADIUS + 1.0),
-                state.land_bounds,
-                zoom_scaled,
-            );
-            paint_lod_dot(text, center, player_color(player), sf, dot_scale);
-            continue;
-        }
-
-        let fitted_font_size = fitted_nameplate_font_px(
-            scaled_size,
-            fit_scale,
-            dev.font_size_scale,
-            dev.vfx_nameplate_names,
-            dev.vfx_nameplate_troops,
-        );
-        let show_full = fitted_font_size >= 7.0 && (is_human || full_labels_drawn < 80);
-        if !show_full {
-            let dot_scale = fit_size_to_land(
-                2.0 * (LOD_DOT_RADIUS + 1.0),
-                2.0 * (LOD_DOT_RADIUS + 1.0),
-                state.land_bounds,
-                zoom_scaled,
-            );
-            paint_lod_dot(text, center, player_color(player), sf, dot_scale);
-            continue;
-        }
-        if !is_human {
-            full_labels_drawn += 1;
-        }
-
-        paint_nameplate(
-            text,
-            player,
-            center,
-            scaled_size,
-            layout,
-            fit_scale,
-            &state.display_name,
-            &state.troops_text,
-            is_me,
-            is_allied,
-            has_request,
-            rank,
-            dev,
-            campaign_avatar_slots,
-            sf,
-        );
-    }
-}
-
-fn sample_nameplates(
-    text: &TextRenderer,
-    snapshot: &SimSnapshot,
-    sim: &SimState,
-    ui: &mut UiState,
-    dev: &DevConfig,
-    sf: f32,
-    my_id: u16,
-    now: Instant,
-) {
-    let my_id_changed = ui.nameplate_order_my_id != Some(my_id);
-    if !nameplate_sample_due(ui.nameplate_sample_tick, snapshot.tick, my_id_changed) {
-        return;
-    }
-
-    let Some(engine) = sim.engine.as_ref() else {
-        ui.nameplate_order.clear();
-        ui.nameplate_visuals.clear();
-        ui.nameplate_land_cache = NameplateLandCache::default();
-        return;
-    };
-    let new_player_needs_landmass = snapshot.players.iter().any(|player| {
-        player.alive && player.tile_count > 0 && !ui.nameplate_land_cache.has_landmass(player.id)
-    });
-    if ui.nameplate_land_cache.needs_rebuild(
-        &engine.state.map,
-        snapshot.tick,
-        new_player_needs_landmass,
-    ) && !ui
-        .nameplate_land_cache
-        .rebuild(&engine.state.map, snapshot.tick)
-    {
-        ui.nameplate_order.clear();
-        ui.nameplate_visuals.clear();
-        return;
-    }
-
-    let tick_gap = ui
-        .nameplate_sample_tick
-        .map(|tick| snapshot.tick.saturating_sub(tick))
-        .unwrap_or(NAMEPLATE_SAMPLE_TICKS);
-
-    let force_snap = tick_gap > NAMEPLATE_MAX_CATCHUP_TICKS;
-    let sample_alpha = if force_snap {
-        1.0
-    } else {
-        nameplate_sample_alpha(ui.nameplate_sample_at, now, nameplate_sample_duration(sim))
-    };
-    let inverse_sample_alpha = 1.0 - sample_alpha;
-    let style_key = nameplate_metrics_style_key(dev, sf);
-    let mut order: Vec<usize> = snapshot
-        .players
-        .iter()
-        .enumerate()
-        .filter(|(_, player)| {
-            player.alive
-                && player.tile_count > 0
-                && ui.nameplate_land_cache.rect_for(player.id).is_some()
-        })
-        .map(|(index, _)| index)
-        .collect();
-    order.sort_unstable_by(|a, b| {
-        let a = &snapshot.players[*a];
-        let b = &snapshot.players[*b];
-        let precedence = |player: &PlayerSnapshot| match player.player_type {
-            PlayerType::Human if player.id == my_id => 1,
-            PlayerType::Human => 2,
-            _ => 0,
-        };
-        precedence(a)
-            .cmp(&precedence(b))
-            .then_with(|| b.tile_count.cmp(&a.tile_count))
-            .then_with(|| a.id.cmp(&b.id))
-    });
-
-    let active_ids: HashSet<u16> = order
-        .iter()
-        .map(|index| snapshot.players[*index].id)
-        .collect();
-    ui.nameplate_visuals
-        .retain(|player_id, _| active_ids.contains(player_id));
-
-    for player in snapshot
-        .players
-        .iter()
-        .filter(|player| player.alive && player.tile_count > 0)
-    {
-        let Some(land_rect) = ui.nameplate_land_cache.rect_for(player.id) else {
-            continue;
-        };
-        let target_center = land_rect.center();
-        let land_bounds = land_rect.world_bounds();
-        let target_size = nameplate_world_size(player.tile_count);
-        if let Some(state) = ui.nameplate_visuals.get_mut(&player.id) {
-            let current_size = if state.from_size == state.to_size {
-                state.to_size
-            } else {
-                lerp(state.from_size, state.to_size, inverse_sample_alpha)
-            };
-            state.from_size =
-                if force_snap || !nameplate_size_needs_interpolation(current_size, target_size) {
-                    target_size
-                } else {
-                    current_size
-                };
-            state.to_center = target_center;
-            state.to_size = target_size;
-            state.land_bounds = land_bounds;
-            refresh_nameplate_text_cache(text, state, player, style_key, dev, sf);
-        } else {
-            let mut state =
-                new_nameplate_visual_state(player, target_center, target_size, land_bounds);
-            refresh_nameplate_text_cache(text, &mut state, player, style_key, dev, sf);
-            ui.nameplate_visuals.insert(player.id, state);
-        }
-    }
-
-    ui.nameplate_order = order;
-    ui.nameplate_sample_tick = Some(snapshot.tick);
-    ui.nameplate_sample_at = Some(now);
-    ui.nameplate_order_my_id = Some(my_id);
-}
-
-fn new_nameplate_visual_state(
-    player: &PlayerSnapshot,
-    center: [f32; 2],
-    size: f32,
-    land_bounds: [f32; 4],
-) -> crate::app::NameplateVisualState {
-    crate::app::NameplateVisualState {
-        to_center: center,
-        from_size: size,
-        to_size: size,
-        land_bounds,
-        source_name: String::new(),
-        player_type: player.player_type,
-        display_name: String::new(),
-        troops_bits: u64::MAX,
-        troops_text: String::new(),
-        name_measure_unit: [0.0; 2],
-        troops_measure_unit: [0.0; 2],
-        metrics_style_key: None,
-    }
-}
-
-fn refresh_nameplate_text_cache(
-    text: &TextRenderer,
-    state: &mut crate::app::NameplateVisualState,
-    player: &PlayerSnapshot,
-    style_key: [u32; 2],
-    dev: &DevConfig,
-    sf: f32,
-) {
-    let identity_changed =
-        state.source_name != player.name || state.player_type != player.player_type;
-    if identity_changed {
-        state.source_name = player.name.clone();
-        state.player_type = player.player_type;
-        let display_name =
-            sow_core::player::display_name(player.id, &player.name, player.player_type);
-        state.display_name = if player.player_type == PlayerType::Bot {
-            display_name
-                .strip_prefix(sow_core::player::tribe_animal(player.id, &player.name))
-                .unwrap_or(&display_name)
-                .trim_start()
-                .to_owned()
-        } else {
-            display_name
-        };
-    }
-    let troops_bits = player.troops.to_bits();
-    let troops_changed = troops_bits != state.troops_bits;
-    if troops_changed {
-        state.troops_bits = troops_bits;
-        state.troops_text = crate::utils::format_number(player.troops);
-    }
-    if identity_changed || state.metrics_style_key != Some(style_key) {
-        state.name_measure_unit = text_measure(
-            text,
-            &state.display_name,
-            1.0,
-            dev.font_char_spacing.max(1.0),
-            sf,
-        );
-    }
-    if troops_changed || state.metrics_style_key != Some(style_key) {
-        state.troops_measure_unit = text_measure(
-            text,
-            &state.troops_text,
-            1.0,
-            dev.font_char_spacing.max(1.0),
-            sf,
-        );
-    }
-    state.metrics_style_key = Some(style_key);
-}
-
-fn nameplate_metrics_style_key(dev: &DevConfig, sf: f32) -> [u32; 2] {
-    [dev.font_char_spacing.max(1.0).to_bits(), sf.to_bits()]
-}
-
-fn nameplate_sample_duration(sim: &SimState) -> Duration {
-    Duration::from_secs_f32(
-        (sim.config.tick_rate_ms.max(1.0) / 1000.0) * NAMEPLATE_SAMPLE_TICKS as f32,
-    )
-}
-
-#[inline]
-fn nameplate_sample_due(last_tick: Option<u64>, current_tick: u64, my_id_changed: bool) -> bool {
-    my_id_changed
-        || last_tick.is_none_or(|last_tick| {
-            current_tick.saturating_sub(last_tick) >= NAMEPLATE_SAMPLE_TICKS
-        })
-}
-
-fn nameplate_sample_alpha(sample_at: Option<Instant>, now: Instant, duration: Duration) -> f32 {
-    let Some(sample_at) = sample_at else {
-        return 1.0;
-    };
-    let duration_secs = duration.as_secs_f32().max(0.001);
-    let t = (now.duration_since(sample_at).as_secs_f32() / duration_secs).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
-
-#[inline]
-fn nameplate_size_needs_interpolation(from: f32, to: f32) -> bool {
-    (to - from).abs() > NAMEPLATE_SIZE_DEADZONE
-}
-
-#[inline]
-fn lerp(from: f32, to: f32, inverse_amount: f32) -> f32 {
-    to - (to - from) * inverse_amount
-}
-
-fn player_at_explored_tile(center: [f32; 2], sim: &SimState) -> bool {
-    let col = center[0].floor() as i32;
-    let row = center[1].floor() as i32;
-    if col < 0 || row < 0 || col >= sim.map_w as i32 || row >= sim.map_h as i32 {
-        return false;
-    }
-    sim.fog_explored
-        .contains((row * sim.map_w as i32 + col) as u32)
-}
-
-fn nameplate_world_size(tile_count: u32) -> f32 {
-    (tile_count as f32).sqrt().clamp(0.2, 150.0)
-}
-
-fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
-    let world_px = world_size * NAMEPLATE_WORLD_SCALE * zoom_scaled;
-    if is_human {
-        world_px.clamp(NAMEPLATE_MIN_FONT, NAMEPLATE_MAX_FONT)
-    } else {
-        world_px
-    }
-}
-
-#[inline]
-fn fitted_nameplate_font_px(
-    scaled_size: f32,
-    fit_scale: f32,
-    font_scale: f32,
-    show_names: bool,
-    show_troops: bool,
-) -> f32 {
-    let font_px = scaled_size.max(7.0) * font_scale.max(0.1) * fit_scale;
-    if show_names {
-        font_px
-    } else if show_troops {
-        font_px * TROOPS_SCALE
-    } else {
-        f32::INFINITY
-    }
-}
-
-#[derive(Clone, Copy)]
-struct NameplateMetrics {
-    render_size: f32,
-    avatar_diameter: f32,
-    avatar_radius: f32,
-    badge_size: f32,
-    troops_render_size: f32,
-}
-
-impl NameplateMetrics {
-    fn compute(scaled_size: f32, player_type: PlayerType, show_bot_avatars: bool) -> Self {
-        let render_size = scaled_size.max(7.0);
-        let avatar_scale = match player_type {
-            PlayerType::Human => HUMAN_AVATAR_SCALE,
-            PlayerType::Bot if show_bot_avatars => BOT_AVATAR_SCALE,
-            PlayerType::Nation => NATION_AVATAR_SCALE,
-            PlayerType::Bot => 0.0,
-        };
-        let avatar_diameter = if avatar_scale > 0.0 {
-            (render_size * avatar_scale).max(4.0)
-        } else {
-            0.0
-        };
-        Self {
-            render_size,
-            avatar_diameter,
-            avatar_radius: avatar_diameter * 0.5,
-            badge_size: render_size * BADGE_SCALE,
-            troops_render_size: render_size * TROOPS_SCALE,
-        }
-    }
-}
-
-fn compute_nameplate_layout(
-    player_type: PlayerType,
-    show_bot_avatars: bool,
-    center: [f32; 2],
-    scaled_size: f32,
-    name_measure_unit: [f32; 2],
-    troops_measure_unit: [f32; 2],
-    dev: &DevConfig,
-    sf: f32,
-) -> NameplateLayout {
-    let metrics = NameplateMetrics::compute(scaled_size, player_type, show_bot_avatars);
-    let font_scale = dev.font_size_scale.max(0.1);
-    let name_font_size = metrics.render_size * font_scale;
-    let troops_font_size = metrics.troops_render_size * font_scale;
-    let name_measure = scale_text_measure(name_measure_unit, name_font_size);
-    let troops_measure = scale_text_measure(troops_measure_unit, troops_font_size);
-    let troops_icon_size = troops_font_size;
-    let troops_size = [
-        troops_icon_size + 3.0 + troops_measure[0],
-        troops_icon_size.max(troops_measure[1]),
-    ];
-    let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let badge_padding = outline
-        .scaled_for_emoji(metrics.badge_size * sf)
-        .effect_padding()
-        / sf;
-    NameplateLayout::compute(
-        center,
-        metrics.render_size,
-        metrics.avatar_diameter,
-        metrics.avatar_radius,
-        metrics.badge_size,
-        name_measure,
-        troops_size,
-        dev.vfx_nameplate_names,
-        dev.vfx_nameplate_troops,
-        badge_padding,
-    )
-}
-
-fn paint_nameplate(
-    text: &mut TextRenderer,
-    player: &PlayerSnapshot,
-    center: [f32; 2],
-    scaled_size: f32,
-    layout: NameplateLayout,
-    fit_scale: f32,
-    display_name: &str,
-    troops: &str,
-    is_me: bool,
-    is_allied: bool,
-    has_request: bool,
-    rank: Option<usize>,
-    dev: &DevConfig,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    sf: f32,
-) {
-    let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
-    let metrics = NameplateMetrics::compute(scaled_size, player.player_type, show_bot_avatars);
-    let font_scale = dev.font_size_scale.max(0.1);
-    let char_spacing = dev.font_char_spacing.max(0.1) * fit_scale;
-    let name_font_size = metrics.render_size * font_scale * fit_scale;
-    let troops_font_size = metrics.troops_render_size * font_scale * fit_scale;
-    let troops_icon_size = troops_font_size;
-    let outline = scale_outline_style(
-        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-        fit_scale,
-    );
-    let layout = layout.scaled_about(center, fit_scale);
-    let color = player_color(player);
-    let text_style = scale_text_style(
-        crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-        fit_scale,
-    );
-
-    if layout.avatar_radius > 0.0 {
-        draw_avatar(
-            text,
-            player,
-            layout.avatar_center,
-            layout.avatar_radius,
-            color,
-            outline,
-            campaign_avatar_slots,
-            fit_scale,
-            sf,
-        );
-
-        if let Some(rank) = rank {
-            let icon = match rank {
-                1 => "👑",
-                2 => "🥈",
-                _ => "🥉",
-            };
-            let tint = match rank {
-                1 => [250.0 / 255.0, 204.0 / 255.0, 21.0 / 255.0, 1.0],
-                2 => [203.0 / 255.0, 213.0 / 255.0, 225.0 / 255.0, 1.0],
-                _ => [217.0 / 255.0, 119.0 / 255.0, 6.0 / 255.0, 1.0],
-            };
-            draw_emoji(
-                text,
-                icon,
-                layout.rank_center,
-                layout.badge_size,
-                tint,
-                outline,
-                sf,
-            );
-        }
-        if is_me {
-            draw_emoji(
-                text,
-                "⭐",
-                layout.star_center,
-                layout.badge_size,
-                [1.0; 4],
-                outline,
-                sf,
-            );
-        }
-
-        let mut right_slots = 0usize;
-        if has_request {
-            draw_emoji(
-                text,
-                "📨",
-                layout.side_badge_center(true, 0, is_me),
-                layout.badge_size,
-                [1.0; 4],
-                outline,
-                sf,
-            );
-        }
-        if is_allied {
-            draw_emoji(
-                text,
-                "🤝",
-                layout.side_badge_center(false, right_slots, is_me),
-                layout.badge_size,
-                [1.0; 4],
-                outline,
-                sf,
-            );
-            right_slots += 1;
-        }
-        if player.traitor {
-            draw_emoji(
-                text,
-                "🗡️",
-                layout.side_badge_center(false, right_slots, is_me),
-                layout.badge_size,
-                [1.0; 4],
-                outline,
-                sf,
-            );
-            right_slots += 1;
-        }
-        if let Some(active_emoji) = player
-            .active_emoji
-            .as_deref()
-            .filter(|emoji| *emoji != "🗡️")
-        {
-            draw_emoji(
-                text,
-                active_emoji,
-                layout.express_center(right_slots),
-                layout.badge_size,
-                [1.0; 4],
-                outline,
-                sf,
-            );
-        }
-        if player.disconnected {
-            draw_emoji(
-                text,
-                "🔌",
-                [
-                    layout.avatar_center[0] + layout.avatar_radius * 0.6,
-                    layout.avatar_center[1] + layout.avatar_radius * 0.6,
-                ],
-                layout.avatar_radius * 0.8,
-                [1.0; 4],
-                outline,
-                sf,
-            );
-        }
-    }
-
-    if dev.vfx_nameplate_names {
-        text.push_string(
-            display_name,
-            [
-                center[0] * sf,
-                (layout.text_top + layout.name_size[1] * 0.85) * sf,
-            ],
-            name_font_size * sf,
-            color,
-            text_style,
-            (0.5, char_spacing, INLINE_EMOJI_SCALE),
-        );
-    }
-    if dev.vfx_nameplate_troops {
-        let row_y = if dev.vfx_nameplate_names {
-            layout.text_top + layout.name_size[1] + layout.item_spacing_y
-        } else {
-            layout.text_top
-        };
-        let left_x = center[0] - layout.troops_size[0] * 0.5;
-        draw_emoji(
-            text,
-            "⚔",
-            [
-                left_x + troops_icon_size * 0.5,
-                row_y + troops_icon_size * 0.5,
-            ],
-            troops_icon_size,
-            color,
-            outline,
-            sf,
-        );
-        text.push_string(
-            troops,
-            [
-                (left_x + troops_icon_size + 3.0 * fit_scale) * sf,
-                (row_y + layout.troops_size[1] * 0.85) * sf,
-            ],
-            troops_font_size * sf,
-            color,
-            text_style,
-            (0.0, char_spacing, INLINE_EMOJI_SCALE),
-        );
-    }
-}
-
-fn text_measure(
-    text: &TextRenderer,
-    value: &str,
-    font_size: f32,
-    char_spacing: f32,
-    sf: f32,
-) -> [f32; 2] {
-    let measure = text.measure_string(value, font_size * sf, char_spacing, INLINE_EMOJI_SCALE);
-    [measure.width / sf, measure.height / sf]
-}
-
-#[inline]
-fn scale_text_measure(unit: [f32; 2], font_size: f32) -> [f32; 2] {
-    [unit[0] * font_size, unit[1] * font_size]
-}
-
-fn scale_outline_style(
-    mut outline: crate::render::gpu::OutlineStyle,
-    scale: f32,
-) -> crate::render::gpu::OutlineStyle {
-    outline.thickness *= scale;
-    outline.shadow_y *= scale;
-    outline.reference_diameter *= scale;
-    outline
-}
-
-fn scale_text_style(
-    mut style: crate::render::gpu::TextPaintStyle,
-    scale: f32,
-) -> crate::render::gpu::TextPaintStyle {
-    style.face_dilate *= scale;
-    style.outline = scale_outline_style(style.outline, scale);
-    style.underlay_softness *= scale;
-    style
-}
-
-fn draw_avatar(
-    text: &mut TextRenderer,
-    player: &PlayerSnapshot,
-    center: [f32; 2],
-    radius: f32,
-    color: [f32; 4],
-    outline: crate::render::gpu::OutlineStyle,
-    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    fit_scale: f32,
-    sf: f32,
-) {
-    let center = [center[0] * sf, center[1] * sf];
-    let radius = radius * sf;
-    let campaign_slot = player.campaign_avatar.as_ref().map(|slug| {
-        if slug == "null" {
-            Leader::ALL.len()
-        } else {
-            campaign_avatar_slots
-                .get(slug)
-                .copied()
-                .unwrap_or(Leader::ALL.len())
-        }
-    });
-    let mut sprite_uv = None;
-    let frame = if let Some(slot) = campaign_slot {
-        sprite_uv = text
-            .avatar_uv(slot)
-            .or_else(|| text.avatar_uv(Leader::ALL.len()));
-        color
-    } else if player.player_type == PlayerType::Human {
-        let rgb = player.leader.filler_rgb();
-        let frame = [rgb[0], rgb[1], rgb[2], 1.0];
-        sprite_uv = text
-            .avatar_uv(avatar_slot(Some(player.leader)))
-            .or_else(|| text.avatar_uv(avatar_slot(None)));
-        frame
-    } else {
-        color
-    };
-
-    let border = (radius * 0.12).max(fit_scale * sf);
-    let frame_radius = radius + border * 0.3;
-    text.push_rounded_rect(
-        center,
-        [frame_radius * 2.0; 2],
-        AVATAR_CORNER_RADIUS_RATIO,
-        frame,
-        [0.0, 0.0, 0.0, 160.0 / 255.0],
-        border * 0.5,
-    );
-    if let Some(uv) = sprite_uv {
-        text.push_sprite(center, radius, uv, [1.0; 4]);
-    }
-
-    let glyph = if campaign_slot.is_some() {
-        None
-    } else {
-        match player.player_type {
-        PlayerType::Bot => Some(sow_core::player::tribe_animal(player.id, &player.name)),
-        PlayerType::Nation => Some(sow_core::player::empire_emoji(player.id, &player.name)),
-        PlayerType::Human => None,
-        }
-    };
-    if let Some(glyph) = glyph {
-        let _ = text.push_emoji(
-            glyph,
-            center,
-            radius * CATEGORY_EMOJI_DIAMETER_SCALE,
-            [1.0; 4],
-            outline,
-        );
-    }
-}
-
-fn draw_emoji(
-    text: &mut TextRenderer,
-    emoji: &str,
-    center: [f32; 2],
-    diameter: f32,
-    tint: [f32; 4],
-    outline: crate::render::gpu::OutlineStyle,
-    sf: f32,
-) {
-    let _ = text.push_emoji(
-        emoji,
-        [center[0] * sf, center[1] * sf],
-        diameter * sf * 0.5,
-        tint,
-        outline,
-    );
-}
-
-fn paint_lod_dot(
-    text: &mut TextRenderer,
-    center: [f32; 2],
-    color: [f32; 4],
-    sf: f32,
-    fit_scale: f32,
-) {
-    let center = [center[0] * sf, center[1] * sf];
-    let radius = LOD_DOT_RADIUS * fit_scale * sf;
-    text.push_disc(center, radius, color);
-    text.push_ring(
-        center,
-        radius,
-        [0.0, 0.0, 0.0, 180.0 / 255.0],
-        fit_scale * sf,
-    );
-}
-
-fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
-    let rgb = player
-        .team
-        .map_or(player.color, sow_core::player::team_territory_rgb);
-    let luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-    let factor = if luminance < 0.60 {
-        (0.60 - luminance) / (1.0 - luminance).max(0.001)
-    } else {
-        0.0
-    };
-    [
-        rgb[0] + (1.0 - rgb[0]) * factor,
-        rgb[1] + (1.0 - rgb[1]) * factor,
-        rgb[2] + (1.0 - rgb[2]) * factor,
-        1.0,
-    ]
-}
-
-fn avatar_slot(leader: Option<Leader>) -> usize {
+pub(super) fn avatar_slot(leader: Option<Leader>) -> usize {
     match leader {
         Some(leader) => Leader::ALL
             .iter()
@@ -995,35 +115,47 @@ fn avatar_slot(leader: Option<Leader>) -> usize {
 
 #[derive(Clone, Copy)]
 struct BuildingLod {
-    final_scale: f32,
+    band: i16,
+    quantized_zoom: f32,
     cluster_cell_size: f32,
-    compact: bool,
 }
 
 impl BuildingLod {
     fn for_zoom(zoom_scaled: f32) -> Self {
-        let zoom_factor =
-            ((zoom_scaled - BUILDING_LOD_START_ZOOM) / BUILDING_LOD_ZOOM_RANGE).clamp(0.0, 1.0);
-        let final_scale = BUILDING_SCALE * (0.5 + 0.5 * zoom_factor);
-        let natural_size = building_icon_size(zoom_scaled) * final_scale;
-        let compact = natural_size < BUILDING_MIN_MARKER_SIZE;
-        let cluster_cell_size = if compact {
-            (BUILDING_CLUSTER_TARGET_SIZE / zoom_scaled.max(BUILDING_CULL_FLOOR)).max(1.0)
-        } else {
-            1.0
-        };
+        let zoom = zoom_scaled.max(BUILDING_CULL_FLOOR);
+        let band = (zoom.log2() * BUILDING_ZOOM_STEPS_PER_OCTAVE).floor() as i16;
+        let quantized_zoom = 2.0_f32.powf(band as f32 / BUILDING_ZOOM_STEPS_PER_OCTAVE);
         Self {
-            final_scale,
-            cluster_cell_size,
-            compact,
+            band,
+            quantized_zoom,
+            cluster_cell_size: (BUILDING_CLUSTER_TARGET_SIZE / quantized_zoom).max(1.0),
         }
     }
+
+    fn detail(self, kind: BuildingKind) -> BuildingDetail {
+        let (width, height) = kind.footprint_dimensions();
+        let projected_short_side = width.min(height) as f32 * self.quantized_zoom;
+        if projected_short_side < BUILDING_MIN_MARKER_SIZE {
+            BuildingDetail::Cluster
+        } else if projected_short_side < BUILDING_FULL_DETAIL_SIZE {
+            BuildingDetail::Compact
+        } else {
+            BuildingDetail::Full
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BuildingDetail {
+    Full,
+    Compact,
+    Cluster,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct BuildingVisualStatus {
     progress: f32,
-    label: String,
+    label: Option<String>,
     color: [f32; 4],
 }
 
@@ -1038,17 +170,28 @@ struct RenderedBuilding {
     count: usize,
     owner_id: u16,
     tile_idx: Option<u32>,
+    detail: BuildingDetail,
     status: Option<BuildingVisualStatus>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct BuildingClusterKey {
+    grid_x: i32,
+    grid_y: i32,
+    owner_id: u16,
+    kind: BuildingKind,
+    level: u8,
 }
 
 #[derive(Default)]
 pub(crate) struct BuildingRenderCache {
     tick: Option<u64>,
     map_w: u32,
-    cluster_cell_size_bits: u32,
+    lod_band: i16,
     player_id: u16,
     tick_rate_ms_bits: u32,
     buildings: Vec<RenderedBuilding>,
+    clusters: HashMap<BuildingClusterKey, (f32, f32, usize)>,
 }
 
 impl BuildingRenderCache {
@@ -1057,13 +200,13 @@ impl BuildingRenderCache {
         &self,
         tick: u64,
         map_w: u32,
-        cluster_cell_size_bits: u32,
+        lod_band: i16,
         player_id: u16,
         tick_rate_ms_bits: u32,
     ) -> bool {
         self.tick == Some(tick)
             && self.map_w == map_w
-            && self.cluster_cell_size_bits == cluster_cell_size_bits
+            && self.lod_band == lod_band
             && self.player_id == player_id
             && self.tick_rate_ms_bits == tick_rate_ms_bits
     }
@@ -1132,6 +275,7 @@ fn building_visual_status(
     active_level: u8,
     my_id: u16,
     tick_rate_ms: f32,
+    show_label: bool,
 ) -> Option<BuildingVisualStatus> {
     if building.owner_id != my_id || !building.under_construction {
         return None;
@@ -1142,22 +286,20 @@ fn building_visual_status(
         building.level,
         building.ticks_until_complete,
     )?;
-    if active_level == 0 {
-        return Some(BuildingVisualStatus {
-            progress,
-            label: construction_status_label(None, building.ticks_until_complete, tick_rate_ms),
-            color: [0.0, 0.86, 1.0, 1.0],
-        });
-    }
-
     Some(BuildingVisualStatus {
         progress,
-        label: construction_status_label(
-            Some(building.level),
-            building.ticks_until_complete,
-            tick_rate_ms,
-        ),
-        color: [1.0, 0.82, 0.22, 1.0],
+        label: show_label.then(|| {
+            construction_status_label(
+                (active_level > 0).then_some(building.level),
+                building.ticks_until_complete,
+                tick_rate_ms,
+            )
+        }),
+        color: if active_level == 0 {
+            [0.0, 0.86, 1.0, 1.0]
+        } else {
+            [1.0, 0.82, 0.22, 1.0]
+        },
     })
 }
 
@@ -1181,15 +323,16 @@ fn render_buildings(
     let my_id = sim.my_player_id.unwrap_or(0);
     for building in &snapshot.buildings {
         let active_level = building.active_level();
-        if let Some(previous) = ui.building_levels_seen.insert(building.tile_idx, active_level)
+        if let Some(previous) = ui
+            .building_levels_seen
+            .insert(building.tile_idx, active_level)
             && active_level > previous
         {
             ui.building_upgrade_flashes.insert(building.tile_idx, now);
         }
     }
-    ui.building_upgrade_flashes.retain(|_, started| {
-        now.duration_since(*started) < Duration::from_millis(300)
-    });
+    ui.building_upgrade_flashes
+        .retain(|_, started| now.duration_since(*started) < Duration::from_millis(300));
     let building_upgrade_flashes = std::mem::take(&mut ui.building_upgrade_flashes);
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
@@ -1206,20 +349,21 @@ fn render_buildings(
         }
 
         let center = world_to_screen(building.bx, building.by, input, sf);
-        let margin = zoom_scaled * 2.0;
-        if center[0] < -margin
-            || center[0] > screen_w + margin
-            || center[1] < -margin
-            || center[1] > screen_h + margin
+        let marker_size = building_marker_size(building, zoom_scaled);
+        let half_width = marker_size[0] * 0.5;
+        let half_height = marker_size[1] * 0.5;
+        if center[0] + half_width < 0.0
+            || center[0] - half_width > screen_w
+            || center[1] + half_height < 0.0
+            || center[1] - half_height > screen_h
         {
             continue;
         }
-
-        let marker_size = building_marker_size(building, lod, zoom_scaled);
+        let marker_extent = marker_size[0].max(marker_size[1]);
 
         if let Some(status) = &building.status {
             let center_px = [center[0] * sf, center[1] * sf];
-            let radius = marker_size * sf * 0.58;
+            let radius = marker_extent * sf * 0.58;
             text.push_ring(
                 center_px,
                 radius,
@@ -1242,14 +386,37 @@ fn render_buildings(
         } else {
             1.0
         };
-        text.push_building_sprite(
-            building_kind_sprite(building.kind, building.level.max(1)),
-            [center[0] * sf, center[1] * sf],
-            marker_size * sf * 0.5,
-            [1.0, 1.0, 1.0, alpha],
-        );
+        let building_center = [center[0] * sf, center[1] * sf];
+        let building_size = [
+            marker_size[0] * sf * BUILDING_FOOTPRINT_FILL,
+            marker_size[1] * sf * BUILDING_FOOTPRINT_FILL,
+        ];
+        let building_art = if building.detail == BuildingDetail::Full {
+            crate::render::gpu::building_sprite_uv(building.kind, building.level.max(1))
+        } else {
+            None
+        };
+        if let Some(uv_rect) = building_art {
+            text.push_building_sprite(
+                building_center,
+                building_size,
+                uv_rect,
+                [1.0, 1.0, 1.0, alpha],
+            );
+        } else {
+            let icon_half_size =
+                marker_size[0].min(marker_size[1]) * sf * BUILDING_FOOTPRINT_FILL * 0.5;
+            let _ = text.push_emoji(
+                building_kind_emoji(building.kind, building.level.max(1)),
+                building_center,
+                icon_half_size,
+                [1.0, 1.0, 1.0, alpha],
+                crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]),
+            );
+        }
 
-        if let Some(tile_idx) = building.tile_idx
+        if building.detail == BuildingDetail::Full
+            && let Some(tile_idx) = building.tile_idx
             && let Some(started) = building_upgrade_flashes.get(&tile_idx)
         {
             let t = (now.duration_since(*started).as_secs_f32() / 0.3).clamp(0.0, 1.0);
@@ -1257,24 +424,29 @@ fn render_buildings(
             let _ = text.push_emoji(
                 "✨",
                 [center[0] * sf, center[1] * sf],
-                marker_size * sf * (0.5 + 0.35 * t),
+                marker_extent * sf * (0.5 + 0.35 * t),
                 [1.0, 0.88, 0.46, alpha],
                 crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha * 0.7]),
             );
         }
 
-        if building.kind == BuildingKind::City && building.count == 1 && zoom_scaled >= 1.5 {
-            render_city_modules(text, center, marker_size, building.modules, dev, sf);
+        if building.detail == BuildingDetail::Full
+            && building.kind == BuildingKind::City
+            && building.count == 1
+        {
+            render_city_modules(text, center, marker_extent, building.modules, dev, sf);
         }
 
-        if let Some(label) = building_badge_label(building) {
-            let level_font_size = (marker_size * BUILDING_LEVEL_FONT_RATIO)
+        if (building.detail == BuildingDetail::Full || building.count > 1)
+            && let Some(label) = building_badge_label(building)
+        {
+            let level_font_size = (marker_extent * BUILDING_LEVEL_FONT_RATIO)
                 .clamp(8.0, 18.0)
                 .round()
                 * dev.font_size_scale.max(0.1);
             let label_center = [
-                center[0] + marker_size * 0.45,
-                center[1] - marker_size * 0.45,
+                center[0] + half_width * 0.78,
+                center[1] - half_height * 0.78,
             ];
             text.push_string(
                 &label,
@@ -1289,11 +461,14 @@ fn render_buildings(
             );
         }
 
-        if let Some(status) = &building.status {
+        if building.detail == BuildingDetail::Full
+            && let Some(status) = &building.status
+            && let Some(label) = &status.label
+        {
             render_building_preview_badge(
                 text,
                 [center[0] * sf, center[1] * sf],
-                &status.label,
+                label,
                 status.color,
                 dev,
                 sf,
@@ -1324,14 +499,7 @@ pub(crate) fn building_at_pointer(
     }
 
     let lod = BuildingLod::for_zoom(zoom_scaled);
-    let buildings = cached_buildings(
-        ui,
-        snapshot,
-        sim.map_w,
-        lod,
-        my_id,
-        sim.config.tick_rate_ms,
-    );
+    let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let pointer_x = x as f32 / sf;
     let pointer_y = y as f32 / sf;
     let pointer_world_x = (x as f32 - input.camera_x) / input.camera_zoom;
@@ -1346,9 +514,19 @@ pub(crate) fn building_at_pointer(
         let dx = pointer_x - center[0];
         let dy = pointer_y - center[1];
         let distance_sq = dx * dx + dy * dy;
-        let hit_radius = (building_marker_size(building, lod, zoom_scaled) * 0.5).max(12.0);
-        if distance_sq > hit_radius * hit_radius {
-            continue;
+        if building.tile_idx.is_some() {
+            let (width, height) = building.kind.footprint_dimensions();
+            if (pointer_world_x - building.bx).abs() > width as f32 * 0.5
+                || (pointer_world_y - building.by).abs() > height as f32 * 0.5
+            {
+                continue;
+            }
+        } else {
+            let size = building_marker_size(building, zoom_scaled)[0];
+            let hit_radius = (size * 0.5).max(12.0);
+            if distance_sq > hit_radius * hit_radius {
+                continue;
+            }
         }
 
         let Some(tile_idx) = building.tile_idx.or_else(|| {
@@ -1413,17 +591,17 @@ fn nearest_building_in_cluster(
     closest.map(|(_, tile_idx)| tile_idx)
 }
 
-fn building_marker_size(building: &RenderedBuilding, lod: BuildingLod, zoom_scaled: f32) -> f32 {
-    let icon_size = building_icon_size(zoom_scaled);
-    let natural_size = (if building.count > 1 {
-        icon_size * 1.2
+fn building_marker_size(building: &RenderedBuilding, zoom_scaled: f32) -> [f32; 2] {
+    if building.tile_idx.is_some() {
+        let (width, height) = building.kind.footprint_dimensions();
+        [
+            width as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL,
+            height as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL,
+        ]
     } else {
-        icon_size
-    }) * lod.final_scale;
-    if lod.compact {
-        natural_size.max(BUILDING_MIN_MARKER_SIZE)
-    } else {
-        natural_size
+        let size = (building_icon_size(zoom_scaled) * if building.count > 1 { 0.6 } else { 0.5 })
+            .max(BUILDING_MIN_MARKER_SIZE);
+        [size; 2]
     }
 }
 
@@ -1439,7 +617,10 @@ fn render_building_selection_focus(
     else {
         return;
     };
-    if sim.map_w == 0 || sim.map_h == 0 || !input.camera_zoom.is_finite() || input.camera_zoom <= 0.0
+    if sim.map_w == 0
+        || sim.map_h == 0
+        || !input.camera_zoom.is_finite()
+        || input.camera_zoom <= 0.0
     {
         return;
     }
@@ -1450,46 +631,32 @@ fn render_building_selection_focus(
     let zoom = input.camera_zoom;
     let tile_x = menu.tile_idx % sim.map_w;
     let tile_y = menu.tile_idx / sim.map_w;
-    let left_tile = tile_x.saturating_sub(1);
-    let top_tile = tile_y.saturating_sub(1);
-    let right_tile = tile_x.saturating_add(2).min(sim.map_w);
-    let bottom_tile = tile_y.saturating_add(2).min(sim.map_h);
-    let left = input.camera_x + left_tile as f32 * zoom;
-    let top = input.camera_y + top_tile as f32 * zoom;
-    let width = (right_tile - left_tile) as f32 * zoom;
-    let height = (bottom_tile - top_tile) as f32 * zoom;
-    let line = (1.25 * sf).min((zoom * 0.2).max(1.0)).max(1.0);
-    let selected_left = input.camera_x + tile_x as f32 * zoom;
-    let selected_top = input.camera_y + tile_y as f32 * zoom;
-    let selected_center = [selected_left + zoom * 0.5, selected_top + zoom * 0.5];
+    let footprint = sow_core::building::BuildingFootprint::at(kind, tile_x, tile_y);
+    let left = input.camera_x + footprint.left as f32 * zoom;
+    let top = input.camera_y + footprint.top as f32 * zoom;
+    let width = footprint.width as f32 * zoom;
+    let height = footprint.height as f32 * zoom;
+    let line = (1.5 * sf).min((zoom * 0.2).max(1.0)).max(1.0);
+    let selected_center = [left + width * 0.5, top + height * 0.5];
+    let anchor_center = [
+        input.camera_x + (tile_x as f32 + 0.5) * zoom,
+        input.camera_y + (tile_y as f32 + 0.5) * zoom,
+    ];
 
     if zoom >= 4.0 * sf {
         text.push_rect([left, top], [width, height], [0.84, 0.68, 0.38, 0.045]);
-        text.push_rect(
-            [selected_left + line, selected_top + line],
-            [(zoom - 2.0 * line).max(1.0), (zoom - 2.0 * line).max(1.0)],
-            [0.17, 0.78, 0.86, 0.15],
-        );
-        for col in left_tile..=right_tile {
-            let x = input.camera_x + col as f32 * zoom - line * 0.5;
-            text.push_rect([x, top], [line, height], [0.89, 0.77, 0.54, 0.36]);
-        }
-        for row in top_tile..=bottom_tile {
-            let y = input.camera_y + row as f32 * zoom - line * 0.5;
-            text.push_rect([left, y], [width, line], [0.89, 0.77, 0.54, 0.36]);
-        }
         for (x, y, w, h) in [
-            (selected_left, selected_top, zoom, line * 1.6),
-            (selected_left, selected_top + zoom - line * 1.6, zoom, line * 1.6),
-            (selected_left, selected_top, line * 1.6, zoom),
-            (selected_left + zoom - line * 1.6, selected_top, line * 1.6, zoom),
+            (left, top, width, line * 1.6),
+            (left, top + height - line * 1.6, width, line * 1.6),
+            (left, top, line * 1.6, height),
+            (left + width - line * 1.6, top, line * 1.6, height),
         ] {
             text.push_rect([x, y], [w, h], [0.42, 0.91, 0.94, 0.88]);
         }
     } else {
         text.push_ring(
             selected_center,
-            (building_icon_size(input.camera_zoom / sf) * sf * 0.65).max(9.0 * sf),
+            (width.max(height) * 0.5).max(9.0 * sf),
             [0.42, 0.91, 0.94, 0.85],
             (1.8 * sf).max(1.0),
         );
@@ -1499,9 +666,9 @@ fn render_building_selection_focus(
     {
         let range = (sim.config.bunker_range.round() as u32
             + u32::from(menu.building_level.saturating_sub(1)) * 2)
-        .min(20);
+            .min(20);
         text.push_ring(
-            selected_center,
+            anchor_center,
             range as f32 * zoom,
             [0.91, 0.71, 0.34, 0.30],
             (1.4 * sf).max(1.0),
@@ -1513,12 +680,11 @@ fn render_building_placement_preview(
     text: &mut TextRenderer,
     snapshot: &SimSnapshot,
     sim: &SimState,
-    ui: &UiState,
+    ui: &mut UiState,
     input: &InputState,
     map_renderer: Option<&crate::render::gpu::MapRenderer>,
     dev: &DevConfig,
     sf: f32,
-    zoom_scaled: f32,
     time_secs: f32,
     now: Instant,
 ) {
@@ -1540,8 +706,9 @@ fn render_building_placement_preview(
     }
     let hovered_tile = (row as u32) * sim.map_w + col as u32;
     let my_id = sim.my_player_id.unwrap_or(0);
-    let target =
-        crate::input::resolve_build_target_tile(&crate::input::placement::PlacementQuery {
+    let target = ui.building_placement_cache.resolve(
+        snapshot.tick,
+        &crate::input::placement::PlacementQuery {
             kind,
             click_x: col,
             click_y: row,
@@ -1551,7 +718,8 @@ fn render_building_placement_preview(
             terrain: &map_renderer.terrain,
             my_id,
             buildings: &snapshot.buildings,
-        });
+        },
+    );
     let preview_tile = target.unwrap_or(hovered_tile);
     let cost_index = sow_core::game::BuildingKind::ALL
         .iter()
@@ -1560,8 +728,13 @@ fn render_building_placement_preview(
     let cost = ui.app.hud_state.building_costs[cost_index];
     let has_gold = ui.app.hud_state.gold >= cost;
     let can_place = target.is_ok() && has_gold;
-    let (preview_x, preview_y) =
-        crate::render::world::movers::tile_to_world(preview_tile, sim.map_w);
+    let footprint = sow_core::building::BuildingFootprint::at(
+        kind,
+        preview_tile % sim.map_w,
+        preview_tile / sim.map_w,
+    );
+    let preview_x = footprint.left as f32 + footprint.width as f32 * 0.5;
+    let preview_y = footprint.top as f32 + footprint.height as f32 * 0.5;
     let center = world_to_screen_values(
         preview_x,
         preview_y,
@@ -1571,18 +744,41 @@ fn render_building_placement_preview(
         sf,
     );
     let center_px = [center[0] * sf, center[1] * sf];
+    let footprint_size_px = [
+        footprint.width as f32 * input.camera_zoom,
+        footprint.height as f32 * input.camera_zoom,
+    ];
+    let footprint_top_left = [
+        input.camera_x + footprint.left as f32 * input.camera_zoom,
+        input.camera_y + footprint.top as f32 * input.camera_zoom,
+    ];
     let color = if can_place {
         [0.13, 0.83, 0.94, 1.0]
     } else {
         [0.94, 0.27, 0.27, 1.0]
     };
-    let half_tile = (input.camera_zoom * 0.46).max(7.0);
     text.push_rect(
-        [center_px[0] - half_tile, center_px[1] - half_tile],
-        [half_tile * 2.0, half_tile * 2.0],
+        footprint_top_left,
+        footprint_size_px,
         [color[0], color[1], color[2], 0.16],
     );
-    text.push_ring(center_px, half_tile, color, (2.0 * sf).max(1.0));
+    let grid_line = (1.0 * sf).max(1.0);
+    for col in 0..=footprint.width {
+        let x = footprint_top_left[0] + col as f32 * input.camera_zoom;
+        text.push_rect(
+            [x - grid_line * 0.5, footprint_top_left[1]],
+            [grid_line, footprint_size_px[1]],
+            [color[0], color[1], color[2], 0.58],
+        );
+    }
+    for row in 0..=footprint.height {
+        let y = footprint_top_left[1] + row as f32 * input.camera_zoom;
+        text.push_rect(
+            [footprint_top_left[0], y - grid_line * 0.5],
+            [footprint_size_px[0], grid_line],
+            [color[0], color[1], color[2], 0.58],
+        );
+    }
     if input.hold_build_active
         && let Some(start) = input.map_pointer_start.as_ref()
     {
@@ -1597,7 +793,8 @@ fn render_building_placement_preview(
         };
         let pulse_rate = if burst { 28.0 } else { 8.0 };
         let pulse = (time_secs * pulse_rate).sin().max(0.0);
-        let radius = half_tile + (3.0 + pulse * 2.0) * sf;
+        let radius =
+            footprint_size_px[0].max(footprint_size_px[1]) * 0.5 + (3.0 + pulse * 2.0) * sf;
         text.push_ring(
             center_px,
             radius,
@@ -1607,13 +804,27 @@ fn render_building_placement_preview(
         text.push_arc(center_px, radius, progress, color, (3.0 * sf).max(1.0));
     }
 
-    let marker_size = building_icon_size(zoom_scaled).max(20.0) * sf;
-    text.push_building_sprite(
-        building_kind_sprite(kind, 1),
-        center_px,
-        marker_size * 0.5,
-        [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
-    );
+    if let Some(uv_rect) = crate::render::gpu::building_sprite_uv(kind, 1) {
+        text.push_building_sprite(
+            center_px,
+            [
+                footprint_size_px[0] * BUILDING_FOOTPRINT_FILL,
+                footprint_size_px[1] * BUILDING_FOOTPRINT_FILL,
+            ],
+            uv_rect,
+            [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
+        );
+    } else {
+        let icon_half_size =
+            footprint_size_px[0].min(footprint_size_px[1]) * BUILDING_FOOTPRINT_FILL * 0.5;
+        let _ = text.push_emoji(
+            building_kind_emoji(kind, 1),
+            center_px,
+            icon_half_size,
+            [1.0, 1.0, 1.0, if can_place { 0.78 } else { 0.42 }],
+            crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.75]),
+        );
+    }
     let label = construction_status_label(
         None,
         kind.construction_duration_ticks(),
@@ -1622,8 +833,18 @@ fn render_building_placement_preview(
     render_building_preview_badge(text, center_px, &label, color, dev, sf);
 
     if kind == BuildingKind::Bunker {
+        let (anchor_x, anchor_y) =
+            crate::render::world::movers::tile_to_world(preview_tile, sim.map_w);
+        let anchor_center = world_to_screen_values(
+            anchor_x,
+            anchor_y,
+            input.camera_x,
+            input.camera_y,
+            input.camera_zoom,
+            sf,
+        );
         text.push_ring(
-            center_px,
+            [anchor_center[0] * sf, anchor_center[1] * sf],
             sim.config.bunker_range as f32 * input.camera_zoom,
             [0.94, 0.27, 0.27, 0.38],
             (1.5 * sf).max(1.0),
@@ -1640,7 +861,10 @@ fn render_building_placement_preview(
     };
     render_building_gold_badge(
         text,
-        [center_px[0], center_px[1] + marker_size * 0.8],
+        [
+            center_px[0],
+            center_px[1] + footprint_size_px[1] * 0.5 + 18.0 * sf,
+        ],
         &balance,
         has_gold,
         dev,
@@ -1819,18 +1043,19 @@ fn cached_buildings<'a>(
     tick_rate_ms: f32,
 ) -> &'a [RenderedBuilding] {
     let map_w = map_w.max(1);
-    let cluster_cell_size_bits = lod.cluster_cell_size.to_bits();
     let tick_rate_ms_bits = tick_rate_ms.to_bits();
     let cache = &mut ui.building_render_cache;
-    if !cache.matches(
-        snapshot.tick,
-        map_w,
-        cluster_cell_size_bits,
-        my_id,
-        tick_rate_ms_bits,
-    ) {
-        let mut buildings = collect_buildings(snapshot, map_w, lod, my_id, tick_rate_ms);
-        buildings.sort_unstable_by(|a, b| {
+    if !cache.matches(snapshot.tick, map_w, lod.band, my_id, tick_rate_ms_bits) {
+        collect_buildings(
+            snapshot,
+            map_w,
+            lod,
+            my_id,
+            tick_rate_ms,
+            &mut cache.buildings,
+            &mut cache.clusters,
+        );
+        cache.buildings.sort_unstable_by(|a, b| {
             a.by.partial_cmp(&b.by)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.bx.partial_cmp(&b.bx).unwrap_or(std::cmp::Ordering::Equal))
@@ -1838,10 +1063,9 @@ fn cached_buildings<'a>(
         });
         cache.tick = Some(snapshot.tick);
         cache.map_w = map_w;
-        cache.cluster_cell_size_bits = cluster_cell_size_bits;
+        cache.lod_band = lod.band;
         cache.player_id = my_id;
         cache.tick_rate_ms_bits = tick_rate_ms_bits;
-        cache.buildings = buildings;
     }
     &cache.buildings
 }
@@ -1852,62 +1076,57 @@ fn collect_buildings(
     lod: BuildingLod,
     my_id: u16,
     tick_rate_ms: f32,
-) -> Vec<RenderedBuilding> {
+    out: &mut Vec<RenderedBuilding>,
+    clusters: &mut HashMap<BuildingClusterKey, (f32, f32, usize)>,
+) {
     let map_w = map_w.max(1);
-    if lod.cluster_cell_size <= 1.0 {
-        return snapshot
-            .buildings
-            .iter()
-            .map(|building| {
-                let (bx, by) =
-                    crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
-                let active_level = building.active_level();
-                RenderedBuilding {
-                    bx,
-                    by,
-                    kind: building.kind,
-                    level: active_level,
-                    modules: building.modules,
-                    under_construction: building.under_construction,
-                    count: 1,
-                    owner_id: building.owner_id,
-                    tile_idx: Some(building.tile_idx),
-                    status: building_visual_status(building, active_level, my_id, tick_rate_ms),
-                }
-            })
-            .collect();
-    }
-
-    #[derive(Hash, PartialEq, Eq)]
-    struct ClusterKey {
-        grid_x: i32,
-        grid_y: i32,
-        owner_id: u16,
-        kind: BuildingKind,
-        level: u8,
-    }
-
-    let mut clusters: HashMap<ClusterKey, (f32, f32, usize)> = HashMap::new();
+    out.clear();
+    clusters.clear();
     for building in &snapshot.buildings {
-        let (bx, by) = crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
-        let tile_x = (building.tile_idx % map_w) as f32;
-        let tile_y = (building.tile_idx / map_w) as f32;
-        let key = ClusterKey {
-            grid_x: (tile_x / lod.cluster_cell_size) as i32,
-            grid_y: (tile_y / lod.cluster_cell_size) as i32,
-            owner_id: building.owner_id,
+        let tile_x = building.tile_idx % map_w;
+        let tile_y = building.tile_idx / map_w;
+        let active_level = building.active_level();
+        let detail = lod.detail(building.kind);
+        if detail == BuildingDetail::Cluster {
+            let (bx, by) = crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
+            let key = BuildingClusterKey {
+                grid_x: (tile_x as f32 / lod.cluster_cell_size) as i32,
+                grid_y: (tile_y as f32 / lod.cluster_cell_size) as i32,
+                owner_id: building.owner_id,
+                kind: building.kind,
+                level: active_level,
+            };
+            let entry = clusters.entry(key).or_insert((0.0, 0.0, 0));
+            entry.0 += bx;
+            entry.1 += by;
+            entry.2 += 1;
+            continue;
+        }
+
+        let footprint = sow_core::building::BuildingFootprint::at(building.kind, tile_x, tile_y);
+        out.push(RenderedBuilding {
+            bx: footprint.left as f32 + footprint.width as f32 * 0.5,
+            by: footprint.top as f32 + footprint.height as f32 * 0.5,
             kind: building.kind,
-            level: building.active_level(),
-        };
-        let entry = clusters.entry(key).or_insert((0.0, 0.0, 0));
-        entry.0 += bx;
-        entry.1 += by;
-        entry.2 += 1;
+            level: active_level,
+            modules: building.modules,
+            under_construction: building.under_construction,
+            count: 1,
+            owner_id: building.owner_id,
+            tile_idx: Some(building.tile_idx),
+            detail,
+            status: building_visual_status(
+                building,
+                active_level,
+                my_id,
+                tick_rate_ms,
+                detail == BuildingDetail::Full,
+            ),
+        });
     }
 
-    clusters
-        .into_iter()
-        .map(|(key, (sum_x, sum_y, count))| RenderedBuilding {
+    for (key, (sum_x, sum_y, count)) in clusters.drain() {
+        out.push(RenderedBuilding {
             bx: sum_x / count as f32,
             by: sum_y / count as f32,
             kind: key.kind,
@@ -1917,9 +1136,10 @@ fn collect_buildings(
             count,
             owner_id: key.owner_id,
             tile_idx: None,
+            detail: BuildingDetail::Cluster,
             status: None,
-        })
-        .collect()
+        });
+    }
 }
 
 fn tile_at_world(x: f32, y: f32, map_w: u32) -> Option<u32> {
@@ -1937,30 +1157,30 @@ fn building_icon_size(zoom_scaled: f32) -> f32 {
     size.clamp(11.0, 96.0)
 }
 
-fn building_kind_sprite(kind: BuildingKind, level: u8) -> BuildingSpriteId {
+fn building_kind_emoji(kind: BuildingKind, level: u8) -> &'static str {
     match (kind, level.clamp(1, kind.max_level())) {
-        (BuildingKind::City, 1) => BuildingSpriteId::Camp,
-        (BuildingKind::City, 2) => BuildingSpriteId::Hamlet,
-        (BuildingKind::City, 3) => BuildingSpriteId::Village,
-        (BuildingKind::City, 4) => BuildingSpriteId::Town,
-        (BuildingKind::City, 5) => BuildingSpriteId::City,
-        (BuildingKind::City, _) => BuildingSpriteId::Metropolis,
-        (BuildingKind::Port, 1) => BuildingSpriteId::Dock,
-        (BuildingKind::Port, 2) => BuildingSpriteId::Wharf,
-        (BuildingKind::Port, 3) => BuildingSpriteId::Harbor,
-        (BuildingKind::Port, 4) => BuildingSpriteId::Port,
-        (BuildingKind::Port, _) => BuildingSpriteId::Megaport,
-        (BuildingKind::Factory, 1) => BuildingSpriteId::Workshop,
-        (BuildingKind::Factory, 2) => BuildingSpriteId::Manufactory,
-        (BuildingKind::Factory, 3) => BuildingSpriteId::Factory,
-        (BuildingKind::Factory, _) => BuildingSpriteId::IndustrialComplex,
-        (BuildingKind::Bunker, 1) => BuildingSpriteId::Watchpost,
-        (BuildingKind::Bunker, 2) => BuildingSpriteId::Watchtower,
-        (BuildingKind::Bunker, 3) => BuildingSpriteId::Bastion,
-        (BuildingKind::Bunker, _) => BuildingSpriteId::Citadel,
-        (BuildingKind::Farm, 1) => BuildingSpriteId::CultivatedPlot,
-        (BuildingKind::Farm, 2) => BuildingSpriteId::Farm,
-        (BuildingKind::Farm, _) => BuildingSpriteId::IrrigatedFields,
+        (BuildingKind::City, 1) => "🏕️",
+        (BuildingKind::City, 2) => "🏘️",
+        (BuildingKind::City, 3) => "🏡",
+        (BuildingKind::City, 4) => "🏙️",
+        (BuildingKind::City, 5) => "🏛️",
+        (BuildingKind::City, _) => "🌆",
+        (BuildingKind::Factory, 1) => "🛠️",
+        (BuildingKind::Factory, 2) => "🏗️",
+        (BuildingKind::Factory, 3) => "🏭",
+        (BuildingKind::Factory, _) => "🏭",
+        (BuildingKind::Port, 1) => "⚓",
+        (BuildingKind::Port, 2) => "🛶",
+        (BuildingKind::Port, 3) => "🚢",
+        (BuildingKind::Port, 4) => "⚓",
+        (BuildingKind::Port, _) => "🛳️",
+        (BuildingKind::Bunker, 1) => "👁️",
+        (BuildingKind::Bunker, 2) => "🗼",
+        (BuildingKind::Bunker, 3) => "🏰",
+        (BuildingKind::Bunker, _) => "🏯",
+        (BuildingKind::Farm, 1) => "🌱",
+        (BuildingKind::Farm, 2) => "🌾",
+        (BuildingKind::Farm, _) => "🚜",
     }
 }
 
@@ -1989,43 +1209,27 @@ mod tests {
     }
 
     #[test]
-    fn nameplate_scales_match_the_last_gpu_tuning() {
-        let human = NameplateMetrics::compute(14.0, PlayerType::Human, true);
-        let bot = NameplateMetrics::compute(14.0, PlayerType::Bot, true);
-        let nation = NameplateMetrics::compute(14.0, PlayerType::Nation, true);
-        assert_eq!(human.avatar_diameter, 14.0 * HUMAN_AVATAR_SCALE);
-        assert_eq!(bot.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
-        assert_eq!(nation.avatar_diameter, 14.0 * NATION_AVATAR_SCALE);
-    }
+    fn standard_building_footprint_shares_lod_and_is_stable_inside_a_zoom_band() {
+        let far = BuildingLod::for_zoom(1.0);
+        for kind in BuildingKind::ALL {
+            assert_eq!(far.detail(kind), BuildingDetail::Cluster);
+        }
+        assert_eq!(far.cluster_cell_size, BUILDING_CLUSTER_TARGET_SIZE);
+        assert_eq!(far.band, BuildingLod::for_zoom(1.05).band);
+        assert_eq!(
+            far.cluster_cell_size,
+            BuildingLod::for_zoom(1.05).cluster_cell_size
+        );
 
-    #[test]
-    fn nameplate_lod_uses_the_final_fitted_font_size() {
-        assert_eq!(fitted_nameplate_font_px(8.0, 1.0, 1.0, true, true), 8.0);
-        assert!(fitted_nameplate_font_px(8.0, 0.5, 1.0, true, true) < 7.0);
-        assert!(fitted_nameplate_font_px(8.0, 0.5, 1.0, false, true) >= 7.0);
-        assert!(fitted_nameplate_font_px(8.0, 0.1, 1.0, false, false).is_infinite());
-    }
+        let mid = BuildingLod::for_zoom(8.0);
+        for kind in BuildingKind::ALL {
+            assert_eq!(mid.detail(kind), BuildingDetail::Full);
+        }
 
-    #[test]
-    fn nameplate_sampling_coalesces_four_ticks() {
-        assert!(nameplate_sample_due(None, 0, false));
-        assert!(!nameplate_sample_due(Some(0), 1, false));
-        assert!(!nameplate_sample_due(Some(0), 3, false));
-        assert!(nameplate_sample_due(Some(0), 4, false));
-        assert!(nameplate_sample_due(Some(4), 4, true));
-    }
-
-    #[test]
-    fn nameplate_size_deadzone_skips_small_growth() {
-        assert!(!nameplate_size_needs_interpolation(10.0, 10.2));
-        assert!(nameplate_size_needs_interpolation(10.0, 10.21));
-    }
-
-    #[test]
-    fn building_lod_clusters_when_the_marker_is_not_readable() {
-        let lod = BuildingLod::for_zoom(1.0);
-        assert!(lod.compact);
-        assert_eq!(lod.cluster_cell_size, BUILDING_CLUSTER_TARGET_SIZE);
+        let close = BuildingLod::for_zoom(32.0);
+        for kind in BuildingKind::ALL {
+            assert_eq!(close.detail(kind), BuildingDetail::Full);
+        }
     }
 
     #[test]
@@ -2034,36 +1238,18 @@ mod tests {
         let mut cache = BuildingRenderCache::default();
         cache.tick = Some(4);
         cache.map_w = 800;
-        cache.cluster_cell_size_bits = lod.cluster_cell_size.to_bits();
+        cache.lod_band = lod.band;
 
         cache.player_id = 7;
         cache.tick_rate_ms_bits = 100.0f32.to_bits();
 
-        assert!(cache.matches(
-            4,
-            800,
-            lod.cluster_cell_size.to_bits(),
-            7,
-            100.0f32.to_bits()
-        ));
-        assert!(!cache.matches(
-            5,
-            800,
-            lod.cluster_cell_size.to_bits(),
-            7,
-            100.0f32.to_bits()
-        ));
-        assert!(!cache.matches(
-            4,
-            801,
-            lod.cluster_cell_size.to_bits(),
-            7,
-            100.0f32.to_bits()
-        ));
+        assert!(cache.matches(4, 800, lod.band, 7, 100.0f32.to_bits()));
+        assert!(!cache.matches(5, 800, lod.band, 7, 100.0f32.to_bits()));
+        assert!(!cache.matches(4, 801, lod.band, 7, 100.0f32.to_bits()));
         assert!(!cache.matches(
             4,
             800,
-            BuildingLod::for_zoom(2.0).cluster_cell_size.to_bits(),
+            BuildingLod::for_zoom(2.0).band,
             7,
             100.0f32.to_bits()
         ));
@@ -2090,17 +1276,17 @@ mod tests {
     #[test]
     fn building_status_distinguishes_new_construction_from_upgrade() {
         let new_build = building_snapshot(BuildingKind::City, 1, true, 20);
-        let status = building_visual_status(&new_build, new_build.active_level(), 7, 100.0)
+        let status = building_visual_status(&new_build, new_build.active_level(), 7, 100.0, true)
             .expect("new construction status");
-        assert_eq!(status.label, "🏗️ 2s");
+        assert_eq!(status.label.as_deref(), Some("🏗️ 2s"));
         assert_eq!(status.color, [0.0, 0.86, 1.0, 1.0]);
         assert_eq!(status.progress, 0.0);
 
         let upgrade_ticks = sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 2);
         let upgrade = building_snapshot(BuildingKind::City, 2, true, upgrade_ticks);
-        let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0)
+        let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0, true)
             .expect("upgrade status");
-        assert_eq!(status.label, "🏗️ 2 · 2.2s");
+        assert_eq!(status.label.as_deref(), Some("🏗️ 2 · 2.2s"));
         assert_eq!(status.color, [1.0, 0.82, 0.22, 1.0]);
         assert_eq!(status.progress, 0.0);
     }
@@ -2110,11 +1296,14 @@ mod tests {
         let duration_two = sow_core::building::core::upgrade_duration_ticks(BuildingKind::City, 2);
         let remaining = duration_two / 2;
         let upgrade = building_snapshot(BuildingKind::City, 2, true, remaining);
-        let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0)
+        let status = building_visual_status(&upgrade, upgrade.active_level(), 7, 100.0, true)
             .expect("upgrade status");
         assert_eq!(
             status.label,
-            format!("🏗️ 2 · {}", format_construction_time(remaining, 100.0))
+            Some(format!(
+                "🏗️ 2 · {}",
+                format_construction_time(remaining, 100.0)
+            ))
         );
         let expected_progress = 1.0 - (remaining as f32 / duration_two as f32);
         assert!((status.progress - expected_progress).abs() < 0.001);
@@ -2123,32 +1312,51 @@ mod tests {
     #[test]
     fn building_status_uses_configured_tick_rate_and_disappears_when_ready() {
         let building = building_snapshot(BuildingKind::City, 1, true, 20);
-        let status = building_visual_status(&building, building.active_level(), 7, 250.0)
+        let status = building_visual_status(&building, building.active_level(), 7, 250.0, true)
             .expect("construction status");
-        assert_eq!(status.label, "🏗️ 5s");
+        assert_eq!(status.label.as_deref(), Some("🏗️ 5s"));
+        let compact = building_visual_status(&building, building.active_level(), 7, 250.0, false)
+            .expect("compact construction status");
+        assert_eq!(compact.label, None);
 
         let ready = building_snapshot(BuildingKind::City, 1, false, 0);
-        assert!(building_visual_status(&ready, ready.active_level(), 7, 100.0).is_none());
+        assert!(building_visual_status(&ready, ready.active_level(), 7, 100.0, true).is_none());
     }
 
     #[test]
-    fn every_building_level_uses_its_own_atlas_cell() {
-        let offsets = [0, 24, 16, 8, 28];
-        for (kind, offset) in BuildingKind::ALL.into_iter().zip(offsets) {
-            for level in 1..=kind.max_level() {
-                assert_eq!(
-                    building_kind_sprite(kind, level) as u8,
-                    offset + level - 1,
-                    "{kind:?} level {level}"
+    fn building_levels_restore_the_historical_emojis_and_all_are_packed() {
+        let expected: &[(BuildingKind, &[&str])] = &[
+            (BuildingKind::City, &["🏕️", "🏘️", "🏡", "🏙️", "🏛️", "🌆"]),
+            (BuildingKind::Factory, &["🛠️", "🏗️", "🏭", "🏭"]),
+            (BuildingKind::Port, &["⚓", "🛶", "🚢", "⚓", "🛳️"]),
+            (BuildingKind::Bunker, &["👁️", "🗼", "🏰", "🏯"]),
+            (BuildingKind::Farm, &["🌱", "🌾", "🚜"]),
+        ];
+
+        for (kind, emojis) in expected {
+            assert_eq!(emojis.len(), kind.max_level() as usize);
+            assert_eq!(building_kind_emoji(*kind, 0), emojis[0]);
+            for (level, emoji) in emojis.iter().enumerate() {
+                let level = level as u8 + 1;
+                assert_eq!(building_kind_emoji(*kind, level), *emoji);
+                assert!(
+                    crate::render::gpu::emoji_uv_opt(emoji).is_some(),
+                    "missing emoji atlas entry for {kind:?} level {level}: {emoji}"
                 );
             }
         }
-    }
-
-    #[test]
-    fn unfinished_foundations_use_the_level_one_sprite() {
-        for kind in BuildingKind::ALL {
-            assert_eq!(building_kind_sprite(kind, 0), building_kind_sprite(kind, 1));
+        for level in 1..=BuildingKind::Farm.max_level() {
+            assert!(crate::render::gpu::building_sprite_uv(BuildingKind::Farm, level).is_some());
+        }
+        assert!(crate::render::gpu::building_sprite_uv(BuildingKind::Farm, 0).is_some());
+        assert!(crate::render::gpu::building_sprite_uv(BuildingKind::Farm, 4).is_none());
+        for kind in [
+            BuildingKind::City,
+            BuildingKind::Factory,
+            BuildingKind::Port,
+            BuildingKind::Bunker,
+        ] {
+            assert!(crate::render::gpu::building_sprite_uv(kind, 1).is_none());
         }
     }
 

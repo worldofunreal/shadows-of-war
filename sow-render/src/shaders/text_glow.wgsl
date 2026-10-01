@@ -25,6 +25,7 @@ var emoji_sampler: sampler;
 var avatar_atlas: texture_2d<f32>;
 var avatar_sampler: sampler;
 var building_atlas: texture_2d<f32>;
+var building_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -172,10 +173,12 @@ fn shade_sprite(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(tex.rgb * in.color.rgb, tex.a * mask * in.color.a);
 }
 
-// Square building image from the dedicated atlas. Unlike leader portraits, this keeps its full
-// transparent sprite silhouette instead of clipping it to a circle.
 fn shade_building_sprite(in: VertexOutput) -> vec4<f32> {
-    let tex = textureSample(building_atlas, avatar_sampler, clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw));
+    let tex = textureSample(
+        building_atlas,
+        building_sampler,
+        clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw),
+    );
     return vec4<f32>(tex.rgb * in.color.rgb, tex.a * in.color.a);
 }
 
@@ -233,11 +236,11 @@ fn shade_cross(in: VertexOutput) -> vec4<f32> {
 }
 
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 10.5) {
+        return shade_building_sprite(in);
+    }
     if (in.kind > 9.5) {
         return shade_rounded_rect(in);
-    }
-    if (in.kind > 8.5) {
-        return shade_building_sprite(in);
     }
     if (in.kind > 7.5) {
         return shade_arc(in);

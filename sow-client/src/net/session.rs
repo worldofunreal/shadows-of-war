@@ -205,10 +205,10 @@ impl SowApp {
                     .and_then(|snapshot| snapshot.players.iter().find(|p| p.id == player_id))
             {
                 exit_leader = Some(player.leader);
-                self.ui
-                    .app
-                    .main_menu_state
-                    .set_selected_leader(player.leader, false);
+                self.ui.app.main_menu_state.sync_selected_leader_from_match(
+                    player.leader,
+                    was_offline && self.ui.tutorial_active,
+                );
             }
             if !self.progress_match_recorded {
                 crate::store_portals::measure("match", "round", "abandon");
@@ -271,6 +271,13 @@ impl SowApp {
 
     /// Enter the EnterGame splash (fade-in, progress bar, fade-out to Playing).
     pub(crate) fn begin_enter_game_loader(&mut self, leader: sow_core::player::Leader) {
+        let reuse_enter_game_loader = self.ui.app.phase == ClientPhase::Splash
+            && self.ui.app.splash_state.job == SplashJob::EnterGame
+            && self.ui.app.splash_state.loader_leader == Some(leader)
+            && !self.ui.app.splash_state.done;
+        if reuse_enter_game_loader {
+            return;
+        }
         let reuse_boot_loader = self.ui.app.phase == ClientPhase::Splash
             && self.ui.app.splash_state.job == SplashJob::Boot
             && !self.ui.app.splash_state.done;

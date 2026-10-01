@@ -108,7 +108,7 @@
     function renderFooter(label) {
         var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
         return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
-            "<a href='/how-to-play/'>" + esc(SOW_t("menu.how_to_play")) + "</a><a href='/support/'>" + esc(SOW_t("menu.support")) + "</a><a href='/terms/'>" + esc(SOW_t("menu.terms")) + "</a><a href='/privacy/'>" + esc(SOW_t("menu.privacy")) + "</a><a href='/cookies/'>" + esc(SOW_t("menu.cookies")) + "</a>" +
+            "<a href='/#faq'>" + esc(SOW_t("site.faq")) + "</a><a href='/support/'>" + esc(SOW_t("menu.support")) + "</a><a href='/terms/'>" + esc(SOW_t("menu.terms")) + "</a><a href='/privacy/'>" + esc(SOW_t("menu.privacy")) + "</a><a href='/cookies/'>" + esc(SOW_t("menu.cookies")) + "</a>" +
             "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a href='https://github.com/worldofunreal/shadows-of-war'" + externalAttrs + ">" + esc(SOW_t("menu.github")) + "</a>" +
             "</nav><span>" + esc(SOW_t("menu.brand")) + "</span></footer>";
     }
@@ -1706,6 +1706,20 @@
     /* POKI_SHARED_STORE_EVENTS_END */
 
     root.addEventListener("keydown", function (event) {
+        var profileTab = event.target.closest("[role='tab'][data-command='profile_tab']");
+        if (profileTab && ["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(event.key) >= 0) {
+            var profileTabs = Array.prototype.slice.call(root.querySelectorAll("[role='tab'][data-command='profile_tab']"));
+            var profileTabIndex = profileTabs.indexOf(profileTab);
+            if (profileTabs.length && profileTabIndex >= 0) {
+                var nextProfileTabIndex = event.key === "Home" ? 0 : event.key === "End" ? profileTabs.length - 1 :
+                    (profileTabIndex + (event.key === "ArrowRight" ? 1 : -1) + profileTabs.length) % profileTabs.length;
+                event.preventDefault();
+                profileTabs[nextProfileTabIndex].click();
+                var selectedProfileTab = root.querySelector("[role='tab'][aria-selected='true']");
+                if (selectedProfileTab) selectedProfileTab.focus();
+                return;
+            }
+        }
         var dropdownTrigger = event.target.closest("[data-role='dropdown-trigger']");
         var dropdownOption = event.target.closest("[data-role='dropdown-option'], [data-command='select_dropdown']");
         if (dropdownTrigger) {
@@ -1956,24 +1970,8 @@
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
     });
 
-    function waitForMenuImage(url) {
-        return new Promise(function (resolve) {
-            var image = new Image();
-            image.onload = function () {
-                if (typeof image.decode !== "function") return resolve();
-                try {
-                    image.decode().then(resolve, resolve);
-                } catch (error) {
-                    resolve();
-                }
-            };
-            image.onerror = resolve;
-            image.src = url;
-        });
-    }
-
     function waitForExitMenuArt() {
-        var waits = [waitForMenuImage(heroImage())];
+        var waits = [];
         publicLobbies(true).forEach(function (lobby) {
             waits.push(preloadLobbyThumbnail(lobby).catch(function () {}));
         });
@@ -1993,17 +1991,20 @@
             window.SOW_syncWebLoader(nextState);
             return;
         }
-        if (exitMenuAssetsPending) return;
-
-        exitMenuAssetsPending = true;
-        var token = ++exitMenuAssetsToken;
-        waitForExitMenuArt().then(function () {
-            if (token !== exitMenuAssetsToken) return;
-            exitMenuAssetsPending = false;
-            if (!state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
-            exitMenuAssetsReady = true;
-            window.SOW_syncWebLoader(state);
-        });
+        if (!exitMenuAssetsPending) {
+            exitMenuAssetsPending = true;
+            var token = ++exitMenuAssetsToken;
+            waitForExitMenuArt().then(function () {
+                if (token !== exitMenuAssetsToken) return;
+                exitMenuAssetsPending = false;
+                if (!state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
+                exitMenuAssetsReady = true;
+                window.SOW_syncWebLoader(state);
+            });
+        }
+        window.SOW_syncWebLoader(nextState.loader_done === true
+            ? Object.assign({}, nextState, { loader_done: false })
+            : nextState);
     }
 
     function scheduleRewardPresentation(delay) {
@@ -2017,6 +2018,9 @@
     }
 
     window.addEventListener("sow:loader-cycle-ready", function () {
+        if (state && state.phase === "Playing" && state.loader_leader) {
+            prepareLeaderArt(leaderById(state.loader_leader));
+        }
         if (!pendingExitScreenIntro || !state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
         pendingExitScreenIntro = false;
         previousScreen = null;

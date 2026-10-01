@@ -3,8 +3,9 @@
 //! that turn a role into team, color, AI, and troop tier.
 
 use sow_core::game_config::ScriptedSpawn;
+use sow_core::game_config::{CampaignBetrayal, CampaignHostility};
 use sow_core::player::{Civilization, Leader};
-use sow_core::protocol::Team;
+use sow_core::protocol::CampaignRelation;
 
 /// Which scripted campaign the running tutorial match belongs to. Boudica is
 /// the first-run teaching intro; the Six Sky episodes are the retention chain
@@ -114,22 +115,22 @@ impl CampaignId {
     }
 }
 
-/// A faction's role fixes its team, color, AI, and troop tier. The difficulty ladder runs
+/// A faction's role fixes its AI tier, civilization default, and starting troop tier. The ladder runs
 /// Independent (500) → Vassal (1 000) → Boss (2 500) → BigBoss (5 000); the player (Boudica)
 /// starts at 1 000 and grows by conquest, so the ladder climbs as the campaign progresses.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Role {
-    /// Boudica's kin/allies — Team Red, Boudica's color, passive (config troops).
+    /// Iceni identity; diplomacy is configured per faction, not by this role.
     Kin,
-    /// Lone clan — gray, no team, passive, **500** (the easy first-blood targets).
+    /// Lone clan — **500** starting troops.
     Independent,
-    /// Rome's client tribe — Team Blue, passive, **1 000** (a "vassal" of the bosses).
+    /// Client tribe — **1 000** starting troops.
     Vassal,
-    /// A Roman city — Team Blue, expanding nation, **2 500**.
+    /// A city — expanding nation, **2 500**.
     Boss,
-    /// Rome itself — Team Blue, expanding nation, **5 000** (the apex).
+    /// A major power — expanding nation, **5 000** (the apex).
     BigBoss,
-    /// Unaligned bystander — its own color, no team, passive, **500**.
+    /// Unaligned bystander — **500** starting troops.
     Neutral,
 }
 
@@ -151,14 +152,9 @@ impl Role {
     fn troop_cap(self) -> Option<f64> {
         None
     }
-    /// `(team, expanding-nation?)`. Only the bosses + big boss actively expand.
-    fn team_and_ai(self) -> (Option<Team>, bool) {
-        match self {
-            Role::Kin => (Some(Team::Red), false),
-            Role::Vassal => (Some(Team::Blue), false),
-            Role::Boss | Role::BigBoss => (Some(Team::Blue), true),
-            Role::Independent | Role::Neutral => (None, false),
-        }
+    /// Only the city and major-power tiers use the expanding nation AI.
+    fn is_nation(self) -> bool {
+        matches!(self, Role::Boss | Role::BigBoss)
     }
     /// Civilization implied by the role (kin = Iceni, Rome's cities/empire = Rome, rest Gallic).
     fn civ(self) -> Civilization {
@@ -189,6 +185,10 @@ pub struct Faction {
     pub x: u32,
     pub y: u32,
     pub role: Role,
+    pub relation: CampaignRelation,
+    pub hostility: CampaignHostility,
+    pub betrayal: CampaignBetrayal,
+    pub color: [f32; 3],
     pub civ: Civilization,
     /// Bot intelligence override; `None` = engine default. Only the JSON loader sets it.
     pub iq: Option<u32>,
@@ -204,12 +204,16 @@ pub struct Faction {
 impl Faction {
     /// Build a faction; civ is implied by role so it stays consistent between the hardcoded
     /// roster and the JSON loader.
-    fn new(name: impl Into<String>, x: u32, y: u32, role: Role) -> Faction {
+    fn new(name: impl Into<String>, x: u32, y: u32, role: Role, color: [f32; 3]) -> Faction {
         Faction {
             name: name.into(),
             x,
             y,
             role,
+            relation: CampaignRelation::Neutral,
+            hostility: CampaignHostility::Passive,
+            betrayal: CampaignBetrayal::Never,
+            color,
             civ: role.civ(),
             iq: None,
             leader: None,
@@ -224,12 +228,6 @@ impl Faction {
 // `Faction::new`; there are deliberately no hand-rolled `kin()/boss()/…` builders, so there is one
 // and only one way to define a faction. `Faction::new` stays private to this module.
 
-/// Boudica's territory color — kin share it so the rebellion reads as one bloc.
-/// (Mirrors `Leader::Boudica.filler_rgb()`.)
-pub const ALLY_COLOR: [f32; 3] = [0.88, 0.42, 0.12];
-const ROME_BLUE: [f32; 3] = [0.20, 0.45, 0.95];
-const TRIBE_GRAY: [f32; 3] = [0.58, 0.58, 0.62];
-
 /// Distinct own-colors for the neutral bystander factions (Welsh tribes, Gaul).
 const NEUTRAL_PALETTE: [[f32; 3]; 6] = [
     [0.30, 0.65, 0.45], // green
@@ -240,11 +238,9 @@ const NEUTRAL_PALETTE: [[f32; 3]; 6] = [
     [0.45, 0.50, 0.72], // slate
 ];
 
-/// The human's team in the rebellion (Boudica leads Red).
-pub const PLAYER_TEAM: Team = Team::Red;
+pub const PLAYER_COLOR: [f32; 3] = [0.94, 0.56, 0.16];
 
-/// Log the episode roster grouped by allegiance, so the console shows at a glance who is on
-/// which side before the engine places them. (The engine then logs each actual placement.)
+/// Log the episode roster grouped by role before the engine places it.
 pub fn log_plan(episode: &str, player_spawn: (u32, u32), factions: &[Faction]) {
     log_plan_for(episode, "Boudica/Iceni, 1000", player_spawn, factions);
 }
@@ -277,11 +273,7 @@ pub fn log_plan_for(
         factions.len()
     );
     log::info!(
-        "campaign:   TEAM RED (us): [player] + kin {}",
-        join(&[Role::Kin])
-    );
-    log::info!(
-        "campaign:   TEAM BLUE (foes): big-boss {} | bosses {} | vassals {}",
+        "campaign:   major powers {} | cities {} | client tribes {}",
         join(&[Role::BigBoss]),
         join(&[Role::Boss]),
         join(&[Role::Vassal])
@@ -298,21 +290,10 @@ pub fn log_plan_for(
 
 /// Turn an episode's faction list into engine-ready scripted spawns (team + color + tier).
 pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
-    let mut neutral_i = 0usize;
     factions
         .iter()
         .map(|f| {
-            let (team, is_nation) = f.role.team_and_ai();
-            let color = match f.role {
-                Role::Kin => ALLY_COLOR,
-                Role::Vassal | Role::Boss | Role::BigBoss => ROME_BLUE,
-                Role::Independent => TRIBE_GRAY,
-                Role::Neutral => {
-                    let c = NEUTRAL_PALETTE[neutral_i % NEUTRAL_PALETTE.len()];
-                    neutral_i += 1;
-                    c
-                }
-            };
+            let is_nation = f.role.is_nation();
             let leader = match f.role {
                 Role::Boss | Role::BigBoss => Leader::Caesar,
                 Role::Kin => Leader::Boudica,
@@ -323,8 +304,8 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 name: f.name.clone(),
                 x: f.x,
                 y: f.y,
-                color,
-                team,
+                color: f.color,
+                team: None,
                 leader,
                 civilization: f.civ,
                 is_nation,
@@ -334,6 +315,9 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
                 campaign_support_interval_seconds: f.support_interval_seconds,
                 campaign_alliance_group: f.alliance_group.clone(),
+                campaign_relation: Some(f.relation),
+                campaign_hostility: Some(f.hostility),
+                campaign_betrayal: Some(f.betrayal),
             }
         })
         .collect()
@@ -341,15 +325,21 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
 
 // ---- Data-driven rosters (authored visually by tools/campaign-editor) ----
 
-/// One faction in a JSON roster file. Names/positions/roles only; everything else (team, color,
-/// troops, civ) is derived from `role`, exactly like the hardcoded builders — so the JSON stays a
-/// thin authoring surface and can't drift the balance model.
+/// Faction identity, diplomacy, and presentation come from the same editor-authored roster.
 #[derive(serde::Deserialize)]
 struct RosterEntry {
     name: String,
     x: u32,
     y: u32,
     role: String,
+    #[serde(default)]
+    relation: CampaignRelation,
+    #[serde(default)]
+    hostility: CampaignHostility,
+    #[serde(default)]
+    betrayal: CampaignBetrayal,
+    #[serde(default)]
+    color: Option<String>,
     #[serde(default)]
     iq: Option<u32>,
     /// Civilization override (`"maya"`, …); absent = the role default.
@@ -370,6 +360,8 @@ struct RosterEntry {
 struct RosterFile {
     #[serde(default)]
     player_spawn: Option<(u32, u32)>,
+    #[serde(default)]
+    player_color: Option<String>,
     #[serde(default)]
     factions: Vec<RosterEntry>,
 }
@@ -399,26 +391,30 @@ fn civ_from_id(value: &str) -> Option<Civilization> {
 /// Parse an episode roster from JSON text. `None` on any problem (bad JSON, unknown role, empty
 /// list). This is the **single** roster code path — shared by the runtime file override and the
 /// embedded committed default — so there is exactly one format and no second way to define a roster.
-pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
+pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> {
     let rf: RosterFile = serde_json::from_str(text).ok()?;
     let mut factions = Vec::with_capacity(rf.factions.len());
     let mut names = std::collections::HashSet::new();
-    for e in &rf.factions {
+    for (index, e) in rf.factions.iter().enumerate() {
         if e.name.trim().is_empty() || !names.insert(e.name.as_str()) {
             return None;
         }
         let role = Role::from_name(&e.role)?;
-        if (e.support_interval_seconds.is_some()
-            && role != Role::Kin
-            && e.alliance_group.is_none())
-            || e.support_interval_seconds.is_some_and(|seconds| !(5..=600).contains(&seconds))
+        if e.support_interval_seconds.is_some_and(|seconds| !(5..=600).contains(&seconds))
             || e.alliance_group
                 .as_deref()
                 .is_some_and(|group| !valid_campaign_group_id(group))
         {
             return None;
         }
-        let mut f = Faction::new(e.name.clone(), e.x, e.y, role);
+        let color = match e.color.as_deref() {
+            Some(color) => parse_campaign_color(color)?,
+            None => NEUTRAL_PALETTE[index % NEUTRAL_PALETTE.len()],
+        };
+        let mut f = Faction::new(e.name.clone(), e.x, e.y, role, color);
+        f.relation = e.relation;
+        f.hostility = e.hostility;
+        f.betrayal = e.betrayal;
         f.iq = e.iq;
         f.support_interval_seconds = e.support_interval_seconds;
         f.alliance_group = e.alliance_group.clone();
@@ -439,7 +435,20 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32))> {
     if factions.is_empty() {
         return None;
     }
-    Some((factions, rf.player_spawn.unwrap_or((696, 45))))
+    let player_color = match rf.player_color.as_deref() {
+        Some(color) => parse_campaign_color(color)?,
+        None => PLAYER_COLOR,
+    };
+    Some((factions, rf.player_spawn.unwrap_or((696, 45)), player_color))
+}
+
+pub fn parse_campaign_color(value: &str) -> Option<[f32; 3]> {
+    let hex = value.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let channel = |start| u8::from_str_radix(&hex[start..start + 2], 16).ok().map(|value| value as f32 / 255.0);
+    Some([channel(0)?, channel(2)?, channel(4)?])
 }
 
 fn valid_avatar_id(value: &str) -> bool {

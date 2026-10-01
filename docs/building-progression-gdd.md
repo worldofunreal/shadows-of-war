@@ -51,7 +51,7 @@ City farm plots are a limit, not an order to fill every tile. Improve an empty l
 
 ## Touch and visuals
 
-The browser JavaScript HUD owns the mobile building card and buttons. Rust draws map markers with Blade's GPU image-and-text renderer, using the 22-cell building atlas. Level labels remain text; the 300 ms completion sparkle uses the existing emoji atlas, so it needs no extra effect sprite. Farm data is stored only for tiles that actually have a Farm.
+The browser JavaScript HUD owns the mobile building card and buttons. Rust draws map markers with Blade's GPU text renderer, using the shared emoji atlas and the historical emoji for each building level. Level labels remain text; the 300 ms completion sparkle also uses the shared emoji atlas. Farm data is stored only for tiles that actually have a Farm.
 
 The card uses a large touch target and can scroll on a small screen. It shows the active level, what the next level adds, the price, and the remaining or expected time. It does not put a permanent explanation beneath the building buttons.
 

@@ -2,10 +2,10 @@ use crate::context::RenderContext;
 use crate::text::msdf::FontAtlas;
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
-    AVATAR_CELL, AVATAR_COLS, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC, KIND_CROSS, KIND_DISC,
-    AVATAR_CORNER_RADIUS_RATIO, BuildingSpriteId, KIND_BUILDING_SPRITE, KIND_EMOJI, KIND_GLYPH,
-    KIND_RECT, KIND_RING, KIND_ROUNDED_RECT, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle,
-    TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
+    AVATAR_CELL, AVATAR_COLS, AVATAR_CORNER_RADIUS_RATIO, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC,
+    KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING,
+    KIND_ROUNDED_RECT, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals, TextInstanceGpu,
+    TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -18,6 +18,10 @@ pub fn emoji_uv_opt(emoji: &str) -> Option<[f32; 4]> {
             (r.y + r.h) as f32 / sow_data::emoji::ATLAS_HEIGHT as f32,
         ]
     })
+}
+
+pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Option<[f32; 4]> {
+    crate::text::building_atlas::uv_rect(kind, level)
 }
 
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
@@ -47,6 +51,99 @@ fn clamp_arc_phase(phase: f32) -> f32 {
 pub struct TextMeasure {
     pub width: f32,
     pub height: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum PreparedTextKind {
+    Glyph,
+    Emoji,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PreparedTextItem {
+    kind: PreparedTextKind,
+    offset: [f32; 2],
+    size: [f32; 2],
+    uv_rect: [f32; 4],
+}
+
+/// Atlas-shaped text. Character spacing and alignment are resolved at creation;
+/// drawing can only translate and uniformly scale the prepared geometry.
+#[derive(Clone, Debug)]
+pub struct PreparedText {
+    items: Vec<PreparedTextItem>,
+    advance_width: f32,
+    align_x: f32,
+    font_size: f32,
+    line_height: f32,
+    visual_bounds: Option<[f32; 4]>,
+    complete: bool,
+}
+
+impl PreparedText {
+    pub fn instance_count(&self) -> usize {
+        if self.complete {
+            self.items.len()
+        } else {
+            usize::MAX
+        }
+    }
+
+    pub fn measure_at(&self, font_size: f32) -> TextMeasure {
+        let scale = font_size.max(0.0) / self.font_size;
+        TextMeasure {
+            width: self.advance_width * scale,
+            height: self.line_height * scale,
+        }
+    }
+
+    /// Bounds of the exact glyph and inline-emoji quads emitted at this size,
+    /// relative to the same anchor passed to `push_prepared_text`.
+    pub fn visual_bounds_at(&self, font_size: f32) -> Option<[f32; 4]> {
+        let scale = font_size.max(0.0) / self.font_size;
+        self.visual_bounds
+            .map(|bounds| bounds.map(|value| value * scale))
+    }
+}
+
+impl Default for PreparedText {
+    fn default() -> Self {
+        Self {
+            items: Vec::new(),
+            advance_width: 0.0,
+            align_x: 0.0,
+            font_size: 48.0,
+            line_height: 0.0,
+            visual_bounds: None,
+            complete: true,
+        }
+    }
+}
+
+fn prepared_text_bounds(
+    items: &[PreparedTextItem],
+    advance_width: f32,
+    align_x: f32,
+) -> Option<[f32; 4]> {
+    let scale = 1.0;
+    let align_offset = advance_width * align_x * scale;
+    let mut bounds = [
+        f32::INFINITY,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+    ];
+    for item in items {
+        let x = item.offset[0] * scale - align_offset;
+        let y = item.offset[1] * scale;
+        let width = item.size[0] * scale;
+        let height = item.size[1] * scale;
+        bounds[0] = bounds[0].min(x);
+        bounds[1] = bounds[1].min(y);
+        bounds[2] = bounds[2].max(x + width);
+        bounds[3] = bounds[3].max(y + height);
+    }
+    bounds[0].is_finite().then_some(bounds)
 }
 
 #[inline]
@@ -109,6 +206,158 @@ fn emoji_instance(
     }
 }
 
+fn shape_text(
+    atlas: &FontAtlas,
+    text: &str,
+    char_spacing: f32,
+    emoji_scale: f32,
+    mut emit: impl FnMut(PreparedTextItem),
+) -> (f32, bool, usize) {
+    let atlas_width = atlas.atlas.common.scale_w.max(1) as f32;
+    let atlas_height = atlas.atlas.common.scale_h.max(1) as f32;
+    let base = atlas.atlas.common.base as f32;
+    let mut advance = 0.0f32;
+    let mut has_emoji = false;
+    let mut item_count = 0usize;
+    let mut prev_char = Option::<char>::None;
+    let mut chars = text.char_indices().peekable();
+
+    while let Some((byte_idx, ch)) = chars.next() {
+        if let Some(glyph) = atlas.char_map.get(&ch) {
+            let kern = prev_char
+                .and_then(|previous| atlas.kerning_map.get(&(previous, ch)))
+                .copied()
+                .unwrap_or(0) as f32;
+            emit(PreparedTextItem {
+                kind: PreparedTextKind::Glyph,
+                offset: [
+                    advance + glyph.xoffset as f32 + kern * char_spacing,
+                    -base + glyph.yoffset as f32,
+                ],
+                size: [glyph.width as f32, glyph.height as f32],
+                uv_rect: [
+                    glyph.x as f32 / atlas_width,
+                    glyph.y as f32 / atlas_height,
+                    (glyph.x + glyph.width) as f32 / atlas_width,
+                    (glyph.y + glyph.height) as f32 / atlas_height,
+                ],
+            });
+            item_count = item_count.saturating_add(1);
+            advance += (glyph.xadvance as f32 + kern) * char_spacing;
+            prev_char = Some(ch);
+            continue;
+        }
+
+        let has_selector = chars.peek().is_some_and(|&(_, next)| next == '\u{fe0f}');
+        let character_bytes = ch.len_utf8();
+        let text_bytes = if has_selector {
+            character_bytes + '\u{fe0f}'.len_utf8()
+        } else {
+            character_bytes
+        };
+        let candidate = &text[byte_idx..byte_idx + text_bytes];
+        let emoji = if has_selector {
+            &text[byte_idx..byte_idx + character_bytes]
+        } else {
+            candidate
+        };
+        if let Some(uv_rect) = emoji_uv_opt(emoji) {
+            let size = atlas.atlas.info.size as f32 * emoji_scale;
+            emit(PreparedTextItem {
+                kind: PreparedTextKind::Emoji,
+                offset: [advance, -size],
+                size: [size; 2],
+                uv_rect,
+            });
+            item_count = item_count.saturating_add(1);
+            advance += size * char_spacing;
+            has_emoji = true;
+            prev_char = None;
+            if has_selector {
+                chars.next();
+            }
+        } else {
+            prev_char = None;
+        }
+    }
+    (advance, has_emoji, item_count)
+}
+
+fn emit_prepared_text(
+    instances: &mut Vec<TextInstanceGpu>,
+    items: &[PreparedTextItem],
+    advance_width: f32,
+    align_x: f32,
+    font_unit: f32,
+    scale: f32,
+    pos: [f32; 2],
+    color: [f32; 4],
+    settings: TextPaintStyle,
+) {
+    let font_scale = scale / font_unit;
+    let align_offset = advance_width * align_x * font_scale;
+    for item in items {
+        let offset_x = item.offset[0] * font_scale - align_offset;
+        let offset_y = item.offset[1] * font_scale;
+        let size = [item.size[0] * font_scale, item.size[1] * font_scale];
+        match item.kind {
+            PreparedTextKind::Glyph => instances.push(TextInstanceGpu {
+                screen_pos: [pos[0] + offset_x, pos[1] + offset_y],
+                size,
+                uv_rect: item.uv_rect,
+                content_rect: [0.0, 0.0, 1.0, 1.0],
+                color,
+                outline_color: settings.outline.color,
+                face_dilate: settings.face_dilate,
+                outline_thickness: settings.outline.thickness,
+                underlay_offset_y: settings.outline.shadow_y,
+                underlay_softness: settings.underlay_softness,
+                kind: KIND_GLYPH,
+            }),
+            PreparedTextKind::Emoji => {
+                let half_size = size[0] * 0.5;
+                let center = [pos[0] + offset_x + half_size, pos[1] + offset_y + half_size];
+                instances.push(emoji_instance(
+                    item.uv_rect,
+                    center,
+                    half_size,
+                    color,
+                    settings.outline,
+                    settings.underlay_softness,
+                ));
+            }
+        }
+    }
+}
+
+fn emit_prepared_text_if_fits(
+    instances: &mut Vec<TextInstanceGpu>,
+    items: &[PreparedTextItem],
+    advance_width: f32,
+    align_x: f32,
+    font_unit: f32,
+    scale: f32,
+    pos: [f32; 2],
+    color: [f32; 4],
+    settings: TextPaintStyle,
+) -> bool {
+    if instances.len().saturating_add(items.len()) > MAX_TEXT_GLYPHS {
+        return false;
+    }
+    emit_prepared_text(
+        instances,
+        items,
+        advance_width,
+        align_x,
+        font_unit,
+        scale,
+        pos,
+        color,
+        settings,
+    );
+    true
+}
+
 fn ring_geometry(center: [f32; 2], radius: f32) -> ([f32; 2], [f32; 2], [f32; 4]) {
     let radius = radius.max(0.0);
     let outer = radius + RING_AA_MARGIN;
@@ -148,13 +397,15 @@ pub struct TextRenderer {
     avatar_atlas_tex: FontAtlasTexture,
     building_atlas_tex: FontAtlasTexture,
     avatar_loaded: [bool; AVATAR_SLOT_COUNT],
-    avatar_dirty: bool,
+    avatar_dirty_slots: Vec<usize>,
+    prepared_text_scratch: Vec<PreparedTextItem>,
     pipeline: gpu::RenderPipeline,
     buffer: gpu::Buffer,
     sampler: gpu::Sampler,
     emoji_sampler: gpu::Sampler,
     avatar_sampler: gpu::Sampler,
-    pub upload_instances: Vec<TextInstanceGpu>,
+    building_sampler: gpu::Sampler,
+    upload_instances: Vec<TextInstanceGpu>,
 }
 
 impl TextRenderer {
@@ -176,11 +427,10 @@ impl TextRenderer {
         );
         let building_atlas_tex = FontAtlasTexture::from_bytes(
             context,
-            include_bytes!("../../../assets/gameplay/buildings/building_atlas.png"),
+            crate::BUILDING_ATLAS_BYTES,
             "building_atlas",
             gpu::TextureFormat::Rgba8UnormSrgb,
         );
-
         let shader_source = include_str!("../shaders/text_glow.wgsl");
         let shader = context.create_shader(gpu::ShaderDesc {
             source: shader_source,
@@ -257,6 +507,13 @@ impl TextRenderer {
             ..Default::default()
         });
 
+        let building_sampler = context.create_sampler(gpu::SamplerDesc {
+            name: "building_atlas_pixel_sampler",
+            mag_filter: gpu::FilterMode::Nearest,
+            min_filter: gpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
         Self {
             font_atlas_desc,
             font_atlas_tex,
@@ -264,19 +521,20 @@ impl TextRenderer {
             avatar_atlas_tex,
             building_atlas_tex,
             avatar_loaded: [false; AVATAR_SLOT_COUNT],
-            avatar_dirty: true, // force first (blank) upload so the texture is defined
+            avatar_dirty_slots: Vec::with_capacity(AVATAR_SLOT_COUNT),
+            prepared_text_scratch: Vec::with_capacity(32),
             pipeline,
             buffer,
             sampler,
             emoji_sampler,
             avatar_sampler,
+            building_sampler,
             upload_instances: Vec::with_capacity(4096),
         }
     }
 
     /// Transition all atlas textures to a defined layout before first use. Must be called once
-    /// (alongside `upload_atlas`) before any draw — avatar and building images are sampled by
-    /// sprite instances, so their textures must be initialized before the first text pass.
+    /// (alongside `upload_atlas`) before any draw.
     pub fn init_textures(&self, encoder: &mut gpu::CommandEncoder) {
         encoder.init_texture(self.font_atlas_tex.texture);
         encoder.init_texture(self.emoji_atlas_tex.texture);
@@ -308,6 +566,76 @@ impl TextRenderer {
         }
     }
 
+    pub fn prepare_string(
+        &self,
+        text: &str,
+        char_spacing: f32,
+        emoji_scale: f32,
+        align_x: f32,
+    ) -> PreparedText {
+        let font_size = self.font_atlas_desc.atlas.info.size.max(1) as f32;
+        let mut items = Vec::with_capacity(text.chars().count().min(MAX_TEXT_GLYPHS));
+        let (advance_width, has_emoji, item_count) = shape_text(
+            &self.font_atlas_desc,
+            text,
+            char_spacing,
+            emoji_scale,
+            |item| {
+                if items.len() < MAX_TEXT_GLYPHS {
+                    items.push(item);
+                }
+            },
+        );
+        let visual_bounds = prepared_text_bounds(&items, advance_width, align_x);
+        PreparedText {
+            items,
+            advance_width,
+            align_x,
+            font_size,
+            line_height: if text.is_empty() {
+                0.0
+            } else {
+                text_measure_height(font_size, emoji_scale, has_emoji)
+            },
+            visual_bounds,
+            complete: item_count <= MAX_TEXT_GLYPHS,
+        }
+    }
+
+    /// Emit prepared text at one final physical font size; fitting is already resolved by caller.
+    /// Returns false without emitting any instances if the frame budget is insufficient.
+    pub fn push_prepared_text(
+        &mut self,
+        prepared: &PreparedText,
+        pos: [f32; 2],
+        final_font_size: f32,
+        color: [f32; 4],
+        settings: TextPaintStyle,
+    ) -> bool {
+        if !prepared.complete || !final_font_size.is_finite() || final_font_size <= 0.0 {
+            return false;
+        }
+        emit_prepared_text_if_fits(
+            &mut self.upload_instances,
+            &prepared.items,
+            prepared.advance_width,
+            prepared.align_x,
+            prepared.font_size,
+            final_font_size,
+            pos,
+            color,
+            settings,
+        )
+    }
+
+    pub fn remaining_instance_capacity(&self) -> usize {
+        MAX_TEXT_GLYPHS.saturating_sub(self.upload_instances.len())
+    }
+
+    pub fn instance_count(&self) -> usize {
+        self.upload_instances.len()
+    }
+
     pub fn push_string(
         &mut self,
         text: &str,
@@ -317,114 +645,35 @@ impl TextRenderer {
         settings: TextPaintStyle,
         layout: (f32, f32, f32),
     ) {
-        let outline_color = settings.outline.color;
         let (align_x, char_spacing, emoji_scale) = layout;
-        if text.is_empty() {
+        let font_unit = self.font_atlas_desc.atlas.info.size.max(1) as f32;
+        let TextRenderer {
+            font_atlas_desc,
+            prepared_text_scratch,
+            upload_instances,
+            ..
+        } = self;
+        prepared_text_scratch.clear();
+        let (advance_width, _, item_count) =
+            shape_text(font_atlas_desc, text, char_spacing, emoji_scale, |item| {
+                if prepared_text_scratch.len() < MAX_TEXT_GLYPHS {
+                    prepared_text_scratch.push(item);
+                }
+            });
+        if item_count > MAX_TEXT_GLYPHS {
             return;
         }
-
-        let scale = font_size / 48.0;
-        let aw = self.font_atlas_tex.width as f32;
-        let ah = self.font_atlas_tex.height as f32;
-        let base = self.font_atlas_desc.atlas.common.base as f32;
-
-        // Real zero-allocation layout: emit instances straight into the persistent
-        // `upload_instances` buffer (already capacity-reserved + cleared per frame),
-        // remember where this string started, then apply horizontal alignment as a
-        // single in-place shift. No per-call scratch Vec — see README "Zero-Allocation
-        // Hot Path". Replaces the mislabeled with_capacity(32)/(8) per-call heap allocs.
-        let start = self.upload_instances.len();
-        let mut x_advance = 0.0f32;
-        let mut prev_char = Option::<char>::None;
-        let mut chars = text.char_indices().peekable();
-
-        while let Some((byte_idx, ch)) = chars.next() {
-            if let Some(glyph) = self.font_atlas_desc.char_map.get(&ch) {
-                let kern = prev_char
-                    .and_then(|p| self.font_atlas_desc.kerning_map.get(&(p, ch)))
-                    .copied()
-                    .unwrap_or(0) as f32;
-                let char_x = x_advance + (glyph.xoffset as f32 + kern) * scale;
-                x_advance += (glyph.xadvance as f32 + kern) * scale * char_spacing;
-                prev_char = Some(ch);
-                // Disjoint field borrow: `glyph` borrows `font_atlas_desc` while we
-                // push to `upload_instances` (a different field), so no intermediate
-                // buffer is needed to satisfy the borrow checker.
-                if self.upload_instances.len() < MAX_TEXT_GLYPHS {
-                    let gw = glyph.width as f32 * scale;
-                    let gh = glyph.height as f32 * scale;
-                    let y_off = glyph.yoffset as f32 * scale;
-                    self.upload_instances.push(TextInstanceGpu {
-                        screen_pos: [pos[0] + char_x, pos[1] - base * scale + y_off],
-                        size: [gw, gh],
-                        uv_rect: [
-                            glyph.x as f32 / aw,
-                            glyph.y as f32 / ah,
-                            (glyph.x + glyph.width) as f32 / aw,
-                            (glyph.y + glyph.height) as f32 / ah,
-                        ],
-                        content_rect: [0.0, 0.0, 1.0, 1.0],
-                        color,
-                        outline_color,
-                        face_dilate: settings.face_dilate,
-                        outline_thickness: settings.outline.thickness,
-                        underlay_offset_y: settings.outline.shadow_y,
-                        underlay_softness: settings.underlay_softness,
-                        kind: KIND_GLYPH,
-                    });
-                }
-                continue;
-            }
-            let has_selector = chars
-                .peek()
-                .is_some_and(|&(_, next_ch)| next_ch == '\u{fe0f}');
-            let char_len = ch.len_utf8();
-            let total_len = if has_selector {
-                char_len + '\u{fe0f}'.len_utf8()
-            } else {
-                char_len
-            };
-            let candidate = &text[byte_idx..byte_idx + total_len];
-            let stripped = if has_selector {
-                &text[byte_idx..byte_idx + char_len]
-            } else {
-                candidate
-            };
-            if let Some(uv) = emoji_uv_opt(stripped) {
-                let emoji_size = font_size * emoji_scale;
-                let advance = x_advance;
-                x_advance += emoji_size * char_spacing;
-                prev_char = None;
-                if self.upload_instances.len() < MAX_TEXT_GLYPHS {
-                    let center = [
-                        pos[0] + advance + emoji_size * 0.5,
-                        pos[1] - emoji_size * 0.5,
-                    ];
-                    self.upload_instances.push(emoji_instance(
-                        uv,
-                        center,
-                        emoji_size * 0.5,
-                        color,
-                        settings.outline,
-                        settings.underlay_softness,
-                    ));
-                }
-                if has_selector {
-                    chars.next();
-                }
-                continue;
-            }
-            prev_char = None;
-        }
-
-        // Alignment is one cheap in-place pass over the instances we just emitted,
-        // replacing the old second buffer-building loop.
-        let align_offset = x_advance * align_x;
-        if align_offset != 0.0 {
-            for inst in &mut self.upload_instances[start..] {
-                inst.screen_pos[0] -= align_offset;
-            }
-        }
+        let _ = emit_prepared_text_if_fits(
+            upload_instances,
+            prepared_text_scratch,
+            advance_width,
+            align_x,
+            font_unit,
+            font_size.max(0.0),
+            pos,
+            color,
+            settings,
+        );
     }
 
     /// Measure `text` in the same units as `font_size`, using the exact advance math
@@ -437,48 +686,22 @@ impl TextRenderer {
         char_spacing: f32,
         emoji_scale: f32,
     ) -> TextMeasure {
-        if text.is_empty() {
-            return TextMeasure {
-                width: 0.0,
-                height: 0.0,
-            };
-        }
-        let scale = font_size / 48.0;
-        let mut x_advance = 0.0f32;
-        let mut has_emoji = false;
-        let mut prev_char = Option::<char>::None;
-        let mut chars = text.char_indices().peekable();
-
-        while let Some((byte_idx, ch)) = chars.next() {
-            if let Some(glyph) = self.font_atlas_desc.char_map.get(&ch) {
-                let kern = prev_char
-                    .and_then(|p| self.font_atlas_desc.kerning_map.get(&(p, ch)))
-                    .copied()
-                    .unwrap_or(0) as f32;
-                x_advance += (glyph.xadvance as f32 + kern) * scale * char_spacing;
-                prev_char = Some(ch);
-                continue;
-            }
-            let has_selector = chars
-                .peek()
-                .is_some_and(|&(_, next_ch)| next_ch == '\u{fe0f}');
-            let char_len = ch.len_utf8();
-            let stripped = &text[byte_idx..byte_idx + char_len];
-            if emoji_uv_opt(stripped).is_some() {
-                has_emoji = true;
-                x_advance += font_size * emoji_scale * char_spacing;
-                prev_char = None;
-                if has_selector {
-                    chars.next();
-                }
-                continue;
-            }
-            prev_char = None;
-        }
-
+        let (advance_width, has_emoji, _) = shape_text(
+            &self.font_atlas_desc,
+            text,
+            char_spacing,
+            emoji_scale,
+            |_| {},
+        );
+        let font_unit = self.font_atlas_desc.atlas.info.size.max(1) as f32;
+        let scale = font_size / font_unit;
         TextMeasure {
-            width: x_advance,
-            height: text_measure_height(font_size, emoji_scale, has_emoji),
+            width: advance_width * scale,
+            height: if text.is_empty() {
+                0.0
+            } else {
+                text_measure_height(font_size, emoji_scale, has_emoji)
+            },
         }
     }
 
@@ -668,19 +891,19 @@ impl TextRenderer {
         });
     }
 
-    /// Push a square building image from the shared 8×4 building atlas.
+    /// Push a pixel-art building sprite from the generated gameplay atlas.
     pub fn push_building_sprite(
         &mut self,
-        sprite: BuildingSpriteId,
         center: [f32; 2],
-        half_size: f32,
+        size: [f32; 2],
+        uv_rect: [f32; 4],
         tint: [f32; 4],
     ) {
-        let half_size = half_size.max(0.0);
+        let size = [size[0].max(0.0), size[1].max(0.0)];
         self.push_inst(TextInstanceGpu {
-            screen_pos: [center[0] - half_size, center[1] - half_size],
-            size: [half_size * 2.0; 2],
-            uv_rect: sprite.uv_rect(),
+            screen_pos: [center[0] - size[0] * 0.5, center[1] - size[1] * 0.5],
+            size,
+            uv_rect,
             content_rect: [0.0, 0.0, 1.0, 1.0],
             color: tint,
             outline_color: [0.0; 4],
@@ -759,8 +982,10 @@ impl TextRenderer {
             let d = ((y0 + y) * atlas_w + x0) * 4;
             dst[d..d + cell * 4].copy_from_slice(&rgba_cell[s..s + cell * 4]);
         }
+        if !self.avatar_dirty_slots.contains(&slot) {
+            self.avatar_dirty_slots.push(slot);
+        }
         self.avatar_loaded[slot] = true;
-        self.avatar_dirty = true;
     }
 
     /// UV rect for a loaded avatar slot, or `None` if that slot hasn't been uploaded yet.
@@ -798,10 +1023,17 @@ impl TextRenderer {
 
         self.write_buffers(context);
 
-        // Flush any newly-arrived avatar portraits into the atlas before sampling them.
-        if self.avatar_dirty {
-            self.avatar_atlas_tex.upload(encoder, context);
-            self.avatar_dirty = false;
+        // The atlas was initialized by upload_atlas; update only cells that just arrived.
+        for slot in self.avatar_dirty_slots.drain(..) {
+            let cell = AVATAR_CELL as usize;
+            let x = (slot % AVATAR_COLS as usize) * cell;
+            let y = (slot / AVATAR_COLS as usize) * cell;
+            self.avatar_atlas_tex.upload_region(
+                encoder,
+                context,
+                [x as u32, y as u32],
+                [AVATAR_CELL, AVATAR_CELL],
+            );
         }
 
         let mut pass = encoder.render(
@@ -830,6 +1062,7 @@ impl TextRenderer {
             avatar_atlas: self.avatar_atlas_tex.view,
             avatar_sampler: self.avatar_sampler,
             building_atlas: self.building_atlas_tex.view,
+            building_sampler: self.building_sampler,
         };
 
         let mut rc = pass.with(&self.pipeline);
@@ -846,6 +1079,7 @@ impl TextRenderer {
         render_ctx.context.destroy_sampler(self.sampler);
         render_ctx.context.destroy_sampler(self.emoji_sampler);
         render_ctx.context.destroy_sampler(self.avatar_sampler);
+        render_ctx.context.destroy_sampler(self.building_sampler);
         render_ctx
             .context
             .destroy_texture_view(self.font_atlas_tex.view);
@@ -888,6 +1122,70 @@ impl TextRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn prepared_test_text(atlas: &FontAtlas, text: &str, spacing: f32) -> PreparedText {
+        prepared_test_text_aligned(atlas, text, spacing, 0.5)
+    }
+
+    fn prepared_test_text_aligned(
+        atlas: &FontAtlas,
+        text: &str,
+        spacing: f32,
+        align_x: f32,
+    ) -> PreparedText {
+        let font_size = atlas.atlas.info.size.max(1) as f32;
+        let mut items = Vec::new();
+        let (advance_width, has_emoji, item_count) =
+            shape_text(atlas, text, spacing, 1.4, |item| items.push(item));
+        PreparedText {
+            visual_bounds: prepared_text_bounds(&items, advance_width, align_x),
+            items,
+            advance_width,
+            align_x,
+            font_size,
+            line_height: text_measure_height(font_size, 1.4, has_emoji),
+            complete: item_count <= MAX_TEXT_GLYPHS,
+        }
+    }
+
+    fn paint_test_text(
+        atlas: &FontAtlas,
+        prepared: &PreparedText,
+        font_size: f32,
+    ) -> Vec<TextInstanceGpu> {
+        paint_test_text_with_settings(atlas, prepared, font_size, TextPaintStyle::default())
+    }
+
+    fn paint_test_text_with_settings(
+        atlas: &FontAtlas,
+        prepared: &PreparedText,
+        font_size: f32,
+        settings: TextPaintStyle,
+    ) -> Vec<TextInstanceGpu> {
+        paint_test_text_at(atlas, prepared, font_size, [80.0, 60.0], settings)
+    }
+
+    fn paint_test_text_at(
+        atlas: &FontAtlas,
+        prepared: &PreparedText,
+        font_size: f32,
+        pos: [f32; 2],
+        settings: TextPaintStyle,
+    ) -> Vec<TextInstanceGpu> {
+        let mut instances = Vec::new();
+        emit_prepared_text(
+            &mut instances,
+            &prepared.items,
+            prepared.advance_width,
+            prepared.align_x,
+            atlas.atlas.info.size.max(1) as f32,
+            font_size,
+            pos,
+            [1.0; 4],
+            settings,
+        );
+        instances
+    }
 
     #[test]
     fn ring_geometry_keeps_requested_radius_inside_antialias_padding() {
@@ -1011,5 +1309,198 @@ mod tests {
         assert_eq!(text_measure_height(48.0, 1.4, false), 48.0);
         assert_eq!(text_measure_height(48.0, 1.4, true), 67.2);
         assert_eq!(text_measure_height(48.0, 0.8, true), 48.0);
+    }
+
+    #[test]
+    fn prepared_text_uniformly_scales_glyphs_and_letter_advances() {
+        let atlas = FontAtlas::load_static();
+        let prepared = prepared_test_text(&atlas, "Nameplate 42", 0.95);
+        assert!(prepared.complete);
+        assert!(prepared.instance_count() > 4);
+        assert!(prepared.advance_width > 0.0);
+
+        let reference = paint_test_text(&atlas, &prepared, 32.0);
+        for factor in [0.75, 0.5, 0.25] {
+            let scaled = paint_test_text(&atlas, &prepared, 32.0 * factor);
+            assert_eq!(scaled.len(), reference.len());
+            for (base, actual) in reference.iter().zip(&scaled) {
+                assert!((actual.size[0] - base.size[0] * factor).abs() < 1e-4);
+                assert!((actual.size[1] - base.size[1] * factor).abs() < 1e-4);
+                assert!(
+                    (actual.screen_pos[0] - 80.0 - (base.screen_pos[0] - 80.0) * factor).abs()
+                        < 1e-4
+                );
+                assert!(
+                    (actual.screen_pos[1] - 60.0 - (base.screen_pos[1] - 60.0) * factor).abs()
+                        < 1e-4
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn prepared_text_measurement_uses_the_same_shaped_advances_as_drawing() {
+        let atlas = FontAtlas::load_static();
+        let prepared = prepared_test_text(&atlas, "Ação 123 🏅", 0.95);
+        let measure = prepared.measure_at(24.0);
+        let expected_advance = prepared.advance_width * 24.0 / prepared.font_size;
+        assert!((measure.width - expected_advance).abs() < 1e-4);
+        assert_eq!(
+            prepared.instance_count(),
+            paint_test_text(&atlas, &prepared, 24.0).len()
+        );
+    }
+
+    #[test]
+    fn prepared_text_bounds_match_emitted_quads_at_zoom_scales() {
+        let atlas = FontAtlas::load_static();
+        let settings = TextPaintStyle {
+            outline: OutlineStyle::NONE,
+            ..TextPaintStyle::default()
+        };
+
+        for value in ["Li", "Ação 42 🏅", "Alexandria de Todos os Mundos 123"] {
+            let prepared = prepared_test_text(&atlas, value, 0.95);
+            for scale in [1.0, 0.75, 0.5, 0.25] {
+                let font_size = 32.0 * scale;
+                let expected = prepared.visual_bounds_at(font_size).unwrap();
+                let instances =
+                    paint_test_text_with_settings(&atlas, &prepared, font_size, settings);
+                let mut actual = [
+                    f32::INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::NEG_INFINITY,
+                ];
+                for instance in instances {
+                    actual[0] = actual[0].min(instance.screen_pos[0] - 80.0);
+                    actual[1] = actual[1].min(instance.screen_pos[1] - 60.0);
+                    actual[2] = actual[2].max(instance.screen_pos[0] + instance.size[0] - 80.0);
+                    actual[3] = actual[3].max(instance.screen_pos[1] + instance.size[1] - 60.0);
+                }
+                for (measured, emitted) in expected.into_iter().zip(actual) {
+                    assert!(
+                        (measured - emitted).abs() < 1e-4,
+                        "value={value:?} scale={scale} measured={measured} emitted={emitted}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn nameplate_fit_bounds_contain_the_real_prepared_name_and_troops_quads() {
+        use crate::nameplate::{NameplateLayout, NameplateMetrics, NameplateStatus, ScreenPoint};
+        use sow_core::player::PlayerType;
+
+        let atlas = FontAtlas::load_static();
+        let name = prepared_test_text(&atlas, "Ação 42 🏅", 0.95);
+        let troops = prepared_test_text_aligned(&atlas, "1 234 567", 0.95, 0.0);
+        let center = ScreenPoint([100.0, 90.0]);
+        let metrics = NameplateMetrics::compute(16.0, PlayerType::Human, true);
+        let status = NameplateStatus {
+            show_names: true,
+            show_troops: true,
+            ..Default::default()
+        };
+        let layout = NameplateLayout::compute(center, metrics, &name, &troops, 1.0, status, 2.0);
+        let settings = TextPaintStyle {
+            outline: OutlineStyle::NONE,
+            ..TextPaintStyle::default()
+        };
+
+        for scale in [1.0, 0.75, 0.5, 0.25] {
+            let scaled = layout.scaled_about(center, scale);
+            let bounds = scaled.visual_bounds(center, 2.0 * scale);
+            let extents = bounds.extents_about(center);
+            let minimum = [center.0[0] - extents[0], center.0[1] - extents[1]];
+            let maximum = [center.0[0] + extents[0], center.0[1] + extents[1]];
+
+            for (prepared, font_size, anchor) in [
+                (
+                    &name,
+                    metrics.render_size() * scale,
+                    scaled.name_anchor(center),
+                ),
+                (
+                    &troops,
+                    metrics.troops_render_size() * scale,
+                    scaled.troops_text_anchor(center),
+                ),
+            ] {
+                let instances = paint_test_text_at(&atlas, prepared, font_size, anchor.0, settings);
+                for instance in instances {
+                    assert!(
+                        instance.screen_pos[0] >= minimum[0] - 1e-4,
+                        "scale={scale} x-min={} bounds={minimum:?}",
+                        instance.screen_pos[0]
+                    );
+                    assert!(
+                        instance.screen_pos[1] >= minimum[1] - 1e-4,
+                        "scale={scale} y-min={} bounds={minimum:?}",
+                        instance.screen_pos[1]
+                    );
+                    assert!(
+                        instance.screen_pos[0] + instance.size[0] <= maximum[0] + 1e-4,
+                        "scale={scale} x-max={} bounds={maximum:?}",
+                        instance.screen_pos[0] + instance.size[0]
+                    );
+                    assert!(
+                        instance.screen_pos[1] + instance.size[1] <= maximum[1] + 1e-4,
+                        "scale={scale} y-max={} bounds={maximum:?}",
+                        instance.screen_pos[1] + instance.size[1]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn kerning_and_measurement_use_the_same_character_spacing() {
+        let mut atlas = FontAtlas::load_static();
+        let left = 'A';
+        let right = 'V';
+        let kern = -5;
+        assert!(atlas.char_map.contains_key(&left));
+        assert!(atlas.char_map.contains_key(&right));
+        atlas.kerning_map.insert((left, right), kern);
+        let spacing = 0.55;
+        let mut prepared = prepared_test_text(&atlas, &format!("{left}{right}"), spacing);
+        prepared.align_x = 0.0;
+        let instances = paint_test_text(&atlas, &prepared, prepared.font_size);
+        let left_glyph = atlas.char_map.get(&left).unwrap();
+        let right_glyph = atlas.char_map.get(&right).unwrap();
+        let expected_delta = (left_glyph.xadvance as f32 + kern as f32) * spacing
+            + right_glyph.xoffset as f32
+            - left_glyph.xoffset as f32;
+        assert_eq!(instances.len(), 2);
+        assert!(
+            (instances[1].screen_pos[0] - instances[0].screen_pos[0] - expected_delta).abs() < 1e-4
+        );
+    }
+
+    #[test]
+    fn prepared_text_emission_is_all_or_nothing_at_the_instance_limit() {
+        let item = PreparedTextItem {
+            kind: PreparedTextKind::Glyph,
+            offset: [0.0; 2],
+            size: [10.0; 2],
+            uv_rect: [0.0, 0.0, 1.0, 1.0],
+        };
+        let mut instances =
+            vec![<TextInstanceGpu as bytemuck::Zeroable>::zeroed(); MAX_TEXT_GLYPHS - 1];
+        let accepted = emit_prepared_text_if_fits(
+            &mut instances,
+            &[item, item],
+            20.0,
+            0.0,
+            48.0,
+            24.0,
+            [0.0; 2],
+            [1.0; 4],
+            TextPaintStyle::default(),
+        );
+        assert!(!accepted);
+        assert_eq!(instances.len(), MAX_TEXT_GLYPHS - 1);
     }
 }

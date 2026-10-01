@@ -64,9 +64,9 @@ impl SowApp {
 
         let (anim_x, anim_y) = self
             .ui
-            .nameplate_visuals
-            .get(&player_id)
-            .map(|label| (label.to_center[0], label.to_center[1]))
+            .nameplates
+            .anchor_for(player_id)
+            .map(|center| (center[0], center[1]))
             .unwrap_or((wx, wy));
         crate::app::DeathNameplateAnimation::enqueue(
             &mut self.ui.death_nameplates,

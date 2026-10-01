@@ -20,12 +20,16 @@
   .episode-picker { display:inline-flex; align-items:center; gap:6px; margin:0 8px 0 0; }
   .episode-picker select { width:auto; min-width:130px; padding:4px 7px; font-size:10px; }
   .group { padding:15px 18px; border-bottom:1px solid var(--line); }
+  #selectedGroup { max-height:min(42dvh,420px); overflow-y:auto; overscroll-behavior:contain; }
   .group h2 { margin:0 0 11px; font-size:9px; text-transform:uppercase; letter-spacing:.16em; color:#c4cfca; }
   label { display:block; font-size:11px; color:var(--muted); margin:8px 0 3px; }
   input, select { width:100%; background:#0c1316; color:var(--text); border:1px solid #354444; border-radius:4px; padding:7px 9px; font:inherit; transition:border-color .15s,box-shadow .15s,background .15s; }
   input:focus,select:focus { outline:none; border-color:var(--accent-dim); box-shadow:0 0 0 2px #e9bb6420; background:#111b1d; }
   .row { display:flex; gap:8px; }
   .row > * { flex:1; }
+  .faction-avatar-picker { display:flex; align-items:center; gap:9px; }
+  .faction-avatar-picker img { width:96px; height:96px; flex:0 0 96px; object-fit:cover; border:1px solid #c9ae7180; border-radius:7px; background:#0c1316; box-shadow:0 5px 14px #0006; }
+  .faction-avatar-picker select { min-width:0; }
   button { min-height:34px; background:linear-gradient(180deg,#202d30,#172124); color:var(--text); border:1px solid #3a4a49; border-radius:4px; padding:7px 10px; font:inherit; font-size:10px; letter-spacing:.04em; cursor:pointer; transition:transform .14s,border-color .14s,background .14s; }
   button:hover { background:linear-gradient(180deg,#2c3b3d,#1c292b); border-color:#71807a; transform:translateY(-1px); }
   button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
@@ -54,6 +58,7 @@
     #app { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(220px,43dvh) minmax(0,1fr); height:100dvh; }
     #stage { min-height:220px; }
     #side { width:auto; min-height:0; overflow-y:auto; border-left:0; border-top:1px solid #394746; box-shadow:0 -12px 32px #0007; }
+    #selectedGroup { max-height:none; overflow:visible; }
     header { padding:12px 14px 10px; }
     .group { padding:10px 14px; }
     .list { min-height:72px; }
@@ -72,10 +77,10 @@
   <div id="side">
     <header>
       <h1>Campaign Studio</h1>
-      <div class="sub"><label class="episode-picker">Episode <select id="episodeSelect" aria-label="Select campaign episode"></select></label> · <span id="episodeLabel">boudica</span> · place factions · <a id="logicLink" href="logic.html" title="Unsaved map changes are saved before opening Story &amp; logic" style="color:var(--accent);text-decoration:none">Story &amp; logic →</a></div>
+      <div class="sub"><label class="episode-picker">Episode <select id="episodeSelect" aria-label="Select campaign episode"></select></label> · <span id="episodeLabel">boudica</span> · place factions · <a id="logicLink" href="logic.html" title="Unsaved map changes are saved before opening Story &amp; logic" style="color:var(--accent);text-decoration:none">Story &amp; logic →</a> · <a href="/tools/campaign-editor/atlas">Entity Atlas →</a> · <a href="/tools/campaign-editor/map-rosters" style="color:var(--accent);text-decoration:none">Map Rosters →</a></div>
     </header>
 
-    <div class="group">
+    <div class="group" id="selectedGroup">
       <h2>Selected</h2>
       <div id="seleditor"><div class="hint">Click a tribe on the map or in the list.</div></div>
     </div>
@@ -86,11 +91,15 @@
         <button id="addBtn">+ Add tribe</button>
         <button id="spawnBtn">Set player spawn</button>
       </div>
+      <label for="atlasEntityInput">Add an existing entity</label>
+      <div class="row"><input id="atlasEntityInput" list="atlasEntityOptions" placeholder="Search catalog"><button id="addAtlasEntity" type="button">Add</button></div>
+      <datalist id="atlasEntityOptions"></datalist>
       <label>Show</label>
       <div class="row">
         <label style="margin:0"><input type="checkbox" id="labelsChk" checked style="width:auto"> labels</label>
         <label style="margin:0"><input type="checkbox" id="ringsChk" checked style="width:auto"> reach rings</label>
       </div>
+      <div class="hint"><span style="color:#4b91ff">● Ally</span> · <span style="color:#ff5656">● Enemy</span> · Neutral uses its own color</div>
       <div class="hint" id="waterhint"></div>
     </div>
 
@@ -113,14 +122,20 @@
 <script>
 // ---- role model (mirrors sow-client-world/src/campaign/mod.rs Role) ----
 const ROLES = {
-  kin:         { color:"#e06b1f", team:"Red",  troops:500,  label:"Kin (ally)" },
-  independent: { color:"#9aa0ac", team:"—",    troops:500,  label:"Independent" },
-  vassal:      { color:"#3372f2", team:"Blue", troops:1000, label:"Vassal" },
-  boss:        { color:"#2f5fe0", team:"Blue", troops:2500, label:"City (boss)" },
-  big_boss:    { color:"#1d3fb0", team:"Blue", troops:5000, label:"Rome (big boss)" },
-  neutral:     { color:"#4ca572", team:"—",    troops:500,  label:"Neutral" },
+  kin:         { troops:500,  label:"Kin · 500" },
+  independent: { troops:500,  label:"Independent · 500" },
+  vassal:      { troops:1000, label:"Vassal · 1,000" },
+  boss:        { troops:2500, label:"City · 2,500" },
+  big_boss:    { troops:5000, label:"Major power · 5,000" },
+  neutral:     { troops:500,  label:"Neutral · 500" },
 };
 const PLAYER_COLOR = "#f0902a";
+const ALLY_COLOR = "#4b91ff", ENEMY_COLOR = "#ff5656";
+const FACTION_COLORS = ["#4ca572", "#a88c40", "#8c59a8", "#40999e", "#b87366", "#7380b8"];
+const RELATIONS = { neutral:"Neutral", allied:"Ally", enemy:"Enemy" };
+const HOSTILITIES = { passive:"Passive", aggressive:"Aggressive" };
+const BETRAYALS = { never:"Never", opportunistic:"Opportunistic" };
+function factionColor(f){ return f.relation==="allied" ? ALLY_COLOR : f.relation==="enemy" ? ENEMY_COLOR : (f.color || FACTION_COLORS[0]); }
 // Bot IQ tiers grounded in the engine (sow-core player/diplomacy/intent): default 100; AI smarts
 // unlock at 100 and 130; bots roll 130–180; the lowest value the codebase exercises is 85.
 function iqTier(iq){ return iq>=130 ? "sharp (≥130)" : iq>=100 ? "standard" : "dull"; }
@@ -130,8 +145,9 @@ const query = new URLSearchParams(location.search);
 const episodeId = /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
 let MAPW = 896, MAPH = 504;
 let terrain = null;            // Uint8Array length MAPW*MAPH, bit7 = land
-let roster = { map:"eastanglia", player_spawn:[696,45], factions:[] };
+let roster = { map:"eastanglia", player_spawn:[696,45], player_color:PLAYER_COLOR, factions:[] };
 let avatarCatalog = [];
+let entityCatalog = null;
 let rosterEtag = null;
 let rosterDirty = false, rosterExternal = false, rosterSaving = false;
 let sel = -1;                  // index into factions, or -2 = player spawn
@@ -157,19 +173,8 @@ document.getElementById("side").addEventListener("change", e => {
 });
 
 function isLand(mx, my) {
-  mx = Math.floor(mx); my = Math.floor(my);
-  if (mx < 0 || my < 0 || mx >= MAPW || my >= MAPH || !terrain) return false;
-  return (terrain[my*MAPW + mx] & 0x80) !== 0;
-}
-
-// ---- parse the SOWM map.bin (LE header + 1 byte/tile) ----
-function parseMap(buf) {
-  const map = SOWCampaignMapPreview.parse(buf);
-  return { w: map.width, h: map.height, terrain: map.terrain };
-}
-
-function buildMapImage() {
-  mapImage = SOWCampaignMapPreview.terrainCanvas(terrain, MAPW, MAPH);
+  if (!terrain) return null;
+  return SOWCampaignMapPreview.isLand(terrain, MAPW, MAPH, mx, my);
 }
 
 // ---- view fit ----
@@ -190,6 +195,12 @@ function zoomAt(sx, sy, factor){
 }
 const m2s = (mx,my) => [mx*scale+ox, my*scale+oy];
 const s2m = (sx,sy) => [(sx-ox)/scale, (sy-oy)/scale];
+function focusFaction(index){
+  const faction=roster.factions[index];
+  if(!faction||faction.x<0||faction.y<0||faction.x>=MAPW||faction.y>=MAPH)return;
+  const offset=SOWCampaignMapPreview.centerMapOffsets({x:faction.x,y:faction.y},scale,cv.width,cv.height);
+  ox=offset.x;oy=offset.y;clampView();draw();
+}
 
 // ---- draw ----
 function draw() {
@@ -210,21 +221,18 @@ function draw() {
   // factions
   roster.factions.forEach((f,i) => {
     const [sx,sy] = m2s(f.x,f.y);
-    const role = ROLES[f.role] || ROLES.neutral;
-    const water = !isLand(f.x,f.y);
+    const water = isLand(f.x,f.y) === false;
     const hov = (i===hovered);
     const r = hov ? 7.5 : 6;
     if (hov && i!==sel) { ctx.beginPath(); ctx.arc(sx,sy,r+5,0,7); ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.lineWidth=2; ctx.stroke(); }
     ctx.beginPath(); ctx.arc(sx,sy,r,0,7);
-    ctx.fillStyle = role.color; ctx.fill();
+    ctx.fillStyle = factionColor(f); ctx.fill();
     ctx.lineWidth = (i===sel)?3:1.5;
     ctx.strokeStyle = water ? "#ff4d4d" : (i===sel ? "#fff" : "rgba(0,0,0,.5)");
     ctx.stroke();
     if (water) { ctx.beginPath(); ctx.arc(sx,sy,r+4,0,7); ctx.strokeStyle="#ff4d4d"; ctx.lineWidth=1.5; ctx.stroke(); }
     if (showLabels || hov) {
-      ctx.font = (hov?"bold ":"")+"11px system-ui"; ctx.textAlign="center";
-      ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillText(f.name, sx+1, sy-r-3);
-      ctx.fillStyle="#fff"; ctx.fillText(f.name, sx, sy-r-4);
+      SOWCampaignMapPreview.drawMapLabel(ctx, f.name, sx, sy-r-4, hov);
     }
   });
 
@@ -233,7 +241,7 @@ function draw() {
   const phov = (hovered===-2);
   if (phov && sel!==-2) { ctx.beginPath(); ctx.arc(sx,sy,13,0,7); ctx.strokeStyle="rgba(255,255,255,.55)"; ctx.lineWidth=2; ctx.stroke(); }
   ctx.beginPath(); ctx.arc(sx,sy,8,0,7);
-  ctx.fillStyle = PLAYER_COLOR; ctx.fill();
+  ctx.fillStyle = roster.player_color || PLAYER_COLOR; ctx.fill();
   ctx.lineWidth = (sel===-2)?3:2; ctx.strokeStyle = (sel===-2)?"#fff":"#1a1206"; ctx.stroke();
   ctx.fillStyle="#1a1206"; ctx.font="bold 10px system-ui"; ctx.textAlign="center"; ctx.fillText("★",sx,sy+3.5);
 }
@@ -266,8 +274,9 @@ cv.addEventListener("mousemove", e => {
   if (panning) { ox = panStart.ox + (e.clientX-panStart.mx); oy = panStart.oy + (e.clientY-panStart.my); clampView(); draw(); return; }
   const [mx,my] = s2m(sx,sy);
   const cx = Math.round(mx), cy = Math.round(my);
-  hud.textContent = `x ${cx}  y ${cy}  ·  ${isLand(cx,cy)?"land":"WATER"}  ·  ${Math.round(scale/minScale*100)}%`;
-  hud.className = isLand(cx,cy) ? "" : "warn";
+  const land = isLand(cx,cy);
+  hud.textContent = `x ${cx}  y ${cy}  ·  ${land===null?"loading map…":land?"land":"WATER"}  ·  ${Math.round(scale/minScale*100)}%`;
+  hud.className = land===false ? "warn" : "";
   if (dragging && sel !== -1) {
     const nx = Math.max(0,Math.min(MAPW-1,cx)), ny = Math.max(0,Math.min(MAPH-1,cy));
     if (sel === -2) roster.player_spawn = [nx,ny];
@@ -293,21 +302,31 @@ cv.addEventListener("wheel", e => {
 function renderSide() {
   const host = document.getElementById("seleditor");
   if (sel === -2) {
+    const spawnLand = isLand(...roster.player_spawn);
     host.innerHTML = `<label>Player spawn</label>
       <div class="row"><input id="psx" type="number" value="${roster.player_spawn[0]}"><input id="psy" type="number" value="${roster.player_spawn[1]}"></div>
-      <div class="hint">${isLand(...roster.player_spawn)?"on land ✓":"⚠ in water"}</div>`;
-    document.getElementById("psx").oninput = e => { roster.player_spawn[0]=+e.target.value|0; draw(); };
-    document.getElementById("psy").oninput = e => { roster.player_spawn[1]=+e.target.value|0; draw(); };
+      <label>Player color</label><input id="playerColor" type="color" value="${escapeHtml(roster.player_color || PLAYER_COLOR)}">
+      <div class="hint">${spawnLand===null?"Checking map…":spawnLand?"on land ✓":"⚠ in water"}</div>`;
+    document.getElementById("psx").oninput = e => { roster.player_spawn[0]=+e.target.value|0; markRosterDirty(); draw(); };
+    document.getElementById("psy").oninput = e => { roster.player_spawn[1]=+e.target.value|0; markRosterDirty(); draw(); };
+    document.getElementById("playerColor").oninput = e => { roster.player_color=e.target.value; markRosterDirty(); draw(); };
   } else if (sel >= 0) {
     const f = roster.factions[sel];
     const opts = Object.keys(ROLES).map(k=>`<option value="${k}" ${k===f.role?"selected":""}>${ROLES[k].label}</option>`).join("");
+    const relationOpts = Object.entries(RELATIONS).map(([value,label])=>`<option value="${value}" ${value===f.relation?"selected":""}>${label}</option>`).join("");
+    const hostilityOpts = Object.entries(HOSTILITIES).map(([value,label])=>`<option value="${value}" ${value===f.hostility?"selected":""}>${label}</option>`).join("");
+    const betrayalOpts = Object.entries(BETRAYALS).map(([value,label])=>`<option value="${value}" ${value===f.betrayal?"selected":""}>${label}</option>`).join("");
     const avatarOpts = [{id:"",label:"Generic portrait"},...avatarCatalog.map(id=>({id,label:id.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())}))];
     if(f.avatar && !avatarCatalog.includes(f.avatar)) avatarOpts.push({id:f.avatar,label:"Missing asset · "+f.avatar});
     const avatarHtml = avatarOpts.map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===(f.avatar||"")?"selected":""}>${escapeHtml(a.label)}</option>`).join("");
     const iq = f.iq ?? 100;
     host.innerHTML = `<label>Name</label><input id="fn" value="${escapeHtml(f.name)}">
       <label>Role</label><select id="fr">${opts}</select>
-      <label>Nameplate and dialogue portrait</label><select id="fa">${avatarHtml}</select>
+      <label>Initial relationship to the player</label><select id="frelation">${relationOpts}</select>
+      <label>Enemy behavior</label><select id="fhostility">${hostilityOpts}</select>
+      <label>Alliance betrayal</label><select id="fbetrayal">${betrayalOpts}</select>
+      <label>Neutral faction color</label><input id="fcolor" type="color" value="${escapeHtml(f.color || FACTION_COLORS[0])}">
+      <label>Nameplate and dialogue portrait</label><div class="faction-avatar-picker"><img id="fportrait" width="256" height="256" alt=""><select id="fa">${avatarHtml}</select></div>
       <label>Ally support interval (seconds; blank disables)</label><input id="finterval" type="number" min="5" max="600" value="${f.support_interval_seconds ?? ""}" placeholder="Disabled">
       <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
       <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
@@ -319,13 +338,31 @@ function renderSide() {
       const currentRole = ROLES[f.role] || ROLES.neutral;
       const distance = Math.round(Math.hypot(f.x-roster.player_spawn[0], f.y-roster.player_spawn[1]));
       const onLand = isLand(f.x,f.y), hint = document.getElementById("factionHint");
-      hint.classList.toggle("warn", !onLand);
-      hint.textContent = `team ${currentRole.team} · ${currentRole.troops} troops · r≈${distance} from spawn · ${onLand?"land ✓":"⚠ in water"}`;
+      hint.classList.toggle("warn", onLand===false);
+      hint.textContent = `${currentRole.label} · ${RELATIONS[f.relation] || "Neutral"} · ${HOSTILITIES[f.hostility] || "Passive"} · r≈${distance} from spawn · ${onLand===null?"checking map…":onLand?"land ✓":"⚠ in water"}`;
     };
     updateFactionHint();
-    document.getElementById("fn").oninput = e => { f.name=e.target.value; renderList(); draw(); };
+    const factionPortrait = document.getElementById("fportrait");
+    const updateFactionPortrait = slug => {
+      const imageSlug = slug && avatarCatalog.includes(slug) ? slug : "null";
+      factionPortrait.hidden = false;
+      factionPortrait.dataset.fallback = "";
+      factionPortrait.src = `/assets/gameplay/avatars/${encodeURIComponent(imageSlug)}.webp`;
+      factionPortrait.alt = `${f.name} portrait`;
+    };
+    factionPortrait.onerror = () => {
+      if (factionPortrait.dataset.fallback === "true") { factionPortrait.hidden = true; return; }
+      factionPortrait.dataset.fallback = "true";
+      factionPortrait.src = "/assets/gameplay/avatars/null.webp";
+    };
+    updateFactionPortrait(f.avatar);
+    document.getElementById("fn").oninput = e => { f.name=e.target.value; factionPortrait.alt=`${f.name} portrait`; renderList(); draw(); };
     document.getElementById("fr").onchange = e => { f.role=e.target.value; renderList(); renderSide(); draw(); };
-    document.getElementById("fa").onchange = e => { if(e.target.value) f.avatar=e.target.value; else delete f.avatar; markRosterDirty(); };
+    document.getElementById("frelation").onchange = e => { f.relation=e.target.value; markRosterDirty(); updateFactionHint(); renderList(); draw(); };
+    document.getElementById("fhostility").onchange = e => { f.hostility=e.target.value; markRosterDirty(); updateFactionHint(); };
+    document.getElementById("fbetrayal").onchange = e => { f.betrayal=e.target.value; markRosterDirty(); };
+    document.getElementById("fcolor").oninput = e => { f.color=e.target.value; markRosterDirty(); draw(); };
+    document.getElementById("fa").onchange = e => { if(e.target.value) f.avatar=e.target.value; else delete f.avatar; updateFactionPortrait(f.avatar); markRosterDirty(); };
     document.getElementById("finterval").oninput = e => { if(e.target.value==="") delete f.support_interval_seconds; else f.support_interval_seconds=Number(e.target.value); markRosterDirty(); };
     document.getElementById("fgroup").oninput = e => { if(e.target.value.trim()) f.alliance_group=e.target.value.trim(); else delete f.alliance_group; markRosterDirty(); };
     document.getElementById("fx").oninput = e => { f.x=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
@@ -347,9 +384,9 @@ function renderList() {
     const ids = grouped[k]; if (!ids) continue;
     for (const i of ids) {
       const f = roster.factions[i];
-      const water = !isLand(f.x,f.y);
+      const water = isLand(f.x,f.y) === false;
       html += `<div class="item ${i===sel?'sel':''}" data-i="${i}">
-        <span class="dot" style="background:${ROLES[k].color}"></span>
+        <span class="dot" style="background:${factionColor(f)}"></span>
         <span class="nm">${escapeHtml(f.name)}${water?' <span class="warn">⚠</span>':''}</span>
         <span class="rl">${k}</span></div>`;
     }
@@ -358,10 +395,14 @@ function renderList() {
   const scrollTop = list.scrollTop;
   list.innerHTML = html;
   list.scrollTop = scrollTop;
-  list.querySelectorAll(".item").forEach(el => el.onclick = () => { sel=+el.dataset.i; renderSide(); renderList(); draw(); });
-  const inWater = roster.factions.filter(f=>!isLand(f.x,f.y)).map(f=>f.name);
-  document.getElementById("waterhint").innerHTML = inWater.length
-    ? `<span class="warn">⚠ ${inWater.length} in water:</span> ${inWater.map(escapeHtml).join(", ")}` : "All on land ✓";
+  list.querySelectorAll(".item").forEach(el => el.onclick = () => { sel=+el.dataset.i; focusFaction(sel); renderSide(); renderList(); draw(); });
+  const waterHint = document.getElementById("waterhint");
+  if (!terrain) waterHint.textContent = "Checking map…";
+  else {
+    const inWater = roster.factions.filter(f=>isLand(f.x,f.y)===false).map(f=>f.name);
+    waterHint.innerHTML = inWater.length
+      ? `<span class="warn">⚠ ${inWater.length} in water:</span> ${inWater.map(escapeHtml).join(", ")}` : "All on land ✓";
+  }
 }
 
 function renderAll() { renderSide(); renderList(); draw(); }
@@ -370,7 +411,7 @@ function renderAll() { renderSide(); renderList(); draw(); }
 function addTribeAt(mx, my) {
   const x = Math.max(0, Math.min(MAPW-1, Math.round(mx)));
   const y = Math.max(0, Math.min(MAPH-1, Math.round(my)));
-  roster.factions.push({ name:"NewTribe", x, y, role:"independent", iq:100 });
+  roster.factions.push({ name:"NewTribe", x, y, role:"independent", relation:"neutral", hostility:"passive", betrayal:"never", color:FACTION_COLORS[roster.factions.length%FACTION_COLORS.length], iq:100 });
   markRosterDirty();
   sel = roster.factions.length-1; renderAll();
 }
@@ -387,6 +428,45 @@ window.addEventListener("keydown", e => {
   else if (e.key === "Escape") { sel = -1; renderSide(); draw(); }
 });
 document.getElementById("addBtn").onclick = () => { const [px,py] = roster.player_spawn; addTribeAt(px+30, py+30); };
+async function ensureEntityCatalog(){
+  if(entityCatalog) return entityCatalog;
+  const response = await fetch("/__entities", {cache:"no-store"});
+  if(!response.ok) throw new Error("entity catalog unavailable");
+  const value = await response.json();
+  if(!value || value.version!==1 || !Array.isArray(value.entities)) throw new Error("invalid entity catalog");
+  entityCatalog = value.entities;
+  return entityCatalog;
+}
+function renderEntityOptions(){
+  if(!entityCatalog) return;
+  const q=document.getElementById("atlasEntityInput").value.trim().toLocaleLowerCase();
+  const options=document.getElementById("atlasEntityOptions");
+  options.replaceChildren();
+  if(q.length<2) return;
+  for(const entity of entityCatalog.filter(item=>item.name.toLocaleLowerCase().includes(q)||item.id.includes(q)).slice(0,40)){
+    const option=document.createElement("option");
+    option.value=entity.name;
+    option.label=`${entity.kind.replaceAll("_"," ")} · ${entity.region.replaceAll("_"," ")}`;
+    options.append(option);
+  }
+}
+document.getElementById("atlasEntityInput").addEventListener("focus",()=>ensureEntityCatalog().then(renderEntityOptions).catch(error=>toast(error.message)));
+document.getElementById("atlasEntityInput").addEventListener("input",renderEntityOptions);
+document.getElementById("addAtlasEntity").onclick=async()=>{
+  try{
+    const entities=await ensureEntityCatalog();
+    const name=document.getElementById("atlasEntityInput").value.trim();
+    const entity=entities.find(item=>item.name.toLocaleLowerCase()===name.toLocaleLowerCase());
+    if(!entity){toast("Choose an entity from the catalog suggestions");return;}
+    if(roster.factions.some(f=>f.name.toLocaleLowerCase()===entity.name.toLocaleLowerCase())){toast("That entity is already in this episode");return;}
+    const [px,py]=roster.player_spawn;
+    const faction={name:entity.name,x:Math.max(0,Math.min(MAPW-1,Math.round(px+30))),y:Math.max(0,Math.min(MAPH-1,Math.round(py+30))),role:"independent",relation:"neutral",hostility:"passive",betrayal:"never",color:FACTION_COLORS[roster.factions.length%FACTION_COLORS.length],iq:100};
+    if(entity.avatar&&avatarCatalog.includes(entity.avatar))faction.avatar=entity.avatar;
+    roster.factions.push(faction);
+    document.getElementById("atlasEntityInput").value="";
+    markRosterDirty();sel=roster.factions.length-1;renderAll();toast("Added from Entity Atlas — adjust episode position and role");
+  }catch(error){toast("Could not load entity catalog: "+error.message);}
+};
 // Right-click the map = drop a new tribe right there (same as + Add tribe, placed at the cursor).
 cv.addEventListener("contextmenu", e => {
   e.preventDefault();
@@ -405,7 +485,8 @@ function serialize() {
     _comment: roster._comment || `${episodeId} campaign roster — edited via tools/campaign-editor.`,
     map: roster.map || "eastanglia",
     player_spawn: roster.player_spawn.map(n=>Math.round(n)),
-    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
+    player_color: roster.player_color || PLAYER_COLOR,
+    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, relation:f.relation, hostility:f.hostility, betrayal:f.betrayal, color:f.color, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
@@ -453,17 +534,16 @@ document.getElementById("fileIn").onchange = e => {
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 
 function normalize(j){
-  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], factions:(j.factions||[]).map(f=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
+  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], player_color:j.player_color||PLAYER_COLOR, factions:(j.factions||[]).map((f,index)=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",relation:f.relation||"neutral",hostility:f.hostility||"passive",betrayal:f.betrayal||"never",color:f.color||FACTION_COLORS[index%FACTION_COLORS.length],iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
   validateRoster(result);
   return result;
 }
 function validateRoster(value){
-  if(!value || typeof value.map!=="string" || !Array.isArray(value.player_spawn) || value.player_spawn.length!==2 || !value.player_spawn.every(Number.isFinite)) throw new Error("invalid roster");
+  if(!value || typeof value.map!=="string" || !Array.isArray(value.player_spawn) || value.player_spawn.length!==2 || !value.player_spawn.every(Number.isFinite) || !/^#[0-9a-fA-F]{6}$/.test(value.player_color || PLAYER_COLOR)) throw new Error("invalid roster");
   const names = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(f.support_interval_seconds!=null && f.role!=="kin" && !f.alliance_group) throw new Error("ally support needs a Kin faction or alliance group");
-    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
+    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || !Object.prototype.hasOwnProperty.call(HOSTILITIES,f.hostility) || !Object.prototype.hasOwnProperty.call(BETRAYALS,f.betrayal) || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
     names.add(f.name);
   }
 }
@@ -477,11 +557,9 @@ document.getElementById("zfit").onclick = () => { fitView(); draw(); };
 
 async function loadMap(){
   const mapId = roster.map || "eastanglia";
-  const res = await fetch(`/assets/maps/${encodeURIComponent(mapId)}/map.bin`);
-  if(!res.ok) throw new Error(mapId+" map "+res.status);
-  const buf = await res.arrayBuffer();
-  const m = parseMap(buf);
-  MAPW = m.w; MAPH = m.h; terrain = m.terrain; buildMapImage();
+  const map = await SOWCampaignMapPreview.load(mapId);
+  MAPW = map.width; MAPH = map.height; terrain = map.terrain; mapImage = map.image;
+  renderAll();
 }
 async function loadRoster(){
   try {

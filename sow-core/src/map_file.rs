@@ -11,12 +11,46 @@ pub const MAP_VERSION_INLINE_GEO: u16 = 2;
 /// Geo record tags: byte introducing the record.
 const GEO_TAG_NONE: u8 = 0;
 const GEO_TAG_EQUIRECT: u8 = 1;
+const MAP_ROSTER_TAG: u8 = 2;
+const MAP_ROSTER_VERSION: u16 = 1;
 
 pub const CATALOG_MAGIC: &[u8; 4] = b"SOWC";
-/// v2 adds `num_land_tiles` + `multiplayer_frequency` per entry (source-map
-/// weighted rotation and neutral AI population). v1 entries are still parsed
-/// (fields default to 0 / 1) so stale caches never brick a boot.
+/// v2 adds land/frequency. Roster summaries use a tagged trailing extension,
+/// which v2 readers safely ignore; v3 inline rosters are accepted for transition.
 pub const CATALOG_VERSION: u16 = 2;
+const CATALOG_VERSION_INLINE_ROSTERS: u16 = 3;
+const CATALOG_ROSTER_TAG: u8 = 1;
+const CATALOG_ROSTER_VERSION: u16 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MapRosterRole {
+    Nation,
+    Tribe,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MapRosterEntry {
+    pub entity_id: String,
+    pub role: MapRosterRole,
+    pub x: u32,
+    pub y: u32,
+    #[serde(default)]
+    pub legacy_anchor: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MapRosterPreset {
+    pub id: String,
+    pub name: String,
+    pub entries: Vec<MapRosterEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MapRosterMeta {
+    pub id: String,
+    pub name: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MapSpawn {
@@ -105,6 +139,8 @@ pub struct MapHeader {
     pub num_land_tiles: u32,
     pub spawn_count: usize,
     pub geo_bounds: Option<GeoBounds>,
+    pub default_roster: Option<String>,
+    pub roster_presets: Vec<MapRosterMeta>,
     pub header_bytes: usize,
 }
 
@@ -116,6 +152,8 @@ pub struct MapFile {
     pub num_land_tiles: u32,
     pub spawns: Vec<MapSpawn>,
     pub geo_bounds: Option<GeoBounds>,
+    pub default_roster: Option<String>,
+    pub rosters: Vec<MapRosterPreset>,
     pub terrain: Vec<u8>,
 }
 
@@ -129,6 +167,8 @@ pub struct MapCatalogEntry {
     pub num_land_tiles: u32,
     /// Weighted-rotation tickets (`multiplayer_frequency`); 0 = out of rotation.
     pub multiplayer_frequency: u32,
+    pub default_roster: Option<String>,
+    pub roster_presets: Vec<MapRosterMeta>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +182,10 @@ pub enum MapFileError {
     BadMagic,
     UnsupportedVersion(u16),
     BadGeoTag(u8),
+    BadMapTag(u8),
+    BadCatalogTag(u8),
+    InvalidCatalog(&'static str),
+    InvalidRoster(&'static str),
     InvalidUtf8,
     TerrainLengthMismatch { expected: usize, got: usize },
 }
@@ -153,6 +197,10 @@ impl std::fmt::Display for MapFileError {
             Self::BadMagic => write!(f, "invalid map magic (expected SOWM)"),
             Self::UnsupportedVersion(v) => write!(f, "unsupported map version {v}"),
             Self::BadGeoTag(t) => write!(f, "unsupported geo record tag {t}"),
+            Self::BadMapTag(t) => write!(f, "unsupported map metadata tag {t}"),
+            Self::BadCatalogTag(t) => write!(f, "unsupported catalog metadata tag {t}"),
+            Self::InvalidCatalog(message) => write!(f, "invalid map catalog: {message}"),
+            Self::InvalidRoster(message) => write!(f, "invalid map roster: {message}"),
             Self::InvalidUtf8 => write!(f, "invalid utf-8 in map file"),
             Self::TerrainLengthMismatch { expected, got } => {
                 write!(f, "terrain length mismatch: expected {expected}, got {got}")
@@ -236,6 +284,243 @@ fn write_string(out: &mut Vec<u8>, s: &str) {
     out.extend_from_slice(bytes);
 }
 
+fn read_roster_record(
+    data: &[u8],
+    off: &mut usize,
+    width: u32,
+    height: u32,
+    spawn_count: usize,
+) -> Result<(Option<String>, Vec<MapRosterPreset>), MapFileError> {
+    let tag = read_u8(data, off).ok_or(MapFileError::TooShort)?;
+    if tag != MAP_ROSTER_TAG {
+        return Err(MapFileError::BadMapTag(tag));
+    }
+    let len = read_u32(data, off).ok_or(MapFileError::TooShort)? as usize;
+    let end = (*off).checked_add(len).ok_or(MapFileError::TooShort)?;
+    let payload = data.get(*off..end).ok_or(MapFileError::TooShort)?;
+    *off = end;
+    let mut cursor = 0;
+    let version = read_u16(payload, &mut cursor).ok_or(MapFileError::TooShort)?;
+    if version != MAP_ROSTER_VERSION {
+        return Err(MapFileError::InvalidRoster("unsupported roster version"));
+    }
+    let default_id = read_string(payload, &mut cursor)?;
+    let count = read_u16(payload, &mut cursor).ok_or(MapFileError::TooShort)? as usize;
+    let mut presets = Vec::with_capacity(count);
+    let mut preset_ids = std::collections::HashSet::with_capacity(count);
+    for _ in 0..count {
+        let id = read_string(payload, &mut cursor)?;
+        let name = read_string(payload, &mut cursor)?;
+        if id.is_empty() || name.trim().is_empty() {
+            return Err(MapFileError::InvalidRoster("empty preset ID or name"));
+        }
+        let entry_count = read_u16(payload, &mut cursor).ok_or(MapFileError::TooShort)? as usize;
+        let mut entries = Vec::with_capacity(entry_count);
+        let mut entity_ids = std::collections::HashSet::with_capacity(entry_count);
+        let mut tiles = std::collections::HashSet::with_capacity(entry_count);
+        let mut anchors = std::collections::HashSet::with_capacity(entry_count);
+        for _ in 0..entry_count {
+            let entity_id = read_string(payload, &mut cursor)?;
+            let role = match read_u8(payload, &mut cursor).ok_or(MapFileError::TooShort)? {
+                0 => MapRosterRole::Nation,
+                1 => MapRosterRole::Tribe,
+                _ => return Err(MapFileError::InvalidRoster("unknown gameplay role")),
+            };
+            let x = read_u32(payload, &mut cursor).ok_or(MapFileError::TooShort)?;
+            let y = read_u32(payload, &mut cursor).ok_or(MapFileError::TooShort)?;
+            let anchor = read_u16(payload, &mut cursor).ok_or(MapFileError::TooShort)?;
+            if entity_id.is_empty() {
+                return Err(MapFileError::InvalidRoster(
+                    "empty preset or entity ID/name",
+                ));
+            }
+            if x >= width || y >= height {
+                return Err(MapFileError::InvalidRoster(
+                    "entity position is outside the map",
+                ));
+            }
+            if !entity_ids.insert(entity_id.clone()) || !tiles.insert((x, y)) {
+                return Err(MapFileError::InvalidRoster(
+                    "duplicate entity or tile in preset",
+                ));
+            }
+            if anchor != u16::MAX && anchor as usize >= spawn_count {
+                return Err(MapFileError::InvalidRoster(
+                    "legacy anchor index is out of range",
+                ));
+            }
+            if anchor != u16::MAX && !anchors.insert(anchor) {
+                return Err(MapFileError::InvalidRoster(
+                    "legacy anchor linked twice in preset",
+                ));
+            }
+            entries.push(MapRosterEntry {
+                entity_id,
+                role,
+                x,
+                y,
+                legacy_anchor: (anchor != u16::MAX).then_some(anchor),
+            });
+        }
+        if !preset_ids.insert(id.clone()) {
+            return Err(MapFileError::InvalidRoster("duplicate preset ID"));
+        }
+        presets.push(MapRosterPreset { id, name, entries });
+    }
+    if cursor != payload.len() {
+        return Err(MapFileError::InvalidRoster(
+            "unexpected bytes in roster record",
+        ));
+    }
+    if presets.is_empty() || !presets.iter().any(|preset| preset.id == default_id) {
+        return Err(MapFileError::InvalidRoster("default preset is missing"));
+    }
+    Ok((Some(default_id), presets))
+}
+
+fn parse_map_tail(
+    data: &[u8],
+    mut off: usize,
+    version: u16,
+    width: u32,
+    height: u32,
+    spawn_count: usize,
+    initial_geo: Option<GeoBounds>,
+) -> Result<(Option<GeoBounds>, Option<String>, Vec<MapRosterPreset>), MapFileError> {
+    let mut geo_bounds = initial_geo;
+    if version == MAP_VERSION && off < data.len() {
+        geo_bounds = read_geo_record(data, &mut off)?;
+    }
+    let (default_roster, rosters) = if off < data.len() {
+        read_roster_record(data, &mut off, width, height, spawn_count)?
+    } else {
+        (None, Vec::new())
+    };
+    if off != data.len() {
+        return Err(MapFileError::BadMapTag(data[off]));
+    }
+    Ok((geo_bounds, default_roster, rosters))
+}
+
+fn write_roster_record(map: &MapFile, out: &mut Vec<u8>) {
+    if map.rosters.is_empty() {
+        return;
+    }
+    let mut payload = Vec::new();
+    write_u16(&mut payload, MAP_ROSTER_VERSION);
+    write_string(
+        &mut payload,
+        map.default_roster.as_deref().unwrap_or_default(),
+    );
+    write_u16(&mut payload, map.rosters.len() as u16);
+    for preset in &map.rosters {
+        write_string(&mut payload, &preset.id);
+        write_string(&mut payload, &preset.name);
+        write_u16(&mut payload, preset.entries.len() as u16);
+        for entry in &preset.entries {
+            write_string(&mut payload, &entry.entity_id);
+            payload.push(match entry.role {
+                MapRosterRole::Nation => 0,
+                MapRosterRole::Tribe => 1,
+            });
+            write_u32(&mut payload, entry.x);
+            write_u32(&mut payload, entry.y);
+            write_u16(&mut payload, entry.legacy_anchor.unwrap_or(u16::MAX));
+        }
+    }
+    out.push(MAP_ROSTER_TAG);
+    write_u32(out, payload.len() as u32);
+    out.extend_from_slice(&payload);
+}
+
+/// Validate map-authored roster data before writing it back to a map file.
+/// `require_catalog_ids` is used by the editor save boundary; reading old maps
+/// remains possible after an Atlas entry is removed so it can be repaired.
+pub fn validate_rosters(map: &MapFile, require_catalog_ids: bool) -> Result<(), String> {
+    if map.rosters.is_empty() {
+        return if map.default_roster.is_none() {
+            Ok(())
+        } else {
+            Err("default roster is set but this map has no presets".into())
+        };
+    }
+    if map.rosters.len() > u16::MAX as usize {
+        return Err("too many roster presets".into());
+    }
+    let mut presets = std::collections::HashSet::new();
+    if !map
+        .rosters
+        .iter()
+        .any(|preset| Some(&preset.id) == map.default_roster.as_ref())
+    {
+        return Err("default roster must name one of this map's presets".into());
+    }
+    for preset in &map.rosters {
+        if !valid_roster_key(&preset.id)
+            || preset.id.len() > u16::MAX as usize
+            || preset.name.trim().is_empty()
+            || preset.name.len() > u16::MAX as usize
+            || preset.entries.len() > u16::MAX as usize
+            || !presets.insert(&preset.id)
+        {
+            return Err(format!("invalid or duplicate roster preset: {}", preset.id));
+        }
+        let mut entities = std::collections::HashSet::new();
+        let mut tiles = std::collections::HashSet::new();
+        let mut anchors = std::collections::HashSet::new();
+        for entry in &preset.entries {
+            if !valid_roster_key(&entry.entity_id)
+                || entry.entity_id.len() > u16::MAX as usize
+                || entry.x >= map.width
+                || entry.y >= map.height
+                || !entities.insert(&entry.entity_id)
+                || !tiles.insert((entry.x, entry.y))
+            {
+                return Err(format!(
+                    "invalid or duplicate entry in roster {}",
+                    preset.id
+                ));
+            }
+            if let Some(anchor) = entry.legacy_anchor {
+                if anchor as usize >= map.spawns.len() || !anchors.insert(anchor) {
+                    return Err(format!(
+                        "invalid or duplicate linked anchor in roster {}",
+                        preset.id
+                    ));
+                }
+            }
+            if require_catalog_ids && sow_data::geo_entities::by_id(&entry.entity_id).is_none() {
+                return Err(format!("unknown Atlas entity ID: {}", entry.entity_id));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Carry map-authored rosters across a map-source replacement without silently
+/// retargeting linked legacy anchors. A changed map size or spawn table needs an
+/// explicit edit in the map-roster editor before the replacement is written.
+pub fn preserve_rosters(previous: &MapFile, replacement: &mut MapFile) -> Result<(), &'static str> {
+    if previous.rosters.is_empty() {
+        return Ok(());
+    }
+    if previous.width != replacement.width
+        || previous.height != replacement.height
+        || previous.spawns != replacement.spawns
+    {
+        return Err("map dimensions or spawn anchors changed; roster needs review in Map Rosters");
+    }
+    replacement.default_roster = previous.default_roster.clone();
+    replacement.rosters = previous.rosters.clone();
+    Ok(())
+}
+
+fn valid_roster_key(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
 /// Parse map header + spawn table; does not copy terrain.
 pub fn parse_header(data: &[u8]) -> Result<MapHeader, MapFileError> {
     if data.len() < 20 {
@@ -267,16 +552,30 @@ pub fn parse_header(data: &[u8]) -> Result<MapHeader, MapFileError> {
         geo_bounds = read_geo_record(data, &mut off)?;
     }
     let header_bytes = off;
-    if version == MAP_VERSION {
-        // Current layout: record trails the terrain. Best-effort here — a
-        // caller may pass a header-only prefix, and pre-geo files simply
-        // end at the terrain.
-        if let Some(terrain_len) = (width as usize).checked_mul(height as usize) {
-            let mut tail = header_bytes.saturating_add(terrain_len);
-            if data.len() > tail {
-                geo_bounds = read_geo_record(data, &mut tail)?;
-            }
-        }
+    let mut default_roster = None;
+    let mut roster_presets = Vec::new();
+    let terrain_end = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|len| header_bytes.checked_add(len));
+    if let Some(terrain_end) = terrain_end.filter(|end| data.len() >= *end) {
+        let (parsed_geo, default, rosters) = parse_map_tail(
+            data,
+            terrain_end,
+            version,
+            width,
+            height,
+            spawn_count,
+            geo_bounds,
+        )?;
+        geo_bounds = parsed_geo;
+        default_roster = default;
+        roster_presets = rosters
+            .into_iter()
+            .map(|preset| MapRosterMeta {
+                id: preset.id,
+                name: preset.name,
+            })
+            .collect();
     }
     Ok(MapHeader {
         display_name,
@@ -285,6 +584,8 @@ pub fn parse_header(data: &[u8]) -> Result<MapHeader, MapFileError> {
         num_land_tiles,
         spawn_count,
         geo_bounds,
+        default_roster,
+        roster_presets,
         header_bytes,
     })
 }
@@ -333,6 +634,22 @@ pub fn parse(data: &[u8]) -> Result<MapFile, MapFileError> {
         num_land_tiles,
         spawns,
         geo_bounds: header.geo_bounds,
+        default_roster: header.default_roster,
+        rosters: if header.roster_presets.is_empty() {
+            Vec::new()
+        } else {
+            let terrain_end = header.header_bytes + terrain_len;
+            let (_, _, rosters) = parse_map_tail(
+                data,
+                terrain_end,
+                u16::from_le_bytes([data[4], data[5]]),
+                header.width,
+                header.height,
+                header.spawn_count,
+                header.geo_bounds,
+            )?;
+            rosters
+        },
         terrain,
     })
 }
@@ -360,13 +677,20 @@ pub fn encode(map: &MapFile) -> Vec<u8> {
         write_u32(&mut out, s.y);
     }
     out.extend_from_slice(&map.terrain);
-    if let Some(b) = map.geo_bounds {
-        out.push(GEO_TAG_EQUIRECT);
-        write_i32(&mut out, b.min_lon_e6);
-        write_i32(&mut out, b.min_lat_e6);
-        write_i32(&mut out, b.max_lon_e6);
-        write_i32(&mut out, b.max_lat_e6);
+    if map.geo_bounds.is_some() || !map.rosters.is_empty() {
+        if let Some(b) = map.geo_bounds {
+            out.push(GEO_TAG_EQUIRECT);
+            write_i32(&mut out, b.min_lon_e6);
+            write_i32(&mut out, b.min_lat_e6);
+            write_i32(&mut out, b.max_lon_e6);
+            write_i32(&mut out, b.max_lat_e6);
+        } else {
+            // Old readers consume this known no-bounds record, then ignore the
+            // roster extension that follows it.
+            out.push(GEO_TAG_NONE);
+        }
     }
+    write_roster_record(map, &mut out);
     out
 }
 
@@ -384,6 +708,30 @@ pub fn encode_catalog(catalog: &MapCatalog) -> Vec<u8> {
         write_u32(&mut out, e.num_land_tiles);
         write_u32(&mut out, e.multiplayer_frequency);
     }
+    if catalog
+        .entries
+        .iter()
+        .any(|entry| entry.default_roster.is_some() || !entry.roster_presets.is_empty())
+    {
+        let mut payload = Vec::new();
+        write_u16(&mut payload, CATALOG_ROSTER_VERSION);
+        write_u32(&mut payload, catalog.entries.len() as u32);
+        for entry in &catalog.entries {
+            write_string(&mut payload, &entry.key);
+            write_string(
+                &mut payload,
+                entry.default_roster.as_deref().unwrap_or_default(),
+            );
+            write_u16(&mut payload, entry.roster_presets.len() as u16);
+            for preset in &entry.roster_presets {
+                write_string(&mut payload, &preset.id);
+                write_string(&mut payload, &preset.name);
+            }
+        }
+        out.push(CATALOG_ROSTER_TAG);
+        write_u32(&mut out, payload.len() as u32);
+        out.extend_from_slice(&payload);
+    }
     out
 }
 
@@ -396,7 +744,7 @@ pub fn parse_catalog(data: &[u8]) -> Result<MapCatalog, MapFileError> {
     }
     let mut off = 4usize;
     let version = read_u16(data, &mut off).ok_or(MapFileError::TooShort)?;
-    if version > CATALOG_VERSION {
+    if version > CATALOG_VERSION_INLINE_ROSTERS {
         return Err(MapFileError::UnsupportedVersion(version));
     }
     off += 2;
@@ -415,6 +763,20 @@ pub fn parse_catalog(data: &[u8]) -> Result<MapCatalog, MapFileError> {
         } else {
             (0, 1)
         };
+        let (default_roster, roster_presets) = if version >= CATALOG_VERSION_INLINE_ROSTERS {
+            let default = read_string(data, &mut off)?;
+            let count = read_u16(data, &mut off).ok_or(MapFileError::TooShort)? as usize;
+            let mut presets = Vec::with_capacity(count);
+            for _ in 0..count {
+                presets.push(MapRosterMeta {
+                    id: read_string(data, &mut off)?,
+                    name: read_string(data, &mut off)?,
+                });
+            }
+            ((!default.is_empty()).then_some(default), presets)
+        } else {
+            (None, Vec::new())
+        };
         entries.push(MapCatalogEntry {
             key,
             display_name,
@@ -422,7 +784,66 @@ pub fn parse_catalog(data: &[u8]) -> Result<MapCatalog, MapFileError> {
             height,
             num_land_tiles,
             multiplayer_frequency,
+            default_roster,
+            roster_presets,
         });
+    }
+    if off < data.len() {
+        if version >= CATALOG_VERSION_INLINE_ROSTERS {
+            return Err(MapFileError::InvalidCatalog(
+                "unexpected bytes after inline roster metadata",
+            ));
+        }
+        let tag = read_u8(data, &mut off).ok_or(MapFileError::TooShort)?;
+        if tag != CATALOG_ROSTER_TAG {
+            return Err(MapFileError::BadCatalogTag(tag));
+        }
+        let len = read_u32(data, &mut off).ok_or(MapFileError::TooShort)? as usize;
+        let end = off.checked_add(len).ok_or(MapFileError::TooShort)?;
+        let payload = data.get(off..end).ok_or(MapFileError::TooShort)?;
+        off = end;
+        let mut cursor = 0usize;
+        if read_u16(payload, &mut cursor).ok_or(MapFileError::TooShort)? != CATALOG_ROSTER_VERSION {
+            return Err(MapFileError::InvalidCatalog(
+                "unsupported roster summary version",
+            ));
+        }
+        let metadata_count = read_u32(payload, &mut cursor).ok_or(MapFileError::TooShort)? as usize;
+        if metadata_count != entries.len() {
+            return Err(MapFileError::InvalidCatalog(
+                "roster summary map count does not match catalog",
+            ));
+        }
+        for entry in &mut entries {
+            let key = read_string(payload, &mut cursor)?;
+            if key != entry.key {
+                return Err(MapFileError::InvalidCatalog(
+                    "roster summary map order does not match catalog",
+                ));
+            }
+            let default = read_string(payload, &mut cursor)?;
+            let preset_count =
+                read_u16(payload, &mut cursor).ok_or(MapFileError::TooShort)? as usize;
+            let mut presets = Vec::with_capacity(preset_count);
+            for _ in 0..preset_count {
+                presets.push(MapRosterMeta {
+                    id: read_string(payload, &mut cursor)?,
+                    name: read_string(payload, &mut cursor)?,
+                });
+            }
+            if !default.is_empty() && !presets.iter().any(|preset| preset.id == default) {
+                return Err(MapFileError::InvalidCatalog(
+                    "default roster summary is not listed",
+                ));
+            }
+            entry.default_roster = (!default.is_empty()).then_some(default);
+            entry.roster_presets = presets;
+        }
+        if cursor != payload.len() || off != data.len() {
+            return Err(MapFileError::InvalidCatalog(
+                "unexpected bytes in roster summary",
+            ));
+        }
     }
     Ok(MapCatalog { entries })
 }
@@ -441,6 +862,8 @@ pub fn catalog_from_headers(
             height: h.height,
             num_land_tiles: h.num_land_tiles,
             multiplayer_frequency: frequency,
+            default_roster: h.default_roster,
+            roster_presets: h.roster_presets,
         })
         .collect();
     entries.sort_by_key(|a| a.display_name.to_lowercase());
@@ -491,6 +914,8 @@ mod tests {
                 y: 2,
             }],
             geo_bounds,
+            default_roster: None,
+            rosters: Vec::new(),
             terrain: vec![0u8; 16],
         }
     }
@@ -504,6 +929,82 @@ mod tests {
         assert_eq!(parsed.spawns.len(), 1);
         assert_eq!(parsed.terrain.len(), 16);
         assert_eq!(parsed.geo_bounds, None);
+    }
+
+    #[test]
+    fn map_roster_roundtrips_without_rewriting_legacy_map_fields() {
+        let mut map = sample_map(Some(GeoBounds::from_degrees(-20.0, -10.0, 30.0, 40.0)));
+        map.default_roster = Some("historical".into());
+        map.rosters = vec![MapRosterPreset {
+            id: "historical".into(),
+            name: "Historical".into(),
+            entries: vec![MapRosterEntry {
+                entity_id: "iceland".into(),
+                role: MapRosterRole::Nation,
+                x: 2,
+                y: 3,
+                legacy_anchor: Some(0),
+            }],
+        }];
+
+        validate_rosters(&map, true).unwrap();
+        let bytes = encode(&map);
+        let parsed = parse(&bytes).unwrap();
+        assert_eq!(parsed.display_name, map.display_name);
+        assert_eq!(parsed.spawns, map.spawns);
+        assert_eq!(parsed.terrain, map.terrain);
+        assert_eq!(parsed.geo_bounds, map.geo_bounds);
+        assert_eq!(parsed.default_roster, map.default_roster);
+        assert_eq!(parsed.rosters, map.rosters);
+        let header = parse_header(&bytes).unwrap();
+        assert_eq!(header.default_roster.as_deref(), Some("historical"));
+        assert_eq!(header.roster_presets[0].id, "historical");
+
+        let mut compressed = Vec::new();
+        {
+            let mut writer = brotli::CompressorWriter::new(&mut compressed, 4096, 5, 22);
+            std::io::Write::write_all(&mut writer, &bytes).unwrap();
+        }
+        assert_eq!(decompress_map_payload(&compressed).unwrap(), bytes);
+    }
+
+    #[test]
+    fn roster_survives_source_refresh_only_when_anchors_are_unchanged() {
+        let mut previous = sample_map(None);
+        previous.default_roster = Some("historical".into());
+        previous.rosters = vec![MapRosterPreset {
+            id: "historical".into(),
+            name: "Historical".into(),
+            entries: vec![MapRosterEntry {
+                entity_id: "iceland".into(),
+                role: MapRosterRole::Nation,
+                x: 2,
+                y: 3,
+                legacy_anchor: Some(0),
+            }],
+        }];
+
+        let mut replacement = sample_map(None);
+        preserve_rosters(&previous, &mut replacement).unwrap();
+        assert_eq!(replacement.rosters, previous.rosters);
+        assert_eq!(replacement.default_roster, previous.default_roster);
+        assert_eq!(replacement.spawns, previous.spawns);
+
+        replacement.spawns[0].name = "Different anchor".into();
+        replacement.rosters.clear();
+        replacement.default_roster = None;
+        assert!(preserve_rosters(&previous, &mut replacement).is_err());
+        assert!(replacement.rosters.is_empty());
+        assert!(replacement.default_roster.is_none());
+    }
+
+    #[test]
+    fn no_roster_map_still_ends_after_terrain_and_keeps_legacy_anchors() {
+        let map = sample_map(None);
+        let bytes = encode(&map);
+        let header = parse_header(&bytes).unwrap();
+        assert_eq!(bytes.len(), header.header_bytes + map.terrain.len());
+        assert_eq!(parse(&bytes).unwrap().spawns, map.spawns);
     }
 
     #[test]
@@ -657,14 +1158,91 @@ mod tests {
                 height: 100,
                 num_land_tiles: 5000,
                 multiplayer_frequency: 20,
+                default_roster: Some("historical".to_string()),
+                roster_presets: vec![MapRosterMeta {
+                    id: "historical".to_string(),
+                    name: "Historical".to_string(),
+                }],
             }],
         };
         let bytes = encode_catalog(&cat);
+        assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), CATALOG_VERSION);
         let parsed = parse_catalog(&bytes).unwrap();
         assert_eq!(parsed.entries.len(), 1);
         assert_eq!(parsed.entries[0].key, "world");
         assert_eq!(parsed.entries[0].num_land_tiles, 5000);
         assert_eq!(parsed.entries[0].multiplayer_frequency, 20);
+        assert_eq!(
+            parsed.entries[0].default_roster.as_deref(),
+            Some("historical")
+        );
+        assert_eq!(parsed.entries[0].roster_presets[0].name, "Historical");
+    }
+
+    #[test]
+    fn roster_catalog_keeps_the_legacy_v2_entry_prefix() {
+        let catalog = MapCatalog {
+            entries: vec![MapCatalogEntry {
+                key: "world".into(),
+                display_name: "World".into(),
+                width: 4,
+                height: 4,
+                num_land_tiles: 12,
+                multiplayer_frequency: 1,
+                default_roster: Some("historical".into()),
+                roster_presets: vec![MapRosterMeta {
+                    id: "historical".into(),
+                    name: "Historical".into(),
+                }],
+            }],
+        };
+        let bytes = encode_catalog(&catalog);
+        let mut offset = 4;
+        assert_eq!(read_u16(&bytes, &mut offset), Some(2));
+        offset += 2;
+        let count = read_u32(&bytes, &mut offset).unwrap();
+        assert_eq!(count, 1);
+        let _ = read_string(&bytes, &mut offset).unwrap();
+        let _ = read_string(&bytes, &mut offset).unwrap();
+        offset += 16; // width, height, land count, rotation frequency
+        assert_eq!(bytes[offset], CATALOG_ROSTER_TAG);
+
+        // The deployed v2 reader stops after these entries and ignores trailing bytes.
+        let legacy = parse_catalog(&bytes[..offset]).unwrap();
+        assert_eq!(legacy.entries[0].default_roster, None);
+        assert!(legacy.entries[0].roster_presets.is_empty());
+        assert_eq!(
+            parse_catalog(&bytes).unwrap().entries[0]
+                .default_roster
+                .as_deref(),
+            Some("historical")
+        );
+    }
+
+    #[test]
+    fn reads_transitional_inline_v3_roster_catalog() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(CATALOG_MAGIC);
+        write_u16(&mut bytes, CATALOG_VERSION_INLINE_ROSTERS);
+        write_u16(&mut bytes, 0);
+        write_u32(&mut bytes, 1);
+        write_string(&mut bytes, "world");
+        write_string(&mut bytes, "World");
+        write_u32(&mut bytes, 4);
+        write_u32(&mut bytes, 4);
+        write_u32(&mut bytes, 12);
+        write_u32(&mut bytes, 1);
+        write_string(&mut bytes, "historical");
+        write_u16(&mut bytes, 1);
+        write_string(&mut bytes, "historical");
+        write_string(&mut bytes, "Historical");
+
+        let parsed = parse_catalog(&bytes).unwrap();
+        assert_eq!(
+            parsed.entries[0].default_roster.as_deref(),
+            Some("historical")
+        );
+        assert_eq!(parsed.entries[0].roster_presets[0].name, "Historical");
     }
 
     #[test]

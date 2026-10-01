@@ -13,7 +13,11 @@
       "role": "kin",
       "iq": 110,
       "civ": "maya",
-      "leader": "lady_six_sky"
+      "leader": "lady_six_sky",
+      "relation": "allied",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Sa'aal Court",
@@ -22,7 +26,11 @@
       "role": "kin",
       "iq": 110,
       "civ": "maya",
-      "leader": "lady_six_sky"
+      "leader": "lady_six_sky",
+      "relation": "allied",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Dos Pilas Veterans",
@@ -31,7 +39,11 @@
       "role": "kin",
       "iq": 110,
       "civ": "maya",
-      "leader": "lady_six_sky"
+      "leader": "lady_six_sky",
+      "relation": "allied",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Yaxha Lookouts",
@@ -39,7 +51,11 @@
       "y": 421,
       "role": "independent",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Topoxte Fishers",
@@ -47,7 +63,11 @@
       "y": 422,
       "role": "independent",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Calakmul Emissaries",
@@ -55,7 +75,11 @@
       "y": 415,
       "role": "vassal",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Copan Delegation",
@@ -63,7 +87,11 @@
       "y": 429,
       "role": "vassal",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Palenque Envoys",
@@ -71,7 +99,11 @@
       "y": 425,
       "role": "vassal",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Uaxactun Rebels",
@@ -79,7 +111,11 @@
       "y": 425,
       "role": "boss",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Yaxha Rebels",
@@ -87,7 +123,11 @@
       "y": 427,
       "role": "boss",
       "iq": 105,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Tayasal Rebels",
@@ -95,7 +135,11 @@
       "y": 427,
       "role": "boss",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Seibal Rebels",
@@ -103,7 +147,11 @@
       "y": 430,
       "role": "boss",
       "iq": 105,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Caracol",
@@ -111,7 +159,11 @@
       "y": 419,
       "role": "boss",
       "iq": 110,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Tikal Coalition",
@@ -119,7 +171,11 @@
       "y": 424,
       "role": "big_boss",
       "iq": 115,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Quirigua",
@@ -127,7 +183,11 @@
       "y": 431,
       "role": "neutral",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Lamanai",
@@ -135,7 +195,11 @@
       "y": 416,
       "role": "neutral",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Altun Ha",
@@ -143,7 +207,12 @@
       "y": 430,
       "role": "neutral",
       "iq": 100,
-      "civ": "maya"
+      "civ": "maya",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     }
-  ]
+  ],
+  "player_color": "#f0902a"
 }

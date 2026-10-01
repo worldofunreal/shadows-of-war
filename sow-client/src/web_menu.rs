@@ -60,6 +60,11 @@ enum WebMenuCommand {
         #[serde(default)]
         player_id: Option<u16>,
     },
+    ResolveCampaignDiplomacy {
+        target_player_id: u16,
+        relation: sow_core::protocol::CampaignRelation,
+        gold_cost: f64,
+    },
     MapMenuAction {
         session: u64,
         tile_idx: u32,
@@ -521,6 +526,28 @@ impl SowApp {
                                     .any(|player| player.id == *player_id)
                             })
                         });
+                    }
+                }
+                WebMenuCommand::ResolveCampaignDiplomacy {
+                    target_player_id,
+                    relation,
+                    gold_cost,
+                } => {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && gold_cost.is_finite()
+                        && (0.0..=1_000_000.0).contains(&gold_cost)
+                        && self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                            snapshot.players.iter().any(|player| player.id == target_player_id)
+                        })
+                    {
+                        self.send_intent(
+                            sow_core::protocol::GameplayIntent::ResolveCampaignDiplomacy {
+                                target_player: target_player_id,
+                                relation,
+                                gold_cost,
+                            },
+                        );
                     }
                 }
                 WebMenuCommand::MapMenuAction {
@@ -2114,29 +2141,19 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .iter()
         .map(|notification| {
             let text = localized_text_payload(&notification.text);
-            let avatars: Vec<_> = notification
-                .players
-                .iter()
-                .enumerate()
-                .map(|(index, player_id)| {
-                    let player_id = (*player_id)?;
-                    if index > 0 && notification.players[0] == Some(player_id) {
-                        return None;
-                    }
-                    Some(
-                        hud.players
-                            .iter()
-                            .find(|player| player.id == player_id)
-                            .map(|player| {
-                                player
-                                    .campaign_avatar
-                                    .as_deref()
-                                    .filter(|avatar| !avatar.is_empty())
-                                    .map(str::to_owned)
-                                    .unwrap_or_else(|| leader_id(player.leader))
-                            })
-                            .unwrap_or_else(|| "null".to_string()),
-                    )
+            let players = snapshot
+                .map(|snapshot| snapshot.players.as_slice())
+                .unwrap_or(&[]);
+            let avatars: Vec<_> = sow_core::player::notification_avatar_identities(
+                players,
+                notification.players,
+            )
+                .into_iter()
+                .map(|avatar| {
+                    avatar.map(|avatar| {
+                        serde_json::to_value(avatar)
+                            .unwrap_or_else(|_| serde_json::json!({ "kind": "fallback" }))
+                    })
                 })
                 .collect();
             serde_json::json!({
@@ -2361,6 +2378,10 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let hud_payload = build_hud_payload(app, include_leaderboard);
         serde_json::json!({
             "phase": "Playing",
+            "loader_job": splash_job_name(&app.ui.app.splash_state.job),
+            "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
+            "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
+            "loader_done": app.ui.app.splash_state.done,
             "hud": hud_payload,
             "settings": {
                 "mute_all": app.ui.app.settings_state.mute_all,
@@ -2459,6 +2480,8 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                             "display_name": &entry.display_name,
                             "width": entry.width,
                             "height": entry.height,
+                            "default_roster": &entry.default_roster,
+                            "roster_presets": &entry.roster_presets,
                         })
                     })
                     .collect()

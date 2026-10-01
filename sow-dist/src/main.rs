@@ -221,6 +221,7 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         )?;
     }
     copy_dir(&src.join("gameplay/avatars"), &dst.join("gameplay/avatars"))?;
+    copy_dir(&src.join("gameplay/buildings"), &dst.join("gameplay/buildings"))?;
     copy_dir(
         &src.join("gameplay/currency"),
         &dst.join("gameplay/currency"),
@@ -428,6 +429,19 @@ fn compile_wasm_profile(paths: &Paths, profile: &str, dev: bool) -> Result<PathB
         "wasm-release" => "wasm-release",
         _ => bail!("unsupported WASM profile: {profile}"),
     };
+    run(
+        "cargo",
+        &[
+            "run",
+            "-p",
+            "sow-tools",
+            "--bin",
+            "sow-tools",
+            "--",
+            "pack-building-atlas",
+        ],
+        Some(&paths.root),
+    )?;
     println!("==> Compiling WASM ({profile})...");
     let mut a = vec!["build"];
     if profile != "dev" {
@@ -1013,7 +1027,19 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "main_menu.hud.js",
         ]
     };
-    let mut menu_js = read_shell_bundle(&paths.shell, "main_menu.js", &menu_parts)?
+    let building_manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(paths.assets_gameplay.join("buildings/atlas.json"))
+            .context("building atlas manifest missing; run pack-building-atlas")?,
+    )
+    .context("building atlas manifest is invalid JSON")?;
+    let building_manifest_js = format!(
+        "window.SOW_BUILDING_ART = {};\n",
+        serde_json::to_string(&building_manifest)?
+    );
+    let mut menu_js = format!(
+        "{building_manifest_js}{}",
+        read_shell_bundle(&paths.shell, "main_menu.js", &menu_parts)?
+    )
         .replace("</script>", "<\\/script>");
     if poki || jest {
         menu_js = strip_marked_section(
@@ -1184,10 +1210,8 @@ fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
     Ok(())
 }
 
-const PUBLIC_SITE_PAGES: [&str; 7] = [
+const PUBLIC_SITE_PAGES: [&str; 5] = [
     "index.html",
-    "leaders/index.html",
-    "how-to-play/index.html",
     "support/index.html",
     "privacy/index.html",
     "cookies/index.html",
@@ -1908,11 +1932,11 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "terms/index.html",
         "cookies/index.html",
         "support/index.html",
-        "how-to-play/index.html",
-        "leaders/index.html",
         "8d227b8f9e6140d39e3381a1829e1db3.txt",
         "sow.svg",
         "manifest.webmanifest",
+        "assets/gameplay/buildings/atlas.webp",
+        "assets/gameplay/buildings/atlas.json",
         "icon-192.png",
         "icon-512.png",
         "icon-512-maskable.png",
@@ -1924,6 +1948,12 @@ fn verify_layout(dir: &Path) -> Result<()> {
     }
     if dir.join("admin").exists() {
         bail!("webroot must not contain admin/ (dashboard was removed)");
+    }
+    let play_html = fs::read_to_string(dir.join("play/index.html"))?;
+    if !play_html.contains("window.SOW_BUILDING_ART =")
+        || !play_html.contains("gameplay/buildings/atlas.webp")
+    {
+        bail!("webroot game page is missing the building-art registry");
     }
     println!("✅ Dist layout OK ({})", dir.display());
     Ok(())
@@ -1990,6 +2020,8 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "assets/shell/loader/loader_full.webp",
         "assets/campaign/boudica.json",
         "assets/campaign/boudica.triggers.json",
+        "assets/gameplay/buildings/atlas.webp",
+        "assets/gameplay/buildings/atlas.json",
         "maps/catalog.bin",
         "maps/world/map.bin.br",
     ] {
@@ -2020,6 +2052,8 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "window.SOW_PORTAL = \"poki\"",
         "window.SOW_MAPS_URL = \"./maps\"",
         "window.SOW_ASSETS_URL = \"./assets\"",
+        "window.SOW_BUILDING_ART =",
+        "gameplay/buildings/atlas.webp",
         "window.SOW_DISABLE_CHAT = true",
         "sdk.init",
         "sdk.gameLoadingFinished",
@@ -2162,6 +2196,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &assets.join("gameplay/store"),
     )?;
     copy_dir(
+        &paths.assets_gameplay.join("buildings"),
+        &assets.join("gameplay/buildings"),
+    )?;
+    copy_dir(
         &paths.root.join("assets/campaign"),
         &assets.join("campaign"),
     )?;
@@ -2246,8 +2284,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         "terms",
         "cookies",
         "support",
-        "how-to-play",
-        "leaders",
         "auth",
         "fonts",
         ".well-known",
@@ -2297,8 +2333,6 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
             "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
             "  <url>\n    <loc>https://shadowsofwar.io/</loc>\n    <lastmod>2026-08-25</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n",
             "  <url>\n    <loc>https://shadowsofwar.io/play/</loc>\n    <lastmod>2026-08-25</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/leaders/</loc>\n    <lastmod>2026-08-25</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n",
-            "  <url>\n    <loc>https://shadowsofwar.io/how-to-play/</loc>\n    <lastmod>2026-08-25</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n",
             "  <url>\n    <loc>https://shadowsofwar.io/support/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.4</priority>\n  </url>\n",
             "  <url>\n    <loc>https://shadowsofwar.io/privacy/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>\n",
             "  <url>\n    <loc>https://shadowsofwar.io/terms/</loc>\n    <lastmod>2026-09-03</lastmod>\n    <changefreq>yearly</changefreq>\n    <priority>0.3</priority>\n  </url>\n",
@@ -2341,6 +2375,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.join("skins"),
         paths.assets_gameplay.join("currency"),
         paths.assets_gameplay.join("store"),
+        paths.assets_gameplay.join("buildings"),
         paths.root.join("assets/campaign"),
         paths.assets_site.join("media"),
         paths.assets_site.join("icons"),
@@ -2377,7 +2412,9 @@ fn package_native_web(
         && out.join("fonts/fonts.css").is_file()
         && out
             .join("assets/shell/loader/sow-splash-desktop.webp")
-            .is_file();
+            .is_file()
+        && out.join("assets/gameplay/buildings/atlas.webp").is_file()
+        && out.join("assets/gameplay/buildings/atlas.json").is_file();
 
     if !static_ready {
         if out.exists() {
@@ -2387,7 +2424,7 @@ fn package_native_web(
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
-        for name in ["avatars", "skins", "currency", "store"] {
+        for name in ["avatars", "skins", "currency", "store", "buildings"] {
             copy_dir(
                 &paths.assets_gameplay.join(name),
                 &assets.join("gameplay").join(name),
@@ -2717,6 +2754,8 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "assets/shell/loader/loader_full.webp",
         "assets/campaign/boudica.json",
         "assets/campaign/boudica.triggers.json",
+        "assets/gameplay/buildings/atlas.webp",
+        "assets/gameplay/buildings/atlas.json",
         "maps/catalog.bin",
         "maps/world/map.bin.br",
     ] {
@@ -2748,6 +2787,8 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "window.SOW_PORTAL = \"jest\"",
         "window.SOW_MAPS_URL = \"./maps\"",
         "window.SOW_ASSETS_URL = \"./assets\"",
+        "window.SOW_BUILDING_ART =",
+        "gameplay/buildings/atlas.webp",
         "window.SOW_DISABLE_CHAT = true",
         "main_menu.jest.js",
         "window.JestSDK",
@@ -3018,6 +3059,8 @@ fn local_watch_roots(paths: &Paths) -> Vec<PathBuf> {
         paths.root.join("sow-i18n"),
         paths.root.join("sow-net"),
         paths.root.join("sow-render"),
+        paths.root.join("sow-tools/src"),
+        paths.root.join("sow-tools/assets/buildings"),
         paths.root.join("sow-dist"),
         paths.root.join("sow-web"),
         paths.root.join("assets"),
@@ -3083,6 +3126,12 @@ fn local_source_snapshot(paths: &Paths) -> Result<Vec<LocalFileStamp>> {
 }
 
 fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
+    if path.starts_with(paths.root.join("sow-tools/assets/buildings")) {
+        return path.extension().and_then(|extension| extension.to_str()) == Some("png");
+    }
+    if path.starts_with(paths.root.join("sow-tools/src")) {
+        return path.extension().and_then(|extension| extension.to_str()) == Some("rs");
+    }
     let Ok(relative) = path.strip_prefix(&paths.root) else {
         return false;
     };
@@ -3739,8 +3788,6 @@ mod tests {
             "fonts/noto-sans-arabic-regular.ttf",
             "fonts/noto-sans-cjk-regular.ttc",
             "wou-auth.js",
-            "how-to-play/index.html",
-            "leaders/index.html",
             "auth/callback/index.html",
             "8d227b8f9e6140d39e3381a1829e1db3.txt",
             "privacy/index.html",
@@ -3752,6 +3799,8 @@ mod tests {
                 "Required site source file missing: {required}"
             );
         }
+        assert!(!site.join("leaders/index.html").exists());
+        assert!(!site.join("how-to-play/index.html").exists());
         for required in [
             "index.html.template",
             "main_menu.css",
@@ -3964,34 +4013,6 @@ mod tests {
     }
 
     #[test]
-    fn test_leader_compendium_contains_all_twelve_leaders() -> Result<()> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .canonicalize()?;
-        let leaders_html = fs::read_to_string(root.join("sow-web/site/leaders/index.html"))?;
-        for leader_id in [
-            "caesar",
-            "cleopatra",
-            "ragnar",
-            "suntzu",
-            "alexander",
-            "genghiskhan",
-            "richard",
-            "vercingetorix",
-            "boudica",
-            "ladysixsky",
-            "leonidas",
-            "napoleon",
-        ] {
-            assert!(
-                leaders_html.contains(&format!("id=\"{leader_id}\"")),
-                "leaders/index.html missing section for leader id: {leader_id}"
-            );
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_index_html_prerenders_all_twelve_leaders() -> Result<()> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -4016,19 +4037,6 @@ mod tests {
                 "index.html missing prerendered card for leader id: {leader_id}"
             );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn test_marketing_mechanics_match_engine_terms() -> Result<()> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .canonicalize()?;
-        let leaders_html = fs::read_to_string(root.join("sow-web/site/leaders/index.html"))?;
-        let how_to_play = fs::read_to_string(root.join("sow-web/site/how-to-play/index.html"))?;
-        assert!(leaders_html.contains("Armory modules grant +50% max troop capacity."));
-        assert!(!leaders_html.contains("Armory / Bunker districts"));
-        assert!(!how_to_play.contains("raise garrison limits"));
         Ok(())
     }
 
@@ -4087,6 +4095,11 @@ mod tests {
         assert!(
             conf.contains("return 301 https://shadowsofwar.io$request_uri;"),
             "Nginx missing 301 redirect to canonical root"
+        );
+        assert!(
+            conf.contains("location ~ ^/(leaders|how-to-play)/?$")
+                && conf.contains("return 301 https://shadowsofwar.io/;"),
+            "Nginx must permanently redirect retired pages to the landing"
         );
         let security =
             fs::read_to_string(root.join("sow-dist/deploy/freebsd/conf.d/00-00-security.conf"))?;

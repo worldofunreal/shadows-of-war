@@ -40,6 +40,6 @@ pub use profile::{
     PublicProfileView, PublicRatingView, PublicVictoryLeaderboardEntry, SeasonRating, SeasonRecord,
 };
 pub use tribes::{
-    EMPIRE_EMOJIS, FALLBACK_TRIBES, HISTORICAL_CIVILIZATIONS, TRIBE_ANIMALS, animal_for_id,
-    animal_for_name, empire_emoji_for_id, empire_emoji_for_name,
+    EMPIRE_EMOJIS, TRIBE_ANIMALS, animal_for_id, animal_for_name, empire_emoji_for_id,
+    empire_emoji_for_name, fallback_nations, fallback_tribes,
 };

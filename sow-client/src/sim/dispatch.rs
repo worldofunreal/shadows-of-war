@@ -10,6 +10,7 @@ impl SowApp {
                 players,
                 map_spawns,
                 geo_bounds,
+                map_rosters,
                 num_land_tiles,
             } => self.handle_sim_init(super::init::SimInitOpts {
                 config,
@@ -18,6 +19,7 @@ impl SowApp {
                 players,
                 map_spawns,
                 geo_bounds,
+                map_rosters,
                 num_land_tiles,
             }),
             sow_core::protocol::SimCommand::Turn(turn) => self.handle_sim_turn(turn),

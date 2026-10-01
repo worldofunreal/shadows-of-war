@@ -3,9 +3,11 @@ use std::error::Error;
 use std::path::PathBuf;
 
 mod emoji_atlas;
+mod building_atlas;
 mod exporter;
 mod image_map;
 mod map_audit;
+mod map_roster;
 mod map_source_import;
 use exporter::ExportMapCtx;
 use sow_map::osm_overpass as overpass;
@@ -45,9 +47,15 @@ enum Commands {
     /// Audit map bins and water topology without writing files.
     #[command(name = "map-audit")]
     MapAudit(MapAuditArgs),
+    /// Update an existing map.bin roster from the local editor's stdin payload.
+    #[command(name = "save-map-rosters")]
+    SaveMapRosters(SaveMapRostersArgs),
     /// Pack pixel emoji atlas + generated manifest (pixel set + moji CDN fallback).
     #[command(name = "pack-emoji-atlas")]
     PackEmojiAtlas(PackEmojiAtlasArgs),
+    /// Pack supplied building art into the pixelated WebP atlas used by Rust and the HUD.
+    #[command(name = "pack-building-atlas")]
+    PackBuildingAtlas(PackBuildingAtlasArgs),
     /// Stamp geographic bounds (SOWM v2) into existing map.bin files.
     #[command(name = "stamp-geo")]
     StampGeo(StampGeoArgs),
@@ -90,6 +98,16 @@ struct PackEmojiAtlasArgs {
     out_atlas: PathBuf,
     #[arg(long, default_value = "sow-data/src/emoji/manifest.rs")]
     out_manifest: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+struct PackBuildingAtlasArgs {
+    #[arg(long, default_value = "sow-tools/assets/buildings")]
+    source_root: PathBuf,
+    #[arg(long, default_value = "assets/gameplay/buildings")]
+    asset_root: PathBuf,
+    #[arg(long, default_value = "sow-render/src/text/building_atlas.rs")]
+    rust_manifest: PathBuf,
 }
 
 /// Generate a map from a pre-rendered world-map image (no network calls).
@@ -137,6 +155,14 @@ struct MapAuditArgs {
 
 #[derive(Parser, Debug)]
 struct RefreshCatalogArgs {
+    #[arg(long, default_value = "assets/maps")]
+    maps_root: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+struct SaveMapRostersArgs {
+    #[arg(long)]
+    map: String,
     #[arg(long, default_value = "assets/maps")]
     maps_root: PathBuf,
 }
@@ -206,6 +232,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             map: args.map,
             json: args.json,
         }),
+        Some(Commands::SaveMapRosters(args)) => map_roster::run(map_roster::SaveMapRostersArgs {
+            map: args.map,
+            maps_root: args.maps_root,
+        }),
         Some(Commands::StampGeo(args)) => stamp_geo::run(stamp_geo::StampGeoArgs {
             maps_root: args.maps_root,
             map: args.map,
@@ -228,6 +258,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Ok(Err(e)) => Err(e.to_string().into()),
                 Err(_) => Err("pack-emoji-atlas thread panicked".into()),
             }
+        }
+        Some(Commands::PackBuildingAtlas(args)) => {
+            let repo_root = std::env::current_dir()?;
+            building_atlas::pack(building_atlas::PackBuildingAtlasArgs {
+                source_root: repo_root.join(args.source_root),
+                asset_root: repo_root.join(args.asset_root),
+                rust_manifest: repo_root.join(args.rust_manifest),
+            })
+            .map_err(|error| error.to_string().into())
         }
         None => {
             let args = cli.generate;

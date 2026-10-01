@@ -1,5 +1,39 @@
 use crate::engine::SowEngine;
 
+fn sample_map_roster(
+    preset: Option<&crate::map_file::MapRosterPreset>,
+    role: crate::map_file::MapRosterRole,
+    map: &crate::map::GameMap,
+    count: usize,
+    rng: &mut wyrand::WyRand,
+) -> Vec<crate::map_file::MapRosterEntry> {
+    let Some(preset) = preset else {
+        return Vec::new();
+    };
+    let mut candidates: Vec<usize> = preset
+        .entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            if !map.is_valid_coord(entry.x as i32, entry.y as i32) {
+                return None;
+            }
+            let tile = map.ref_id(entry.x, entry.y);
+            (entry.role == role
+                && crate::geo_entities::by_id(&entry.entity_id).is_some()
+                && map.terrain[tile].is_land()
+                && map.owner_id(entry.x, entry.y) == 0)
+                .then_some(index)
+        })
+        .collect();
+    let mut selected = Vec::with_capacity(count.min(candidates.len()));
+    for _ in 0..count.min(candidates.len()) {
+        let index = (rng.rand() as usize) % candidates.len();
+        selected.push(preset.entries[candidates.swap_remove(index)].clone());
+    }
+    selected
+}
+
 pub struct HumanSpawn {
     pub player_id: u16,
     pub name: String,
@@ -36,37 +70,85 @@ impl SowEngine {
         let mut used_names = std::collections::HashSet::new();
 
         let map_spawns_snapshot: Vec<crate::map_file::MapSpawn> = self.state.map_spawns.clone();
+        let active_roster = config
+            .map_roster_preset
+            .as_deref()
+            .and_then(|id| self.state.map_rosters.iter().find(|preset| preset.id == id))
+            .cloned();
+        if config.map_roster_preset.is_some() && active_roster.is_none() {
+            log::error!(
+                "spawn_ai: selected map roster {:?} is missing from map '{}'",
+                config.map_roster_preset,
+                config.map_name
+            );
+        }
+        // Isolate roster sampling from the existing spawn RNG so adding a map
+        // roster cannot perturb legacy fallback placements.
+        let mut roster_rng = WyRand::new(self.state.seed ^ 0x534f_5752_4f53_5445);
+        let selected_nations = sample_map_roster(
+            active_roster.as_ref(),
+            crate::map_file::MapRosterRole::Nation,
+            &self.state.map,
+            nation_count as usize,
+            &mut roster_rng,
+        );
+        let selected_tribes = sample_map_roster(
+            active_roster.as_ref(),
+            crate::map_file::MapRosterRole::Tribe,
+            &self.state.map,
+            tribe_count as usize,
+            &mut roster_rng,
+        );
+        let linked_anchors: std::collections::HashSet<u16> = active_roster
+            .iter()
+            .flat_map(|preset| preset.entries.iter())
+            .filter_map(|entry| entry.legacy_anchor)
+            .collect();
+        let mut legacy_anchor_cursor = 0usize;
 
         // Prepare the fallback historical civilizations pool for extra nations.
-        let extra_nations_pool = crate::tribes::HISTORICAL_CIVILIZATIONS;
+        let extra_nations_pool = crate::geo_entities::fallback_nations();
         let mut extra_nations_indices: Vec<usize> = (0..extra_nations_pool.len()).collect();
+        let additional_nations_pool: Vec<_> = crate::geo_entities::all()
+            .filter(|entity| {
+                entity.kind != crate::geo_entities::EntityKind::Tribe
+                    && entity.kind != crate::geo_entities::EntityKind::StateRegion
+                    && entity.fallback_nation_order.is_none()
+            })
+            .collect();
+        let mut additional_nations_indices: Vec<usize> =
+            (0..additional_nations_pool.len()).collect();
 
         // Prepare fallback tribes in case extra nations run out
-        let fallback_nations_pool = crate::tribes::FALLBACK_TRIBES;
+        let fallback_nations_pool = crate::geo_entities::fallback_tribes();
         let mut fallback_nations_indices: Vec<usize> = (0..fallback_nations_pool.len()).collect();
 
-        // Geo-database candidates projected into this map's bounds. Empty when
-        // the map carries no geography (fictional maps) → behavior unchanged.
-        struct GeoCand {
-            name: &'static str,
-            x: u32,
-            y: u32,
+        struct EntityCand {
+            entity: &'static crate::geo_entities::GeoEntity,
+            position: Option<(u32, u32)>,
         }
-        let mut geo_nations: Vec<GeoCand> = Vec::new();
-        let mut geo_tribes: Vec<&'static str> = Vec::new();
+        let mut geo_nations: Vec<EntityCand> = Vec::new();
+        let mut geo_tribes: Vec<EntityCand> = Vec::new();
         if let Some(bounds) = self.state.geo_bounds {
             let (map_w, map_h) = (self.state.map.width, self.state.map.height);
             for entity in crate::geo_entities::all() {
-                if let Some((x, y)) =
-                    bounds.project(entity.lat as f64, entity.lon as f64, map_w, map_h)
-                {
+                if entity.kind == crate::geo_entities::EntityKind::StateRegion {
+                    continue;
+                }
+                if let Some((lat, lon)) = entity.lat.zip(entity.lon) {
+                    let Some(position) = bounds.project(lat as f64, lon as f64, map_w, map_h)
+                    else {
+                        continue;
+                    };
                     if entity.kind == crate::geo_entities::EntityKind::Tribe {
-                        geo_tribes.push(entity.name);
+                        geo_tribes.push(EntityCand {
+                            entity,
+                            position: Some(position),
+                        });
                     } else {
-                        geo_nations.push(GeoCand {
-                            name: entity.name,
-                            x,
-                            y,
+                        geo_nations.push(EntityCand {
+                            entity,
+                            position: Some(position),
                         });
                     }
                 }
@@ -76,6 +158,24 @@ impl SowEngine {
                 geo_nations.len(),
                 geo_tribes.len()
             );
+        } else {
+            let map_key = crate::maps::map_key(&self.state.config.map_name);
+            for entity in crate::geo_entities::all() {
+                if entity.kind == crate::geo_entities::EntityKind::StateRegion {
+                    continue;
+                }
+                if entity.maps.iter().any(|eligible| eligible == &map_key) {
+                    let candidate = EntityCand {
+                        entity,
+                        position: None,
+                    };
+                    if entity.kind == crate::geo_entities::EntityKind::Tribe {
+                        geo_tribes.push(candidate);
+                    } else {
+                        geo_nations.push(candidate);
+                    }
+                }
+            }
         }
         let mut geo_nation_indices: Vec<usize> = (0..geo_nations.len()).collect();
         let mut geo_tribe_indices: Vec<usize> = (0..geo_tribes.len()).collect();
@@ -86,11 +186,40 @@ impl SowEngine {
                 break;
             };
 
-            let anchored = map_spawns_snapshot.get(i as usize);
+            let roster_entry = selected_nations.get(i as usize);
+            let anchored_index = if active_roster.is_none() {
+                Some(i as usize)
+            } else if roster_entry.is_none() {
+                let result = (legacy_anchor_cursor..map_spawns_snapshot.len()).find(|index| {
+                    legacy_anchor_cursor = index + 1;
+                    !linked_anchors.contains(&(*index as u16))
+                        && !used_names.contains(&map_spawns_snapshot[*index].name)
+                });
+                result
+            } else {
+                None
+            };
+            let anchored = anchored_index.and_then(|index| map_spawns_snapshot.get(index));
             let mut spawn_point = None;
             let mut name = String::new();
+            let mut avatar = None;
 
-            if let Some(spawn) = anchored {
+            if let Some(entry) = roster_entry {
+                if let Some(entity) = crate::geo_entities::by_id(&entry.entity_id) {
+                    name = entity.name.clone();
+                    avatar = entity.avatar.clone();
+                    if self
+                        .state
+                        .map
+                        .is_valid_coord(entry.x as i32, entry.y as i32)
+                        && self.state.map.owner_id(entry.x, entry.y) == 0
+                        && self.state.map.terrain[self.state.map.ref_id(entry.x, entry.y)].is_land()
+                    {
+                        spawn_point = Some((entry.x, entry.y));
+                    }
+                    used_names.insert(name.clone());
+                }
+            } else if let Some(spawn) = anchored {
                 let nx = spawn.x;
                 let ny = spawn.y;
                 if self.state.map.is_valid_coord(nx as i32, ny as i32)
@@ -100,6 +229,8 @@ impl SowEngine {
                     spawn_point = Some((nx, ny));
                 }
                 name = spawn.name.clone();
+                avatar =
+                    crate::geo_entities::by_name(&name).and_then(|entity| entity.avatar.clone());
                 used_names.insert(name.clone());
             } else {
                 let mut found_name = false;
@@ -110,12 +241,15 @@ impl SowEngine {
                     let idx = (rng.rand() as usize) % geo_nation_indices.len();
                     let cand = &geo_nations[geo_nation_indices[idx]];
                     geo_nation_indices.swap_remove(idx);
-                    if used_names.contains(cand.name) {
+                    if used_names.contains(&cand.entity.name) {
                         continue;
                     }
-                    name = cand.name.to_string();
+                    name = cand.entity.name.clone();
                     used_names.insert(name.clone());
-                    spawn_point = self.nearest_free_land(cand.x, cand.y);
+                    avatar = cand.entity.avatar.clone();
+                    spawn_point = cand
+                        .position
+                        .and_then(|(x, y)| self.nearest_free_land(x, y));
                     found_name = true;
                 }
 
@@ -124,9 +258,11 @@ impl SowEngine {
                 while !found_name && attempts < 100 && !extra_nations_indices.is_empty() {
                     let idx = (rng.rand() as usize) % extra_nations_indices.len();
                     let pool_idx = extra_nations_indices[idx];
-                    let potential_name = extra_nations_pool[pool_idx].to_string();
+                    let potential_entity = extra_nations_pool[pool_idx];
+                    let potential_name = potential_entity.name.clone();
                     if !used_names.contains(&potential_name) {
                         name = potential_name;
+                        avatar = potential_entity.avatar.clone();
                         used_names.insert(name.clone());
                         extra_nations_indices.swap_remove(idx);
                         found_name = true;
@@ -135,6 +271,22 @@ impl SowEngine {
                         extra_nations_indices.swap_remove(idx);
                     }
                     attempts += 1;
+                }
+
+                // Keep campaign and other catalog nations available after the
+                // original historical fallback pool, without changing its order.
+                while !found_name
+                    && extra_nations_indices.is_empty()
+                    && !additional_nations_indices.is_empty()
+                {
+                    let idx = (rng.rand() as usize) % additional_nations_indices.len();
+                    let pool_idx = additional_nations_indices.swap_remove(idx);
+                    let entity = additional_nations_pool[pool_idx];
+                    if used_names.insert(entity.name.clone()) {
+                        name = entity.name.clone();
+                        avatar = entity.avatar.clone();
+                        found_name = true;
+                    }
                 }
 
                 if !found_name {
@@ -146,7 +298,8 @@ impl SowEngine {
                     {
                         let idx = (rng.rand() as usize) % fallback_nations_indices.len();
                         let pool_idx = fallback_nations_indices[idx];
-                        let raw_tribe_name = fallback_nations_pool[pool_idx];
+                        let raw_entity = fallback_nations_pool[pool_idx];
+                        let raw_tribe_name = raw_entity.name.as_str();
 
                         let name_style = (rng.rand() as usize) % 9;
                         let formatted_name = match name_style {
@@ -165,6 +318,7 @@ impl SowEngine {
                             && !used_names.contains(raw_tribe_name)
                         {
                             name = formatted_name;
+                            avatar = raw_entity.avatar.clone();
                             used_names.insert(name.clone());
                             used_names.insert(raw_tribe_name.to_string());
                             fallback_nations_indices.swap_remove(idx);
@@ -208,18 +362,26 @@ impl SowEngine {
                 let mut player = Player::new_nation(bot_id, name, color, &config);
                 player.team = team;
                 self.state.spawn_player(player, sx, sy);
+                if let Some(avatar) = avatar {
+                    self.campaign_avatars.insert(bot_id, avatar);
+                }
                 spawned_nations += 1;
             }
         }
 
-        // Spawn tribes after nations.
-        // Tribes use historical/geo names for flavor, but spawn dynamically
-        // across all available land tiles with distance separation (OpenFront-style)
-        // rather than clustering on historical centroids.
-        let fallback_pool = crate::tribes::FALLBACK_TRIBES;
+        // Spawn tribes after nations. Geographic entries use their projected
+        // homeland tile; the existing random placement remains the fallback.
+        let fallback_pool = crate::geo_entities::fallback_tribes();
         let mut fallback_indices: Vec<usize> = (0..fallback_pool.len()).collect();
+        let additional_tribes_pool: Vec<_> = crate::geo_entities::all()
+            .filter(|entity| {
+                entity.kind == crate::geo_entities::EntityKind::Tribe
+                    && entity.fallback_tribe_order.is_none()
+            })
+            .collect();
+        let mut additional_tribes_indices: Vec<usize> = (0..additional_tribes_pool.len()).collect();
 
-        for _ in 0..tribe_count {
+        for tribe_index in 0..tribe_count {
             let Some(bot_id) = self.state.next_free_player_id() else {
                 log::error!("spawn_ai: player ID space exhausted while spawning tribes");
                 break;
@@ -228,29 +390,66 @@ impl SowEngine {
             let mut name = String::new();
             let mut found_name = false;
             let mut attempts = 0;
+            let mut avatar = None;
+            let mut preferred_spawn = None;
+
+            if let Some(entry) = selected_tribes.get(tribe_index as usize) {
+                if let Some(entity) = crate::geo_entities::by_id(&entry.entity_id) {
+                    name = entity.name.clone();
+                    avatar = entity.avatar.clone();
+                    if self.state.map.owner_id(entry.x, entry.y) == 0
+                        && self.state.map.terrain[self.state.map.ref_id(entry.x, entry.y)].is_land()
+                    {
+                        preferred_spawn = Some((entry.x, entry.y));
+                    }
+                    used_names.insert(name.clone());
+                    found_name = true;
+                }
+            }
 
             // Geo tier: historical tribe names inside the map bounds.
             while !found_name && !geo_tribe_indices.is_empty() {
                 let idx = (rng.rand() as usize) % geo_tribe_indices.len();
-                let cand_name = geo_tribes[geo_tribe_indices[idx]];
+                let candidate = &geo_tribes[geo_tribe_indices[idx]];
                 geo_tribe_indices.swap_remove(idx);
-                if used_names.contains(cand_name) {
+                if used_names.contains(&candidate.entity.name) {
                     continue;
                 }
-                name = cand_name.to_string();
+                name = candidate.entity.name.clone();
+                avatar = candidate.entity.avatar.clone();
+                preferred_spawn = candidate
+                    .position
+                    .and_then(|(x, y)| self.nearest_free_land(x, y));
                 used_names.insert(name.clone());
                 found_name = true;
             }
 
             while !found_name && attempts < 100 {
                 if fallback_indices.is_empty() {
-                    fallback_indices = (0..fallback_pool.len()).collect();
+                    while !found_name && !additional_tribes_indices.is_empty() {
+                        let idx = (rng.rand() as usize) % additional_tribes_indices.len();
+                        let pool_idx = additional_tribes_indices.swap_remove(idx);
+                        let entity = additional_tribes_pool[pool_idx];
+                        if used_names.insert(entity.name.clone()) {
+                            name = entity.name.clone();
+                            avatar = entity.avatar.clone();
+                            found_name = true;
+                        }
+                    }
+                    if !found_name {
+                        fallback_indices = (0..fallback_pool.len()).collect();
+                    }
+                    if found_name {
+                        break;
+                    }
                 }
                 let idx = (rng.rand() as usize) % fallback_indices.len();
                 let pool_idx = fallback_indices[idx];
-                let potential_name = fallback_pool[pool_idx].to_string();
+                let potential_entity = fallback_pool[pool_idx];
+                let potential_name = potential_entity.name.clone();
                 if !used_names.contains(&potential_name) {
                     name = potential_name;
+                    avatar = potential_entity.avatar.clone();
                     used_names.insert(name.clone());
                     fallback_indices.swap_remove(idx);
                     found_name = true;
@@ -264,12 +463,15 @@ impl SowEngine {
                 name = format!("Tribe {}", bot_id);
             }
 
-            let spawn_point = self.find_valid_spawn(&mut rng);
+            let spawn_point = preferred_spawn.or_else(|| self.find_valid_spawn(&mut rng));
 
             if let Some((sx, sy)) = spawn_point {
                 let color = crate::player::bot_territory_color(self.state.seed, bot_id);
                 let player = Player::new_bot(bot_id, name, color, &config);
                 self.state.spawn_player(player, sx, sy);
+                if let Some(avatar) = avatar {
+                    self.campaign_avatars.insert(bot_id, avatar);
+                }
                 spawned_tribes += 1;
             }
         }
@@ -300,6 +502,7 @@ impl SowEngine {
         // Use a different seed offset for human to avoid clashing exactly with bots
         let mut rng = WyRand::new(self.state.seed.wrapping_add(player_id as u64));
         let config = self.state.config.clone();
+        let color = config.campaign_player_color.unwrap_or(color);
 
         // Ghost (is_ai_controlled) Humans are TOP of the food chain — the
         // novice's guide. Single top band (above nations, far above tribes);
@@ -465,6 +668,12 @@ impl SowEngine {
             return;
         }
         let config = self.state.config.clone();
+        let human_id = self
+            .state
+            .players
+            .iter()
+            .find(|player| player.player_type == crate::player::PlayerType::Human)
+            .map(|player| player.id);
         let mut placed = 0;
         for s in &spawns {
             let Some(bot_id) = self.state.next_free_player_id() else {
@@ -508,6 +717,25 @@ impl SowEngine {
             }
             if let Some(group) = &s.campaign_alliance_group {
                 self.campaign_alliance_groups.insert(bot_id, group.clone());
+            }
+            if let Some(relation) = s.campaign_relation {
+                self.campaign_relations.insert(bot_id, relation);
+                self.campaign_hostilities
+                    .insert(bot_id, s.campaign_hostility.unwrap_or_default());
+                self.campaign_betrayal
+                    .insert(bot_id, s.campaign_betrayal.unwrap_or_default());
+                if relation == crate::protocol::CampaignRelation::Allied
+                    && let Some(human_id) = human_id
+                {
+                    if let Some(human) = self.state.player_mut(human_id) {
+                        human.alliances.push(bot_id);
+                    }
+                    if let Some(ally) = self.state.player_mut(bot_id) {
+                        ally.alliances.push(human_id);
+                    }
+                    self.campaign_alliance_started_tick
+                        .insert(bot_id, self.current_tick_u32());
+                }
             }
             placed += 1;
             log::info!(

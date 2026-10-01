@@ -8,35 +8,55 @@
   "factions": [
     {
       "name": "Venta Icenorum",
-      "x": 719,
-      "y": 179,
+      "x": 587,
+      "y": 40,
       "role": "kin",
       "iq": 100,
-      "support_interval_seconds": 30
+      "avatar": "venta_icenorum",
+      "support_interval_seconds": 30,
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Snettisham",
-      "x": 667,
-      "y": 65,
+      "x": 721,
+      "y": 106,
       "role": "kin",
       "iq": 100,
-      "support_interval_seconds": 15
+      "avatar": "snettisham",
+      "support_interval_seconds": 15,
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Thetford",
-      "x": 690,
-      "y": 190,
+      "x": 626,
+      "y": 93,
       "role": "kin",
       "iq": 100,
-      "support_interval_seconds": 20
+      "avatar": "thetford",
+      "support_interval_seconds": 20,
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Stonea",
-      "x": 697,
-      "y": 95,
+      "x": 723,
+      "y": 54,
       "role": "kin",
       "iq": 100,
-      "support_interval_seconds": 30
+      "avatar": "stonea",
+      "support_interval_seconds": 30,
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Trinovantes",
@@ -44,8 +64,12 @@
       "y": 250,
       "role": "neutral",
       "iq": 85,
+      "avatar": "trinovantes",
       "support_interval_seconds": 20,
-      "alliance_group": "trinovantes"
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Trinovantian Farms",
@@ -53,664 +77,1134 @@
       "y": 260,
       "role": "neutral",
       "iq": 100,
+      "avatar": "trinovantian_farms",
       "support_interval_seconds": 30,
-      "alliance_group": "trinovantes"
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Iceni Coast",
-      "x": 726,
-      "y": 73,
+      "x": 741,
+      "y": 17,
       "role": "kin",
       "iq": 100,
-      "support_interval_seconds": 20
+      "avatar": "iceni_coast",
+      "support_interval_seconds": 20,
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Colonia Veterans",
       "x": 720,
       "y": 220,
       "role": "vassal",
+      "iq": 100,
+      "avatar": "colonia_veterans",
       "civ": "Roman Empire",
-      "iq": 100
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "The Iceni Despoilers",
       "x": 706,
       "y": 64,
       "role": "vassal",
+      "iq": 100,
+      "avatar": "the_iceni_despoilers",
       "civ": "Roman Empire",
-      "iq": 100
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Roman Supply Depot",
       "x": 690,
       "y": 220,
       "role": "vassal",
+      "iq": 100,
+      "avatar": "roman_supply_depot",
       "civ": "Roman Empire",
-      "iq": 100
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Tax Collectors",
       "x": 670,
       "y": 240,
       "role": "vassal",
+      "iq": 100,
+      "avatar": "tax_collectors",
       "civ": "Roman Empire",
-      "iq": 100
+      "relation": "enemy",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Camulodunum",
       "x": 730,
       "y": 280,
       "role": "boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman_praetorian",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Londinium",
       "x": 620,
       "y": 320,
       "role": "boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Verulamium",
       "x": 580,
       "y": 280,
       "role": "boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Legio IX Hispana",
       "x": 580,
       "y": 150,
       "role": "big_boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman_legionary",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Legio XIV Gemina",
       "x": 200,
       "y": 130,
       "role": "big_boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "tax_collectors",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Legio XX Valeria",
       "x": 210,
       "y": 140,
       "role": "big_boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman_praetorian",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Legio II Augusta",
       "x": 280,
       "y": 440,
       "role": "big_boss",
-      "iq": 100
+      "iq": 100,
+      "avatar": "colonia_veterans",
+      "relation": "enemy",
+      "hostility": "aggressive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Catuvellauni",
       "x": 560,
       "y": 260,
       "role": "vassal",
-      "iq": 60
+      "iq": 60,
+      "avatar": "catuvellauni",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Catuvellauni North",
       "x": 560,
       "y": 240,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "catuvellauni_north",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Cantiaci",
       "x": 700,
       "y": 380,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "cantiaci",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Durovernum",
       "x": 720,
       "y": 390,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "cantiaci_chieftain",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Regnenses",
       "x": 600,
       "y": 400,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "regnenses",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Noviomagus",
       "x": 580,
       "y": 410,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "regnenses_male",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Atrebates",
       "x": 500,
       "y": 380,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "atrebates",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Calleva",
       "x": 520,
       "y": 370,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "atrebates",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Lindum",
       "x": 560,
       "y": 140,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Deva",
       "x": 349,
       "y": 129,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman_legionary",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Viroconium",
       "x": 380,
       "y": 180,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "roman",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Isca Dumnoniorum",
       "x": 260,
       "y": 430,
       "role": "vassal",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dumnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Brigantes 1",
       "x": 391,
       "y": 56,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "brigantes",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Brigantes 2",
       "x": 407,
       "y": 41,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "brigantes_queen",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Brigantes 3",
       "x": 411,
       "y": 70,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "brigantes_mohawk",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Brigantes 4",
       "x": 382,
       "y": 59,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "brigantes",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Brigantes 5",
       "x": 386,
       "y": 51,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "brigantes_queen",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Brigantes 6",
       "x": 412,
       "y": 43,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "brigantes_mohawk",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Parisi 1",
       "x": 520,
       "y": 73,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "parisi",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Parisi 2",
       "x": 529,
       "y": 88,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "parisi_mask",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Parisi 3",
       "x": 532,
       "y": 64,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "parisi",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Corieltauvi 1",
       "x": 501,
       "y": 193,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "corieltauvi",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Corieltauvi 2",
       "x": 515,
       "y": 174,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "corieltauvi_chief",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Corieltauvi 3",
       "x": 522,
       "y": 168,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "corieltauvi",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Corieltauvi 4",
       "x": 504,
       "y": 196,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "corieltauvi_chief",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Cornovii 1",
       "x": 413,
       "y": 176,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "cornovii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Cornovii 2",
       "x": 399,
       "y": 161,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "cornovii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Cornovii 3",
       "x": 384,
       "y": 180,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "cornovii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Cornovii 4",
       "x": 415,
       "y": 171,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "cornovii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Dobunni 1",
       "x": 435,
       "y": 285,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dobunni",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Dobunni 2",
       "x": 409,
       "y": 290,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dobunni_warrior",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Dobunni 3",
       "x": 400,
       "y": 263,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dobunni",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Dobunni 4",
       "x": 423,
       "y": 288,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dobunni_warrior",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Dobunni 5",
       "x": 420,
       "y": 280,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dobunni",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Durotriges 1",
       "x": 362,
       "y": 439,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "durotriges",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Durotriges 2",
       "x": 343,
       "y": 421,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "durotriges",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Durotriges 3",
       "x": 342,
       "y": 403,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "durotriges",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Durotriges 4",
       "x": 338,
       "y": 401,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "durotriges",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Dumnonii 1",
       "x": 166,
       "y": 451,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dumnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Dumnonii 2",
       "x": 136,
       "y": 459,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dumnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Dumnonii 3",
       "x": 152,
       "y": 452,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dumnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Dumnonii 4",
       "x": 163,
       "y": 436,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dumnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Dumnonii 5",
       "x": 138,
       "y": 448,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "dumnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Silures 1",
       "x": 293,
       "y": 299,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "silures",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Silures 2",
       "x": 260,
       "y": 278,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "silures",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Silures 3",
       "x": 297,
       "y": 299,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "silures",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Silures 4",
       "x": 271,
       "y": 269,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "silures",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Silures 5",
       "x": 275,
       "y": 264,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "silures",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Demetae 1",
       "x": 157,
       "y": 276,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "demetae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Demetae 2",
       "x": 144,
       "y": 297,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "demetae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Demetae 3",
       "x": 137,
       "y": 299,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "demetae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Demetae 4",
       "x": 134,
       "y": 270,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "demetae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Ordovices 1",
       "x": 245,
       "y": 195,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "ordovices",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Ordovices 2",
       "x": 256,
       "y": 160,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "ordovices",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Ordovices 3",
       "x": 260,
       "y": 189,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "ordovices",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Ordovices 4",
       "x": 241,
       "y": 184,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "ordovices",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Ordovices 5",
       "x": 256,
       "y": 173,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "ordovices",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Deceangli 1",
       "x": 304,
       "y": 135,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "deceangli",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Deceangli 2",
       "x": 304,
       "y": 113,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "deceangli",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Deceangli 3",
       "x": 312,
       "y": 140,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "deceangli",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Caledonii 1",
       "x": 305,
       "y": 46,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "caledonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Caledonii 2",
       "x": 286,
       "y": 29,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "caledonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Caledonii 3",
       "x": 299,
       "y": 25,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "caledonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Caledonii 4",
       "x": 289,
       "y": 28,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "caledonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Votadini 1",
       "x": 467,
       "y": 22,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "votadini",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Votadini 2",
       "x": 441,
       "y": 28,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "votadini",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Votadini 3",
       "x": 444,
       "y": 20,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "votadini",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Votadini 4",
       "x": 460,
       "y": 14,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "votadini",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Gaulish Traders 1",
       "x": 758,
       "y": 434,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "vercingetorix",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Gaulish Traders 2",
       "x": 836,
       "y": 469,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "vercingetorix",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Gaulish Traders 3",
       "x": 836,
       "y": 469,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "vercingetorix",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Irish Raiders 1",
       "x": 85,
       "y": 179,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "damnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Irish Raiders 2",
       "x": 83,
       "y": 183,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "damnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Irish Raiders 3",
       "x": 71,
       "y": 186,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "damnonii",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Picts 1",
       "x": 341,
       "y": 4,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "selgovae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     },
     {
       "name": "Picts 2",
       "x": 336,
       "y": 3,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "selgovae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#40999e"
     },
     {
       "name": "Picts 3",
       "x": 367,
       "y": 31,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "selgovae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#b87366"
     },
     {
       "name": "Picts 4",
       "x": 353,
       "y": 37,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "selgovae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#7380b8"
     },
     {
       "name": "Belgae 1",
       "x": 458,
       "y": 386,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "belgae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#4ca572"
     },
     {
       "name": "Belgae 2",
       "x": 459,
       "y": 415,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "belgae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#a88c40"
     },
     {
       "name": "Belgae 3",
       "x": 442,
       "y": 389,
       "role": "neutral",
-      "iq": 100
+      "iq": 100,
+      "avatar": "belgae",
+      "relation": "neutral",
+      "hostility": "passive",
+      "betrayal": "never",
+      "color": "#8c59a8"
     }
-  ]
+  ],
+  "player_color": "#f0902a"
 }

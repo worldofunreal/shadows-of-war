@@ -1,6 +1,9 @@
 //! Map catalog helpers and bundled terrain bytes.
 
-pub use crate::map_file::{MapCatalog, MapCatalogEntry, MapFile, MapHeader, MapSpawn};
+pub use crate::map_file::{
+    MapCatalog, MapCatalogEntry, MapFile, MapHeader, MapRosterEntry, MapRosterMeta,
+    MapRosterPreset, MapRosterRole, MapSpawn,
+};
 
 /// Default map key when catalog is empty or name is unknown.
 pub const DEFAULT_MAP_KEY: &str = "world";

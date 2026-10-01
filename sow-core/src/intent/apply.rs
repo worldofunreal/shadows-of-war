@@ -18,31 +18,76 @@ impl SowEngine {
     }
 
     fn form_campaign_alliance(&mut self, proposer: u16, target: u16) {
+        if self.campaign_relations.get(&proposer)
+            == Some(&crate::protocol::CampaignRelation::Enemy)
+            || self.campaign_relations.get(&target)
+                == Some(&crate::protocol::CampaignRelation::Enemy)
+        {
+            return;
+        }
         let proposers = self.campaign_alliance_members(proposer);
         let targets = self.campaign_alliance_members(target);
         for proposer_id in proposers {
             for &target_id in &targets {
                 if proposer_id == target_id
-                    || !self.state.player(proposer_id).is_some_and(|player| player.alive)
-                    || !self.state.player(target_id).is_some_and(|player| player.alive)
+                    || !self
+                        .state
+                        .player(proposer_id)
+                        .is_some_and(|player| player.alive)
+                    || !self
+                        .state
+                        .player(target_id)
+                        .is_some_and(|player| player.alive)
                 {
                     continue;
                 }
+                let campaign_pair = self.campaign_relations.contains_key(&proposer_id)
+                    || self.campaign_relations.contains_key(&target_id);
                 if let Some(player) = self.state.player_mut(proposer_id) {
                     if !player.alliances.contains(&target_id) {
                         player.alliances.push(target_id);
                     }
-                    player
-                        .alliance_timers
-                        .insert(target_id, ALLIANCE_DURATION_TICKS);
+                    if campaign_pair {
+                        player.alliance_timers.remove(&target_id);
+                    } else {
+                        player.alliance_timers.insert(target_id, ALLIANCE_DURATION_TICKS);
+                    }
                 }
                 if let Some(player) = self.state.player_mut(target_id) {
                     if !player.alliances.contains(&proposer_id) {
                         player.alliances.push(proposer_id);
                     }
-                    player
-                        .alliance_timers
-                        .insert(proposer_id, ALLIANCE_DURATION_TICKS);
+                    if campaign_pair {
+                        player.alliance_timers.remove(&proposer_id);
+                    } else {
+                        player.alliance_timers.insert(proposer_id, ALLIANCE_DURATION_TICKS);
+                    }
+                }
+                if campaign_pair {
+                    if self.state.player(proposer_id).is_some_and(|player| player.is_human())
+                        && self.campaign_relations.contains_key(&target_id)
+                    {
+                        self.campaign_relations.insert(
+                            target_id,
+                            crate::protocol::CampaignRelation::Allied,
+                        );
+                    }
+                    if self.state.player(target_id).is_some_and(|player| player.is_human())
+                        && self.campaign_relations.contains_key(&proposer_id)
+                    {
+                        self.campaign_relations.insert(
+                            proposer_id,
+                            crate::protocol::CampaignRelation::Allied,
+                        );
+                    }
+                    if self.campaign_relations.contains_key(&proposer_id) {
+                        self.campaign_alliance_started_tick
+                            .insert(proposer_id, self.current_tick_u32());
+                    }
+                    if self.campaign_relations.contains_key(&target_id) {
+                        self.campaign_alliance_started_tick
+                            .insert(target_id, self.current_tick_u32());
+                    }
                 }
                 self.retreat_mutual_aggression(proposer_id, target_id);
             }
@@ -69,7 +114,103 @@ impl SowEngine {
         }
         for id in breakers.into_iter().chain(targets) {
             self.campaign_support_next_tick.remove(&id);
+            self.campaign_alliance_started_tick.remove(&id);
         }
+    }
+
+    fn campaign_players_touch(&self, human_id: u16, target_id: u16) -> bool {
+        let Some(human) = self.state.player(human_id) else {
+            return false;
+        };
+        let mut touching = false;
+        for tile in human.border_tiles.ones() {
+            let x = tile % self.state.map.width;
+            let y = tile / self.state.map.width;
+            self.state.map.for_each_neighbor(x, y, |nx, ny| {
+                if self.state.map.owner_id(nx, ny) == target_id
+                    && self.state.map.terrain[self.state.map.ref_id(nx, ny)].is_land()
+                {
+                    touching = true;
+                }
+            });
+            if touching {
+                break;
+            }
+        }
+        touching
+    }
+
+    fn resolve_campaign_diplomacy(
+        &mut self,
+        human_id: u16,
+        target_id: u16,
+        relation: crate::protocol::CampaignRelation,
+        gold_cost: f64,
+    ) {
+        if !self.campaign_relations.contains_key(&target_id)
+            || self.campaign_contact_resolved.contains(&target_id)
+            || !gold_cost.is_finite()
+            || gold_cost < 0.0
+            || gold_cost > 1_000_000.0
+            || (relation != crate::protocol::CampaignRelation::Allied && gold_cost != 0.0)
+            || self.campaign_relations.get(&target_id)
+                != Some(&crate::protocol::CampaignRelation::Neutral)
+            || !self.campaign_players_touch(human_id, target_id)
+        {
+            return;
+        }
+        let Some(human) = self.state.player(human_id) else {
+            return;
+        };
+        if human.player_type != PlayerType::Human || !human.alive || human.gold < gold_cost {
+            return;
+        }
+        if !self.state.player(target_id).is_some_and(|target| target.alive) {
+            return;
+        }
+
+        if gold_cost > 0.0 {
+            if let Some(human) = self.state.player_mut(human_id) {
+                human.gold -= gold_cost;
+            }
+            if let Some(target) = self.state.player_mut(target_id) {
+                target.gold += gold_cost;
+            }
+            self.state
+                .events
+                .push(crate::game::GameEvent::ResourceTransferred {
+                    sender_id: human_id,
+                    receiver_id: target_id,
+                    gold: gold_cost,
+                    troops: 0.0,
+                });
+        }
+
+        let allied = relation == crate::protocol::CampaignRelation::Allied;
+        if let Some(human) = self.state.player_mut(human_id) {
+            human.alliances.retain(|&id| id != target_id);
+            human.alliance_timers.remove(&target_id);
+            if allied {
+                human.alliances.push(target_id);
+            }
+        }
+        if let Some(target) = self.state.player_mut(target_id) {
+            target.alliances.retain(|&id| id != human_id);
+            target.alliance_timers.remove(&human_id);
+            if allied {
+                target.alliances.push(human_id);
+            }
+        }
+        if allied {
+            self.campaign_alliance_started_tick
+                .insert(target_id, self.current_tick_u32());
+            self.retreat_mutual_aggression(human_id, target_id);
+        } else {
+            self.campaign_support_next_tick.remove(&target_id);
+            self.campaign_alliance_started_tick.remove(&target_id);
+        }
+        self.campaign_relations.insert(target_id, relation);
+        self.campaign_contact_resolved.insert(target_id);
     }
 
     pub fn apply_intents(&mut self, intents: &[StampedIntent]) {
@@ -240,7 +381,7 @@ impl SowEngine {
                     && player.gold >= cost
                 {
                     player.gold -= cost;
-            let queue = self.port_queues.entry(port_id).or_default();
+                    let queue = self.port_queues.entry(port_id).or_default();
                     queue.push_back(crate::game::ShipProduction {
                         kind: *kind,
                         ticks_until_complete: kind.build_duration_ticks(),
@@ -319,6 +460,16 @@ impl SowEngine {
             // INK TIDE lockstep input: never reaches the SoW engine — the
             // racer sim runs on the racer clients. Opaque to SoW.
             GameplayIntent::RacerControls(_) => {}
+            GameplayIntent::ResolveCampaignDiplomacy {
+                target_player,
+                relation,
+                gold_cost,
+            } => self.resolve_campaign_diplomacy(
+                stamped.player_id,
+                *target_player,
+                *relation,
+                *gold_cost,
+            ),
             GameplayIntent::Spawn { x, y } => {
                 if let crate::game::GamePhase::Spawning { .. } = self.state.phase {
                     let x = *x;
@@ -332,7 +483,7 @@ impl SowEngine {
                         // Clear old tiles and buildings for this player
                         let w = self.state.map.width;
                         let mut to_clear = Vec::new();
-                        for (i, &owner) in self.state.map.state.iter().enumerate() {
+                        for (i, &owner) in self.state.map.owner_states().iter().enumerate() {
                             if owner == pid {
                                 to_clear.push(i as u32);
                             }
@@ -340,7 +491,15 @@ impl SowEngine {
                         for i in to_clear {
                             self.state.set_tile_owner(i % w, i / w, 0);
                         }
+                        let had_defense_post = self.buildings.iter().any(|b| {
+                            b.owner_id == pid && b.kind == crate::game::BuildingKind::Bunker
+                        });
                         self.buildings.retain(|b| b.owner_id != pid);
+                        self.building_grid.mark_dirty();
+                        if had_defense_post {
+                            self.defense_grid_dirty = true;
+                            self.render_defense_dirty = true;
+                        }
 
                         // Set new spawn
                         self.state.place_spawn(pid, x, y);
@@ -367,7 +526,12 @@ impl SowEngine {
             GameplayIntent::ProposeAlliance { target_player } => {
                 let proposer = stamped.player_id;
                 let target = *target_player;
-                if proposer != target {
+                if proposer != target
+                    && self.campaign_relations.get(&proposer)
+                        != Some(&crate::protocol::CampaignRelation::Enemy)
+                    && self.campaign_relations.get(&target)
+                        != Some(&crate::protocol::CampaignRelation::Enemy)
+                {
                     let proposer_alive = self
                         .state
                         .player(proposer)
@@ -426,6 +590,13 @@ impl SowEngine {
             GameplayIntent::AcceptAlliance { target_player } => {
                 let acceptor = stamped.player_id;
                 let target = *target_player;
+                if self.campaign_relations.get(&acceptor)
+                    == Some(&crate::protocol::CampaignRelation::Enemy)
+                    || self.campaign_relations.get(&target)
+                        == Some(&crate::protocol::CampaignRelation::Enemy)
+                {
+                    return;
+                }
                 let prop_idx = self
                     .alliances_proposed
                     .iter()
@@ -477,6 +648,27 @@ impl SowEngine {
                 }
                 self.mark_betrayal_cooldown(breaker);
                 self.break_campaign_alliance(breaker, target);
+                let human_id = self
+                    .state
+                    .players
+                    .iter()
+                    .find(|player| player.player_type == PlayerType::Human)
+                    .map(|player| player.id);
+                if human_id == Some(target) && self.campaign_relations.contains_key(&breaker) {
+                    self.campaign_relations
+                        .insert(breaker, crate::protocol::CampaignRelation::Enemy);
+                    if self.campaign_betrayal.get(&breaker)
+                        == Some(&crate::game_config::CampaignBetrayal::Opportunistic)
+                    {
+                        self.campaign_hostilities
+                            .insert(breaker, crate::game_config::CampaignHostility::Aggressive);
+                    }
+                } else if human_id == Some(breaker)
+                    && self.campaign_relations.contains_key(&target)
+                {
+                    self.campaign_relations
+                        .insert(target, crate::protocol::CampaignRelation::Enemy);
+                }
             }
             GameplayIntent::SendResources {
                 target_player,
@@ -634,7 +826,7 @@ impl SowEngine {
         troops: Option<f64>,
         route: Option<crate::warp_fleet::FleetRoute>,
     ) {
-        let owner = self.state.map.state[target_tile as usize];
+        let owner = self.state.map.owner_states()[target_tile as usize];
         let is_betrayer = self
             .state
             .player(owner)

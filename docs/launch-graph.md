@@ -68,13 +68,13 @@ official packaging and deployment path includes them.
 | Node | Evidence | State |
 |---|---|---|
 | Positioning | `sow-web/site/index.html` | Landing now says browser MMORTS and uses `Play now`. |
-| Onboarding | `sow-web/site/how-to-play/index.html` | Standalone route exists; it is not hidden under Guides. |
-| Conversion path | `sow-web/site/index.html` | `/` → `/how-to-play/` or `/play/`; current site lists the browser build as live. |
+| Onboarding | `sow-web/site/index.html` | Gameplay overview and FAQ live on the landing page. |
+| Conversion path | `sow-web/site/index.html` | `/` → `/#faq` or `/play/`; retired guide URLs redirect to `/`. |
 | Roster | `sow-web/site/app.js` | Twelve leaders are wired into the landing page and leader selector. |
 | Matchmaking | `sow-server/src/lobby.rs` | One rolling matchmaking lobby rotates through `FFA`, `Teams`, and `HumansVsNations`. |
 | Maps | `sow-server/src/map_playlist.rs` | Weighted map playlists choose maps and avoid recent repeats. |
 | Simulation | `sow-core/src/game_config.rs`, `sow-core/src/engine/` | Default mode is FFA; map-control threshold is 60%; elimination is also an end condition. |
-| Distribution | `sow-dist/src/main.rs` | The package includes the root site, `/how-to-play/`, media, and `/play/`; sitemap includes the onboarding route. |
+| Distribution | `sow-dist/src/main.rs` | The package includes the landing, media, `/play/`, and permanent redirects for retired guide URLs. |
 | External listings | `sow-web/site/index.html` | Other platform listings are explicitly not claimed as live. |
 | Browser measurement | repository search across `sow-web/` | Updated: funnel instrumentation now exists — landing page posts `/api/event` entry + Play-now CTA events (`sow-web/site/app.js`, since c1a8b6e0), and the game shell carries first-party analytics (`SOW_FIRST_PARTY_ANALYTICS`, `sow-web/shell/loader.js`). Server logs complement but are not the funnel. |
 
@@ -83,13 +83,12 @@ official packaging and deployment path includes them.
 The current local package under `dist/web/` was checked against the source
 contract:
 
-- Required webroot files exist: landing, `/play/`, `/how-to-play/`, legal
+- Required webroot files exist: landing, `/play/`, legal
   pages, `robots.txt`, `sitemap.xml`, `sow.svg`, and the packaged client pair.
-- The sitemap includes `/how-to-play/`.
+- The sitemap lists active pages, not retired guide URLs.
 - The staged landing contains the MMORTS positioning, FAQ, `Play now`, and the
   accurate “other platform listings are not live yet” statement.
-- The staged field manual is byte-identical to
-  `sow-web/site/how-to-play/index.html`.
+- `/leaders/` and `/how-to-play/` redirect permanently to the landing.
 - The staged gameplay MP4 and session screenshot were byte-identical to their
   source files.
 - HTML parsing, `cargo check -p sow-dist`, `cargo test -p sow-dist`, and
@@ -112,19 +111,16 @@ flowchart LR
     COMMUNITY[Discord + GitHub]
     ITCH[itch.io listing]
     LANDING[shadowsofwar.io]
-    GUIDE[/how-to-play/]
     GAME[/play/]
     SIGNAL[match started\nmatch completed\nreturn visit]
 
     CAPTURE --> SHORTS
     CAPTURE --> LONG
     SHORTS --> LANDING
-    LONG --> GUIDE
+    LONG --> LANDING
     COMMUNITY --> LANDING
     ITCH --> LANDING
-    LANDING --> GUIDE
     LANDING --> GAME
-    GUIDE --> GAME
     GAME --> SIGNAL
     SIGNAL --> SHORTS
 ```
@@ -137,7 +133,7 @@ flowchart LR
    deployment.
 2. Run the official `./sow p` pipeline after explicit production approval. For
    Android/Play, use the separate `./sow a` pipeline only when the AAB is ready.
-3. Verify the public root, `/how-to-play/`, `/play/`, static assets, and one
+3. Verify the public root, legacy-route redirects, `/play/`, static assets, and one
    real matchmaking entry path.
 
 **Done when:** a new player can click `Play now`, load the client, see a

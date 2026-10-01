@@ -6,6 +6,7 @@
         const doc = root.ownerDocument;
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
+        let guideWasVisible = false, guideX = null, guideY = null;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
@@ -47,7 +48,7 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { guideWasVisible = false; if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
             footer.hidden = step.type === "choice";
             const beatKey = JSON.stringify([step.id, model.state && model.state.line]);
@@ -59,7 +60,6 @@
             const modal = Boolean(model.paused);
             root.classList.toggle("is-modal", modal);
             root.classList.toggle("is-chapter", step.presentation === "chapter");
-            root.classList.toggle("is-ready", Boolean(model.ready));
             root.classList.toggle("is-reduced", reducedMotion);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
@@ -79,7 +79,7 @@
             }
             const speakerName = character.name_key ? t(character.name_key) : character.name || "";
             const copyTitle = t(line.title_key || step.title_key), copyBody = t(line.body_key || step.body_key);
-            const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key)])]);
+            const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key), Boolean(c.disabled)])]);
             if (renderKey !== key) {
                 renderKey = key;
                 conversation.scrollTop = 0;
@@ -95,6 +95,7 @@
                 model.choices.forEach(choice => {
                     const button = doc.createElement("button");
                     button.type = "button"; button.className = "sow-story__choice"; button.dataset.storyChoice = choice.id;
+                    button.disabled = Boolean(choice.disabled);
                     const mark = doc.createElement("span"); mark.className = "sow-story__choice-mark"; mark.textContent = "◇"; mark.setAttribute("aria-hidden", "true");
                     const copy = doc.createElement("span"), label = doc.createElement("strong");
                     label.textContent = t(choice.label_key); copy.appendChild(label);
@@ -131,7 +132,7 @@
             meter.max = Math.max(1, progress.target); meter.value = progress.current;
             meter.setAttribute("aria-label", t(step.title_key));
             setText(amount, Math.floor(progress.current).toLocaleString() + " / " + Math.ceil(progress.target).toLocaleString());
-            setText(find(".sow-story__objective-mark"), model.ready ? "✓" : "◇");
+            setText(find(".sow-story__objective-mark"), "◇");
             const focus = find("[data-story-focus]");
             const hasMapTarget = step.marker || (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && (step.trigger.target || Array.isArray(step.trigger.targets)));
             focus.hidden = !options.onFocus || !hasMapTarget;
@@ -142,11 +143,16 @@
                 { duration: 180, easing: "cubic-bezier(.2,.7,.2,1)" }
             );
             const anchor = context.anchor;
-            const guideVisible = !modal && !model.ready && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
+            const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
             gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
             if (guideVisible) {
                 gesture.dataset.gesture = step.guide.gesture;
-                gesture.style.left = anchor.x + "px"; gesture.style.top = anchor.y + "px";
+                const follow = guideWasVisible && !wasHidden;
+                gesture.classList.toggle("is-following", follow);
+                if (!follow || anchor.x !== guideX || anchor.y !== guideY) {
+                    gesture.style.transform = "translate3d(" + anchor.x + "px, " + anchor.y + "px, 0)";
+                }
+                guideX = anchor.x; guideY = anchor.y; guideWasVisible = true;
                 const direction = root.dir === "rtl" ? -1 : 1;
                 const localDragX = anchor.width ? Math.min(64, anchor.width * 0.35) * direction : 0;
                 gesture.style.setProperty("--guide-dx", ((anchor.toX == null ? anchor.x + localDragX : anchor.toX) - anchor.x) + "px");
@@ -157,6 +163,9 @@
                     spotlight.style.width = (anchor.width + 12) + "px";
                     spotlight.style.height = (anchor.height + 12) + "px";
                 }
+            } else {
+                gesture.classList.remove("is-following");
+                guideWasVisible = false;
             }
         }
         function click(event) {

@@ -1,4 +1,4 @@
-use sow_core::map_file::{self, MapCatalog, MapCatalogEntry};
+use sow_core::map_file::{self, MapCatalog, MapCatalogEntry, MapRosterMeta};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -95,6 +95,8 @@ pub struct MapCatalogJsonEntry {
     pub height: u32,
     pub num_land_tiles: u32,
     pub multiplayer_frequency: u32,
+    pub default_roster: Option<String>,
+    pub roster_presets: Vec<MapRosterMeta>,
     pub thumbnail: String,
 }
 
@@ -108,6 +110,8 @@ pub fn catalog_json() -> Vec<MapCatalogJsonEntry> {
             height: entry.height,
             num_land_tiles: entry.num_land_tiles,
             multiplayer_frequency: entry.multiplayer_frequency,
+            default_roster: entry.default_roster.clone(),
+            roster_presets: entry.roster_presets.clone(),
             thumbnail: format!("/maps/{}/thumbnail.webp", entry.key),
         })
         .collect()

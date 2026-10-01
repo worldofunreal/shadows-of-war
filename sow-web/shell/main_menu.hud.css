@@ -467,11 +467,18 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 .sow-hud__building-icon {
-    display: block;
+    display: grid;
+    place-items: center;
     width: 36px;
     height: 36px;
-    object-fit: contain;
+    font-size: 30px;
+    line-height: 1;
     pointer-events: none;
+}
+
+.sow-hud__building-icon.is-pixel-art {
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
 }
 
 .sow-hud__action-icon {
@@ -500,6 +507,13 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     height: 34px;
     object-fit: contain;
     pointer-events: none;
+}
+
+.sow-hud__map-action-icon.is-emoji {
+    display: grid;
+    place-items: center;
+    font-size: 30px;
+    line-height: 1;
 }
 
 .sow-hud__building-btn:hover:not(:disabled),
@@ -1055,6 +1069,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 .sow-hud__building-card-title { min-width: 0; gap: 7px; }
 .sow-hud__building-card-icon,
 .sow-hud__building-card-icon img { width: 21px; height: 21px; flex: 0 0 auto; object-fit: contain; }
+.sow-hud__building-card-icon .sow-hud__building-icon { width: 21px; height: 21px; font-size: 19px; }
 
 .sow-hud__building-card-level {
     margin-top: 7px;
@@ -1826,19 +1841,37 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     min-width: 0;
 }
 
-.sow-hud__notification-portrait {
+.sow-hud__notification-avatar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
     width: 44px;
     height: 44px;
     border: 1px solid rgb(238 194 104 / 74%);
     border-radius: 6px 6px 10px 4px;
     background: #202629;
-    object-fit: cover;
     box-shadow: 0 3px 10px rgb(0 0 0 / 32%);
+    overflow: hidden;
 }
 
-.sow-hud__notification-portrait + .sow-hud__notification-portrait:not([hidden]) {
+.sow-hud__notification-avatar[hidden] {
+    display: none;
+}
+
+.sow-hud__notification-avatar--overlap {
     margin-left: -11px;
     border-color: #24272a;
+}
+
+.sow-hud__notification-portrait {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sow-hud__notification-emblem {
+    font-size: 25px;
+    line-height: 1;
 }
 
 .sow-hud__notification-copy {
@@ -1853,6 +1886,15 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     gap: 8px;
     min-height: 46px;
     padding: 8px 11px;
+    opacity: 0;
+    transform: translateY(-6px) scale(.99);
+    animation: none;
+    transition: opacity 180ms ease, transform 180ms cubic-bezier(.18,.75,.26,1);
+}
+
+.sow-hud__notification--contextual.sow-hud__map-feedback-card--visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
 }
 
 .sow-hud__notification--contextual .sow-hud__notification-portraits {

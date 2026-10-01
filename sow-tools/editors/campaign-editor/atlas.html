@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOW — Entity Atlas</title>
+<style>
+  :root{color-scheme:dark;--bg:#0b1114;--panel:#111a1d;--line:#2d3b3c;--text:#e8eeea;--muted:#98a7a5;--accent:#e9bb64}
+  *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+  button,input,select{font:inherit;color:inherit;background:#0c1316;border:1px solid #354444;border-radius:4px;padding:7px 9px}button{cursor:pointer;background:linear-gradient(#202d30,#172124)}button:hover{border-color:var(--accent)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  #app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 390px}#map-panel{position:relative;min-width:0;background:#101719}canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}canvas.dragging{cursor:grabbing}
+  #toolbar{position:absolute;top:12px;left:12px;display:flex;gap:6px;align-items:center;background:#0b1114e8;padding:7px;border:1px solid var(--line);border-radius:5px}#toolbar button{min-width:36px}#toolbar .check{display:flex;align-items:center;gap:4px;color:var(--muted);white-space:nowrap}#toolbar input{width:auto;margin:0}#map-status{position:absolute;left:14px;bottom:12px;background:#0b1114df;padding:7px 10px;border-radius:4px;color:var(--muted);pointer-events:none}
+  #side{display:flex;flex-direction:column;min-height:0;background:linear-gradient(160deg,#172124,#101719 58%,#0d1416);border-left:1px solid #394746}header{padding:14px 16px;border-bottom:1px solid var(--line)}h1{font-size:13px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin:0 0 5px}a{color:var(--accent);text-decoration:none}.sub,.hint{color:var(--muted);font-size:11px}.tools{display:flex;gap:6px;margin-top:10px}.tools button{flex:1}.filters{padding:10px 12px;display:grid;grid-template-columns:1fr 1fr;gap:6px;border-bottom:1px solid var(--line)}#search{grid-column:1/-1}.filters select{min-width:0}
+  #count{padding:7px 12px;color:var(--muted);font-size:11px;border-bottom:1px solid var(--line)}#list{min-height:90px;overflow:auto;flex:1;padding:4px 8px}.entity{width:100%;display:flex;align-items:center;gap:8px;text-align:left;border:0;border-bottom:1px solid #ffffff0b;border-radius:0;background:transparent;padding:7px 6px}.entity.selected{background:#e9bb6417}.entity img{width:28px;height:28px;object-fit:cover;border-radius:50%;background:#263335}.entity .meta{margin-left:auto;text-align:right;color:var(--muted);font-size:10px;white-space:nowrap}.entity .meta.warn{color:#f1b0b4}.empty{padding:12px;color:var(--muted)}
+  #editor{max-height:42%;overflow:auto;border-top:1px solid var(--line);padding:10px 14px 14px}#editor h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 8px;color:#c4cfca}label{display:block;color:var(--muted);font-size:11px;margin:7px 0 3px}input,select{width:100%}.two{display:grid;grid-template-columns:1fr 1fr;gap:7px}#avatar-preview{width:46px;height:46px;object-fit:cover;border-radius:50%;background:#263335;display:block;margin:6px 0}#maps{height:68px}#save-status{margin-left:auto;align-self:center;color:var(--muted);font-size:11px}
+  @media(max-width:850px){#app{grid-template-columns:minmax(0,1fr) minmax(290px,36vw)}}
+  @media(max-width:650px){#app{grid-template-columns:1fr;grid-template-rows:minmax(38dvh,1fr) minmax(0,1fr)}#side{border-left:0;border-top:1px solid var(--line)}#editor{max-height:44%}}
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="map-panel" aria-label="World map">
+    <canvas id="map" aria-label="Interactive world map. Select or place an entity."></canvas>
+    <div id="toolbar"><button id="zoom-in" aria-label="Zoom in">＋</button><button id="zoom-out" aria-label="Zoom out">－</button><button id="fit" aria-label="Fit map">Fit</button><label class="check"><input id="labels" type="checkbox" checked> labels</label><button id="place" aria-pressed="false">Place selected</button></div>
+    <div id="map-status">Loading world map…</div>
+  </section>
+  <aside id="side">
+    <header><h1>Entity Atlas</h1><div class="sub"><a href="/tools/campaign-editor/">Campaign Studio</a> · <a href="/tools/campaign-editor/map-rosters">Map Rosters</a> · Save to shared game catalog</div><div class="tools"><button id="add">Add entity</button><button id="reload">Reload</button><button id="save">Save</button><span id="save-status" role="status">Saved</span></div></header>
+    <div class="filters">
+      <input id="search" type="search" placeholder="Search name or ID" aria-label="Search entities">
+      <select id="kind-filter" aria-label="Filter by type"><option value="">All types</option><option value="tribe">Tribes</option><option value="city_state">City-states</option><option value="kingdom">Kingdoms</option><option value="empire">Empires</option><option value="country">Countries</option><option value="state_region">States / regions</option></select>
+      <select id="region-filter" aria-label="Filter by region"><option value="">All regions</option><option value="unassigned">Unassigned</option><option value="europe">Europe</option><option value="africa">Africa</option><option value="asia">Asia</option><option value="americas">Americas</option><option value="oceania">Oceania</option></select>
+      <select id="era-filter" aria-label="Filter by era"><option value="">All eras</option><option value="unspecified">Unspecified</option><option value="ancient">Ancient</option><option value="classical">Classical</option><option value="medieval">Medieval</option><option value="early_modern">Early modern</option><option value="modern">Modern</option></select>
+      <select id="avatar-filter" aria-label="Filter by avatar"><option value="">Any avatar</option><option value="assigned">Avatar assigned</option><option value="missing">No avatar</option></select>
+      <select id="location-filter" aria-label="Filter by map location"><option value="">All map locations</option><option value="land">On land</option><option value="water">In water</option><option value="outside">Outside map</option><option value="missing">Needs location</option></select>
+    </div>
+    <div id="count">Loading…</div>
+    <div id="list" role="listbox" aria-label="Entities"></div>
+    <section id="editor" aria-live="polite"><h2>Selected entity</h2><div class="hint">Select an entity, or add one to place it on the map.</div></section>
+  </aside>
+</div>
+<script src="map-preview.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const canvas = $("map"), ctx = canvas.getContext("2d");
+let world = null, worldError = "", worldReference = null, worldReferenceError = "", worldIslandPath = null, worldIslandError = "";
+let catalog, etag, avatars = [], maps = [], selectedId = null, dirty = false, placing = false;
+let scale = 1, minScale = 1, offsetX = 0, offsetY = 0, pointer = null, pointerStart = null, dragging = false, moved = false;
+const kindNames = {tribe:"Tribe",city_state:"City-state",kingdom:"Kingdom",empire:"Empire",country:"Country",state_region:"State / region"};
+const regionNames = {unassigned:"Unassigned",europe:"Europe",africa:"Africa",asia:"Asia",americas:"Americas",oceania:"Oceania"};
+const eraNames = {unspecified:"Unspecified",ancient:"Ancient",classical:"Classical",medieval:"Medieval",early_modern:"Early modern",modern:"Modern"};
+
+function markDirty(){dirty=true;$("save-status").textContent="Unsaved";}
+function coordinates(entity){return Number.isFinite(entity.lat)&&Number.isFinite(entity.lon);}
+function mapPositions(entity){return world&&coordinates(entity)?SOWCampaignMapPreview.geoToMapPoints(entity.lat,entity.lon,world.geoBounds,world.width,world.height):[];}
+function mapTile(entity){return world&&coordinates(entity)?SOWCampaignMapPreview.geoToTile(entity.lat,entity.lon,world.geoBounds,world.width,world.height):null;}
+function locationStatus(entity){if(!coordinates(entity))return "missing";if(!world)return "unknown";const tile=mapTile(entity);if(!tile)return "outside";return SOWCampaignMapPreview.isLand(world.terrain,world.width,world.height,tile.x,tile.y)?"land":"water";}
+function canvasPoint(event){const r=canvas.getBoundingClientRect();return [event.clientX-r.left,event.clientY-r.top];}
+function mapPoint(point){return [(point[0]-offsetX)/scale,(point[1]-offsetY)/scale];}
+function fit(){if(!world||!canvas.clientWidth||!canvas.clientHeight)return;minScale=Math.min(canvas.clientWidth/world.width,canvas.clientHeight/world.height);scale=minScale;offsetX=(canvas.clientWidth-world.width*scale)/2;offsetY=(canvas.clientHeight-world.height*scale)/2;draw();}
+function resize(){const r=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.round(r.width*dpr);canvas.height=Math.round(r.height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);fit();}
+function filtered(){const q=$("search").value.trim().toLocaleLowerCase(),kind=$("kind-filter").value,region=$("region-filter").value,era=$("era-filter").value,avatar=$("avatar-filter").value,location=$("location-filter").value;return catalog.entities.filter(e=>(!q||e.name.toLocaleLowerCase().includes(q)||e.id.includes(q))&&(!kind||e.kind===kind)&&(!region||e.region===region)&&(!era||e.era===era)&&(!avatar||(avatar==="assigned")===!!e.avatar)&&(!location||locationStatus(e)===location));}
+function entityImage(slug){if(!slug)return "";return `/assets/gameplay/avatars/${encodeURIComponent(slug)}.webp`;}
+function draw(){
+  if(!canvas.width||!canvas.height)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
+  if(!world){$("map-status").textContent=worldError||"Loading playable world map…";return;}
+  ctx.save();ctx.translate(offsetX,offsetY);ctx.scale(scale,scale);
+  const frame=worldReference&&!worldReferenceError&&worldReference.source.map_grid_frame;
+  if(frame){
+    ctx.drawImage(worldReference.image,frame[0],frame[1],frame[2],frame[3],0,0,world.width,world.height);
+    ctx.globalAlpha=0.2;ctx.drawImage(world.image,0,0,world.width,world.height);
+  }else{
+    ctx.drawImage(world.image,0,0,world.width,world.height);
+  }
+  if(worldIslandPath){ctx.save();ctx.globalAlpha=1;ctx.fillStyle="#c3c99a";ctx.fill(worldIslandPath,"evenodd");ctx.strokeStyle="rgba(44,58,40,.9)";ctx.lineWidth=0.75/scale;ctx.lineJoin="round";ctx.lineCap="round";ctx.stroke(worldIslandPath);ctx.restore();}
+  ctx.restore();
+  if(!catalog){$("map-status").textContent="Loading entities…";return;}
+
+  const items=filtered(),showLabels=$("labels").checked;
+  let placed=0,water=0;
+  for(const entity of items){
+    const positions=mapPositions(entity),tile=mapTile(entity);
+    if(!positions.length||!tile)continue;
+    placed++;
+    const land=SOWCampaignMapPreview.isLand(world.terrain,world.width,world.height,tile.x,tile.y);
+    if(!land)water++;
+    const selected=entity.id===selectedId,radius=selected?6:4;
+    for(const position of positions){
+      const x=position.x*scale+offsetX,y=position.y*scale+offsetY;
+      if(x<0||y<0||x>canvas.width/dpr||y>canvas.height/dpr)continue;
+      ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);
+      ctx.fillStyle=entity.kind==="tribe"?"#e9bb64":"#70b6cf";ctx.fill();
+      if(selected||!land){
+        ctx.beginPath();ctx.arc(x,y,radius+(selected?4:3),0,Math.PI*2);
+        ctx.strokeStyle=!land?"#ff4d4d":"#fff";ctx.lineWidth=2;ctx.stroke();
+      }
+      if(showLabels||selected)SOWCampaignMapPreview.drawMapLabel(ctx,entity.name,x,y-radius-4,selected);
+    }
+  }
+  const summary=placing?"Click the playable map to set this entity’s location":`${items.length.toLocaleString()} entities · ${placed.toLocaleString()} on map · ${water.toLocaleString()} in water`;
+  const guideWarnings=[worldReferenceError&&"High-resolution guide unavailable; showing playable map",worldIslandError&&"Island detail unavailable"].filter(Boolean);
+  $("map-status").textContent=guideWarnings.length?`${summary} · ${guideWarnings.join(" · ")}`:summary;
+}
+function focusEntity(entity){
+  const positions=mapPositions(entity);
+  if(!positions.length)return;
+  const center=mapPoint([canvas.clientWidth/2,canvas.clientHeight/2]);
+  const point=positions.reduce((best,item)=>Math.hypot(item.x-center[0],item.y-center[1])<Math.hypot(best.x-center[0],best.y-center[1])?item:best);
+  const offset=SOWCampaignMapPreview.centerMapOffsets(point,scale,canvas.clientWidth,canvas.clientHeight);
+  offsetX=offset.x;offsetY=offset.y;
+}
+function select(id,focusView=false){selectedId=id;placing=false;$("place").setAttribute("aria-pressed","false");if(focusView)focusEntity(catalog.entities.find(entity=>entity.id===id));renderList();renderEditor();draw();}
+function deleteSelected(){
+  if(!catalog||!selectedId)return;
+  const index=catalog.entities.findIndex(entity=>entity.id===selectedId);
+  if(index<0)return;
+  catalog.entities.splice(index,1);selectedId=null;placing=false;$("place").setAttribute("aria-pressed","false");markDirty();renderList();renderEditor();draw();
+}
+function renderList(){
+  if(!catalog)return;
+  const host=$("list"),items=filtered();
+  host.replaceChildren();
+  for(const entity of items){
+    const button=document.createElement("button");
+    button.className="entity"+(entity.id===selectedId?" selected":"");
+    button.setAttribute("role","option");
+    button.setAttribute("aria-selected",String(entity.id===selectedId));
+    button.onclick=()=>select(entity.id,true);
+    if(entity.avatar){const img=document.createElement("img");img.src=entityImage(entity.avatar);img.alt="";button.append(img);}
+    const name=document.createElement("span");name.textContent=entity.name;button.append(name);
+    const status=locationStatus(entity),meta=document.createElement("span");
+    meta.className="meta"+(["water","outside"].includes(status)?" warn":"");
+    meta.textContent=status==="missing"?"Needs location":status==="water"?`${entity.kind} · In water`:status==="outside"?`${entity.kind} · Outside map`:status==="unknown"?`${entity.kind} · Map loading`:`${entity.region} · ${entity.kind}`;
+    button.append(meta);host.append(button);
+  }
+  if(!items.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No matching entities.";host.append(empty);}
+  $("count").textContent=`${items.length.toLocaleString()} shown · ${catalog.entities.length.toLocaleString()} total`;
+}
+function field(label,id,type="text"){const wrap=document.createElement("div"),l=document.createElement("label"),input=document.createElement("input");l.textContent=label;input.id=id;input.type=type;wrap.append(l,input);return wrap;}
+function selectField(label,id,values,labels){const wrap=document.createElement("div"),l=document.createElement("label"),select=document.createElement("select");l.textContent=label;select.id=id;for(const value of values){const option=document.createElement("option");option.value=value;option.textContent=labels[value]||value;select.append(option);}wrap.append(l,select);return wrap;}
+function renderEditor(){const host=$("editor");host.replaceChildren();const title=document.createElement("h2");title.textContent="Selected entity";host.append(title);const entity=catalog.entities.find(e=>e.id===selectedId);if(!entity){const hint=document.createElement("div");hint.className="hint";hint.textContent="Select an entity, or add one to place it on the map.";host.append(hint);return;}
+  const id=field("Stable ID","entity-id");id.querySelector("input").value=entity.id;id.querySelector("input").readOnly=true;host.append(id);
+  const name=field("Name","entity-name");name.querySelector("input").value=entity.name;host.append(name);
+  const kind=selectField("Type","entity-kind",Object.keys(kindNames),kindNames),era=selectField("Era","entity-era",Object.keys(eraNames),eraNames),region=selectField("Region","entity-region",Object.keys(regionNames),regionNames);kind.querySelector("select").value=entity.kind;era.querySelector("select").value=entity.era;region.querySelector("select").value=entity.region;host.append(kind,era,region);
+  const position=document.createElement("div");position.className="two";const lat=field("Latitude","entity-lat","number"),lon=field("Longitude","entity-lon","number");for(const [input,value] of [[lat.querySelector("input"),entity.lat],[lon.querySelector("input"),entity.lon]]){input.step="any";input.value=value??"";}position.append(lat,lon);host.append(position);
+  const flag=field("Flag code","entity-flag");flag.querySelector("input").value=entity.flag||"";host.append(flag);
+  const avatar=selectField("Avatar","entity-avatar",["",...avatars],Object.fromEntries([["","No avatar"],...avatars.map(id=>[id,id.replaceAll("_"," ")])]));avatar.querySelector("select").value=entity.avatar||"";host.append(avatar);const preview=document.createElement("img");preview.id="avatar-preview";preview.alt="Selected avatar preview";preview.hidden=!entity.avatar;if(entity.avatar)preview.src=entityImage(entity.avatar);host.append(preview);avatar.querySelector("select").onchange=()=>{entity.avatar=avatar.querySelector("select").value||null;preview.hidden=!entity.avatar;if(entity.avatar)preview.src=entityImage(entity.avatar);markDirty();renderList();draw();};
+  const mapWrap=document.createElement("div"),mapLabel=document.createElement("label"),mapSelect=document.createElement("select");mapLabel.textContent="Eligible maps (used when a map has no geographic bounds)";mapSelect.id="entity-maps";mapSelect.multiple=true;mapSelect.size=Math.min(5,maps.length);for(const id of maps){const option=document.createElement("option");option.value=id;option.textContent=id;option.selected=entity.maps.includes(id);mapSelect.append(option);}mapWrap.append(mapLabel,mapSelect);host.append(mapWrap);
+  const bind=(element,apply)=>{element.oninput=element.onchange=()=>{apply();markDirty();renderList();draw();};};bind(name.querySelector("input"),()=>{entity.name=name.querySelector("input").value;});bind(kind.querySelector("select"),()=>{entity.kind=kind.querySelector("select").value;});bind(era.querySelector("select"),()=>{entity.era=era.querySelector("select").value;});bind(region.querySelector("select"),()=>{entity.region=region.querySelector("select").value;});bind(flag.querySelector("input"),()=>{entity.flag=flag.querySelector("input").value.trim().toLowerCase();});bind(mapSelect,()=>{entity.maps=[...mapSelect.selectedOptions].map(option=>option.value);});
+  const coords=position.querySelectorAll("input");bind(coords[0],()=>{entity.lat=coords[0].value===""?null:Number(coords[0].value);});bind(coords[1],()=>{entity.lon=coords[1].value===""?null:Number(coords[1].value);});
+  const placeButton=document.createElement("button");placeButton.textContent=coordinates(entity)?"Move on map":"Place on map";placeButton.onclick=()=>{placing=true;$("place").setAttribute("aria-pressed","true");draw();};host.append(placeButton);
+}
+function tileAt(point){
+  if(!world)return null;
+  const [x,y]=mapPoint(point);
+  if(x<0||y<0||x>=world.width||y>=world.height)return null;
+  return {x:Math.floor(x),y:Math.floor(y)};
+}
+function nearestEntity(point){
+  let nearest=null,best=15;
+  for(const entity of filtered()){
+    for(const position of mapPositions(entity)){
+      const dx=(position.x*scale+offsetX)-point[0],dy=(position.y*scale+offsetY)-point[1],distance=Math.hypot(dx,dy);
+      if(distance<best){nearest=entity;best=distance;}
+    }
+  }
+  return nearest;
+}
+function setLocation(entity,point,refresh=true){
+  if(!entity)return;
+  const [x,y]=mapPoint(point),geo=SOWCampaignMapPreview.mapPointToGeo(x,y,world.geoBounds,world.width,world.height);
+  if(!geo)return;
+  entity.lat=geo.lat;entity.lon=geo.lon;markDirty();
+  if(refresh){renderList();renderEditor();}
+  else{$("entity-lat").value=entity.lat.toFixed(6);$("entity-lon").value=entity.lon.toFixed(6);}
+  draw();
+}
+function zoomAt(point,factor){const [mx,my]=mapPoint(point);scale=Math.max(minScale,Math.min(minScale*64,scale*factor));offsetX=point[0]-mx*scale;offsetY=point[1]-my*scale;draw();}
+canvas.addEventListener("pointerdown",event=>{canvas.setPointerCapture(event.pointerId);pointer=canvasPoint(event);pointerStart=pointer.slice();moved=false;const hit=nearestEntity(pointer);if(placing&&selectedId){dragging=true;return;}if(hit){select(hit.id);dragging=true;}else{dragging=false;canvas.classList.add("dragging");}});
+canvas.addEventListener("pointermove",event=>{if(!pointer)return;const point=canvasPoint(event);if(Math.hypot(point[0]-pointerStart[0],point[1]-pointerStart[1])>Math.min(2,scale*0.5))moved=true;if(moved&&dragging&&selectedId){const entity=catalog.entities.find(e=>e.id===selectedId);if(entity)setLocation(entity,point,false);}else if(moved){offsetX+=point[0]-pointer[0];offsetY+=point[1]-pointer[1];draw();}pointer=point;});
+canvas.addEventListener("pointerup",event=>{
+  const point=canvasPoint(event);
+  if(placing&&selectedId){setLocation(catalog.entities.find(e=>e.id===selectedId),point);placing=false;$("place").setAttribute("aria-pressed","false");}
+  else if(dragging&&moved&&selectedId)setLocation(catalog.entities.find(e=>e.id===selectedId),point);
+  else if(!moved&&!nearestEntity(point)){
+    const tile=tileAt(point),[x,y]=mapPoint(point),geo=SOWCampaignMapPreview.mapPointToGeo(x,y,world.geoBounds,world.width,world.height);
+    if(geo&&tile){const land=SOWCampaignMapPreview.isLand(world.terrain,world.width,world.height,tile.x,tile.y);$("map-status").textContent=`${geo.lat.toFixed(6)}°, ${geo.lon.toFixed(6)}° · ${land?"Land":"Water"}`;}
+  }
+  pointer=null;pointerStart=null;dragging=false;canvas.classList.remove("dragging");
+});
+canvas.addEventListener("pointercancel",()=>{pointer=null;pointerStart=null;dragging=false;canvas.classList.remove("dragging");});
+canvas.addEventListener("wheel",event=>{event.preventDefault();zoomAt(canvasPoint(event),Math.exp(-event.deltaY*0.0015));},{passive:false});
+$("zoom-in").onclick=()=>zoomAt([canvas.clientWidth/2,canvas.clientHeight/2],1.3);$("zoom-out").onclick=()=>zoomAt([canvas.clientWidth/2,canvas.clientHeight/2],1/1.3);$("fit").onclick=fit;
+$("place").onclick=()=>{if(!selectedId)return;placing=!placing;$("place").setAttribute("aria-pressed",String(placing));draw();};
+$("add").onclick=()=>{let n=1,id="new_entity";while(catalog.entities.some(e=>e.id===id))id=`new_entity_${n++}`;const entity={id,name:"New entity",kind:"tribe",era:"unspecified",region:"unassigned",lat:null,lon:null,flag:"",avatar:null,maps:[],fallback_nation_order:null,fallback_tribe_order:null};catalog.entities.push(entity);markDirty();$("search").value="";$("kind-filter").value="";$("region-filter").value="";$("era-filter").value="";$("avatar-filter").value="";$("location-filter").value="";select(id);placing=true;$("place").setAttribute("aria-pressed","true");draw();};
+async function load(){if(dirty&&!confirm("Discard unsaved catalog changes?"))return;$("save-status").textContent="Loading…";try{const [response,avatarResponse,mapResponse]=await Promise.all([fetch("/__entities",{cache:"no-store"}),fetch("/__avatars",{cache:"no-store"}),fetch("/__entity_maps",{cache:"no-store"})]);if(!response.ok||!avatarResponse.ok||!mapResponse.ok)throw new Error("catalog data unavailable");catalog=await response.json();etag=response.headers.get("ETag");avatars=await avatarResponse.json();maps=await mapResponse.json();dirty=false;$("save-status").textContent="Saved";renderList();renderEditor();draw();}catch(error){$("save-status").textContent="Load failed";$("map-status").textContent=error.message;}}
+$("reload").onclick=load;$("save").onclick=async()=>{if(!catalog||!dirty)return;$("save-status").textContent="Saving…";try{const response=await fetch("/__entities",{method:"POST",headers:{"Content-Type":"application/json","If-Match":etag||""},body:JSON.stringify(catalog)});if(!response.ok)throw new Error(await response.text());etag=response.headers.get("ETag");dirty=false;$("save-status").textContent="Saved";}catch(error){$("save-status").textContent="Save failed";alert(error.message);}};
+document.addEventListener("keydown",event=>{
+  if((event.key!=="Delete"&&event.key!=="Backspace")||!selectedId||event.target.closest?.("input,textarea,select,[contenteditable='true']"))return;
+  event.preventDefault();deleteSelected();
+});
+for(const id of ["search","kind-filter","region-filter","era-filter","avatar-filter","location-filter"])$(id).addEventListener("input",()=>{renderList();draw();});
+$("labels").addEventListener("change",draw);
+async function loadWorldReference(){
+  const response=await fetch("/assets/map_sources/thumbnail_frames.json",{cache:"no-store"});
+  if(!response.ok)throw new Error("Map source manifest unavailable");
+  const manifest=await response.json(),source=manifest.sources&&manifest.sources["giantworldmap.png"];
+  const frame=source&&source.map_grid_frame;
+  if(!source||!Array.isArray(frame)||frame.length!==4||!frame.every(Number.isFinite)||frame[0]<0||frame[1]<0||frame[2]<=0||frame[3]<=0||frame[0]+frame[2]>source.width||frame[1]+frame[3]>source.height)throw new Error("World map alignment frame is invalid");
+  const image=new Image(),ready=new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error("High-resolution world map unavailable"));});
+  image.src="/assets/map_sources/giantworldmap.png";await ready;
+  if(image.naturalWidth!==source.width||image.naturalHeight!==source.height)throw new Error("World map source dimensions do not match its manifest");
+  return {image,source};
+}
+async function loadWorldIslandGuides(map){
+  const response=await fetch("/assets/map_sources/world_island_guides.json",{cache:"no-store"});
+  if(!response.ok)throw new Error("Island guide data unavailable");
+  const data=await response.json();
+  if(data.version!==1||data.coordinate_reference!=="WGS84 longitude,latitude"||!Array.isArray(data.features))throw new Error("Island guide data is invalid");
+  const path=new Path2D();
+  for(const feature of data.features){
+    if(feature.geometry?.type!=="LineString"||!Array.isArray(feature.geometry.coordinates))continue;
+    let previous=null;
+    for(const coordinate of feature.geometry.coordinates){
+      if(!Array.isArray(coordinate)||coordinate.length<2||!coordinate.every(Number.isFinite)){previous=null;continue;}
+      const point=SOWCampaignMapPreview.geoToMapPoint(coordinate[1],coordinate[0],map.geoBounds,map.width,map.height);
+      if(!point){previous=null;continue;}
+      if(!previous||Math.abs(point.x-previous.x)>map.width/2)path.moveTo(point.x,point.y);
+      else path.lineTo(point.x,point.y);
+      previous=point;
+    }
+  }
+  return path;
+}
+async function loadWorld(){
+  try{
+    const loaded=await SOWCampaignMapPreview.load("world");if(!loaded.geoBounds)throw new Error("World map geographic bounds are missing");
+    world=loaded;worldError="";resize();renderList();draw();
+    try{worldReference=await loadWorldReference();worldReferenceError="";}
+    catch(error){worldReferenceError=error.message;}
+    try{worldIslandPath=await loadWorldIslandGuides(world);worldIslandError="";}
+    catch(error){worldIslandError=error.message;}
+    draw();
+  }catch(error){worldError=`Playable world map unavailable: ${error.message}`;renderList();draw();}
+}
+window.addEventListener("resize",resize);load();loadWorld();
+</script>
+</body>
+</html>

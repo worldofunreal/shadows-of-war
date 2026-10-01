@@ -25,7 +25,7 @@ mod placement_tests {
     }
 
     #[test]
-    fn click_on_city_resolves_to_city_tile() {
+    fn click_on_city_resolves_to_another_valid_site() {
         let map_w = 32u32;
         let map_h = 32u32;
         let my_id = 1u16;
@@ -45,9 +45,9 @@ mod placement_tests {
             my_id,
             buildings: &buildings,
         })
-        .expect("click on city should stack");
+        .expect("click near a city should find an open site");
 
-        assert_eq!(resolved, city_tile);
+        assert_ne!(resolved, city_tile);
     }
 
     #[test]

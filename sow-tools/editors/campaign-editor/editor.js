@@ -667,12 +667,88 @@
             host.appendChild(selectField("Support begins after", support.after_defeated || "", factionOptions(), function (value) { support.after_defeated = value; markDirty(); }));
             host.appendChild(inputField("Current reserves given (%)", support.share_percent, function (value) { support.share_percent = Number(value); markDirty(); }, { type: "number", min: 1, max: 100, step: 1 }));
         }
-        var reactions = section("First support responses");
+        var reactions = section("Story responses");
         (state.definition.reactions || []).forEach(function (reaction) {
             var card = el("div", { class: "form-card" });
-            card.appendChild(el("strong", {}, "Response · " + reaction.id));
-            card.appendChild(selectField("Show after", reaction.after, state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption), function (value) { reaction.after = value; markDirty(); }));
-            card.appendChild(selectField("First aid from", reaction.when.target, supportFactionOptions(), function (value) { reaction.when.target = value; markDirty(); }));
+            var isContact = reaction.when.type === "contact";
+            var isFirstContact = reaction.when.type === "first_contact";
+            card.appendChild(el("strong", {}, (isFirstContact ? "First Iceni contact · " : isContact ? "Contact · " : "First support · ") + reaction.id));
+            if (isContact) {
+                var contactTargetOptions = [{ value: "any_neutral", label: "Any initially neutral faction" }].concat(factionOptions());
+                card.appendChild(selectField("On contact with", reaction.when.relation === "neutral" ? "any_neutral" : reaction.when.target, contactTargetOptions, function (value) {
+                    if (value === "any_neutral") { delete reaction.when.target; reaction.when.relation = "neutral"; }
+                    else { delete reaction.when.relation; reaction.when.target = value; }
+                    markDirty(); renderSettings();
+                }));
+            } else if (isFirstContact) {
+                card.appendChild(selectField("Eligible group", reaction.when.role || "selected", [
+                    { value: "kin", label: "All factions with role Kin" }, { value: "selected", label: "Choose specific factions" }
+                ], function (value) {
+                    if (value === "selected") { delete reaction.when.role; reaction.when.targets = reaction.when.targets || state.roster.factions.filter(function (item) { return item.role === "kin"; }).map(function (item) { return item.name; }); }
+                    else { reaction.when.role = value; delete reaction.when.targets; }
+                    markDirty(); renderSettings();
+                }));
+                if (!reaction.when.role) card.appendChild(multiFactionField("Eligible factions (first matching contact)", reaction.when.targets || [], function (value) { reaction.when.targets = value; markDirty(); }));
+            } else {
+                card.appendChild(selectField("Show after", reaction.after, state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption), function (value) { reaction.after = value; markDirty(); }));
+                card.appendChild(selectField("First aid from", reaction.when.target, supportFactionOptions(), function (value) { reaction.when.target = value; markDirty(); }));
+            }
+            if (isContact || isFirstContact) {
+                card.appendChild(selectField("Automatic relationship result", reaction.outcome || "", [
+                    { value: "", label: reaction.choices ? "Negotiation choices" : "Dialogue only" },
+                    { value: "allied", label: "Alliance" }, { value: "enemy", label: "Enemy" }, { value: "neutral", label: "Remain neutral" }
+                ], function (value) { if (value) { reaction.outcome = value; delete reaction.choices; } else delete reaction.outcome; markDirty(); renderSettings(); }));
+                if (reaction.outcome === "allied") card.appendChild(inputField("Gold paid", reaction.gold_cost || 0, function (value) { reaction.gold_cost = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000, step: 25 }));
+                if (reaction.choices) {
+                    reaction.choices.forEach(function (choice) {
+                        var choiceCard = el("div", { class: "form-card" });
+                        choiceCard.appendChild(el("strong", {}, "Negotiation · " + choice.id));
+                        choiceCard.appendChild(selectField("Result", choice.relation, ["allied", "enemy", "neutral"], function (value) { choice.relation = value; markDirty(); renderSettings(); }));
+                        if (choice.relation === "allied") choiceCard.appendChild(inputField("Gold demanded", choice.gold_cost || 0, function (value) { choice.gold_cost = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000, step: 25 }));
+                        Object.keys(state.definition.strings || {}).sort().forEach(function (locale) {
+                            var dictionary = state.definition.strings[locale] || (state.definition.strings[locale] = {});
+                            [["Choice · " + locale, "label_key"], ["Consequence · " + locale, "body_key"]].forEach(function (fieldInfo) {
+                                var field = el("textarea", { "aria-label": fieldInfo[0] });
+                                field.rows = fieldInfo[1] === "label_key" ? 2 : 3;
+                                field.value = dictionary[choice[fieldInfo[1]]] || "";
+                                field.addEventListener("input", function () { dictionary[choice[fieldInfo[1]]] = field.value; markDirty(); });
+                                choiceCard.appendChild(el("label", {}, fieldInfo[0])); choiceCard.appendChild(field);
+                            });
+                        });
+                        var removeChoice = el("button", { type: "button", class: "danger" }, "Remove choice");
+                        removeChoice.disabled = reaction.choices.length <= 2;
+                        removeChoice.addEventListener("click", function () { reaction.choices = reaction.choices.filter(function (item) { return item !== choice; }); markDirty(); renderSettings(); });
+                        choiceCard.appendChild(removeChoice); card.appendChild(choiceCard);
+                    });
+                    var addChoice = el("button", { type: "button" }, "Add negotiation option");
+                    addChoice.disabled = reaction.choices.length >= 4;
+                    addChoice.addEventListener("click", function () {
+                        var choiceId = "offer_" + (reaction.choices.length + 1), key = "tutorial." + reaction.id + "_" + choiceId;
+                        reaction.choices.push({ id: choiceId, label_key: key + "_label", body_key: key + "_detail", relation: "neutral" });
+                        Object.keys(state.definition.strings || {}).forEach(function (locale) { state.definition.strings[locale][key + "_label"] = "New response"; state.definition.strings[locale][key + "_detail"] = ""; });
+                        markDirty(); renderSettings();
+                    });
+                    card.appendChild(addChoice);
+                } else if (!reaction.outcome) {
+                    var addNegotiation = el("button", { type: "button" }, "Add negotiation choices");
+                    addNegotiation.addEventListener("click", function () {
+                        var prefix = "tutorial." + reaction.id;
+                        reaction.choices = [
+                            { id: "accept", label_key: prefix + "_accept_label", body_key: prefix + "_accept_detail", relation: "allied", gold_cost: 200 },
+                            { id: "refuse", label_key: prefix + "_refuse_label", body_key: prefix + "_refuse_detail", relation: "enemy", gold_cost: 0 }
+                        ];
+                        Object.keys(state.definition.strings || {}).forEach(function (locale) {
+                            var spanish = locale.toLowerCase().split("-")[0] === "es", strings = state.definition.strings[locale];
+                            strings[prefix + "_accept_label"] = spanish ? "Pagar el tributo" : "Pay the tribute";
+                            strings[prefix + "_accept_detail"] = spanish ? "Entregar 200 de oro y formar una alianza." : "Pay 200 gold and form an alliance.";
+                            strings[prefix + "_refuse_label"] = spanish ? "Rechazar" : "Refuse";
+                            strings[prefix + "_refuse_detail"] = spanish ? "La tribu rompe relaciones y se vuelve enemiga." : "The tribe breaks off talks and becomes an enemy.";
+                        });
+                        markDirty(); renderSettings();
+                    });
+                    card.appendChild(addNegotiation);
+                }
+            }
             card.appendChild(selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) { if (value) reaction.speaker = value; else delete reaction.speaker; markDirty(); }));
             Object.keys(state.definition.strings || {}).sort().forEach(function (locale) {
                 var dictionary = state.definition.strings[locale] || (state.definition.strings[locale] = {});
@@ -688,26 +764,54 @@
             remove.addEventListener("click", function () { state.definition.reactions = state.definition.reactions.filter(function (item) { return item !== reaction; }); markDirty(); renderSettings(); });
             card.appendChild(remove); reactions.appendChild(card);
         });
-        var addReaction = el("button", { type: "button" }, "Add ally response");
-        addReaction.addEventListener("click", function () {
-            var used = new Set((state.definition.reactions || []).map(function (item) { return item.when.target; }));
-            var faction = state.roster.factions.find(function (item) { return Number.isInteger(item.support_interval_seconds) && !used.has(item.name); });
-            var after = state.definition.steps.find(function (step) { return step.type === "objective" || step.type === "guide"; });
-            if (!faction || !after) return;
-            var responseId = "support_" + faction.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+        function addReaction(type) {
+            var isFirstContact = type === "first_contact", isNeutralContact = type === "neutral_contact";
+            var eventType = isNeutralContact ? "contact" : type;
+            var used = new Set((state.definition.reactions || []).filter(function (item) { return item.when.type === eventType; }).map(function (item) { return item.when.target || (item.when.relation === "neutral" ? "any_neutral" : null); }));
+            var factions = eventType === "support" ? supportFactionOptions().map(function (option) { return state.roster.factions.find(function (item) { return item.name === option.value; }); }) : state.roster.factions;
+            var faction = isFirstContact || isNeutralContact ? null : factions.find(function (item) { return item && !used.has(item.name); });
+            if (type === "first_contact" && (state.definition.reactions || []).some(function (item) { return item.when.type === "first_contact"; })) return;
+            if (isNeutralContact && used.has("any_neutral")) return;
+            var after = eventType === "support" && state.definition.steps.find(function (step) { return step.type === "objective" || step.type === "guide"; });
+            if (!isFirstContact && !isNeutralContact && !faction || eventType === "support" && !after) return;
+            var responseId = isFirstContact ? "first_contact" : isNeutralContact ? "neutral_contact" : eventType + "_" + faction.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
             while (state.definition.steps.some(function (step) { return step.id === responseId; }) || (state.definition.reactions || []).some(function (item) { return item.id === responseId; })) responseId += "_2";
-            var speakerId = Object.keys(state.definition.speakers || {}).find(function (key) { return state.definition.speakers[key].faction === faction.name; });
-            var reaction = { id: responseId, after: after.id, when: { type: "support", target: faction.name }, title_key: "tutorial." + responseId + "_title", body_key: "tutorial." + responseId + "_body" };
+            var speakerId = faction && Object.keys(state.definition.speakers || {}).find(function (key) { return state.definition.speakers[key].faction === faction.name; });
+            var when = isFirstContact ? { type: type, role: "kin" }
+                : isNeutralContact ? { type: "contact", relation: "neutral" } : { type: eventType, target: faction.name };
+            var reaction = { id: responseId, when: when, title_key: "tutorial." + responseId + "_title", body_key: "tutorial." + responseId + "_body" };
+            if (after) reaction.after = after.id;
             if (speakerId) reaction.speaker = speakerId;
+            if (isFirstContact) reaction.outcome = "allied";
             state.definition.reactions = (state.definition.reactions || []).concat(reaction);
             Object.keys(state.definition.strings || {}).forEach(function (locale) {
                 var spanish = locale.toLowerCase().split("-")[0] === "es";
-                state.definition.strings[locale][reaction.title_key] = spanish ? faction.name + " envía apoyo" : faction.name + " sends support";
-                state.definition.strings[locale][reaction.body_key] = spanish ? "Han llegado tropas y oro." : "Troops and gold have arrived.";
+                state.definition.strings[locale][reaction.title_key] = isFirstContact
+                    ? spanish ? "Una tribu Iceni responde" : "An Iceni clan answers"
+                    : isNeutralContact ? spanish ? "Una tribu pide condiciones" : "A clan asks for terms"
+                    : eventType === "contact" ? spanish ? faction.name + " se une al alzamiento" : faction.name + " joins the rising"
+                    : spanish ? faction.name + " envía apoyo" : faction.name + " sends support";
+                state.definition.strings[locale][reaction.body_key] = isFirstContact
+                    ? spanish ? "Sabemos lo que Roma hizo. Estamos contigo, Boudica." : "We know what Rome did. We stand with you, Boudica."
+                    : isNeutralContact ? spanish ? "Paga 200 de oro y tendrás nuestra ayuda. Si te niegas, nos opondremos a ti." : "Pay 200 gold for our support. Refuse, and we will stand against you."
+                    : eventType === "contact" ? spanish ? "Lucharemos junto a Boudica contra Roma." : "We stand with Boudica against Rome."
+                    : spanish ? "Han llegado tropas y oro." : "Troops and gold have arrived.";
             });
             markDirty(); renderSettings();
-        });
-        reactions.appendChild(addReaction); host.appendChild(reactions);
+        }
+        var addContactReaction = el("button", { type: "button" }, "Add contact response");
+        addContactReaction.disabled = !state.roster.factions.some(function (item) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "contact" && reaction.when.target === item.name; }); });
+        addContactReaction.addEventListener("click", function () { addReaction("contact"); });
+        var addNeutralNegotiation = el("button", { type: "button" }, "Add any-neutral negotiation");
+        addNeutralNegotiation.disabled = (state.definition.reactions || []).some(function (item) { return item.when.type === "contact" && item.when.relation === "neutral"; });
+        addNeutralNegotiation.addEventListener("click", function () { addReaction("neutral_contact"); });
+        var addFirstContact = el("button", { type: "button" }, "Add first-contact scene");
+        addFirstContact.disabled = (state.definition.reactions || []).some(function (item) { return item.when.type === "first_contact"; }) || !state.roster.factions.some(function (item) { return item.role === "kin"; });
+        addFirstContact.addEventListener("click", function () { addReaction("first_contact"); });
+        var addSupportReaction = el("button", { type: "button" }, "Add support response");
+        addSupportReaction.disabled = !state.definition.steps.some(function (step) { return ["objective", "guide"].includes(step.type); }) || !supportFactionOptions().some(function (option) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "support" && reaction.when.target === option.value; }); });
+        addSupportReaction.addEventListener("click", function () { addReaction("support"); });
+        reactions.append(addContactReaction, addNeutralNegotiation, addFirstContact, addSupportReaction); host.appendChild(reactions);
         host.appendChild(selectField("Default story language", state.definition.default_locale, localeOptions(), function (value) { state.definition.default_locale = value; state.definition.strings[value] = state.definition.strings[value] || {}; markDirty(); renderSettings(); }));
         host.appendChild(selectField("Opening step", state.definition.entry, state.definition.steps.map(stepOption), function (value) { state.definition.entry = value; markDirty(); }));
         host.appendChild(selectField("Menu guide opening", state.definition.menu_guide && state.definition.menu_guide.entry || "", [{ value: "", label: "Not set" }].concat(state.definition.steps.map(stepOption)), function (value) { if (!value) delete state.definition.menu_guide; else state.definition.menu_guide = Object.assign({}, state.definition.menu_guide, { entry: value, dismissible: true }); markDirty(); if (state.flow === "menu") resetPreview(); }));
@@ -1098,7 +1202,7 @@
         $("#previewFrame").dataset.device = $("#device").value;
         var model;
         var previousStep = state.playingStep;
-        try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui, performance.now()); }
+        try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.playingStep = model.step.id;
         var actionRatio = Number.isFinite(model.step.attack_ratio_on_enter) ? model.step.attack_ratio_on_enter : null;
@@ -1119,10 +1223,9 @@
             if (!replayTarget || !replayTarget.getClientRects().length) menuHint = " · open Campaign in the preview to reveal Replay";
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
-        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.ready ? " · objective complete" : "") + menuHint + (state.validation.errors.length ? " · draft needs fixes before export" : "");
+        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + menuHint + (state.validation.errors.length ? " · draft needs fixes before export" : "");
         if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
-        if (model.ready && updateMachine !== false) window.setTimeout(function () { if (state.machine) paintPreview(); }, 840);
     }
     function previewLocaleScript(locale) {
         var code = String(locale || "").toLowerCase();
@@ -1229,7 +1332,7 @@
         var requestedEntry = flowEntry() || state.definition.entry;
         if (!steps.some(function (step) { return step && step.id === requestedEntry; })) requestedEntry = start;
         state.playingStep = null;
-        try { state.machine = window.SOWCampaign.create(state.definition, requestedEntry); }
+        try { state.machine = window.SOWCampaign.create(state.definition, requestedEntry, state.roster); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.previewActionStep = null; state.previewActionRatio = null;
         state.facts = state.facts || {};
@@ -1251,9 +1354,9 @@
         var canTick = Boolean((trigger && trigger.type === "elapsed") || timedRoute);
         var simulateButton = $("#simulateBtn"), tickButton = $("#tickBtn");
         simulateButton.hidden = !trigger;
-        simulateButton.disabled = !trigger || model.ready;
+        simulateButton.disabled = !trigger;
         tickButton.hidden = !canTick;
-        tickButton.disabled = !canTick || model.ready;
+        tickButton.disabled = !canTick;
         if (!trigger) host.appendChild(el("small", {}, timedRoute ? "Advance game time to test this route." : "This beat waits for dialogue, a decision or an incoming story event."));
         else {
             var progress = model.progress, description = trigger.type;
@@ -1263,19 +1366,18 @@
             host.appendChild(el("small", {}, "Waiting for " + description + " · " + progress.current + " / " + progress.target));
             if (!["troops", "elapsed", "contact", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
                 var button = el("button", { type: "button" }, "+1 " + trigger.type);
-                button.disabled = model.ready;
                 button.addEventListener("click", function () { simulateObjective(1); });
                 host.appendChild(button);
             }
             if (trigger.type === "contact") (trigger.targets || [trigger.target]).filter(Boolean).forEach(function (name) {
                 var contact = el("button", { type: "button" }, "Contact · " + name);
-                contact.disabled = model.ready || (state.facts.contact_names || []).includes(name);
+                contact.disabled = (state.facts.contact_names || []).includes(name);
                 contact.addEventListener("click", function () { simulateObjective(1, { faction: name }); });
                 host.appendChild(contact);
             });
             if (trigger.type === "alliance") factionOptions().forEach(function (option) {
                 var alliance = el("button", { type: "button" }, "Alliance · " + option.label);
-                alliance.disabled = model.ready || (state.facts.alliance_names || []).includes(option.value);
+                alliance.disabled = (state.facts.alliance_names || []).includes(option.value);
                 alliance.addEventListener("click", function () { simulateObjective(1, { faction: option.value }); });
                 host.appendChild(alliance);
             });
@@ -1283,13 +1385,11 @@
                 if (trigger.target && unit === "TransportShip") {
                     [trigger.target, factionOptions().find(function (option) { return option.value !== trigger.target; })?.value].filter(Boolean).forEach(function (target) {
                         var ship = el("button", { type: "button" }, "Simulate · " + unit + " to " + target);
-                        ship.disabled = model.ready;
                         ship.addEventListener("click", function () { simulateObjective(1, { unit: unit, target: target }); });
                         host.appendChild(ship);
                     });
                 } else {
                     var ship = el("button", { type: "button" }, "Simulate · " + unit);
-                    ship.disabled = model.ready;
                     ship.addEventListener("click", function () { simulateObjective(1, { unit: unit }); });
                     host.appendChild(ship);
                 }
@@ -1299,25 +1399,29 @@
                 var wrongRecipient = state.roster.factions.find(function (faction) { return faction.name !== recipient; });
                 if (wrongRecipient) {
                     var wrongTarget = el("button", { type: "button" }, "Simulate wrong recipient · " + wrongRecipient.name);
-                    wrongTarget.disabled = model.ready;
                     wrongTarget.addEventListener("click", function () { simulateObjective(1, { recipient: wrongRecipient.name, resources: ["gold", "troops"] }); });
                     host.appendChild(wrongTarget);
                 }
                 [["gold"], ["troops"], ["gold", "troops"]].forEach(function (resources) {
                     var transfer = el("button", { type: "button" }, "Simulate " + resources.join(" + ") + " to " + recipient);
-                    transfer.disabled = model.ready;
                     transfer.addEventListener("click", function () { simulateObjective(1, { recipient: recipient, resources: resources }); });
                     host.appendChild(transfer);
                 });
             }
         }
         (state.definition.reactions || []).forEach(function (reaction) {
-            var button = el("button", { type: "button" }, "Simulate first support · " + reaction.when.target);
-            button.disabled = Boolean((state.facts.support_deliveries_by_faction || {})[reaction.when.target]);
+            var isContact = reaction.when.type === "contact";
+            var button = el("button", { type: "button" }, "Simulate first " + (isContact ? "contact" : "support") + " · " + reaction.when.target);
+            button.disabled = isContact
+                ? (state.facts.contact_names || []).includes(reaction.when.target)
+                : Boolean((state.facts.support_deliveries_by_faction || {})[reaction.when.target]);
             button.addEventListener("click", function () {
-                state.facts.support_deliveries_by_faction = state.facts.support_deliveries_by_faction || {};
-                state.facts.support_deliveries_by_faction[reaction.when.target] = { deliveries: 1, gold: 100, troops: 100, first_tick: ++state.facts.elapsed_ticks };
-                state.facts.ally_support_deliveries = Number(state.facts.ally_support_deliveries || 0) + 1;
+                if (isContact) state.facts.contact_names = Array.from(new Set((state.facts.contact_names || []).concat(reaction.when.target)));
+                else {
+                    state.facts.support_deliveries_by_faction = state.facts.support_deliveries_by_faction || {};
+                    state.facts.support_deliveries_by_faction[reaction.when.target] = { deliveries: 1, gold: 100, troops: 100, first_tick: ++state.facts.elapsed_ticks };
+                    state.facts.ally_support_deliveries = Number(state.facts.ally_support_deliveries || 0) + 1;
+                }
                 paintPreview();
             });
             host.appendChild(button);

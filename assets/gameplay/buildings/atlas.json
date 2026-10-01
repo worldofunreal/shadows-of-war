@@ -1,0 +1,35 @@
+{
+  "atlas": "gameplay/buildings/atlas.webp",
+  "atlas_height": 136,
+  "atlas_width": 136,
+  "cell_size": 64,
+  "schema_version": 1,
+  "sprites": {
+    "Farm": {
+      "1": {
+        "height": 64,
+        "sha256": "37ca4a847b80c1e269d0c78cff285cc1d6bec9edc031f48dd60b536a7e42ea03",
+        "source": "farm-level-1.png",
+        "width": 64,
+        "x": 2,
+        "y": 2
+      },
+      "2": {
+        "height": 64,
+        "sha256": "06eab9f45320448e2119537e82fdaa6ff7b6a3229e120c06c8e41b6c7a6013f4",
+        "source": "farm-level-2.png",
+        "width": 64,
+        "x": 70,
+        "y": 2
+      },
+      "3": {
+        "height": 64,
+        "sha256": "1855d90fb81bbbdf0b41fbe48891a040b2f09d7d12cf4e68b9bc01f9cf5aba27",
+        "source": "farm-level-3.png",
+        "width": 64,
+        "x": 2,
+        "y": 70
+      }
+    }
+  }
+}

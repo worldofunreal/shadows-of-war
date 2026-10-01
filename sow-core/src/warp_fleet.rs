@@ -409,7 +409,7 @@ pub fn best_shore_spawn_for_transport(
 }
 
 /// Baseline transport speed at 1x game speed.
-pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 2.5;
+pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 3.0;
 
 /// Moving fleet over water.
 #[derive(Debug, Clone)]
@@ -429,6 +429,7 @@ pub struct WarpFleet {
     pub movement_progress: f64,
     /// Sum of active passive speed bonuses for this fleet (`0.2` means +20%).
     pub speed_bonus_percent: f64,
+    eta_seconds_remaining: Option<f64>,
     pub current_tile: u32,
     pub retreating: bool,
     pub flow_target: Option<u32>,
@@ -464,6 +465,7 @@ impl WarpFleet {
             path_cursor,
             movement_progress: 0.0,
             speed_bonus_percent: 0.0,
+            eta_seconds_remaining: None,
             current_tile,
             retreating: false,
             flow_target: None,
@@ -483,6 +485,14 @@ impl WarpFleet {
             };
         self.movement_progress = 0.0;
         self.path = std::sync::Arc::new(path);
+        self.eta_seconds_remaining = None;
+    }
+
+    pub fn set_speed_bonus_percent(&mut self, speed_bonus_percent: f64) {
+        if self.speed_bonus_percent != speed_bonus_percent {
+            self.speed_bonus_percent = speed_bonus_percent;
+            self.eta_seconds_remaining = None;
+        }
     }
 
     #[inline]
@@ -500,11 +510,53 @@ impl WarpFleet {
         }
     }
 
-    pub fn remaining_eta_seconds(
-        &self,
-        base_steps_per_tick: f64,
-        tick_rate_ms: f32,
-    ) -> Option<f32> {
+    pub fn recalculate_eta(&mut self, base_steps_per_tick: f64, tick_rate_ms: f32) {
+        if self.unit_type != crate::game::UnitType::TransportShip
+            || self.retreating
+            || self.path_cursor >= self.path.len()
+        {
+            self.eta_seconds_remaining = None;
+            return;
+        }
+
+        let steps_per_tick = self.movement_steps_per_tick(base_steps_per_tick);
+        if steps_per_tick <= 0.0 {
+            self.eta_seconds_remaining = None;
+            return;
+        }
+
+        let remaining_steps = self.path.len().saturating_sub(self.path_cursor) as f64
+            - self.movement_progress.clamp(0.0, 1.0);
+        let seconds =
+            remaining_steps.max(0.0) / steps_per_tick * (f64::from(tick_rate_ms).max(0.0) / 1000.0);
+        self.eta_seconds_remaining = seconds.is_finite().then_some(seconds);
+    }
+
+    pub fn update_eta_after_tick(&mut self, base_steps_per_tick: f64, tick_rate_ms: f32) {
+        if self.unit_type != crate::game::UnitType::TransportShip
+            || self.retreating
+            || self.path_cursor >= self.path.len()
+        {
+            self.eta_seconds_remaining = None;
+            return;
+        }
+
+        if self.eta_seconds_remaining.is_none() {
+            self.recalculate_eta(base_steps_per_tick, tick_rate_ms);
+            return;
+        }
+
+        let tick_seconds = f64::from(tick_rate_ms).max(0.0) / 1000.0;
+        if tick_seconds.is_finite() && tick_seconds > 0.0 {
+            self.eta_seconds_remaining = self
+                .eta_seconds_remaining
+                .map(|seconds| (seconds - tick_seconds).max(0.0));
+        } else {
+            self.eta_seconds_remaining = None;
+        }
+    }
+
+    pub fn remaining_eta_seconds(&self) -> Option<f32> {
         if self.unit_type != crate::game::UnitType::TransportShip
             || self.retreating
             || self.path_cursor >= self.path.len()
@@ -512,16 +564,9 @@ impl WarpFleet {
             return None;
         }
 
-        let steps_per_tick = self.movement_steps_per_tick(base_steps_per_tick);
-        if steps_per_tick <= 0.0 {
-            return None;
-        }
-
-        let remaining_steps = self.path.len().saturating_sub(self.path_cursor) as f64
-            - self.movement_progress.clamp(0.0, 1.0);
-        let seconds =
-            remaining_steps.max(0.0) / steps_per_tick * (f64::from(tick_rate_ms).max(0.0) / 1000.0);
-        seconds.is_finite().then_some(seconds as f32)
+        self.eta_seconds_remaining
+            .filter(|seconds| seconds.is_finite())
+            .map(|seconds| seconds as f32)
     }
 }
 
@@ -544,32 +589,72 @@ mod movement_tests {
     }
 
     #[test]
-    fn transport_ten_tiles_eta_matches_two_and_a_half_tiles_per_second_at_one_x() {
+    fn transport_ten_tiles_eta_matches_three_tiles_per_second_at_one_x() {
         let mut config = GameConfig::default();
         config.global_speed_multiplier = 1.0;
-        let fleet = transport();
-        let eta = fleet
-            .remaining_eta_seconds(
-                config.per_tick(TRANSPORT_BASE_SPEED_TILES_PER_SECOND),
-                config.tick_rate_ms,
-            )
-            .expect("moving transport has an ETA");
+        let mut fleet = transport();
+        fleet.recalculate_eta(
+            config.per_tick(TRANSPORT_BASE_SPEED_TILES_PER_SECOND),
+            config.tick_rate_ms,
+        );
+        let eta = fleet.remaining_eta_seconds().expect("moving transport has an ETA");
 
-        assert!((eta - 4.0).abs() < 1e-5);
+        assert!((eta - (10.0 / 3.0)).abs() < 1e-5);
     }
 
     #[test]
-    fn transport_eta_uses_updated_bonus_without_resetting_progress() {
+    fn transport_eta_recalculates_when_speed_bonus_changes() {
         let mut fleet = transport();
         fleet.movement_progress = 0.5;
-        fleet.speed_bonus_percent = 0.25;
+        fleet.recalculate_eta(0.2, 100.0);
+        assert!((fleet.remaining_eta_seconds().unwrap() - 4.75).abs() < 1e-5);
+
+        fleet.set_speed_bonus_percent(0.25);
+        assert_eq!(fleet.remaining_eta_seconds(), None);
 
         let steps_per_tick = fleet.movement_steps_per_tick(0.2);
-        let eta = fleet.remaining_eta_seconds(0.2, 100.0).unwrap();
+        fleet.update_eta_after_tick(0.2, 100.0);
+        let eta = fleet.remaining_eta_seconds().unwrap();
 
         assert!((steps_per_tick - 0.25).abs() < 1e-5);
         assert!((eta - 3.8).abs() < 1e-5);
         assert!((fleet.movement_progress - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn transport_eta_recalculates_when_route_changes() {
+        let mut fleet = transport();
+        fleet.recalculate_eta(0.2, 100.0);
+        fleet.replace_path(vec![20, 21, 22, 23]);
+
+        assert_eq!(fleet.remaining_eta_seconds(), None);
+        fleet.update_eta_after_tick(0.2, 100.0);
+
+        assert!((fleet.remaining_eta_seconds().unwrap() - 1.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn transport_eta_is_absent_after_arrival_or_retreat() {
+        let mut arrived = transport();
+        arrived.recalculate_eta(0.2, 100.0);
+        arrived.path_cursor = arrived.path.len();
+        arrived.update_eta_after_tick(0.2, 100.0);
+        assert_eq!(arrived.remaining_eta_seconds(), None);
+
+        let mut retreating = transport();
+        retreating.recalculate_eta(0.2, 100.0);
+        retreating.retreating = true;
+        retreating.update_eta_after_tick(0.2, 100.0);
+        assert_eq!(retreating.remaining_eta_seconds(), None);
+    }
+
+    #[test]
+    fn transport_eta_counts_down_by_simulation_ticks() {
+        let mut fleet = transport();
+        fleet.recalculate_eta(0.2, 100.0);
+        fleet.update_eta_after_tick(0.2, 100.0);
+
+        assert!((fleet.remaining_eta_seconds().unwrap() - 4.9).abs() < 1e-5);
     }
 }
 

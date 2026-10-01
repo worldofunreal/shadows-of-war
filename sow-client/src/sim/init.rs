@@ -7,6 +7,7 @@ pub(crate) struct SimInitOpts {
     pub players: Vec<sow_core::protocol::PlayerInfo>,
     pub map_spawns: Vec<sow_core::map_file::MapSpawn>,
     pub geo_bounds: Option<sow_core::map_file::GeoBounds>,
+    pub map_rosters: Vec<sow_core::map_file::MapRosterPreset>,
     pub num_land_tiles: u32,
 }
 
@@ -18,6 +19,7 @@ impl SowApp {
         let players = opts.players;
         let map_spawns = opts.map_spawns;
         let geo_bounds = opts.geo_bounds;
+        let map_rosters = opts.map_rosters;
         let num_land_tiles = opts.num_land_tiles;
         self.exit_reward_preview = None;
         self.reset_progress_session();
@@ -31,6 +33,7 @@ impl SowApp {
             players,
             map_spawns,
             geo_bounds,
+            map_rosters,
             num_land_tiles,
         );
         if self.net.is_offline && new_engine.state.config.tutorial {

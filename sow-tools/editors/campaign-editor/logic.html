@@ -38,8 +38,10 @@
   </section>
   <aside id="inspectorPanel" class="inspector-panel" aria-label="Step inspector">
     <div class="panel-bar"><span class="eyebrow">INSPECTOR</span><label>Text language <select id="editLocale"><option value="en">English</option><option value="es">Español</option></select></label></div>
-    <div id="inspector" class="inspector-scroll"></div>
-    <details class="episode-settings"><summary>Episode settings & speakers</summary><div id="settings"></div></details>
+    <div id="inspectorScroll" class="inspector-scroll">
+      <div id="inspector"></div>
+      <details class="episode-settings"><summary>Episode settings & speakers</summary><div id="settings"></div></details>
+    </div>
   </aside>
   <section class="preview-panel" aria-label="Campaign preview">
     <div class="panel-bar"><div><span class="eyebrow">LIVE PREVIEW</span><h2>Player experience</h2></div><button id="demoBtn" class="sample-toggle" type="button" aria-pressed="false">Preview branching sample</button><span class="simulation-badge">SIMULATION</span></div>

@@ -531,7 +531,7 @@
             visualClass = " sow-purchase-modal__visual--skin";
             art = "<img class='sow-purchase-modal__art-image sow-purchase-modal__art-image--skin' src='" + esc(asset(skin.asset_path)) + "' alt='" + esc(skin.name) + "' width='256' height='256'>";
         } else {
-            art = "<picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(asset("shell/leaders/" + leader.slug + "_mobile.webp")) + "'><img class='sow-purchase-modal__art-image' src='" + esc(asset("shell/leaders/" + leader.slug + "_desktop.webp")) + "' alt='" + esc(leaderDisplayName(leader)) + "' width='1080' height='1920'></picture>";
+            art = "<picture><source media='(max-width: 700px) and (orientation: portrait)' srcset='" + esc(leaderArtUrl(leader.slug, "mobile")) + "'><img class='sow-purchase-modal__art-image' src='" + esc(leaderArtUrl(leader.slug, "desktop")) + "' alt='" + esc(leaderDisplayName(leader)) + "' width='1080' height='1920'></picture>";
         }
         var effects = success
             ? "<div class='sow-purchase-modal__effects' aria-hidden='true'><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>"

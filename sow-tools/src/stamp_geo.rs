@@ -5,7 +5,9 @@
 //! anchors against geo-entity centroids. The curated table is authoritative;
 //! calibration is an assistant whose fits were reviewed and pasted there.
 
+use serde::Deserialize;
 use sow_core::map_file::{self, GeoBounds, MapFile};
+use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 use std::fs;
 use std::io::Write;
@@ -101,7 +103,23 @@ const VERIFY_CITIES: &[(&str, f64, f64)] = &[
     ("Sao Paulo", -23.55, -46.63),
 ];
 
+const LAND_BIT: u8 = 0x80;
+const SHORE_BIT: u8 = 0x40;
+const OCEAN_BIT: u8 = 0x20;
+
+#[derive(Deserialize)]
+struct CorrectionManifest {
+    recipes: BTreeMap<String, CorrectionRecipe>,
+}
+
+#[derive(Deserialize, Default)]
+struct CorrectionRecipe {
+    #[serde(default)]
+    land_entity_corrections: Vec<String>,
+}
+
 pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
+    let corrections = load_land_entity_corrections(&args.maps_root)?;
     let keys: Vec<String> = match &args.map {
         Some(key) => vec![key.clone()],
         None => {
@@ -150,9 +168,8 @@ pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
         // rewritten even when the bounds match: the current trailing-record
         // layout keeps version 1 so pre-geo parsers accept stamped maps.
         let outdated_layout = u16::from_le_bytes([payload[4], payload[5]]) != map_file::MAP_VERSION;
-        if map.geo_bounds == Some(bounds) && !outdated_layout {
-            println!("{key}: already stamped with identical bounds, up to date");
-        } else {
+        let bounds_changed = map.geo_bounds != Some(bounds) || outdated_layout;
+        if bounds_changed {
             println!(
                 "{key}: {} -> bbox ({:.2}, {:.2}, {:.2}, {:.2})",
                 if map.geo_bounds.is_some() {
@@ -166,9 +183,26 @@ pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
                 bounds.max_lat()
             );
             map.geo_bounds = Some(bounds);
+        } else {
+            println!("{key}: geographic bounds already up to date");
+        }
+
+        let entity_corrections = corrections.get(key).map_or(&[][..], |ids| ids.as_slice());
+        let corrected_tiles = apply_land_entity_corrections(&mut map, entity_corrections)?;
+        if !entity_corrections.is_empty() {
+            println!(
+                "{key}: {} curated entity locations, {} map tiles corrected",
+                entity_corrections.len(),
+                corrected_tiles
+            );
+        }
+
+        if bounds_changed || corrected_tiles > 0 {
             if write {
                 write_map(&dir, &map)?;
                 stamped += 1;
+            } else {
+                println!("{key}: map.bin and map.bin.br would be updated");
             }
         }
 
@@ -181,6 +215,86 @@ pub fn run(args: StampGeoArgs) -> Result<(), Box<dyn Error>> {
         println!("Stamped {stamped} map(s).");
     }
     Ok(())
+}
+
+fn load_land_entity_corrections(
+    maps_root: &Path,
+) -> Result<BTreeMap<String, Vec<String>>, Box<dyn Error>> {
+    let path = maps_root.join("SOURCES.toml");
+    if !path.is_file() {
+        return Ok(BTreeMap::new());
+    }
+    let manifest: CorrectionManifest = toml::from_str(&fs::read_to_string(path)?)?;
+    Ok(manifest
+        .recipes
+        .into_iter()
+        .filter_map(|(key, recipe)| {
+            (!recipe.land_entity_corrections.is_empty())
+                .then_some((key, recipe.land_entity_corrections))
+        })
+        .collect())
+}
+
+fn apply_land_entity_corrections(
+    map: &mut MapFile,
+    ids: &[String],
+) -> Result<usize, Box<dyn Error>> {
+    let Some(bounds) = map.geo_bounds else {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        return Err("land entity corrections require geographic map bounds".into());
+    };
+
+    let mut changed_tiles = HashSet::new();
+    let mut corrected_centers = HashSet::new();
+    for id in ids {
+        let entity = sow_core::geo_entities::by_id(id)
+            .ok_or_else(|| format!("unknown geographic entity correction: {id}"))?;
+        let (Some(lat), Some(lon)) = (entity.lat, entity.lon) else {
+            return Err(format!("geographic entity {id} has no coordinates").into());
+        };
+        let (x, y) = bounds
+            .project(lat as f64, lon as f64, map.width, map.height)
+            .ok_or_else(|| format!("geographic entity {id} is outside this map"))?;
+        let center = (y * map.width + x) as usize;
+        if !corrected_centers.insert(center) {
+            continue;
+        }
+
+        if map.terrain[center] & LAND_BIT == 0 {
+            map.terrain[center] = LAND_BIT | SHORE_BIT;
+            map.num_land_tiles = map
+                .num_land_tiles
+                .checked_add(1)
+                .ok_or("map land-tile count overflow")?;
+            changed_tiles.insert(center);
+        } else if map.terrain[center] & SHORE_BIT == 0 {
+            map.terrain[center] |= SHORE_BIT;
+            changed_tiles.insert(center);
+        }
+
+        for (nx, ny) in [
+            x.checked_sub(1).map(|nx| (nx, y)),
+            (x + 1 < map.width).then_some((x + 1, y)),
+            y.checked_sub(1).map(|ny| (x, ny)),
+            (y + 1 < map.height).then_some((x, y + 1)),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let neighbor = (ny * map.width + nx) as usize;
+            let previous = map.terrain[neighbor];
+            if previous & LAND_BIT == 0 {
+                let shoreline = (previous & OCEAN_BIT) | SHORE_BIT;
+                if shoreline != previous {
+                    map.terrain[neighbor] = shoreline;
+                    changed_tiles.insert(neighbor);
+                }
+            }
+        }
+    }
+    Ok(changed_tiles.len())
 }
 
 fn resolve_bounds(args: &StampGeoArgs, key: &str, map: &MapFile) -> Option<GeoBounds> {
@@ -212,7 +326,8 @@ fn reference_latlon(name: &str) -> Option<(f64, f64)> {
     }
     sow_core::geo_entities::all()
         .find(|e| e.name == name)
-        .map(|e| (e.lat as f64, e.lon as f64))
+        .and_then(|e| e.lat.zip(e.lon))
+        .map(|(lat, lon)| (lat as f64, lon as f64))
 }
 
 /// Least squares deg = a·px + b over (px, deg) pairs.
@@ -377,5 +492,47 @@ fn verify_map(key: &str, map: &MapFile) {
                 if land { "land" } else { "water" }
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entity_land_corrections_keep_catalog_coordinates_and_are_repeatable() {
+        let mut map = MapFile {
+            display_name: "world".into(),
+            width: 1000,
+            height: 500,
+            num_land_tiles: 0,
+            spawns: Vec::new(),
+            geo_bounds: Some(GeoBounds::from_degrees(-168.69, -78.80, 192.37, 82.78)),
+            default_roster: None,
+            rosters: Vec::new(),
+            terrain: vec![OCEAN_BIT | 31; 500_000],
+        };
+        let ids = vec!["tahitians".into(), "kingdom_of_tahiti".into()];
+
+        assert!(apply_land_entity_corrections(&mut map, &ids).unwrap() > 0);
+        for id in [&ids[0], &ids[1]] {
+            let entity = sow_core::geo_entities::by_id(id).unwrap();
+            let (x, y) = map
+                .geo_bounds
+                .unwrap()
+                .project(
+                    entity.lat.unwrap() as f64,
+                    entity.lon.unwrap() as f64,
+                    map.width,
+                    map.height,
+                )
+                .unwrap();
+            assert_eq!(
+                map.terrain[(y * map.width + x) as usize] & (LAND_BIT | SHORE_BIT),
+                LAND_BIT | SHORE_BIT
+            );
+        }
+        assert_eq!(map.num_land_tiles, 2);
+        assert_eq!(apply_land_entity_corrections(&mut map, &ids).unwrap(), 0);
     }
 }

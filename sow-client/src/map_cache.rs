@@ -98,6 +98,15 @@ pub fn catalog_from_cache() -> Vec<MapCatalogEntry> {
             height: map.height,
             num_land_tiles: map.num_land_tiles,
             multiplayer_frequency: 1,
+            default_roster: map.default_roster,
+            roster_presets: map
+                .rosters
+                .into_iter()
+                .map(|preset| sow_core::map_file::MapRosterMeta {
+                    id: preset.id,
+                    name: preset.name,
+                })
+                .collect(),
         });
     }
     entries.sort_by(|a, b| {

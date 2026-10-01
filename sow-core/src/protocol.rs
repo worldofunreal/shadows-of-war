@@ -102,9 +102,14 @@ pub enum GameplayIntent {
     },
     /// INK TIDE (Wave-Racer-style) boat controls — lockstep input for the
     /// racer. The relay treats this opaquely: stamps, stores, broadcasts.
-    /// Only racer clients decode it. Appended last so existing variant
-    /// indices (and SoW clients) are untouched.
+    /// Only racer clients decode it. Keep new variants appended after this.
     RacerControls(RacerControlsIntent),
+    /// Resolves a single-player campaign contact choice after Rust verifies contact and cost.
+    ResolveCampaignDiplomacy {
+        target_player: crate::player::PlayerId,
+        relation: CampaignRelation,
+        gold_cost: f64,
+    },
 }
 
 /// Boat control frame for INK TIDE lockstep turns.
@@ -370,6 +375,15 @@ pub enum Team {
     Blue,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CampaignRelation {
+    #[default]
+    Neutral,
+    Allied,
+    Enemy,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PlayerInfo {
     pub id: u16,
@@ -432,6 +446,7 @@ pub enum SimCommand {
         /// explicitly or they never reach the engine.
         map_spawns: Vec<crate::map_file::MapSpawn>,
         geo_bounds: Option<crate::map_file::GeoBounds>,
+        map_rosters: Vec<crate::map_file::MapRosterPreset>,
         num_land_tiles: u32,
     },
     /// Apply a server turn (network intents + tick).

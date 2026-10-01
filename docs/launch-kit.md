@@ -39,7 +39,6 @@ Choose 1 of 12 leaders, take land, build your economy, ally,
 and break it when the front line changes.
 
 Play now: https://shadowsofwar.io
-How to play: https://shadowsofwar.io/how-to-play/
 Discord: https://discord.gg/d6ZDeChSE
 Telegram: https://t.me/shadowsofwario
 GitHub: https://github.com/worldofunreal/shadows-of-war
@@ -65,8 +64,6 @@ and decide when breaking it is worth it. Each match turns
 on the front line.
 
 Play the current browser build at https://shadowsofwar.io/play/
-
-Read the field manual at https://shadowsofwar.io/how-to-play/
 ```
 
 Suggested tags: `strategy`, `multiplayer`, `real-time`, `browser`, `war`,
@@ -82,7 +79,6 @@ Choose 1 of 12 leaders, take land, build your economy, ally,
 and decide when to break it.
 
 Play now: https://shadowsofwar.io
-Field manual: https://shadowsofwar.io/how-to-play/
 
 If you play a match, share the moment where the plan changed: first conquest,
 last stand, alliance, or betrayal.
@@ -95,7 +91,7 @@ last stand, alliance, or betrayal.
 - [Gameplay capture](../assets/site/media/shadows-of-war-gameplay.mp4)
 - Session screenshots in `assets/site/media/`
 - Leader artwork and avatars under the existing CDN asset tree
-- Landing page, FAQ, field manual, legal pages, and game shell
+- Landing page with FAQ, legal pages, and game shell
 
 ### Still needed before external listings
 

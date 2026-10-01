@@ -162,8 +162,16 @@ impl SowEngine {
             (src, landing),
             path,
         );
-        fleet.speed_bonus_percent =
-            crate::building::player_boat_speed_bonus(&self.buildings, player_id);
+        fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
+            &self.buildings,
+            player_id,
+        ));
+        fleet.recalculate_eta(
+            self.state
+                .config
+                .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND),
+            self.state.config.tick_rate_ms,
+        );
         self.add_fleet(fleet);
     }
 }

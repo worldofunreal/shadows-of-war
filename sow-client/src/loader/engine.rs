@@ -80,12 +80,7 @@ impl SowApp {
         self.ui.attack_badge_style_key = None;
         self.ui.attack_badge_cache_tick = None;
         self.ui.attack_badge_active_ids.clear();
-        self.ui.nameplate_sample_tick = None;
-        self.ui.nameplate_sample_at = None;
-        self.ui.nameplate_order_my_id = None;
-        self.ui.nameplate_order.clear();
-        self.ui.nameplate_visuals.clear();
-        self.ui.nameplate_land_cache = Default::default();
+        self.ui.nameplates.reset();
         self.ui.building_render_cache = Default::default();
         self.ui.leaderboard_top_three = [None; 3];
         self.ui.leaderboard_refresh_at = None;
@@ -169,6 +164,14 @@ impl SowApp {
                         state.total_land_tiles = map_file.num_land_tiles;
                         state.map_spawns = map_file.spawns;
                         state.geo_bounds = map_file.geo_bounds;
+                        let selected_roster = state.config.map_roster_preset.clone();
+                        state.map_rosters = map_file
+                            .rosters
+                            .into_iter()
+                            .filter(|preset| {
+                                selected_roster.as_deref() == Some(preset.id.as_str())
+                            })
+                            .collect();
                         if map_file.terrain.len() == state.map.terrain.len() {
                             let dest_ptr = state.map.terrain.as_mut_ptr() as *mut u8;
                             unsafe {
@@ -320,6 +323,7 @@ impl SowApp {
                             // from the parsed map file must ride explicitly.
                             map_spawns: state.map_spawns.clone(),
                             geo_bounds: state.geo_bounds,
+                            map_rosters: state.map_rosters.clone(),
                             num_land_tiles: state.total_land_tiles,
                         });
 

@@ -231,11 +231,38 @@ impl MainMenuState {
         }
     }
 
+    pub(crate) fn sync_selected_leader_from_match(
+        &mut self,
+        leader: sow_core::player::Leader,
+        tutorial: bool,
+    ) {
+        if !tutorial {
+            self.set_selected_leader(leader, false);
+        }
+    }
+
     pub(crate) fn reset_leader_selection_override(&mut self) {
         self.leader_selection_dirty = false;
     }
 
     pub(crate) fn has_explicit_leader_selection(&self) -> bool {
         self.leader_selection_dirty
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MainMenuState;
+    use sow_core::player::Leader;
+
+    #[test]
+    fn tutorial_match_does_not_replace_account_leader() {
+        let mut state = MainMenuState::default();
+        state.set_selected_leader(Leader::Caesar, false);
+
+        state.sync_selected_leader_from_match(Leader::Boudica, true);
+
+        assert_eq!(state.selected_leader, Leader::Caesar);
+        assert_eq!(state.custom_game_config.player_leader, Leader::Caesar);
     }
 }

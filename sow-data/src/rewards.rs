@@ -174,7 +174,6 @@ const CROWNS_PER_EMPIRE: u64 = 5;
 const CROWNS_PER_ASSIST: u64 = 2;
 const CROWNS_TUTORIAL: u64 = 100;
 
-
 pub fn calculate(input: RewardInput) -> MatchReward {
     if input.tutorial {
         return MatchReward {

@@ -2,23 +2,23 @@ use crate::engine::SowEngine;
 
 impl SowEngine {
     pub fn build_snapshot(&mut self) -> crate::protocol::SimSnapshot {
-        let dirty_tiles: Vec<crate::protocol::DirtyTile> = self
-            .state
-            .map
-            .dirty_tiles
-            .drain(..)
-            .map(|i| crate::protocol::DirtyTile {
-                index: i as u32,
-                new_owner: self.state.map.state[i],
-                upgrade_level: self
-                    .state
-                    .map
-                    .tile_upgrades
-                    .get(&(i as u32))
-                    .copied()
-                    .unwrap_or_default(),
-            })
-            .collect();
+        let mut dirty_indices = std::mem::take(&mut self.state.map.dirty_tiles);
+        let dirty_tiles: Vec<crate::protocol::DirtyTile> = {
+            let map = &self.state.map;
+            dirty_indices
+                .drain(..)
+                .map(|i| crate::protocol::DirtyTile {
+                    index: i as u32,
+                    new_owner: map.owner_states()[i],
+                    upgrade_level: map
+                        .tile_upgrades
+                        .get(&(i as u32))
+                        .copied()
+                        .unwrap_or_default(),
+                })
+                .collect()
+        };
+        self.state.map.dirty_tiles = dirty_indices;
 
         let proposed = &self.alliances_proposed;
         let proposed_resources = &self.resource_requests_proposed;
@@ -79,7 +79,11 @@ impl SowEngine {
                     centroid_x: cx,
                     centroid_y: cy,
                     player_type: p.player_type,
-                    color: p.color,
+                    color: self
+                        .campaign_relations
+                        .get(&p.id)
+                        .and_then(|relation| crate::player::campaign_relation_rgb(*relation))
+                        .unwrap_or(p.color),
                     team: p.team,
                     has_spawned: p.has_spawned,
                     alive: p.alive,
@@ -104,10 +108,6 @@ impl SowEngine {
             })
             .collect();
 
-        let transport_base_steps_per_tick = self
-            .state
-            .config
-            .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND);
         let fleets = self
             .fleets
             .iter()
@@ -120,10 +120,7 @@ impl SowEngine {
                 path: f.path.clone(),
                 path_cursor: f.path_cursor,
                 movement_progress: f.movement_progress as f32,
-                eta_seconds: f.remaining_eta_seconds(
-                    transport_base_steps_per_tick,
-                    self.state.config.tick_rate_ms,
-                ),
+                eta_seconds: f.remaining_eta_seconds(),
                 retreating: f.retreating,
             })
             .collect();

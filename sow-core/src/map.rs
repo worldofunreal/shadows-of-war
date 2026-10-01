@@ -65,15 +65,28 @@ pub enum TileResource {
     Salt = 9,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GameMap {
     pub width: u32,
     pub height: u32,
     pub terrain: Vec<MapTile>,
-    pub state: Vec<u16>,
+    state: Vec<u16>,
     pub tile_upgrades: BTreeMap<u32, u32>,
     #[serde(skip)]
     pub dirty_tiles: Vec<usize>,
+    #[serde(skip)]
+    ownership_revision: u64,
+}
+
+impl PartialEq for GameMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && self.terrain == other.terrain
+            && self.state == other.state
+            && self.tile_upgrades == other.tile_upgrades
+            && self.dirty_tiles == other.dirty_tiles
+    }
 }
 
 /// Cardinal 4-neighbor deltas: East, West, North, South. Bit index matches border mask packing.
@@ -95,7 +108,21 @@ impl GameMap {
             state: vec![0; size],
             tile_upgrades: BTreeMap::new(),
             dirty_tiles: Vec::new(),
+            ownership_revision: 0,
         }
+    }
+
+    /// Read-only packed per-tile state. Ownership writes must use `set_owner_id`
+    /// so derived caches can observe actual owner changes.
+    #[inline(always)]
+    pub fn owner_states(&self) -> &[u16] {
+        &self.state
+    }
+
+    /// Monotonic within the lifetime of this map; excluded from saved and wire state.
+    #[inline(always)]
+    pub fn ownership_revision(&self) -> u64 {
+        self.ownership_revision
     }
 
     #[inline(always)]
@@ -122,6 +149,9 @@ impl GameMap {
         if old != new {
             self.state[r] = new;
             self.dirty_tiles.push(r);
+            if old & Self::PLAYER_ID_MASK != new & Self::PLAYER_ID_MASK {
+                self.ownership_revision = self.ownership_revision.wrapping_add(1);
+            }
         }
     }
     #[inline(always)]
@@ -223,6 +253,40 @@ impl GameMap {
             }
         }
         self.terrain = new_terrain;
+    }
+}
+
+#[cfg(test)]
+mod ownership_revision_tests {
+    use super::GameMap;
+
+    #[test]
+    fn ownership_revision_tracks_only_actual_owner_changes() {
+        let mut map = GameMap::new(2, 1);
+        assert_eq!(map.ownership_revision(), 0);
+
+        map.set_owner_id(0, 0, 7);
+        assert_eq!(map.ownership_revision(), 1);
+        map.set_owner_id(0, 0, 7);
+        assert_eq!(map.ownership_revision(), 1);
+        map.tile_upgrades.insert(0, 1);
+        assert_eq!(map.ownership_revision(), 1);
+        map.set_owner_id(0, 0, 9);
+        assert_eq!(map.ownership_revision(), 2);
+        map.set_owner_id(0, 0, 0);
+        assert_eq!(map.ownership_revision(), 3);
+    }
+
+    #[test]
+    fn ownership_revision_is_not_serialized_or_part_of_map_equality() {
+        let mut original = GameMap::new(1, 1);
+        original.set_owner_id(0, 0, 1);
+        let mut restored = original.clone();
+        restored.ownership_revision = 0;
+
+        assert_eq!(original, restored);
+        let serialized = serde_json::to_value(&original).expect("map serializes");
+        assert!(serialized.get("ownership_revision").is_none());
     }
 }
 

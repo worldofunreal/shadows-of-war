@@ -635,6 +635,7 @@ impl SowApp {
         display_name: String,
         provider: String,
     ) {
+        let cloud_preferred_leader = cloud.preferred_leader.clone();
         let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
         let account_switch = account_changed && self.progress_account_id.is_some();
         let cloud_intro_completed = cloud.intro_completed.unwrap_or(false);
@@ -709,9 +710,13 @@ impl SowApp {
         if !account_switch && !self.progress.has_history() && portal.has_history() {
             self.progress = portal;
         }
-        if account_changed {
-            self.apply_progress_preferences();
-        }
+        self.progress.preferred_leader = Some(cloud_preferred_leader.unwrap_or_else(|| {
+            sow_data::commerce::assigned_leader_for_account(
+                &account_id,
+                sow_data::commerce::current_rotation_period(),
+            )
+        }));
+        self.apply_progress_preferences();
         if retry_tutorial {
             log::info!(
                 "[tutorial] cloud profile is missing completion; retrying one-time reward sync"

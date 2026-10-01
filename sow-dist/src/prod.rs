@@ -600,13 +600,36 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     run(
         "node",
-        &[
-            "--test",
-            "sow-web/shell/main_menu.interaction.test.js",
-        ],
+        &["--test", "sow-web/shell/main_menu.interaction.test.js"],
         Some(&paths.root),
     )
     .context("web interaction regression tests failed")?;
+    run(
+        "rustfmt",
+        &[
+            "--edition",
+            "2024",
+            "--check",
+            "sow-core/src/map.rs",
+            "sow-core/src/player/mod.rs",
+            "sow-render/src/text/renderer.rs",
+            "sow-render/src/text/types.rs",
+            "sow-render/src/nameplate.rs",
+            "sow-render/src/lib.rs",
+            "sow-client/src/render/world/nameplates.rs",
+            "sow-client/src/render/world/mod.rs",
+            "sow-client/src/ui/utils.rs",
+            "sow-dist/src/prod.rs",
+        ],
+        Some(&paths.root),
+    )
+    .context("nameplate Rust formatting check failed")?;
+    run(
+        "cargo",
+        &["test", "--locked", "-p", "sow-render", "--lib"],
+        Some(&paths.root),
+    )
+    .context("nameplate renderer regression tests failed")?;
     if !Command::new("rustc")
         .args([
             "--print",
@@ -1287,27 +1310,9 @@ fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
     }
     package_self(paths, &web, version, true)?;
     let maps_cache_bust = thumbnail_cache_bust(&web.join("maps"))?;
-    package_cg(
-        &web,
-        &paths.dist_cg,
-        paths,
-        version,
-        &maps_cache_bust,
-    )?;
-    package_poki(
-        &web,
-        &poki,
-        paths,
-        version,
-        &maps_cache_bust,
-    )?;
-    package_jest(
-        &web,
-        &paths.dist_jest,
-        paths,
-        version,
-        &maps_cache_bust,
-    )?;
+    package_cg(&web, &paths.dist_cg, paths, version, &maps_cache_bust)?;
+    package_poki(&web, &poki, paths, version, &maps_cache_bust)?;
+    package_jest(&web, &paths.dist_jest, paths, version, &maps_cache_bust)?;
     write_jest_zip(paths)?;
     fs::create_dir_all(cache.parent().context("web cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;
@@ -1793,7 +1798,6 @@ fn assemble_release(
 
     require_file(&work.join("web/index.html"), "website index")?;
     require_file(&work.join("web/play/index.html"), "game index")?;
-    require_file(&work.join("web/leaders/index.html"), "leaders index")?;
     require_file(&work.join("web/robots.txt"), "robots.txt")?;
     require_file(&work.join("web/sitemap.xml"), "sitemap.xml")?;
     require_file(&work.join("web/game-manifest.json"), "game manifest")?;

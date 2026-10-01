@@ -148,6 +148,8 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         (c, entry)
     };
 
+    normalize_map_roster(&mut config, map_entry.as_ref());
+
     config.game_mode = game_mode.to_string();
 
     if kind == LobbyKind::Matchmaking {
@@ -188,6 +190,30 @@ fn spawn_waiting_lobby(games: &mut Vec<ServerLobby>, next_id: &mut u64, opts: Sp
         bot_fill_target: None,
         pending_bots: Vec::new(),
     });
+}
+
+fn normalize_map_roster(
+    config: &mut GameConfig,
+    entry: Option<&sow_core::map_file::MapCatalogEntry>,
+) {
+    let Some(entry) = entry else {
+        config.map_roster_preset = None;
+        return;
+    };
+    if !entry
+        .roster_presets
+        .iter()
+        .any(|preset| Some(preset.id.as_str()) == config.map_roster_preset.as_deref())
+    {
+        if config.map_roster_preset.is_some() {
+            log::warn!(
+                "Unknown roster preset {:?} for map {}; using its default",
+                config.map_roster_preset,
+                entry.key
+            );
+        }
+        config.map_roster_preset = entry.default_roster.clone();
+    }
 }
 
 /// Matchmaking queue depth: exactly ONE joinable lobby at a time. When it
@@ -712,7 +738,9 @@ fn start_match(lobby: &mut ServerLobby) {
         lobby.config.map_width = entry.width;
         lobby.config.map_height = entry.height;
         lobby.config.map_name = entry.key.clone();
+        normalize_map_roster(&mut lobby.config, Some(&entry));
     } else {
+        normalize_map_roster(&mut lobby.config, None);
         log::error!(
             "Unknown map '{}' in catalog; using config defaults",
             lobby.config.map_name
@@ -1060,7 +1088,8 @@ mod name_tests {
     use super::{
         JoinPlayerOpts, LobbyKind, LobbyPhase, PlayerConnection, ServerLobby, SpawnLobbyOpts,
         build_lobby_broadcast, ensure_queue_depth, join_player, kick_player, master_tick,
-        normalize_player_name, resolve_join_target, set_player_team, spawn_waiting_lobby,
+        normalize_map_roster, normalize_player_name, resolve_join_target, set_player_team,
+        spawn_waiting_lobby,
     };
     use sow_core::game_config::GameConfig;
     use sow_core::player::{Civilization, Leader};
@@ -1129,6 +1158,34 @@ mod name_tests {
         );
         assert!(normalize_player_name("\n\t").starts_with("ANON"));
         assert!(normalize_player_name("Caes\u{200B}ar").starts_with("ANON"));
+    }
+
+    #[test]
+    fn lobby_uses_valid_selected_roster_or_map_default() {
+        let entry = sow_core::map_file::MapCatalogEntry {
+            key: "world".into(),
+            display_name: "World".into(),
+            width: 20,
+            height: 10,
+            num_land_tiles: 100,
+            multiplayer_frequency: 1,
+            default_roster: Some("historical".into()),
+            roster_presets: vec![
+                sow_core::map_file::MapRosterMeta { id: "historical".into(), name: "Historical".into() },
+                sow_core::map_file::MapRosterMeta { id: "modern".into(), name: "Modern".into() },
+            ],
+        };
+        let mut config = GameConfig { map_roster_preset: Some("modern".into()), ..Default::default() };
+        normalize_map_roster(&mut config, Some(&entry));
+        assert_eq!(config.map_roster_preset.as_deref(), Some("modern"));
+
+        config.map_roster_preset = Some("missing".into());
+        normalize_map_roster(&mut config, Some(&entry));
+        assert_eq!(config.map_roster_preset.as_deref(), Some("historical"));
+
+        config.map_roster_preset = Some("stale".into());
+        normalize_map_roster(&mut config, None);
+        assert_eq!(config.map_roster_preset, None);
     }
 
     #[test]

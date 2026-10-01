@@ -327,22 +327,6 @@ pub struct AttackBadgeLabel {
     pub last_update: web_time::Instant,
 }
 
-#[derive(Clone, Debug)]
-pub struct NameplateVisualState {
-    pub to_center: [f32; 2],
-    pub from_size: f32,
-    pub to_size: f32,
-    pub land_bounds: [f32; 4],
-    pub source_name: String,
-    pub player_type: sow_core::player::PlayerType,
-    pub display_name: String,
-    pub troops_bits: u64,
-    pub troops_text: String,
-    pub name_measure_unit: [f32; 2],
-    pub troops_measure_unit: [f32; 2],
-    pub metrics_style_key: Option<[u32; 2]>,
-}
-
 pub struct UiState {
     pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
@@ -381,13 +365,9 @@ pub struct UiState {
     pub attack_badge_style_key: Option<[u32; 2]>,
     pub attack_badge_cache_tick: Option<u64>,
     pub attack_badge_active_ids: std::collections::HashSet<u64>,
-    pub nameplate_sample_tick: Option<u64>,
-    pub nameplate_sample_at: Option<web_time::Instant>,
-    pub nameplate_order_my_id: Option<u16>,
-    pub nameplate_order: Vec<usize>,
-    pub nameplate_visuals: std::collections::HashMap<u16, NameplateVisualState>,
-    pub(crate) nameplate_land_cache: crate::render::world::nameplate_placement::NameplateLandCache,
+    pub(crate) nameplates: crate::render::world::nameplates::NameplateSystem,
     pub(crate) building_render_cache: crate::render::world::BuildingRenderCache,
+    pub(crate) building_placement_cache: crate::input::placement::BuildingPlacementCache,
     pub building_levels_seen: std::collections::HashMap<u32, u8>,
     pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,
     pub last_resource_notice_tick: Option<u64>,
@@ -568,8 +548,6 @@ pub struct SowApp {
     #[cfg(target_arch = "wasm32")]
     pub wasm_doc_was_visible: bool,
     pub asset_config: crate::AssetConfig,
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) web_loader_hidden: bool,
     #[cfg(target_arch = "wasm32")]
     pub(crate) web_exit_lobbies_ready: bool,
     /// Set when Blade/Vulkan init fails; event loop exits on next tick.

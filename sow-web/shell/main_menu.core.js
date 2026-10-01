@@ -110,6 +110,14 @@
         return base + "/" + path.split("/").map(encodeURIComponent).join("/");
     }
 
+    function leaderArtUrl(slug, variant) {
+        return window.SOW_leaderArtUrl(slug, variant);
+    }
+
+    function prepareLeaderArt(leader) {
+        return leader ? window.SOW_prepareLeaderArt(leader.slug) : Promise.resolve(false);
+    }
+
     var MAIN_NAV_ITEMS = [
         ["store", "shell/mobile-nav/store.webp", "menu.shop"],
         ["heroes", "shell/mobile-nav/heroes.webp", "menu.heroes"],
@@ -260,10 +268,15 @@
     };
 
     function heroImage(leaderId) {
+        var selected = arguments.length === 0;
         var leader = arguments.length
             ? leaderById(leaderId || "Caesar")
             : leaderById(state && state.selected_leader);
-        return asset("shell/leaders/" + leader.slug + "_desktop.webp");
+        if (selected && state && state.phase === "MainMenu" &&
+            state.loader_job !== "EnterGame" && state.loader_job !== "ExitGame") {
+            prepareLeaderArt(leader);
+        }
+        return leaderArtUrl(leader.slug);
     }
 
     function avatarImage() {
@@ -331,7 +344,8 @@
             error: state.error,
             notice: state.notice,
             maps: (state.map_catalog || []).map(function (map) {
-                return [map.key, map.display_name, map.width, map.height];
+                return [map.key, map.display_name, map.width, map.height, map.default_roster,
+                    (map.roster_presets || []).map(function (preset) { return [preset.id, preset.name]; })];
             })
         });
     }

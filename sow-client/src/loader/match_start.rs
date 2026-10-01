@@ -4,18 +4,13 @@ use sow_core::game_config::GameConfig;
 #[cfg(target_arch = "wasm32")]
 use crate::ClientPhase;
 
-#[cfg(target_arch = "wasm32")]
-use crate::loader::hide_web_loader;
-
 impl SowApp {
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn finish_boot_to_main_menu(&mut self) {
         self.ui.app.splash_state.done = true;
         self.ui.app.phase = ClientPhase::MainMenu;
-        hide_web_loader();
         crate::store_portals::load_stop();
         crate::store_portals::gameplay_stop();
-        self.web_loader_hidden = true;
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -26,8 +21,6 @@ impl SowApp {
         crate::store_portals::load_stop();
         if !self.progress.is_first_game() {
             log::info!("Portal boot: returning player -> main menu");
-            hide_web_loader();
-            self.web_loader_hidden = true;
             crate::store_portals::gameplay_stop();
             crate::analytics::track_with(
                 "boot_route_decision",
@@ -42,11 +35,9 @@ impl SowApp {
                 serde_json::json!({ "route": "intro" }),
             );
             self.ui.app.main_menu_state.host_private_pending = false;
-            self.boot_campaign_pending = Some(
-                crate::campaign::CampaignId::Boudica
-                    .episode_id()
-                    .to_string(),
-            );
+            let campaign = crate::campaign::CampaignId::Boudica;
+            self.boot_campaign_pending = Some(campaign.episode_id().to_string());
+            self.begin_enter_game_loader(campaign.advisor());
             crate::store_portals::gameplay_stop();
         }
     }
@@ -69,7 +60,7 @@ impl SowApp {
         }
         let roster_text = serde_json::to_string(&roster)
             .map_err(|_| "Campaign roster could not be read.".to_string())?;
-        let (factions, player_spawn) = crate::campaign::parse_roster(&roster_text)
+        let (factions, player_spawn, player_color) = crate::campaign::parse_roster(&roster_text)
             .ok_or_else(|| "Campaign roster is invalid.".to_string())?;
         let (map_width, map_height) = match campaign {
             crate::campaign::CampaignId::Boudica => (896, 504),
@@ -165,10 +156,6 @@ impl SowApp {
                 sow_core::player::Civilization::Maya,
             ),
         };
-        self.ui
-            .app
-            .main_menu_state
-            .set_selected_leader(leader, false);
         self.ui.tutorial_campaign = campaign;
         crate::campaign::log_plan_for(
             campaign.menu_title(),
@@ -187,7 +174,8 @@ impl SowApp {
                 player_civilization: civilization,
                 scripted_spawns: crate::campaign::to_scripted(&factions),
                 player_spawn: Some(player_spawn),
-                player_team: Some(crate::campaign::PLAYER_TEAM),
+                player_team: None,
+                campaign_player_color: Some(player_color),
                 starting_troops,
                 global_speed_multiplier: 1.0,
                 buildings_enabled,
@@ -215,10 +203,6 @@ impl SowApp {
         self.sim.tutorial_observation.reset();
         self.net.client = None;
         self.net.current_ping_ms = None;
-        self.ui
-            .app
-            .main_menu_state
-            .set_selected_leader(leader, false);
         self.begin_enter_game_loader(leader);
         self.sim.my_player_id = Some(1);
         self.sim.my_lobby_id = Some(0);
@@ -280,7 +264,7 @@ impl SowApp {
                         }
                     }
                 },
-                color: self.ui.app.main_menu_state.selected_leader.filler_rgb(),
+                color: leader.filler_rgb(),
                 player_type: sow_core::player::PlayerType::Human,
                 team: config.player_team.or(match config.game_mode.as_str() {
                     "Teams" | "HumansVsNations" => Some(sow_core::protocol::Team::Red),
@@ -288,8 +272,8 @@ impl SowApp {
                 }),
                 spawn_x: 0,
                 spawn_y: 0,
-                civilization: self.ui.app.main_menu_state.selected_civilization,
-                leader: self.ui.app.main_menu_state.selected_leader,
+                civilization: leader.civilization(),
+                leader,
                 skin_style: sow_data::commerce::skin_style_for_profile(
                     &self.progress.owned_skins,
                     self.progress.selected_skin.as_deref(),

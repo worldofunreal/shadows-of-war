@@ -99,9 +99,6 @@ impl SowApp {
         let ws_reconnect_after_resume: bool = false;
         #[cfg(target_arch = "wasm32")]
         let wasm_doc_was_visible: bool = true;
-        #[cfg(target_arch = "wasm32")]
-        let web_loader_hidden: bool = false;
-
         // Strict endpoint config: SOW_WS_URL must be declared by the shell
         // the browser shell. No default, no deriving from
         // window.location — a guessed host once pointed at the wrong origin.
@@ -277,13 +274,10 @@ impl SowApp {
                 attack_badge_style_key: None,
                 attack_badge_cache_tick: None,
                 attack_badge_active_ids: std::collections::HashSet::new(),
-                nameplate_sample_tick: None,
-                nameplate_sample_at: None,
-                nameplate_order_my_id: None,
-                nameplate_order: Vec::new(),
-                nameplate_visuals: std::collections::HashMap::new(),
-                nameplate_land_cache: Default::default(),
+                nameplates: crate::render::world::nameplates::NameplateSystem::default(),
                 building_render_cache: crate::render::world::BuildingRenderCache::default(),
+                building_placement_cache: crate::input::placement::BuildingPlacementCache::default(
+                ),
                 building_levels_seen: std::collections::HashMap::new(),
                 building_upgrade_flashes: std::collections::HashMap::new(),
                 last_resource_notice_tick: None,
@@ -317,8 +311,6 @@ impl SowApp {
             asset_config,
             #[cfg(target_arch = "wasm32")]
             wasm_doc_was_visible,
-            #[cfg(target_arch = "wasm32")]
-            web_loader_hidden,
             #[cfg(target_arch = "wasm32")]
             web_exit_lobbies_ready: false,
             gpu_init_failed: false,

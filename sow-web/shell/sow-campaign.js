@@ -89,6 +89,7 @@
 
     function validate(definition, roster, options) {
         options = options || {};
+        const allowMissingFactionReferences = options.allowMissingFactionReferences === true;
         const errors = [], warnings = [];
         const issue = (step, field, message) => errors.push({ step: step && step.id, field, message });
         const knownFields = (value, allowed, step, field) => {
@@ -114,31 +115,35 @@
         }
         const factions = new Set(["player"]), rosterFactions = new Set();
         if (roster) {
-            knownFields(roster, ["_comment", "map", "player_spawn", "factions"], null, "roster");
+            knownFields(roster, ["_comment", "map", "player_spawn", "player_color", "factions"], null, "roster");
             const expectedMap = definition.episode_id === "boudica" ? ["eastanglia", 896, 504]
                 : /^six_sky_ep[123]$/.test(definition.episode_id) ? ["northamerica", 1000, 516] : null;
             if (!object(roster) || typeof roster.map !== "string" || !/^[a-z0-9_-]+$/.test(roster.map) || !Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2 || !roster.player_spawn.every(n => Number.isInteger(n) && n >= 0) || !Array.isArray(roster.factions) || !roster.factions.length) {
                 issue(null, "roster", "Invalid map, player spawn or factions.");
             }
             if (expectedMap && roster.map !== expectedMap[0]) issue(null, "roster.map", "This episode uses the " + expectedMap[0] + " map.");
+            if (roster.player_color != null && (typeof roster.player_color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(roster.player_color))) issue(null, "roster.player_color", "Use a hex color such as #f0902a.");
             if (expectedMap && Array.isArray(roster.player_spawn) && roster.player_spawn.length === 2 && roster.player_spawn.every(Number.isInteger) && (roster.player_spawn[0] >= expectedMap[1] || roster.player_spawn[1] >= expectedMap[2])) issue(null, "roster.player_spawn", "Player spawn is outside the campaign map.");
             (Array.isArray(roster.factions) ? roster.factions : []).forEach(faction => {
                 if (!object(faction) || typeof faction.name !== "string" || !faction.name.trim() || factions.has(faction.name)) {
                     issue(null, "roster", "Faction names must be unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["name", "x", "y", "role", "iq", "civ", "leader", "avatar", "support_interval_seconds", "alliance_group"], null, "roster.factions");
+                knownFields(faction, ["name", "x", "y", "role", "relation", "hostility", "betrayal", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "alliance_group"], null, "roster.factions");
                 factions.add(faction.name);
                 rosterFactions.add(faction.name);
                 if (!["kin", "independent", "vassal", "boss", "big_boss", "neutral"].includes(faction.role) || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid faction role or spawn: " + faction.name);
                 else if (expectedMap && (faction.x >= expectedMap[1] || faction.y >= expectedMap[2])) issue(null, "roster", "Faction spawn is outside the campaign map: " + faction.name);
+                if (faction.relation != null && !["neutral", "allied", "enemy"].includes(faction.relation)) issue(null, "roster.factions.relation", "Choose neutral, allied or enemy for " + faction.name + ".");
+                if (faction.hostility != null && !["passive", "aggressive"].includes(faction.hostility)) issue(null, "roster.factions.hostility", "Choose passive or aggressive for " + faction.name + ".");
+                if (faction.betrayal != null && !["never", "opportunistic"].includes(faction.betrayal)) issue(null, "roster.factions.betrayal", "Choose never or opportunistic for " + faction.name + ".");
+                if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
                 if (faction.alliance_group != null && (typeof faction.alliance_group !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(faction.alliance_group))) issue(null, "roster.factions.alliance_group", "Use a lowercase alliance group ID.");
-                if (faction.support_interval_seconds != null && faction.role !== "kin" && !faction.alliance_group) issue(null, "roster.factions.support_interval_seconds", "Support needs a Kin ally or an alliance group.");
                 if (faction.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(faction.avatar) || faction.avatar !== "null" && options.hasAvatar && !options.hasAvatar(faction.avatar))) issue(null, "roster.factions.avatar", "Choose an existing portrait for " + faction.name + ".");
             });
-            if (object(settings) && settings.buildings_unlock_after_defeated && !rosterFactions.has(settings.buildings_unlock_after_defeated)) issue(null, "settings.buildings_unlock_after_defeated", "Construction unlock refers to an unknown faction.");
-            if (object(settings) && object(settings.campaign_support) && !rosterFactions.has(settings.campaign_support.after_defeated)) issue(null, "settings.campaign_support.after_defeated", "Support milestone refers to an unknown faction.");
+            if (!allowMissingFactionReferences && object(settings) && settings.buildings_unlock_after_defeated && !rosterFactions.has(settings.buildings_unlock_after_defeated)) issue(null, "settings.buildings_unlock_after_defeated", "Construction unlock refers to an unknown faction.");
+            if (!allowMissingFactionReferences && object(settings) && object(settings.campaign_support) && !rosterFactions.has(settings.campaign_support.after_defeated)) issue(null, "settings.campaign_support.after_defeated", "Support milestone refers to an unknown faction.");
         }
         const strings = definition.strings || {};
         const languageList = Array.isArray(strings) ? strings : object(strings) ? Object.keys(strings) : [];
@@ -159,10 +164,10 @@
         if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
         else Object.entries(speakers).forEach(([key, speaker]) => {
             knownFields(speaker, ["name", "name_key", "avatar", "faction"], null, "speakers." + key);
-            if (!id(key) || !object(speaker) || !(typeof speaker.name === "string" && speaker.name.trim() || typeof speaker.name_key === "string" && speaker.name_key.trim() || typeof speaker.faction === "string" && factions.has(speaker.faction))) issue(null, "speakers", "Invalid character: " + key);
+            if (!id(key) || !object(speaker) || !(typeof speaker.name === "string" && speaker.name.trim() || typeof speaker.name_key === "string" && speaker.name_key.trim() || typeof speaker.faction === "string" && speaker.faction.trim())) issue(null, "speakers", "Invalid character: " + key);
             else {
                 if (speaker.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(speaker.avatar) || speaker.avatar !== "null" && options.hasAvatar && !options.hasAvatar(speaker.avatar))) issue(null, "speakers", "Choose an existing avatar: " + key);
-                if (speaker.faction != null && !rosterFactions.has(speaker.faction)) issue(null, "speakers." + key + ".faction", "Choose an existing roster faction.");
+                if (!allowMissingFactionReferences && speaker.faction != null && !rosterFactions.has(speaker.faction)) issue(null, "speakers." + key + ".faction", "Choose an existing roster faction.");
                 text(null, "speakers", speaker.name_key, false);
             }
         });
@@ -270,14 +275,14 @@
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
                     if (trigger.type === "contact") {
                         if (trigger.targets != null) {
-                            if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (roster && !rosterFactions.has(target)))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
+                            if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (roster && !rosterFactions.has(target) && !allowMissingFactionReferences))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
                             if (trigger.value != null && (!Number.isInteger(trigger.value) || trigger.value < 1 || trigger.value > trigger.targets.length)) issue(step, "trigger.value", "Choose how many of the selected factions must be contacted.");
-                        } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
+                        } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "defeated") {
                         if (trigger.targets != null) {
-                            if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || !rosterFactions.has(target))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
+                            if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (!rosterFactions.has(target) && !allowMissingFactionReferences))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
                             if (!Number.isFinite(trigger.value) || trigger.value !== trigger.targets.length) issue(step, "trigger.value", "The required amount must match the selected factions.");
-                        } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target))) issue(step, "trigger.target", "Choose an existing faction.");
+                        } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
                     } else {
@@ -289,17 +294,17 @@
                     if (["contact", "defeated", "alliance", "resource_transfer"].includes(trigger.type)) {
                         const factionTarget = trigger.target || trigger.recipient;
                         if (trigger.recipient != null && trigger.type !== "resource_transfer") issue(step, "trigger.recipient", "Only resource transfers have a recipient.");
-                        if (factionTarget && roster && !factions.has(factionTarget)) issue(step, "trigger.target", "Unknown faction.");
+                        if (factionTarget && roster && !factions.has(factionTarget) && !allowMissingFactionReferences) issue(step, "trigger.target", "Unknown faction.");
                     }
                     if (trigger.unit != null && trigger.type !== "fleet") issue(step, "trigger.unit", "Only fleet objectives can select a ship type.");
                     if (trigger.resources != null && trigger.type !== "resource_transfer") issue(step, "trigger.resources", "Only transfer objectives can require specific resources.");
-                    if (trigger.recipient != null && roster && !factions.has(trigger.recipient)) issue(step, "trigger.recipient", "Unknown transfer recipient.");
-                    if (trigger.target && roster && !factions.has(trigger.target)) issue(step, "trigger.target", "Unknown faction.");
+                    if (trigger.recipient != null && roster && !factions.has(trigger.recipient) && !allowMissingFactionReferences) issue(step, "trigger.recipient", "Unknown transfer recipient.");
+                    if (trigger.target && roster && !factions.has(trigger.target) && !allowMissingFactionReferences) issue(step, "trigger.target", "Unknown faction.");
                 }
                 if (trigger && trigger.type === "elapsed" && step.guide) issue(step, "guide", "Timed waits do not need a hand guide.");
             } else if (step.trigger) issue(step, "trigger", "Only objectives and guides have completion conditions.");
             knownFields(step.marker, ["target"], step, "marker");
-            if (step.marker && (!object(step.marker) || !step.marker.target || (roster && !factions.has(step.marker.target)))) issue(step, "marker", "Unknown marked faction.");
+            if (step.marker && (!object(step.marker) || !step.marker.target || (roster && !factions.has(step.marker.target) && !allowMissingFactionReferences))) issue(step, "marker", "Unknown marked faction.");
             if (step.guide) {
                 const guide = step.guide;
                 knownFields(guide, ["kind", "target", "gesture", "to"], step, "guide");
@@ -314,21 +319,57 @@
         const reactionIds = new Set(), reactionEvents = new Set();
         reactions.forEach(reaction => {
             if (!object(reaction)) return issue(null, "reactions", "Invalid story response.");
-            knownFields(reaction, ["id", "after", "when", "speaker", "title_key", "body_key"], null, "reactions");
+            knownFields(reaction, ["id", "after", "when", "speaker", "title_key", "body_key", "outcome", "gold_cost", "choices"], null, "reactions");
             if (!id(reaction.id) || byId.has(reaction.id) || reactionIds.has(reaction.id)) issue(null, "reactions.id", "Response IDs must be unique and distinct from story steps.");
             reactionIds.add(reaction.id);
-            const gate = byId.get(reaction.after);
-            if (!gate || !["objective", "guide"].includes(gate.type)) issue(null, "reactions.after", "A response must wait for a completed game objective or guide.");
-            knownFields(reaction.when, ["type", "target"], null, "reactions.when");
-            if (!object(reaction.when) || reaction.when.type !== "support" || typeof reaction.when.target !== "string" || (roster && !rosterFactions.has(reaction.when.target))) issue(null, "reactions.when", "Choose a real ally whose first support delivery starts this response.");
-            const supportingFaction = (roster && roster.factions || []).find(faction => faction.name === (reaction.when && reaction.when.target));
-            if (roster && (!supportingFaction || !Number.isInteger(supportingFaction.support_interval_seconds))) issue(null, "reactions.when.target", "This faction is not configured to send campaign support.");
-            const eventKey = reaction.when && reaction.when.target;
-            if (eventKey && reactionEvents.has(eventKey)) issue(null, "reactions.when", "Each ally can have one first-support response.");
-            if (eventKey) reactionEvents.add(eventKey);
+            knownFields(reaction.when, ["type", "target", "targets", "relation", "role"], null, "reactions.when");
+            const when = reaction.when, type = object(when) && when.type, target = object(when) && when.target;
+            if (!["contact", "first_contact", "support"].includes(type)) issue(null, "reactions.when", "Choose a supported contact or support event.");
+            if (type === "contact") {
+                const hasTarget = typeof target === "string";
+                const hasRelation = typeof when.relation === "string";
+                if (hasTarget === hasRelation || hasRelation && when.relation !== "neutral" || hasTarget && roster && !rosterFactions.has(target) && !allowMissingFactionReferences) issue(null, "reactions.when", "Choose one faction or all initially neutral factions.");
+            }
+            if (type === "support" && (typeof target !== "string" || (roster && !rosterFactions.has(target) && !allowMissingFactionReferences))) issue(null, "reactions.when.target", "Choose an existing faction.");
+            if (type !== "contact" && when && when.relation != null || type !== "first_contact" && when && (when.targets != null || when.role != null)) issue(null, "reactions.when", "That response condition is not valid for this event.");
+            if (type === "first_contact") {
+                const targets = when && when.targets;
+                const hasTargets = Array.isArray(targets) && targets.length > 0;
+                const hasRole = typeof when.role === "string";
+                if (target != null || hasTargets === hasRole || hasRole && !["kin", "independent", "vassal", "boss", "big_boss", "neutral"].includes(when.role) || hasTargets && (new Set(targets).size !== targets.length || targets.some(name => typeof name !== "string" || (roster && !rosterFactions.has(name) && !allowMissingFactionReferences)))) issue(null, "reactions.when", "Choose one faction group or distinct existing factions for the first-contact scene.");
+                if (reaction.after != null) issue(null, "reactions.after", "First contact happens immediately and cannot wait for another step.");
+            }
+            if (type === "contact" && reaction.after != null) issue(null, "reactions.after", "Contact responses happen immediately and cannot wait for another step.");
+            if (type === "support") {
+                const gate = byId.get(reaction.after);
+                if (!gate || !["objective", "guide"].includes(gate.type)) issue(null, "reactions.after", "Choose the objective that unlocks this support response.");
+                const supportingFaction = (roster && roster.factions || []).find(faction => faction.name === target);
+                if (roster && (supportingFaction ? !Number.isInteger(supportingFaction.support_interval_seconds) : !allowMissingFactionReferences)) issue(null, "reactions.when.target", "This faction is not configured to send campaign support.");
+            }
+            const eventKey = type === "first_contact" ? type : type + ":" + (target || when && when.relation);
+            if (reactionEvents.has(eventKey)) issue(null, "reactions.when", "Each event can have only one response.");
+            if (type === "first_contact" || typeof target === "string" || when && when.relation) reactionEvents.add(eventKey);
             if (reaction.speaker && !own(speakers, reaction.speaker)) issue(null, "reactions.speaker", "Choose an existing character.");
             text(null, "reactions.title_key", reaction.title_key, true);
             text(null, "reactions.body_key", reaction.body_key, true);
+            if (reaction.outcome != null && !["neutral", "allied", "enemy"].includes(reaction.outcome)) issue(null, "reactions.outcome", "Choose a neutral, allied or enemy result.");
+            if (reaction.gold_cost != null && (!Number.isFinite(reaction.gold_cost) || reaction.gold_cost < 0 || reaction.gold_cost > 1_000_000 || (reaction.gold_cost > 0 && reaction.outcome !== "allied"))) issue(null, "reactions.gold_cost", "Gold can only be paid for an alliance (0–1,000,000).");
+            if (reaction.choices != null) {
+                if (!Array.isArray(reaction.choices) || reaction.choices.length < 2 || reaction.choices.length > 4 || reaction.outcome != null || !["contact", "first_contact"].includes(type)) issue(null, "reactions.choices", "Contact negotiations need 2–4 choices and no automatic result.");
+                const choiceIds = new Set();
+                (Array.isArray(reaction.choices) ? reaction.choices : []).forEach(choice => {
+                    if (!object(choice)) return issue(null, "reactions.choices", "Invalid negotiation choice.");
+                    knownFields(choice, ["id", "label_key", "body_key", "relation", "gold_cost"], null, "reactions.choices");
+                    if (!id(choice.id) || choiceIds.has(choice.id)) issue(null, "reactions.choices.id", "Negotiation choice IDs must be unique.");
+                    choiceIds.add(choice.id);
+                    text(null, "reactions.choices.label_key", choice.label_key, true);
+                    text(null, "reactions.choices.body_key", choice.body_key, false);
+                    if (!["neutral", "allied", "enemy"].includes(choice.relation)) issue(null, "reactions.choices.relation", "Every choice needs a neutral, allied or enemy result.");
+                    if (choice.gold_cost != null && (!Number.isFinite(choice.gold_cost) || choice.gold_cost < 0 || choice.gold_cost > 1_000_000 || (choice.gold_cost > 0 && choice.relation !== "allied"))) issue(null, "reactions.choices.gold_cost", "Gold can only be paid for an alliance (0–1,000,000).");
+                });
+            }
+            if (reaction.outcome != null && reaction.choices != null) issue(null, "reactions", "Choose an automatic result or negotiation choices, not both.");
+            if (type === "support" && (reaction.outcome != null || reaction.gold_cost != null || reaction.choices != null)) issue(null, "reactions", "Support notices cannot change diplomacy.");
         });
         const edges = step => [step.next].concat((Array.isArray(step.routes) ? step.routes : []).map(r => r && r.next), (Array.isArray(step.choices) ? step.choices : []).map(c => c && c.next)).filter(target => byId.has(target));
         const menuFlowReachable = new Set();
@@ -380,16 +421,16 @@
         return { errors, warnings };
     }
 
-    function create(definition, entry) {
+    function create(definition, entry, roster) {
         // Each run owns its definition; editor changes cannot mutate an active game.
         definition = copy(definition);
         const byId = new Map(definition.steps.map(step => [step.id, step]));
-        const state = { id: null, line: 0, choices: Object.create(null), completed: [], reactionsShown: [], done: false };
-        let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, readyAt = null, pausedAt = null, now = 0;
+        const state = { id: null, line: 0, choices: Object.create(null), completed: [], reactionsShown: [], reactionChoices: Object.create(null), contactsResolved: [], firstContactTarget: null, done: false };
+        let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, externallyPaused = false;
         function enter(key) {
             if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
             state.id = key; state.line = 0; state.done = false;
-            baseline = copy(facts); uiBaseline = { ...ui }; readyAt = null;
+            baseline = copy(facts); uiBaseline = { ...ui };
         }
         function matches(when) {
             if (when.choice) return state.choices[when.choice] === when.equals;
@@ -441,50 +482,76 @@
             }
             return { current: Math.min(target, Math.max(0, current)), target };
         }
-        let activeReaction = null, reactionOpenedAt = null;
+        let activeReaction = null;
         function nextReaction() {
-            const currentStep = byId.get(state.id);
-            if (!currentStep || !["objective", "guide"].includes(currentStep.type)) return null;
-            return (definition.reactions || []).map((reaction, index) => ({ reaction, index,
-                receipt: facts.support_deliveries_by_faction && facts.support_deliveries_by_faction[reaction.when.target]
-            })).filter(({ reaction, receipt }) => state.completed.includes(reaction.after)
-                && receipt && receipt.deliveries > 0 && !state.reactionsShown.includes(reaction.id))
-                .sort((a, b) => Number(a.receipt.first_tick || 0) - Number(b.receipt.first_tick || 0) || a.index - b.index)[0]?.reaction || null;
+            const contactNames = facts.contact_names || [];
+            const gameplayActive = !["scene", "choice", "end"].includes(byId.get(state.id).type);
+            return (definition.reactions || []).flatMap((reaction, index) => {
+                const type = reaction.when.type;
+                const isFirstContact = type === "first_contact";
+                const isContact = type === "contact" || isFirstContact;
+                let targets = [];
+                if (isFirstContact && !state.firstContactTarget) {
+                    const eligible = reaction.when.role
+                        ? (roster && roster.factions || []).filter(faction => faction.role === reaction.when.role).map(faction => faction.name)
+                        : reaction.when.targets || [];
+                    targets = eligible.filter(name => contactNames.includes(name) && !state.contactsResolved.includes(name)).slice(0, 1);
+                } else if (type === "contact" && reaction.when.target) {
+                    if (contactNames.includes(reaction.when.target) && !state.contactsResolved.includes(reaction.when.target)) targets = [reaction.when.target];
+                } else if (type === "contact" && reaction.when.relation) {
+                    const factions = new Map((roster && roster.factions || []).map(faction => [faction.name, faction]));
+                    targets = contactNames.filter(name => !state.contactsResolved.includes(name)
+                        && ((factions.get(name) && factions.get(name).relation || "neutral") === reaction.when.relation));
+                }
+                if (isContact) return targets.map(target => ({ reaction, index, target, isContact, isFirstContact, priority: isFirstContact ? 0 : reaction.when.target ? 1 : 2, instanceId: reaction.id + "@" + target }));
+                const receipt = type === "support" && facts.support_deliveries_by_faction && facts.support_deliveries_by_faction[reaction.when.target];
+                const ready = gameplayActive && state.completed.includes(reaction.after) && receipt && receipt.deliveries > 0;
+                return ready ? [{ reaction, index, receipt, target: reaction.when.target, isContact: false, isFirstContact: false, priority: 3, instanceId: reaction.id }] : [];
+            }).filter(item => !state.reactionsShown.includes(item.instanceId))
+                .sort((a, b) => a.priority - b.priority
+                    || (Number(a.receipt && a.receipt.first_tick || 0) - Number(b.receipt && b.receipt.first_tick || 0))
+                    || a.index - b.index)[0] || null;
         }
         function view() {
             const step = byId.get(state.id);
             if (activeReaction) {
+                const reaction = activeReaction.reaction;
+                const hasChoices = Array.isArray(reaction.choices) && reaction.choices.length > 0;
+                const factionSpeaker = reaction.when.type === "first_contact" || reaction.when.relation
+                    ? Object.keys(definition.speakers || {}).find(key => definition.speakers[key].faction === activeReaction.target)
+                    : null;
                 const response = {
-                    id: "reaction-" + activeReaction.id, type: "scene", speaker: activeReaction.speaker,
-                    title_key: activeReaction.title_key, body_key: activeReaction.body_key, presentation: "dialogue"
+                    id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker,
+                    title_key: reaction.title_key, body_key: reaction.body_key, presentation: "dialogue"
                 };
-                return { definition, step: response, line: response, progress: progress(), paused: true, ready: false, done: false, choices: [], state, reaction: activeReaction.id };
+                return { definition, step: response, line: response, progress: progress(), paused: true, done: false, choices: reaction.choices || [], state, reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
             const line = step.lines ? step.lines[state.line] : step;
-            return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type), ready: readyAt != null, done: state.done, choices: step.choices || [], state };
+            return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type), done: state.done, choices: step.choices || [], state };
         }
-        function setPaused(paused, nowMs) {
-            const at = Number.isFinite(nowMs) ? nowMs : now;
-            if (paused) {
-                if (pausedAt == null) pausedAt = at;
-            } else if (pausedAt != null) {
-                if (readyAt != null) readyAt += Math.max(0, at - pausedAt);
-                pausedAt = null;
-            }
-        }
+        function setPaused(paused) { externallyPaused = Boolean(paused); }
         function advance(choiceId, expectedStepId) {
-            if (state.done || pausedAt != null) return false;
+            if (state.done || externallyPaused) return false;
             if (activeReaction) {
-                if (expectedStepId !== "reaction-" + activeReaction.id) return false;
-                if (!state.reactionsShown.includes(activeReaction.id)) state.reactionsShown.push(activeReaction.id);
-                if (readyAt != null) readyAt += Math.max(0, now - reactionOpenedAt) + 800;
-                activeReaction = null; reactionOpenedAt = null;
+                const reaction = activeReaction.reaction;
+                if (expectedStepId !== "reaction-" + activeReaction.instanceId) return false;
+                if (reaction.choices && reaction.choices.length) {
+                    const answer = reaction.choices.find(option => option.id === choiceId);
+                    if (!answer) return false;
+                    state.reactionChoices[activeReaction.instanceId] = answer.id;
+                }
+                if (!state.reactionsShown.includes(activeReaction.instanceId)) state.reactionsShown.push(activeReaction.instanceId);
+                if (["contact", "first_contact"].includes(reaction.when.type) && !state.contactsResolved.includes(activeReaction.target)) state.contactsResolved.push(activeReaction.target);
+                activeReaction = null;
                 return true;
             }
             if (expectedStepId && expectedStepId !== state.id) return false;
             const step = byId.get(state.id);
             if (step.type === "scene" && step.lines && state.line + 1 < step.lines.length) { state.line++; return true; }
-            if (["objective", "guide"].includes(step.type) && readyAt == null) return false;
+            if (["objective", "guide"].includes(step.type)) {
+                const result = progress();
+                if (result.current < result.target) return false;
+            }
             if (step.type === "end") {
                 if (!state.completed.includes(step.id)) state.completed.push(step.id);
                 state.done = true;
@@ -505,19 +572,23 @@
             enter(destination);
             return true;
         }
-        function update(nextFacts, nextUi, nowMs) {
-            now = Number.isFinite(nowMs) ? nowMs : now;
+        function update(nextFacts, nextUi) {
             facts = copy(nextFacts || {}); ui = { ...(nextUi || {}) };
             if (initial == null) { initial = copy(facts); initialUi = { ...ui }; baseline = copy(facts); uiBaseline = { ...ui }; }
-            if (state.done || pausedAt != null) return view();
-            if (!activeReaction && (activeReaction = nextReaction())) reactionOpenedAt = now;
-            if (activeReaction) return view();
-            const step = byId.get(state.id);
-            if (["objective", "guide"].includes(step.type)) {
+            if (state.done || externallyPaused) return view();
+            while (!state.done) {
+                if (!activeReaction) {
+                    const next = nextReaction();
+                    if (next) {
+                        if (next.isFirstContact) state.firstContactTarget = next.target;
+                        activeReaction = { reaction: next.reaction, target: next.target, instanceId: next.instanceId };
+                    }
+                }
+                if (activeReaction) return view();
+                const step = byId.get(state.id);
+                if (!["objective", "guide"].includes(step.type)) break;
                 const result = progress();
-                if (result.current >= result.target && readyAt == null) readyAt = now;
-                // A short completion beat belongs to presentation; game waits use elapsed_seconds.
-                if (readyAt != null && now - readyAt >= 800) advance(null, step.id);
+                if (result.current < result.target || !advance(null, step.id)) break;
             }
             return view();
         }
@@ -547,7 +618,7 @@
                 const decision = byId.get(key);
                 if (!decision || !Array.isArray(decision.choices) || !decision.choices.some(answer => answer && answer.id === state.choices[key])) delete state.choices[key];
             });
-            if (resetProgress) { baseline = copy(facts); uiBaseline = { ...ui }; readyAt = null; }
+            if (resetProgress) { baseline = copy(facts); uiBaseline = { ...ui }; }
             return true;
         }
         enter(entry || definition.entry);

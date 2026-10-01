@@ -9,20 +9,6 @@ pub(super) fn splash_show_loading_progress(
 }
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) fn hide_web_loader() {
-    if let Some(window) = web_sys::window() {
-        let _ = js_sys::Reflect::get(&window, &wasm_bindgen::JsValue::from_str("hideWebLoader"))
-            .and_then(|f| {
-                if f.is_function() {
-                    let func: js_sys::Function = f.unchecked_into();
-                    let _ = func.call0(&wasm_bindgen::JsValue::NULL);
-                }
-                Ok(wasm_bindgen::JsValue::NULL)
-            });
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 pub(crate) fn show_graphics_error() {
     if let Some(window) = web_sys::window() {
         let _ = js_sys::Reflect::get(

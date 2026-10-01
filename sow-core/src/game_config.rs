@@ -90,6 +90,29 @@ pub struct ScriptedSpawn {
     /// Factions in this campaign bloc share a pact when one member forms an alliance.
     #[serde(default)]
     pub campaign_alliance_group: Option<String>,
+    /// Campaign relationship to the human player; absent for ordinary spawns.
+    #[serde(default)]
+    pub campaign_relation: Option<crate::protocol::CampaignRelation>,
+    #[serde(default)]
+    pub campaign_hostility: Option<CampaignHostility>,
+    #[serde(default)]
+    pub campaign_betrayal: Option<CampaignBetrayal>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CampaignHostility {
+    #[default]
+    Passive,
+    Aggressive,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CampaignBetrayal {
+    #[default]
+    Never,
+    Opportunistic,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -124,6 +147,9 @@ pub struct GameConfig {
     // ==========================================
     /// The directory name of the map to load (e.g., "europe").
     pub map_name: String,
+    /// Selected map-authored entity roster. None preserves legacy spawn behavior.
+    #[serde(default)]
+    pub map_roster_preset: Option<String>,
     /// Whether this is "FFA", "Teams", etc.
     #[serde(default = "default_game_mode")]
     pub game_mode: String,
@@ -267,6 +293,9 @@ pub struct GameConfig {
     /// Deterministic campaign aid from contacted teammates after a story milestone.
     #[serde(default)]
     pub campaign_support: Option<CampaignSupport>,
+    /// Campaign-only player territory color, separate from multiplayer team colors.
+    #[serde(default)]
+    pub campaign_player_color: Option<[f32; 3]>,
 
     /// **Tutorial firewall flag.** `true` only for the scripted campaign/tutorial. The engine
     /// ignores it — it exists so the *client* can derive its tutorial UI from the match it is
@@ -301,6 +330,7 @@ impl Default for GameConfig {
 
             // Map Generation & Spawning
             map_name: crate::maps::DEFAULT_MAP_KEY.to_string(),
+            map_roster_preset: None,
             game_mode: "FFA".to_string(),
             map_width: 1000,
             map_height: 800,
@@ -363,6 +393,7 @@ impl Default for GameConfig {
             buildings_enabled: true,
             buildings_unlock_after_defeated: None,
             campaign_support: None,
+            campaign_player_color: None,
             tutorial: false,
         }
     }
@@ -418,5 +449,24 @@ mod tests {
     #[test]
     fn tutorial_firewall_defaults_closed() {
         assert!(!GameConfig::default().tutorial);
+    }
+
+    #[test]
+    fn map_roster_choice_survives_replay_config_serialization() {
+        let mut config = GameConfig::default();
+        config.map_roster_preset = Some("historical".into());
+
+        let saved = serde_json::to_value(&config).unwrap();
+        let loaded: GameConfig = serde_json::from_value(saved).unwrap();
+        assert_eq!(loaded.map_roster_preset.as_deref(), Some("historical"));
+    }
+
+    #[test]
+    fn older_saved_config_without_roster_keeps_legacy_selection() {
+        let mut saved = serde_json::to_value(GameConfig::default()).unwrap();
+        saved.as_object_mut().unwrap().remove("map_roster_preset");
+
+        let loaded: GameConfig = serde_json::from_value(saved).unwrap();
+        assert_eq!(loaded.map_roster_preset, None);
     }
 }

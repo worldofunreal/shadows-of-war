@@ -27,7 +27,7 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Display name from the source info.json ("Africa", "Europe", ...); fall back to slug.
     let display_name = read_info_json_name(&input).unwrap_or_else(|| slug.clone());
 
-    let map_file = if input.join("image.png").exists() {
+    let mut map_file = if input.join("image.png").exists() {
         import_from_png(&input, &display_name)?
     } else {
         import_from_bin(&input)?
@@ -36,6 +36,12 @@ pub fn run_import(args: ImportArgs) -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&args.maps_root)?;
     let out_dir = args.maps_root.join(&slug);
     fs::create_dir_all(&out_dir)?;
+
+    if out_dir.join("map.bin").is_file() || out_dir.join("map.bin.br").is_file() {
+        let existing = map_file::parse(&read_map_payload(&out_dir)?)?;
+        map_file::preserve_rosters(&existing, &mut map_file)
+            .map_err(|message| format!("cannot replace map '{slug}': {message}"))?;
+    }
 
     let encoded = map_file::encode(&map_file);
     fs::write(out_dir.join("map.bin"), &encoded)?;
@@ -131,6 +137,8 @@ fn import_from_png(dir: &Path, display_name: &str) -> Result<MapFile, Box<dyn st
         num_land_tiles: result.num_land_tiles,
         spawns,
         geo_bounds: None,
+        default_roster: None,
+        rosters: Vec::new(),
         terrain: result.map_data,
     })
 }
@@ -226,10 +234,19 @@ fn import_from_bin(dir: &Path) -> Result<MapFile, Box<dyn std::error::Error>> {
                 s.x = rx.min(target_w - 1);
                 s.y = ry.min(target_h - 1);
             }
+            for preset in &mut map.rosters {
+                for entity in &mut preset.entries {
+                    let rx = (entity.x as f64 * (target_w as f64 / width as f64)).round() as u32;
+                    let ry = (entity.y as f64 * (target_h as f64 / height as f64)).round() as u32;
+                    entity.x = rx.min(target_w - 1);
+                    entity.y = ry.min(target_h - 1);
+                }
+            }
             map.width = target_w;
             map.height = target_h;
             map.num_land_tiles = rescaled.iter().filter(|&&b| (b & 0x80) != 0).count() as u32;
             map.terrain = rescaled;
+            map_file::validate_rosters(&map, false)?;
         }
         return Ok(map);
     }
@@ -281,6 +298,15 @@ pub fn refresh_catalog(maps_root: &Path) -> Result<(), Box<dyn std::error::Error
     }
     let catalog = map_file::catalog_from_headers(items);
     let catalog_bytes = map_file::encode_catalog(&catalog);
-    fs::write(maps_root.join("catalog.bin"), catalog_bytes)?;
+    let path = maps_root.join("catalog.bin");
+    let temp = maps_root.join(format!(".catalog.bin.{}.tmp", std::process::id()));
+    if let Err(error) = fs::write(&temp, catalog_bytes) {
+        let _ = fs::remove_file(&temp);
+        return Err(error.into());
+    }
+    if let Err(error) = fs::rename(&temp, &path) {
+        let _ = fs::remove_file(&temp);
+        return Err(error.into());
+    }
     Ok(())
 }

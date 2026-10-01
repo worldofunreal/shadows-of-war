@@ -8,6 +8,15 @@ hostnames, paths and compatibility behavior are not production instructions.
 - Execute exactly the requested scope; do not invent adjacent work.
 - Verify before making claims. Distinguish current runtime facts from historical
   evidence and roadmap design.
+- Before asking anything or presenting a plan, reread the original request and
+  every correction. Inspect the code and available tools first; decide technical
+  details yourself. Ask only for a material product/business choice that is
+  genuinely absent, with context, consequences, and a recommended default.
+  Apply this equally to Codex's built-in question/plan tools; never use them to
+  offload technical choices, repeat explicit requirements, or disguise uncertainty.
+- Campaign Studio is the existing owner for campaign-map rendering and labels.
+  Entity Atlas must reuse its rendering behavior and shared map-preview helpers;
+  do not build a parallel renderer or projection for convenience.
 - Before map or thumbnail work, read `docs/maps.md` for the reviewed framing,
   current generator limitations, and independent mobile terrain budgets.
 - Infrastructure decisions, firewall/PF/NSG changes and new resources require

@@ -91,6 +91,8 @@ mod tests {
             height: 100,
             num_land_tiles: land_tiles,
             multiplayer_frequency: 1,
+            default_roster: None,
+            roster_presets: Vec::new(),
         }
     }
 

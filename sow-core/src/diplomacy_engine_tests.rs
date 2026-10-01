@@ -3,6 +3,8 @@ mod alliance_lifecycle_tests {
     use crate::diplomacy::{ALLIANCE_REQUEST_TTL_TICKS, AllianceProposal};
     use crate::engine::SowEngine;
     use crate::game::{GamePhase, GameState};
+    use crate::game_config::{CampaignBetrayal, CampaignHostility, GameConfig};
+    use crate::player::{Player, PlayerType};
     use crate::protocol::{GameplayIntent, StampedIntent};
     use crate::water_components::WaterComponents;
 
@@ -10,6 +12,128 @@ mod alliance_lifecycle_tests {
         let mut game = GameState::new(1, 4, 4, crate::game_config::GameConfig::default());
         game.phase = GamePhase::Playing;
         SowEngine::new(game, WaterComponents::default())
+    }
+
+    fn campaign_contact_engine(gold: f64, contact: bool) -> SowEngine {
+        let config = GameConfig::default();
+        let mut game = GameState::new(1, 4, 4, config.clone());
+        game.phase = GamePhase::Playing;
+        let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
+        human.gold = gold;
+        if contact { human.border_tiles.insert(5); }
+        game.register_player(human);
+        let mut tribe = Player::new_human(2, "Venta Icenorum".into(), [0.5; 3], &config);
+        tribe.player_type = PlayerType::Bot;
+        tribe.gold = 50.0;
+        game.register_player(tribe);
+        game.map.set_owner_id(2, 1, 2);
+        let mut engine = SowEngine::new(game, WaterComponents::default());
+        engine.campaign_relations.insert(2, crate::protocol::CampaignRelation::Neutral);
+        engine
+    }
+
+    #[test]
+    fn campaign_contact_choice_pays_atomically_and_updates_the_relationship() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.apply_stamped_intent(&StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::ResolveCampaignDiplomacy {
+                target_player: 2,
+                relation: crate::protocol::CampaignRelation::Allied,
+                gold_cost: 200.0,
+            },
+        }, 0);
+
+        assert_eq!(engine.state.player(1).unwrap().gold, 50.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+        assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Allied));
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.players.iter().find(|player| player.id == 2).unwrap().color, [0.2, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn campaign_contact_choice_rejects_missing_gold_or_contact_without_partial_changes() {
+        for (gold, contact) in [(199.0, true), (500.0, false)] {
+            let mut engine = campaign_contact_engine(gold, contact);
+            engine.apply_stamped_intent(&StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ResolveCampaignDiplomacy {
+                    target_player: 2,
+                    relation: crate::protocol::CampaignRelation::Allied,
+                    gold_cost: 200.0,
+                },
+            }, 0);
+            assert_eq!(engine.state.player(1).unwrap().gold, gold);
+            assert_eq!(engine.state.player(2).unwrap().gold, 50.0);
+            assert!(engine.state.player(1).unwrap().alliances.is_empty());
+            assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Neutral));
+            assert!(!engine.campaign_contact_resolved.contains(&2));
+        }
+    }
+
+    #[test]
+    fn campaign_contact_choice_rejects_gold_above_the_editor_limit() {
+        let mut engine = campaign_contact_engine(1_000_001.0, true);
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ResolveCampaignDiplomacy {
+                    target_player: 2,
+                    relation: crate::protocol::CampaignRelation::Allied,
+                    gold_cost: 1_000_000.01,
+                },
+            },
+            0,
+        );
+
+        assert_eq!(engine.state.player(1).unwrap().gold, 1_000_001.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 50.0);
+        assert!(engine.state.player(1).unwrap().alliances.is_empty());
+        assert_eq!(
+            engine.campaign_relations.get(&2),
+            Some(&crate::protocol::CampaignRelation::Neutral)
+        );
+        assert!(!engine.campaign_contact_resolved.contains(&2));
+    }
+
+    #[test]
+    fn refusing_campaign_terms_marks_the_faction_enemy_and_red_without_charging_gold() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.apply_stamped_intent(&StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::ResolveCampaignDiplomacy {
+                target_player: 2,
+                relation: crate::protocol::CampaignRelation::Enemy,
+                gold_cost: 0.0,
+            },
+        }, 0);
+
+        assert_eq!(engine.state.player(1).unwrap().gold, 250.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 50.0);
+        assert!(engine.state.player(1).unwrap().alliances.is_empty());
+        assert!(engine.state.player(2).unwrap().alliances.is_empty());
+        assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Enemy));
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.players.iter().find(|player| player.id == 2).unwrap().color, [1.0, 0.2, 0.2]);
+    }
+
+    #[test]
+    fn opportunistic_campaign_betrayal_becomes_a_red_aggressive_enemy() {
+        let mut engine = campaign_contact_engine(100.0, true);
+        engine.campaign_relations.insert(2, crate::protocol::CampaignRelation::Allied);
+        engine.campaign_betrayal.insert(2, CampaignBetrayal::Opportunistic);
+        engine.state.player_mut(1).unwrap().alliances.push(2);
+        engine.state.player_mut(2).unwrap().alliances.push(1);
+        engine.apply_stamped_intent(&StampedIntent {
+            player_id: 2,
+            intent: GameplayIntent::BreakAlliance { target_player: 1 },
+        }, 0);
+        assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Enemy));
+        assert_eq!(engine.campaign_hostilities.get(&2), Some(&CampaignHostility::Aggressive));
+        let snapshot = engine.build_snapshot();
+        assert_eq!(snapshot.players.iter().find(|player| player.id == 2).unwrap().color, [1.0, 0.2, 0.2]);
     }
 
     #[test]

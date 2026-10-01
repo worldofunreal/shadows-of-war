@@ -5,6 +5,7 @@ use crate::render::world::overlays::{INLINE_EMOJI_SCALE, world_to_screen};
 use crate::render::{dev_emoji_outline, dev_text_style};
 use crate::theme::dev_config::DevConfig;
 use sow_core::protocol::{AttackSnapshot, SimSnapshot};
+use sow_render::FontAtlas;
 use web_time::Instant;
 
 const CLICK_MARKER_DURATION: f32 = 0.16;
@@ -17,6 +18,34 @@ const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
+
+fn transport_eta_baseline_y(
+    font_atlas: &FontAtlas,
+    eta_text: &str,
+    center_y: f32,
+    font_size: f32,
+) -> f32 {
+    let font_scale = font_size / 48.0;
+    let base = font_atlas.atlas.common.base as f32;
+    let (min_y, max_y) = eta_text
+        .chars()
+        .filter_map(|ch| font_atlas.char_map.get(&ch))
+        .fold(
+            (f32::INFINITY, f32::NEG_INFINITY),
+            |(min_y, max_y), glyph| {
+                (
+                    min_y.min(glyph.yoffset as f32),
+                    max_y.max(glyph.yoffset as f32 + glyph.height as f32),
+                )
+            },
+        );
+
+    if min_y.is_finite() && max_y.is_finite() {
+        center_y + (base - (min_y + max_y) * 0.5) * font_scale
+    } else {
+        center_y
+    }
+}
 
 pub(crate) fn render(
     text: &mut TextRenderer,
@@ -45,6 +74,7 @@ fn render_transport_targets(
     sf: f32,
     now: Instant,
 ) {
+    let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
     if ui.transport_target_snapshot_tick != Some(snapshot.tick) {
         if ui
             .transport_target_snapshot_tick
@@ -55,7 +85,6 @@ fn render_transport_targets(
         }
 
         ui.transport_target_seen.clear();
-        let my_id = sim.my_player_id.unwrap_or(ui.app.hud_state.my_player_id);
         if my_id != 0 {
             for fleet in &snapshot.fleets {
                 if fleet.owner_id != my_id
@@ -104,6 +133,17 @@ fn render_transport_targets(
         ui.transport_target_snapshot_tick = Some(snapshot.tick);
     }
 
+    let player_rgb = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == my_id)
+        .map(|player| {
+            player
+                .team
+                .map_or(player.color, sow_core::player::team_territory_rgb)
+        })
+        .unwrap_or([0.5, 0.5, 0.5]);
+
     let sf = sf.max(0.01);
     let screen_w = input.screen_w / sf;
     let screen_h = input.screen_h / sf;
@@ -137,32 +177,40 @@ fn render_transport_targets(
 
         let pulse = (age * 2.7).sin() * 0.5 + 0.5;
         let rotation = (age * TRANSPORT_TARGET_ROTATIONS_PER_SEC).fract();
-        let outer_radius = (19.0 + 2.0 * pulse) * sf;
-        let inner_radius = (12.0 + pulse) * sf;
+        let outer_radius = (24.0 + 3.0 * pulse) * sf;
+        let inner_radius = (16.0 + 2.0 * pulse) * sf;
         let center_px = [center[0] * sf, center[1] * sf];
         text.push_ring(
             center_px,
             outer_radius,
-            [1.0, 0.0, 0.0, alpha * 0.48],
-            (1.5 * sf).max(1.0),
+            [player_rgb[0], player_rgb[1], player_rgb[2], alpha * 0.48],
+            (2.5 * sf).max(1.0),
         );
         text.push_rotating_arc(
             center_px,
             inner_radius,
             0.76,
             rotation,
-            [1.0, 0.0, 0.0, alpha],
-            (2.4 * sf).max(1.0),
+            [player_rgb[0], player_rgb[1], player_rgb[2], alpha],
+            (3.5 * sf).max(1.0),
         );
         if marker.eta_seconds.is_some() {
             let font_size = TRANSPORT_TARGET_ETA_FONT_SIZE * sf;
             text.push_string(
                 &marker.eta_text,
-                [center_px[0], center_px[1] + font_size * 0.34],
+                [
+                    center_px[0],
+                    transport_eta_baseline_y(
+                        &text.font_atlas_desc,
+                        &marker.eta_text,
+                        center_px[1],
+                        font_size,
+                    ),
+                ],
                 font_size,
                 [1.0, 1.0, 1.0, alpha],
                 dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
-                (0.5, 0.0, INLINE_EMOJI_SCALE),
+                (0.5, dev.font_char_spacing.max(0.1), INLINE_EMOJI_SCALE),
             );
         }
         true
@@ -458,6 +506,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn transport_eta_baseline_centers_short_and_wide_numbers() {
+        let atlas = FontAtlas::load_static();
+        let center_y = 100.0;
+        let font_size = TRANSPORT_TARGET_ETA_FONT_SIZE;
+        let base = atlas.atlas.common.base as f32;
+        let font_scale = font_size / 48.0;
+
+        for eta in ["1", "8888"] {
+            let baseline = transport_eta_baseline_y(&atlas, eta, center_y, font_size);
+            let (min_y, max_y) = eta.chars().filter_map(|ch| atlas.char_map.get(&ch)).fold(
+                (f32::INFINITY, f32::NEG_INFINITY),
+                |(min_y, max_y), glyph| {
+                    (
+                        min_y.min(glyph.yoffset as f32),
+                        max_y.max(glyph.yoffset as f32 + glyph.height as f32),
+                    )
+                },
+            );
+            let visible_center_y =
+                baseline - base * font_scale + (min_y + max_y) * 0.5 * font_scale;
+
+            assert!((visible_center_y - center_y).abs() < 1e-5, "{eta}");
+        }
+    }
+
+    #[test]
     fn attack_badges_only_include_local_incoming_or_outgoing_attacks() {
         let base = AttackSnapshot {
             id: 1,
@@ -472,5 +546,4 @@ mod tests {
         assert_eq!(attack_badge_color(&base, 3), Some(crate::rgb(255, 90, 90)));
         assert_eq!(attack_badge_color(&base, 4), None);
     }
-
 }

@@ -80,6 +80,7 @@ impl SowEngine {
             .state
             .config
             .per_tick(crate::warp_fleet::TRANSPORT_BASE_SPEED_TILES_PER_SECOND);
+        let tick_rate_ms = self.state.config.tick_rate_ms;
 
         for i in 0..self.fleets.len() {
             let fleet = &mut self.fleets[i];
@@ -94,8 +95,9 @@ impl SowEngine {
                 .get(fleet.owner_id as usize)
                 .map(|aggregate| aggregate.port_levels)
                 .unwrap_or_default();
-            fleet.speed_bonus_percent =
-                crate::building::cost::boat_speed_bonus_from_port_levels(port_levels);
+            fleet.set_speed_bonus_percent(
+                crate::building::cost::boat_speed_bonus_from_port_levels(port_levels),
+            );
 
             if fleet.retreating && fleet.retreat_dst.is_none() {
                 if let Some(player) = self.state.player(fleet.owner_id) {
@@ -200,6 +202,8 @@ impl SowEngine {
                     }
                 }
             }
+
+            fleet.update_eta_after_tick(transport_base_steps_per_tick, tick_rate_ms);
 
             if fleet.unit_type == crate::game::UnitType::TradeShip {
                 let trade_levels = self

@@ -32,7 +32,15 @@ pub fn export_map(ctx: ExportMapCtx) -> Result<(), Box<dyn std::error::Error>> {
     } = ctx;
     let output_dir = maps_root().join(&map_name);
     let map_bin = output_dir.join("map.bin");
-    if map_bin.exists() && !force {
+    let map_br = output_dir.join("map.bin.br");
+    let existing = if map_bin.is_file() {
+        Some(fs::read(&map_bin)?)
+    } else if map_br.is_file() {
+        Some(map_file::decompress_map_payload(&fs::read(&map_br)?)?)
+    } else {
+        None
+    };
+    if existing.is_some() && !force {
         return Err(format!(
             "export map: {} already exists; re-run with --force to overwrite",
             map_bin.display()
@@ -53,15 +61,22 @@ pub fn export_map(ctx: ExportMapCtx) -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    let map_file = MapFile {
+    let mut map_file = MapFile {
         display_name: display_name.to_string(),
         width,
         height,
         num_land_tiles: num_land,
         spawns: map_spawns,
         geo_bounds,
+        default_roster: None,
+        rosters: Vec::new(),
         terrain: terrain_bytes,
     };
+    if let Some(existing) = existing {
+        let previous = map_file::parse(&existing)?;
+        map_file::preserve_rosters(&previous, &mut map_file)
+            .map_err(|message| format!("cannot replace map '{map_name}': {message}"))?;
+    }
     let encoded = map_file::encode(&map_file);
     fs::write(&map_bin, &encoded)?;
 

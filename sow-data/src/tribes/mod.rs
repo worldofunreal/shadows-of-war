@@ -34,5 +34,4 @@ pub fn empire_emoji_for_id(id: u16) -> &'static str {
     EMPIRE_EMOJIS[(id as usize) % EMPIRE_EMOJIS.len()]
 }
 
-mod names;
-pub use names::{FALLBACK_TRIBES, HISTORICAL_CIVILIZATIONS};
+pub use crate::geo_entities::{fallback_nations, fallback_tribes};

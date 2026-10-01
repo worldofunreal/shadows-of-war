@@ -291,6 +291,12 @@ water_connectivity = "cardinal-4"
 small_island_policy = "remove-under-30-source-tiles"
 small_lake_policy = "remove-under-16-tiles"
 downscale_policy = "water-wins"
-map_bin_sha256 = "5ab2da444e12d8ae609f6484ba18c97b0cd8e0daa68c1bf8b4873c6fe8a09b50"
-map_bin_br_sha256 = "4767ed54349786a0bf89a191971b6ba8f6e5518d927d98387130316d8ef724ee"
+land_entity_corrections = [
+  "maldives", "ryukyu_kingdom", "carib", "samoa", "tonga", "palau",
+  "micronesia", "marshall_islands", "kiribati", "chamorro", "tahitians",
+  "marquesans", "rapa_nui", "nan_madol", "kingdom_of_tahiti",
+  "tui_tonga_empire", "moriori", "frisii", "chauci",
+]
+map_bin_sha256 = "c59857a4493c48c5b02178c2a17a107d007bcac88a57024aecf0373b5d2eccd4"
+map_bin_br_sha256 = "136b8a223c44ab8ed8eec9fe5d814ea025ea37b9090ac67cd03eea405d7416bf"
 thumbnail_sha256 = "32b7157610c622f6cb47c55ac3c0fb5a815e8b350a27027a6314ad7854dbb8b1"

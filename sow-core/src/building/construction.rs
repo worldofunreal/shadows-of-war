@@ -25,6 +25,7 @@ impl SowEngine {
                 }
                 if b.kind == BuildingKind::Bunker {
                     self.defense_grid_dirty = true;
+                    self.render_defense_dirty = true;
                 }
                 self.state.events.push(GameEvent::StructureReady {
                     id: b.id,
@@ -83,8 +84,9 @@ impl SowEngine {
                             (spawn_tile, spawn_tile),
                             vec![],
                         );
-                        fleet.speed_bonus_percent =
-                            crate::building::player_boat_speed_bonus(&self.buildings, owner_id);
+                        fleet.set_speed_bonus_percent(
+                            crate::building::player_boat_speed_bonus(&self.buildings, owner_id),
+                        );
                         new_fleets.push(fleet);
                     }
                 }

@@ -114,10 +114,10 @@ impl SowApp {
                             && let Some(player) =
                                 start_msg.players.iter().find(|p| p.id == player_id)
                         {
-                            self.ui
-                                .app
-                                .main_menu_state
-                                .set_selected_leader(player.leader, false);
+                            self.ui.app.main_menu_state.sync_selected_leader_from_match(
+                                player.leader,
+                                start_msg.config.tutorial,
+                            );
                         }
                         self.ui.app.main_menu_state.is_waiting = false;
                         self.ui.app.main_menu_state.pending_join_lobby_id = None;

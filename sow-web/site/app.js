@@ -46,12 +46,21 @@
   const heroVideo = $('.hero-video');
   if (heroVideo) {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const heroSection = heroVideo.closest('.hero');
+    let heroVisible = true;
     function syncHeroVideo() {
-      if (prefersReducedMotion.matches || document.visibilityState === 'hidden') {
+      if (prefersReducedMotion.matches || document.visibilityState === 'hidden' || !heroVisible) {
         heroVideo.pause();
         return;
       }
       heroVideo.play()?.catch(() => {});
+    }
+    if (heroSection && window.IntersectionObserver) {
+      heroVisible = false;
+      new IntersectionObserver(([entry]) => {
+        heroVisible = entry.isIntersecting;
+        syncHeroVideo();
+      }).observe(heroSection);
     }
     prefersReducedMotion.addEventListener?.('change', syncHeroVideo);
     document.addEventListener('visibilitychange', syncHeroVideo);
@@ -73,7 +82,6 @@
   }));
 
   const asset = (leader, mobile = false) => `/assets/shell/leaders/${leader.image}_${mobile ? 'mobile' : 'desktop'}.webp`;
-  const avatar = leader => `/assets/gameplay/avatars/${leader.image}.webp`;
   let activeLeaderIndex = 0;
   const leaderName = leader => siteText(leader.nameKey, leader.name);
   const leaderCiv = leader => siteText(leader.civKey, leader.civ);
@@ -90,19 +98,11 @@
     const civ = leaderCiv(leader);
     const historical = leaderHistorical(leader);
 
-    const heroImage = $('[data-hero-image]');
-    if (heroImage) {
-      heroImage.src = asset(leader);
-      heroImage.alt = siteText('site.leader_artwork', `${name} leader artwork`, { name });
-    }
-    const heroName = $('[data-hero-name]');
-    if (heroName) heroName.textContent = name;
-    const heroCiv = $('[data-hero-civ]');
-    if (heroCiv) heroCiv.textContent = civ;
     const detailImage = $('[data-detail-image]');
     if (detailImage) {
+      const detailMobileImage = $('[data-detail-mobile]');
+      if (detailMobileImage) detailMobileImage.srcset = asset(leader, true);
       detailImage.src = asset(leader);
-      detailImage.srcset = `${asset(leader, true)} 600w, ${asset(leader)} 1200w`;
       detailImage.alt = siteText('site.leader_artwork', `${name} artwork`, { name });
     }
     const detailCode = $('[data-detail-code]');
@@ -123,14 +123,6 @@
       detailDesc.textContent = siteText(leader.descriptionKey, '', {});
     }
 
-    $$('.leader-chip').forEach((item, itemIndex) => {
-      const active = itemIndex === index;
-      const label = siteText('site.select_leader', `Select ${leaderName(leaders[itemIndex])}`, { name: leaderName(leaders[itemIndex]) });
-      item.classList.toggle('is-active', active);
-      item.setAttribute('aria-pressed', String(active));
-      item.setAttribute('aria-label', label);
-      item.title = label;
-    });
     cards.forEach((item, itemIndex) => {
       const active = itemIndex === index;
       const itemLeader = leaders[itemIndex];
@@ -144,23 +136,6 @@
       if (cardCiv) cardCiv.textContent = leaderCiv(itemLeader);
       if (cardImage) cardImage.alt = siteText('site.leader_artwork', `${leaderName(itemLeader)} artwork`, { name: leaderName(itemLeader) });
     });
-  }
-
-  function renderLeaderRail() {
-    const rail = $('[data-leader-rail]');
-    if (!rail || !leaders.length) return;
-    rail.replaceChildren(...leaders.map((leader, index) => {
-      const button = document.createElement('button');
-      const label = siteText('site.select_leader', `Select ${leaderName(leader)}`, { name: leaderName(leader) });
-      button.className = 'leader-chip';
-      button.type = 'button';
-      button.setAttribute('aria-pressed', 'false');
-      button.setAttribute('aria-label', label);
-      button.title = label;
-      button.innerHTML = `<img src="${avatar(leader)}" alt="" width="256" height="256" loading="lazy" decoding="async">`;
-      button.addEventListener('click', () => updateLeader(index));
-      return button;
-    }));
   }
 
   function bindLeaderGrid() {
@@ -179,7 +154,6 @@
     });
   }
 
-  renderLeaderRail();
   bindLeaderGrid();
   if (leaders.length) {
     updateLeader(0);
