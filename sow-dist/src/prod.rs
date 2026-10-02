@@ -1331,9 +1331,13 @@ fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
 }
 
 pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
+    // The game HTML and manifest embed the public source commit, so doc-only
+    // commits must still invalidate the packaged web candidate.
+    let source = super::source_identity(paths)?;
+    let source_version = format!("{version}:{}", source.sha);
     input_fingerprint(
-        "web-v9-jest",
-        version,
+        "web-v10-jest",
+        &source_version,
         &[
             &paths.wasm_input,
             &paths.shell,
