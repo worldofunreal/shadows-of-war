@@ -823,7 +823,7 @@
         justify-content: center;
     }
 
-    #sow-menu[data-screen="home"] .sow-menu__footer-links > :not(.sow-menu__source-link) {
+    #sow-menu[data-screen="home"] .sow-menu__footer-links > :not(.sow-menu__source-link):not(.sow-menu__license-link) {
         display: none;
     }
 }
