@@ -22,6 +22,8 @@ const nativeProfileSource = [
 ].map((file) => fs.readFileSync(path.join(shell, file), "utf8")).join("\n");
 const loaderSource = fs.readFileSync(path.join(shell, "loader.js"), "utf8");
 const pokiSource = fs.readFileSync(path.join(shell, "main_menu.poki.js"), "utf8");
+const licenseJestSource = fs.readFileSync(path.join(shell, "main_menu.jest.js"), "utf8");
+const licenseMenuLayout = fs.readFileSync(path.join(shell, "main_menu.layout.css"), "utf8");
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
 const campaignEngine = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
@@ -257,6 +259,29 @@ test("mobile navigation and footers reuse the same localization key per link", (
         });
         assert.ok(footerKeys.length, `footer has no localized link for ${href}`);
         assert.ok(footerKeys.every((key) => key === mobileKey), `${href} uses different menu/footer localization keys`);
+    }
+});
+
+test("AGPL legal notice links to each release license and stays visible in the compact footer", () => {
+    for (const [platform, source] of [["standard", shellSource], ["Poki", pokiSource], ["Jest", licenseJestSource]]) {
+        assert.match(source, /sow-menu__license-link/, `${platform} menu has no license link`);
+        assert.match(source, /menu\.license_notice/, `${platform} menu has no localized legal notice`);
+        assert.equal((source.match(/© OpenFront and Contributors/g) || []).length, 1, `${platform} credit must appear once`);
+    }
+    assert.match(shellSource, /sourceUrl\.replace\("\/tree\/", "\/blob\/"\) \+ "\/LICENSE"/);
+    assert.match(licenseJestSource, /sourceUrl\.replace\("\/tree\/", "\/blob\/"\) \+ "\/LICENSE"/);
+    assert.match(pokiSource, /function pokiLicenseUrl\(\)[\s\S]*sourceUrl\.replace\("\/tree\/", "\/blob\/"\) \+ "\/LICENSE"/);
+    assert.match(pokiSource, /data-command='poki_license'/);
+    assert.match(pokiSource, /window\.SOW_pokiOpenExternalLink\(licenseUrl\)/);
+    assert.match(licenseMenuLayout, /:not\(\.sow-menu__source-link\):not\(\.sow-menu__license-link\)/);
+
+    const localeRoot = path.join(shell, "../../sow-i18n/strings");
+    const localeFiles = fs.readdirSync(localeRoot)
+        .map((locale) => path.join(localeRoot, locale, "web.toml"))
+        .filter((file) => fs.existsSync(file));
+    assert.equal(localeFiles.length, 15);
+    for (const file of localeFiles) {
+        assert.match(fs.readFileSync(file, "utf8"), /^license_notice = ".+"$/m, `${file} lacks the notice translation`);
     }
 });
 

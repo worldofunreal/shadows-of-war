@@ -815,3 +815,15 @@
     #sow-menu .sow-menu__progress-cell { padding-inline: 4px; font-size: 9px; }
     #sow-menu .sow-menu__currency-icon { width: 14px; height: 14px; }
 }
+
+@media (max-width: 599px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px) {
+    #sow-menu[data-screen="home"] .sow-menu__footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #sow-menu[data-screen="home"] .sow-menu__footer-links > :not(.sow-menu__source-link):not(.sow-menu__license-link) {
+        display: none;
+    }
+}

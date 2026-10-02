@@ -73,9 +73,10 @@ function renderSettings() {
 
 function renderFooter(label) {
     var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
+    var licenseUrl = sourceUrl ? sourceUrl.replace("/tree/", "/blob/") + "/LICENSE" : "";
     return "<footer class='sow-menu__footer'>" +
         (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") +
-        "<span><a href='" + esc(sourceUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(SOW_t("menu.source_code")) + "</a> · " + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
+        "<span><a class='sow-menu__source-link' href='" + esc(sourceUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(SOW_t("menu.source_code")) + "</a> · <a class='sow-menu__license-link' href='" + esc(licenseUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(SOW_t("menu.license_notice")) + "</a> · " + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
 }
 
 function renderAuthModal() { return ""; }

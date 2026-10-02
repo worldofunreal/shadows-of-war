@@ -203,13 +203,13 @@ pub(super) fn execute(paths: &Paths, bump: bool) -> Result<()> {
 pub(super) fn execute_android(paths: &Paths) -> Result<()> {
     println!("==> 1/3 Preflight (read-only)");
     preflight_android(paths)?;
+    let source = require_published_source(paths)?;
     // Every Android publication is a user-visible release. Keep the marketing
     // version moving together with the Play versionCode instead of publishing
     // a new AAB forever as the same versionName.
     let version = version(paths, true)?;
     println!("==> Android {version}");
     let android_code = android_version_code(paths, &version, false)?;
-    let source = super::source_identity(paths)?;
 
     println!("==> 2/3 Build Android AAB");
     build_android(paths, &version, android_code, &source.sha, &source.url)?;
@@ -791,7 +791,18 @@ fn require_published_source(paths: &Paths) -> Result<super::SourceIdentity> {
     if !workspace_dirty_files(paths)?.is_empty() {
         bail!("release source must be committed and publicly available before building");
     }
+    let root = paths.root.to_str().context("workspace path is not UTF-8")?;
     let source = super::source_identity(paths)?;
+    // AGPL §5(a): identify the modified source revision and its relevant date.
+    let source_date = super::output("git", &["-C", root, "show", "-s", "--format=%cs", "HEAD"])?;
+    let readme = fs::read_to_string(paths.root.join("README.md"))?;
+    let modified_source_notice =
+        format!("Modified from OpenFrontIO. Source revision date: `{source_date}`.");
+    if !readme.contains(&modified_source_notice) {
+        bail!(
+            "README must identify the modified OpenFront source and its revision date ({source_date})"
+        );
+    }
     let status = super::output(
         "curl",
         &[
@@ -1330,9 +1341,13 @@ fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
 }
 
 pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
+    // The game HTML and manifest embed the public source commit, so doc-only
+    // commits must still invalidate the packaged web candidate.
+    let source = super::source_identity(paths)?;
+    let source_version = format!("{version}:{}", source.sha);
     input_fingerprint(
-        "web-v9-jest",
-        version,
+        "web-v10-jest",
+        &source_version,
         &[
             &paths.wasm_input,
             &paths.shell,
