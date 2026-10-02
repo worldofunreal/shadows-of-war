@@ -21,6 +21,7 @@
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
         campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
         menu_multiplayer: '#sow-menu [data-command="quick_match"]',
+        menu_lobby: '#sow-menu .sow-menu__home-public [data-lobby-card]',
         menu_heroes: '#sow-menu [data-nav-screen="heroes"]',
         menu_profile: '#sow-menu [data-nav-screen="profile"]',
         attack_ratio: "#sow-hud-slider",

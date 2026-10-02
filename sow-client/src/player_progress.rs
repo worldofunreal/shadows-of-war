@@ -200,8 +200,7 @@ impl PlayerProgress {
                 .values()
                 .map(|stats| u64::from(stats.wins))
                 .sum(),
-            distinct_leaders: self.leader_stats.len() as u64
-                + u64::from(leader_stats.is_none()),
+            distinct_leaders: self.leader_stats.len() as u64 + u64::from(leader_stats.is_none()),
             best_leader_xp: leader_xp.values().copied().max().unwrap_or_default() as u64,
         };
         sow_data::rewards::newly_unlocked_achievements(totals, &self.unlocked_achievements)

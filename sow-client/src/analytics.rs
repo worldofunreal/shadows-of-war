@@ -35,7 +35,10 @@ static GAMEPLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Capture the ingest endpoint and envelope fields once at boot.
 pub fn configure(database_base: &str) {
-    if matches!(js_global("SOW_PORTAL").as_deref(), Some("poki") | Some("jest")) {
+    if matches!(
+        js_global("SOW_PORTAL").as_deref(),
+        Some("poki") | Some("jest")
+    ) {
         // Poki's player data must stay inside Poki's approved SDK events.
         // Jest measures load and retention through its own SDK instead.
         return;
@@ -69,7 +72,10 @@ pub fn track(name: &'static str) {
 }
 
 pub fn track_with(name: &'static str, props: serde_json::Value) {
-    if matches!(js_global("SOW_PORTAL").as_deref(), Some("poki") | Some("jest")) {
+    if matches!(
+        js_global("SOW_PORTAL").as_deref(),
+        Some("poki") | Some("jest")
+    ) {
         // Poki builds report only through PokiSDK.measure(). Do not retain a
         // second first-party event queue in the browser.
         return;

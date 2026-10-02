@@ -10,7 +10,12 @@ impl SowApp {
         self.sim
             .current_snapshot
             .as_ref()
-            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == player_id))
+            .and_then(|snapshot| {
+                snapshot
+                    .players
+                    .iter()
+                    .find(|player| player.id == player_id)
+            })
             .map(|player| player.gold)
             .unwrap_or(self.ui.app.hud_state.gold)
     }
@@ -157,7 +162,11 @@ impl SowApp {
                     let current_world_cy =
                         (self.input.screen_h * 0.5 - self.input.camera_y) / self.input.camera_zoom;
 
-                    let speed = if self.input.tutorial_camera_focus { 0.04 } else { 0.01 };
+                    let speed = if self.input.tutorial_camera_focus {
+                        0.04
+                    } else {
+                        0.01
+                    };
                     let next_world_cx =
                         current_world_cx + (target_world_cx - current_world_cx) * speed;
                     let next_world_cy =
@@ -283,12 +292,7 @@ impl SowApp {
                     .with("name", name),
                 _ => continue,
             };
-            notifications.push((
-                text,
-                players,
-                3,
-                format!("resource:received:{other_id}"),
-            ));
+            notifications.push((text, players, 3, format!("resource:received:{other_id}")));
         }
 
         for rejection in &snapshot.resource_rejections {

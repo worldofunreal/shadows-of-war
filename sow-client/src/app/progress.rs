@@ -25,8 +25,7 @@ impl SowApp {
         match_id: u64,
         leader: sow_core::player::Leader,
     ) {
-        let mut reward =
-            sow_data::rewards::calculate(sow_data::rewards::RewardInput::default());
+        let mut reward = sow_data::rewards::calculate(sow_data::rewards::RewardInput::default());
         reward.laurels = self.progress.preview_participation_laurels(leader, reward);
         self.store_exit_reward_preview(match_id.to_string(), reward);
     }

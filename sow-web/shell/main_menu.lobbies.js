@@ -211,7 +211,9 @@
         var continueId = campaign.continue_episode || "";
         var continueButton = continueId
             ? "<button class='sow-menu__primary' type='button' data-command='start_campaign_episode' data-episode-id='" + esc(continueId) + "'>" + esc(SOW_t("lobbies.continue_campaign")) + " <span>↗</span></button>"
-            : "<div class='sow-campaign__complete'>" + esc(SOW_t("lobbies.saga_complete")) + "</div>";
+            : episodes.length && episodes.every(function (episode) { return episode && episode.completed; })
+                ? "<div class='sow-campaign__complete'>" + esc(SOW_t("lobbies.saga_complete")) + "</div>"
+                : "";
         return "<main class='sow-menu__main sow-campaign' data-screen-panel='campaign'>" +
             "<section class='sow-menu__command sow-campaign__intro'>" +
                 "<p class='sow-menu__eyebrow'>" + esc(SOW_t("lobbies.single_player")) + "</p>" +

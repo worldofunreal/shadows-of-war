@@ -80,7 +80,7 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     top: max(12px, var(--sow-sat));
     inset-inline: max(16px, var(--sow-sal)) max(16px, var(--sow-sar));
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     pointer-events: none;
     gap: 12px;
@@ -100,6 +100,16 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     pointer-events: auto;
+}
+
+.sow-hud__status-right {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+}
+
+.sow-hud__status-left:not(:has(> :not(.hidden))) {
+    display: none;
 }
 
 .sow-hud__icon-pill {
@@ -130,6 +140,74 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 
 .sow-hud__icon-pill .sow-hud__action-icon { width: 30px; height: 30px; }
 
+/* Tutorial player nameplate: avatar + name + live troop bar under the buttons. */
+.sow-hud__nameplate {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 148px;
+    padding: 6px;
+    margin-top: 4px;
+    border: 1px solid var(--sow-line);
+    border-radius: 5px;
+    background: rgb(255 255 255 / 3%);
+    pointer-events: none;
+}
+
+.sow-hud__nameplate:not([hidden]) { display: flex; }
+
+.sow-hud__nameplate-avatar {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgb(233 187 100 / 45%);
+    object-fit: cover;
+    background: rgb(0 0 0 / 40%);
+}
+
+.sow-hud__nameplate-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.sow-hud__nameplate-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    color: #f2eee4;
+}
+
+.sow-hud__nameplate-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: rgb(5 10 13 / 78%);
+    border: 1px solid var(--sow-line);
+    overflow: hidden;
+}
+
+.sow-hud__nameplate-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, rgb(119 162 169 / 80%), rgb(159 188 151 / 90%));
+    border-radius: 2px;
+    transition: width 0.15s ease;
+}
+
+.sow-hud__nameplate-copy span {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--sow-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 .sow-hud__inbox-pill { position: relative; }
 
 .sow-hud__inbox-badge {
@@ -150,18 +228,17 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 .sow-hud__settings.hidden { display: none !important; }
 
 .sow-hud__fps {
+    flex: 0 0 auto;
     font-size: 10px;
     font-weight: 650;
     color: var(--sow-muted);
     font-variant-numeric: tabular-nums;
-    padding: 0 9px;
-    border-inline-start: 1px solid var(--sow-line);
+    white-space: nowrap;
+    padding: 0 4px;
 }
 
 @media (min-width: 721px) {
     .sow-hud__topbar { align-items: flex-start; }
-    .sow-hud__status-right { flex-direction: column; align-items: stretch; gap: 2px; }
-    .sow-hud__fps { padding: 0 2px 4px; border-inline-start: 0; border-bottom: 1px solid var(--sow-line); text-align: center; }
 }
 
 .sow-hud__btn-danger:hover {
@@ -2090,15 +2167,10 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
         top: max(8px, var(--sow-sat));
         inset-inline: max(8px, var(--sow-sal)) max(8px, var(--sow-sar));
         align-items: center;
-        justify-content: space-between;
     }
 
     .sow-hud__status-left, .sow-hud__status-right { gap: 2px; padding: 3px; }
     .sow-hud__icon-pill { width: 40px; height: 40px; }
-
-    .sow-hud__fps {
-        display: none;
-    }
 
     .sow-hud__left-rail {
         inset-inline-start: 6px;
@@ -2415,4 +2487,15 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     .sow-hud__building-icon { width: 32px; height: 32px; }
     .sow-hud__resource-row { gap: 4px; }
     .sow-hud__res-rate, .sow-hud__res-gold { padding-inline: 5px; font-size: 10px; }
+}
+
+/* Desktop gameplay chrome: left quest column + right vertical panel anchors.
+ * This block lives last so it beats the base rules above at equal specificity. */
+@media (min-width: 721px) {
+    .sow-hud__leaderboard { top: calc(max(12px, var(--sow-sat)) + 272px); }
+    .sow-hud__notifications {
+        left: max(16px, var(--sow-sal));
+        top: calc(max(12px, var(--sow-sat)) + 132px);
+        transform: none;
+    }
 }

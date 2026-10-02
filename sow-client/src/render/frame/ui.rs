@@ -30,11 +30,14 @@ impl SowApp {
             self.input.camera_focus_target = None;
             self.input.tutorial_camera_focus = false;
         }
-        if !pointer_gesture_active
-            && let Some((world_x, world_y)) = self.input.camera_focus_target
+        if !pointer_gesture_active && let Some((world_x, world_y)) = self.input.camera_focus_target
         {
             self.input.camera_focus_waiting_for_input_release = false;
-            let rate = if self.input.tutorial_camera_focus { 2.0 } else { 12.0 };
+            let rate = if self.input.tutorial_camera_focus {
+                2.0
+            } else {
+                12.0
+            };
             let lerp = (1.0 - f32::exp(-rate * dt)).clamp(0.0, 1.0);
             self.input.camera_zoom += (self.input.target_zoom - self.input.camera_zoom) * lerp;
             self.clamp_camera_to_map();
@@ -106,11 +109,15 @@ impl SowApp {
             text.begin_frame();
             for (key, cell) in &self.ui.app.asset_loader.gpu_avatar_cells {
                 let slot = match key {
-                    crate::ui::asset_loader::AvatarFetchKey::Leader(leader) => sow_core::player::Leader::ALL
-                        .iter()
-                        .position(|value| value == leader)
-                        .unwrap_or(0),
-                    crate::ui::asset_loader::AvatarFetchKey::Fallback => sow_core::player::Leader::ALL.len(),
+                    crate::ui::asset_loader::AvatarFetchKey::Leader(leader) => {
+                        sow_core::player::Leader::ALL
+                            .iter()
+                            .position(|value| value == leader)
+                            .unwrap_or(0)
+                    }
+                    crate::ui::asset_loader::AvatarFetchKey::Fallback => {
+                        sow_core::player::Leader::ALL.len()
+                    }
                     crate::ui::asset_loader::AvatarFetchKey::Campaign { slot, .. } => *slot,
                 };
                 if text.avatar_uv(slot).is_none() {

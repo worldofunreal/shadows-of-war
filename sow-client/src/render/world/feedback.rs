@@ -292,6 +292,8 @@ fn render_death_nameplates(
     let screen_h = input.screen_h / sf;
     let font_scale = dev.font_size_scale.max(0.1);
     let font_size = DEATH_NAMEPLATE_FONT_SIZE * font_scale;
+    let char_spacing = dev.font_char_spacing.max(0.1);
+    let campaign_avatar_slots = &ui.app.asset_loader.campaign_avatar_slots;
 
     ui.death_nameplates.retain(|animation| {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
@@ -309,7 +311,16 @@ fn render_death_nameplates(
             sf,
         );
         let icon_size = font_size * 0.8;
-        let margin = icon_size * 0.5 + 8.0;
+        let name_measure = text.measure_string(
+            &animation.name,
+            font_size * sf,
+            char_spacing,
+            INLINE_EMOJI_SCALE,
+        );
+        let gap = 3.0 * sf;
+        let icon_block = icon_size * sf + gap;
+        let row_width = icon_block * 2.0 + name_measure.width;
+        let margin = row_width * 0.5 + 8.0;
         if center[0] < -margin
             || center[0] > screen_w + margin
             || center[1] < -margin
@@ -318,13 +329,40 @@ fn render_death_nameplates(
             return true;
         }
 
+        let center_px = [center[0] * sf, center[1] * sf];
+        let row_left = center_px[0] - row_width * 0.5;
         let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
         text.push_emoji(
             death_emoji(animation.by_nuke),
-            [center[0] * sf, center[1] * sf],
+            [row_left + icon_size * sf * 0.5, center_px[1]],
             icon_size * sf * 0.5,
             [1.0, 1.0, 1.0, alpha],
             emoji_outline,
+        );
+        let avatar = crate::render::world::nameplates::prepare_death_avatar(
+            text,
+            &animation.avatar,
+            campaign_avatar_slots,
+            [row_left + icon_block + icon_size * sf * 0.5, center_px[1]],
+            icon_size * sf * 0.5,
+            animation.color,
+        );
+        crate::render::world::nameplates::paint_prepared_avatar(text, avatar, emoji_outline, alpha);
+        text.push_string(
+            &animation.name,
+            [
+                row_left + icon_block * 2.0,
+                center_px[1] + name_measure.height * 0.35,
+            ],
+            font_size * sf,
+            [
+                animation.color[0],
+                animation.color[1],
+                animation.color[2],
+                alpha,
+            ],
+            dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+            (0.0, char_spacing, INLINE_EMOJI_SCALE),
         );
         true
     });

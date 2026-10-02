@@ -815,9 +815,7 @@ impl SowApp {
                 return false;
             }
             if !self.structure_upgrade_requirement_met(&building) {
-                self.add_map_feedback(crate::ui::UiText::new(
-                    "hud.building_requires_city_level",
-                ));
+                self.add_map_feedback(crate::ui::UiText::new("hud.building_requires_city_level"));
                 return false;
             }
             let cost = self

@@ -169,9 +169,7 @@ impl SowApp {
                         state.map_rosters = map_file
                             .rosters
                             .into_iter()
-                            .filter(|preset| {
-                                selected_roster.as_deref() == Some(preset.id.as_str())
-                            })
+                            .filter(|preset| selected_roster.as_deref() == Some(preset.id.as_str()))
                             .collect();
                         if map_file.terrain.len() == state.map.terrain.len() {
                             let dest_ptr = state.map.terrain.as_mut_ptr() as *mut u8;

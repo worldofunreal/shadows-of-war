@@ -188,6 +188,10 @@
                                     { value: "reduced", label: SOW_t("menu.reduced_motion") }
                                 ] }) +
                             "</label>" +
+                            "<label class='sow-menu__form-field'>" +
+                                "<span>" + esc(SOW_t("menu.free_zoom_out")) + "</span>" +
+                                "<input class='sow-menu__field' type='checkbox' name='free_zoom_out' data-setting='free_zoom_out'" + (settings.free_zoom_out ? " checked" : "") + ">" +
+                            "</label>" +
                             "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                                 SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                             "</label>" +
@@ -1052,8 +1056,10 @@
         var settings = state.settings || {};
         var musicInput = root.querySelector("[data-setting='music_volume']");
         var motionInput = root.querySelector("[data-setting='reduced_motion']");
+        var freeZoomInput = root.querySelector("[data-setting='free_zoom_out']");
         if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
         if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
+        if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
         var musicValBadge = root.querySelector("[data-val-for='music_vol']");
         if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
         var timer = panel.querySelector("[data-live-countdown]");
@@ -1980,6 +1986,7 @@
         if (!input.dataset.setting) return;
         if (input.dataset.setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
+        if (input.dataset.setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
     });
 
     function waitForExitMenuArt() {

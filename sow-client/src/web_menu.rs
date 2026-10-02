@@ -138,6 +138,9 @@ enum WebMenuCommand {
     SetReducedMotion {
         value: bool,
     },
+    SetFreeZoomOut {
+        value: bool,
+    },
     SetAttackRatio {
         ratio: f32,
     },
@@ -262,6 +265,7 @@ struct HudPublishKey {
     settings_mute: bool,
     settings_music_volume: u32,
     settings_reduced_motion: bool,
+    settings_free_zoom_out: bool,
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
     tutorial_active: bool,
@@ -555,7 +559,10 @@ impl SowApp {
                         && gold_cost.is_finite()
                         && (0.0..=1_000_000.0).contains(&gold_cost)
                         && self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-                            snapshot.players.iter().any(|player| player.id == target_player_id)
+                            snapshot
+                                .players
+                                .iter()
+                                .any(|player| player.id == target_player_id)
                         })
                     {
                         self.send_intent(
@@ -726,6 +733,10 @@ impl SowApp {
                 }
                 WebMenuCommand::SetReducedMotion { value } => {
                     self.ui.app.settings_state.reduced_motion = value;
+                }
+                WebMenuCommand::SetFreeZoomOut { value } => {
+                    self.ui.app.settings_state.free_zoom_out = value;
+                    self.clamp_camera_to_map();
                 }
                 WebMenuCommand::SetAttackRatio { ratio } => {
                     self.ui.app.hud_state.attack_ratio = ratio.clamp(0.05, 1.0);
@@ -946,7 +957,11 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::FocusWorld { x, y } => {
-                    if self.ui.tutorial_active && self.net.is_offline && x.is_finite() && y.is_finite() {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && x.is_finite()
+                        && y.is_finite()
+                    {
                         self.input.has_snapped_camera_to_spawn = true;
                         self.input.target_zoom = self.input.camera_zoom;
                         self.input.camera_focus_target = Some((x, y));
@@ -1040,6 +1055,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_mute: app.ui.app.settings_state.mute_all,
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
+        settings_free_zoom_out: app.ui.app.settings_state.free_zoom_out,
         leaderboard_open: app.ui.show_leaderboard,
         leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
         inbox_open: hud.show_alliance_inbox,
@@ -1456,7 +1472,11 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .collect::<Vec<_>>();
     alliance_faction_ids.sort_unstable();
     let me = snapshot.players.iter().find(|player| player.id == my_pid);
-    let campaign_faction_ids = app.sim.engine.as_ref().map(|engine| &engine.campaign_faction_ids);
+    let campaign_faction_ids = app
+        .sim
+        .engine
+        .as_ref()
+        .map(|engine| &engine.campaign_faction_ids);
     let players = snapshot
         .players
         .iter()
@@ -1827,20 +1847,30 @@ fn building_benefit_label(
             match level {
                 0 => "No Factory benefit until construction is complete.".to_string(),
                 1 => format!("Produces +{income:.2} gold/s."),
-                2 => format!("Produces +{income:.2} gold/s. Each Manufactory shortens construction by 5% (25% max)."),
-                3 => format!("Produces +{income:.2} gold/s. Manufactory speeds work; each Factory lowers other upgrade prices by 5% (25% max)."),
-                _ => format!("Produces +{income:.2} gold/s. Also speeds work, lowers other upgrade prices, and adds 5% Trade Ship income (25% max)."),
+                2 => format!(
+                    "Produces +{income:.2} gold/s. Each Manufactory shortens construction by 5% (25% max)."
+                ),
+                3 => format!(
+                    "Produces +{income:.2} gold/s. Manufactory speeds work; each Factory lowers other upgrade prices by 5% (25% max)."
+                ),
+                _ => format!(
+                    "Produces +{income:.2} gold/s. Also speeds work, lowers other upgrade prices, and adds 5% Trade Ship income (25% max)."
+                ),
             }
         }
         Kind::Bunker => {
             let range = (config.bunker_range.round() as u32
                 + u32::from(level.saturating_sub(1)) * 2)
-            .min(20);
+                .min(20);
             let defense = u32::from(level) * 5;
             if level >= sow_core::game::BuildingKind::Bunker.max_level() {
-                format!("Raises nearby enemy attack losses by up to {defense}% within range {range}; intercepts nuclear bombs. Combined defense stops at 50%.")
+                format!(
+                    "Raises nearby enemy attack losses by up to {defense}% within range {range}; intercepts nuclear bombs. Combined defense stops at 50%."
+                )
             } else {
-                format!("Raises nearby enemy attack losses by up to {defense}% within range {range}. Combined defense stops at 50%.")
+                format!(
+                    "Raises nearby enemy attack losses by up to {defense}% within range {range}. Combined defense stops at 50%."
+                )
             }
         }
         Kind::Farm => format!(
@@ -1872,9 +1902,27 @@ fn building_metrics(
     let level = f64::from(level);
     let mut metrics = match kind {
         Kind::City => vec![
-            building_metric("troops", "Troop capacity", config.city_max_troops * level, "+", ""),
-            building_metric("troops", "Troop income", config.city_troop_income * level, "+", "/s"),
-            building_metric("gold", "Gold income", config.city_gold_income * level, "+", "/s"),
+            building_metric(
+                "troops",
+                "Troop capacity",
+                config.city_max_troops * level,
+                "+",
+                "",
+            ),
+            building_metric(
+                "troops",
+                "Troop income",
+                config.city_troop_income * level,
+                "+",
+                "/s",
+            ),
+            building_metric(
+                "gold",
+                "Gold income",
+                config.city_gold_income * level,
+                "+",
+                "/s",
+            ),
             building_metric(
                 "farm",
                 "Farm plots",
@@ -1886,8 +1934,20 @@ fn building_metrics(
         Kind::Port => vec![
             building_metric("port", "Boat slots", level, "+", ""),
             building_metric("speed", "Boat speed", level, "+", "%"),
-            building_metric("troops", "Troop income", config.port_troop_income * level, "+", "/s"),
-            building_metric("gold", "Gold income", config.port_gold_income * level, "+", "/s"),
+            building_metric(
+                "troops",
+                "Troop income",
+                config.port_troop_income * level,
+                "+",
+                "/s",
+            ),
+            building_metric(
+                "gold",
+                "Gold income",
+                config.port_gold_income * level,
+                "+",
+                "/s",
+            ),
         ],
         Kind::Factory => {
             let mut stats = vec![building_metric(
@@ -1898,13 +1958,25 @@ fn building_metrics(
                 "/s",
             )];
             if level >= 2.0 {
-                stats.push(building_metric("speed", "Construction speed", 5.0, "+", "%"));
+                stats.push(building_metric(
+                    "speed",
+                    "Construction speed",
+                    5.0,
+                    "+",
+                    "%",
+                ));
             }
             if level >= 3.0 {
                 stats.push(building_metric("discount", "Upgrade cost", 5.0, "−", "%"));
             }
             if level >= 4.0 {
-                stats.push(building_metric("trade_ship", "Trade ship income", 5.0, "+", "%"));
+                stats.push(building_metric(
+                    "trade_ship",
+                    "Trade ship income",
+                    5.0,
+                    "+",
+                    "%",
+                ));
             }
             stats
         }
@@ -1952,7 +2024,10 @@ fn building_detail_payload(
 ) -> serde_json::Value {
     let active_level = building.active_level();
     let next_level = active_level.saturating_add(1);
-    let my_id = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
+    let my_id = app
+        .sim
+        .my_player_id
+        .unwrap_or(app.ui.app.hud_state.my_player_id);
     let owns = building.owner_id == my_id;
     let snapshot = app.sim.current_snapshot.as_ref();
     let factory_time_levels = snapshot
@@ -1989,22 +2064,26 @@ fn building_detail_payload(
         factory_time_levels,
     );
     let boat_slots = snapshot.and_then(|snapshot| {
-        snapshot.players.iter().find(|player| player.id == my_id).map(|player| {
-            let port_levels = snapshot
-                .buildings
-                .iter()
-                .filter(|candidate| {
-                    candidate.owner_id == my_id
-                        && candidate.kind == sow_core::game::BuildingKind::Port
+        snapshot
+            .players
+            .iter()
+            .find(|player| player.id == my_id)
+            .map(|player| {
+                let port_levels = snapshot
+                    .buildings
+                    .iter()
+                    .filter(|candidate| {
+                        candidate.owner_id == my_id
+                            && candidate.kind == sow_core::game::BuildingKind::Port
+                    })
+                    .map(|candidate| u32::from(candidate.active_level()))
+                    .sum::<u32>();
+                serde_json::json!({
+                    "used": player.boats_in_use,
+                    "total": player.boat_capacity,
+                    "speed_percent": port_levels.min(30),
                 })
-                .map(|candidate| u32::from(candidate.active_level()))
-                .sum::<u32>();
-            serde_json::json!({
-                "used": player.boats_in_use,
-                "total": player.boat_capacity,
-                "speed_percent": port_levels.min(30),
             })
-        })
     });
     serde_json::json!({
         "id": building.id,
@@ -2409,6 +2488,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "mute_all": app.ui.app.settings_state.mute_all,
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
+                "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
             },
         })
     } else {
@@ -2593,6 +2673,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "mute_all": app.ui.app.settings_state.mute_all,
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
+                "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
             },
         })
     };
@@ -2736,9 +2817,10 @@ mod tests {
             2,
             &sow_core::game_config::GameConfig::default(),
         );
-        assert!(port.iter().any(|metric| {
-            metric["icon"] == "port" && metric["value"] == 2.0
-        }));
+        assert!(
+            port.iter()
+                .any(|metric| { metric["icon"] == "port" && metric["value"] == 2.0 })
+        );
         assert!(port.iter().any(|metric| {
             metric["icon"] == "troops" && metric["value"] == 25.0 && metric["unit"] == "/s"
         }));
@@ -2747,12 +2829,16 @@ mod tests {
             2,
             &sow_core::game_config::GameConfig::default(),
         );
-        assert!(bunker.iter().any(|metric| {
-            metric["icon"] == "defense" && metric["value"] == 10.0
-        }));
-        assert!(bunker.iter().any(|metric| {
-            metric["icon"] == "range" && metric["value"] == 16.0
-        }));
+        assert!(
+            bunker
+                .iter()
+                .any(|metric| { metric["icon"] == "defense" && metric["value"] == 10.0 })
+        );
+        assert!(
+            bunker
+                .iter()
+                .any(|metric| { metric["icon"] == "range" && metric["value"] == 16.0 })
+        );
     }
 
     #[test]

@@ -395,14 +395,16 @@
     function updateMenuGuide() {
         if (!runtime.menuGuide || !runtime.machine || !runtime.definition || !runtime.latestHud && runtime.lastPhase !== "MainMenu") return;
         var machineView = runtime.machine.update({}, runtime.uiCounts, performance.now());
+        // Owner decision: in the main menu the guide is the hand only. The
+        // objective card ("Open Campaigns to continue the story.") had no close
+        // button and only vanished when the player obeyed it, and the closing
+        // "You're ready" panel was the same nuisance. Both stay hidden here; the
+        // in-match objective card is unaffected.
+        if (machineView.done || machineView.step.type === "end") { dismissMenuGuide(); return; }
         var context = renderContext(machineView.step, null, anchorFor(machineView.step, { tutorial: {} }));
         context.reducedMotion = Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        context.hideObjective = true;
         runtime.view.render(machineView, context);
-        if (machineView.done) {
-            runtime.menuGuide = false;
-            runtime.machine = null;
-            pendingMenuGuide = null;
-        }
     }
 
     function startMenuGuide() {

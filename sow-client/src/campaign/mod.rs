@@ -97,7 +97,9 @@ impl CampaignId {
     pub fn is_unlocked(self, progress: &crate::player_progress::PlayerProgress) -> bool {
         match self {
             CampaignId::Boudica => true,
-            CampaignId::SixSkyEp1 => CampaignId::Boudica.is_completed(progress),
+            // Owner decision: episode 1 is not finished yet, so the whole Six Sky
+            // chain stays locked. Only the Boudica tutorial can be replayed.
+            CampaignId::SixSkyEp1 => false,
             CampaignId::SixSkyEp2 => CampaignId::SixSkyEp1.is_completed(progress),
             CampaignId::SixSkyEp3 => CampaignId::SixSkyEp2.is_completed(progress),
         }

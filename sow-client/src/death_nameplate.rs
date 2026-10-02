@@ -1,3 +1,4 @@
+use sow_core::player::AvatarIdentity;
 use web_time::Instant;
 
 pub const MAX_DEATH_NAMEPLATES: usize = 64;
@@ -9,6 +10,9 @@ pub struct DeathNameplateAnimation {
     pub world_y: f32,
     pub start_time: Instant,
     pub by_nuke: bool,
+    pub name: String,
+    pub color: [f32; 4],
+    pub avatar: AvatarIdentity,
 }
 
 impl DeathNameplateAnimation {
@@ -50,6 +54,9 @@ mod tests {
             world_y: 0.0,
             start_time: Instant::now(),
             by_nuke: false,
+            name: "Test".to_string(),
+            color: [1.0, 1.0, 1.0, 1.0],
+            avatar: AvatarIdentity::Fallback,
         }
     }
 

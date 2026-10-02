@@ -1,5 +1,5 @@
 use crate::app::SowApp;
-use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound};
+use crate::camera_zoom_upper_bound;
 
 impl SowApp {
     pub fn check_surface(&mut self) {
@@ -28,12 +28,7 @@ impl SowApp {
 
                     let vp = crate::viewport::Viewport::from_configured(self, sf);
                     vp.sync_to_app(self);
-                    let zmin = camera_zoom_lower_bound(
-                        self.input.screen_w,
-                        self.input.screen_h,
-                        self.sim.map_w,
-                        self.sim.map_h,
-                    );
+                    let zmin = self.zoom_floor();
                     let zmax =
                         camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
                     self.input.camera_zoom = self.input.camera_zoom.clamp(zmin, zmax);

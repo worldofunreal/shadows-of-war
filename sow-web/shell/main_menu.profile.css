@@ -1771,6 +1771,11 @@
     margin: 0 auto;
 }
 
+/* The panel shape below decides which leader art file the heroes screen shows:
+   this tall column takes *_mobile.webp (portrait art), the short band in the
+   phone media query takes *_desktop.webp (landscape art). Owner decision, the
+   file names are backwards on purpose — see heroesFeaturedArt() in
+   main_menu.heroes.js and AGENTS.md -> "Heroes featured art". */
 .sow-heroes__workspace {
     display: grid;
     flex: 1 1 auto;
@@ -2206,6 +2211,8 @@
         padding-top: 2px;
     }
 
+    /* Short band panel -> *_desktop.webp (landscape art). Owner decision, the
+       file names are backwards on purpose — see heroesFeaturedArt(). */
     #sow-menu[data-screen="heroes"] .sow-heroes__featured {
         flex: 0 0 clamp(192px, 29dvh, 236px);
         height: auto;

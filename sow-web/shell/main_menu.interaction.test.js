@@ -428,8 +428,8 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.doesNotMatch(webMenu, /hud\.rewards/);
     assert.match(coreSource, /receipt\.leader_xp/);
     assert.match(coreSource, /return leaderArtUrl\(leader\.slug\);/);
-    assert.match(heroesSource, /var portraitAsset = leaderArtUrl\([\s\S]*"mobile"[\s\S]*var landscapeAsset = leaderArtUrl\([\s\S]*"desktop"[\s\S]*source\.srcset = portraitAsset[\s\S]*image\.src = landscapeAsset/);
-    assert.match(heroesSource, /source media='\(orientation: portrait\)' srcset='" \+ esc\(portraitAsset\)[\s\S]*img src='" \+ esc\(landscapeAsset\)/);
+    // The heroes featured art mapping is guarded by its own test:
+    // "heroes featured art follows the panel shape, not the device name".
 });
 
 test("participation receipt stays synced until replay verification resolves", () => {
@@ -1191,6 +1191,53 @@ test("weekly free rotation is a splash-only status", () => {
     assert.match(profileCss, /\.sow-heroes__rotation/);
 });
 
+// GUARD — owner decision. Read this before changing anything in it.
+// The heroes featured picture picks its art by the SHAPE OF THE PANEL, not by
+// the device or the file name: desktop/landscape = tall column panel ->
+// *_mobile.webp (1080x1920); phone/portrait = short wide band ->
+// *_desktop.webp (1920x1080). The file names are backwards, so this mapping
+// was flipped without authorization three times (80c7043d 2026-09-24,
+// b945feb3 2026-09-24, 12486980 2026-10-01) and the last one shipped broken.
+// It runs in the ./sow p preflight: a red run here means someone flipped it
+// again. Full rationale: heroesFeaturedArt() in main_menu.heroes.js and
+// AGENTS.md -> "Heroes featured art (owner decision — do not flip)".
+test("heroes featured art follows the panel shape, not the device name", () => {
+    const why = "OWNER DECISION: desktop gets *_mobile.webp (tall column panel), " +
+        "portrait screens get *_desktop.webp (short band panel). The file names are backwards on purpose. " +
+        "Flipping this broke production in 80c7043d, b945feb3 and 12486980. " +
+        "Read heroesFeaturedArt() and AGENTS.md before touching it.";
+    const helperStart = heroesSource.indexOf("function heroesFeaturedArt");
+    const helperEnd = heroesSource.indexOf("function updateHeroesPreview", helperStart);
+    assert.ok(helperStart >= 0 && helperEnd > helperStart, "heroesFeaturedArt() must exist as the single owner of the mapping — " + why);
+    const helper = heroesSource.slice(helperStart, helperEnd);
+    assert.match(helper, /band: leaderArtUrl\(slug, "desktop"\)/, why);
+    assert.match(helper, /column: leaderArtUrl\(slug, "mobile"\)/, why);
+    assert.match(heroesSource, /OWNER DECISION — DO NOT "FIX" THIS MAPPING/,
+        "the mapping must keep its explanation in the source — " + why);
+    assert.equal((heroesSource.match(/heroesFeaturedArt\(activeLeader\.slug\)/g) || []).length, 2,
+        "renderHeroes() and updateHeroesPreview() must both go through the helper — " + why);
+    const previewStart = heroesSource.indexOf("function updateHeroesPreview");
+    const previewEnd = heroesSource.indexOf("function renderHeroInfoModal", previewStart);
+    const renderStart = heroesSource.indexOf("function renderHeroes()");
+    assert.ok(previewStart >= 0 && previewEnd > previewStart && renderStart > previewEnd);
+    const previewBody = heroesSource.slice(previewStart, previewEnd);
+    const renderBody = heroesSource.slice(renderStart);
+    assert.doesNotMatch(previewBody, /leaderArtUrl\(/, "no second inline art mapping in updateHeroesPreview() — " + why);
+    assert.doesNotMatch(renderBody, /leaderArtUrl\(/, "no second inline art mapping in renderHeroes() — " + why);
+    assert.match(previewBody, /source\.srcset = featuredArt\.band/, why);
+    assert.match(previewBody, /image\.src = featuredArt\.column/, why);
+    assert.match(renderBody, /source media='\(max-width: 680px\), \(orientation: portrait\)' srcset='" \+ esc\(featuredArt\.band\)/, why);
+    assert.match(renderBody, /img src='" \+ esc\(featuredArt\.column\) \+ "' alt='[^']*' width='1080' height='1920'/,
+        "the fallback <img> is the tall art, so 1080x1920 must stay — " + why);
+    // The <picture> switches on exactly the media query that turns the panel
+    // into a band, so art and layout can never disagree again.
+    assert.match(profileCss,
+        /@media \(max-width: 680px\), \(orientation: portrait\) \{[^@]*?\.sow-heroes__workspace \{\s*grid-template-columns: 1fr;/,
+        "picture media query must equal the CSS band-layout query — " + why);
+    // The info dialog is one tall card on every device; it is never swapped.
+    assert.match(heroesSource, /function renderHeroInfoModal[\s\S]*?leaderArtUrl\(activeLeader\.slug, "mobile"\)/, why);
+});
+
 test("header exposes server progress currencies and keeps the real XP remainder", () => {
     assert.match(shellSource, /data-progression-gems-value/);
     assert.match(shellSource, /data-progression-laurels-value/);
@@ -1615,6 +1662,22 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.match(campaignEditor, /previewActionStep/);
     assert.match(campaignEditor, /if \(actionRatio != null\) \$\("#sow-hud-slider"\)\.value/);
     assert.match(tutorial, /machineView\.step\.id !== runtime\.lastActionStepId/);
+});
+
+test("gameplay chrome: vertical right panel with exit on top, fps in dock, notices on the left", () => {
+    const statusRight = hud.slice(hud.indexOf("sow-hud__status-right"), hud.indexOf("</header>"));
+    const exitAt = statusRight.indexOf("prompt_surrender");
+    assert.ok(exitAt > 0 && exitAt < statusRight.indexOf("toggle_settings")
+        && exitAt < statusRight.indexOf("toggle_inbox")
+        && exitAt < statusRight.indexOf("toggle_leaderboard"),
+        "exit stays first in the vertical panel");
+    assert.ok(!statusRight.includes("sow-hud-fps"), "fps meter leaves the topbar");
+    assert.match(hud, /sow-hud__res-gold[\s\S]{0,400}sow-hud-fps/);
+    assert.match(hudCss, /\.sow-hud__status-right \{[^}]*flex-direction: column/);
+    assert.match(hudCss, /\.sow-hud__status-left:not\(:has\(> :not\(\.hidden\)\)\)/);
+    assert.match(hudCss, /\.sow-hud__notifications \{[^}]*left: max\(16px, var\(--sow-sal\)\)/);
+    assert.match(campaignView, /objective\.hidden = false;/);
+    assert.doesNotMatch(campaignView, /objective\.hidden = modal/);
 });
 
 test("campaign support reactions queue by delivery order, wait for their gate and preserve objective progress", () => {
@@ -2490,7 +2553,7 @@ test("campaign validator warns when route order makes a later threshold unreacha
     assert.ok(report.warnings.some(issue => issue.step === "opening" && issue.message.includes("Route 2 is unreachable")));
 });
 
-test("campaign validator rejects ignored fields and renders objective speakers", () => {
+test("campaign validator rejects ignored fields and dialog keeps its speaker row", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const report = campaign.validate({
         version: 2, episode_id: "unsupported_field_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
@@ -2509,8 +2572,8 @@ test("campaign validator rejects ignored fields and renders objective speakers",
         ]
     });
     assert.deepEqual(unusedSpeaker.errors, []);
-    assert.match(campaignView, /sow-story__objective-speaker/);
-    assert.match(campaignView, /objectiveSpeakerName/);
+    assert.match(campaignView, /sow-story__speaker/);
+    assert.doesNotMatch(campaignView, /sow-story__objective-speaker/);
 });
 
 test("campaign preview can seed prior decisions and facts to inspect conditional scenes", () => {
@@ -2905,10 +2968,11 @@ test("campaign dialogue resolves episode-local copy before the global catalog", 
     assert.match(campaignView, /options\.translate\(key\)/);
 });
 
-test("mobile chapter dialogue hugs its copy while staying centered", () => {
+test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 8px/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
+    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: var\(--story-safe-bottom\); transform: none; \}/);
     assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
 });
 
@@ -2924,20 +2988,18 @@ test("mobile story dialogs scroll long text and choices while keeping speaker co
     assert.match(campaignView, /button\.className = "sow-story__choice"[\s\S]*?choices\.appendChild\(button\)/);
 });
 
-test("mobile campaign objective stays compact until expanded and resets on step change", () => {
-    assert.match(campaignView, /data-story-objective-toggle aria-controls=.*aria-expanded="false"/);
-    assert.match(campaignView, /function setObjectiveExpanded\(expanded\)[\s\S]*?objective\.classList\.toggle\("is-expanded", objectiveExpanded\)[\s\S]*?setAttribute\("aria-expanded", String\(objectiveExpanded\)\)/);
-    assert.match(campaignView, /objectiveStepId !== step\.id\)[\s\S]*?setObjectiveExpanded\(false\)/);
-    assert.match(campaignView, /data-story-objective-toggle"\)\) setObjectiveExpanded\(!objectiveExpanded\)/);
+test("quest panel has no fold state and mobile docks it under the nameplate", () => {
+    assert.doesNotMatch(campaignView, /data-story-objective-toggle/);
+    assert.doesNotMatch(campaignView, /setObjectiveExpanded/);
+    assert.doesNotMatch(campaignView, /sow-story__objective-toggle/);
+    assert.doesNotMatch(storyCss, /\.sow-story__objective-toggle/);
+    assert.doesNotMatch(storyCss, /\.sow-story__objective\.is-expanded/);
+    assert.match(hud, /sow-hud-nameplate/);
+    assert.match(hud, /hudRefs\.plateTroops/);
+    assert.match(hudCss, /\.sow-hud__nameplate:not\(\[hidden\]\) \{ display: flex/);
     const mobileObjective = storyCss.slice(storyCss.indexOf("@container (max-width: 720px)"), storyCss.indexOf("@container (max-width: 640px)"));
-    assert.match(mobileObjective, /top: max\(64px, calc\(var\(--story-inset-top\) \+ 56px\)\)/);
-    assert.match(mobileObjective, /\.sow-story__objective-toggle \{[^}]*44px/);
-    assert.match(mobileObjective, /\.sow-story__objective\.is-expanded \{[^}]*max-height: 40dvh; overflow-y: auto; pointer-events: auto/);
-    const stringsRoot = path.join(shell, "../../sow-i18n/strings");
-    fs.readdirSync(stringsRoot).filter((locale) => fs.existsSync(path.join(stringsRoot, locale, "web.toml"))).forEach((locale) => {
-        const catalog = fs.readFileSync(path.join(stringsRoot, locale, "web.toml"), "utf8");
-        assert.match(catalog, /^objective_details = ".+"$/m, `${locale} objective disclosure label`);
-    });
+    assert.match(mobileObjective, /top: calc\(max\(8px, var\(--story-inset-top\)\) \+ 250px\)/);
+    assert.match(mobileObjective, /inset-inline: auto max\(8px, var\(--story-inset-right\)\)/);
 });
 
 test("short landscape compaction stays on mobile and the editor reuses the shared dialogue", () => {
@@ -3321,7 +3383,7 @@ test("menu guide uses the shared flow engine from its own entry", () => {
     assert.equal(machine.view().step.id, "menu_end");
 });
 
-test("Boudica completion offers localized Campaign and tutorial replay guidance", () => {
+test("Boudica completion points the menu guide hand at an active lobby", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const episode = path.join(shell, "../../assets/campaign");
     const definition = JSON.parse(fs.readFileSync(path.join(episode, "boudica.triggers.json"), "utf8"));
@@ -3335,9 +3397,13 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     combatBehaviorRoster.factions.find(faction => faction.id === "camulodunum").hostility = "aggressive";
     assert.deepEqual(campaign.validate(definition, combatBehaviorRoster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) }).errors, []);
     assert.equal(definition.menu_guide.dismissible, true);
-    assert.equal(definition.steps.find(step => step.id === definition.menu_guide.entry).trigger.action, "menu_campaign");
-    assert.equal(definition.steps.find(step => step.id === "boudica_return_replay").trigger.action, "campaign_replay");
-    assert.equal(definition.steps.find(step => step.id === "boudica_return_multiplayer").trigger.action, "menu_multiplayer");
+    assert.equal(definition.menu_guide.entry, "boudica_return_lobby");
+    assert.equal(definition.steps.find(step => step.id === definition.menu_guide.entry).trigger.action, "menu_lobby");
+    assert.equal(definition.steps.find(step => step.id === definition.menu_guide.entry).guide.target, "menu_lobby");
+    assert.equal(definition.steps.find(step => step.id === definition.menu_guide.entry).next, "boudica_return_end");
+    for (const obsolete of ["boudica_return_campaign", "boudica_return_replay", "boudica_return_multiplayer"]) {
+        assert.equal(definition.steps.find(step => step.id === obsolete), undefined, obsolete + " must not come back");
+    }
     assert.equal(definition.steps.find(step => step.id === "boudica_return_end").speaker, "boudica");
     assert.equal(definition.steps.find(step => step.id === "boudica_end").body_key, "tutorial.boudica_end_body");
     assert.equal(definition.steps.find(step => step.id === "boudica_complete").type, "end");
@@ -3470,6 +3536,7 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     const guideReadyEvent = shellSource.indexOf('dispatchEvent(new CustomEvent("sow:campaign-menu-guide-ready"))');
     assert.ok(rewardGate >= 0 && guideReadyEvent > rewardGate, "return guide must wait for reward presentation");
     for (const locale of ["en", "es"]) {
+        assert.ok(definition.strings[locale]["tutorial.boudica_menu_lobby_hint"]);
         assert.ok(definition.strings[locale]["tutorial.boudica_menu_campaign_hint"]);
         assert.ok(definition.strings[locale]["tutorial.boudica_menu_replay_hint"]);
         assert.ok(definition.strings[locale]["tutorial.boudica_menu_multiplayer_hint"]);
@@ -3478,15 +3545,38 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     }
     const machine = campaign.create(definition, definition.menu_guide.entry);
     machine.update({}, {}, 0);
-    machine.update({}, { menu_campaign: 1 }, 1);
-    machine.update({}, { menu_campaign: 1 }, 801);
-    assert.equal(machine.view().step.id, "boudica_return_replay");
-    machine.update({}, { menu_campaign: 1, campaign_replay: 1 }, 802);
-    machine.update({}, { menu_campaign: 1, campaign_replay: 1 }, 1602);
-    assert.equal(machine.view().step.id, "boudica_return_multiplayer");
-    machine.update({}, { menu_campaign: 1, campaign_replay: 1, menu_multiplayer: 1 }, 1603);
-    machine.update({}, { menu_campaign: 1, campaign_replay: 1, menu_multiplayer: 1 }, 2403);
+    assert.equal(machine.view().step.id, "boudica_return_lobby");
+    machine.update({}, { menu_lobby: 1 }, 1);
     assert.equal(machine.view().step.id, "boudica_return_end");
+    assert.equal(machine.view().step.type, "end");
+    assert.equal(machine.view().done, false);
+});
+
+// Owner decision: the return guide in the main menu is the hand only. The
+// objective card had no close button, and the closing "You're ready" panel was
+// the same nuisance, so both stay hidden until the tour is redesigned.
+test("the main menu guide points the hand at a lobby and never shows a card", () => {
+    assert.match(campaignEngine, /menu_lobby: '#sow-menu \.sow-menu__home-public \[data-lobby-card\]'/);
+    assert.match(tutorial, /if \(machineView\.done \|\| machineView\.step\.type === "end"\) \{ dismissMenuGuide\(\); return; \}/);
+    assert.match(tutorial, /context\.hideObjective = true/);
+    // The card stays visible by default (gameplay) and only the menu guide turns it off.
+    assert.match(campaignView, /dialog\.hidden = !modal; shade\.hidden = !modal; objective\.hidden = false;/);
+    assert.match(campaignView, /if \(context\.hideObjective\) objective\.hidden = true;/);
+    assert.doesNotMatch(campaignView, /objective\.hidden = modal/);
+});
+
+// Owner decision: episode 1 ("Arrival") is not finished yet, so the whole Six Sky
+// chain stays locked and the campaign screen only lets players replay the tutorial.
+test("campaign episode 1 stays locked so only the tutorial can be replayed", () => {
+    const unlockStart = campaignModule.indexOf("pub fn is_unlocked(");
+    const unlock = campaignModule.slice(unlockStart, campaignModule.indexOf("pub fn advisor(", unlockStart));
+    assert.ok(unlockStart >= 0, "is_unlocked must exist");
+    assert.match(unlock, /CampaignId::SixSkyEp1 => false/);
+    assert.doesNotMatch(unlock, /SixSkyEp1 => CampaignId::Boudica\.is_completed/);
+    // A locked episode renders the same disabled card as the rest of the chain.
+    assert.match(lobbiesSource, /: "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>"/);
+    // "Saga complete" may only appear when every episode is really finished.
+    assert.match(lobbiesSource, /episodes\.every\(function \(episode\) \{ return episode && episode\.completed; \}\)/);
 });
 
 test("tutorial locale and UI guides resolve per episode and point to actual HUD controls", () => {

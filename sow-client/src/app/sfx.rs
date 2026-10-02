@@ -193,7 +193,8 @@ impl SfxDirector {
     }
 
     pub(crate) fn play_nuke_launch(&mut self, now: Instant, spatial: SpatialSoundParams) {
-        if !self.gameplay_allowed(now) || !Self::open_gap(&mut self.last_nuke_launch, now, NUKE_GAP) {
+        if !self.gameplay_allowed(now) || !Self::open_gap(&mut self.last_nuke_launch, now, NUKE_GAP)
+        {
             return;
         }
         self.mark_critical(now);
@@ -206,7 +207,8 @@ impl SfxDirector {
         level: u8,
         spatial: SpatialSoundParams,
     ) {
-        if !self.gameplay_allowed(now) || !Self::open_gap(&mut self.last_nuke_impact, now, NUKE_GAP) {
+        if !self.gameplay_allowed(now) || !Self::open_gap(&mut self.last_nuke_impact, now, NUKE_GAP)
+        {
             return;
         }
         self.mark_critical(now);

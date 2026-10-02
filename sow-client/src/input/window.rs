@@ -1,6 +1,6 @@
 use crate::app::{HoverPointer, MapPointerStart, SowApp};
 use crate::input::map_click::{TOUCH_HOLD_MS, is_quick_tap};
-use crate::{ClientPhase, camera_zoom_lower_bound, camera_zoom_upper_bound};
+use crate::{ClientPhase, camera_zoom_upper_bound};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, PointerKind, WindowEvent};
 
 const HOLD_BUILD_INTERVAL_SECS: f32 = 0.25;
@@ -535,12 +535,7 @@ impl SowApp {
                 if y.abs() >= x.abs() { y } else { x }
             }
         };
-        let zmin = camera_zoom_lower_bound(
-            self.input.screen_w,
-            self.input.screen_h,
-            self.sim.map_w,
-            self.sim.map_h,
-        );
+        let zmin = self.zoom_floor();
         let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
         let previous_zoom = self.input.target_zoom;
         self.input.target_zoom = (previous_zoom * (1.0 + scroll * 0.15)).clamp(zmin, zmax);

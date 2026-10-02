@@ -174,14 +174,19 @@
         hudRoot.innerHTML = ''
             + '<header class="sow-hud__topbar">'
             + '  <div class="sow-hud__status-left">'
-            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.rankings") + '" title="' + SOW_t("hud.rankings") + '">' + hudIcon("rankings", "sow-hud__action-icon") + '</button>'
             + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">' + hudIcon("tools", "sow-hud__action-icon") + '</button>'
             + '  </div>'
             + '  <div class="sow-hud__status-right">'
-            + '    <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
-            + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">' + hudIcon("inbox") + '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>'
-            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">' + hudIcon("settings", "sow-hud__action-icon") + '</button>'
             + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' + SOW_t("hud.leave_match") + '" title="' + SOW_t("hud.leave_match") + '">' + hudIcon("leave", "sow-hud__action-icon") + '</button>'
+            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">' + hudIcon("settings", "sow-hud__action-icon") + '</button>'
+            + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">' + hudIcon("inbox") + '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>'
+            + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.rankings") + '" title="' + SOW_t("hud.rankings") + '">' + hudIcon("rankings", "sow-hud__action-icon") + '</button>'
+            + '    <div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden>'
+            + '      <img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false">'
+            + '      <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>'
+            + '      <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i></div>'
+            + '      <span id="sow-hud-nameplate-troops"></span></div>'
+            + '    </div>'
             + '  </div>'
             + '</header>'
             + '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">'
@@ -236,6 +241,7 @@
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.sound") + '</span><input type="checkbox" data-hud-setting="mute_all"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
+            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input type="checkbox" data-hud-setting="free_zoom_out"></label>'
             + '</aside>'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
             + '  <div class="sow-hud__dock-inner" id="sow-hud-dock-inner">'
@@ -263,6 +269,7 @@
             + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="' + SOW_t("hud.gold_treasury") + '">'
             + '        <span class="sow-hud__gold-text"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b data-role="gold">0</b></span>'
             + '      </div>'
+            + '      <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
             + '    </div>'
             + '  </div>'
             + '</footer>'
@@ -363,6 +370,11 @@
             troops: hudRoot.querySelector('[data-role="troops"]'),
             prod: hudRoot.querySelector('[data-role="prod"]'),
             fps: document.getElementById("sow-hud-fps"),
+            nameplate: document.getElementById("sow-hud-nameplate"),
+            plateAvatar: document.getElementById("sow-hud-nameplate-avatar"),
+            plateName: document.getElementById("sow-hud-nameplate-name"),
+            plateFill: document.getElementById("sow-hud-nameplate-fill"),
+            plateTroops: document.getElementById("sow-hud-nameplate-troops"),
             inboxCount: document.getElementById("sow-hud-inbox-count"),
             hoverCard: document.getElementById("sow-hud-hover-card"),
             hoverAvatar: document.getElementById("sow-hud-hover-avatar"),
@@ -503,6 +515,7 @@
             if (setting === "mute_all") send("set_mute", { value: !input.checked });
             if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
+            if (setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
         });
     }
 
@@ -1508,6 +1521,31 @@
             }
         }
 
+        var tutorialOn = Boolean(hud.tutorial && hud.tutorial.active);
+        if (hudRefs.nameplate) {
+            if (hudRefs.nameplate.hidden === tutorialOn) hudRefs.nameplate.hidden = !tutorialOn;
+            if (tutorialOn) {
+                var plateLeader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
+                var plateSrc = asset("gameplay/avatars/" + plateLeader.slug + ".webp");
+                if (hudRefs.plateAvatar && hudRefs.plateAvatar.getAttribute("src") !== plateSrc) {
+                    hudRefs.plateAvatar.src = plateSrc;
+                    hudRefs.plateAvatar.alt = plateLeader.name;
+                }
+                if (hudRefs.plateName && hudRefs.plateName.textContent !== plateLeader.name) {
+                    hudRefs.plateName.textContent = plateLeader.name;
+                }
+                var plateText = troops.toLocaleString() + " / " + maxTroops.toLocaleString();
+                if (hudRefs.plateTroops && hudRefs.plateTroops.textContent !== plateText) {
+                    hudRefs.plateTroops.textContent = plateText;
+                }
+                var plateFillPct = maxTroops > 0 ? Math.min(100, Math.max(0, (troops / maxTroops) * 100)) : 0;
+                var plateFillStr = plateFillPct.toFixed(1) + '%';
+                if (hudRefs.plateFill && hudRefs.plateFill.style.width !== plateFillStr) {
+                    hudRefs.plateFill.style.width = plateFillStr;
+                }
+            }
+        }
+
         if (hudRefs.prod && hudRefs.prod.dataset.val !== String(prod)) {
             hudRefs.prod.innerHTML = hudIcon("troops", "sow-hud__inline-icon") + ' +' + prod.toLocaleString() + '/s';
             hudRefs.prod.dataset.val = String(prod);
@@ -1612,9 +1650,11 @@
                 var muteInput = hudRefs.settings.querySelector('[data-hud-setting="mute_all"]');
                 var musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
                 var motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
+                var freeZoomInput = hudRefs.settings.querySelector('[data-hud-setting="free_zoom_out"]');
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
                 if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
                 if (motionInput && document.activeElement !== motionInput) motionInput.checked = Boolean(settings.reduced_motion);
+                if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
             }
         }
 

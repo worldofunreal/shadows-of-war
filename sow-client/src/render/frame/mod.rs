@@ -324,8 +324,9 @@ impl SowApp {
                                 let bx = (b.tile_idx % self.sim.map_w) as i32;
                                 let by = (b.tile_idx / self.sim.map_w) as i32;
 
-                                let radius = sow_core::building::minimum_building_spacing(kind, b.kind)
-                                    as f32;
+                                let radius =
+                                    sow_core::building::minimum_building_spacing(kind, b.kind)
+                                        as f32;
                                 let dx = (bx - col).abs();
                                 let dy = (by - row).abs();
                                 let dist = dx.max(dy);
@@ -366,10 +367,9 @@ impl SowApp {
                     let snapshot = self.sim.current_snapshot.as_ref();
                     let mut slot = 0usize;
                     self.ui.alliance_celebrations.retain(|effect| {
-                        let Some(age) = crate::app::alliance_celebration_age(
-                            effect.start_time,
-                            current_time,
-                        ) else {
+                        let Some(age) =
+                            crate::app::alliance_celebration_age(effect.start_time, current_time)
+                        else {
                             return false;
                         };
                         let Some(snapshot) = snapshot else {

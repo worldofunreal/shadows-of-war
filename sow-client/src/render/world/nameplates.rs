@@ -101,7 +101,7 @@ struct FullNameplate {
 }
 
 #[derive(Clone, Copy)]
-struct AvatarPlan {
+pub(crate) struct AvatarPlan {
     center: [f32; 2],
     radius: f32,
     frame_radius: f32,
@@ -717,15 +717,46 @@ fn prepare_full_nameplate(
     }
 }
 
-fn prepare_avatar(
+pub(crate) fn prepare_death_avatar(
     text: &TextRenderer,
-    player: &PlayerSnapshot,
+    identity: &sow_core::player::AvatarIdentity,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
-    layout: NameplateLayout,
+    center: [f32; 2],
+    radius: f32,
     color: [f32; 4],
-    sf: f32,
 ) -> AvatarPlan {
-    let (frame_color, content) = match sow_core::player::avatar_identity_ref(player) {
+    let identity_ref = match identity {
+        sow_core::player::AvatarIdentity::Portrait { slug, leader } => {
+            sow_core::player::AvatarIdentityRef::Portrait {
+                slug,
+                leader: *leader,
+            }
+        }
+        sow_core::player::AvatarIdentity::Emblem { symbol } => {
+            sow_core::player::AvatarIdentityRef::Emblem { symbol }
+        }
+        sow_core::player::AvatarIdentity::Fallback => sow_core::player::AvatarIdentityRef::Fallback,
+    };
+    let (frame_color, content) =
+        resolve_avatar_content(text, identity_ref, campaign_avatar_slots, color);
+    let border = radius * 0.12;
+    AvatarPlan {
+        center,
+        radius,
+        frame_radius: radius + border * 0.3,
+        border,
+        frame_color,
+        content,
+    }
+}
+
+fn resolve_avatar_content(
+    text: &TextRenderer,
+    identity: sow_core::player::AvatarIdentityRef<'_>,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    color: [f32; 4],
+) -> ([f32; 4], AvatarContent) {
+    match identity {
         sow_core::player::AvatarIdentityRef::Portrait { slug, leader: None } => {
             let slot = campaign_avatar_slots
                 .get(slug)
@@ -757,7 +788,23 @@ fn prepare_avatar(
             text.avatar_uv(Leader::ALL.len())
                 .map_or(AvatarContent::None, AvatarContent::Sprite),
         ),
-    };
+    }
+}
+
+fn prepare_avatar(
+    text: &TextRenderer,
+    player: &PlayerSnapshot,
+    campaign_avatar_slots: &std::collections::HashMap<String, usize>,
+    layout: NameplateLayout,
+    color: [f32; 4],
+    sf: f32,
+) -> AvatarPlan {
+    let (frame_color, content) = resolve_avatar_content(
+        text,
+        sow_core::player::avatar_identity_ref(player),
+        campaign_avatar_slots,
+        color,
+    );
     let center = [
         layout.avatar_center().0[0] * sf,
         layout.avatar_center().0[1] * sf,
@@ -796,7 +843,7 @@ fn paint_prepared_nameplate(
 ) {
     let before = text.instance_count();
     if let Some(avatar) = plan.avatar {
-        paint_prepared_avatar(text, avatar, plan.emoji_outline);
+        paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
     }
     for badge in plan.badges[..plan.badge_count].iter().flatten() {
         let icon = match badge.kind {
@@ -852,29 +899,33 @@ fn paint_prepared_nameplate(
     debug_assert!(text.instance_count().saturating_sub(before) <= plan.instance_count);
 }
 
-fn paint_prepared_avatar(
+pub(crate) fn paint_prepared_avatar(
     text: &mut TextRenderer,
     avatar: AvatarPlan,
     outline: sow_render::text::OutlineStyle,
+    alpha: f32,
 ) {
+    let mut frame_color = avatar.frame_color;
+    frame_color[3] *= alpha;
     text.push_rounded_rect(
         avatar.center,
         [avatar.frame_radius * 2.0; 2],
         AVATAR_CORNER_RADIUS_RATIO,
-        avatar.frame_color,
-        [0.0, 0.0, 0.0, 160.0 / 255.0],
+        frame_color,
+        [0.0, 0.0, 0.0, 160.0 / 255.0 * alpha],
         avatar.border * 0.5,
     );
+    let tint = [1.0, 1.0, 1.0, alpha];
     match avatar.content {
         AvatarContent::Sprite(uv) => {
-            text.push_sprite(avatar.center, avatar.radius, uv, [1.0; 4]);
+            text.push_sprite(avatar.center, avatar.radius, uv, tint);
         }
         AvatarContent::Emblem(glyph) => {
             let _ = text.push_emoji(
                 glyph,
                 avatar.center,
                 avatar.radius * CATEGORY_EMOJI_DIAMETER_SCALE,
-                [1.0; 4],
+                tint,
                 outline,
             );
         }
@@ -928,7 +979,7 @@ fn paint_lod_dot(
     );
 }
 
-fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
+pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
     let rgb = player
         .team
         .map_or(player.color, sow_core::player::team_territory_rgb);

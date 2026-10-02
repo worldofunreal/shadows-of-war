@@ -35,11 +35,7 @@ impl SowApp {
                 .collect();
             let mut notifications = Vec::new();
             if my_id != 0 {
-                if let Some(attacker_id) = new_attackers
-                    .difference(&old_attackers)
-                    .copied()
-                    .min()
-                {
+                if let Some(attacker_id) = new_attackers.difference(&old_attackers).copied().min() {
                     notifications.push((
                         crate::ui::UiText::new("hud.attack_incoming")
                             .with("count", new_attackers.len().to_string()),
@@ -75,8 +71,14 @@ impl SowApp {
                             );
                             if let Some(requester) = snap.players.iter().find(|p| p.id == *req) {
                                 notifications.push((
-                                    crate::ui::UiText::new("hud.alliance_request")
-                                        .with("name", sow_core::player::display_name(requester.id, &requester.name, requester.player_type)),
+                                    crate::ui::UiText::new("hud.alliance_request").with(
+                                        "name",
+                                        sow_core::player::display_name(
+                                            requester.id,
+                                            &requester.name,
+                                            requester.player_type,
+                                        ),
+                                    ),
                                     [Some(*req), Some(my_id)],
                                     3,
                                     format!("alliance-request:{req}"),
@@ -86,12 +88,23 @@ impl SowApp {
                         }
                     }
                     for request in &my_info_new.resource_requests {
-                        if !my_info_old.resource_requests.iter().any(|old| old.requester == request.requester)
-                            && let Some(requester) = snap.players.iter().find(|p| p.id == request.requester)
+                        if !my_info_old
+                            .resource_requests
+                            .iter()
+                            .any(|old| old.requester == request.requester)
+                            && let Some(requester) =
+                                snap.players.iter().find(|p| p.id == request.requester)
                         {
                             notifications.push((
                                 crate::ui::UiText::new("hud.resource_request")
-                                    .with("name", sow_core::player::display_name(requester.id, &requester.name, requester.player_type))
+                                    .with(
+                                        "name",
+                                        sow_core::player::display_name(
+                                            requester.id,
+                                            &requester.name,
+                                            requester.player_type,
+                                        ),
+                                    )
                                     .with("gold", crate::utils::format_number(request.gold))
                                     .with("troops", crate::utils::format_number(request.troops)),
                                 [Some(request.requester), Some(my_id)],
@@ -102,11 +115,18 @@ impl SowApp {
                         }
                     }
                     for ally_id in &my_info_new.alliances {
-                        let Some(old_ally) = my_info_old.alliances.iter().find(|id| *id == ally_id) else {
+                        let Some(old_ally) = my_info_old.alliances.iter().find(|id| *id == ally_id)
+                        else {
                             if let Some(ally) = snap.players.iter().find(|p| p.id == *ally_id) {
                                 notifications.push((
-                                    crate::ui::UiText::new("hud.alliance_formed")
-                                        .with("name", sow_core::player::display_name(ally.id, &ally.name, ally.player_type)),
+                                    crate::ui::UiText::new("hud.alliance_formed").with(
+                                        "name",
+                                        sow_core::player::display_name(
+                                            ally.id,
+                                            &ally.name,
+                                            ally.player_type,
+                                        ),
+                                    ),
                                     [Some(my_id), Some(*ally_id)],
                                     3,
                                     format!("alliance-formed:{ally_id}"),
@@ -115,14 +135,30 @@ impl SowApp {
                             }
                             continue;
                         };
-                        let old_timer = my_info_old.alliance_timers.get(old_ally).copied().unwrap_or_default();
-                        let new_timer = my_info_new.alliance_timers.get(ally_id).copied().unwrap_or_default();
-                        if old_timer <= 300 && new_timer > old_timer && new_timer > 300
+                        let old_timer = my_info_old
+                            .alliance_timers
+                            .get(old_ally)
+                            .copied()
+                            .unwrap_or_default();
+                        let new_timer = my_info_new
+                            .alliance_timers
+                            .get(ally_id)
+                            .copied()
+                            .unwrap_or_default();
+                        if old_timer <= 300
+                            && new_timer > old_timer
+                            && new_timer > 300
                             && let Some(ally) = snap.players.iter().find(|p| p.id == *ally_id)
                         {
                             notifications.push((
-                                crate::ui::UiText::new("hud.alliance_renewed")
-                                    .with("name", sow_core::player::display_name(ally.id, &ally.name, ally.player_type)),
+                                crate::ui::UiText::new("hud.alliance_renewed").with(
+                                    "name",
+                                    sow_core::player::display_name(
+                                        ally.id,
+                                        &ally.name,
+                                        ally.player_type,
+                                    ),
+                                ),
                                 [Some(my_id), Some(*ally_id)],
                                 3,
                                 format!("alliance-renewed:{ally_id}"),
@@ -146,19 +182,32 @@ impl SowApp {
                             self.ui
                                 .trigger_viewport_alert(crate::app::ViewportAlertKind::Betrayal);
                             notifications.push((
-                                crate::ui::UiText::new("hud.betrayal")
-                                    .with("name", sow_core::player::display_name(other_player.id, &other_player.name, other_player.player_type)),
+                                crate::ui::UiText::new("hud.betrayal").with(
+                                    "name",
+                                    sow_core::player::display_name(
+                                        other_player.id,
+                                        &other_player.name,
+                                        other_player.player_type,
+                                    ),
+                                ),
                                 [Some(*ally_id), Some(my_id)],
                                 4,
                                 format!("betrayal:{ally_id}"),
                                 false,
                             ));
                         } else if !my_info_new.alliances.contains(ally_id)
-                            && let Some(other_player) = snap.players.iter().find(|p| p.id == *ally_id)
+                            && let Some(other_player) =
+                                snap.players.iter().find(|p| p.id == *ally_id)
                         {
                             notifications.push((
-                                crate::ui::UiText::new("hud.alliance_ended")
-                                    .with("name", sow_core::player::display_name(other_player.id, &other_player.name, other_player.player_type)),
+                                crate::ui::UiText::new("hud.alliance_ended").with(
+                                    "name",
+                                    sow_core::player::display_name(
+                                        other_player.id,
+                                        &other_player.name,
+                                        other_player.player_type,
+                                    ),
+                                ),
                                 [Some(*ally_id), Some(my_id)],
                                 3,
                                 format!("alliance-ended:{ally_id}"),

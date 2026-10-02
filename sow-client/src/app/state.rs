@@ -71,7 +71,8 @@ pub struct TutorialObservation {
     pub seen_contact_faction_ids: std::collections::HashSet<String>,
     pub seen_nukes: std::collections::HashSet<u64>,
     pub ally_support_deliveries: u64,
-    pub support_deliveries_by_faction_id: std::collections::BTreeMap<String, CampaignSupportReceipt>,
+    pub support_deliveries_by_faction_id:
+        std::collections::BTreeMap<String, CampaignSupportReceipt>,
     pub structure_upgrades: u64,
     pub city_upgrades: u64,
     pub city_levels: u64,
@@ -79,7 +80,8 @@ pub struct TutorialObservation {
     pub port_levels: u64,
     pub tile_upgrades: u64,
     pub resource_transfers: u64,
-    pub resource_transfers_by_recipient_faction_id: std::collections::BTreeMap<String, ResourceTransferCounts>,
+    pub resource_transfers_by_recipient_faction_id:
+        std::collections::BTreeMap<String, ResourceTransferCounts>,
     pub foundry_level: u64,
     pub seen_alliances: std::collections::HashSet<u16>,
     pub seen_alliance_faction_ids: std::collections::HashSet<String>,
@@ -357,7 +359,10 @@ fn queue_alliance_celebration(
     while celebrations.len() >= MAX_ALLIANCE_CELEBRATIONS {
         celebrations.pop_front();
     }
-    celebrations.push_back(AllianceCelebration { player_ids, start_time: now });
+    celebrations.push_back(AllianceCelebration {
+        player_ids,
+        start_time: now,
+    });
 }
 
 pub(crate) fn alliance_celebration_age(
@@ -365,8 +370,7 @@ pub(crate) fn alliance_celebration_age(
     now: web_time::Instant,
 ) -> Option<f32> {
     let elapsed = now.duration_since(start_time).as_secs_f32();
-    (elapsed < ALLIANCE_CELEBRATION_DURATION)
-        .then_some(elapsed / ALLIANCE_CELEBRATION_DURATION)
+    (elapsed < ALLIANCE_CELEBRATION_DURATION).then_some(elapsed / ALLIANCE_CELEBRATION_DURATION)
 }
 
 #[derive(Clone, Debug)]
@@ -530,7 +534,10 @@ mod alliance_celebration_tests {
         assert_eq!(effects.back().unwrap().player_ids, [9, 109]);
         assert_eq!(effects.back().unwrap().start_time, refreshed);
         assert_eq!(
-            effects.iter().filter(|effect| effect.player_ids == [1, 101]).count(),
+            effects
+                .iter()
+                .filter(|effect| effect.player_ids == [1, 101])
+                .count(),
             1
         );
     }
@@ -538,11 +545,7 @@ mod alliance_celebration_tests {
     #[test]
     fn celebrations_expire_after_the_configured_duration() {
         let start = Instant::now();
-        assert!(alliance_celebration_age(
-            start,
-            start + Duration::from_millis(1599)
-        )
-        .is_some());
+        assert!(alliance_celebration_age(start, start + Duration::from_millis(1599)).is_some());
         assert_eq!(
             alliance_celebration_age(
                 start,

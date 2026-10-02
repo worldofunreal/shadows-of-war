@@ -236,7 +236,10 @@ impl SowApp {
                         .unwrap_or_default()
                 }
                 Ok(response) => {
-                    log::warn!("[collectibles] owner lookup failed HTTP {:?}", response.status);
+                    log::warn!(
+                        "[collectibles] owner lookup failed HTTP {:?}",
+                        response.status
+                    );
                     return;
                 }
                 Err(error) => {
@@ -248,14 +251,11 @@ impl SowApp {
                 let Ok(body) = serde_json::to_vec(&serde_json::json!({ "token": &token })) else {
                     continue;
                 };
-                let mut claim =
-                    ehttp::Request::post(format!("{ID_API}/api/v1/assets/claim"), body);
+                let mut claim = ehttp::Request::post(format!("{ID_API}/api/v1/assets/claim"), body);
                 claim
                     .headers
                     .insert("Authorization", format!("Bearer {session_token}"));
-                claim
-                    .headers
-                    .insert("Content-Type", "application/json");
+                claim.headers.insert("Content-Type", "application/json");
                 ehttp::fetch(claim, move |result| match result {
                     Ok(response) if response.ok => {
                         log::info!("[collectibles] claimed {token}")
@@ -730,8 +730,7 @@ impl SowApp {
             if receipt.verification_status
                 == Some(sow_data::profile::ReplayVerificationStatus::Pending)
             {
-                self.pending_reward_receipt_ids
-                    .insert(receipt.id.clone());
+                self.pending_reward_receipt_ids.insert(receipt.id.clone());
             }
         }
         crate::anonymous_identity::save_pending_reward_receipt_ids(

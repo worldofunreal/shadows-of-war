@@ -266,11 +266,8 @@ fn resolve_placement(
             return Err("Tap a lowland tile you own.");
         };
         let lowland = terrain_byte & 0x80 != 0 && terrain_byte & 0x1f < 10;
-        let footprint = sow_core::building::BuildingFootprint::at(
-            kind,
-            click_x as u32,
-            click_y as u32,
-        );
+        let footprint =
+            sow_core::building::BuildingFootprint::at(kind, click_x as u32, click_y as u32);
         let blocked = blocked_by_building(
             query,
             index,

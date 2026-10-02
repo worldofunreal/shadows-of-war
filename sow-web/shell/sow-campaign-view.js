@@ -6,7 +6,7 @@
         const doc = root.ownerDocument;
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
-        let objectiveExpanded = false, objectiveStepId = null;
+        let objectiveStepId = null;
         let guideWasVisible = false, guideX = null, guideY = null, nudgeTimer = 0;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
@@ -17,9 +17,9 @@
                 '<div class="sow-story__actions"><div class="sow-story__choices"></div><footer class="sow-story__footer"><span class="sow-story__lines" aria-hidden="true"></span>' +
                 '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
             '</article>' +
-            '<aside class="sow-story__objective" hidden><span class="sow-story__objective-mark" aria-hidden="true">◇</span>' +
-                '<div class="sow-story__objective-copy"><h3></h3><div class="sow-story__objective-details" id="' + uid + '-objective-details"><div class="sow-story__objective-speaker" hidden><img alt="" draggable="false"><span></span></div><p></p></div><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
-                '<button class="sow-story__locate" type="button" data-story-focus>⌖</button><button class="sow-story__objective-toggle" type="button" data-story-objective-toggle aria-controls="' + uid + '-objective-details" aria-expanded="false" aria-label="">⌄</button></aside>' +
+            '<aside class="sow-story__objective" hidden>' +
+                '<div class="sow-story__objective-copy"><h3></h3><p></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
+                '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
             '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden></span></div>';
         const find = selector => root.querySelector(selector);
@@ -29,8 +29,6 @@
         const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
-        const objectiveToggle = find("[data-story-objective-toggle]");
-        const objectiveSpeaker = find(".sow-story__objective-speaker"), objectiveSpeakerImage = objectiveSpeaker.querySelector("img"), objectiveSpeakerName = objectiveSpeaker.querySelector("span");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), spotlight = find(".sow-story__spotlight");
         const view = doc.defaultView;
@@ -87,12 +85,6 @@
             else if (options.onContinue) options.onContinue();
         }
         function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
-        function setObjectiveExpanded(expanded) {
-            objectiveExpanded = Boolean(expanded);
-            objective.classList.toggle("is-expanded", objectiveExpanded);
-            objectiveToggle.setAttribute("aria-expanded", String(objectiveExpanded));
-            objectiveToggle.textContent = objectiveExpanded ? "⌃" : "⌄";
-        }
         function releaseFocus() {
             if (focusBefore && focusBefore.isConnected && typeof focusBefore.focus === "function") focusBefore.focus({ preventScroll: true });
             focusBefore = null;
@@ -106,9 +98,9 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { guideWasVisible = false; clearNudge(); objectiveStepId = null; setObjectiveExpanded(false); if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { guideWasVisible = false; clearNudge(); objectiveStepId = null; if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
-            if (objectiveStepId !== step.id) { objectiveStepId = step.id; setObjectiveExpanded(false); }
+            if (objectiveStepId !== step.id) { objectiveStepId = step.id; }
             footer.hidden = step.type === "choice" || step.pause_game === true;
             const beatKey = JSON.stringify([step.id, model.state && model.state.line]);
             const beatChanged = Boolean(lastBeatKey && beatKey !== lastBeatKey);
@@ -123,7 +115,9 @@
             root.classList.toggle("is-reduced", reducedMotion);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
-            dialog.hidden = !modal; shade.hidden = !modal; objective.hidden = modal;
+            dialog.hidden = !modal; shade.hidden = !modal; objective.hidden = false;
+            // Owner decision: the main-menu guide hides the card; gameplay never does.
+            if (context.hideObjective) objective.hidden = true;
             dialog.setAttribute("role", "dialog");
             dialog.setAttribute("aria-modal", "true");
             dialog.setAttribute("aria-labelledby", uid + (line.title_key || step.title_key ? "-title" : "-body"));
@@ -201,26 +195,18 @@
                 button.setAttribute("aria-label", t(dismissContinues || step.type === "choice" ? "tutorial.continue" : "hud.leave_match"));
             });
             setText(objectiveTitle, t(step.title_key));
-            objectiveToggle.setAttribute("aria-label", t("tutorial.objective_details"));
-            objectiveSpeaker.hidden = !step.speaker || !speakerName;
-            setText(objectiveSpeakerName, speakerName);
-            const objectiveAvatar = character.avatar ? options.asset("gameplay/avatars/" + character.avatar + ".webp") : "";
-            objectiveSpeakerImage.hidden = !objectiveAvatar;
-            if (objectiveAvatar && objectiveSpeakerImage.getAttribute("src") !== objectiveAvatar) objectiveSpeakerImage.src = objectiveAvatar;
-            else if (!objectiveAvatar) objectiveSpeakerImage.removeAttribute("src");
             setText(hint, context.hintOverride || t(step.hint_key || step.body_key)); hint.hidden = !hint.textContent;
             const progress = model.progress;
             objective.querySelector(".sow-story__meter").hidden = progress.target <= 1;
             meter.max = Math.max(1, progress.target); meter.value = progress.current;
             meter.setAttribute("aria-label", t(step.title_key));
             setText(amount, Math.floor(progress.current).toLocaleString() + " / " + Math.ceil(progress.target).toLocaleString());
-            setText(find(".sow-story__objective-mark"), "◇");
             const focus = find("[data-story-focus]");
             const hasMapTarget = step.marker || (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && (step.trigger.target || Array.isArray(step.trigger.targets)));
             focus.hidden = !options.onFocus || !hasMapTarget;
             focus.setAttribute("aria-label", t("hud.center_camera"));
             objective.setAttribute("role", "status");
-            if (beatChanged && !modal && !reducedMotion && objective.animate) objective.animate(
+            if (beatChanged && !reducedMotion && objective.animate) objective.animate(
                 [{ opacity: 0, transform: "translateY(-6px)" }, { opacity: 1, transform: "translateY(0)" }],
                 { duration: 180, easing: "cubic-bezier(.2,.7,.2,1)" }
             );
@@ -267,7 +253,6 @@
             if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
             else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
-            else if (button.hasAttribute("data-story-objective-toggle")) setObjectiveExpanded(!objectiveExpanded);
             else if (button.hasAttribute("data-story-dismiss")) dismissDialog();
         }
         function outsideClick(event) {

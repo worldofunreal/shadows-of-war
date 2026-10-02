@@ -120,9 +120,10 @@ impl SowApp {
                 let support = value
                     .as_object()
                     .ok_or_else(|| "Campaign support settings are invalid.".to_string())?;
-                if support.keys().any(|key| {
-                    !matches!(key.as_str(), "after_defeated" | "share_percent")
-                }) {
+                if support
+                    .keys()
+                    .any(|key| !matches!(key.as_str(), "after_defeated" | "share_percent"))
+                {
                     return Err("Campaign support contains an unknown setting.".to_string());
                 }
                 let after_defeated = support
@@ -179,7 +180,7 @@ impl SowApp {
                 player_team: None,
                 campaign_player_color: Some(player_color),
                 starting_troops,
-                global_speed_multiplier: 1.0,
+                global_speed_multiplier: 0.5,
                 buildings_enabled,
                 buildings_unlock_after_defeated,
                 campaign_support,

@@ -107,6 +107,26 @@ The browser shell owns menus, HUD, panels, tutorial, and input. Rust keeps the
 simulation, networking, and Blade GPU world renderer; there is no native UI or
 native launcher to maintain.
 
+### Heroes featured art (owner decision — do not flip)
+
+- The heroes featured picture chooses its art by the SHAPE OF THE PANEL, not by
+  the device and not by the file name. Desktop/landscape shows a tall narrow
+  column panel and gets `*_mobile.webp` (1080x1920). Phone/portrait shows a
+  short wide band panel and gets `*_desktop.webp` (1920x1080).
+- The file names are backwards relative to where they are shown. That looks
+  wrong at a glance and is the whole reason this line keeps being "corrected".
+- `heroesFeaturedArt()` in `sow-web/shell/main_menu.heroes.js` is the only owner
+  of the mapping. Do not invert it and do not add a second inline copy in
+  `renderHeroes()` or `updateHeroesPreview()`.
+- Incident history (all unauthorized, all wrong): `80c7043d` (2026-09-24),
+  `b945feb3` (2026-09-24) and `12486980` (2026-10-01), the last one shipped
+  broken. Each flip was made because "_mobile.webp on desktop" read like a bug.
+  It is not a bug; it is the owner's explicit request.
+- Enforcement: the test `heroes featured art follows the panel shape, not the
+  device name` in `sow-web/shell/main_menu.interaction.test.js`, which runs in
+  the `./sow p` preflight. A red run there means someone flipped it again —
+  restore this mapping, never the "obvious" one.
+
 ### Lobby state invariant
 
 - `MainMenuState.lobbies` is the current unique-by-ID lobby snapshot; local updates use the shared lobby helpers.

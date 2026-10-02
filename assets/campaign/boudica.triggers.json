@@ -13,7 +13,7 @@
   },
   "entry": "boudica_rise_of_the_iceni_intro",
   "menu_guide": {
-    "entry": "boudica_return_campaign",
+    "entry": "boudica_return_lobby",
     "dismissible": true
   },
   "reactions": [
@@ -307,6 +307,8 @@
       "tutorial.boudica_end_body": "Rome can break an army. It cannot undo what we began.",
       "tutorial.boudica_menu_campaign_title": "Campaigns",
       "tutorial.boudica_menu_campaign_hint": "Open Campaigns to continue the story.",
+      "tutorial.boudica_menu_lobby_title": "Lobbies",
+      "tutorial.boudica_menu_lobby_hint": "Join an open lobby to play.",
       "tutorial.boudica_menu_replay_title": "Replay the tutorial",
       "tutorial.boudica_menu_replay_hint": "Choose Boudica to play this tutorial again.",
       "tutorial.boudica_menu_multiplayer_title": "Multiplayer",
@@ -506,6 +508,8 @@
       "tutorial.boudica_end_body": "Roma puede quebrar un ejército. No puede borrar lo que iniciamos.",
       "tutorial.boudica_menu_campaign_title": "Campañas",
       "tutorial.boudica_menu_campaign_hint": "Abre Campañas para continuar la historia.",
+      "tutorial.boudica_menu_lobby_title": "Salas",
+      "tutorial.boudica_menu_lobby_hint": "Únete a una sala abierta para jugar.",
       "tutorial.boudica_menu_replay_title": "Repetir el tutorial",
       "tutorial.boudica_menu_replay_hint": "Elige a Boudica para volver a jugar este tutorial.",
       "tutorial.boudica_menu_multiplayer_title": "Multijugador",
@@ -1827,52 +1831,18 @@
       "presentation": "chapter"
     },
     {
-      "id": "boudica_return_campaign",
+      "id": "boudica_return_lobby",
       "type": "guide",
-      "title_key": "tutorial.boudica_menu_campaign_title",
-      "hint_key": "tutorial.boudica_menu_campaign_hint",
+      "title_key": "tutorial.boudica_menu_lobby_title",
+      "hint_key": "tutorial.boudica_menu_lobby_hint",
       "trigger": {
         "type": "ui",
-        "action": "menu_campaign",
+        "action": "menu_lobby",
         "scope": "step"
       },
       "guide": {
         "kind": "ui",
-        "target": "menu_campaign",
-        "gesture": "tap"
-      },
-      "next": "boudica_return_replay"
-    },
-    {
-      "id": "boudica_return_replay",
-      "type": "guide",
-      "title_key": "tutorial.boudica_menu_replay_title",
-      "hint_key": "tutorial.boudica_menu_replay_hint",
-      "trigger": {
-        "type": "ui",
-        "action": "campaign_replay",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "campaign_replay",
-        "gesture": "tap"
-      },
-      "next": "boudica_return_multiplayer"
-    },
-    {
-      "id": "boudica_return_multiplayer",
-      "type": "guide",
-      "title_key": "tutorial.boudica_menu_multiplayer_title",
-      "hint_key": "tutorial.boudica_menu_multiplayer_hint",
-      "trigger": {
-        "type": "ui",
-        "action": "menu_multiplayer",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "menu_multiplayer",
+        "target": "menu_lobby",
         "gesture": "tap"
       },
       "next": "boudica_return_end"
@@ -1886,12 +1856,8 @@
     }
   ],
   "layout": {
-    "boudica_return_campaign": {
+    "boudica_return_lobby": {
       "x": 70,
-      "y": 1580
-    },
-    "boudica_return_replay": {
-      "x": 350,
       "y": 1580
     },
     "boudica_return_end": {
@@ -2161,10 +2127,6 @@
     "boudica_complete": {
       "x": 630,
       "y": 3870
-    },
-    "boudica_return_multiplayer": {
-      "x": 630,
-      "y": 4060
     },
     "boudica_outpost_colonia_veterans": {
       "x": 70,

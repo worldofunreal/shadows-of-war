@@ -14,7 +14,10 @@ impl TutorialObservation {
                 && let Some(target) = engine.state.player(attack.target_owner)
                 && let Some(faction_id) = engine.campaign_faction_ids.get(&target.id)
             {
-                let count = self.attacks_by_faction_id.entry(faction_id.clone()).or_default();
+                let count = self
+                    .attacks_by_faction_id
+                    .entry(faction_id.clone())
+                    .or_default();
                 *count = count.saturating_add(1);
             }
         }
@@ -59,7 +62,8 @@ impl TutorialObservation {
         for building in &engine.buildings {
             if building.owner_id == my_id {
                 self.owned_structures.insert(building.id);
-                self.owned_structure_kinds.insert(building.id, building.kind);
+                self.owned_structure_kinds
+                    .insert(building.id, building.kind);
                 if building.active_level() > 0 {
                     self.seen_structures.insert(building.id);
                     let kind = match building.kind {
@@ -180,11 +184,20 @@ impl TutorialObservation {
                     self.resource_transfers = self.resource_transfers.saturating_add(1);
                     if let Some(receiver) = engine.state.player(*receiver_id) {
                         if let Some(faction_id) = engine.campaign_faction_ids.get(&receiver.id) {
-                            let counts = self.resource_transfers_by_recipient_faction_id.entry(faction_id.clone()).or_default();
+                            let counts = self
+                                .resource_transfers_by_recipient_faction_id
+                                .entry(faction_id.clone())
+                                .or_default();
                             counts.total = counts.total.saturating_add(1);
-                            if *gold > 0.0 { counts.gold = counts.gold.saturating_add(1); }
-                            if *troops > 0.0 { counts.troops = counts.troops.saturating_add(1); }
-                            if *gold > 0.0 && *troops > 0.0 { counts.gold_troops = counts.gold_troops.saturating_add(1); }
+                            if *gold > 0.0 {
+                                counts.gold = counts.gold.saturating_add(1);
+                            }
+                            if *troops > 0.0 {
+                                counts.troops = counts.troops.saturating_add(1);
+                            }
+                            if *gold > 0.0 && *troops > 0.0 {
+                                counts.gold_troops = counts.gold_troops.saturating_add(1);
+                            }
                         }
                     }
                 }
@@ -198,8 +211,13 @@ impl TutorialObservation {
                 {
                     self.ally_support_deliveries = self.ally_support_deliveries.saturating_add(1);
                     if let Some(faction_id) = engine.campaign_faction_ids.get(&sender.id) {
-                        let receipt = self.support_deliveries_by_faction_id.entry(faction_id.clone()).or_default();
-                        if receipt.deliveries == 0 { receipt.first_tick = engine.state.tick; }
+                        let receipt = self
+                            .support_deliveries_by_faction_id
+                            .entry(faction_id.clone())
+                            .or_default();
+                        if receipt.deliveries == 0 {
+                            receipt.first_tick = engine.state.tick;
+                        }
                         receipt.deliveries = receipt.deliveries.saturating_add(1);
                         receipt.gold += (*gold).max(0.0);
                         receipt.troops += (*troops).max(0.0);
@@ -243,13 +261,23 @@ impl TutorialObservation {
             if let GameEvent::TileUpgraded { tile_idx, .. } = event {
                 let width = engine.state.map.width;
                 if width > 0
-                    && engine.state.map.owner_id(tile_idx % width, tile_idx / width) == my_id
+                    && engine
+                        .state
+                        .map
+                        .owner_id(tile_idx % width, tile_idx / width)
+                        == my_id
                 {
                     self.tile_upgrades = self.tile_upgrades.saturating_add(1);
                 }
             }
-            if let GameEvent::PlayerEliminated { player_id, conqueror_id, assists, .. } = event
-                && (*conqueror_id == my_id || assists.iter().any(|(player_id, _)| *player_id == my_id))
+            if let GameEvent::PlayerEliminated {
+                player_id,
+                conqueror_id,
+                assists,
+                ..
+            } = event
+                && (*conqueror_id == my_id
+                    || assists.iter().any(|(player_id, _)| *player_id == my_id))
                 && let Some(player) = engine.state.player(*player_id)
             {
                 self.seen_defeated.insert(*player_id);
@@ -389,10 +417,9 @@ mod tests {
             state.set_tile_owner(x, 1, id);
         }
         let mut engine = SowEngine::new(state, WaterComponents::default());
-        engine.campaign_faction_ids.extend([
-            (2, "neighbor".to_string()),
-            (3, "distant".to_string()),
-        ]);
+        engine
+            .campaign_faction_ids
+            .extend([(2, "neighbor".to_string()), (3, "distant".to_string())]);
         engine
     }
 
@@ -475,10 +502,7 @@ mod tests {
     fn campaign_action_events_survive_the_tick_event_clear() {
         let mut engine = engine();
         let mut observation = TutorialObservation::default();
-        for (id, tile_idx, kind) in [
-            (20, 9, BuildingKind::City),
-            (21, 10, BuildingKind::Port),
-        ] {
+        for (id, tile_idx, kind) in [(20, 9, BuildingKind::City), (21, 10, BuildingKind::Port)] {
             engine.add_building(Building {
                 id,
                 owner_id: 1,
@@ -567,8 +591,18 @@ mod tests {
         assert_eq!(observation.city_levels, 1);
         assert_eq!(observation.port_levels, 1);
 
-        engine.buildings.iter_mut().find(|building| building.id == 30).unwrap().level = 3;
-        engine.buildings.iter_mut().find(|building| building.id == 31).unwrap().level = 2;
+        engine
+            .buildings
+            .iter_mut()
+            .find(|building| building.id == 30)
+            .unwrap()
+            .level = 3;
+        engine
+            .buildings
+            .iter_mut()
+            .find(|building| building.id == 31)
+            .unwrap()
+            .level = 2;
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.city_levels, 3);
         assert_eq!(observation.port_levels, 2);
@@ -603,7 +637,9 @@ mod tests {
         assert_eq!(observation.seen_fleets_by_type.get("TradeShip"), Some(&1));
         assert_eq!(observation.seen_fleets_by_type.get("Warship"), Some(&1));
         assert_eq!(
-            observation.seen_transport_fleets_by_faction_id.get("neighbor"),
+            observation
+                .seen_transport_fleets_by_faction_id
+                .get("neighbor"),
             Some(&1)
         );
         assert_eq!(observation.seen_transport_fleets_by_faction_id.len(), 1);

@@ -216,9 +216,7 @@ impl SowApp {
                 crate::store_portals::measure("match", "round", "abandon");
             }
             crate::store_portals::gameplay_stop();
-            if !was_offline
-                && let Some(match_id) = reward_match_id
-            {
+            if !was_offline && let Some(match_id) = reward_match_id {
                 self.capture_online_reward_preview(
                     match_id,
                     exit_leader.unwrap_or(self.ui.app.main_menu_state.selected_leader),
@@ -333,5 +331,4 @@ mod tests {
         assert!(should_use_exit_game_loader(ClientPhase::Playing));
         assert!(!should_use_exit_game_loader(ClientPhase::Splash));
     }
-
 }

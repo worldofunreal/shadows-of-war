@@ -68,6 +68,12 @@ impl SowApp {
             .anchor_for(player_id)
             .map(|center| (center[0], center[1]))
             .unwrap_or((wx, wy));
+        let color = victim
+            .map(crate::render::world::nameplates::player_color)
+            .unwrap_or([0.85, 0.85, 0.85, 1.0]);
+        let avatar = victim
+            .map(sow_core::player::avatar_identity)
+            .unwrap_or(sow_core::player::AvatarIdentity::Fallback);
         crate::app::DeathNameplateAnimation::enqueue(
             &mut self.ui.death_nameplates,
             crate::app::DeathNameplateAnimation {
@@ -75,6 +81,9 @@ impl SowApp {
                 world_y: anim_y,
                 start_time: now_instant,
                 by_nuke: info.by_nuke,
+                name: name.clone(),
+                color,
+                avatar,
             },
         );
 

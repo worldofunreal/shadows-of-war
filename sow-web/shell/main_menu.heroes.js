@@ -4,6 +4,39 @@
         return !!leader && leader.available === true && leader.free_rotation === true && leader.owned === false;
     }
 
+    // OWNER DECISION — DO NOT "FIX" THIS MAPPING.
+    //
+    // The heroes featured art is chosen by the SHAPE OF THE PANEL, not by the
+    // device and not by the file name:
+    //   - Desktop / landscape screen: the panel is a tall narrow column
+    //     (".sow-heroes__workspace { grid-template-columns: minmax(320px, .8fr)
+    //     minmax(0, 1.2fr) }" in main_menu.profile.css), so it takes the
+    //     PORTRAIT art *_mobile.webp (1080x1920).
+    //   - Phone / portrait screen: the panel collapses into a short wide band
+    //     ("#sow-menu[data-screen="heroes"] .sow-heroes__featured {
+    //     flex: 0 0 clamp(192px, 29dvh, 236px) }"), so it takes the LANDSCAPE
+    //     art *_desktop.webp (1920x1080).
+    //
+    // The file names are backwards, which is exactly why this line keeps
+    // getting "corrected" without authorization. Incident history:
+    //   - 80c7043d (2026-09-24) flipped it to the device-name mapping.
+    //   - b945feb3 (2026-09-24) flipped it back the same day.
+    //   - 12486980 (2026-10-01) flipped it again and shipped broken.
+    // Every flip was wrong: each one read "_mobile.webp on desktop" as a bug.
+    // It is not a bug. The owner explicitly asked for desktop = *_mobile.webp
+    // and phone = *_desktop.webp.
+    //
+    // This function is the ONLY owner of the mapping. Guarded by the test
+    // "heroes featured art follows the panel shape, not the device name"
+    // (main_menu.interaction.test.js, runs in the ./sow p preflight) and by
+    // AGENTS.md -> "Heroes featured art (owner decision — do not flip)".
+    function heroesFeaturedArt(slug) {
+        return {
+            band: leaderArtUrl(slug, "desktop"),
+            column: leaderArtUrl(slug, "mobile")
+        };
+    }
+
     function renderHeroesCard(leader, activeId) {
         var selected = leader.id === activeId;
         var locked = leader.available === false;
@@ -80,12 +113,14 @@
         var confirm = featured.querySelector("[data-command='confirm_leader']");
         var locked = activeLeader.available === false;
         featured.classList.toggle("is-locked", locked);
+        // prepareLeaderArt() warms the loader splash art (loader.js), not this
+        // panel art. Leave it alone; the <picture> fetches its own file.
         prepareLeaderArt(activeLeader);
-        var portraitAsset = leaderArtUrl(activeLeader.slug, "mobile");
-        var landscapeAsset = leaderArtUrl(activeLeader.slug, "desktop");
-        if (source) source.srcset = portraitAsset;
+        // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
+        var featuredArt = heroesFeaturedArt(activeLeader.slug);
+        if (source) source.srcset = featuredArt.band;
         if (image) {
-            image.src = landscapeAsset;
+            image.src = featuredArt.column;
             image.alt = leaderDisplayName(activeLeader);
         }
         if (title) title.textContent = leaderDisplayName(activeLeader);
@@ -124,6 +159,8 @@
         if (!heroInfoOpen) return "";
         var activeLeader = leaderById(tempSelectedLeader || (state && state.selected_leader) || "Caesar");
         if (!activeLeader) return "";
+        // The info dialog is one tall portrait card on every device, so it
+        // always uses the portrait art. Not part of the panel-shape swap.
         var artUrl = leaderArtUrl(activeLeader.slug, "mobile");
         return "<div class='sow-menu__overlay' data-menu-overlay='hero-info'><section class='sow-menu__modal sow-hero-info' role='dialog' aria-modal='true' aria-label='" + esc(leaderDisplayName(activeLeader)) + "'>" +
             "<div class='sow-hero-info__art' style=\"background-image:url('" + esc(artUrl) + "')\">" +
@@ -247,12 +284,16 @@
         var activeId = tempSelectedLeader || (state && state.selected_leader) || "Caesar";
         var activeLeader = leaderById(activeId);
         var locked = activeLeader.available === false;
+        // prepareLeaderArt() warms the loader splash art (loader.js), not this
+        // panel art. Leave it alone; the <picture> fetches its own file.
         prepareLeaderArt(activeLeader);
-        var portraitAsset = leaderArtUrl(activeLeader.slug, "mobile");
-        var landscapeAsset = leaderArtUrl(activeLeader.slug, "desktop");
+        // Panel-shape mapping — see heroesFeaturedArt(). Do not invert it.
+        // The <img> fallback is the tall column art, so width='1080'
+        // height='1920' below are correct on purpose.
+        var featuredArt = heroesFeaturedArt(activeLeader.slug);
         return "<main class='sow-menu__main sow-menu__main--heroes' data-screen-panel='heroes'><section class='sow-menu__heroes-slot' aria-label='" + esc(SOW_t("menu.heroes")) + "'>" +
                     "<div class='sow-heroes__workspace'>" +
-                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" + esc(leaderDisplayName(activeLeader)) + "'>i</button><picture><source media='(orientation: portrait)' srcset='" + esc(portraitAsset) + "'><img src='" + esc(landscapeAsset) + "' alt='" + esc(leaderDisplayName(activeLeader)) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (isWeeklyFreeRotation(activeLeader) ? "" : " hidden") + ">" + esc(SOW_t("heroes.weekly_free_rotation")) + "</p><h2 id='sow-heroes-selected'>" + esc(leaderDisplayName(activeLeader)) + "</h2>" + (leaderHistoricalName(activeLeader) ? "<p class='sow-heroes__historical-name'>" + esc(leaderHistoricalName(activeLeader)) + "</p>" : "") + "<p class='sow-heroes__civilization'>" + esc(leaderCivilization(activeLeader)) + "</p><p class='sow-heroes__perk'>" + esc(leaderPerk(activeLeader)) + "</p><div class='sow-heroes__actions'><div data-hero-purchase>" + renderLeaderPurchase(activeLeader) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t("heroes.confirm_leader", { name: "" })) + " <span>✓</span></button></div></div></section>" +
+                        "<section class='sow-heroes__featured" + (locked ? " is-locked" : "") + "' aria-labelledby='sow-heroes-selected'><button class='sow-menu__icon-button sow-heroes__info' type='button' data-command='open_hero_info' aria-label='" + esc(leaderDisplayName(activeLeader)) + "'>i</button><picture><source media='(max-width: 680px), (orientation: portrait)' srcset='" + esc(featuredArt.band) + "'><img src='" + esc(featuredArt.column) + "' alt='" + esc(leaderDisplayName(activeLeader)) + "' width='1080' height='1920' fetchpriority='high'></picture><div class='sow-heroes__featured-copy'><p class='sow-heroes__rotation' data-hero-status" + (isWeeklyFreeRotation(activeLeader) ? "" : " hidden") + ">" + esc(SOW_t("heroes.weekly_free_rotation")) + "</p><h2 id='sow-heroes-selected'>" + esc(leaderDisplayName(activeLeader)) + "</h2>" + (leaderHistoricalName(activeLeader) ? "<p class='sow-heroes__historical-name'>" + esc(leaderHistoricalName(activeLeader)) + "</p>" : "") + "<p class='sow-heroes__civilization'>" + esc(leaderCivilization(activeLeader)) + "</p><p class='sow-heroes__perk'>" + esc(leaderPerk(activeLeader)) + "</p><div class='sow-heroes__actions'><div data-hero-purchase>" + renderLeaderPurchase(activeLeader) + "</div><button class='sow-menu__primary sow-heroes__confirm' type='button' data-command='confirm_leader' data-leader-id='" + esc(activeLeader.id) + "'" + (locked ? " disabled aria-disabled='true'" : "") + ">" + esc(SOW_t("heroes.confirm_leader", { name: "" })) + " <span>✓</span></button></div></div></section>" +
                         "<section class='sow-heroes__roster' aria-label='" + esc(SOW_t("heroes.leader_list")) + "'><div class='sow-heroes__section-head'><div class='sow-heroes__filters'><label class='sow-heroes__search'><span class='sow-heroes__sr-only'>" + esc(SOW_t("heroes.search_leaders")) + "</span><input data-role='heroes-search' type='search' placeholder='" + esc(SOW_t("heroes.search_leader_civilization")) + "' value=\"" + esc(heroesSearchQuery) + "\" autocomplete='off' spellcheck='false'></label>" + renderHeroesRegionDropdown() + "</div></div><div class='sow-heroes__grid' data-heroes-roster aria-live='polite'>" + renderHeroesRoster(activeId) + "</div></section>" +
                     "</div>" +
         "</section></main>";

@@ -239,9 +239,7 @@ impl SowApp {
                         continue;
                     }
                     self.profile_request_in_flight = false;
-                    if self.profile_refresh_pending
-                        && self.display_name_save_request_id.is_none()
-                    {
+                    if self.profile_refresh_pending && self.display_name_save_request_id.is_none() {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
                         continue;
@@ -352,9 +350,7 @@ impl SowApp {
                 }
                 crate::player_progress::DbEvent::LoadFailed { request_id, status } => {
                     self.profile_request_in_flight = false;
-                    if self.profile_refresh_pending
-                        && self.display_name_save_request_id.is_none()
-                    {
+                    if self.profile_refresh_pending && self.display_name_save_request_id.is_none() {
                         self.profile_refresh_pending = false;
                         self.fetch_cloud_progress();
                         continue;
