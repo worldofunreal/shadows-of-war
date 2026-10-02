@@ -75,7 +75,7 @@ function renderFooter(label) {
     var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
     return "<footer class='sow-menu__footer'>" +
         (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") +
-        "<span><a href='" + esc(sourceUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(SOW_t("menu.source_code")) + "</a> · " + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
+        "<span><a class='sow-menu__source-link' href='" + esc(sourceUrl) + "' target='_blank' rel='noopener noreferrer'>" + esc(SOW_t("menu.source_code")) + "</a> · " + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
 }
 
 function renderAuthModal() { return ""; }

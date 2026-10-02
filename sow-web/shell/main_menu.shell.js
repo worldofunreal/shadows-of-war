@@ -112,7 +112,7 @@
         var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
         return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
             "<a href='/#faq'>" + esc(SOW_t("site.faq")) + "</a><a href='/support/'>" + esc(SOW_t("menu.support")) + "</a><a href='/terms/'>" + esc(SOW_t("menu.terms")) + "</a><a href='/privacy/'>" + esc(SOW_t("menu.privacy")) + "</a><a href='/cookies/'>" + esc(SOW_t("menu.cookies")) + "</a>" +
-            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a>" +
+            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a class='sow-menu__source-link' href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a>" +
             "</nav><span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
     }
 

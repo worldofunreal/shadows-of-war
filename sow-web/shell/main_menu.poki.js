@@ -64,7 +64,7 @@ function renderFooter(label) {
     var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
     return "<footer class='sow-menu__footer'>" +
         (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") +
-        "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'><button type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button><button type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button></nav>" +
+        "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'><button type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button><button class='sow-menu__source-link' type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button></nav>" +
         "<span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
 }
 
