@@ -1398,7 +1398,7 @@ fn s3_vanilla_tribe_passive_but_growing() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// S4 — A Nation under attack retaliates quickly (defense beats trigger).
+// S4 — A passive campaign enemy retaliates when struck (defense beats trigger).
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
 fn s4_nation_defends_when_struck() {
@@ -1420,8 +1420,14 @@ fn s4_nation_defends_when_struck() {
         LabPlayer::nation(2, 4, 4),
     ];
     let mut engine = build_lab(10, 10, "FFA", &attacker_specs);
+    engine
+        .campaign_relations
+        .insert(2, crate::protocol::CampaignRelation::Enemy);
+    engine
+        .campaign_hostilities
+        .insert(2, crate::game_config::CampaignHostility::Passive);
 
-    // Strike first as player 1 (ghost) so the nation sees inbound attacks.
+    // Strike first as player 1 so the passive enemy only responds after the attack.
     use crate::protocol::StampedIntent;
     let strike = StampedIntent {
         player_id: 1,

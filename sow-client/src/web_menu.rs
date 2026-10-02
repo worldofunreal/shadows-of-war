@@ -202,6 +202,10 @@ enum WebMenuCommand {
     FocusPlayer {
         player_id: u16,
     },
+    FocusWorld {
+        x: f32,
+        y: f32,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -921,6 +925,12 @@ impl SowApp {
                         }
                     }
                 }
+                WebMenuCommand::FocusWorld { x, y } => {
+                    if self.ui.tutorial_active && self.net.is_offline && x.is_finite() && y.is_finite() {
+                        self.input.camera_focus_target = Some((x, y));
+                        self.input.target_zoom = 8.0;
+                    }
+                }
             }
         }
     }
@@ -1468,6 +1478,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "facts": {
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
+            "zoom_in_events": app.input.tutorial_zoom_in_events,
+            "zoom_out_events": app.input.tutorial_zoom_out_events,
             "troops": me.map(|player| player.troops).unwrap_or(0.0),
             "kills": me.map(|player| player.kills).unwrap_or(0),
             "defeated": observation.seen_defeated.len(),
@@ -1519,6 +1531,8 @@ fn player_json(
         "troops": player.troops,
         "max_troops": player.max_troops,
         "tile_count": player.tile_count,
+        "centroid_x": player.centroid_x,
+        "centroid_y": player.centroid_y,
         "territory_pct": territory_pct,
         "is_alive": player.alive,
         "is_me": player.id == my_pid,
@@ -1903,16 +1917,6 @@ fn building_detail_payload(
     let my_id = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
     let owns = building.owner_id == my_id;
     let snapshot = app.sim.current_snapshot.as_ref();
-    let owned_levels = snapshot
-        .map(|snapshot| {
-            snapshot
-                .buildings
-                .iter()
-                .filter(|candidate| candidate.owner_id == my_id && candidate.kind == building.kind)
-                .map(|candidate| candidate.level as u32)
-                .sum()
-        })
-        .unwrap_or_default();
     let factory_time_levels = snapshot
         .map(|snapshot| {
             snapshot
@@ -1926,37 +1930,16 @@ fn building_detail_payload(
                 .count() as u32
         })
         .unwrap_or_default();
-    let factory_discount_levels = snapshot
-        .map(|snapshot| {
-            snapshot
-                .buildings
-                .iter()
-                .filter(|candidate| {
-                    candidate.owner_id == my_id
-                        && candidate.kind == sow_core::game::BuildingKind::Factory
-                        && candidate.active_level() >= 3
-                })
-                .count() as u32
-        })
+    let cost = app
+        .map_menu_cost(
+            crate::input::map_click::MapMenuAction::UpgradeStructure,
+            building.tile_idx,
+        )
+        .0
         .unwrap_or_default();
-    let cost = sow_core::building::cost::structure_upgrade_cost_gold(
-        building.kind,
-        next_level,
-        owned_levels,
-        factory_discount_levels,
-        &app.sim.config,
-    );
-    let has_gold = app.ui.app.hud_state.gold >= cost;
+    let has_gold = app.current_player_gold() >= cost;
     let maxed = next_level > building.kind.max_level();
-    let factory_requirement = building.kind != sow_core::game::BuildingKind::Factory
-        || next_level != 2
-        || app.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot.buildings.iter().any(|other| {
-                other.owner_id == my_id
-                    && other.kind == sow_core::game::BuildingKind::City
-                    && other.active_level() >= 3
-            })
-        });
+    let factory_requirement = app.structure_upgrade_requirement_met(building);
     let requirements = if building.kind == sow_core::game::BuildingKind::Factory {
         serde_json::json!([{ "key": "Village", "met": factory_requirement }])
     } else {
@@ -2378,6 +2361,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let hud_payload = build_hud_payload(app, include_leaderboard);
         serde_json::json!({
             "phase": "Playing",
+            "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
@@ -2490,6 +2474,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
 
         serde_json::json!({
             "phase": phase_name(app.ui.app.phase),
+            "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),

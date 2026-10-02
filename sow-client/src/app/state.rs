@@ -248,6 +248,9 @@ pub struct InputState {
     pub key_pan_left: bool,
     pub key_pan_right: bool,
     pub camera_focus_target: Option<(f32, f32)>,
+    pub tutorial_camera_focus: bool,
+    pub tutorial_zoom_in_events: u64,
+    pub tutorial_zoom_out_events: u64,
     pub input_focused: bool,
 }
 
@@ -317,6 +320,13 @@ pub struct TransportImpact {
 }
 
 pub const MAX_TRANSPORT_IMPACTS: usize = 256;
+pub const MAX_ALLIANCE_CELEBRATIONS: usize = 8;
+pub const ALLIANCE_CELEBRATION_DURATION: f32 = 2.4;
+
+pub struct AllianceCelebration {
+    pub player_ids: [u16; 2],
+    pub start_time: web_time::Instant,
+}
 
 #[derive(Clone, Debug)]
 pub struct AttackBadgeLabel {
@@ -372,6 +382,7 @@ pub struct UiState {
     pub building_upgrade_flashes: std::collections::HashMap<u32, web_time::Instant>,
     pub last_resource_notice_tick: Option<u64>,
     pub border_flashes: Vec<BorderFlashInstance>,
+    pub alliance_celebrations: std::collections::VecDeque<AllianceCelebration>,
     pub border_flash_intensities: std::collections::HashMap<u16, f32>,
     pub placement_scratch: Vec<(i32, i32, f32, i32)>,
     pub last_player_attack_flash_time: std::collections::HashMap<u16, web_time::Instant>,
@@ -416,6 +427,23 @@ pub fn easeout_flash(elapsed: f32) -> Option<f32> {
 }
 
 impl UiState {
+    pub(crate) fn trigger_alliance_celebration(&mut self, a: u16, b: u16, now: web_time::Instant) {
+        let player_ids = if a < b { [a, b] } else { [b, a] };
+        if let Some(existing) = self
+            .alliance_celebrations
+            .iter_mut()
+            .find(|effect| effect.player_ids == player_ids)
+        {
+            existing.start_time = now;
+            return;
+        }
+        if self.alliance_celebrations.len() == MAX_ALLIANCE_CELEBRATIONS {
+            self.alliance_celebrations.pop_front();
+        }
+        self.alliance_celebrations
+            .push_back(AllianceCelebration { player_ids, start_time: now });
+    }
+
     pub(crate) fn trigger_viewport_alert(&mut self, kind: ViewportAlertKind) {
         let priority = |k: ViewportAlertKind| match k {
             ViewportAlertKind::Victory | ViewportAlertKind::Defeat => 4,

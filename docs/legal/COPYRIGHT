@@ -2,9 +2,9 @@ Shadows of War
 Copyright (c) 2024–2026 World of Unreal
 
 Incorporates OpenFront (https://github.com/openfrontio/OpenFrontIO).
-Copyright (c) OpenFront Inc. and Contributors. AGPL-3.0-or-later.
+Copyright (c) OpenFront Inc. and Contributors. AGPL-3.0-only, with the additional terms in section 7 of LICENSE.
 
-Licensed under GNU Affero General Public License v3.0 or later. See LICENSE.
+Licensed under GNU Affero General Public License v3.0 only. See LICENSE, including OpenFront's additional terms in section 7.
 Third-party notices: docs/legal/NOTICE and docs/legal/NOTICE.deps.
 
 OpenFront-derived map sources and generated map artifacts are licensed under

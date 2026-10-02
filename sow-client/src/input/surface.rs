@@ -4,6 +4,18 @@ use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound};
 use blade_graphics as gpu;
 
 impl SowApp {
+    pub(crate) fn record_tutorial_zoom(&mut self, zoom_delta: f32) {
+        if !self.ui.tutorial_active || !self.net.is_offline || zoom_delta.abs() < f32::EPSILON {
+            return;
+        }
+        let count = if zoom_delta > 0.0 {
+            &mut self.input.tutorial_zoom_in_events
+        } else {
+            &mut self.input.tutorial_zoom_out_events
+        };
+        *count = count.saturating_add(1);
+    }
+
     pub(crate) fn mouse_to_tile(&self, x: f64, y: f64) -> Option<(i32, i32)> {
         let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
         let world_y = (y as f32 - self.input.camera_y) / self.input.camera_zoom;
@@ -94,7 +106,6 @@ impl SowApp {
         let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
         self.input.camera_zoom = self.input.camera_zoom.clamp(zmin, zmax);
         self.input.target_zoom = self.input.camera_zoom;
-
         let map_x = (cx - self.input.camera_x) / old_zoom;
         let map_y = (cy - self.input.camera_y) / old_zoom;
         self.input.camera_x = cx - map_x * self.input.camera_zoom;

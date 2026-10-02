@@ -3,7 +3,7 @@ name = "sow-tools"
 version = "0.1.0"
 edition = "2024"
 description = "Shadows of War — Map generator and tooling CLI"
-license = "AGPL-3.0-or-later"
+license = "AGPL-3.0-only"
 
 [[bin]]
 name = "test-relay"

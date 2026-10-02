@@ -6,7 +6,11 @@ impl SowApp {
     pub(crate) fn apply_snapshot_fx(&mut self, snap: &mut SimSnapshot, my_id: u16) {
         let mut being_attacked_triggered = false;
         let mut under_attack_sound_triggered = false;
+        let now = web_time::Instant::now();
         if let Some(mut existing) = self.sim.current_snapshot.take() {
+            for [a, b] in new_mutual_alliances(&existing.players, &snap.players) {
+                self.ui.trigger_alliance_celebration(a, b, now);
+            }
             let old_attack_troops: HashMap<u64, f64> = existing
                 .attacks
                 .iter()
@@ -175,7 +179,6 @@ impl SowApp {
             }
             // Count unique attackers targeting us in the new snapshot
             let unique_attackers = new_attackers.len();
-            let now = web_time::Instant::now();
             let under_attack_spatial = snap
                 .attacks
                 .iter()
@@ -295,6 +298,97 @@ impl SowApp {
                 false,
             );
         }
+    }
+}
+
+fn mutually_allied(players: &[sow_core::protocol::PlayerSnapshot], a: u16, b: u16) -> bool {
+    let a_has_b = players
+        .iter()
+        .find(|player| player.id == a)
+        .is_some_and(|player| player.alliances.contains(&b));
+    let b_has_a = players
+        .iter()
+        .find(|player| player.id == b)
+        .is_some_and(|player| player.alliances.contains(&a));
+    a_has_b && b_has_a
+}
+
+fn new_mutual_alliances(
+    old: &[sow_core::protocol::PlayerSnapshot],
+    new: &[sow_core::protocol::PlayerSnapshot],
+) -> Vec<[u16; 2]> {
+    let mut pairs = HashSet::new();
+    for player in new {
+        for &other_id in &player.alliances {
+            if player.id == 0
+                || other_id == 0
+                || player.id >= other_id
+                || !mutually_allied(new, player.id, other_id)
+                || mutually_allied(old, player.id, other_id)
+            {
+                continue;
+            }
+            pairs.insert([player.id, other_id]);
+        }
+    }
+    let mut pairs: Vec<_> = pairs.into_iter().collect();
+    pairs.sort_unstable();
+    pairs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::new_mutual_alliances;
+    use sow_core::player::{Civilization, Leader, PlayerType};
+    use sow_core::protocol::PlayerSnapshot;
+
+    fn player(id: u16, alliances: &[u16]) -> PlayerSnapshot {
+        PlayerSnapshot {
+            id,
+            name: format!("Player {id}"),
+            troops: 100.0,
+            max_troops: 100.0,
+            gold: 100.0,
+            tile_count: 1,
+            centroid_x: 0.0,
+            centroid_y: 0.0,
+            player_type: PlayerType::Bot,
+            color: [0.5; 3],
+            team: None,
+            has_spawned: true,
+            alive: true,
+            iq: 100,
+            alliances: alliances.to_vec(),
+            alliance_timers: Default::default(),
+            alliance_requests: Vec::new(),
+            resource_requests: Vec::new(),
+            disconnected: false,
+            active_emoji: None,
+            traitor: false,
+            civilization: Civilization::Rome,
+            leader: Leader::Caesar,
+            campaign_avatar: None,
+            skin_style: 0,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            boats_in_use: 0,
+            boat_capacity: 1,
+        }
+    }
+
+    #[test]
+    fn detects_only_new_mutual_alliances() {
+        let old = vec![player(1, &[]), player(2, &[]), player(3, &[])];
+        let new = vec![player(1, &[2]), player(2, &[1]), player(3, &[])];
+        assert_eq!(new_mutual_alliances(&old, &new), vec![[1, 2]]);
+    }
+
+    #[test]
+    fn ignores_requests_unilateral_alliances_and_existing_alliances() {
+        let old = vec![player(1, &[2]), player(2, &[1]), player(3, &[])];
+        let new = vec![player(1, &[2, 3]), player(2, &[1]), player(3, &[])];
+        assert!(new_mutual_alliances(&old, &new).is_empty());
     }
 }
 

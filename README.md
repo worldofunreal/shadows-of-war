@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/worldofunreal/shadows-of-war/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 license" /></a>
+  <a href="https://github.com/worldofunreal/shadows-of-war/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="AGPL-3.0-only license" /></a>
   <img src="https://img.shields.io/badge/client-Rust%20%2B%20WASM-orange" alt="Rust and WebAssembly client" />
   <img src="https://img.shields.io/badge/interface-JavaScript-f7df1e" alt="JavaScript interface" />
   <img src="https://img.shields.io/badge/rendering-Blade%20GPU-111827" alt="Blade GPU rendering" />
@@ -90,12 +90,12 @@ The native build and the browser preview use the same client. The desktop shell 
 
 ## License & derivatives
 
-Shadows of War is licensed under [AGPL-3.0-or-later](LICENSE). Portions derive from [OpenFrontIO](https://github.com/openfrontio/OpenFrontIO). See [COPYRIGHT](docs/legal/COPYRIGHT) and [NOTICE](docs/legal/NOTICE).
+The integrated game code is licensed under [AGPL-3.0-only](LICENSE), with OpenFront's additional terms in section 7 preserved in that file. Portions derive from [OpenFrontIO](https://github.com/openfrontio/OpenFrontIO). Map files derived from OpenFront are separately licensed under CC BY-SA 4.0; their sources, attribution, and changes are recorded in [assets/maps/SOURCES.toml](assets/maps/SOURCES.toml) and included in the served map notice. See [COPYRIGHT](docs/legal/COPYRIGHT) and [NOTICE](docs/legal/NOTICE).
 
 **What this means if you build on this code:**
 
 - You may use, study, modify and redistribute it — including commercially — under the same AGPL-3.0 license.
-- If you run a modified or unmodified version as a service over a network (a hosted game, a web client, a relay), AGPL section 13 obligates you to offer the **full corresponding source of your modified version** to every user of that service. This applies to closed-source servers, SaaS and game backends alike; there is no loophole for "we only host it."
-- Your derivative must stay AGPL (or compatible) when shared, keep the legal notices intact, and game art carries its own terms in [docs/legal/LICENSE-ASSETS](docs/legal/LICENSE-ASSETS) (CC BY-SA for shipped art), so replaced content is share-alike too.
+- If you run a modified version as a service over a network (a hosted game, a web client, or a relay), AGPL section 13 requires you to offer its **full corresponding source** to users who interact with it remotely.
+- Derivative game code remains under AGPL-3.0-only, including the OpenFront additional terms. Map and other artwork keep the separate terms recorded in [docs/legal/LICENSE-ASSETS](docs/legal/LICENSE-ASSETS).
 - The license does **not** grant the right to distribute your version under the *Shadows of War* name, logo or brand. Please rebrand derivatives entirely; we enforce our brand as a trademark matter separate from the code license.
 - AGPL cannot require you to notify the upstream project, and we ask nothing of you as a license condition — but if you run something public built on this code, we would genuinely like to hear about it. Non-compliance (closed-source network use, stripped notices, brand reuse) is copyright infringement and we do monitor and enforce it.

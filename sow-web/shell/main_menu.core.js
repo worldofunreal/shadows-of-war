@@ -167,8 +167,13 @@
         return leader && leader.civilization ? leader.civilization : "";
     }
 
+    function leaderTranslationSlug(leader) {
+        var rawSlug = leader && leader.slug ? String(leader.slug) : "";
+        return rawSlug === "richard_the_lionheart" ? "richard" : rawSlug.replace(/_/g, "");
+    }
+
     function leaderDisplayName(leader) {
-        var slug = leader && leader.slug ? String(leader.slug).replace(/_/g, "") : "";
+        var slug = leaderTranslationSlug(leader);
         var key = slug ? "heroes.leader_" + slug + "_name" : "";
         if (key) {
             var value = SOW_t(key);
@@ -178,7 +183,7 @@
     }
 
     function leaderHistoricalName(leader) {
-        var slug = leader && leader.slug ? String(leader.slug).replace(/_/g, "") : "";
+        var slug = leaderTranslationSlug(leader);
         var key = slug ? "heroes.leader_" + slug + "_historical" : "";
         if (key) {
             var value = SOW_t(key);

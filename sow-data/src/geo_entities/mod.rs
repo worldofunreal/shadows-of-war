@@ -50,11 +50,32 @@ pub struct GeoEntity {
     #[serde(default)]
     pub avatar: Option<String>,
     #[serde(default)]
+    pub territory_color: Option<String>,
+    #[serde(default)]
     pub maps: Vec<String>,
     #[serde(default)]
     pub fallback_nation_order: Option<u32>,
     #[serde(default)]
     pub fallback_tribe_order: Option<u32>,
+}
+
+impl GeoEntity {
+    pub fn territory_color_rgb(&self) -> Option<[f32; 3]> {
+        parse_territory_color(self.territory_color.as_deref()?)
+    }
+}
+
+fn parse_territory_color(color: &str) -> Option<[f32; 3]> {
+    let hex = color.strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    let channel = |start| {
+        u8::from_str_radix(hex.get(start..start + 2)?, 16)
+            .ok()
+            .map(|value| value as f32 / 255.0)
+    };
+    Some([channel(0)?, channel(2)?, channel(4)?])
 }
 
 #[derive(Debug, Deserialize)]
@@ -179,6 +200,13 @@ mod tests {
                 .enumerate()
                 .all(|(i, e)| e.fallback_tribe_order == Some(i as u32))
         );
+    }
+
+    #[test]
+    fn atlas_territory_color_accepts_hex_and_keeps_missing_colors_unset() {
+        assert_eq!(parse_territory_color("#ff8000"), Some([1.0, 128.0 / 255.0, 0.0]));
+        assert_eq!(parse_territory_color("#12xz00"), None);
+        assert_eq!(parse_territory_color("#fff"), None);
     }
 
     #[test]

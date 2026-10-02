@@ -466,6 +466,24 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, color .15s ease;
 }
 
+.sow-hud__building-cancel {
+    display: grid;
+    place-items: center;
+    flex: 0 0 48px;
+    min-height: 54px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--sow-red) 55%, transparent);
+    border-radius: 5px 5px 11px 4px;
+    background: color-mix(in srgb, var(--sow-red) 12%, transparent);
+    color: #fff;
+    font: inherit;
+    font-size: 23px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.sow-hud__building-cancel[hidden] { display: none; }
+
 .sow-hud__building-icon {
     display: grid;
     place-items: center;
@@ -1103,6 +1121,26 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     padding-top: 7px;
     border-top: 1px solid var(--sow-line);
 }
+
+.sow-hud__building-card-gold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 6px;
+    padding: 5px 7px;
+    border: 1px solid var(--sow-line);
+    border-radius: 4px;
+    color: var(--sow-gold-bright);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.sow-hud__building-card-gold[hidden] { display: none; }
+.sow-hud__building-gold-balance,
+.sow-hud__building-gold-cost { display: inline-flex; align-items: center; gap: 5px; }
+.sow-hud__building-gold-arrow { color: var(--sow-muted); }
+.sow-hud__building-card-gold.is-short .sow-hud__building-gold-balance { color: var(--sow-red); }
 
 .sow-hud__building-card-benefit[hidden],
 .sow-hud__building-card-next[hidden] { display: none; }
@@ -2037,6 +2075,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     }
 
     .sow-hud__building-card-upgrade { min-height: 42px; }
+    .sow-hud__building-cancel { min-height: 48px; }
     .sow-hud__topbar {
         top: max(8px, var(--sow-sat));
         inset-inline: max(8px, var(--sow-sal)) max(8px, var(--sow-sar));

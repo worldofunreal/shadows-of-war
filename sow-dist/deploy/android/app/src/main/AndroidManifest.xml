@@ -76,6 +76,10 @@
                 android:value="${defaultUrl}" />
 
             <meta-data
+                android:name="com.shadowsofwar.SOURCE_URL"
+                android:value="${sourceUrl}" />
+
+            <meta-data
                 android:name="android.support.customtabs.trusted.DISPLAY_MODE"
                 android:value="sticky-immersive" />
 

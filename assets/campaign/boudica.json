@@ -7,17 +7,17 @@
   ],
   "factions": [
     {
-      "name": "Venta Icenorum",
-      "x": 587,
-      "y": 40,
+      "name": "Stonea",
+      "x": 723,
+      "y": 54,
       "role": "kin",
       "iq": 100,
-      "avatar": "venta_icenorum",
-      "support_interval_seconds": 30,
+      "avatar": "stonea",
+      "support_interval_seconds": 15,
       "relation": "neutral",
       "hostility": "passive",
       "betrayal": "never",
-      "color": "#4ca572"
+      "color": "#40999e"
     },
     {
       "name": "Snettisham",
@@ -41,22 +41,9 @@
       "avatar": "thetford",
       "support_interval_seconds": 20,
       "relation": "neutral",
-      "hostility": "passive",
+      "hostility": "aggressive",
       "betrayal": "never",
       "color": "#8c59a8"
-    },
-    {
-      "name": "Stonea",
-      "x": 723,
-      "y": 54,
-      "role": "kin",
-      "iq": 100,
-      "avatar": "stonea",
-      "support_interval_seconds": 30,
-      "relation": "neutral",
-      "hostility": "passive",
-      "betrayal": "never",
-      "color": "#40999e"
     },
     {
       "name": "Trinovantes",
@@ -83,19 +70,6 @@
       "hostility": "passive",
       "betrayal": "never",
       "color": "#7380b8"
-    },
-    {
-      "name": "Iceni Coast",
-      "x": 741,
-      "y": 17,
-      "role": "kin",
-      "iq": 100,
-      "avatar": "iceni_coast",
-      "support_interval_seconds": 20,
-      "relation": "neutral",
-      "hostility": "passive",
-      "betrayal": "never",
-      "color": "#4ca572"
     },
     {
       "name": "Colonia Veterans",
@@ -1206,5 +1180,5 @@
       "color": "#8c59a8"
     }
   ],
-  "player_color": "#f0902a"
+  "player_color": "#3380ff"
 }

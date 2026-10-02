@@ -357,7 +357,9 @@ impl SowEngine {
                 } else {
                     None
                 };
-                let color = crate::player::human_shader_territory_rgb(bot_id);
+                let color = crate::geo_entities::by_name(&name)
+                    .and_then(crate::geo_entities::GeoEntity::territory_color_rgb)
+                    .unwrap_or_else(|| crate::player::human_shader_territory_rgb(bot_id));
 
                 let mut player = Player::new_nation(bot_id, name, color, &config);
                 player.team = team;
@@ -466,7 +468,9 @@ impl SowEngine {
             let spawn_point = preferred_spawn.or_else(|| self.find_valid_spawn(&mut rng));
 
             if let Some((sx, sy)) = spawn_point {
-                let color = crate::player::bot_territory_color(self.state.seed, bot_id);
+                let color = crate::geo_entities::by_name(&name)
+                    .and_then(crate::geo_entities::GeoEntity::territory_color_rgb)
+                    .unwrap_or_else(|| crate::player::bot_territory_color(self.state.seed, bot_id));
                 let player = Player::new_bot(bot_id, name, color, &config);
                 self.state.spawn_player(player, sx, sy);
                 if let Some(avatar) = avatar {
@@ -714,6 +718,9 @@ impl SowEngine {
             }
             if let Some(interval) = s.campaign_support_interval_seconds {
                 self.campaign_support_intervals.insert(bot_id, interval);
+            }
+            if let Some(gold) = s.campaign_gold_loot_bonus.filter(|gold| *gold <= 1_000_000) {
+                self.campaign_gold_loot_bonus.insert(bot_id, gold);
             }
             if let Some(group) = &s.campaign_alliance_group {
                 self.campaign_alliance_groups.insert(bot_id, group.clone());

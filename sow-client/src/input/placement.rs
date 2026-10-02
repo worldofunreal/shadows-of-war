@@ -473,6 +473,32 @@ mod tests {
     }
 
     #[test]
+    fn stack_target_is_the_nearest_owned_building_of_the_selected_kind() {
+        let map_w = 40;
+        let building = |id, owner_id, kind, x, y| sow_core::protocol::BuildingSnapshot {
+            id,
+            tile_idx: y * map_w + x,
+            owner_id,
+            kind,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+            modules: CityModules::default(),
+        };
+        let buildings = [
+            building(1, 2, BuildingKind::City, 10, 10),
+            building(8, 1, BuildingKind::City, 12, 10),
+            building(9, 1, BuildingKind::City, 11, 10),
+            building(2, 1, BuildingKind::Farm, 10, 10),
+        ];
+
+        assert_eq!(
+            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &buildings),
+            Some(10 * map_w + 11)
+        );
+    }
+
+    #[test]
     fn farm_uses_the_standard_footprint_in_bounds_on_owned_land_without_overlap() {
         let (map_w, map_h, my_id) = (8, 8, 1);
         let owners = vec![my_id; (map_w * map_h) as usize];

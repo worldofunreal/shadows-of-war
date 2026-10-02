@@ -17,6 +17,8 @@ const BUILDING_CLUSTER_TARGET_SIZE: f32 = 40.0;
 const BUILDING_ZOOM_STEPS_PER_OCTAVE: f32 = 8.0;
 const BUILDING_FOOTPRINT_FILL: f32 = 0.9;
 const BUILDING_LEVEL_FONT_RATIO: f32 = 0.58;
+const BUILDING_CELEBRATION_OFFSETS: [[f32; 2]; 4] =
+    [[-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]];
 
 #[inline]
 pub(crate) fn world_to_screen(world_x: f32, world_y: f32, input: &InputState, sf: f32) -> [f32; 2] {
@@ -334,8 +336,10 @@ fn render_buildings(
     ui.building_upgrade_flashes
         .retain(|_, started| now.duration_since(*started) < Duration::from_millis(300));
     let building_upgrade_flashes = std::mem::take(&mut ui.building_upgrade_flashes);
+    let reduced_motion = ui.app.settings_state.reduced_motion;
     let buildings = cached_buildings(ui, snapshot, sim.map_w, lod, my_id, sim.config.tick_rate_ms);
     let text_style = crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]);
+    let mut celebration_budget = 24usize;
 
     for building in buildings {
         if dev.fog_of_war
@@ -428,6 +432,26 @@ fn render_buildings(
                 [1.0, 0.88, 0.46, alpha],
                 crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha * 0.7]),
             );
+            if building.owner_id == my_id
+                && !reduced_motion
+                && celebration_budget >= BUILDING_CELEBRATION_OFFSETS.len()
+            {
+                let radius = marker_extent * sf * (0.3 + 0.55 * t);
+                let sparkle_size = (marker_extent * sf * 0.18).clamp(4.0 * sf, 14.0 * sf);
+                for offset in BUILDING_CELEBRATION_OFFSETS {
+                    let _ = text.push_emoji(
+                        "✨",
+                        [
+                            center[0] * sf + offset[0] * radius,
+                            center[1] * sf + offset[1] * radius,
+                        ],
+                        sparkle_size,
+                        [1.0, 0.84, 0.36, alpha * 0.9],
+                        crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha * 0.6]),
+                    );
+                }
+                celebration_budget -= BUILDING_CELEBRATION_OFFSETS.len();
+            }
         }
 
         if building.detail == BuildingDetail::Full

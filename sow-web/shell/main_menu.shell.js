@@ -17,7 +17,9 @@
     var reportBusy = false;
     var exitMenuAssetsPending = false;
     var exitMenuAssetsReady = false;
-    var exitMenuAssetsToken = 0;
+    var exitMenuAssetsCycleId = null;
+    var latestLoaderCycleId = -1;
+    var completedLoaderCycleId = -1;
     var deleteArmed = false;
     var deleteBusy = false;
     var activeMenuPointerId = null;
@@ -107,10 +109,11 @@
 
     function renderFooter(label) {
         var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
+        var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
         return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
             "<a href='/#faq'>" + esc(SOW_t("site.faq")) + "</a><a href='/support/'>" + esc(SOW_t("menu.support")) + "</a><a href='/terms/'>" + esc(SOW_t("menu.terms")) + "</a><a href='/privacy/'>" + esc(SOW_t("menu.privacy")) + "</a><a href='/cookies/'>" + esc(SOW_t("menu.cookies")) + "</a>" +
-            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a href='https://github.com/worldofunreal/shadows-of-war'" + externalAttrs + ">" + esc(SOW_t("menu.github")) + "</a>" +
-            "</nav><span>" + esc(SOW_t("menu.brand")) + "</span></footer>";
+            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a>" +
+            "</nav><span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
     }
 
     function renderMainNav(active) {
@@ -1978,14 +1981,28 @@
         return Promise.all(waits);
     }
 
+    function normalizeCompletedExitState(nextState) {
+        if (nextState.phase === "MainMenu" && nextState.loader_job === "ExitGame" &&
+            Number.isSafeInteger(nextState.loader_cycle_id) && nextState.loader_cycle_id <= completedLoaderCycleId) {
+            return Object.assign({}, nextState, { loader_job: "Boot", loader_leader: null });
+        }
+        return nextState;
+    }
+
     function syncWebLoaderForState(nextState) {
         if (typeof window.SOW_syncWebLoader !== "function") return;
-        if (nextState.phase !== "MainMenu" || nextState.loader_job !== "ExitGame") {
-            exitMenuAssetsToken += 1;
+        var cycleId = nextState.loader_cycle_id;
+        if (nextState.phase !== "MainMenu" || nextState.loader_job !== "ExitGame" || !Number.isSafeInteger(cycleId)) {
+            exitMenuAssetsCycleId = null;
             exitMenuAssetsPending = false;
             exitMenuAssetsReady = false;
             window.SOW_syncWebLoader(nextState);
             return;
+        }
+        if (exitMenuAssetsCycleId !== cycleId) {
+            exitMenuAssetsCycleId = cycleId;
+            exitMenuAssetsPending = false;
+            exitMenuAssetsReady = false;
         }
         if (exitMenuAssetsReady) {
             window.SOW_syncWebLoader(nextState);
@@ -1993,13 +2010,12 @@
         }
         if (!exitMenuAssetsPending) {
             exitMenuAssetsPending = true;
-            var token = ++exitMenuAssetsToken;
             waitForExitMenuArt().then(function () {
-                if (token !== exitMenuAssetsToken) return;
+                if (exitMenuAssetsCycleId !== cycleId || !state || state.phase !== "MainMenu" ||
+                    state.loader_job !== "ExitGame" || state.loader_cycle_id !== cycleId) return;
                 exitMenuAssetsPending = false;
-                if (!state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
                 exitMenuAssetsReady = true;
-                window.SOW_syncWebLoader(state);
+                syncWebLoaderForState(state);
             });
         }
         window.SOW_syncWebLoader(nextState.loader_done === true
@@ -2017,15 +2033,23 @@
         }, delay);
     }
 
-    window.addEventListener("sow:loader-cycle-ready", function () {
-        if (state && state.phase === "Playing" && state.loader_leader) {
-            prepareLeaderArt(leaderById(state.loader_leader));
+    window.addEventListener("sow:loader-cycle-ready", function (event) {
+        var cycleId = event && event.detail && event.detail.cycle_id;
+        if (!Number.isSafeInteger(cycleId) || cycleId < latestLoaderCycleId || cycleId < completedLoaderCycleId) return;
+        completedLoaderCycleId = cycleId;
+        if (!state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame" || state.loader_cycle_id !== cycleId) return;
+
+        var replayExitIntro = pendingExitScreenIntro;
+        state = normalizeCompletedExitState(state);
+        exitMenuAssetsCycleId = null;
+        exitMenuAssetsPending = false;
+        exitMenuAssetsReady = false;
+        if (replayExitIntro) {
+            pendingExitScreenIntro = false;
+            previousScreen = null;
         }
-        if (!pendingExitScreenIntro || !state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame") return;
-        pendingExitScreenIntro = false;
-        previousScreen = null;
         render();
-        scheduleRewardPresentation(250);
+        if (replayExitIntro) scheduleRewardPresentation(250);
     });
 
     document.addEventListener("visibilitychange", function () {
@@ -2057,6 +2081,9 @@
             console.warn("[WEB MENU] invalid state:", error);
             return;
         }
+        if (!Number.isSafeInteger(state.loader_cycle_id) || state.loader_cycle_id < latestLoaderCycleId) return;
+        latestLoaderCycleId = state.loader_cycle_id;
+        state = normalizeCompletedExitState(state);
         var accountId = state.account_id || "";
         if (rewardAnimationAccount !== accountId) {
             rewardAnimationAccount = accountId;

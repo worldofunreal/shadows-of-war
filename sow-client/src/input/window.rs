@@ -418,11 +418,13 @@ impl SowApp {
             if let Some((last_distance, last_x, last_y)) = self.input.last_pinch_state {
                 self.input.camera_x += (cx - last_x) as f32;
                 self.input.camera_y += (cy - last_y) as f32;
+                let previous_zoom = self.input.camera_zoom;
                 self.process_camera_zoom(
                     1.0 + ((distance - last_distance) as f32 * 0.005),
                     cx as f32,
                     cy as f32,
                 );
+                self.record_tutorial_zoom(self.input.camera_zoom - previous_zoom);
             }
             self.input.last_pinch_state = Some((distance, cx, cy));
         } else if is_touch {
@@ -483,7 +485,9 @@ impl SowApp {
             self.sim.map_h,
         );
         let zmax = camera_zoom_upper_bound(self.input.screen_w, self.input.screen_h).max(zmin);
-        self.input.target_zoom = (self.input.target_zoom * (1.0 + scroll * 0.15)).clamp(zmin, zmax);
+        let previous_zoom = self.input.target_zoom;
+        self.input.target_zoom = (previous_zoom * (1.0 + scroll * 0.15)).clamp(zmin, zmax);
+        self.record_tutorial_zoom(self.input.target_zoom - previous_zoom);
     }
 
     fn cancel_pointer_gesture(&mut self) {

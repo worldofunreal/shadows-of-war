@@ -44,6 +44,11 @@
         return true;
     }
 
+    function availableGold(hud) {
+        var gold = Number(hud && hud.gold);
+        return Number.isFinite(gold) ? Math.max(0, gold) : 0;
+    }
+
     function tr(key) {
         var definition = runtime.definition;
         var locale = String(typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en").toLowerCase().replace(/_/g, "-");
@@ -55,6 +60,31 @@
         if (typeof text === "string" && text.trim()) return text;
         var value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
         return !value || value === "[" + key + "]" ? key : value;
+    }
+
+    function zoomMode() {
+        var nav = window.navigator || {}, data = nav.userAgentData || {};
+        return window.SOWCampaign.zoomInputMode({
+            androidTwa: typeof window.SOW_isAndroidTwa === "function" && window.SOW_isAndroidTwa(),
+            mobile: Boolean(data.mobile),
+            userAgent: nav.userAgent || "",
+            platform: data.platform || nav.platform || "",
+            maxTouchPoints: nav.maxTouchPoints
+        });
+    }
+
+    function renderContext(step, hud, anchor) {
+        var context = {
+            anchor: anchor,
+            reducedMotion: Boolean(hud && hud.settings && hud.settings.reduced_motion),
+            direction: document.documentElement.dir
+        };
+        if (step && step.guide && (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out")) {
+            context.zoomMode = zoomMode();
+            var hintKey = String(step.hint_key || "").replace(/_hint$/, "_" + context.zoomMode + "_hint");
+            if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey);
+        }
+        return context;
     }
 
     function fetchJson(path) {
@@ -273,11 +303,21 @@
         if (machineView.reactionData && machineView.reactionData.outcome) {
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
         }
+        if (machineView.reactionData && machineView.reactionTarget !== runtime.cameraReactionTarget) {
+            runtime.cameraReactionTarget = machineView.reactionTarget;
+            var faction = (hud.players || []).find(function (item) { return item && item.name === machineView.reactionTarget; });
+            if (faction && Number.isFinite(Number(faction.centroid_x)) && Number.isFinite(Number(faction.centroid_y))) {
+                send("focus_world", { x: Number(faction.centroid_x), y: Number(faction.centroid_y) });
+            }
+        } else if (!machineView.reactionData) runtime.cameraReactionTarget = null;
         if (machineView.choices && machineView.choices.length) {
-            var player = (hud.players || []).find(function (item) { return item && item.is_me; });
-            var gold = player ? Number(player.gold || 0) : 0;
+            var gold = availableGold(hud);
             machineView.choices = machineView.choices.map(function (choice) {
-                return Object.assign({}, choice, { disabled: Number(choice.gold_cost || 0) > gold });
+                if (Number(choice.gold_cost || 0) <= 0) return choice;
+                return Object.assign({}, choice, {
+                    gold_available: Math.max(0, gold),
+                    gold_insufficient: Number(choice.gold_cost || 0) > gold
+                });
             });
         }
         runtime.priorChoices = Object.assign(Object.create(null), runtime.machine.state.choices);
@@ -301,7 +341,7 @@
             runtime.markerId = markerId;
             send("set_tutorial_marker", { player_id: markerId });
         }
-        if (!runtime.modalOpen) runtime.view.render(machineView, { anchor: anchorFor(machineView.step, hud, machineView), reducedMotion: Boolean(hud.settings && hud.settings.reduced_motion), direction: document.documentElement.dir });
+        if (!runtime.modalOpen) runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud, machineView)));
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
             if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
@@ -312,11 +352,9 @@
     function updateMenuGuide() {
         if (!runtime.menuGuide || !runtime.machine || !runtime.definition || !runtime.latestHud && runtime.lastPhase !== "MainMenu") return;
         var machineView = runtime.machine.update({}, runtime.uiCounts, performance.now());
-        runtime.view.render(machineView, {
-            anchor: anchorFor(machineView.step, { tutorial: {} }),
-            reducedMotion: Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches),
-            direction: document.documentElement.dir
-        });
+        var context = renderContext(machineView.step, null, anchorFor(machineView.step, { tutorial: {} }));
+        context.reducedMotion = Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+        runtime.view.render(machineView, context);
         if (machineView.done) {
             runtime.menuGuide = false;
             runtime.machine = null;
@@ -381,7 +419,15 @@
         var step = model.step;
         if (model.reactionData) {
             var answer = (model.reactionData.choices || []).find(function (choice) { return choice.id === choiceId; });
-            if (!answer || !resolveReaction(model.reactionData, model.reactionTarget, answer, runtime.latestHud)) return;
+            if (!answer) return;
+            if (answer.relation === "allied" && Number(answer.gold_cost || 0) > availableGold(runtime.latestHud)) {
+                answer = (model.reactionData.choices || []).find(function (choice) {
+                    return choice.relation !== "allied" && Number(choice.gold_cost || 0) === 0;
+                });
+                if (!answer) return;
+                choiceId = answer.id;
+            }
+            if (!resolveReaction(model.reactionData, model.reactionTarget, answer, runtime.latestHud)) return;
         }
         if (runtime.machine.advance(choiceId, step.id)) runtime.menuGuide ? updateMenuGuide() : update(runtime.latestHud);
     }
@@ -394,7 +440,7 @@
         var target = (hud && hud.players || []).find(function (player) { return player && player.name === targetName; });
         var human = (hud && hud.players || []).find(function (player) { return player && player.is_me; });
         var goldCost = Number(choice ? choice.gold_cost || 0 : reaction.gold_cost || 0);
-        if (!target || !human || Number(human.gold || 0) < goldCost) return false;
+        if (!target || !human || availableGold(hud) < goldCost) return false;
         if (!send("resolve_campaign_diplomacy", {
             target_player_id: Number(target.id), relation: outcome, gold_cost: goldCost
         })) return false;
@@ -428,7 +474,8 @@
             root.hidden = true;
         } else if (runtime.machine) {
             if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false });
-            runtime.view.render(runtime.machine.view(), { anchor: anchorFor(runtime.machine.view().step, runtime.latestHud) });
+            var model = runtime.machine.view();
+            runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
         }
     }
 
@@ -437,11 +484,7 @@
         if (runtime.menuGuide) { updateMenuGuide(); return; }
         if (!runtime.latestHud) return;
         var model = runtime.machine.view();
-        runtime.view.render(model, {
-            anchor: anchorFor(model.step, runtime.latestHud),
-            reducedMotion: Boolean(runtime.latestHud.settings && runtime.latestHud.settings.reduced_motion),
-            direction: document.documentElement.dir
-        });
+        runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
     }
     window.addEventListener("resize", redrawCampaign, { passive: true });
 
@@ -512,6 +555,7 @@
         runtime.starting = null;
         runtime.activating = null;
         runtime.bootEpisode = null;
+        runtime.cameraReactionTarget = null;
         runtime.latestHud = null;
         runtime.menuGuide = false;
         runtime.uiPaused = false;

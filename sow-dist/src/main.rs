@@ -24,7 +24,6 @@ const POKI_FORBIDDEN_MARKERS: &[&str] = &[
     "worldofunreal.com/wouid.svg",
     "discord.gg",
     "t.me/shadowsofwar",
-    "github.com/worldofunreal",
     "SOW_startAndroidPlayGamesAutoAuth",
     "SOW_prepareAndroidAuthState",
     "SOW_ensureWouAnonymousSession",
@@ -88,6 +87,23 @@ fn shell_quote(s: &str) -> String {
     } else {
         format!("'{}'", s.replace('\'', "'\\''"))
     }
+}
+
+struct SourceIdentity {
+    sha: String,
+    url: String,
+}
+
+fn source_identity(paths: &Paths) -> Result<SourceIdentity> {
+    let root = paths.root.to_str().context("workspace path is not UTF-8")?;
+    let sha = output("git", &["-C", root, "rev-parse", "--verify", "HEAD^{commit}"])?;
+    if sha.len() != 40 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("source revision is not a full Git commit SHA");
+    }
+    Ok(SourceIdentity {
+        url: format!("https://github.com/worldofunreal/shadows-of-war/tree/{sha}"),
+        sha,
+    })
 }
 
 struct Paths {
@@ -241,6 +257,8 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
 fn copy_poki_maps(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     fs::copy(src.join("catalog.bin"), dst.join("catalog.bin"))?;
+    fs::copy(src.join("NOTICE"), dst.join("NOTICE"))
+        .context("copy map attribution notice into portal package")?;
     for entry in fs::read_dir(src).with_context(|| format!("read directory {}", src.display()))? {
         let entry = entry?;
         if !entry.file_type()?.is_dir() {
@@ -746,7 +764,7 @@ fn validate_quoted_catalog_keys(
                     })
                     .unwrap_or(rest.len());
                 let key = &rest[..end];
-                if key.ends_with('_') {
+                if key.ends_with('.') || key.ends_with('_') {
                     if !web_catalog_has_prefix(catalog, key) {
                         bail!("{label} uses unknown localization key prefix {key}");
                     }
@@ -807,6 +825,16 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let jest = target == WebTarget::Jest;
     let portal = cg || poki || jest;
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
+    let source_slot = "<!-- __SOW_SOURCE_IDENTITY_SLOT__ -->";
+    if tpl.matches(source_slot).count() != 1 {
+        bail!("game HTML template must contain one source identity slot");
+    }
+    let source = source_identity(paths)?;
+    let source_identity_html = format!(
+        "<script>window.SOW_SOURCE_SHA = {}; window.SOW_SOURCE_URL = {};</script>",
+        serde_json::to_string(&source.sha)?,
+        serde_json::to_string(&source.url)?,
+    );
     let splash_desktop = inline_webp(&paths.assets_shell.join("loader/sow-splash-desktop.webp"))?;
     let splash_mobile = inline_webp(&paths.assets_shell.join("loader/sow-splash-mobile.webp"))?;
     let locale_codes = serde_json::to_string(
@@ -822,6 +850,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         format!("src=\"../sdk/store_portals.js?v={ts}\"")
     };
     let mut html = tpl
+        .replace(source_slot, &source_identity_html)
         .replace("__VERSION__", version)
         .replace(
             "./__JS_FILE__",
@@ -1152,6 +1181,9 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         fh = fh.replace(
             "href=\"/fonts/fonts.css\"",
             "href=\"https://shadowsofwar.io/fonts/fonts.css\"",
+        ).replace(
+            "    <link rel=\"manifest\" href=\"/manifest.webmanifest\">\n",
+            "",
         );
     }
     fs::write(&index, fh)?;
@@ -1251,10 +1283,25 @@ fn write_sw(out: &Path, version: &str, js: &str, wasm: &str, ts: &str) -> Result
     Ok(())
 }
 
-fn write_manifest(out: &Path, version: &str, js: &str, wasm: &str, ts: &str) -> Result<()> {
+fn write_manifest(
+    paths: &Paths,
+    out: &Path,
+    version: &str,
+    js: &str,
+    wasm: &str,
+    ts: &str,
+) -> Result<()> {
+    let source = source_identity(paths)?;
     fs::write(
         out.join("game-manifest.json"),
-        format!(r#"{{"js":"{js}","wasm":"{wasm}","build_ts":"{ts}","version":"{version}"}}"#),
+        serde_json::to_vec(&serde_json::json!({
+            "js": js,
+            "wasm": wasm,
+            "build_ts": ts,
+            "version": version,
+            "source_sha": source.sha,
+            "source_url": source.url,
+        }))?,
     )?;
     Ok(())
 }
@@ -1391,6 +1438,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "menu.github"
                 | "menu.google_play_games"
                 | "menu.level_short"
+                | "menu.source_code"
                 | "menu.telegram"
                 | "menu.xp"
                 | "profile.android"
@@ -1407,6 +1455,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "site.leader_napoleon_ability"
                 | "site.privacy_hosting_body"
                 | "site.terms_general_title"
+                | "site.terms_maps_license"
                 | "site.telegram"
         )
 }
@@ -1959,6 +2008,180 @@ fn verify_layout(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn html_attribute_value<'a>(tag: &'a str, wanted: &str) -> Option<&'a str> {
+    let bytes = tag.as_bytes();
+    let mut index = 1;
+    while index < bytes.len()
+        && !bytes[index].is_ascii_whitespace()
+        && !matches!(bytes[index], b'/' | b'>')
+    {
+        index += 1;
+    }
+
+    while index < bytes.len() {
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if index >= bytes.len() || matches!(bytes[index], b'/' | b'>') {
+            break;
+        }
+
+        let name_start = index;
+        while index < bytes.len()
+            && !bytes[index].is_ascii_whitespace()
+            && !matches!(bytes[index], b'=' | b'/' | b'>')
+        {
+            index += 1;
+        }
+        if name_start == index {
+            index += 1;
+            continue;
+        }
+        let name = &tag[name_start..index];
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+        if index >= bytes.len() || matches!(bytes[index], b'/' | b'>') {
+            if name.eq_ignore_ascii_case(wanted) {
+                return Some("");
+            }
+            break;
+        }
+        if bytes[index] != b'=' {
+            if name.eq_ignore_ascii_case(wanted) {
+                return Some("");
+            }
+            continue;
+        }
+        index += 1;
+        while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+            index += 1;
+        }
+
+        let value = if index < bytes.len() && matches!(bytes[index], b'\'' | b'"') {
+            let quote = bytes[index];
+            index += 1;
+            let value_start = index;
+            while index < bytes.len() && bytes[index] != quote {
+                index += 1;
+            }
+            let value = &tag[value_start..index];
+            if index < bytes.len() {
+                index += 1;
+            }
+            value
+        } else {
+            let value_start = index;
+            while index < bytes.len()
+                && !bytes[index].is_ascii_whitespace()
+                && bytes[index] != b'>'
+            {
+                index += 1;
+            }
+            &tag[value_start..index]
+        };
+        if name.eq_ignore_ascii_case(wanted) {
+            return Some(value);
+        }
+    }
+    None
+}
+
+fn verify_cg_local_resources(dir: &Path, html: &str) -> Result<()> {
+    let bytes = html.as_bytes();
+    let mut offset = 0;
+    while let Some(relative_start) = html[offset..].find('<') {
+        let start = offset + relative_start;
+        if html[start..].starts_with("<!--") {
+            let end = html[start + 4..]
+                .find("-->")
+                .context("crazygames index.html has an unterminated comment")?;
+            offset = start + 4 + end + 3;
+            continue;
+        }
+
+        let mut quote = None;
+        let mut end = start + 1;
+        while end < bytes.len() {
+            match (quote, bytes[end]) {
+                (Some(current), byte) if current == byte => quote = None,
+                (None, b'\'' | b'"') => quote = Some(bytes[end]),
+                (None, b'>') => break,
+                _ => {}
+            }
+            end += 1;
+        }
+        if end >= bytes.len() {
+            bail!("crazygames index.html has an unterminated tag");
+        }
+        let tag = &html[start..=end];
+        let mut name_end = 1;
+        while name_end < tag.len()
+            && !tag.as_bytes()[name_end].is_ascii_whitespace()
+            && !matches!(tag.as_bytes()[name_end], b'/' | b'>')
+        {
+            name_end += 1;
+        }
+        let name = tag[1..name_end].to_ascii_lowercase();
+        let attributes: &[&str] = match name.as_str() {
+            "link" => &["href"],
+            "script" | "img" | "iframe" | "embed" | "source" | "audio" | "track" => {
+                &["src"]
+            }
+            "video" => &["src", "poster"],
+            "object" => &["data"],
+            _ => &[],
+        };
+        for attribute in attributes {
+            let Some(raw_url) = html_attribute_value(tag, attribute) else {
+                continue;
+            };
+            let url = raw_url.trim();
+            if url.is_empty() || url.starts_with('#') || url.starts_with("//") {
+                continue;
+            }
+            if url
+                .find(':')
+                .is_some_and(|colon| colon < url.find('/').unwrap_or(usize::MAX))
+            {
+                continue;
+            }
+            let path = url
+                .split(|character| character == '?' || character == '#')
+                .next()
+                .unwrap_or_default();
+            let path = path.trim_start_matches('/');
+            let mut relative_path = PathBuf::new();
+            for component in Path::new(path).components() {
+                match component {
+                    std::path::Component::CurDir => {}
+                    std::path::Component::Normal(part) => relative_path.push(part),
+                    std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_) => {
+                        bail!("crazygames resource escapes bundle: {url}");
+                    }
+                }
+            }
+            if relative_path.as_os_str().is_empty() || !dir.join(relative_path).is_file() {
+                bail!("crazygames index references missing local resource: {url}");
+            }
+        }
+
+        offset = end + 1;
+        if name == "script" || name == "style" {
+            let closing_tag = format!("</{name}");
+            let body = &html[offset..];
+            if let Some(close_offset) = body.find(&closing_tag) {
+                offset += close_offset;
+            } else {
+                bail!("crazygames index.html has an unclosed {name} tag");
+            }
+        }
+    }
+    Ok(())
+}
+
 fn verify_cg_layout(dir: &Path) -> Result<()> {
     verify_exported_locales(dir)?;
     // Portal entry points are the UNCOMPRESSED pair (restored June design):
@@ -1985,6 +2208,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         }
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
+    verify_cg_local_resources(dir, &html)?;
     for needle in [
         "sdk.crazygames.com/crazygames-sdk-v3.js",
         "SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"",
@@ -1996,6 +2220,9 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         if !html.contains(needle) {
             bail!("crazygames index.html missing: {}", needle);
         }
+    }
+    if html.contains("manifest.webmanifest") {
+        bail!("crazygames index.html must not reference the unbundled PWA manifest");
     }
     Ok(())
 }
@@ -2023,6 +2250,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
         "maps/catalog.bin",
+        "maps/NOTICE",
         "maps/world/map.bin.br",
     ] {
         if !dir.join(required).is_file() {
@@ -2256,7 +2484,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         }
     }
     write_sw(out, version, &js, &wasm, &ts)?;
-    write_manifest(out, version, &js, &wasm, &ts)?;
+    write_manifest(paths, out, version, &js, &wasm, &ts)?;
 
     // Marketing website at the webroot root (game shell lives under play/).
     let site = paths.root.join("sow-web/site");
@@ -2681,7 +2909,7 @@ fn package_poki(
         fs::remove_file(poki_source)?;
     }
     export_locales(out)?;
-    write_manifest(out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    write_manifest(paths, out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
     build_index(
         paths,
         out,
@@ -2757,6 +2985,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
         "maps/catalog.bin",
+        "maps/NOTICE",
         "maps/world/map.bin.br",
     ] {
         if !dir.join(required).is_file() {
@@ -2951,7 +3180,7 @@ fn package_jest(
         }
     }
     export_locales(out)?;
-    write_manifest(out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    write_manifest(paths, out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
     build_index(
         paths,
         out,
@@ -3126,6 +3355,11 @@ fn local_source_snapshot(paths: &Paths) -> Result<Vec<LocalFileStamp>> {
 }
 
 fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
+    if path == paths.root.join("assets/geo_entities.json")
+        || path == paths.root.join("assets/maps/world/map.bin.br")
+    {
+        return true;
+    }
     if path.starts_with(paths.root.join("sow-tools/assets/buildings")) {
         return path.extension().and_then(|extension| extension.to_str()) == Some("png");
     }
@@ -3956,17 +4190,30 @@ mod tests {
     }
 
     #[test]
-    fn test_local_watcher_rebuilds_wasm_only_for_game_rust() -> Result<()> {
+    fn test_local_watcher_rebuilds_wasm_for_rust_and_embedded_game_assets() -> Result<()> {
         let paths = Paths::discover()?;
         let rust_path = paths.root.join("sow-client/src/lib.rs");
+        let entities_path = paths.root.join("assets/geo_entities.json");
+        let world_map_path = paths.root.join("assets/maps/world/map.bin.br");
         let css_path = paths.root.join("sow-web/shell/main_menu.base.css");
         let tutorial_js_path = paths.root.join("sow-web/shell/main_menu.tutorial.js");
         let html_path = paths.root.join("sow-web/site/index.html");
+        let other_map_path = paths.root.join("assets/maps/europe/map.bin.br");
         let roster_path = paths.root.join("assets/campaign/boudica.json");
         let campaign_path = paths.root.join("assets/campaign/boudica.triggers.json");
         let previous = vec![
             LocalFileStamp {
                 path: rust_path.clone(),
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: entities_path,
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: world_map_path,
                 len: 1,
                 modified_nanos: 1,
             },
@@ -3986,6 +4233,11 @@ mod tests {
                 modified_nanos: 1,
             },
             LocalFileStamp {
+                path: other_map_path,
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
                 path: roster_path,
                 len: 1,
                 modified_nanos: 1,
@@ -4000,12 +4252,22 @@ mod tests {
         current[0].len = 2;
         assert!(local_change_requires_wasm(&previous, &current, &paths));
 
-        for index in 1..previous.len() {
+        for index in 1..3 {
+            current = previous.clone();
+            current[index].len = 2;
+            assert!(
+                local_change_requires_wasm(&previous, &current, &paths),
+                "embedded game data changes must rebuild WASM: {}",
+                current[index].path.display()
+            );
+        }
+
+        for index in 3..previous.len() {
             current = previous.clone();
             current[index].len = 2;
             assert!(
                 !local_change_requires_wasm(&previous, &current, &paths),
-                "web/editor file changes must not rebuild WASM: {}",
+                "web/editor/non-bundled map changes must not rebuild WASM: {}",
                 current[index].path.display()
             );
         }
@@ -4068,6 +4330,7 @@ mod tests {
             &catalog
         )
         .is_err());
+        assert!(validate_quoted_catalog_keys("const key = 'tutorial.';", "test", &catalog).is_ok());
         Ok(())
     }
 

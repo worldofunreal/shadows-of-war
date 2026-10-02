@@ -239,6 +239,9 @@ impl SowApp {
                 key_pan_left: false,
                 key_pan_right: false,
                 camera_focus_target: None,
+                tutorial_camera_focus: false,
+                tutorial_zoom_in_events: 0,
+                tutorial_zoom_out_events: 0,
                 input_focused: false,
             },
             ui: UiState {
@@ -282,6 +285,9 @@ impl SowApp {
                 building_upgrade_flashes: std::collections::HashMap::new(),
                 last_resource_notice_tick: None,
                 border_flashes: Vec::new(),
+                alliance_celebrations: std::collections::VecDeque::with_capacity(
+                    crate::app::MAX_ALLIANCE_CELEBRATIONS,
+                ),
                 border_flash_intensities: std::collections::HashMap::new(),
                 placement_scratch: Vec::new(),
                 last_player_attack_flash_time: std::collections::HashMap::new(),

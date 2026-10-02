@@ -2,6 +2,19 @@ use crate::app::SowApp;
 use web_time::Instant;
 
 impl SowApp {
+    pub(crate) fn current_player_gold(&self) -> f64 {
+        let player_id = self
+            .sim
+            .my_player_id
+            .unwrap_or(self.ui.app.hud_state.my_player_id);
+        self.sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == player_id))
+            .map(|player| player.gold)
+            .unwrap_or(self.ui.app.hud_state.gold)
+    }
+
     pub fn update_sim(&mut self, now: Instant) {
         self.time.turn_queue_peak = self.time.turn_queue_peak.max(self.sim.turn_queue.len());
         if let Some(snap) = &self.sim.current_snapshot {
@@ -121,18 +134,33 @@ impl SowApp {
                 {
                     self.input.has_snapped_camera_to_spawn = true;
                 } else {
-                    let cx = player.centroid_x;
-                    let cy = player.centroid_y;
-                    let target_world_cx = cx + 0.5;
-                    let target_world_cy = cy + 0.5;
-                    let target_zoom = 20.0;
+                    let player_focus = (player.centroid_x + 0.5, player.centroid_y + 0.5);
+                    let (target_world_cx, target_world_cy, target_zoom) =
+                        if let Some(((x, y), zoom)) = crate::campaign::tutorial_camera_frame(
+                            self.ui.tutorial_campaign,
+                            &self.sim.config,
+                            self.input.screen_w,
+                            self.input.screen_h,
+                        ) {
+                            (x, y, zoom)
+                        } else {
+                            (
+                                player_focus.0,
+                                player_focus.1,
+                                if self.input.tutorial_camera_focus {
+                                    45.0
+                                } else {
+                                    20.0
+                                },
+                            )
+                        };
 
                     let current_world_cx =
                         (self.input.screen_w * 0.5 - self.input.camera_x) / self.input.camera_zoom;
                     let current_world_cy =
                         (self.input.screen_h * 0.5 - self.input.camera_y) / self.input.camera_zoom;
 
-                    let speed = 0.01;
+                    let speed = if self.input.tutorial_camera_focus { 0.04 } else { 0.01 };
                     let next_world_cx =
                         current_world_cx + (target_world_cx - current_world_cx) * speed;
                     let next_world_cy =
@@ -159,7 +187,7 @@ impl SowApp {
                         self.clamp_camera_to_map();
                         self.input.has_snapped_camera_to_spawn = true;
                         log::info!(
-                            "Game started! Camera smoothly arrived at player spawn at ({}, {}), zoom={}",
+                            "Game started! Camera smoothly arrived at opening frame at ({}, {}), zoom={}",
                             target_world_cx,
                             target_world_cy,
                             self.input.camera_zoom

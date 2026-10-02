@@ -2,7 +2,8 @@ Third-Party Notices for Shadows of War
 ======================================
 
 This game incorporates material from OpenFront (OpenFrontIO), copyright OpenFront Inc.
-and Contributors, licensed under AGPL-3.0-or-later.
+and Contributors, licensed under AGPL-3.0-only with OpenFront's additional terms in
+section 7 preserved in LICENSE.
 
 OpenFront map-generator assets
 ------------------------------
@@ -14,7 +15,8 @@ Source: OpenFront Inc. and Contributors, OpenFrontIO map-generator assets,
 commit f51f165b947a92cc683ade3a72c3800300e86e61.
 Shadows of War crops, corrects, classifies, downsizes, filters, packs, and
 renders these sources into its map.bin, map.bin.br, and thumbnail.webp files.
-OSM-derived maps are covered by their own source declarations.
+OSM-derived maps are covered by their own source declarations. The player-facing
+map notice is included in assets/maps/NOTICE and served alongside map files.
 
 Fonts
 -----

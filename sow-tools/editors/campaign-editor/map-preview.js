@@ -153,6 +153,50 @@
         };
     }
 
+    function resizeCanvas(canvas, dpr) {
+        var rect = canvas.getBoundingClientRect();
+        dpr = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+        return { width: rect.width, height: rect.height, dpr: dpr };
+    }
+
+    function fitMapView(mapWidth, mapHeight, viewWidth, viewHeight) {
+        if (![mapWidth, mapHeight, viewWidth, viewHeight].every(function (value) {
+            return Number.isFinite(value) && value > 0;
+        })) return null;
+        var scale = Math.min(viewWidth / mapWidth, viewHeight / mapHeight);
+        return {
+            scale: scale,
+            fitScale: scale,
+            minScale: scale * 0.5,
+            x: (viewWidth - mapWidth * scale) / 2,
+            y: (viewHeight - mapHeight * scale) / 2
+        };
+    }
+
+    function mapToScreen(point, view) {
+        return [point[0] * view.scale + view.x, point[1] * view.scale + view.y];
+    }
+
+    function screenToMap(point, view) {
+        return [(point[0] - view.x) / view.scale, (point[1] - view.y) / view.scale];
+    }
+
+    function panMapView(view, dx, dy) {
+        return { scale: view.scale, x: view.x + dx, y: view.y + dy };
+    }
+
+    function zoomMapView(view, point, factor, minScale, maxScale) {
+        var mapPoint = screenToMap(point, view);
+        var scale = Math.max(minScale, Math.min(maxScale, view.scale * factor));
+        return {
+            scale: scale,
+            x: point[0] - mapPoint[0] * scale,
+            y: point[1] - mapPoint[1] * scale
+        };
+    }
+
     function geoToTile(lat, lon, bounds, width, height) {
         var point = geoToMapPoint(lat, lon, bounds, width, height);
         return point && { x: Math.trunc(point.x), y: Math.trunc(point.y) };
@@ -216,7 +260,7 @@
         });
     }
 
-    var api = { parse: parse, geoToMapPoint: geoToMapPoint, mapPointToGeo: mapPointToGeo, geoToMapPoints: geoToMapPoints, centerMapOffsets: centerMapOffsets, geoToTile: geoToTile, tileToGeo: tileToGeo, isLand: isLand, drawMapLabel: drawMapLabel, terrainCanvas: terrainCanvas, load: load };
+    var api = { parse: parse, geoToMapPoint: geoToMapPoint, mapPointToGeo: mapPointToGeo, geoToMapPoints: geoToMapPoints, centerMapOffsets: centerMapOffsets, resizeCanvas: resizeCanvas, fitMapView: fitMapView, mapToScreen: mapToScreen, screenToMap: screenToMap, panMapView: panMapView, zoomMapView: zoomMapView, geoToTile: geoToTile, tileToGeo: tileToGeo, isLand: isLand, drawMapLabel: drawMapLabel, terrainCanvas: terrainCanvas, load: load };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaignMapPreview = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

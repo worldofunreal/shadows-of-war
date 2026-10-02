@@ -49,10 +49,10 @@ Static HTML lives in `sow-web/site/` (landing, privacy, terms, cookies, support)
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[GNU Affero General Public License v3.0 or later](LICENSE), the same license
-as the project.
+[GNU Affero General Public License v3.0 only](LICENSE), with the OpenFront
+additional terms included there.
 
-Inbound contributions = outbound under AGPL-3.0-or-later. No separate CLA is required.
+Inbound contributions = outbound under AGPL-3.0-only. No separate CLA is required.
 
 See also “License & derivatives” in the README for obligations that apply to anyone deploying a derivative, including network use under AGPL section 13.
 

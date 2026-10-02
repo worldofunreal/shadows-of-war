@@ -305,6 +305,16 @@ impl SowApp {
                                 &snap.buildings,
                             );
 
+                            let mut slot = 0usize;
+                            if let Some(tile_idx) = stack_tile {
+                                nobuild_slots[slot] = [
+                                    (tile_idx % self.sim.map_w) as f32,
+                                    (tile_idx / self.sim.map_w) as f32,
+                                    0.0,
+                                    2.0,
+                                ];
+                                slot += 1;
+                            }
                             self.ui.placement_scratch.clear();
                             for b in &snap.buildings {
                                 if stack_tile == Some(b.tile_idx) {
@@ -325,8 +335,10 @@ impl SowApp {
                             self.ui
                                 .placement_scratch
                                 .sort_unstable_by_key(|item| item.3);
-                            for (i, item) in self.ui.placement_scratch.iter().take(32).enumerate() {
-                                nobuild_slots[i] = [item.0 as f32, item.1 as f32, item.2, 1.0f32];
+                            for item in self.ui.placement_scratch.iter().take(32 - slot) {
+                                nobuild_slots[slot] =
+                                    [item.0 as f32, item.1 as f32, item.2, 1.0f32];
+                                slot += 1;
                             }
                         }
                     }
@@ -349,6 +361,36 @@ impl SowApp {
                             true
                         });
                     }
+
+                    let mut alliance_celebration_slots = [[0.0f32; 4]; 16];
+                    let snapshot = self.sim.current_snapshot.as_ref();
+                    let mut slot = 0usize;
+                    self.ui.alliance_celebrations.retain(|effect| {
+                        let elapsed = current_time.duration_since(effect.start_time).as_secs_f32();
+                        if elapsed >= crate::app::ALLIANCE_CELEBRATION_DURATION {
+                            return false;
+                        }
+                        let Some(snapshot) = snapshot else {
+                            return true;
+                        };
+                        let age = elapsed / crate::app::ALLIANCE_CELEBRATION_DURATION;
+                        if slot < crate::app::MAX_ALLIANCE_CELEBRATIONS {
+                            for (participant, player_id) in effect.player_ids.iter().enumerate() {
+                                if let Some(player) =
+                                    snapshot.players.iter().find(|p| p.id == *player_id)
+                                {
+                                    alliance_celebration_slots[slot * 2 + participant] = [
+                                        *player_id as f32,
+                                        player.centroid_x,
+                                        player.centroid_y,
+                                        age,
+                                    ];
+                                }
+                            }
+                        }
+                        slot += 1;
+                        true
+                    });
 
                     // ── Attack Border Flash ──
                     let (attack_flash_target, attack_flash_t) = {
@@ -439,6 +481,7 @@ impl SowApp {
                         shore_thickness,
                         shore_darkness,
                         threat_slots,
+                        alliance_celebration_slots,
                         effect_shockwave: if dev.vfx_conquer { 1.0 } else { 0.0 },
                         effect_breathe: if dev.vfx_border_breathe { 1.0 } else { 0.0 },
                         effect_energy_flow: if dev.vfx_energy_flow { 1.0 } else { 0.0 },

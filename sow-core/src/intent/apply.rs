@@ -204,6 +204,12 @@ impl SowEngine {
         if allied {
             self.campaign_alliance_started_tick
                 .insert(target_id, self.current_tick_u32());
+            if self.state.config.campaign_support.is_some()
+                && self.campaign_support_intervals.contains_key(&target_id)
+            {
+                self.campaign_support_next_tick
+                    .insert(target_id, self.state.tick);
+            }
             self.retreat_mutual_aggression(human_id, target_id);
         } else {
             self.campaign_support_next_tick.remove(&target_id);

@@ -250,6 +250,7 @@
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Port" aria-label="' + SOW_t("hud.map_action_port") + '">' + buildingIcon("Port") + '</button>'
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Bunker" aria-label="' + SOW_t("hud.map_action_bunker") + '">' + buildingIcon("Bunker") + '</button>'
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="Farm">' + buildingIcon("Farm") + '</button>'
+            + '        <button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden>✕</button>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
@@ -341,6 +342,7 @@
             + '  <div class="sow-hud__building-card-level" id="sow-hud-building-card-level"></div>'
             + '  <div class="sow-hud__building-card-benefit" id="sow-hud-building-card-benefit"></div>'
             + '  <div class="sow-hud__building-card-next" id="sow-hud-building-card-next"></div>'
+            + '  <div class="sow-hud__building-card-gold" id="sow-hud-building-card-gold" hidden></div>'
             + '  <button type="button" class="sow-hud__building-card-upgrade" id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure">Upgrade</button>'
             + '</aside>';
 
@@ -384,6 +386,7 @@
             deployTimer: document.getElementById("sow-hud-deploy-timer"),
             buildingsStrip: document.getElementById("sow-hud-buildings-strip"),
             buildingButtons: Array.prototype.slice.call(hudRoot.querySelectorAll("[data-command='select_building']")),
+            buildingCancel: hudRoot.querySelector("[data-command='cancel_building_mode']"),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_'], .sow-hud__right-rail [data-command='toggle_emoji']")),
             troopFill: document.getElementById("sow-hud-troop-fill"),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
@@ -426,6 +429,7 @@
             buildingCardLevel: document.getElementById("sow-hud-building-card-level"),
             buildingCardBenefit: document.getElementById("sow-hud-building-card-benefit"),
             buildingCardNext: document.getElementById("sow-hud-building-card-next"),
+            buildingCardGold: document.getElementById("sow-hud-building-card-gold"),
             buildingCardUpgrade: document.getElementById("sow-hud-building-card-upgrade"),
             notifications: document.createElement("div"),
             mapFeedback: document.createElement("div")
@@ -886,6 +890,35 @@
         }).join("");
     }
 
+    function buildingMetricDeltaMarkup(currentMetrics, nextMetrics) {
+        if (!Array.isArray(nextMetrics)) return "";
+        var currentByKey = Object.create(null);
+        (Array.isArray(currentMetrics) ? currentMetrics : []).forEach(function (metric) {
+            currentByKey[String(metric.icon || "upgrade") + "|" + String(metric.label || "")] = metric;
+        });
+        var deltas = [];
+        nextMetrics.forEach(function (metric) {
+            var previous = currentByKey[String(metric.icon || "upgrade") + "|" + String(metric.label || "")];
+            var before = previous && Number(previous.value);
+            var after = Number(metric.value);
+            if (previous && Number.isFinite(before) && Number.isFinite(after)) {
+                var difference = after - before;
+                if (Math.abs(difference) < 0.000001) return;
+                deltas.push(Object.assign({}, metric, {
+                    value: Math.abs(difference),
+                    prefix: difference < 0 ? "−" : (metric.prefix || "+")
+                }));
+            } else if (!previous) {
+                deltas.push(Object.assign({}, metric, {
+                    prefix: metric.prefix || (Number.isFinite(after) ? "+" : "")
+                }));
+            } else if (String(previous.value) !== String(metric.value)) {
+                deltas.push(metric);
+            }
+        });
+        return buildingMetricMarkup(deltas);
+    }
+
     function positionBuildingCard(mapMenu) {
         var card = hudRefs.buildingCard;
         var width = card.offsetWidth;
@@ -904,7 +937,7 @@
         card.style.bottom = "auto";
     }
 
-    function renderBuildingCard(mapMenu) {
+    function renderBuildingCard(mapMenu, playerGold) {
         if (!hudRefs || !hudRefs.buildingCard) return;
         var detail = mapMenu && mapMenu.building;
         var open = Boolean(mapMenu && mapMenu.open && mapMenu.view === "building_details" && detail);
@@ -945,37 +978,50 @@
         if (underConstruction) {
             hudRefs.buildingCardNext.innerHTML = "";
             hudRefs.buildingCardNext.hidden = true;
+            hudRefs.buildingCardGold.hidden = true;
             hudRefs.buildingCardUpgrade.disabled = true;
             hudRefs.buildingCardUpgrade.hidden = true;
             positionBuildingCard(mapMenu);
             return;
         }
         if (detail.next_level) {
-            var nextMetrics = Array.isArray(detail.next_metrics) ? detail.next_metrics.slice() : [];
-            nextMetrics.push({
-                icon: "clock",
-                label: "Upgrade time",
-                value: Math.max(0, Number(detail.duration_seconds) || 0),
-                unit: "s"
-            });
+            var nextMetrics = Array.isArray(detail.next_metrics) ? detail.next_metrics : [];
+            var deltaMarkup = buildingMetricDeltaMarkup(activeMetrics, nextMetrics);
             var requirementMarkup = unmet.length
-                ? '<span class="sow-hud__building-requirement" title="Requirement not met">'
-                    + hudIcon("lock", "sow-hud__building-metric-icon") + escapeHudText(unmet[0].key) + '</span>'
+                ? '<span class="sow-hud__building-requirement" title="Requirement not met" aria-label="Requirement not met">'
+                    + hudIcon("lock", "sow-hud__building-metric-icon") + '</span>'
                 : "";
-            hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-next-level" title="Next level">'
-                + hudIcon("upgrade", "sow-hud__building-metric-icon") + 'Lv ' + escapeHudText(detail.next_level)
-                + '</span><span class="sow-hud__building-metrics">' + buildingMetricMarkup(nextMetrics)
-                + requirementMarkup + '</span>';
+            var duration = Number(detail.duration_seconds);
+            var durationMarkup = Number.isFinite(duration)
+                ? buildingMetricMarkup([{ icon: "clock", label: "Upgrade time", value: Math.max(0, duration), unit: "s" }])
+                : "";
+            hudRefs.buildingCardBenefit.hidden = true;
+            hudRefs.buildingCardNext.innerHTML = deltaMarkup + durationMarkup + requirementMarkup;
             hudRefs.buildingCardNext.setAttribute("aria-label", detail.next_benefit_label || "Upgrade effects");
-            hudRefs.buildingCardNext.hidden = false;
+            hudRefs.buildingCardNext.hidden = !deltaMarkup && !durationMarkup && !requirementMarkup;
             var cost = Math.floor(Number(detail.cost) || 0).toLocaleString();
+            var availableGold = Number(playerGold);
+            if (!Number.isFinite(availableGold)) availableGold = 0;
+            var goldText = Math.floor(availableGold).toLocaleString();
+            var enoughGold = availableGold >= Number(detail.cost);
+            hudRefs.buildingCardGold.innerHTML = '<span class="sow-hud__building-gold-balance">'
+                + hudIcon("gold", "sow-hud__building-metric-icon") + '<b>' + escapeHudText(goldText) + '</b></span>'
+                + '<span class="sow-hud__building-gold-arrow" aria-hidden="true">→</span>'
+                + '<span class="sow-hud__building-gold-cost" title="Upgrade cost">'
+                + hudIcon("gold", "sow-hud__building-metric-icon") + '<b>' + escapeHudText(cost) + '</b></span>';
+            hudRefs.buildingCardGold.classList.toggle("is-short", !enoughGold);
+            hudRefs.buildingCardGold.setAttribute("aria-label", "Gold: " + goldText + ". Upgrade cost: " + cost);
+            hudRefs.buildingCardGold.hidden = false;
             hudRefs.buildingCardUpgrade.innerHTML = hudIcon("upgrade", "sow-hud__building-upgrade-icon")
-                + '<span>' + hudIcon("gold", "sow-hud__building-metric-icon") + escapeHudText(cost) + '</span>';
-            hudRefs.buildingCardUpgrade.setAttribute("aria-label", "Upgrade for " + cost + " gold");
-            hudRefs.buildingCardUpgrade.title = "Upgrade for " + cost + " gold";
-            hudRefs.buildingCardUpgrade.disabled = !detail.can_upgrade;
+                + '<span>Lv ' + escapeHudText(detail.next_level) + '</span>';
+            hudRefs.buildingCardUpgrade.setAttribute("aria-label", "Upgrade to level " + detail.next_level);
+            hudRefs.buildingCardUpgrade.title = "Upgrade to level " + detail.next_level;
+            hudRefs.buildingCardUpgrade.disabled = !detail.can_upgrade || !enoughGold;
             hudRefs.buildingCardUpgrade.hidden = false;
         } else {
+            hudRefs.buildingCardGold.hidden = true;
+            hudRefs.buildingCardBenefit.hidden = !activeMetrics.length;
+            hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
             hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-level sow-hud__building-level--max" title="Maximum level">MAX</span>';
             hudRefs.buildingCardNext.hidden = false;
             hudRefs.buildingCardUpgrade.hidden = true;
@@ -1518,6 +1564,7 @@
         if (hudRefs.buildingsStrip) {
             hudRefs.buildingsStrip.style.display = isDeploying ? "none" : "flex";
             var selectedBuilding = hud.selected_building;
+            if (hudRefs.buildingCancel) hudRefs.buildingCancel.hidden = !selectedBuilding;
             var buildingCosts = hud.building_costs || {};
             hudRefs.buildingButtons.forEach(function (button) {
                 var kind = button.dataset.kind || "";
@@ -1675,7 +1722,7 @@
             }
         }
         var mapMenuOpen = renderMapMenu(hud.map_menu);
-        renderBuildingCard(hud.map_menu);
+        renderBuildingCard(hud.map_menu, hud.gold);
         var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: hudSettingsOpen, toggle_dev_sidebar: devSidebarOpen, toggle_emoji: emojiPickerOpen };
         hudRefs.panelButtons.forEach(function (button) {
             var expanded = Boolean(panelStates[button.dataset.command]);
@@ -1811,6 +1858,9 @@
                 send("spawn_troops");
             } else if (cmd === "select_building") {
                 send("select_building", { kind: btn.dataset.kind });
+            } else if (cmd === "cancel_building_mode") {
+                var selectedBuilding = hudState && hudState.hud && hudState.hud.selected_building;
+                if (selectedBuilding) send("select_building", { kind: selectedBuilding });
             } else if (cmd === "close_building_card") {
                 send("close_map_context_menu");
             } else if (cmd === "confirm_endgame_leave") {

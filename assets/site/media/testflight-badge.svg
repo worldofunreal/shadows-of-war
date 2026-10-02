@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs><linearGradient id="testflight-blue" x1="5" y1="3" x2="44" y2="46" gradientUnits="userSpaceOnUse"><stop stop-color="#48B7FF"/><stop offset="1" stop-color="#1267E8"/></linearGradient></defs>
+  <rect width="48" height="48" rx="11" fill="url(#testflight-blue)"/>
+  <g fill="#fff">
+    <path d="M24 5.2c3.2 3.8 4.4 8 3.7 12.1l-1.2 6.1h-5l-1.2-6.1C19.6 13.2 20.8 9 24 5.2Z"/>
+    <path d="M24 5.2c3.2 3.8 4.4 8 3.7 12.1l-1.2 6.1h-5l-1.2-6.1C19.6 13.2 20.8 9 24 5.2Z" transform="rotate(120 24 24)"/>
+    <path d="M24 5.2c3.2 3.8 4.4 8 3.7 12.1l-1.2 6.1h-5l-1.2-6.1C19.6 13.2 20.8 9 24 5.2Z" transform="rotate(240 24 24)"/>
+  </g>
+  <circle cx="24" cy="24" r="2.4" fill="#1674E8"/>
+</svg>

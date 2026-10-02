@@ -487,7 +487,9 @@ impl SowApp {
             .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx));
         match building {
             Some(building) if !building.under_construction => {
-                if building.level < building.kind.max_level() {
+                if building.level < building.kind.max_level()
+                    && self.structure_upgrade_requirement_met(building)
+                {
                     actions.push(MapMenuAction::UpgradeStructure);
                 }
                 if self.sim.config.tutorial && building.kind == sow_core::game::BuildingKind::City {
@@ -566,6 +568,7 @@ impl SowApp {
     }
 
     pub(crate) fn map_menu_items(&mut self, tile_idx: u32) -> Vec<MapMenuItem> {
+        let gold = self.current_player_gold();
         self.map_menu_actions(tile_idx)
             .into_iter()
             .map(|action| {
@@ -574,9 +577,7 @@ impl SowApp {
                     action,
                     cost,
                     level,
-                    disabled: cost.is_some_and(|value| {
-                        !value.is_finite() || self.ui.app.hud_state.gold < value
-                    }),
+                    disabled: cost.is_some_and(|value| !value.is_finite() || gold < value),
                 }
             })
             .collect()
@@ -594,13 +595,20 @@ impl SowApp {
         if menu.session != session || menu.tile_idx != tile_idx {
             return;
         }
+        let keep_building_card_open = action == MapMenuAction::UpgradeStructure
+            && self
+                .input
+                .map_context_menu
+                .is_some_and(|menu| menu.view == MapContextMenuView::BuildingDetails);
         if !self.map_menu_actions(tile_idx).contains(&action) {
             self.show_map_menu_unavailable(tile_idx);
-            self.close_map_context_menu();
+            if !keep_building_card_open {
+                self.close_map_context_menu();
+            }
             return;
         }
         if let Some(cost) = self.map_menu_cost(action, tile_idx).0
-            && (!cost.is_finite() || self.ui.app.hud_state.gold < cost)
+            && (!cost.is_finite() || self.current_player_gold() < cost)
         {
             let message = if cost.is_finite() {
                 format!("Need {} gold.", crate::utils::format_number(cost))
@@ -608,7 +616,9 @@ impl SowApp {
                 "Action unavailable here.".to_string()
             };
             self.add_action_feedback(message);
-            self.close_map_context_menu();
+            if !keep_building_card_open {
+                self.close_map_context_menu();
+            }
             return;
         }
 
@@ -682,7 +692,9 @@ impl SowApp {
                 self.build_ship_at(tile_idx, kind);
             }
         }
-        self.close_map_context_menu();
+        if !keep_building_card_open {
+            self.close_map_context_menu();
+        }
     }
 
     pub(crate) fn move_selected_warships(&mut self, x: f64, y: f64) -> bool {
@@ -767,10 +779,58 @@ impl SowApp {
         col: i32,
         row: i32,
     ) -> bool {
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let stack_target = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+            super::placement::find_stack_target_tile(
+                kind,
+                col,
+                row,
+                self.sim.map_w,
+                my_id,
+                &snapshot.buildings,
+            )
+            .and_then(|tile_idx| {
+                snapshot
+                    .buildings
+                    .iter()
+                    .find(|building| building.tile_idx == tile_idx)
+                    .copied()
+            })
+        });
+        if let Some(building) = stack_target {
+            self.cancel_hold_build();
+            if building.under_construction {
+                self.add_action_feedback("Building under construction. 🏗️");
+                return false;
+            }
+            if building.level >= kind.max_level()
+                || !self.structure_upgrade_requirement_met(&building)
+            {
+                self.add_action_feedback("Action unavailable here.");
+                return false;
+            }
+            let cost = self
+                .map_menu_cost(MapMenuAction::UpgradeStructure, building.tile_idx)
+                .0
+                .unwrap_or(f64::INFINITY);
+            let gold = self.current_player_gold();
+            if !cost.is_finite() || gold < cost {
+                let message = if cost.is_finite() {
+                    format!("Need {} gold.", crate::utils::format_number(cost))
+                } else {
+                    "Action unavailable here.".to_string()
+                };
+                self.add_action_feedback(message);
+                return false;
+            }
+            self.send_intent(sow_core::protocol::GameplayIntent::UpgradeStructure {
+                building_id: building.id,
+            });
+            return true;
+        }
         let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
             return false;
         };
-        let my_id = self.sim.my_player_id.unwrap_or(0);
         if kind == sow_core::game::BuildingKind::Farm {
             let slots = snapshot
                 .buildings
@@ -826,7 +886,7 @@ impl SowApp {
             .iter()
             .position(|candidate| *candidate == kind)
             .unwrap_or(0);
-        if self.ui.app.hud_state.gold < self.ui.app.hud_state.building_costs[cost_index] {
+        if self.current_player_gold() < self.ui.app.hud_state.building_costs[cost_index] {
             let text = format!(
                 "Need {} gold.",
                 crate::utils::format_number(self.ui.app.hud_state.building_costs[cost_index])
@@ -870,7 +930,11 @@ impl SowApp {
         true
     }
 
-    fn map_menu_cost(&self, action: MapMenuAction, tile_idx: u32) -> (Option<f64>, Option<u8>) {
+    pub(crate) fn map_menu_cost(
+        &self,
+        action: MapMenuAction,
+        tile_idx: u32,
+    ) -> (Option<f64>, Option<u8>) {
         match action {
             MapMenuAction::UpgradeTile => {
                 let level = self.sim.tile_upgrades.get(&tile_idx).copied().unwrap_or(0) as i32;
@@ -990,7 +1054,7 @@ impl SowApp {
                             .unwrap_or_default();
                         sow_core::building::cost::structure_upgrade_cost_gold(
                             building.kind,
-                            building.level.saturating_add(1),
+                            building.active_level().saturating_add(1),
                             owned_levels,
                             factory_discount_levels,
                             &self.sim.config,
@@ -1001,6 +1065,24 @@ impl SowApp {
             }
             _ => (None, None),
         }
+    }
+
+    pub(crate) fn structure_upgrade_requirement_met(
+        &self,
+        building: &sow_core::protocol::BuildingSnapshot,
+    ) -> bool {
+        if building.kind != sow_core::game::BuildingKind::Factory
+            || building.active_level().saturating_add(1) != 2
+        {
+            return true;
+        }
+        self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.buildings.iter().any(|city| {
+                city.owner_id == building.owner_id
+                    && city.kind == sow_core::game::BuildingKind::City
+                    && city.active_level() >= 3
+            })
+        })
     }
 
     fn upgrade_tile_at(&mut self, tile_idx: u32) -> bool {

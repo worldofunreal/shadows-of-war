@@ -3,7 +3,7 @@ name = "sow-client"
 version.workspace = true
 edition = "2024"
 description = "Shadows of War — main game client (simulation host, event loop, platform integrations)"
-license = "AGPL-3.0-or-later"
+license = "AGPL-3.0-only"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

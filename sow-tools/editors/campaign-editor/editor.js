@@ -20,7 +20,8 @@
         { value: "support", label: "Receive allied support" }, { value: "fleet", label: "Launch a fleet" },
         { value: "nuke", label: "Launch a nuke" }, { value: "elapsed", label: "Wait for game time" },
         { value: "contact", label: "Reach a faction" }, { value: "defeated", label: "Defeat a faction" },
-        { value: "ui", label: "Use a control" }
+        { value: "ui", label: "Use a control" },
+        { value: "zoom_in", label: "Zoom in" }, { value: "zoom_out", label: "Zoom out" }
     ];
     var locales = ["en", "es"], localeNames = { en: "English", es: "Español" }, catalogLoads = Object.create(null);
 
@@ -335,6 +336,7 @@
             if (bodyKey) replacement.body_key = bodyKey;
             if (step.speaker || firstLine && firstLine.speaker) replacement.speaker = step.speaker || firstLine.speaker;
             if (Number.isFinite(step.attack_ratio_on_enter)) replacement.attack_ratio_on_enter = step.attack_ratio_on_enter;
+            if (keepsMechanics && step.pause_game === true) replacement.pause_game = true;
             if (["scene", "end"].includes(value)) replacement.presentation = step.presentation || "dialogue";
             if (value === "scene") {
                 if (Array.isArray(step.lines)) replacement.lines = step.lines;
@@ -457,6 +459,7 @@
         }
         if (step.type === "objective" || step.type === "guide") {
             var objective = section("Mechanic and guide");
+            objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else delete step.pause_game; markDirty(); }));
             step.trigger = step.trigger || { type: "territory", value: 1, scope: "step" };
             if (step.type === "guide" && !step.guide) step.guide = { kind: "world", target: "expand", gesture: "tap" };
             var availableTriggers = state.flow === "menu"
@@ -472,6 +475,7 @@
                     if (step.guide) Object.assign(step.guide, { kind: "ui", target: step.trigger.action });
                 }
                 else step.trigger.value = 1;
+                if (["zoom_in", "zoom_out"].includes(value)) step.guide = { kind: "world", target: "player", gesture: value };
                 if (step.guide && value !== "ui" && step.guide.kind === "ui") Object.assign(step.guide, { kind: "world", target: worldGuideTarget(value) });
                 if (value === "elapsed" && step.type === "objective") delete step.guide;
                 markDirty(); renderInspector();
@@ -517,7 +521,12 @@
                 objective.appendChild(selectField("Hand points at", step.guide.kind + ":" + step.guide.target, [
                     { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }, { value: "world:player", label: "Map · player base" }
                 ].concat(inGameUiTargets().map(function (key) { return { value: "ui:" + key, label: "Interface · " + key.replace(/_/g, " ") }; })), function (value) { var pair = value.split(":"); if (pair[0] !== step.guide.kind) delete step.guide.to; step.guide.kind = pair[0]; step.guide.target = pair[1]; markDirty(); renderInspector(); }));
-                objective.appendChild(selectField("Gesture", step.guide.gesture || "tap", ["tap", "hold", "drag"], function (value) { step.guide.gesture = value; if (value !== "drag") delete step.guide.to; markDirty(); renderInspector(); }));
+                objective.appendChild(selectField("Gesture", step.guide.gesture || "tap", ["tap", "hold", "drag", "zoom_in", "zoom_out"], function (value) {
+                    step.guide.gesture = value;
+                    if (value !== "drag") delete step.guide.to;
+                    if (["zoom_in", "zoom_out"].includes(value)) { step.guide.kind = "world"; step.guide.target = "player"; step.trigger.type = value; }
+                    markDirty(); renderInspector();
+                }));
                 if (step.guide.gesture === "drag") {
                     var dragTargets = step.guide.kind === "world"
                         ? [{ value: "expand", label: "Map · expansion" }, { value: "assault", label: "Map · attack" }, { value: "target_action", label: "Map · target action" }, { value: "player", label: "Map · player base" }]
@@ -532,7 +541,9 @@
             } else if (step.type === "objective" && step.trigger.type !== "elapsed") {
                 var addGuide = el("button", { type: "button" }, "Add hand guide");
                 addGuide.addEventListener("click", function () {
-                    step.guide = step.trigger.type === "ui"
+                    step.guide = ["zoom_in", "zoom_out"].includes(step.trigger.type)
+                        ? { kind: "world", target: "player", gesture: step.trigger.type }
+                        : step.trigger.type === "ui"
                         ? { kind: "ui", target: step.trigger.action, gesture: "tap" }
                         : { kind: "world", target: worldGuideTarget(step.trigger.type), gesture: "tap" };
                     markDirty(); renderInspector();
@@ -1212,7 +1223,10 @@
             if (actionRatio != null) $("#sow-hud-slider").value = String(Math.round(actionRatio * 100));
         }
         var anchor = previewAnchor(model.step);
-        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage) }); }
+        var zoomMode = $("#device").value === "mobile" ? "pinch" : "wheel";
+        var zoomHint = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture)
+            ? translated("tutorial." + model.step.id + "_" + zoomMode + "_hint", state.previewLanguage) : null;
+        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: zoomHint }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
@@ -1223,7 +1237,7 @@
             if (!replayTarget || !replayTarget.getClientRects().length) menuHint = " · open Campaign in the preview to reveal Replay";
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
-        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + menuHint + (state.validation.errors.length ? " · draft needs fixes before export" : "");
+        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + menuHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
         if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
     }
@@ -1518,7 +1532,7 @@
         box.hidden = !issues.length;
         box.classList.toggle("is-warning", !errors.length && warnings.length > 0);
         if (issues.length) {
-            box.appendChild(el("strong", {}, errors.length ? "Fix this step before export" : "Review this step"));
+            box.appendChild(el("strong", {}, errors.length ? "Fix this step before saving" : "Review this step"));
             issues.forEach(function (issue) { box.appendChild(el("p", {}, [warnings.includes(issue) ? "Note" : "", issue.field, issue.message].filter(Boolean).join(" · "))); });
         }
     }

@@ -6,13 +6,14 @@
 <title>SOW — Campaign Studio</title>
 <link rel="stylesheet" href="/fonts/fonts.css" />
 <link rel="stylesheet" href="/shell/sow-controls.css" />
+<link rel="stylesheet" href="atlas-entity-picker.css" />
 <style>
   :root { --bg:#0b1114; --panel:#111a1d; --line:#2d3b3c; --text:#e8eeea; --muted:#98a7a5; --accent:#e9bb64; --accent-dim:#b98a3d; }
   * { box-sizing:border-box; }
   html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font:13px/1.45 var(--sow-ui-font,system-ui),Segoe UI,Roboto,sans-serif; }
   #app { display:flex; height:100%; }
   #stage { flex:1; min-width:0; position:relative; overflow:hidden; background:radial-gradient(ellipse at 50% 44%,#243331 0,#131e20 46%,#0b1114 100%); }
-  canvas { position:absolute; top:0; left:0; image-rendering:pixelated; }
+  canvas { position:absolute; top:0; left:0; width:100%; height:100%; image-rendering:pixelated; }
   #side { width:340px; flex:0 0 340px; background:linear-gradient(160deg,#172124 0,#101719 58%,#0d1416 100%); border-left:1px solid #394746; box-shadow:-16px 0 40px #0007; display:flex; flex-direction:column; z-index:1; }
   header { padding:18px 18px 15px; border-bottom:1px solid var(--line); background:linear-gradient(110deg,#ffffff05,transparent 65%); }
   header h1 { margin:0; color:var(--accent); font-size:12px; text-transform:uppercase; letter-spacing:.17em; }
@@ -92,8 +93,9 @@
         <button id="spawnBtn">Set player spawn</button>
       </div>
       <label for="atlasEntityInput">Add an existing entity</label>
-      <div class="row"><input id="atlasEntityInput" list="atlasEntityOptions" placeholder="Search catalog"><button id="addAtlasEntity" type="button">Add</button></div>
-      <datalist id="atlasEntityOptions"></datalist>
+      <div class="row"><input id="atlasEntityInput" placeholder="Search Atlas by name or ID" aria-label="Search Atlas entities"><button id="addAtlasEntity" type="button" disabled>Add</button></div>
+      <div id="atlasEntityResults" class="atlas-picker__results" role="group" aria-label="Atlas search results"></div>
+      <div id="atlasEntityStatus" class="atlas-picker__status" role="status">Type at least 2 characters to search the Atlas.</div>
       <label>Show</label>
       <div class="row">
         <label style="margin:0"><input type="checkbox" id="labelsChk" checked style="width:auto"> labels</label>
@@ -104,10 +106,10 @@
     </div>
 
     <div class="group">
-      <h2>Export</h2>
+      <h2>Save</h2>
       <div class="btns">
-        <button class="primary" id="exportBtn">Export</button>
-        <button id="reloadBtn">Reload</button>
+        <button class="primary" id="exportBtn">Save</button>
+        <button id="reloadBtn">Reload saved</button>
       </div>
       <div class="hint" id="rosterStatus" role="status">Saved</div>
       <label>Load a different roster</label>
@@ -119,6 +121,7 @@
 </div>
 
 <script src="map-preview.js"></script>
+<script src="atlas-entity-picker.js"></script>
 <script>
 // ---- role model (mirrors sow-client-world/src/campaign/mod.rs Role) ----
 const ROLES = {
@@ -148,10 +151,11 @@ let terrain = null;            // Uint8Array length MAPW*MAPH, bit7 = land
 let roster = { map:"eastanglia", player_spawn:[696,45], player_color:PLAYER_COLOR, factions:[] };
 let avatarCatalog = [];
 let entityCatalog = null;
+let atlasEntityPicker = null;
 let rosterEtag = null;
 let rosterDirty = false, rosterExternal = false, rosterSaving = false;
 let sel = -1;                  // index into factions, or -2 = player spawn
-let scale = 1, ox = 0, oy = 0, minScale = 1, maxScale = 12; // view: sx = mx*scale+ox
+let scale = 1, ox = 0, oy = 0, fitScale = 1, minScale = 0.5, maxScale = 12, viewWidth = 1, viewHeight = 1, dpr = 1; // view: sx = mx*scale+ox
 let hovered = -1, panning = false, panStart = null;
 
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
@@ -177,34 +181,39 @@ function isLand(mx, my) {
   return SOWCampaignMapPreview.isLand(terrain, MAPW, MAPH, mx, my);
 }
 
-// ---- view fit ----
-function computeMinScale(){ return Math.min(cv.width/MAPW, cv.height/MAPH); }
-function fitView() { minScale = computeMinScale(); maxScale = Math.max(12, minScale*10); scale = minScale; clampView(); }
+// ---- shared map view ----
+function viewState(){ return {scale, x:ox, y:oy}; }
+function applyView(view){ scale=view.scale; ox=view.x; oy=view.y; }
+function computeFitView(){ return SOWCampaignMapPreview.fitMapView(MAPW, MAPH, viewWidth, viewHeight); }
+function fitView() {
+  const view=computeFitView(); if(!view)return;
+  fitScale=view.fitScale; minScale=view.minScale; maxScale=Math.max(12, fitScale*10);
+  applyView(view); clampView();
+}
 // Keep the map from drifting fully off-screen (centered when it fits within the view).
 function clampView(){
   const w = MAPW*scale, h = MAPH*scale, m = 60;
-  ox = (w <= cv.width)  ? (cv.width  - w)/2 : Math.min(m, Math.max(cv.width  - w - m, ox));
-  oy = (h <= cv.height) ? (cv.height - h)/2 : Math.min(m, Math.max(cv.height - h - m, oy));
+  ox = (w <= viewWidth)  ? (viewWidth  - w)/2 : Math.min(m, Math.max(viewWidth  - w - m, ox));
+  oy = (h <= viewHeight) ? (viewHeight - h)/2 : Math.min(m, Math.max(viewHeight - h - m, oy));
 }
 // Zoom toward a screen point, keeping the world point under it fixed.
 function zoomAt(sx, sy, factor){
-  const [wx,wy] = s2m(sx,sy);
-  scale = Math.max(minScale, Math.min(maxScale, scale*factor));
-  ox = sx - wx*scale; oy = sy - wy*scale;
+  applyView(SOWCampaignMapPreview.zoomMapView(viewState(), [sx,sy], factor, minScale, maxScale));
   clampView(); draw();
 }
-const m2s = (mx,my) => [mx*scale+ox, my*scale+oy];
-const s2m = (sx,sy) => [(sx-ox)/scale, (sy-oy)/scale];
+const m2s = (mx,my) => SOWCampaignMapPreview.mapToScreen([mx,my], viewState());
+const s2m = (sx,sy) => SOWCampaignMapPreview.screenToMap([sx,sy], viewState());
 function focusFaction(index){
   const faction=roster.factions[index];
   if(!faction||faction.x<0||faction.y<0||faction.x>=MAPW||faction.y>=MAPH)return;
-  const offset=SOWCampaignMapPreview.centerMapOffsets({x:faction.x,y:faction.y},scale,cv.width,cv.height);
+  const offset=SOWCampaignMapPreview.centerMapOffsets({x:faction.x,y:faction.y},scale,viewWidth,viewHeight);
   ox=offset.x;oy=offset.y;clampView();draw();
 }
 
 // ---- draw ----
 function draw() {
-  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,viewWidth,viewHeight);
   if (mapImage) ctx.drawImage(mapImage, ox, oy, MAPW*scale, MAPH*scale);
 
   const showLabels = document.getElementById("labelsChk").checked;
@@ -271,11 +280,11 @@ cv.addEventListener("mousedown", e => {
 cv.addEventListener("mousemove", e => {
   const r = cv.getBoundingClientRect();
   const sx = e.clientX-r.left, sy = e.clientY-r.top;
-  if (panning) { ox = panStart.ox + (e.clientX-panStart.mx); oy = panStart.oy + (e.clientY-panStart.my); clampView(); draw(); return; }
+  if (panning) { applyView(SOWCampaignMapPreview.panMapView({scale, x:panStart.ox, y:panStart.oy}, e.clientX-panStart.mx, e.clientY-panStart.my)); clampView(); draw(); return; }
   const [mx,my] = s2m(sx,sy);
   const cx = Math.round(mx), cy = Math.round(my);
   const land = isLand(cx,cy);
-  hud.textContent = `x ${cx}  y ${cy}  ·  ${land===null?"loading map…":land?"land":"WATER"}  ·  ${Math.round(scale/minScale*100)}%`;
+  hud.textContent = `x ${cx}  y ${cy}  ·  ${land===null?"loading map…":land?"land":"WATER"}  ·  ${Math.round(scale/fitScale*100)}%`;
   hud.className = land===false ? "warn" : "";
   if (dragging && sel !== -1) {
     const nx = Math.max(0,Math.min(MAPW-1,cx)), ny = Math.max(0,Math.min(MAPH-1,cy));
@@ -320,6 +329,8 @@ function renderSide() {
     if(f.avatar && !avatarCatalog.includes(f.avatar)) avatarOpts.push({id:f.avatar,label:"Missing asset · "+f.avatar});
     const avatarHtml = avatarOpts.map(a=>`<option value="${escapeHtml(a.id)}" ${a.id===(f.avatar||"")?"selected":""}>${escapeHtml(a.label)}</option>`).join("");
     const iq = f.iq ?? 100;
+    const goldLootBonus = f.gold_loot_bonus ?? 0;
+    const standardGoldBounty = ["boss", "big_boss"].includes(f.role) ? 1250 : 500;
     host.innerHTML = `<label>Name</label><input id="fn" value="${escapeHtml(f.name)}">
       <label>Role</label><select id="fr">${opts}</select>
       <label>Initial relationship to the player</label><select id="frelation">${relationOpts}</select>
@@ -328,6 +339,8 @@ function renderSide() {
       <label>Neutral faction color</label><input id="fcolor" type="color" value="${escapeHtml(f.color || FACTION_COLORS[0])}">
       <label>Nameplate and dialogue portrait</label><div class="faction-avatar-picker"><img id="fportrait" width="256" height="256" alt=""><select id="fa">${avatarHtml}</select></div>
       <label>Ally support interval (seconds; blank disables)</label><input id="finterval" type="number" min="5" max="600" value="${f.support_interval_seconds ?? ""}" placeholder="Disabled">
+      <label>Bonus gold loot on defeat</label><input id="fgoldloot" type="number" min="0" max="1000000" step="1" value="${goldLootBonus}">
+      <div class="hint" id="goldLootPreview">Defeat loot: ${standardGoldBounty.toLocaleString()} base + ${goldLootBonus.toLocaleString()} bonus; base grows 0.01% per game tick.</div>
       <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
       <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
       <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
@@ -364,6 +377,12 @@ function renderSide() {
     document.getElementById("fcolor").oninput = e => { f.color=e.target.value; markRosterDirty(); draw(); };
     document.getElementById("fa").onchange = e => { if(e.target.value) f.avatar=e.target.value; else delete f.avatar; updateFactionPortrait(f.avatar); markRosterDirty(); };
     document.getElementById("finterval").oninput = e => { if(e.target.value==="") delete f.support_interval_seconds; else f.support_interval_seconds=Number(e.target.value); markRosterDirty(); };
+    document.getElementById("fgoldloot").oninput = e => {
+      const value = e.target.value === "" ? 0 : Number(e.target.value);
+      if (value > 0) f.gold_loot_bonus = value; else delete f.gold_loot_bonus;
+      document.getElementById("goldLootPreview").textContent = `Defeat loot: ${standardGoldBounty.toLocaleString()} base + ${Math.max(0, value).toLocaleString()} bonus; base grows 0.01% per game tick.`;
+      markRosterDirty();
+    };
     document.getElementById("fgroup").oninput = e => { if(e.target.value.trim()) f.alliance_group=e.target.value.trim(); else delete f.alliance_group; markRosterDirty(); };
     document.getElementById("fx").oninput = e => { f.x=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
     document.getElementById("fy").oninput = e => { f.y=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
@@ -437,33 +456,23 @@ async function ensureEntityCatalog(){
   entityCatalog = value.entities;
   return entityCatalog;
 }
-function renderEntityOptions(){
-  if(!entityCatalog) return;
-  const q=document.getElementById("atlasEntityInput").value.trim().toLocaleLowerCase();
-  const options=document.getElementById("atlasEntityOptions");
-  options.replaceChildren();
-  if(q.length<2) return;
-  for(const entity of entityCatalog.filter(item=>item.name.toLocaleLowerCase().includes(q)||item.id.includes(q)).slice(0,40)){
-    const option=document.createElement("option");
-    option.value=entity.name;
-    option.label=`${entity.kind.replaceAll("_"," ")} · ${entity.region.replaceAll("_"," ")}`;
-    options.append(option);
-  }
-}
-document.getElementById("atlasEntityInput").addEventListener("focus",()=>ensureEntityCatalog().then(renderEntityOptions).catch(error=>toast(error.message)));
-document.getElementById("atlasEntityInput").addEventListener("input",renderEntityOptions);
+atlasEntityPicker = SOWAtlasEntityPicker.attach({
+  input:document.getElementById("atlasEntityInput"),
+  results:document.getElementById("atlasEntityResults"),
+  status:document.getElementById("atlasEntityStatus"),
+  getEntities:ensureEntityCatalog,
+  onChange:entity=>{document.getElementById("addAtlasEntity").disabled=!entity;}
+});
 document.getElementById("addAtlasEntity").onclick=async()=>{
   try{
-    const entities=await ensureEntityCatalog();
-    const name=document.getElementById("atlasEntityInput").value.trim();
-    const entity=entities.find(item=>item.name.toLocaleLowerCase()===name.toLocaleLowerCase());
-    if(!entity){toast("Choose an entity from the catalog suggestions");return;}
+    const entity=atlasEntityPicker.getSelected();
+    if(!entity){toast("Choose an Atlas search result");return;}
     if(roster.factions.some(f=>f.name.toLocaleLowerCase()===entity.name.toLocaleLowerCase())){toast("That entity is already in this episode");return;}
     const [px,py]=roster.player_spawn;
     const faction={name:entity.name,x:Math.max(0,Math.min(MAPW-1,Math.round(px+30))),y:Math.max(0,Math.min(MAPH-1,Math.round(py+30))),role:"independent",relation:"neutral",hostility:"passive",betrayal:"never",color:FACTION_COLORS[roster.factions.length%FACTION_COLORS.length],iq:100};
     if(entity.avatar&&avatarCatalog.includes(entity.avatar))faction.avatar=entity.avatar;
     roster.factions.push(faction);
-    document.getElementById("atlasEntityInput").value="";
+    atlasEntityPicker.clear();
     markRosterDirty();sel=roster.factions.length-1;renderAll();toast("Added from Entity Atlas — adjust episode position and role");
   }catch(error){toast("Could not load entity catalog: "+error.message);}
 };
@@ -486,11 +495,11 @@ function serialize() {
     map: roster.map || "eastanglia",
     player_spawn: roster.player_spawn.map(n=>Math.round(n)),
     player_color: roster.player_color || PLAYER_COLOR,
-    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, relation:f.relation, hostility:f.hostility, betrayal:f.betrayal, color:f.color, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
+    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, relation:f.relation, hostility:f.hostility, betrayal:f.betrayal, color:f.color, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
-async function exportRoster(){
+async function saveRoster(){
   if(rosterSaving) return false;
   rosterSaving = true;
   try {
@@ -502,18 +511,18 @@ async function exportRoster(){
     rosterDirty = serialize() !== savedDraft; rosterExternal = false;
     document.getElementById("rosterStatus").textContent = rosterDirty ? "Newer edits not saved" : "Saved";
     document.getElementById("rosterStatus").className = rosterDirty ? "hint warn" : "hint";
-    toast(rosterDirty ? "Saved; newer map edits remain" : `Exported → assets/campaign/${file}`);
+    toast(rosterDirty ? "Saved; newer map edits remain" : `Saved → assets/campaign/${file}`);
     return !rosterDirty;
-  } catch(e){ toast("Export failed (run via `sow m`): "+e.message); }
+  } catch(e){ toast("Save failed: "+e.message); }
   finally { rosterSaving = false; }
   return false;
 }
-document.getElementById("exportBtn").onclick = exportRoster;
+document.getElementById("exportBtn").onclick = saveRoster;
 document.getElementById("logicLink").addEventListener("click", async e => {
   if(!rosterDirty) return;
   e.preventDefault();
   const href = e.currentTarget.href;
-  if(await exportRoster() && !rosterDirty) location.href = href;
+  if(await saveRoster() && !rosterDirty) location.href = href;
 });
 window.addEventListener("beforeunload", e => {
   if(!rosterDirty) return;
@@ -534,7 +543,7 @@ document.getElementById("fileIn").onchange = e => {
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 
 function normalize(j){
-  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], player_color:j.player_color||PLAYER_COLOR, factions:(j.factions||[]).map((f,index)=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",relation:f.relation||"neutral",hostility:f.hostility||"passive",betrayal:f.betrayal||"never",color:f.color||FACTION_COLORS[index%FACTION_COLORS.length],iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
+  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], player_color:j.player_color||PLAYER_COLOR, factions:(j.factions||[]).map((f,index)=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",relation:f.relation||"neutral",hostility:f.hostility||"passive",betrayal:f.betrayal||"never",color:f.color||FACTION_COLORS[index%FACTION_COLORS.length],iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
   validateRoster(result);
   return result;
 }
@@ -543,16 +552,21 @@ function validateRoster(value){
   const names = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || !Object.prototype.hasOwnProperty.call(HOSTILITIES,f.hostility) || !Object.prototype.hasOwnProperty.call(BETRAYALS,f.betrayal) || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
+    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || !Object.prototype.hasOwnProperty.call(HOSTILITIES,f.hostility) || !Object.prototype.hasOwnProperty.call(BETRAYALS,f.betrayal) || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
     names.add(f.name);
   }
 }
 
 // ---- boot ----
-function resize(){ cv.width = cv.parentElement.clientWidth; cv.height = cv.parentElement.clientHeight; minScale = computeMinScale(); maxScale = Math.max(12, minScale*10); scale = Math.max(scale, minScale); clampView(); draw(); }
+function resize(){
+  const size=SOWCampaignMapPreview.resizeCanvas(cv,Math.min(window.devicePixelRatio||1,2));
+  viewWidth=size.width; viewHeight=size.height; dpr=size.dpr;
+  const view=computeFitView(); if(view){fitScale=view.fitScale;minScale=view.minScale;maxScale=Math.max(12,fitScale*10);scale=Math.max(scale,minScale);}
+  clampView(); draw();
+}
 window.addEventListener("resize", resize);
-document.getElementById("zin").onclick  = () => zoomAt(cv.width/2, cv.height/2, 1.3);
-document.getElementById("zout").onclick = () => zoomAt(cv.width/2, cv.height/2, 1/1.3);
+document.getElementById("zin").onclick  = () => zoomAt(viewWidth/2, viewHeight/2, 1.3);
+document.getElementById("zout").onclick = () => zoomAt(viewWidth/2, viewHeight/2, 1/1.3);
 document.getElementById("zfit").onclick = () => { fitView(); draw(); };
 
 async function loadMap(){

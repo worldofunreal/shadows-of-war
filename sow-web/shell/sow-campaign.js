@@ -12,7 +12,8 @@
         port_upgrade: "port_upgrades", port_level: "port_levels",
         tile_upgrade: "tile_upgrades", resource_transfer: "resource_transfers",
         alliance: "alliances_formed", support: "ally_support_deliveries",
-        fleet: "fleets", nuke: "nukes", elapsed: "elapsed_seconds"
+        fleet: "fleets", nuke: "nukes", elapsed: "elapsed_seconds",
+        zoom_in: "zoom_in_events", zoom_out: "zoom_out_events"
     };
     const WORLD_TARGETS = ["expand", "assault", "target_action", "player"];
     const UI_TARGETS = {
@@ -58,6 +59,15 @@
         rankings: '#sow-hud [data-command="toggle_leaderboard"]',
         settings: '#sow-hud [data-command="toggle_settings"]'
     };
+
+    function zoomInputMode(info) {
+        info = info || {};
+        var platform = String(info.platform || "");
+        var userAgent = String(info.userAgent || "");
+        var appleTouchDevice = /mac/i.test(platform) && Number(info.maxTouchPoints) > 1;
+        if (info.androidTwa || info.mobile || appleTouchDevice || /android|iphone|ipad|ipod/i.test(userAgent)) return "pinch";
+        return /mac/i.test(platform) ? "trackpad" : "wheel";
+    }
     const own = (object, key) => object != null && Object.prototype.hasOwnProperty.call(object, key);
     const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
     const id = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,95}$/.test(value) && !["constructor", "prototype", "__proto__"].includes(value);
@@ -129,7 +139,7 @@
                     issue(null, "roster", "Faction names must be unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["name", "x", "y", "role", "relation", "hostility", "betrayal", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "alliance_group"], null, "roster.factions");
+                knownFields(faction, ["name", "x", "y", "role", "relation", "hostility", "betrayal", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "alliance_group"], null, "roster.factions");
                 factions.add(faction.name);
                 rosterFactions.add(faction.name);
                 if (!["kin", "independent", "vassal", "boss", "big_boss", "neutral"].includes(faction.role) || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid faction role or spawn: " + faction.name);
@@ -139,6 +149,7 @@
                 if (faction.betrayal != null && !["never", "opportunistic"].includes(faction.betrayal)) issue(null, "roster.factions.betrayal", "Choose never or opportunistic for " + faction.name + ".");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
+                if (faction.gold_loot_bonus != null && (!Number.isInteger(faction.gold_loot_bonus) || faction.gold_loot_bonus < 0 || faction.gold_loot_bonus > 1_000_000)) issue(null, "roster.factions.gold_loot_bonus", "Bonus gold loot must be an integer from 0 to 1,000,000.");
                 if (faction.alliance_group != null && (typeof faction.alliance_group !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(faction.alliance_group))) issue(null, "roster.factions.alliance_group", "Use a lowercase alliance group ID.");
                 if (faction.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(faction.avatar) || faction.avatar !== "null" && options.hasAvatar && !options.hasAvatar(faction.avatar))) issue(null, "roster.factions.avatar", "Choose an existing portrait for " + faction.name + ".");
             });
@@ -205,14 +216,15 @@
         const stepFields = {
             scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "next", "routes", "attack_ratio_on_enter"],
             choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "next", "routes", "attack_ratio_on_enter"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "next", "routes", "attack_ratio_on_enter"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "next", "routes", "attack_ratio_on_enter"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "next", "routes", "attack_ratio_on_enter"],
             end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
             if (!TYPES.includes(step.type)) issue(step, "type", "Unknown step type.");
             if (own(step, "attack_ratio_on_enter") && (!Number.isFinite(step.attack_ratio_on_enter) || step.attack_ratio_on_enter < 0.05 || step.attack_ratio_on_enter > 1)) issue(step, "attack_ratio_on_enter", "Attack ratio must be between 0.05 and 1.");
+            if (own(step, "pause_game") && typeof step.pause_game !== "boolean") issue(step, "pause_game", "Pause game must be true or false.");
             ["title_key", "body_key", "hint_key"].forEach(field => text(step, field, step[field], false));
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
             if (step.presentation && !["dialogue", "chapter"].includes(step.presentation)) issue(step, "presentation", "Unknown presentation.");
@@ -309,9 +321,10 @@
                 const guide = step.guide;
                 knownFields(guide, ["kind", "target", "gesture", "to"], step, "guide");
                 if (!["objective", "guide"].includes(step.type)) issue(step, "guide", "Only mechanics use the hand; decisions never do.");
-                if (!object(guide) || !["world", "ui"].includes(guide.kind) || !["tap", "hold", "drag"].includes(guide.gesture)) issue(step, "guide", "Choose a world/control target and a gesture.");
+                if (!object(guide) || !["world", "ui"].includes(guide.kind) || !["tap", "hold", "drag", "zoom_in", "zoom_out"].includes(guide.gesture)) issue(step, "guide", "Choose a world/control target and a gesture.");
                 else if (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.target) : !own(UI_TARGETS, guide.target)) issue(step, "guide.target", "Unknown guide target.");
                 if (guide.gesture === "drag" && (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.to) : guide.to != null && !own(UI_TARGETS, guide.to))) issue(step, "guide.to", "Choose a valid drag destination.");
+                if (["zoom_in", "zoom_out"].includes(guide.gesture) && (guide.kind !== "world" || guide.target !== "player" || !step.trigger || step.trigger.type !== guide.gesture)) issue(step, "guide", "Zoom guides must match a zoom objective and point at the player.");
             } else if (step.type === "guide") issue(step, "guide", "A guide step needs a hand target.");
         });
         const reactions = Array.isArray(definition.reactions) ? definition.reactions : [];
@@ -367,6 +380,10 @@
                     if (!["neutral", "allied", "enemy"].includes(choice.relation)) issue(null, "reactions.choices.relation", "Every choice needs a neutral, allied or enemy result.");
                     if (choice.gold_cost != null && (!Number.isFinite(choice.gold_cost) || choice.gold_cost < 0 || choice.gold_cost > 1_000_000 || (choice.gold_cost > 0 && choice.relation !== "allied"))) issue(null, "reactions.choices.gold_cost", "Gold can only be paid for an alliance (0–1,000,000).");
                 });
+                if (Array.isArray(reaction.choices) && reaction.choices.some(choice => choice && choice.relation === "allied" && Number(choice.gold_cost || 0) > 0)
+                    && reaction.choices.filter(choice => choice && choice.relation !== "allied" && Number(choice.gold_cost || 0) === 0).length !== 1) {
+                    issue(null, "reactions.choices", "Paid alliances need exactly one free non-allied fallback choice.");
+                }
             }
             if (reaction.outcome != null && reaction.choices != null) issue(null, "reactions", "Choose an automatic result or negotiation choices, not both.");
             if (type === "support" && (reaction.outcome != null || reaction.gold_cost != null || reaction.choices != null)) issue(null, "reactions", "Support notices cannot change diplomacy.");
@@ -527,7 +544,7 @@
                 return { definition, step: response, line: response, progress: progress(), paused: true, done: false, choices: reaction.choices || [], state, reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
             const line = step.lines ? step.lines[state.line] : step;
-            return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type), done: state.done, choices: step.choices || [], state };
+            return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type) || step.pause_game === true, done: state.done, choices: step.choices || [], state };
         }
         function setPaused(paused) { externallyPaused = Boolean(paused); }
         function advance(choiceId, expectedStepId) {
@@ -624,7 +641,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, METRICS, UI_TARGETS, resolveUiTarget, resolveUiAnchor, validate, create };
+    const api = { TYPES, METRICS, UI_TARGETS, zoomInputMode, resolveUiTarget, resolveUiAnchor, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

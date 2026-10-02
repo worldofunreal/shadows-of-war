@@ -33,12 +33,15 @@ const campaignEditorServer = fs.readFileSync(path.join(shell, "../../sow-tools/e
 const campaignEditorHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/logic.html"), "utf8");
 const campaignEditorCss = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.css"), "utf8");
 const mapRostersHtml = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/map-rosters.html"), "utf8");
+const atlasEntityPickerSource = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/atlas-entity-picker.js"), "utf8");
 const mapRosterWriter = fs.readFileSync(path.join(shell, "../../sow-tools/src/map_roster.rs"), "utf8");
 const gameFonts = fs.readFileSync(path.join(shell, "../../sow-web/site/fonts/fonts.css"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
+const siteDistSource = fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
 const siteChrome = fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.js"), "utf8");
 const siteDropdown = fs.readFileSync(path.join(shell, "sow-dropdown.js"), "utf8");
+const gameControlsCss = fs.readFileSync(path.join(shell, "sow-controls.css"), "utf8");
 const siteApp = fs.readFileSync(path.join(shell, "../../sow-web/site/app.js"), "utf8");
 const siteCss = fs.readFileSync(path.join(shell, "../../sow-web/site/styles.css"), "utf8");
 const siteFooterPages = ["support", "privacy", "terms", "cookies"].map((page) =>
@@ -64,6 +67,7 @@ const simEventsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/s
 const eliminationSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/events/elimination.rs"), "utf8");
 const snapshotFxSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/snapshot_fx.rs"), "utf8");
 const actionsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
+const surfaceSource = fs.readFileSync(path.join(shell, "../../sow-client/src/input/surface.rs"), "utf8");
 const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
@@ -79,6 +83,8 @@ const assetSource = fs.readFileSync(path.join(shell, "../../sow-client/src/asset
 const relaySource = fs.readFileSync(path.join(shell, "../../sow-relay/src/main.rs"), "utf8");
 const serverSource = fs.readFileSync(path.join(shell, "../../sow-server/src/main.rs"), "utf8");
 const mapClick = fs.readFileSync(path.join(shell, "../../sow-client/src/input/map_click.rs"), "utf8");
+const frameSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/mod.rs"), "utf8");
+const mapShader = fs.readFileSync(path.join(shell, "../../sow-render/src/shaders/map.wgsl"), "utf8");
 const menuCssFiles = [
     "main_menu.base.css",
     "main_menu.layout.css",
@@ -115,6 +121,42 @@ test("public landing keeps the video hero, interactive leader roster, community 
     assert.match(siteCss, /\.faq-list \{ display: grid; grid-template-columns: 1fr;/);
 });
 
+test("landing alpha badges link to the iOS and Android tests in every locale", () => {
+    const alpha = landingHtml.slice(landingHtml.indexOf('class="hero-alpha"'), landingHtml.indexOf('</div>\n        </div>', landingHtml.indexOf('class="hero-alpha"')));
+    assert.match(alpha, /aria-labelledby="hero-alpha-label"/);
+    assert.match(alpha, /data-i18n="site\.mobile_alpha_testing"/);
+    assert.match(alpha, /href="https:\/\/testflight\.apple\.com\/join\/Y8fu4zch" target="_blank" rel="noopener"[\s\S]*?src="\/assets\/site\/media\/testflight-badge\.svg"[\s\S]*?data-i18n="site\.testflight_badge_action"[\s\S]*?TestFlight/);
+    assert.match(alpha, /href="https:\/\/play\.google\.com\/apps\/testing\/com\.shadowsofwar" target="_blank" rel="noopener"[\s\S]*?src="\/assets\/site\/media\/google-play-badge\.svg"[\s\S]*?data-i18n="site\.google_play_badge_action"[\s\S]*?Google Play/);
+    assert.doesNotMatch(alpha, /join_alpha|JOIN THE ALPHA/i);
+    const siteMedia = path.join(shell, "../../assets/site/media");
+    for (const asset of ["testflight-badge.svg", "google-play-badge.svg"]) {
+        assert.ok(fs.existsSync(path.join(siteMedia, asset)), `missing local vector asset: ${asset}`);
+        assert.match(fs.readFileSync(path.join(siteMedia, asset), "utf8"), /<svg\b/);
+    }
+    const playMark = fs.readFileSync(path.join(siteMedia, "google-play-badge.svg"), "utf8");
+    for (const color of ["#4285F4", "#34A853", "#FBBC04", "#EA4335"]) assert.ok(playMark.includes(color), `Google Play mark is missing ${color}`);
+    assert.match(siteDistSource, /copy_dir\(&paths\.assets_site\.join\("media"\), &assets\.join\("site\/media"\)\)/);
+    assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+    assert.match(siteCss, /\.hero-alpha-links \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6\.5px; max-width: 299px; \}/);
+    assert.match(siteCss, /\.hero-alpha-badge \{ display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px;/);
+    assert.match(siteCss, /\.hero-alpha-icon \{ flex: 0 0 30px; width: 30px; height: 30px; \}/);
+    const narrowStyles = siteCss.slice(siteCss.indexOf("@media (max-width: 479px)"), siteCss.indexOf("@media (orientation: landscape)"));
+    assert.match(narrowStyles, /\.hero-alpha-links \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 6px; max-width: none; \}/);
+    assert.match(narrowStyles, /\.hero-alpha-badge \{ min-height: 42px; gap: 6px; padding-inline: 6px; \}/);
+    assert.match(narrowStyles, /\.hero-alpha-icon \{ flex-basis: 27px; width: 27px; height: 27px; \}/);
+    assert.match(narrowStyles, /\.hero-alpha-copy b \{ font-size: 12px; \}/);
+    const locales = path.join(shell, "../../sow-i18n/strings");
+    for (const locale of fs.readdirSync(locales)) {
+        const file = path.join(locales, locale, "web.toml");
+        if (!fs.existsSync(file)) continue;
+        const source = fs.readFileSync(file, "utf8");
+        assert.match(source, /^mobile_alpha_testing\s*=\s*".+"$/m, `${locale} is missing the alpha label`);
+        assert.match(source, /^testflight_badge_action\s*=\s*".+"$/m, `${locale} is missing the TestFlight badge action`);
+        assert.match(source, /^google_play_badge_action\s*=\s*".+"$/m, `${locale} is missing the Google Play badge action`);
+        assert.doesNotMatch(source, /^join_alpha\s*=/m, `${locale} has the removed redundant alpha action`);
+    }
+});
+
 test("retired marketing pages stay deleted and redirect to the landing", () => {
     const siteRoot = path.join(shell, "../../sow-web/site");
     assert.equal(fs.existsSync(path.join(siteRoot, "leaders/index.html")), false);
@@ -126,6 +168,16 @@ test("retired marketing pages stay deleted and redirect to the landing", () => {
         assert.match(mobileMenu, new RegExp(`href="${href}" data-i18n="site\\.${key}"`));
     }
     assert.match(mobileMenu, /<div class="mobile-menu-actions">\s*<div class="site-locale" data-locale-select[\s\S]*?<\/div>\s*<\/div>\s*<a href="\/" data-i18n="site\.nav_home">Home<\/a>/);
+    const navInnerCss = siteCss.match(/\.nav-inner\s*\{([^}]+)\}/)?.[1] ?? "";
+    assert.doesNotMatch(navInnerCss, /\b(?:border|border-radius|background|box-shadow|backdrop-filter)\s*:/);
+    const dropdownTriggerCss = gameControlsCss.match(/\.sow-control-dropdown__trigger\s*\{([^}]+)\}/)?.[1] ?? "";
+    assert.match(dropdownTriggerCss, /border: 1px solid var\(--sow-button-dark-border\)/);
+    assert.match(dropdownTriggerCss, /border-radius: var\(--sow-button-radius\)/);
+    assert.match(dropdownTriggerCss, /background: var\(--sow-button-dark-bg\)/);
+    assert.match(siteCss, /\.site-locale-dropdown \.sow-control-dropdown__trigger\s*\{\s*height: 42px;\s*\}/);
+    const mobileMenuCss = siteCss.match(/\.mobile-menu\s*\{(?=[^}]*position: absolute)([^}]+)\}/)?.[1] ?? "";
+    assert.match(mobileMenuCss, /background: var\(--panel\)/);
+    assert.match(mobileMenuCss, /box-shadow: var\(--surface-shadow\)/);
     const mobileActionsCss = siteCss.match(/\.mobile-menu-actions \{[^}]+\}/)?.[0] ?? "";
     assert.match(mobileActionsCss, /padding-bottom: 2px;/);
     assert.match(mobileActionsCss, /border-bottom: 1px solid var\(--line\);/);
@@ -408,13 +460,24 @@ test("game exit resets Battle and replays the screen entrance after the loader",
 test("first-run tutorial keeps one boot loader and splash art until Rust signals completion", async () => {
     assert.match(loaderSource, /window\.SOW_leaderArtUrl = leaderArtUrl/);
     assert.match(loaderSource, /window\.SOW_prepareLeaderArt = prepareLeaderArt/);
-    assert.match(loaderSource, /if \(loaderArtKey === 'boot' && state && state\.loader_job === 'EnterGame'\) \{\s*const slug = leaderSlugForState\(state\);\s*if \(slug\) prepareLeaderArt\(slug\);\s*return;/,
-        "tutorial hero art is prepared behind the original boot splash");
-    assert.match(loaderSource, /if \(state\.loader_done === true\) \{\s*if \(state\.loader_job === 'ExitGame'\) syncLoaderArt\(state\);\s*finish\(\);/,
+    assert.match(loaderSource, /if \(loaderArtKey === 'boot' && state && state\.loader_job === 'EnterGame'\) \{[\s\S]*?prepareLeaderArt\(slug\);[\s\S]*?activeMatchArt = preparedLeaderArt;/,
+        "tutorial art is prepared behind the original splash and pinned to the match");
+    const attachExitArt = loaderSource.indexOf("const pendingArt = syncLoaderArt(state);");
+    const closeAfterArt = loaderSource.indexOf("if (state.loader_done === true) {\n            if (pendingArt) return;\n            finish(cycleId);", attachExitArt);
+    assert.ok(attachExitArt >= 0 && closeAfterArt > attachExitArt,
         "exit art is attached before the loader begins closing");
+    assert.match(loaderSource, /function waitForExitLeaderArt\(prepared, slug, cycleId\)[\s\S]*?syncLoaderArt\(current\)[\s\S]*?finish\(cycleId\);/,
+        "a pending exit reuses the same image and closes only its own loader cycle");
+    assert.doesNotMatch(loaderSource, /prepared\.variant !== leaderArtVariant\(\)/,
+        "orientation changes do not discard the art used by this match");
     assert.match(coreSource, /return window\.SOW_leaderArtUrl\(slug, variant\)/);
     assert.match(heroesSource, /prepareLeaderArt\(activeLeader\)/);
-    assert.match(shellSource, /state\.phase === "Playing" && state\.loader_leader[\s\S]*prepareLeaderArt\(leaderById\(state\.loader_leader\)\)/);
+    assert.doesNotMatch(shellSource, /state\.phase === "Playing" && state\.loader_leader[\s\S]*prepareLeaderArt\(leaderById\(state\.loader_leader\)\)/,
+        "finishing EnterGame does not trigger a redundant image preparation");
+    assert.match(shellSource, /function normalizeCompletedExitState\([\s\S]*?loader_cycle_id <= completedLoaderCycleId[\s\S]*?loader_job: "Boot"/,
+        "a completed exit is normalized before later menu snapshots reach the loader");
+    assert.match(shellSource, /sow:loader-cycle-ready", function \(event\)[\s\S]*?event\.detail\.cycle_id[\s\S]*?normalizeCompletedExitState\(state\)/,
+        "menu completion is tied to the exact loader cycle");
     for (const source of [coreSource, heroesSource, storeSource, profileSource]) {
         assert.doesNotMatch(source, /asset\(["']shell\/leaders\//, "leader art must use the same versioned URL as the loader");
     }
@@ -426,8 +489,10 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
     assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
     assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
-    assert.match(webMenu, /"phase": "Playing",\s*"loader_job": splash_job_name\(&app\.ui\.app\.splash_state\.job\),\s*"loader_leader": app\.ui\.app\.splash_state\.loader_leader\.map\(leader_id\),\s*"loader_progress": app\.ui\.app\.splash_state\.progress\.clamp\(0\.0, 1\.0\),\s*"loader_done": app\.ui\.app\.splash_state\.done/);
-    assert.match(loaderSource, /loaderArtKey === key \+ ':unready'[\s\S]*preparedLeaderArt\.ready/,
+    assert.match(webMenu, /"phase": "Playing",\s*"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id,\s*"loader_job": splash_job_name\(&app\.ui\.app\.splash_state\.job\),\s*"loader_leader": app\.ui\.app\.splash_state\.loader_leader\.map\(leader_id\),\s*"loader_progress": app\.ui\.app\.splash_state\.progress\.clamp\(0\.0, 1\.0\),\s*"loader_done": app\.ui\.app\.splash_state\.done/);
+    assert.match(webMenu, /"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id/);
+    assert.match(loaderSource, /if \(loaderArtKey === key \|\| loaderArtKey === key \+ ':failed'\) return null;/);
+    assert.match(loaderSource, /if \(!prepared\.ready\) \{[\s\S]*?return state\.loader_job === 'ExitGame' \? prepared : null;\s*\}\s*const image = prepared\.image;/,
         "a completed existing preload can recover from an earlier pending state");
     assert.doesNotMatch(loaderSource, /state\.phase !== 'MainMenu' && state\.phase !== 'Playing'/);
     assert.doesNotMatch(loaderSource, /window\.hideWebLoader/);
@@ -468,6 +533,15 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(nativeProfileSource,
         /fn sync_selected_leader_from_match\([\s\S]*?if !tutorial \{[\s\S]*?set_selected_leader\(leader, false\)/,
         "MainMenuState owns the rule for keeping campaign heroes separate from account selection");
+    assert.match(nativeProfileSource, /fn tutorial_match_does_not_replace_account_leader\([\s\S]*?sync_selected_leader_from_match\(Leader::Boudica, true\)[\s\S]*?assert_eq!\(state\.selected_leader, Leader::Caesar\)/,
+        "the Boudica tutorial cannot replace the account's selected hero");
+    const applyCloudProfileStart = accountSource.indexOf("pub(crate) fn apply_cloud_profile(");
+    const applyCloudProfileEnd = accountSource.indexOf("\n    pub(crate) fn ", applyCloudProfileStart + 1);
+    assert.ok(applyCloudProfileStart >= 0);
+    const applyCloudProfile = accountSource.slice(applyCloudProfileStart, applyCloudProfileEnd);
+    assert.match(applyCloudProfile,
+        /cloud_preferred_leader\.unwrap_or_else\([\s\S]*?assigned_leader_for_account\([\s\S]*?current_rotation_period\(\)/,
+        "a missing cloud preference resolves to the account's free-rotation leader, not Boudica");
     const tutorialCompleteStart = dataDbSource.indexOf("pub async fn complete_tutorial(");
     const tutorialCompleteEnd = dataDbSource.indexOf("/// Register expected players", tutorialCompleteStart);
     const tutorialComplete = dataDbSource.slice(tutorialCompleteStart, tutorialCompleteEnd);
@@ -562,9 +636,10 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     };
     const timers = new Map();
     const events = [];
+    const completedLoaderCycles = [];
     const leaderPreloads = [];
     class PreloadImage {
-        constructor() { this.parentNode = null; }
+        constructor() { this.parentNode = null; this.children = []; }
         set src(value) { this._src = value; leaderPreloads.push(this); }
         get src() { return this._src; }
         decode() { return Promise.resolve(); }
@@ -585,11 +660,15 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         matchMedia: () => ({ matches: window.innerHeight >= window.innerWidth }),
         location: { href: "https://game.test/", origin: "https://game.test" },
         addEventListener() {},
-        dispatchEvent(event) { events.push(event.type); }
+        dispatchEvent(event) {
+            events.push(event.type);
+            if (event.type === "sow:loader-cycle-ready") completedLoaderCycles.push(event.detail.cycle_id);
+        }
     };
     const context = {
         window, document, URL, Image: PreloadImage,
         Event: class { constructor(type) { this.type = type; } },
+        CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
         performance: { now: () => 0 },
         requestAnimationFrame: () => 1,
         cancelAnimationFrame() {},
@@ -608,10 +687,18 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
         { id: "Caesar", slug: "caesar" },
         { id: "Ragnar", slug: "ragnar" }
     ];
-    const state = (job, leader, progress = 0.4, phase = "Splash", done = false) => ({
-        phase, loader_job: job, loader_leader: leader,
-        loader_progress: progress, loader_done: done, leaders
-    });
+    let cycleId = -1;
+    let previousJob = null;
+    let previousDone = false;
+    const state = (job, leader, progress = 0.4, phase = "Splash", done = false) => {
+        if (job !== previousJob || (previousDone && !done)) cycleId += 1;
+        previousJob = job;
+        previousDone = done;
+        return {
+            phase, loader_cycle_id: cycleId, loader_job: job, loader_leader: leader,
+            loader_progress: progress, loader_done: done, leaders
+        };
+    };
     window.SOW_syncWebLoader(state("Boot", null, 0.2, "Splash"));
     const bootPicture = findPicture();
     const bootImage = bootPicture.children[1];
@@ -650,8 +737,6 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const boudicaReady = window.SOW_prepareLeaderArt("boudica");
     const boudicaPreload = leaderPreloads[0];
     assert.equal(boudicaPreload.src, window.SOW_leaderArtUrl("boudica", "desktop"));
-    boudicaPreload.onload();
-    assert.equal(await boudicaReady, true);
     assert.equal(leaderPreloads.length, 1, "the tutorial loader owns one Boudica image request");
     window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.96, "Splash"));
     window.SOW_syncWebLoader(state("EnterGame", "Boudica", 0.97, "Playing"));
@@ -688,18 +773,45 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(window.SOW_leaderArtUrl("boudica"), "/assets/shell/leaders/boudica_desktop.webp?v=regression",
         "the menu backdrop resolver defaults to the landscape variant on a landscape screen");
     assert.equal(window.SOW_prepareLeaderArt("boudica"), boudicaReady,
-        "the post-entry warmup reuses the boot-time image instead of creating another");
+        "requesting the same prepared URL reuses its existing promise");
     assert.equal(leaderPreloads.length, 1);
 
+    window.innerWidth = 390;
+    window.innerHeight = 844;
     window.SOW_syncWebLoader(state("ExitGame", "Boudica", 0.6));
+    assert.equal(findPicture(), bootPicture, "the original tutorial splash remains while its one Boudica preload is pending");
+    assert.equal(findPicture().children[1], bootImage);
+    assert.equal(leaderPreloads.length, 1, "showing the loader starts no additional hero-image request");
+    const tutorialExitDone = state("ExitGame", "Boudica", 1, "MainMenu", true);
+    window.SOW_syncWebLoader(tutorialExitDone);
+    assert.equal(root.style.visibility, "visible", "loader_done cannot hide the bar before the prepared image is attached");
+    assert.equal(document.getElementById("loader-bar-fill"), loaderBar);
+    assert.equal(events.filter(event => event === "sow:loader-cycle-ready").length, 1);
+    boudicaPreload.onload();
+    assert.equal(await boudicaReady, true);
+    await new Promise(setImmediate);
+    assert.equal(findPicture().children[0], boudicaPreload,
+        "the same Boudica image that began loading behind Boot is attached on tutorial exit");
     const exitBoudicaPicture = findPicture();
     const exitBoudicaImage = exitBoudicaPicture.children[0];
-    assert.equal(exitBoudicaImage, boudicaPreload, "the loader adopts the decoded tutorial art instead of requesting it again");
-    assert.match(exitBoudicaImage.src, /leaders\/boudica_desktop\.webp/);
-    assert.equal(leaderPreloads.length, 1, "showing the loader starts no additional hero-image request");
-    window.SOW_syncWebLoader(state("ExitGame", "Boudica", 1, "MainMenu", true));
+    assert.equal(exitBoudicaImage, boudicaPreload);
+    assert.match(boudicaPreload.src, /leaders\/boudica_desktop\.webp/,
+        "exit keeps the exact prepared variant after orientation changes");
+    assert.equal(leaderPreloads.length, 1, "the full tutorial cycle creates one Boudica image");
+    assert.equal(document.getElementById("loader-bar-fill"), loaderBar, "tutorial exit keeps the one original progress bar");
     [...timers.values()][0]();
     timers.clear();
+    assert.ok(events.includes("sow:loader-cycle-ready"));
+    assert.equal(completedLoaderCycles.filter(id => id === tutorialExitDone.loader_cycle_id).length, 1);
+    window.SOW_syncWebLoader({ ...tutorialExitDone, loader_progress: 1 });
+    window.SOW_syncWebLoader({ ...tutorialExitDone, loader_progress: 1 });
+    assert.equal(root.style.visibility, "hidden", "repeated completed MainMenu snapshots cannot reopen the old ExitGame cycle");
+    assert.equal(root.style.pointerEvents, "none", "the completed loader cannot block menu or lobby input");
+    assert.equal(findPicture(), null, "the old Boudica image stays detached after the cycle is consumed");
+    assert.equal(completedLoaderCycles.filter(id => id === tutorialExitDone.loader_cycle_id).length, 1,
+        "one cycle dispatches one completion event");
+    window.innerWidth = 1024;
+    window.innerHeight = 768;
     const reusedBoudicaReady = window.SOW_prepareLeaderArt("boudica");
     assert.equal(reusedBoudicaReady, boudicaReady, "the decoded image remains prepared after the loader cycle");
     assert.equal(leaderPreloads.length, 1, "the finished cycle does not trigger another Boudica image");
@@ -713,6 +825,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     window.SOW_syncWebLoader(state("EnterGame", "Boudica", 1, "Playing", true));
     [...timers.values()][0]();
     timers.clear();
+    window.innerWidth = 390;
+    window.innerHeight = 844;
     window.SOW_syncWebLoader(state("ExitGame", "Boudica", 0.45));
     const normalExitPicture = findPicture();
     assert.equal(normalExitPicture.children[0], boudicaPreload,
@@ -723,6 +837,8 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(leaderPreloads.length, 1, "entry and exit create no second Boudica image");
     [...timers.values()][0]();
     timers.clear();
+    window.innerWidth = 1024;
+    window.innerHeight = 768;
 
     const failedReady = window.SOW_prepareLeaderArt("caesar");
     const failedPreload = leaderPreloads[leaderPreloads.length - 1];
@@ -730,7 +846,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(await failedReady, false);
     const requestCountBeforeUnreadyLoader = leaderPreloads.length;
     window.SOW_syncWebLoader(state("EnterGame", "Caesar", 0.35));
-    assert.equal(findPicture(), null, "failed preload keeps the dark fallback instead of starting a loader-time request");
+    assert.equal(findPicture(), bootPicture, "failed preload keeps the original splash instead of leaving the loader blank");
     assert.equal(root.style.visibility, "visible");
     assert.equal(loaderBar.style.width, "35.0%");
     assert.equal(leaderPreloads.length, requestCountBeforeUnreadyLoader);
@@ -765,7 +881,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.equal(findPicture(), caesarPicture, "a delayed old-image error cannot touch the current hero");
 
     caesarImage.onerror();
-    assert.equal(findPicture(), null, "a failed current image leaves the dark loader background");
+    assert.equal(findPicture(), bootPicture, "a failed current image falls back to the original splash");
     assert.equal(root.style.visibility, "visible", "art failure does not close the loader");
     assert.equal(document.getElementById("loader-bar-fill").style.width, "65.0%");
 
@@ -790,14 +906,14 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     caesarImage.onerror();
     assert.equal(findPicture(), nextCaesarPicture, "an old cycle cannot invalidate the same hero in a new cycle");
     nextCaesarPicture.children[0].onerror();
-    assert.equal(findPicture(), null, "a failed current image leaves the dark loader background");
+    assert.equal(findPicture(), bootPicture, "a failed current image falls back to the original splash");
     assert.equal(root.style.visibility, "visible", "art failure does not close the loader");
     assert.equal(document.getElementById("loader-bar-fill").style.width, "45.0%");
 
     const pendingExitReady = window.SOW_prepareLeaderArt("ragnar");
     const pendingExitImage = leaderPreloads.at(-1);
     window.SOW_syncWebLoader(state("ExitGame", "Ragnar", 0.45));
-    assert.equal(findPicture(), null, "a pending exit art uses the dark fallback until that same request is ready");
+    assert.equal(findPicture(), bootPicture, "a pending exit keeps the original splash until that same request is ready");
     const imageCountBeforePendingExitReady = leaderPreloads.length;
     pendingExitImage.onload();
     assert.equal(await pendingExitReady, true);
@@ -953,6 +1069,38 @@ test("hero selection opens the shared catalog for equipped and purchasable skins
     assert.match(profileCss, /\.sow-menu__modal\.sow-skin-picker/);
 });
 
+test("leader display names use the catalog translation keys for every leader", () => {
+    const start = coreSource.indexOf("function leaderTranslationSlug(leader)");
+    const end = coreSource.indexOf("function mapInfo(key)", start);
+    assert.ok(start >= 0 && end > start);
+    const requestedKeys = [];
+    const context = {
+        SOW_t(key) {
+            requestedKeys.push(key);
+            return "translated:" + key;
+        }
+    };
+    vm.runInNewContext(coreSource.slice(start, end) + "this.leaderDisplayName = leaderDisplayName; this.leaderHistoricalName = leaderHistoricalName;", context);
+
+    const slugs = [
+        "caesar", "cleopatra", "ragnar", "sun_tzu", "alexander", "genghis_khan",
+        "richard_the_lionheart", "vercingetorix", "boudica", "lady_six_sky", "leonidas", "napoleon"
+    ];
+    const expectedSlugs = [
+        "caesar", "cleopatra", "ragnar", "suntzu", "alexander", "genghiskhan",
+        "richard", "vercingetorix", "boudica", "ladysixsky", "leonidas", "napoleon"
+    ];
+    for (let i = 0; i < slugs.length; i++) {
+        const expectedKey = "heroes.leader_" + expectedSlugs[i] + "_name";
+        assert.equal(context.leaderDisplayName({ slug: slugs[i], name: "Fallback" }), "translated:" + expectedKey);
+        assert.equal(requestedKeys[i], expectedKey);
+    }
+    assert.equal(
+        context.leaderHistoricalName({ slug: "richard_the_lionheart", name: "Richard the Lionheart" }),
+        "translated:heroes.leader_richard_historical"
+    );
+});
+
 test("direct purchases wait for delivery before celebrating", () => {
     assert.match(storeSource, /EXTERNAL_PURCHASE_POLL_MS = 3000/);
     assert.match(storeSource, /EXTERNAL_PURCHASE_WAIT_MS = 120000/);
@@ -1049,10 +1197,21 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
     }
 });
 
+test("campaign zoom input mode prioritizes TWA and touch devices, then Mac trackpads", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    assert.equal(campaign.zoomInputMode({ androidTwa: true, platform: "MacIntel" }), "pinch");
+    assert.equal(campaign.zoomInputMode({ mobile: true, platform: "MacIntel" }), "pinch");
+    assert.equal(campaign.zoomInputMode({ userAgent: "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)", platform: "MacIntel", maxTouchPoints: 5 }), "pinch");
+    assert.equal(campaign.zoomInputMode({ platform: "MacIntel" }), "trackpad");
+    assert.equal(campaign.zoomInputMode({ platform: "Win32" }), "wheel");
+    assert.equal(campaign.zoomInputMode({ platform: "Linux x86_64" }), "wheel");
+});
+
 test("Boudica opens with a choice, then guides allied support, rebuilding and three Roman outposts", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const step = id => definition.steps.find(candidate => candidate.id === id);
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true, hasAvatar: () => true }).errors, []);
     assert.equal(definition.settings.starting_troops, 2000);
     assert.equal(roster.factions.some(faction => faction.relation === "allied"), false, "Boudica starts without pre-made allies");
@@ -1101,35 +1260,62 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     direct.advance(null, victory.step.id);
     assert.equal(direct.view().step.id, "boudica_first_expansion");
     const expansion = direct.update({ ...victoryFacts, tiles_gained: 250 }, {});
-    assert.equal(expansion.step.id, "boudica_first_contact_intro");
+    assert.equal(expansion.step.id, "boudica_zoom_in");
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 0, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_in");
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 1, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_out");
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 1, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_out");
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 1, zoom_out_events: 1 }, {}).step.id, "boudica_first_contact_intro");
     direct.advance(null, direct.view().step.id);
     assert.equal(direct.view().step.id, "boudica_first_contact");
-    assert.deepEqual(direct.view().step.trigger.targets, ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"]);
-    const firstContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham"] }, {});
-    assert.equal(firstContact.reaction, "first_iceni_contact");
-    assert.equal(firstContact.reactionTarget, "Snettisham");
-    assert.equal(direct.advance(null, "reaction-first_iceni_contact@Snettisham"), true);
-    const secondContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham", "Thetford"] }, {});
-    assert.equal(secondContact.reaction, "contact_thetford");
-    assert.equal(secondContact.choices.length, 2);
-    assert.equal(secondContact.choices.find(choice => choice.id === "accept").gold_cost, 200);
-    assert.equal(direct.advance("refuse", "reaction-contact_thetford@Thetford"), true);
-    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham", "Thetford"] }, {}).progress.current, 2);
+    assert.deepEqual(direct.view().step.trigger.targets, ["Stonea", "Snettisham", "Thetford"]);
+    const stoneaContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Stonea"] }, {});
+    assert.equal(stoneaContact.reaction, "contact_stonea");
+    assert.equal(stoneaContact.reactionTarget, "Stonea");
+    assert.equal(stoneaContact.reactionData.outcome, "allied");
+    assert.equal(direct.advance(null, "reaction-contact_stonea@Stonea"), true);
+    const snettishamContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Stonea", "Snettisham"] }, {});
+    assert.equal(snettishamContact.reaction, "contact_snettisham");
+    assert.equal(snettishamContact.reactionTarget, "Snettisham");
+    assert.equal(snettishamContact.choices.length, 2);
+    assert.equal(snettishamContact.choices.find(choice => choice.id === "accept").gold_cost, 200);
+    assert.equal(snettishamContact.choices.find(choice => choice.id === "refuse").relation, "enemy");
+    assert.equal(direct.advance("refuse", "reaction-contact_snettisham@Snettisham"), true);
+    const thetfordContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Stonea", "Snettisham", "Thetford"] }, {});
+    assert.equal(thetfordContact.reaction, "contact_thetford");
+    assert.deepEqual(thetfordContact.choices.map(choice => [choice.id, choice.relation, choice.gold_cost]), [
+        ["respect", "allied", 0], ["demand", "enemy", 0]
+    ]);
+    const outOfOrder = campaign.create(definition, "boudica_first_contact", roster);
+    outOfOrder.update({ ...victoryFacts, tiles_gained: 250, contact_names: [] }, {});
+    assert.equal(outOfOrder.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Thetford"] }, {}).reaction, "contact_thetford");
     const contactsOnly = campaign.create({ ...definition, reactions: [] }, "boudica_first_contact");
     contactsOnly.update({ ...victoryFacts, tiles_gained: 250, contact_names: [] }, {});
-    const fourContacts = { ...victoryFacts, tiles_gained: 250, contact_names: ["Thetford", "Stonea", "Iceni Coast", "Venta Icenorum"] };
-    assert.equal(contactsOnly.update(fourContacts, {}).progress.current, 4);
-    assert.equal(contactsOnly.view().progress.target, 5);
-    const fiveContacts = { ...fourContacts, contact_names: fourContacts.contact_names.concat("Snettisham") };
-    assert.equal(contactsOnly.update(fiveContacts, {}).step.id, "boudica_first_contact_response");
+    const twoContacts = { ...victoryFacts, tiles_gained: 250, contact_names: ["Snettisham", "Thetford"] };
+    assert.equal(contactsOnly.update(twoContacts, {}).progress.current, 2);
+    assert.equal(contactsOnly.view().progress.target, 3);
+    const threeContacts = { ...twoContacts, contact_names: ["Stonea", "Snettisham", "Thetford"] };
+    assert.equal(contactsOnly.update(threeContacts, {}).step.id, "boudica_first_contact_response");
     contactsOnly.advance(null, contactsOnly.view().step.id);
     assert.equal(contactsOnly.view().step.id, "boudica_trinovantes_intro");
     contactsOnly.advance(null, contactsOnly.view().step.id);
     assert.equal(contactsOnly.view().step.id, "boudica_trinovantes_alliance");
     const support = definition.steps.find(step => step.id === "boudica_ally_support_wait");
     assert.deepEqual(support.trigger, { type: "support", value: 1, scope: "total" });
-    const iceniReactions = definition.reactions.filter(reaction => reaction.when.type === "contact" && reaction.when.target);
-    assert.equal(iceniReactions.length, 5);
+    const iceniReactions = definition.reactions.filter(reaction => ["Stonea", "Snettisham", "Thetford"].includes(reaction.when.target));
+    assert.equal(iceniReactions.length, 3);
+    assert.deepEqual(roster.factions.filter(faction => faction.role === "kin").map(faction => faction.name).sort(), ["Snettisham", "Stonea", "Thetford"]);
+    assert.equal(roster.factions.find(faction => faction.name === "Snettisham").hostility, "passive");
+    assert.equal(roster.factions.find(faction => faction.name === "Stonea").hostility, "passive");
+    assert.equal(roster.factions.find(faction => faction.name === "Thetford").hostility, "aggressive");
+    assert.equal(roster.factions.find(faction => faction.name === "Stonea").support_interval_seconds, 15);
+    assert.equal(definition.steps.find(step => step.id === "boudica_transfer_send").trigger.recipient, "Stonea");
+    assert.equal(definition.steps.find(step => step.id === "boudica_transfer_target").marker.target, "Stonea");
+    for (const removed of ["Iceni Coast", "Venta Icenorum"]) assert.equal(roster.factions.some(faction => faction.name === removed), false);
+    for (const locale of ["en", "es"]) {
+        for (const key of ["tutorial.boudica_snettisham_tribute_title", "tutorial.boudica_snettisham_tribute_body", "tutorial.boudica_snettisham_refuse_detail", "tutorial.boudica_thetford_respect_title", "tutorial.boudica_thetford_respect_body", "tutorial.boudica_thetford_respect", "tutorial.boudica_thetford_respect_detail", "tutorial.boudica_thetford_demand", "tutorial.boudica_thetford_demand_detail"]) assert.ok(definition.strings[locale][key], `${locale}/${key}`);
+        assert.match(definition.strings[locale]["tutorial.boudica_transfer_target_title"], /Stonea/);
+        assert.match(definition.strings[locale]["tutorial.boudica_transfer_target_hint"], /Stonea/);
+    }
     for (const reaction of iceniReactions) {
         const name = reaction.when.target;
         const faction = roster.factions.find(item => item.name === name);
@@ -1157,7 +1343,25 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(definition.steps.find(step => step.id === "boudica_choose_city").guide.target, "dock_city");
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_build_city").trigger, { type: "city", value: 1, scope: "step" });
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_first_expansion").trigger, { type: "territory", value: 250, scope: "step" });
+    assert.deepEqual([step("boudica_zoom_in").trigger, step("boudica_zoom_out").trigger], [
+        { type: "zoom_in", value: 1, scope: "step" }, { type: "zoom_out", value: 1, scope: "step" }
+    ]);
+    assert.equal(step("boudica_zoom_in").guide.target, "player");
+    assert.equal(step("boudica_zoom_in").guide.gesture, "zoom_in");
+    assert.equal(step("boudica_zoom_in").next, "boudica_zoom_out");
+    assert.equal(step("boudica_zoom_out").guide.gesture, "zoom_out");
+    assert.equal(step("boudica_zoom_out").next, "boudica_first_contact_intro");
+    for (const locale of ["en", "es"]) for (const direction of ["zoom_in", "zoom_out"]) {
+        for (const input of ["pinch", "trackpad", "wheel"]) assert.ok(definition.strings[locale][`tutorial.boudica_${direction}_${input}_hint`]);
+    }
+    assert.match(windowInput, /record_tutorial_zoom\(self\.input\.camera_zoom - previous_zoom\)/);
+    assert.match(windowInput, /record_tutorial_zoom\(self\.input\.target_zoom - previous_zoom\)/);
+    assert.match(surfaceSource, /process_camera_zoom[\s\S]*?self\.input\.target_zoom = self\.input\.camera_zoom/);
+    assert.doesNotMatch(actionsSource, /record_tutorial_zoom/);
     assert.match(tutorial, /step\.trigger\.type === "territory" && step\.guide\.target === "expand" && view && view\.progress\.current > 0\) return null/);
+    assert.match(tutorial, /window\.SOWCampaign\.zoomInputMode/);
+    assert.match(tutorial, /SOW_isAndroidTwa/);
+    assert.match(tutorial, /userAgentData/);
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_roman_outposts").trigger, { type: "defeated", targets: ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"], value: 3, scope: "total" });
     assert.match(webMenu, /"notifications": notifications/);
     assert.match(webMenu, /"map_feedback": map_feedback/);
@@ -1320,6 +1524,76 @@ test("first Iceni contact is friendly, then each neutral contact negotiates inde
     const fourth = machine.update(contacts, {});
     assert.equal(fourth.reaction, "neutral_terms");
     assert.equal(fourth.reactionTarget, "Neutral Two", "each initially neutral faction negotiates on its own first contact");
+});
+
+test("campaign negotiation uses the canonical HUD gold balance, not player-list fields", async () => {
+    async function chooseAtBalance(balance) {
+        const commands = [], root = { hidden: true, isConnected: false };
+        let viewOptions, rendered;
+        const document = {
+            body: { appendChild(node) { node.isConnected = true; } },
+            documentElement: { dir: "ltr" },
+            getElementById: () => null,
+            createElement: () => root,
+            addEventListener() {}
+        };
+        const model = {
+            step: { id: "terms", type: "choice" }, paused: true, state: { choices: {} },
+            reactionData: { id: "terms", choices: [
+                { id: "pay", relation: "allied", gold_cost: 200 },
+                { id: "refuse", relation: "enemy", gold_cost: 0 }
+            ] },
+            reactionTarget: "Snettisham",
+            choices: [
+                { id: "pay", label_key: "pay", relation: "allied", gold_cost: 200 },
+                { id: "refuse", label_key: "refuse", relation: "enemy", gold_cost: 0 }
+            ]
+        };
+        let advanced;
+        const window = {
+            addEventListener() {},
+            SOW_menu_command(message) { commands.push(JSON.parse(message)); },
+            SOWCampaign: {
+                validate: () => ({ errors: [] }), UI_TARGETS: {},
+                create: () => ({ state: { choices: {} }, update: () => model, view: () => model,
+                    advance(choiceId) { advanced = choiceId; return true; } })
+            },
+            SOWCampaignView: { mount: (_root, options) => {
+                viewOptions = options;
+                return { render(value) { rendered = value; }, destroy() {} };
+            } }
+        };
+        vm.runInNewContext(tutorial, { window, document, performance: { now: () => 0 }, console,
+            fetch(url) {
+                const data = url.endsWith(".triggers.json")
+                    ? { episode_id: "boudica", settings: {}, strings: {}, speakers: {} }
+                    : { factions: [] };
+                return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+            }
+        });
+        window.SOW_tutorial_state_update({ phase: "Playing", hud: {
+            gold: balance,
+            players: [{ id: 1, name: "Boudica", is_me: true }, { id: 2, name: "Snettisham" }],
+            settings: {}, tutorial: { active: true, episode_id: "boudica", facts: {} }
+        } });
+        await new Promise(setImmediate);
+        const displayed = rendered.choices[0];
+        viewOptions.onChoice("pay");
+        return { commands, displayed, advanced };
+    }
+
+    const funded = await chooseAtBalance(6020);
+    assert.equal(funded.displayed.gold_available, 6020);
+    assert.equal(funded.displayed.gold_insufficient, false);
+    assert.equal(funded.commands.find(command => command.type === "resolve_campaign_diplomacy").relation, "allied");
+    assert.equal(funded.commands.find(command => command.type === "resolve_campaign_diplomacy").gold_cost, 200);
+    assert.equal(funded.advanced, "pay");
+
+    const short = await chooseAtBalance(0);
+    assert.equal(short.displayed.gold_insufficient, true);
+    assert.equal(short.commands.find(command => command.type === "resolve_campaign_diplomacy").relation, "enemy");
+    assert.equal(short.commands.find(command => command.type === "resolve_campaign_diplomacy").gold_cost, 0);
+    assert.equal(short.advanced, "refuse");
 });
 
 test("campaign objectives distinguish the intended contact, alliance, fleet, transfer and foundry action", () => {
@@ -1773,6 +2047,24 @@ test("campaign editor refresh serves current source files without browser cachin
     assert.match(campaignEditorServer, /"Cache-Control": "no-store"/);
 });
 
+test("campaign saves use the current validator and call Save by its real action", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
+    const zoomOut = definition.steps.find(step => step.id === "boudica_zoom_out");
+    assert.equal(zoomOut.pause_game, true);
+    const report = campaign.validate(definition, roster, { allowMissingFactionReferences: true, hasText: () => true, hasAvatar: () => true });
+    assert.deepEqual(report.errors.filter(issue => issue.step === zoomOut.id), []);
+
+    assert.match(campaignEditorServer, /function loadCampaignRuntime\(\) \{\s*const modulePath = campaignRequire\.resolve\(campaignFile\);\s*delete campaignRequire\.cache\[modulePath\];\s*return campaignRequire\(modulePath\);\s*\}/);
+    assert.match(campaignEditorServer, /loadCampaignRuntime\(\)\.validate\(definition, roster,/);
+    assert.match(campaignMapEditorHtml, /<h2>Save<\/h2>[\s\S]*?<button class="primary" id="exportBtn">Save<\/button>/);
+    assert.match(campaignMapEditorHtml, /<button id="reloadBtn">Reload saved<\/button>/);
+    assert.match(campaignMapEditorHtml, /async function saveRoster\(\)/);
+    assert.match(campaignMapEditorHtml, /Save failed: /);
+    assert.match(campaignEditorHtml, /<button id="reloadBtn">Reload saved<\/button><button id="exportBtn" class="primary">Save<\/button>/);
+});
+
 test("campaign selector removes the multiplayer filler from every locale", () => {
     const strings = path.join(shell, "../../sow-i18n/strings");
     const files = fs.readdirSync(strings).map(locale => path.join(strings, locale, "web.toml")).filter(file => fs.existsSync(file));
@@ -1816,8 +2108,8 @@ test("Campaign Studio avoids rebuilding the route graph on progress-only updates
 });
 
 test("campaign dialogue starts each new beat at the top of its scroll panel", () => {
-    assert.match(campaignView, /if \(renderKey !== key\) \{\s*renderKey = key;\s*conversation\.scrollTop = 0;/);
-    assert.match(storyCss, /\.sow-story__conversation\s*\{[^}]*overflow-y: auto/);
+    assert.match(campaignView, /if \(renderKey !== key\) \{\s*renderKey = key;\s*conversation\.scrollTop = 0;\s*scrollContent\.scrollTop = 0;\s*actions\.scrollTop = 0;/);
+    assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*overflow-y: auto/);
 });
 
 test("campaign editor preview and game share RTL locale coverage", () => {
@@ -2337,9 +2629,69 @@ test("campaign dialogue passes HUD controls through and outside-continues only n
     assert.match(campaignView, /if \(control\) return;[\s\S]*?model\.step\.type !== "choice"[\s\S]*?options\.onContinue\(\)/);
 });
 
+test("outside tap on a pending choice ignites the golden button nudge", () => {
+    assert.match(campaignView, /model\.step\.type === "choice"[\s\S]*?triggerNudge\(\)/);
+    assert.match(campaignView, /dialog\.classList\.add\("is-nudged"\)/);
+    assert.match(campaignView, /vibrate\(12\)/);
+    assert.match(campaignView, /dialog\.classList\.add\("is-waiting"\)/);
+    assert.match(campaignView, /if \(beatChanged \|\| step\.type !== "choice"\) clearNudge\(\)/);
+    assert.match(storyCss, /\.sow-story__dialog\.is-nudged \.sow-story__choice \{[^}]*animation: story-nudge-breathe 1\.6s ease-in-out infinite/);
+    assert.match(storyCss, /@keyframes story-nudge-breathe \{[\s\S]*?border-color: #ffd98a/);
+    assert.match(storyCss, /@keyframes story-nudge-sweep \{/);
+    assert.match(storyCss, /@keyframes story-nudge-twinkle \{/);
+    assert.match(storyCss, /\.sow-story__dialog\.is-nudged \.sow-story__choice::after \{[^}]*linear-gradient\(100deg, transparent, rgb\(255 236 190 \/ 50%\), transparent\)/);
+    assert.match(storyCss, /\.sow-story\.is-reduced \.sow-story__dialog\.is-nudged \.sow-story__choice/);
+});
+
 test("campaign dialogue keeps a compact speaker portrait on narrow screens", () => {
-    assert.match(storyCss, /@container \(max-width: 380px\) \{[\s\S]*?grid-template-columns: 64px minmax\(0, 1fr\)/);
+    assert.match(storyCss, /@container \(max-width: 640px\) \{[\s\S]*?\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 144px\)\) minmax\(0, 1fr\); \}/);
+    assert.match(storyCss, /\.sow-story__portrait \{ width: var\(--story-portrait-size,[^}]*height: var\(--story-portrait-size,[^}]*aspect-ratio: 1;[^}]*align-self: center/);
+    assert.match(campaignView, /function syncMobilePortrait\(\)[\s\S]*?conversation\.getBoundingClientRect\(\)\.height[\s\S]*?new ResizeObserverCtor\(\(\) => \{[\s\S]*?view\.requestAnimationFrame\([\s\S]*?syncMobilePortrait\(\)/);
+    assert.match(campaignView, /portraitObserver\.observe\(conversation\)/);
+    assert.match(campaignView, /portraitObserver\.disconnect\(\)/);
+    assert.doesNotMatch(storyCss, /grid-template-columns: (?:72px|64px|clamp\(64px, 17vw, 72px\)) minmax\(0, 1fr\)/);
     assert.doesNotMatch(storyCss, /@container \(max-width: 380px\) \{[\s\S]*?\.sow-story__portrait \{ display: none/);
+});
+
+test("campaign dialogue resolves episode-local copy before the global catalog", () => {
+    const resolverStart = tutorial.indexOf("function tr(key)");
+    const resolverEnd = tutorial.indexOf("function zoomMode()", resolverStart);
+    assert.ok(resolverStart >= 0 && resolverEnd > resolverStart);
+    const resolver = tutorial.slice(resolverStart, resolverEnd);
+    assert.ok(resolver.indexOf("return text;") < resolver.indexOf("window.SOW_t(key)"));
+    assert.match(resolver, /strings\[definition\.default_locale\]/);
+    assert.match(campaignView, /options\.translate\(key\)/);
+});
+
+test("mobile chapter dialogue hugs its copy while staying centered", () => {
+    const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
+    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 12px/);
+    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
+    assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
+});
+
+test("mobile story dialogs scroll long text and choices while keeping speaker controls reachable", () => {
+    assert.match(storyCss, /@container \(max-width: 640px\) \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 60svh\)/);
+    assert.match(storyCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)/);
+    assert.match(storyCss, /\.sow-story__portrait img \{[^}]*width: 100%; height: 100%;[^}]*object-fit: cover/);
+    assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*flex: 1 1 auto; min-height: 0; overflow-y: auto/);
+    assert.match(storyCss, /\.sow-story__actions \{[^}]*overflow-y: auto/);
+    assert.match(storyCss, /\.sow-story__choices \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 280px\), 1fr\)\)/);
+    assert.match(campaignView, /<div class="sow-story__main"><div class="sow-story__portrait"[\s\S]*?<div class="sow-story__conversation"><header class="sow-story__heading"[\s\S]*?data-story-dismiss[\s\S]*?<div class="sow-story__scroll"><h2[\s\S]*?<p class="sow-story__body"[\s\S]*?<\/div><\/div><\/div>'\s*\+\s*'<div class="sow-story__actions"><div class="sow-story__choices"><\/div><footer class="sow-story__footer"[\s\S]*?data-story-continue/);
+    assert.match(campaignView, /footer\.hidden = step\.type === "choice"/);
+    assert.match(campaignView, /button\.className = "sow-story__choice"[\s\S]*?choices\.appendChild\(button\)/);
+});
+
+test("short landscape compaction stays on mobile and the editor reuses the shared dialogue", () => {
+    assert.match(storyCss, /\.sow-story__dialog \{[^}]*max-height: calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\)/);
+    assert.match(storyCss, /\.sow-story__main \{ display: contents; \}/);
+    assert.match(storyCss, /\.sow-story\.has-portrait \.sow-story__dialog \{ grid-template-columns: clamp\(130px, 22cqw, 220px\) minmax\(0, 1fr\); \}/);
+    assert.match(storyCss, /\.sow-story\.has-portrait \.sow-story__actions \{ grid-column: 2; \}/);
+    assert.match(storyCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\)/);
+    assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
+    assert.match(campaignEditorHtml, /href="\/shell\/main_menu\.tutorial\.css"/);
+    assert.match(campaignEditorHtml, /src="\/shell\/sow-campaign-view\.js"/);
+    assert.match(campaignEditor, /window\.SOWCampaignView\.mount/);
 });
 
 test("campaign dialogue announces each new spoken line to screen readers", () => {
@@ -2428,7 +2780,14 @@ test("campaign story preview uses the selected episode map and faction positions
     assert.match(atlasHtml, /ctx\.drawImage\(worldReference\.image,frame\[0\],frame\[1\],frame\[2\],frame\[3\],0,0,world\.width,world\.height\)/);
     assert.doesNotMatch(atlasHtml, /drawEquirectangularImage/);
     assert.match(atlasHtml, /ctx\.globalAlpha=0\.2/);
-    assert.match(atlasHtml, /Math\.min\(minScale\*64/);
+    assert.match(atlasHtml, /zoomMapView\(viewState\(\),point,factor,minScale,fitScale\*64\)/);
+    assert.match(campaignMapEditorHtml, /canvas \{ position:absolute; top:0; left:0; width:100%; height:100%;/);
+    for (const viewer of [campaignMapEditorHtml, atlasHtml, mapRostersHtml]) {
+        assert.match(viewer, /SOWCampaignMapPreview\.resizeCanvas\(/);
+        assert.match(viewer, /SOWCampaignMapPreview\.fitMapView\(/);
+        assert.match(viewer, /SOWCampaignMapPreview\.zoomMapView\(/);
+    }
+    assert.match(mapRostersHtml, /window\.addEventListener\("resize",resize\);resize\(\);\s*document\.addEventListener/);
     assert.match(atlasHtml, /mapPointToGeo/);
     assert.match(atlasHtml, /world_island_guides\.json/);
     assert.match(atlasHtml, /new Path2D\(\)/);
@@ -2557,6 +2916,31 @@ test("campaign map preview accepts valid SOWM terrain and rejects a truncated ma
     assert.throws(() => mapPreview.parse(buffer.slice(0, 25)), /Invalid SOW map dimensions/);
 });
 
+test("campaign map preview shares canvas sizing and anchored viewport math", () => {
+    const canvas = {
+        width: 300,
+        height: 150,
+        getBoundingClientRect: () => ({ width: 720, height: 400 })
+    };
+    assert.deepEqual(campaignMapPreviewApi.resizeCanvas(canvas, 2), { width: 720, height: 400, dpr: 2 });
+    assert.equal(canvas.width, 1440);
+    assert.equal(canvas.height, 800);
+
+    const fit = campaignMapPreviewApi.fitMapView(1000, 500, 720, 400);
+    assert.deepEqual(fit, { scale: 0.72, fitScale: 0.72, minScale: 0.36, x: 0, y: 20 });
+    const anchor = [360, 200];
+    const before = campaignMapPreviewApi.screenToMap(anchor, fit);
+    const zoomed = campaignMapPreviewApi.zoomMapView(fit, anchor, 0.1, fit.minScale, fit.fitScale * 64);
+    const after = campaignMapPreviewApi.screenToMap(anchor, zoomed);
+    assert.ok(Math.abs(zoomed.scale - fit.minScale) < 1e-12, "zoom out stops at half Fit");
+    assert.ok(Math.abs(after[0] - before[0]) < 1e-12);
+    assert.ok(Math.abs(after[1] - before[1]) < 1e-12);
+    assert.deepEqual(campaignMapPreviewApi.panMapView(zoomed, 12, -8), {
+        scale: zoomed.scale, x: zoomed.x + 12, y: zoomed.y - 8
+    });
+    assert.deepEqual(campaignMapPreviewApi.mapToScreen(before, fit), anchor);
+});
+
 test("Map Rosters reads binary presets and leaves unmatched map anchors intact", () => {
     const mapPreview = require(path.join(shell, "../../sow-tools/editors/campaign-editor/map-preview.js"));
     const u16 = value => { const b = Buffer.alloc(2); b.writeUInt16LE(value); return b; };
@@ -2584,9 +2968,59 @@ test("Map Rosters reads binary presets and leaves unmatched map anchors intact",
     assert.match(mapRostersHtml, /SOWCampaignMapPreview\.load\(id\)/);
     assert.match(mapRostersHtml, /assets\/gameplay\/avatars/);
     assert.match(mapRostersHtml, /SOWCampaignMapPreview\.drawMapLabel/);
+    const rosterScript = mapRostersHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
+    assert.ok(rosterScript, "Map Rosters inline script exists");
+    assert.doesNotThrow(() => new vm.Script(rosterScript[1]));
     assert.match(mapRosterWriter, /map_file::encode\(&map\)/);
     assert.match(mapRosterWriter, /map\.bin\.br/);
     assert.doesNotMatch(mapRosterWriter.split("#[cfg(test)]")[0], /roster\.json/i);
+});
+
+test("Atlas picker visibly selects a catalog entity by stable ID in both editors", async () => {
+    class FakeElement {
+        constructor(id = "") { this.id = id; this.children = []; this.listeners = {}; this.attributes = {}; this.value = ""; this.textContent = ""; }
+        setAttribute(name, value) { this.attributes[name] = value; }
+        addEventListener(name, callback) { (this.listeners[name] ||= []).push(callback); }
+        append(...children) { this.children.push(...children); }
+        replaceChildren(...children) { this.children = children; }
+        async dispatch(name, event = {}) { for (const callback of this.listeners[name] || []) await callback(event); }
+    }
+    const context = { document: { createElement: () => new FakeElement() } };
+    vm.runInNewContext(atlasEntityPickerSource, context);
+    const pickerApi = context.SOWAtlasEntityPicker;
+    const entities = [
+        { id: "iceland", name: "Iceland", kind: "country", region: "europe" },
+        { id: "iceni", name: "Iceni", kind: "tribe", region: "europe" }
+    ];
+    const input = new FakeElement("search");
+    const results = new FakeElement("results");
+    const status = new FakeElement("status");
+    const picker = pickerApi.attach({ input, results, status, getEntities: () => entities });
+
+    input.value = "icel";
+    await input.dispatch("input");
+    assert.equal(results.children.length, 1);
+    assert.equal(results.children[0].children[0].textContent, "Iceland");
+    await results.children[0].dispatch("click");
+    assert.equal(input.value, "Iceland");
+    assert.equal(picker.getSelected().id, "iceland");
+
+    input.value = "ICENI";
+    await input.dispatch("input");
+    assert.equal(picker.getSelected().id, "iceni", "exact name input resolves to its stable Atlas ID");
+    assert.match(mapRostersHtml, /SOWAtlasEntityPicker\.attach/);
+    assert.match(mapRostersHtml, /entityPicker\.select\(selectedEntity\)/);
+    assert.match(mapRostersHtml, /entity_id:found\.id,role:/);
+    assert.match(mapRostersHtml, /pendingId=found\.id/);
+    assert.match(mapRostersHtml, /if\(placeAt\(pendingId,point\)\)entityPicker\?\.clear\(\)/);
+    assert.match(campaignMapEditorHtml, /SOWAtlasEntityPicker\.attach/);
+    assert.match(campaignMapEditorHtml, /atlasEntityPicker\.getSelected\(\)/);
+    assert.match(campaignMapEditorHtml, /color:FACTION_COLORS\[roster\.factions\.length%FACTION_COLORS\.length\]/);
+    const episodeEditorScript = campaignMapEditorHtml.match(/<script>\s*([\s\S]*?)<\/script>/);
+    assert.ok(episodeEditorScript, "Campaign Studio Episode script exists");
+    assert.doesNotThrow(() => new vm.Script(episodeEditorScript[1]));
+    assert.match(atlasHtml, /map-rosters-link/);
+    assert.match(atlasHtml, /entity=\$\{encodeURIComponent\(selectedId\)\}/);
 });
 
 test("campaign studio preserves edits made while a save is in flight", () => {
@@ -2646,7 +3080,7 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     assert.equal(definition.steps.find(step => step.id === "boudica_return_end").speaker, "boudica");
     assert.equal(definition.steps.find(step => step.id === "boudica_end").body_key, "tutorial.boudica_end_body");
     assert.equal(definition.steps.find(step => step.id === "boudica_complete").type, "end");
-    for (const type of ["farm", "factory", "port", "bunker", "structure_upgrade", "city_upgrade", "city_level", "foundry_level", "port_upgrade", "port_level", "tile_upgrade", "resource_transfer", "alliance", "fleet"]) {
+    for (const type of ["farm", "factory", "port", "bunker", "structure_upgrade", "city_upgrade", "city_level", "foundry_level", "port_upgrade", "port_level", "tile_upgrade", "resource_transfer", "alliance", "fleet", "zoom_in", "zoom_out"]) {
         assert.ok(campaign.METRICS[type], `missing campaign metric ${type}`);
         assert.match(campaignEditor, new RegExp(`value: "${type}"`), `Campaign Studio cannot select ${type}`);
     }
@@ -2654,15 +3088,49 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     assert.equal(step("boudica_first_victory").attack_ratio_on_enter, 1);
     assert.equal(step("boudica_ratio_guide").attack_ratio_on_enter, 0.5);
     assert.equal(step("boudica_first_victory_scene").next, "boudica_first_expansion");
-    assert.equal(step("boudica_first_expansion").next, "boudica_first_contact_intro");
-    assert.deepEqual(step("boudica_first_contact").trigger.targets, ["Snettisham", "Iceni Coast", "Stonea", "Venta Icenorum", "Thetford"]);
-    assert.equal(step("boudica_first_contact").trigger.value, 5);
+    assert.equal(step("boudica_first_expansion").next, "boudica_zoom_in");
+    assert.equal(step("boudica_zoom_in").next, "boudica_zoom_out");
+    assert.equal(step("boudica_zoom_out").next, "boudica_first_contact_intro");
+    assert.deepEqual(step("boudica_first_contact").trigger.targets, ["Stonea", "Snettisham", "Thetford"]);
+    assert.equal(step("boudica_first_contact").trigger.value, 3);
     assert.equal(step("boudica_first_contact").next, "boudica_first_contact_response");
     assert.equal(definition.steps.some(candidate => /boudica_contact_.*pledge/.test(candidate.id)), false);
     assert.equal(step("boudica_first_contact").guide.target, "target_action");
-    assert.equal(definition.reactions.find(reaction => reaction.id === "first_iceni_contact").when.role, "kin");
-    assert.equal(definition.reactions.find(reaction => reaction.id === "first_iceni_contact").outcome, "allied");
+    assert.deepEqual(roster.factions.filter(faction => faction.role === "kin").map(faction => faction.name).sort(), ["Snettisham", "Stonea", "Thetford"]);
+    const friendly = definition.reactions.find(reaction => reaction.id === "contact_stonea");
+    assert.equal(friendly.when.target, "Stonea");
+    assert.equal(friendly.outcome, "allied");
+    const tribute = definition.reactions.find(reaction => reaction.id === "contact_snettisham");
+    assert.deepEqual(tribute.choices.map(choice => [choice.id, choice.relation, choice.gold_cost]), [["accept", "allied", 200], ["refuse", "enemy", 0]]);
+    assert.equal(roster.factions.find(faction => faction.name === "Snettisham").hostility, "passive");
+    const respect = definition.reactions.find(reaction => reaction.id === "contact_thetford");
+    assert.deepEqual(respect.choices.map(choice => [choice.id, choice.relation, choice.gold_cost]), [["respect", "allied", 0], ["demand", "enemy", 0]]);
+    assert.equal(roster.factions.find(faction => faction.name === "Thetford").hostility, "aggressive");
+    assert.equal(roster.factions.find(faction => faction.name === "Stonea").hostility, "passive");
+    assert.equal(roster.factions.find(faction => faction.name === "Stonea").support_interval_seconds, 15);
+    assert.equal(step("boudica_transfer_send").trigger.recipient, "Stonea");
+    assert.equal(roster.factions.some(faction => ["Iceni Coast", "Venta Icenorum"].includes(faction.name)), false);
     assert.equal(definition.reactions.find(reaction => reaction.id === "neutral_contact_terms").when.relation, "neutral");
+    const paidTerms = definition.reactions.find(reaction => reaction.choices && reaction.choices.some(choice => choice.gold_cost > 0));
+    assert.ok(paidTerms, "campaign includes a gold negotiation");
+    const withoutRefusal = JSON.parse(JSON.stringify(definition));
+    const brokenTerms = withoutRefusal.reactions.find(reaction => reaction.id === paidTerms.id);
+    brokenTerms.choices = brokenTerms.choices.filter(choice => choice.relation === "allied");
+    assert.ok(campaign.validate(withoutRefusal, roster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) }).errors.some(issue => issue.field === "reactions.choices"),
+        "a paid offer cannot be authored without its free refusal path");
+    const lootRoster = JSON.parse(JSON.stringify(roster));
+    lootRoster.factions[0].gold_loot_bonus = 275;
+    assert.deepEqual(campaign.validate(definition, lootRoster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) }).errors, []);
+    lootRoster.factions[0].gold_loot_bonus = 1_000_001;
+    assert.ok(campaign.validate(definition, lootRoster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) }).errors.some(issue => issue.field === "roster.factions.gold_loot_bonus"));
+    assert.match(tutorial, /gold_insufficient: Number\(choice\.gold_cost \|\| 0\) > gold/);
+    assert.match(tutorial, /choice\.relation !== "allied" && Number\(choice\.gold_cost \|\| 0\) === 0/);
+    assert.match(tutorial, /choiceId = answer\.id/);
+    assert.match(campaignView, /gameplay\/currency\/gold\.webp/);
+    assert.match(campaignView, /sow-story__choice-price.*is-insufficient/);
+    assert.doesNotMatch(campaignView, /button\.disabled = Boolean\(choice\.disabled\)/);
+    assert.match(campaignMapEditorHtml, /id="fgoldloot"/);
+    assert.match(campaignMapEditorHtml, /gold_loot_bonus:Number\(f\.gold_loot_bonus\)/);
     assert.ok(roster.factions.filter(faction => faction.civ === "Roman Empire" || ["boss", "big_boss"].includes(faction.role)).every(faction => faction.relation === "enemy"));
     assert.ok(roster.factions.filter(faction => faction.role === "kin").every(faction => faction.relation === "neutral"));
     assert.match(campaignEditor, /Factions to contact/);
@@ -2738,6 +3206,10 @@ test("tutorial locale and UI guides resolve per episode and point to actual HUD 
     assert.match(tutorial, /SOWCampaign\.resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
     assert.match(tutorial, /tutorial\[guide\.target\]/);
     assert.match(campaignView, /sow-story__gesture/);
+    assert.match(campaignView, /sow-story__zoom-fingers/);
+    assert.match(storyCss, /data-gesture="zoom_in"/);
+    assert.match(storyCss, /data-gesture="zoom_out"/);
+    assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : "wheel"/);
     assert.match(campaignEngine, /menu_campaign:/);
     assert.match(campaignEngine, /map_attack:/);
     assert.match(tutorial, /addEventListener\("resize", redrawCampaign/);
@@ -2842,6 +3314,36 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
     assert.match(hudCss, /\.sow-hud__map-menu\.hidden\s*\{\s*display: none/);
 });
 
+test("building mode upgrades same-kind targets, marks them, and has a cancel control", () => {
+    const buildStart = mapClick.indexOf("    fn build_structure_at(");
+    const buildEnd = mapClick.indexOf("    fn city_module_is_available", buildStart);
+    const buildBody = mapClick.slice(buildStart, buildEnd);
+    assert.ok(buildStart >= 0 && buildEnd > buildStart);
+    assert.match(buildBody, /find_stack_target_tile\([\s\S]*?snapshot\.buildings/);
+    assert.match(buildBody, /if let Some\(building\) = stack_target \{[\s\S]*?cancel_hold_build\(\)[\s\S]*?GameplayIntent::UpgradeStructure \{[\s\S]*?building_id: building\.id/);
+    assert.match(buildBody, /return true;\s*\}\s*let Some\(snapshot\)/);
+    assert.match(frameSource, /nobuild_slots\[slot\]\s*=\s*\[[\s\S]*?0\.0,[\s\S]*?2\.0/);
+    assert.match(mapShader, /active_flag > 1\.0 && b_dist == 0[\s\S]*?is_upgrade_target = true/);
+    assert.match(mapShader, /overlay_color = vec3<f32>\(1\.0, 0\.72, 0\.16\)/);
+    assert.match(hud, /data-command="cancel_building_mode"/);
+    assert.match(hud, /if \(selectedBuilding\) send\("select_building", \{ kind: selectedBuilding \}\)/);
+    assert.match(hud, /buildingCancel\.hidden = !selectedBuilding/);
+    assert.match(hudCss, /\.sow-hud__building-cancel[\s\S]*?flex: 0 0 48px/);
+    assert.match(mapClick, /\*selected != Some\(kind\)\)\.then_some\(kind\)/);
+    assert.match(buildingOverlaySource, /celebration_budget = 24/);
+    assert.match(buildingOverlaySource, /!reduced_motion[\s\S]*?celebration_budget >= BUILDING_CELEBRATION_OFFSETS\.len\(\)/);
+});
+
+test("building upgrade uses snapshot gold and keeps the card open for the server result", () => {
+    assert.match(simUpdateSource, /pub\(crate\) fn current_player_gold\(&self\)[\s\S]*?player\.gold[\s\S]*?unwrap_or\(self\.ui\.app\.hud_state\.gold\)/);
+    assert.match(mapClick, /let gold = self\.current_player_gold\(\);[\s\S]*?if !cost\.is_finite\(\) \|\| gold < cost/);
+    assert.ok(webMenu.includes("let has_gold = app.current_player_gold() >= cost"));
+    assert.match(hud, /renderBuildingCard\(hud\.map_menu, hud\.gold\)/);
+    assert.match(hud, /id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure"/);
+    assert.ok(mapClick.includes("let keep_building_card_open = action == MapMenuAction::UpgradeStructure"));
+    assert.ok(mapClick.includes("if !keep_building_card_open {"));
+});
+
 test("building card anchors to the building and shows compact visual stats", () => {
     const renderStart = hud.indexOf("    function escapeHudText(value) {");
     const renderEnd = hud.indexOf("\n    function updateLeaderboard", renderStart);
@@ -2877,6 +3379,7 @@ test("building card anchors to the building and shows compact visual stats", () 
         buildingCardLevel: element(),
         buildingCardBenefit: element(),
         buildingCardNext: element(),
+        buildingCardGold: element(),
         buildingCardUpgrade: element()
     };
     const renderBuildingCard = vm.runInNewContext(
@@ -2901,6 +3404,7 @@ test("building card anchors to the building and shows compact visual stats", () 
         can_upgrade: false
     }));
     assert.match(hudRefs.buildingCardLevel.innerHTML, /7\.4s/);
+    assert.doesNotMatch(hudRefs.buildingCardLevel.innerHTML, /Lv 0/);
     assert.equal(hudRefs.buildingCardKind.textContent, "Bunker");
     assert.equal(hudRefs.buildingCardBenefit.hidden, true);
     assert.equal(hudRefs.buildingCardNext.hidden, true);
@@ -2924,19 +3428,31 @@ test("building card anchors to the building and shows compact visual stats", () 
         ],
         duration_seconds: 6,
         cost: 150,
+        owns: true,
         can_upgrade: true
-    }));
+    }), 120);
     assert.match(hudRefs.buildingCardLevel.innerHTML, /Lv 2/);
-    assert.match(hudRefs.buildingCardBenefit.innerHTML, /10%/);
-    assert.match(hudRefs.buildingCardBenefit.innerHTML, /16/);
-    assert.equal(hudRefs.buildingCardBenefit.hidden, false);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /Lv 3/);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /15%/);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /18/);
+    assert.equal(hudRefs.buildingCardBenefit.hidden, true);
+    assert.doesNotMatch(hudRefs.buildingCardNext.innerHTML, /Lv 3|15%|18/);
+    assert.match(hudRefs.buildingCardNext.innerHTML, /5%/);
+    assert.match(hudRefs.buildingCardNext.innerHTML, /2/);
     assert.match(hudRefs.buildingCardNext.innerHTML, /6s/);
-    assert.match(hudRefs.buildingCardUpgrade.innerHTML, /150/);
-    assert.equal(hudRefs.buildingCardUpgrade.attributes["aria-label"], "Upgrade for 150 gold");
+    assert.match(hudRefs.buildingCardGold.innerHTML, /120/);
+    assert.match(hudRefs.buildingCardGold.innerHTML, /150/);
+    assert.equal(hudRefs.buildingCardGold.classes.has("is-short"), true);
+    assert.equal(hudRefs.buildingCardUpgrade.attributes["aria-label"], "Upgrade to level 3");
     assert.equal(hudRefs.buildingCardUpgrade.hidden, false);
+    assert.equal(hudRefs.buildingCardUpgrade.disabled, true);
+    renderBuildingCard(menu({
+        kind: "Bunker",
+        level: 2,
+        next_level: 3,
+        metrics: [{ icon: "defense", label: "Enemy attack losses", value: 10, prefix: "+", unit: "%" }],
+        next_metrics: [{ icon: "defense", label: "Enemy attack losses", value: 15, prefix: "+", unit: "%" }],
+        cost: 150,
+        can_upgrade: true
+    }), 200);
+    assert.equal(hudRefs.buildingCardGold.classes.has("is-short"), false);
     assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
     assert.equal(hudRefs.buildingCard.style.left, "104px");
     assert.equal(hudRefs.buildingCard.style.top, "40px");

@@ -13,7 +13,8 @@ const campaignDir = path.join(root, "assets/campaign");
 const mapsDir = path.join(root, "assets/maps");
 const entityCatalogFile = path.join(root, "assets/geo_entities.json");
 const distLocaleDir = path.join(root, "dist/web/locales");
-const campaign = createRequire(import.meta.url)(path.join(root, "sow-web/shell/sow-campaign.js"));
+const campaignRequire = createRequire(import.meta.url);
+const campaignFile = path.join(root, "sow-web/shell/sow-campaign.js");
 const maxBodyBytes = 1024 * 1024;
 const saving = new Set();
 let entityCatalogSaving = false;
@@ -23,6 +24,12 @@ const entityId = /^[a-z][a-z0-9_]{0,95}$/;
 const avatarId = /^[a-z][a-z0-9_]*$/;
 const mapId = /^[a-z][a-z0-9_]{0,63}$/;
 const sharedShell = new Set(["sow-controls.css", "main_menu.tutorial.css", "sow-campaign.js", "sow-campaign-view.js"]);
+
+function loadCampaignRuntime() {
+  const modulePath = campaignRequire.resolve(campaignFile);
+  delete campaignRequire.cache[modulePath];
+  return campaignRequire(modulePath);
+}
 
 function portFromArgs() {
   const args = process.argv.slice(2);
@@ -127,7 +134,7 @@ async function validatePair(episodeId, roster, definition, allowMissingFactionRe
   }
   const avatarFiles = new Set((await fs.readdir(path.join(root, "assets/gameplay/avatars")))
     .filter(name => /^[a-z][a-z0-9_]*\.webp$/.test(name)).map(name => name.slice(0, -5)));
-  const result = campaign.validate(definition, roster, {
+  const result = loadCampaignRuntime().validate(definition, roster, {
     hasText: key => hasText(key, definition),
     hasAvatar: avatar => avatarFiles.has(avatar),
     allowMissingFactionReferences
@@ -151,6 +158,7 @@ async function validateEntityCatalog(value) {
       || typeof entity.name !== "string" || !entity.name.trim() || entity.name.length > 120
       || !kinds.has(entity.kind) || !eras.has(entity.era) || !regions.has(entity.region)
       || typeof entity.flag !== "string" || (entity.flag && !/^[a-z]{2}$/.test(entity.flag))
+      || (entity.territory_color != null && (typeof entity.territory_color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(entity.territory_color)))
       || !Array.isArray(entity.maps) || entity.maps.some(id => typeof id !== "string" || !mapId.test(id))) throw new Error("Invalid or duplicate entity.");
     ids.add(entity.id);
     const normalizedName = entity.name.trim().toLocaleLowerCase();
@@ -354,6 +362,6 @@ server.listen(port, "127.0.0.1", () => {
   console.log(`Campaign editor: http://127.0.0.1:${port}/tools/campaign-editor/`);
   console.log(`Entity Atlas: http://127.0.0.1:${port}/tools/campaign-editor/atlas`);
   console.log(`Map Rosters: http://127.0.0.1:${port}/tools/campaign-editor/map-rosters`);
-  console.log("  Map and story export update assets/campaign directly; refresh the local game to use them.");
+  console.log("  Saving in the editor updates assets/campaign directly; refresh the local game to use them.");
   console.log("  Ctrl-C to stop.");
 });

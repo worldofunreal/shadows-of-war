@@ -79,6 +79,10 @@ impl SowEngine {
         let is_mfo = slot.tier == AiTier::Nation;
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
         let campaign_betrayal = self.campaign_betrayal.get(&bot_id).copied();
+        let passive_campaign_enemy = campaign_relation
+            == Some(crate::protocol::CampaignRelation::Enemy)
+            && self.campaign_hostilities.get(&bot_id)
+                == Some(&crate::game_config::CampaignHostility::Passive);
         let attacks_players = self
             .campaign_hostilities
             .get(&bot_id)
@@ -176,7 +180,42 @@ impl SowEngine {
                 // nearest neutral shores. Free like land expansion (growth,
                 // not war); every tier including passive tribes — neutral
                 // never means combat.
-                if !has_neutral && self.try_expansion_boat(bot_id, decisions) {
+                let passive_enemy_attackers = if passive_campaign_enemy {
+                    let mut attackers = std::collections::HashSet::new();
+                    if let (Some(defender), Some(inbound_attacks)) = (
+                        self.state.player(bot_id),
+                        self.ai_attack_index.get(bot_id as usize),
+                    ) {
+                        for &attack_index in inbound_attacks {
+                            let Some(attack) = self.attacks.get(attack_index) else {
+                                continue;
+                            };
+                            if attack.target_owner != bot_id
+                                || !neighbor_players.contains(&attack.owner_id)
+                            {
+                                continue;
+                            }
+                            let Some(attacker) = self.state.player(attack.owner_id) else {
+                                continue;
+                            };
+                            let is_friendly = defender.alliances.contains(&attack.owner_id)
+                                || (defender.team.is_some()
+                                    && defender.team == attacker.team);
+                            if attacker.player_type != crate::player::PlayerType::Bot
+                                && !is_friendly
+                            {
+                                attackers.insert(attack.owner_id);
+                            }
+                        }
+                    }
+                    attackers
+                } else {
+                    std::collections::HashSet::new()
+                };
+                if !has_neutral
+                    && passive_enemy_attackers.is_empty()
+                    && self.try_expansion_boat(bot_id, decisions)
+                {
                     return;
                 }
 
@@ -212,6 +251,7 @@ impl SowEngine {
                             if !attacks_players
                                 && let Some(t) = self.state.player(id)
                                 && t.player_type != crate::player::PlayerType::Bot
+                                && !passive_enemy_attackers.contains(&id)
                             {
                                 return false; // passive tribe: skip players
                             }
@@ -239,7 +279,7 @@ impl SowEngine {
                     });
 
                 let mut defender_target = None;
-                if bot_iq >= 100 {
+                if bot_iq >= 100 || !passive_enemy_attackers.is_empty() {
                     let mut largest_attack = 0.0;
                     let inbound_attacks = self
                         .ai_attack_index

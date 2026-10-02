@@ -183,6 +183,8 @@ pub struct SowEngine {
     pub campaign_avatars: std::collections::HashMap<PlayerId, String>,
     /// Scripted campaign membership, kept out of Player and ordinary matches.
     pub campaign_support_intervals: std::collections::HashMap<PlayerId, u32>,
+    /// Optional fixed bonus loot per scripted campaign faction.
+    pub campaign_gold_loot_bonus: std::collections::HashMap<PlayerId, u32>,
     pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
     pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
     pub campaign_hostilities:
@@ -252,6 +254,7 @@ impl SowEngine {
             resource_requests_proposed: Vec::new(),
             campaign_avatars: std::collections::HashMap::new(),
             campaign_support_intervals: std::collections::HashMap::new(),
+            campaign_gold_loot_bonus: std::collections::HashMap::new(),
             campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_relations: std::collections::HashMap::new(),
             campaign_hostilities: std::collections::HashMap::new(),
@@ -419,7 +422,8 @@ impl SowEngine {
 
         let survived_ticks = self.state.tick;
         let bonus_percent = survived_ticks as f64 * 0.0001; // 0.01% per tick
-        let total_reward = base_reward * (1.0 + bonus_percent);
+        let total_reward = base_reward * (1.0 + bonus_percent)
+            + f64::from(self.campaign_gold_loot_bonus.get(&victim_id).copied().unwrap_or(0));
 
         // Gather tile conquest contributions (deterministic by player id)
         let mut contributors: Vec<(u16, u32)> = self
@@ -568,9 +572,39 @@ mod tick;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::GameState;
+    use crate::game::{GameEvent, GameState};
     use crate::game_config::GameConfig;
+    use crate::player::{Player, PlayerType};
     use crate::water_components::WaterComponents;
+
+    #[test]
+    fn campaign_gold_loot_adds_to_the_unchanged_time_scaled_elimination_bounty() {
+        let reward = |loot_bonus: Option<u32>| {
+            let config = GameConfig::default();
+            let mut state = GameState::new(1, 4, 4, config.clone());
+            state.tick = 100;
+            let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
+            human.gold = 100.0;
+            state.register_player(human);
+            let mut victim = Player::new_human(2, "Outpost".into(), [0.5; 3], &config);
+            victim.player_type = PlayerType::Bot;
+            state.register_player(victim);
+            let mut engine = SowEngine::new(state, WaterComponents::default());
+            if let Some(bonus) = loot_bonus {
+                engine.campaign_gold_loot_bonus.insert(2, bonus);
+            }
+            engine.eliminate_player(2, 1, 0, 0, false);
+            let bounty = engine.state.events.iter().find_map(|event| match event {
+                GameEvent::PlayerEliminated { gold_bounty, .. } => Some(*gold_bounty),
+                _ => None,
+            }).unwrap();
+            (engine.state.player(1).unwrap().gold, bounty)
+        };
+
+        assert_eq!(reward(None), (605.0, 505));
+        assert_eq!(reward(Some(125)), (730.0, 630));
+    }
+
     #[test]
     fn test_spawn_ai_nations() {
         let config = GameConfig {

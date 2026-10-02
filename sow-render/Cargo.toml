@@ -3,7 +3,7 @@ name = "sow-render"
 version = "0.1.0"
 edition = "2024"
 description = "Shadows of War — pure GPU rendering pipelines and shaders"
-license = "AGPL-3.0-or-later"
+license = "AGPL-3.0-only"
 
 [dependencies]
 blade-graphics = { git = "https://github.com/ohsalmeron/blade", rev = "be2fc3130ce09212f41a31bbce629f0a1c14bc61" }

@@ -198,6 +198,7 @@ pub struct Faction {
     /// Shared by the map nameplate and story dialogue; absent uses the generic portrait.
     pub avatar: Option<String>,
     pub support_interval_seconds: Option<u32>,
+    pub gold_loot_bonus: Option<u32>,
     pub alliance_group: Option<String>,
 }
 
@@ -219,6 +220,7 @@ impl Faction {
             leader: None,
             avatar: None,
             support_interval_seconds: None,
+            gold_loot_bonus: None,
             alliance_group: None,
         }
     }
@@ -314,6 +316,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 iq: f.iq,
                 campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
                 campaign_support_interval_seconds: f.support_interval_seconds,
+                campaign_gold_loot_bonus: f.gold_loot_bonus,
                 campaign_alliance_group: f.alliance_group.clone(),
                 campaign_relation: Some(f.relation),
                 campaign_hostility: Some(f.hostility),
@@ -353,6 +356,8 @@ struct RosterEntry {
     #[serde(default)]
     support_interval_seconds: Option<u32>,
     #[serde(default)]
+    gold_loot_bonus: Option<u32>,
+    #[serde(default)]
     alliance_group: Option<String>,
 }
 
@@ -364,6 +369,38 @@ struct RosterFile {
     player_color: Option<String>,
     #[serde(default)]
     factions: Vec<RosterEntry>,
+}
+
+pub(crate) fn tutorial_camera_frame(
+    campaign: CampaignId,
+    config: &sow_core::game_config::GameConfig,
+    screen_w: f32,
+    screen_h: f32,
+) -> Option<((f32, f32), f32)> {
+    if !config.tutorial || campaign != CampaignId::Boudica {
+        return None;
+    }
+    let (player_x, player_y) = config.player_spawn?;
+    let target = config
+        .scripted_spawns
+        .iter()
+        .find(|spawn| spawn.name == "The Iceni Despoilers")?;
+    let dx = player_x.abs_diff(target.x) as f32;
+    let dy = player_y.abs_diff(target.y) as f32;
+    let center = (
+        (player_x as f32 + target.x as f32 + 1.0) * 0.5,
+        (player_y as f32 + target.y as f32 + 1.0) * 0.5,
+    );
+    let fit_zoom = (screen_w.max(1.0) / (dx + 8.0))
+        .min(screen_h.max(1.0) / (dy + 8.0))
+        .min(28.0);
+    let min_zoom = crate::camera_zoom_lower_bound(
+        screen_w,
+        screen_h,
+        config.map_width,
+        config.map_height,
+    );
+    Some((center, fit_zoom.max(min_zoom)))
 }
 
 /// Resolve a civilization id from roster JSON (`"maya"`, `"Maya"`,
@@ -401,6 +438,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
         }
         let role = Role::from_name(&e.role)?;
         if e.support_interval_seconds.is_some_and(|seconds| !(5..=600).contains(&seconds))
+            || e.gold_loot_bonus.is_some_and(|gold| gold > 1_000_000)
             || e.alliance_group
                 .as_deref()
                 .is_some_and(|group| !valid_campaign_group_id(group))
@@ -417,6 +455,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
         f.betrayal = e.betrayal;
         f.iq = e.iq;
         f.support_interval_seconds = e.support_interval_seconds;
+        f.gold_loot_bonus = e.gold_loot_bonus;
         f.alliance_group = e.alliance_group.clone();
         if let Some(civ_name) = e.civ.as_deref() {
             f.civ = civ_from_id(civ_name)?;
@@ -461,4 +500,20 @@ fn valid_campaign_group_id(value: &str) -> bool {
     let mut chars = value.chars();
     matches!(chars.next(), Some('a'..='z'))
         && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_roster, to_scripted};
+
+    #[test]
+    fn gold_loot_bonus_survives_roster_parse_and_scripted_spawn_conversion() {
+        let roster = r##"{"player_spawn":[1,1],"factions":[{"name":"Rome","x":2,"y":1,"role":"vassal","gold_loot_bonus":275}]}"##;
+        let (factions, _, _) = parse_roster(roster).unwrap();
+        assert_eq!(factions[0].gold_loot_bonus, Some(275));
+        assert_eq!(to_scripted(&factions)[0].campaign_gold_loot_bonus, Some(275));
+
+        let invalid = r##"{"factions":[{"name":"Rome","x":2,"y":1,"role":"vassal","gold_loot_bonus":1000001}]}"##;
+        assert!(parse_roster(invalid).is_none());
+    }
 }

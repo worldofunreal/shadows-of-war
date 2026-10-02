@@ -87,6 +87,9 @@ pub struct ScriptedSpawn {
     /// Per-faction repeat interval for campaign support.
     #[serde(default)]
     pub campaign_support_interval_seconds: Option<u32>,
+    /// Fixed extra gold awarded when this scripted campaign faction is defeated.
+    #[serde(default)]
+    pub campaign_gold_loot_bonus: Option<u32>,
     /// Factions in this campaign bloc share a pact when one member forms an alliance.
     #[serde(default)]
     pub campaign_alliance_group: Option<String>,

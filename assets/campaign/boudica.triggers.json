@@ -18,11 +18,12 @@
   },
   "reactions": [
     {
-      "id": "first_iceni_contact",
+      "id": "contact_stonea",
       "when": {
-        "type": "first_contact",
-        "role": "kin"
+        "type": "contact",
+        "target": "Stonea"
       },
+      "speaker": "stonea",
       "outcome": "allied",
       "title_key": "tutorial.first_iceni_contact_title",
       "body_key": "tutorial.first_iceni_contact_body"
@@ -34,8 +35,8 @@
         "target": "Snettisham"
       },
       "speaker": "snettisham",
-      "title_key": "tutorial.boudica_snettisham_pledge_title",
-      "body_key": "tutorial.boudica_snettisham_pledge_body",
+      "title_key": "tutorial.boudica_snettisham_tribute_title",
+      "body_key": "tutorial.boudica_snettisham_tribute_body",
       "choices": [
         {
           "id": "accept",
@@ -47,85 +48,7 @@
         {
           "id": "refuse",
           "label_key": "tutorial.neutral_terms_refuse",
-          "body_key": "tutorial.neutral_terms_refuse_detail",
-          "relation": "enemy",
-          "gold_cost": 0
-        }
-      ]
-    },
-    {
-      "id": "contact_iceni_coast",
-      "when": {
-        "type": "contact",
-        "target": "Iceni Coast"
-      },
-      "speaker": "iceni_coast",
-      "title_key": "tutorial.boudica_coast_pledge_title",
-      "body_key": "tutorial.boudica_coast_pledge_body",
-      "choices": [
-        {
-          "id": "accept",
-          "label_key": "tutorial.neutral_terms_accept",
-          "body_key": "tutorial.neutral_terms_accept_detail",
-          "relation": "allied",
-          "gold_cost": 200
-        },
-        {
-          "id": "refuse",
-          "label_key": "tutorial.neutral_terms_refuse",
-          "body_key": "tutorial.neutral_terms_refuse_detail",
-          "relation": "enemy",
-          "gold_cost": 0
-        }
-      ]
-    },
-    {
-      "id": "contact_stonea",
-      "when": {
-        "type": "contact",
-        "target": "Stonea"
-      },
-      "speaker": "stonea",
-      "title_key": "tutorial.boudica_stonea_pledge_title",
-      "body_key": "tutorial.boudica_stonea_pledge_body",
-      "choices": [
-        {
-          "id": "accept",
-          "label_key": "tutorial.neutral_terms_accept",
-          "body_key": "tutorial.neutral_terms_accept_detail",
-          "relation": "allied",
-          "gold_cost": 200
-        },
-        {
-          "id": "refuse",
-          "label_key": "tutorial.neutral_terms_refuse",
-          "body_key": "tutorial.neutral_terms_refuse_detail",
-          "relation": "enemy",
-          "gold_cost": 0
-        }
-      ]
-    },
-    {
-      "id": "contact_venta",
-      "when": {
-        "type": "contact",
-        "target": "Venta Icenorum"
-      },
-      "speaker": "venta_icenorum",
-      "title_key": "tutorial.boudica_venta_pledge_title",
-      "body_key": "tutorial.boudica_venta_pledge_body",
-      "choices": [
-        {
-          "id": "accept",
-          "label_key": "tutorial.neutral_terms_accept",
-          "body_key": "tutorial.neutral_terms_accept_detail",
-          "relation": "allied",
-          "gold_cost": 200
-        },
-        {
-          "id": "refuse",
-          "label_key": "tutorial.neutral_terms_refuse",
-          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "body_key": "tutorial.boudica_snettisham_refuse_detail",
           "relation": "enemy",
           "gold_cost": 0
         }
@@ -138,20 +61,20 @@
         "target": "Thetford"
       },
       "speaker": "thetford",
-      "title_key": "tutorial.boudica_thetford_pledge_title",
-      "body_key": "tutorial.boudica_thetford_pledge_body",
+      "title_key": "tutorial.boudica_thetford_respect_title",
+      "body_key": "tutorial.boudica_thetford_respect_body",
       "choices": [
         {
-          "id": "accept",
-          "label_key": "tutorial.neutral_terms_accept",
-          "body_key": "tutorial.neutral_terms_accept_detail",
+          "id": "respect",
+          "label_key": "tutorial.boudica_thetford_respect",
+          "body_key": "tutorial.boudica_thetford_respect_detail",
           "relation": "allied",
-          "gold_cost": 200
+          "gold_cost": 0
         },
         {
-          "id": "refuse",
-          "label_key": "tutorial.neutral_terms_refuse",
-          "body_key": "tutorial.neutral_terms_refuse_detail",
+          "id": "demand",
+          "label_key": "tutorial.boudica_thetford_demand",
+          "body_key": "tutorial.boudica_thetford_demand_detail",
           "relation": "enemy",
           "gold_cost": 0
         }
@@ -185,6 +108,16 @@
   ],
   "strings": {
     "en": {
+      "tutorial.boudica_zoom_in_title": "Bring the world closer",
+      "tutorial.boudica_zoom_in_hint": "Zoom in to inspect the map.",
+      "tutorial.boudica_zoom_in_pinch_hint": "Spread two fingers to zoom in.",
+      "tutorial.boudica_zoom_in_trackpad_hint": "Spread two fingers on your trackpad to zoom in.",
+      "tutorial.boudica_zoom_in_wheel_hint": "Scroll the mouse wheel up to zoom in.",
+      "tutorial.boudica_zoom_out_title": "See more of the map",
+      "tutorial.boudica_zoom_out_hint": "Zoom out to see more of the map.",
+      "tutorial.boudica_zoom_out_pinch_hint": "Bring two fingers together to zoom out.",
+      "tutorial.boudica_zoom_out_trackpad_hint": "Pinch two fingers together on your trackpad to zoom out.",
+      "tutorial.boudica_zoom_out_wheel_hint": "Scroll the mouse wheel down to zoom out.",
       "tutorial.boudica_council_title": "A Queen's Answer",
       "tutorial.boudica_council_body": "Rome took our land and humiliated my family. The Iceni council waits for my answer.",
       "tutorial.boudica_decision_title": "What do we do?",
@@ -199,10 +132,10 @@
       "tutorial.boudica_victory_title": "The First Blow",
       "tutorial.boudica_victory_body": "The outpost is broken. The tribes must see that the Iceni still stand.",
       "tutorial.boudica_contact_title": "The Iceni Stand Together",
-      "tutorial.boudica_contact_body": "The Iceni clans will decide whether to rise with us—or name their price.",
+      "tutorial.boudica_contact_body": "The Iceni clans will decide whether to join us, ask for tribute, or demand respect.",
       "tutorial.boudica_contact_hint": "Touch an Iceni clan to hear its answer.",
       "tutorial.boudica_first_contact_response_title": "The Iceni Stand Together",
-      "tutorial.boudica_first_contact_response_body": "One clan pledged support. The others will decide for themselves.",
+      "tutorial.boudica_first_contact_response_body": "Stonea stands with us. Snettisham and Thetford have made their own choices.",
       "tutorial.boudica_support_title": "Aid Arrives",
       "tutorial.boudica_support_hint": "The tribes are sending gold and warriors.",
       "tutorial.boudica_trinovantes_intro_title": "A Pact Beyond the Iceni",
@@ -211,24 +144,23 @@
       "tutorial.boudica_trinovantes_alliance_hint": "Touch Trinovantian land to hear their terms.",
       "tutorial.boudica_trinovantes_pact_title": "The Trinovantes Join",
       "tutorial.boudica_trinovantes_pact_body": "The Trinovantes have chosen: stand with us or against us.",
-      "tutorial.boudica_venta_pledge_title": "Venta Icenorum sets its terms",
-      "tutorial.boudica_venta_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
-      "tutorial.boudica_snettisham_pledge_title": "Snettisham sets its terms",
-      "tutorial.boudica_snettisham_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
-      "tutorial.boudica_thetford_pledge_title": "Thetford sets its terms",
-      "tutorial.boudica_thetford_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
-      "tutorial.boudica_stonea_pledge_title": "Stonea sets its terms",
-      "tutorial.boudica_stonea_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
-      "tutorial.boudica_coast_pledge_title": "Iceni Coast sets its terms",
-      "tutorial.boudica_coast_pledge_body": "We know what Rome did, Boudica. Pay 200 gold, and we will send warriors.",
+      "tutorial.boudica_snettisham_tribute_title": "Snettisham asks for tribute",
+      "tutorial.boudica_snettisham_tribute_body": "Pay 200 gold for our support. Refuse, and we become enemies, but we will not attack first. We may still expand, and you can attack us at any time.",
+      "tutorial.boudica_snettisham_refuse_detail": "Snettisham becomes a passive enemy. It may expand, but will not attack first; you can attack it at any time.",
+      "tutorial.boudica_thetford_respect_title": "Thetford asks for respect",
+      "tutorial.boudica_thetford_respect_body": "Treat our clan as an equal and we will join your cause. Demand our submission, and we will rebel against you.",
+      "tutorial.boudica_thetford_respect": "Show respect",
+      "tutorial.boudica_thetford_respect_detail": "Recognize Thetford as an equal and form an alliance without tribute.",
+      "tutorial.boudica_thetford_demand": "Demand submission",
+      "tutorial.boudica_thetford_demand_detail": "Thetford rebels and becomes an aggressive enemy.",
       "tutorial.boudica_aid_choice_title": "Return the Favor",
-      "tutorial.boudica_aid_choice_body": "Our neighbors sent aid. Send some to Snettisham—or keep it for the march?",
+      "tutorial.boudica_aid_choice_body": "Our neighbors sent aid. Send some to Stonea—or keep it for the march?",
       "tutorial.boudica_aid_choice_share": "Send aid",
       "tutorial.boudica_aid_choice_keep": "Keep our reserves",
       "tutorial.boudica_share_intro_title": "Answer Their Call",
       "tutorial.boudica_share_intro_body": "Choose how much gold and how many troops to send. They come from our reserves.",
-      "tutorial.boudica_transfer_target_title": "Send Aid to Snettisham",
-      "tutorial.boudica_transfer_target_hint": "Tap Snettisham's land and choose Transfer.",
+      "tutorial.boudica_transfer_target_title": "Send Aid to Stonea",
+      "tutorial.boudica_transfer_target_hint": "Tap Stonea's land and choose Transfer.",
       "tutorial.boudica_transfer_troops_title": "Share the Warriors",
       "tutorial.boudica_transfer_troops_hint": "Choose how many troops to send.",
       "tutorial.boudica_transfer_gold_title": "Share the Gold",
@@ -236,7 +168,7 @@
       "tutorial.boudica_transfer_send_title": "Send Their Share",
       "tutorial.boudica_transfer_send_hint": "Send the resources you selected.",
       "tutorial.boudica_share_sent_title": "A Debt Repaid",
-      "tutorial.boudica_share_sent_body": "Snettisham has its garrison. We begin the march with fewer reserves.",
+      "tutorial.boudica_share_sent_body": "Stonea has its garrison. We begin the march with fewer reserves.",
       "tutorial.boudica_aid_kept_title": "Reserves Held",
       "tutorial.boudica_aid_kept_body": "No troops or gold leave our ranks. We march with the full force.",
       "tutorial.boudica_rebuild_title": "Rebuild the Iceni",
@@ -382,6 +314,16 @@
       "tutorial.neutral_terms_refuse_detail": "The clan ends talks and becomes an enemy."
     },
     "es": {
+      "tutorial.boudica_zoom_in_title": "Acerca el mapa",
+      "tutorial.boudica_zoom_in_hint": "Acerca el mapa para verlo mejor.",
+      "tutorial.boudica_zoom_in_pinch_hint": "Separa dos dedos para acercar el mapa.",
+      "tutorial.boudica_zoom_in_trackpad_hint": "Separa dos dedos en el trackpad para acercar el mapa.",
+      "tutorial.boudica_zoom_in_wheel_hint": "Mueve la rueda del ratón hacia arriba para acercar el mapa.",
+      "tutorial.boudica_zoom_out_title": "Aleja el mapa",
+      "tutorial.boudica_zoom_out_hint": "Aleja el mapa para ver más territorio.",
+      "tutorial.boudica_zoom_out_pinch_hint": "Junta dos dedos para alejar el mapa.",
+      "tutorial.boudica_zoom_out_trackpad_hint": "Junta dos dedos en el trackpad para alejar el mapa.",
+      "tutorial.boudica_zoom_out_wheel_hint": "Mueve la rueda del ratón hacia abajo para alejar el mapa.",
       "tutorial.boudica_council_title": "La respuesta de una reina",
       "tutorial.boudica_council_body": "Roma arrebató nuestras tierras y humilló a mi familia. El consejo iceno espera mi respuesta.",
       "tutorial.boudica_decision_title": "¿Qué hacemos?",
@@ -396,10 +338,10 @@
       "tutorial.boudica_victory_title": "El primer golpe",
       "tutorial.boudica_victory_body": "El puesto cayó. Las tribus deben ver que los icenos siguen en pie.",
       "tutorial.boudica_contact_title": "Los icenos se unen",
-      "tutorial.boudica_contact_body": "Las tribus Iceni decidirán si se alzan con nosotros... o qué precio exigirán.",
+      "tutorial.boudica_contact_body": "Las tribus icenas decidirán si se unen, piden tributo o exigen respeto.",
       "tutorial.boudica_contact_hint": "Toca el territorio de una tribu Iceni para conocer su respuesta.",
       "tutorial.boudica_first_contact_response_title": "Los icenos se unen",
-      "tutorial.boudica_first_contact_response_body": "Una tribu juró apoyarnos. Las demás decidirán por sí mismas.",
+      "tutorial.boudica_first_contact_response_body": "Stonea está con nosotros. Snettisham y Thetford tomaron sus propias decisiones.",
       "tutorial.boudica_support_title": "Llega la ayuda",
       "tutorial.boudica_support_hint": "Las tribus envían oro y guerreros.",
       "tutorial.boudica_trinovantes_intro_title": "Un pacto más allá de los icenos",
@@ -408,24 +350,23 @@
       "tutorial.boudica_trinovantes_alliance_hint": "Toca el territorio trinovante para escuchar sus condiciones.",
       "tutorial.boudica_trinovantes_pact_title": "Se unen los trinovantes",
       "tutorial.boudica_trinovantes_pact_body": "Los Trinovantes ya eligieron: estar con nosotros o enfrentarnos.",
-      "tutorial.boudica_venta_pledge_title": "Venta Icenorum exige condiciones",
-      "tutorial.boudica_venta_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
-      "tutorial.boudica_snettisham_pledge_title": "Snettisham exige condiciones",
-      "tutorial.boudica_snettisham_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
-      "tutorial.boudica_thetford_pledge_title": "Thetford exige condiciones",
-      "tutorial.boudica_thetford_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
-      "tutorial.boudica_stonea_pledge_title": "Stonea exige condiciones",
-      "tutorial.boudica_stonea_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
-      "tutorial.boudica_coast_pledge_title": "Iceni Coast exige condiciones",
-      "tutorial.boudica_coast_pledge_body": "Sabemos lo que Roma hizo, Boudica. Paga 200 de oro y enviaremos guerreros.",
+      "tutorial.boudica_snettisham_tribute_title": "Snettisham pide tributo",
+      "tutorial.boudica_snettisham_tribute_body": "Paga 200 de oro por nuestro apoyo. Si te niegas, seremos enemigos, pero no atacaremos primero. Aun así podemos expandirnos y puedes atacarnos cuando quieras.",
+      "tutorial.boudica_snettisham_refuse_detail": "Snettisham será un enemigo pasivo. Puede expandirse, pero no atacará primero; puedes atacarlo cuando quieras.",
+      "tutorial.boudica_thetford_respect_title": "Thetford pide respeto",
+      "tutorial.boudica_thetford_respect_body": "Trata a nuestra tribu como igual y nos uniremos a tu causa. Si exiges nuestra sumisión, nos rebelaremos contra ti.",
+      "tutorial.boudica_thetford_respect": "Mostrar respeto",
+      "tutorial.boudica_thetford_respect_detail": "Reconocer a Thetford como igual y formar una alianza sin tributo.",
+      "tutorial.boudica_thetford_demand": "Exigir sumisión",
+      "tutorial.boudica_thetford_demand_detail": "Thetford se rebela y se convierte en un enemigo agresivo.",
       "tutorial.boudica_aid_choice_title": "Devolver el apoyo",
-      "tutorial.boudica_aid_choice_body": "Nuestros vecinos enviaron ayuda. ¿Devolvemos parte a Snettisham o la guardamos para la marcha?",
+      "tutorial.boudica_aid_choice_body": "Nuestros vecinos enviaron ayuda. ¿Devolvemos parte a Stonea o la guardamos para la marcha?",
       "tutorial.boudica_aid_choice_share": "Enviar ayuda",
       "tutorial.boudica_aid_choice_keep": "Guardar reservas",
       "tutorial.boudica_share_intro_title": "Responder a su llamado",
       "tutorial.boudica_share_intro_body": "Elige cuánto oro y cuántos guerreros enviar. Saldrán de nuestras reservas.",
-      "tutorial.boudica_transfer_target_title": "Ayuda a Snettisham",
-      "tutorial.boudica_transfer_target_hint": "Toca el territorio de Snettisham y elige Transferir.",
+      "tutorial.boudica_transfer_target_title": "Ayuda a Stonea",
+      "tutorial.boudica_transfer_target_hint": "Toca el territorio de Stonea y elige Transferir.",
       "tutorial.boudica_transfer_troops_title": "Comparte los guerreros",
       "tutorial.boudica_transfer_troops_hint": "Elige cuántas tropas enviar.",
       "tutorial.boudica_transfer_gold_title": "Comparte el oro",
@@ -433,7 +374,7 @@
       "tutorial.boudica_transfer_send_title": "Envía su parte",
       "tutorial.boudica_transfer_send_hint": "Envía los recursos que elegiste.",
       "tutorial.boudica_share_sent_title": "Una deuda saldada",
-      "tutorial.boudica_share_sent_body": "Snettisham ya tiene su guarnición. Marchamos con menos reservas.",
+      "tutorial.boudica_share_sent_body": "Stonea ya tiene su guarnición. Marchamos con menos reservas.",
       "tutorial.boudica_aid_kept_title": "Reservas intactas",
       "tutorial.boudica_aid_kept_body": "No enviamos tropas ni oro. Marcharemos con toda nuestra fuerza.",
       "tutorial.boudica_rebuild_title": "Reconstruir a los icenos",
@@ -588,20 +529,14 @@
       "name_key": "tutorial.boudica_council_speaker",
       "avatar": "iceni_council"
     },
-    "venta_icenorum": {
-      "faction": "Venta Icenorum"
-    },
     "snettisham": {
       "faction": "Snettisham"
-    },
-    "thetford": {
-      "faction": "Thetford"
     },
     "stonea": {
       "faction": "Stonea"
     },
-    "iceni_coast": {
-      "faction": "Iceni Coast"
+    "thetford": {
+      "faction": "Thetford"
     },
     "trinovantes": {
       "faction": "Trinovantes"
@@ -697,6 +632,29 @@
         "target": "expand",
         "gesture": "tap"
       },
+      "next": "boudica_zoom_in"
+    },
+    {
+      "id": "boudica_zoom_in",
+      "type": "objective",
+      "title_key": "tutorial.boudica_zoom_in_title",
+      "hint_key": "tutorial.boudica_zoom_in_hint",
+      "speaker": "boudica",
+      "trigger": { "type": "zoom_in", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "world", "target": "player", "gesture": "zoom_in" },
+      "next": "boudica_zoom_out"
+    },
+    {
+      "id": "boudica_zoom_out",
+      "type": "objective",
+      "title_key": "tutorial.boudica_zoom_out_title",
+      "hint_key": "tutorial.boudica_zoom_out_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "trigger": { "type": "zoom_out", "value": 1, "scope": "step" },
+      "marker": { "target": "player" },
+      "guide": { "kind": "world", "target": "player", "gesture": "zoom_out" },
       "next": "boudica_first_contact_intro"
     },
     {
@@ -717,17 +675,15 @@
       "trigger": {
         "type": "contact",
         "targets": [
-          "Snettisham",
-          "Iceni Coast",
           "Stonea",
-          "Venta Icenorum",
+          "Snettisham",
           "Thetford"
         ],
-        "value": 5,
+        "value": 3,
         "scope": "total"
       },
       "marker": {
-        "target": "Snettisham"
+        "target": "Stonea"
       },
       "guide": {
         "kind": "world",
@@ -838,7 +794,7 @@
         "scope": "step"
       },
       "marker": {
-        "target": "Snettisham"
+        "target": "Stonea"
       },
       "guide": {
         "kind": "world",
@@ -891,7 +847,7 @@
       "speaker": "boudica",
       "trigger": {
         "type": "resource_transfer",
-        "recipient": "Snettisham",
+        "recipient": "Stonea",
         "resources": [
           "gold",
           "troops"

@@ -100,11 +100,6 @@ button { color: inherit; font: inherit; }
   justify-content: space-between;
   gap: 18px;
   padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 4px 4px 12px 4px;
-  background: var(--panel);
-  box-shadow: var(--surface-shadow);
-  backdrop-filter: blur(16px);
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; flex: none; transition: opacity .2s ease, transform .2s ease; }
 .brand:hover { opacity: .95; transform: translateY(-1px); }
@@ -143,7 +138,6 @@ button { color: inherit; font: inherit; }
 .site-locale-dropdown .sow-control-dropdown__trigger {
   height: 42px;
 }
-.site-locale-dropdown .sow-control-dropdown__trigger,
 .site-locale-dropdown .sow-control-dropdown__option {
   color: var(--muted);
 }
@@ -245,6 +239,18 @@ button { color: inherit; font: inherit; }
 .hero h1 em { color: #f5d898; }
 .hero-lede { max-width: 570px; margin: 30px 0 28px; color: rgb(245 241 232 / 76%); font-size: 17px; line-height: 1.7; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.hero-alpha { margin-top: 27px; }
+.hero-alpha-label { margin: 0 0 10px; color: #f5d898; font: 700 10px/1.2 var(--font-display); letter-spacing: .16em; text-transform: uppercase; }
+.hero-alpha-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6.5px; max-width: 299px; }
+.hero-alpha-badge { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 46px; padding: 5px 8px; border: 1px solid #3b3b3b; border-radius: 7px; background: #050505; color: #fff; text-decoration: none; transition: border-color .18s ease; }
+.hero-alpha-badge:hover { border-color: #8a8a8a; }
+.hero-alpha-badge:focus-visible { outline: 2px solid #f5d898; outline-offset: 3px; }
+.hero-alpha-icon { flex: 0 0 30px; width: 30px; height: 30px; }
+.hero-alpha-badge--testflight .hero-alpha-icon { border-radius: 6px; }
+.hero-alpha-copy, .hero-alpha-copy small, .hero-alpha-copy b { display: block; }
+.hero-alpha-copy { min-width: 0; }
+.hero-alpha-copy small { color: #fff; font: 500 7px/1.25 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.hero-alpha-copy b { margin-top: 2px; font: 600 13px/1.05 Arial, sans-serif; letter-spacing: -.035em; white-space: nowrap; }
 .foot-line { height: 1px; flex: 1; background: var(--line); }
 
 /* Proof strip */
@@ -416,6 +422,9 @@ button { color: inherit; font: inherit; }
   .hero h1 { font-size: clamp(54px, 16vw, 88px); }
   .hero-lede { margin: 24px 0; font-size: 15px; }
   .hero-actions .button { flex: 1; min-width: 155px; padding: 0 12px; font-size: 11px; }
+  .hero-alpha { margin-top: 22px; }
+  .hero-alpha-links { max-width: 299px; }
+  .hero-alpha-badge { gap: 8px; padding-inline: 8px; }
   .proof-grid { display: block; }
   .proof-grid > div, .proof-grid > div:first-child { min-height: 78px; padding: 16px 0; border-inline-end: 0; border-bottom: 1px solid var(--line); }
   .proof-grid > div:last-child { border-bottom: 0; }
@@ -576,6 +585,10 @@ button { color: inherit; font: inherit; }
   .nav-actions > a.button-orange { padding: 0 10px; }
   .hero-actions { display: grid; grid-template-columns: 1fr; }
   .hero-actions .button { width: 100%; }
+  .hero-alpha-links { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-width: none; }
+  .hero-alpha-badge { min-height: 42px; gap: 6px; padding-inline: 6px; }
+  .hero-alpha-icon { flex-basis: 27px; width: 27px; height: 27px; }
+  .hero-alpha-copy b { font-size: 12px; }
   .leaders-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .leader-card, .leader-card img { min-height: 150px; }
   .gallery-grid { grid-template-columns: 1fr; }

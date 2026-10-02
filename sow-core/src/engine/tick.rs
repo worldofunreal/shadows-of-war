@@ -214,7 +214,11 @@ impl SowEngine {
             return;
         }
         let contact_check_ticks = (1000.0 / self.state.config.tick_rate_ms.max(1.0)).ceil() as u64;
-        if self.state.tick % contact_check_ticks.max(1) != 0 {
+        let immediate_support_due = self
+            .campaign_support_next_tick
+            .values()
+            .any(|&next_tick| next_tick <= self.state.tick);
+        if !immediate_support_due && self.state.tick % contact_check_ticks.max(1) != 0 {
             return;
         }
         let Some(receiver) =
@@ -548,6 +552,69 @@ mod tests {
         assert_eq!(engine.state.player(1).unwrap().troops, 375.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 125.0);
         assert_eq!(engine.state.player(2).unwrap().troops, 125.0);
+    }
+
+    #[test]
+    fn newly_allied_faction_sends_first_support_on_the_next_tick_then_waits_for_interval() {
+        let milestone = "The Iceni Despoilers";
+        let config = GameConfig {
+            tick_rate_ms: 100.0,
+            campaign_support: Some(CampaignSupport {
+                after_defeated: milestone.to_string(),
+                share_percent: 50,
+            }),
+            ..GameConfig::default()
+        };
+        let mut state = GameState::new(9, 5, 5, config.clone());
+        state.phase = GamePhase::Playing;
+
+        let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
+        human.gold = 100.0;
+        human.troops = 0.0;
+        human.max_troops = 1000.0;
+        human.border_tiles.insert(6); // (1, 1), adjacent to (0, 1)
+        state.register_player(human);
+
+        let mut ally = Player::new_human(2, "Snettisham".into(), [0.5; 3], &config);
+        ally.player_type = PlayerType::Bot;
+        ally.gold = 500.0;
+        ally.troops = 500.0;
+        state.register_player(ally);
+
+        let mut roman = Player::new_human(3, milestone.into(), [0.0; 3], &config);
+        roman.alive = false;
+        state.register_player(roman);
+        state.map.set_owner_id(0, 1, 2);
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine
+            .campaign_relations
+            .insert(2, crate::protocol::CampaignRelation::Neutral);
+        engine.campaign_support_intervals.insert(2, 8);
+        engine.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::ResolveCampaignDiplomacy {
+                target_player: 2,
+                relation: crate::protocol::CampaignRelation::Allied,
+                gold_cost: 0.0,
+            },
+        }]);
+
+        engine.state.tick = 1;
+        engine.apply_campaign_unlocks_and_support();
+        assert_eq!(engine.state.player(1).unwrap().gold, 350.0);
+        assert_eq!(engine.state.player(1).unwrap().troops, 250.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
+        assert_eq!(engine.state.player(2).unwrap().troops, 250.0);
+        assert!(engine.state.events.iter().any(|event| matches!(
+            event,
+            GameEvent::ResourceTransferred { sender_id: 2, receiver_id: 1, gold: 250.0, troops: 250.0 }
+        )));
+
+        engine.state.tick = 2;
+        engine.apply_campaign_unlocks_and_support();
+        assert_eq!(engine.state.player(1).unwrap().gold, 350.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
     }
 
     #[test]

@@ -857,6 +857,11 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     text-decoration: none;
 }
 
+.sow-menu__openfront-credit {
+    text-transform: none;
+    letter-spacing: normal;
+}
+
 .sow-menu__footer-links a:hover,
 .sow-menu__footer-links a:focus-visible {
     color: var(--sow-gold-bright);

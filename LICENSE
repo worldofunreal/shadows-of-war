@@ -617,3 +617,20 @@ Program, unless a warranty or assumption of liability accompanies a
 copy of the Program in return for a fee.
 
                      END OF TERMS AND CONDITIONS
+
+=== ADDITIONAL TERMS (AGPL v3 Section 7) ===
+
+Copyright Preservation Requirement (Section 7(b)):
+
+OpenFront displays copyright notices in the footer and on the
+loading screen. Modified versions must preserve the copyright
+notice "© OpenFront and Contributors" in reasonably
+visible locations such as the footer, loading screen, splash screen,
+or main menu.
+
+Prohibition of Misrepresentation (Section 7(c)):
+
+Modified versions may not misrepresent their origin or
+relationship to the OpenFront project. Modified versions must
+not use "OpenFront" as their primary title or imply official
+endorsement without permission.

@@ -61,10 +61,11 @@ function renderSettings() {
 }
 
 function renderFooter(label) {
+    var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
     return "<footer class='sow-menu__footer'>" +
         (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") +
-        "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'><button type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button></nav>" +
-        "<span>" + esc(SOW_t("menu.brand")) + "</span></footer>";
+        "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'><button type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button><button type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button></nav>" +
+        "<span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
 }
 
 function renderAuthModal() { return ""; }
@@ -76,6 +77,14 @@ function beginStoreRestore() {}
 function closeStoreCheckout() {}
 
 document.addEventListener("click", function (event) {
+    var sourceTarget = event.target && event.target.closest ? event.target.closest("[data-command='poki_source']") : null;
+    if (sourceTarget) {
+        event.preventDefault();
+        if (typeof window.SOW_pokiOpenExternalLink === "function" && window.SOW_SOURCE_URL) {
+            window.SOW_pokiOpenExternalLink(window.SOW_SOURCE_URL);
+        }
+        return;
+    }
     var target = event.target && event.target.closest ? event.target.closest("[data-command='poki_privacy']") : null;
     if (target) {
         event.preventDefault();

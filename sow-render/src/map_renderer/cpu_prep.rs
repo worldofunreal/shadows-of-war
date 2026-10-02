@@ -14,6 +14,8 @@ pub struct MapGlobals {
     pub shore_darkness: f32,
     /// Up to 8 attack threat slots: [front_x, front_y, radius, packed_ids].
     pub threat_slots: [[f32; 4]; 8],
+    /// Up to 8 alliance celebrations, two slots per pair: [player_id, center_x, center_y, age].
+    pub alliance_celebration_slots: [[f32; 4]; 16],
     pub effect_shockwave: f32,
     pub effect_breathe: f32,
     pub effect_energy_flow: f32,

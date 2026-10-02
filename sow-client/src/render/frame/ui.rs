@@ -28,7 +28,8 @@ impl SowApp {
             self.input.camera_focus_target = None;
         }
         if let Some((world_x, world_y)) = self.input.camera_focus_target {
-            let lerp = (1.0 - f32::exp(-12.0 * dt)).clamp(0.0, 1.0);
+            let rate = if self.input.tutorial_camera_focus { 2.0 } else { 12.0 };
+            let lerp = (1.0 - f32::exp(-rate * dt)).clamp(0.0, 1.0);
             self.input.camera_zoom += (self.input.target_zoom - self.input.camera_zoom) * lerp;
             let target_x = self.input.screen_w * 0.5 - world_x * self.input.camera_zoom;
             let target_y = self.input.screen_h * 0.5 - world_y * self.input.camera_zoom;
@@ -39,6 +40,10 @@ impl SowApp {
                 && (target_y - self.input.camera_y).abs() < 0.5
             {
                 self.input.camera_focus_target = None;
+                if self.input.tutorial_camera_focus {
+                    self.input.tutorial_camera_focus = false;
+                    self.input.has_snapped_camera_to_spawn = true;
+                }
             }
         } else {
             let diff = self.input.target_zoom - self.input.camera_zoom;

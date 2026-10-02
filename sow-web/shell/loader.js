@@ -224,17 +224,23 @@
         return /^[a-z0-9_]+$/.test(slug) ? slug : null;
     }
 
-    function waitForExitLeaderArt(prepared, slug) {
-        if (pendingExitArt === prepared) return;
-        pendingExitArt = prepared;
+    function loaderCycleId(state) {
+        const value = state && state.loader_cycle_id;
+        return Number.isSafeInteger(value) && value >= 0 ? value : null;
+    }
+
+    function waitForExitLeaderArt(prepared, slug, cycleId) {
+        if (pendingExitArt && pendingExitArt.prepared === prepared && pendingExitArt.cycleId === cycleId) return;
+        pendingExitArt = { prepared, cycleId };
         prepared.promise.then(() => {
-            if (pendingExitArt !== prepared) return;
+            if (!pendingExitArt || pendingExitArt.prepared !== prepared || pendingExitArt.cycleId !== cycleId) return;
             pendingExitArt = null;
+            if (activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId) return;
             const current = latestLoaderState;
-            if (!current || current.loader_job !== 'ExitGame' || leaderSlugForState(current) !== slug) return;
+            if (!current || loaderCycleId(current) !== cycleId || current.loader_job !== 'ExitGame' || leaderSlugForState(current) !== slug) return;
             if (prepared.ready && activeMatchArt !== prepared && preparedLeaderArt !== prepared) return;
             const stillPending = syncLoaderArt(current);
-            if (current.loader_done === true && !stillPending) finish();
+            if (current.loader_done === true && !stillPending) finish(cycleId);
         });
     }
 
@@ -245,7 +251,6 @@
                 prepareLeaderArt(slug);
                 if (preparedLeaderArt && preparedLeaderArt.slug === slug) {
                     activeMatchArt = preparedLeaderArt;
-                    activeMatchStartedFromBoot = true;
                 }
             }
             return null;
@@ -257,7 +262,7 @@
         if (!slug) {
             if (transition) {
                 const key = state.loader_job + ':none';
-                if (loaderArtKey !== key) clearLoaderPicture(key);
+                if (loaderArtKey !== key) showBootSplash(key);
             } else if (loaderArtKey !== 'boot') {
                 applySplashArt();
             }
@@ -266,7 +271,6 @@
 
         const key = slug;
         if (state.loader_job === 'EnterGame') {
-            activeMatchStartedFromBoot = false;
             if (!activeMatchArt || activeMatchArt.slug !== slug) {
                 activeMatchArt = preparedLeaderArt && preparedLeaderArt.slug === slug
                     ? preparedLeaderArt : null;
@@ -280,34 +284,28 @@
             : preparedLeaderArt && preparedLeaderArt.slug === slug ? preparedLeaderArt : null;
         if (!prepared) {
             if (loaderArtKey !== key + ':unready') {
-                if (state.loader_job === 'ExitGame' && activeMatchStartedFromBoot) showBootSplash(key + ':unready');
-                else clearLoaderPicture(key + ':unready');
+                showBootSplash(key + ':unready');
             }
-            return null;
-        }
-        if (state.loader_job !== 'ExitGame' && prepared.variant !== leaderArtVariant()) {
-            if (preparedLeaderArt === prepared) preparedLeaderArt = null;
-            if (loaderArtKey !== key + ':unready') clearLoaderPicture(key + ':unready');
             return null;
         }
         if (!prepared.ready) {
             if (loaderArtKey !== key + ':unready') {
-                if (state.loader_job === 'ExitGame' && activeMatchStartedFromBoot) showBootSplash(key + ':unready');
-                else clearLoaderPicture(key + ':unready');
+                showBootSplash(key + ':unready');
             }
-            if (state.loader_job === 'ExitGame') waitForExitLeaderArt(prepared, slug);
+            if (state.loader_job === 'ExitGame') waitForExitLeaderArt(prepared, slug, loaderCycleId(state));
             return state.loader_job === 'ExitGame' ? prepared : null;
         }
 
         const image = prepared.image;
         const { picture } = replaceLoaderPicture(null, null, image);
         loaderArtKey = key;
+        const cycleId = loaderCycleId(state);
         image.onerror = function () {
+            if (activeLoaderCycleId !== cycleId || completedLoaderCycleId >= cycleId) return;
             if (preparedLeaderArt && preparedLeaderArt.image === image) preparedLeaderArt = null;
             if (activeMatchArt && activeMatchArt.image === image) activeMatchArt = null;
             if (loaderArtKey === key && document.querySelector('#web-loader .splash-picture') === picture) {
-                picture.remove();
-                loaderArtKey = key + ':failed';
+                showBootSplash(key + ':failed');
             }
         };
         return null;
@@ -328,7 +326,9 @@
     let loaderArtKey = null;
     let preparedLeaderArt = null;
     let activeMatchArt = null;
-    let activeMatchStartedFromBoot = false;
+    let activeLoaderCycleId = -1;
+    let completedLoaderCycleId = -1;
+    let finishingLoaderCycleId = -1;
     let bootSplashPicture = null;
     let latestLoaderState = null;
     let pendingExitArt = null;
@@ -548,10 +548,12 @@
         /* SOW_FIRST_PARTY_ANALYTICS_END */
     }
 
-    function finish() {
-        if (!root || finishing || !loaderVisible) return;
+    function finish(cycleId) {
+        if (!root || !loaderVisible || cycleId !== activeLoaderCycleId || cycleId <= completedLoaderCycleId) return;
+        if (finishing) return;
         const closingRoot = root;
         finishing = true;
+        finishingLoaderCycleId = cycleId;
         cancelFinishTimers();
         sowTrack('shell_loaded');
         stopProgress();
@@ -565,7 +567,7 @@
         root.style.transition = `opacity ${FADEOUT_MS}ms ease-out`;
         finishTimer = setTimeout(() => {
             finishTimer = 0;
-            if (root !== closingRoot) return;
+            if (root !== closingRoot || activeLoaderCycleId !== cycleId || finishingLoaderCycleId !== cycleId) return;
             root.style.opacity = '0';
             root.style.visibility = 'hidden';
             root.style.pointerEvents = 'none';
@@ -573,27 +575,40 @@
             root.setAttribute('aria-busy', 'false');
             loaderVisible = false;
             finishing = false;
+            finishingLoaderCycleId = -1;
+            completedLoaderCycleId = cycleId;
             clearLoaderPicture(null);
             if (latestLoaderState && latestLoaderState.loader_job === 'ExitGame') {
                 activeMatchArt = null;
-                activeMatchStartedFromBoot = false;
                 pendingExitArt = null;
             }
             if (!loaderReadyDispatched) {
                 loaderReadyDispatched = true;
                 window.dispatchEvent(new Event('sow:loader-ready'));
             }
-            window.dispatchEvent(new Event('sow:loader-cycle-ready'));
+            window.dispatchEvent(new CustomEvent('sow:loader-cycle-ready', { detail: { cycle_id: cycleId } }));
         }, 160);
     }
 
     function sync(state) {
         if (!state) return;
+        const cycleId = loaderCycleId(state);
+        if (cycleId === null || cycleId < activeLoaderCycleId || cycleId <= completedLoaderCycleId) return;
+        if (cycleId > activeLoaderCycleId) {
+            activeLoaderCycleId = cycleId;
+            pendingExitArt = null;
+            if (finishing) {
+                cancelFinishTimers();
+                finishing = false;
+                finishingLoaderCycleId = -1;
+                loaderVisible = false;
+            }
+        }
+        if (finishing && finishingLoaderCycleId === cycleId) return;
         latestLoaderState = state;
-        if (state.loader_job !== 'ExitGame') pendingExitArt = null;
         if (state.loader_done === true && state.loader_job !== 'ExitGame') {
             if (state.loader_job === 'EnterGame') syncLoaderArt(state);
-            finish();
+            finish(cycleId);
             return;
         }
 
@@ -626,7 +641,7 @@
         if (root) root.setAttribute('aria-busy', 'true');
         if (state.loader_done === true) {
             if (pendingArt) return;
-            finish();
+            finish(cycleId);
         }
     }
 

@@ -209,13 +209,13 @@ pub(super) fn execute_android(paths: &Paths) -> Result<()> {
     let version = version(paths, true)?;
     println!("==> Android {version}");
     let android_code = android_version_code(paths, &version, false)?;
-    let source_sha = android_source_sha(paths)?;
+    let source = super::source_identity(paths)?;
 
     println!("==> 2/3 Build Android AAB");
-    build_android(paths, &version, android_code, &source_sha)?;
+    build_android(paths, &version, android_code, &source.sha, &source.url)?;
 
     println!("==> 3/3 Test and publish");
-    test_android(paths, &version, android_code, &source_sha)?;
+    test_android(paths, &version, android_code, &source.sha)?;
     publish_android(paths, android_code)?;
     println!("✅ Android {version} (code {android_code}) published");
     Ok(())
@@ -402,12 +402,13 @@ fn android_version_code(paths: &Paths, _version: &str, _bump: bool) -> Result<u3
     Ok(next)
 }
 
-fn android_source_sha(paths: &Paths) -> Result<String> {
-    let root = paths.root.to_str().context("workspace path is not UTF-8")?;
-    output("git", &["-C", root, "rev-parse", "HEAD"])
-}
-
-fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &str) -> Result<()> {
+fn build_android(
+    paths: &Paths,
+    version: &str,
+    version_code: u32,
+    source_sha: &str,
+    source_url: &str,
+) -> Result<()> {
     let project = paths.root.join(ANDROID_PROJECT);
     let gradlew = project.join("gradlew");
     let key_properties = project.join("key.properties");
@@ -421,6 +422,7 @@ fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &s
     let version_name_arg = format!("-PsowVersionName={version}");
     let version_code_arg = format!("-PsowVersionCode={version_code}");
     let source_sha_arg = format!("-PsowSourceSha={source_sha}");
+    let source_url_arg = format!("-PsowSourceUrl={source_url}");
     let revenuecat_key = env::var("SOW_REVENUECAT_ANDROID_PUBLIC_KEY")
         .context("SOW_REVENUECAT_ANDROID_PUBLIC_KEY must be provided via sow-dist/.env")?;
     if !revenuecat_key.starts_with("goog_") {
@@ -445,6 +447,7 @@ fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &s
             &version_name_arg,
             &version_code_arg,
             &source_sha_arg,
+            &source_url_arg,
             &revenuecat_key_arg,
             &play_games_app_id_arg,
             &play_games_client_id_arg,
@@ -468,6 +471,7 @@ fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &s
     let build_config = fs::read_to_string(&release_build_config)
         .with_context(|| format!("read {}", release_build_config.display()))?;
     if !build_config.contains(&format!("SOW_SOURCE_SHA = \"{source_sha}\""))
+        || !build_config.contains(&format!("SOW_SOURCE_URL = \"{source_url}\""))
         || !build_config.contains(&format!("VERSION_CODE = {version_code};"))
     {
         bail!("Android release artifact identity is not bound to source SHA/versionCode");
@@ -480,6 +484,7 @@ fn build_android(paths: &Paths, version: &str, version_code: u32, source_sha: &s
     if !merged_manifest.contains("package=\"com.shadowsofwar\"")
         || !merged_manifest.contains(&format!("android:versionCode=\"{version_code}\""))
         || !merged_manifest.contains(&format!("sow_source_sha={source_sha}"))
+        || !merged_manifest.contains(&format!("{source_url}"))
     {
         bail!("Android release manifest identity is not bound to source SHA/versionCode");
     }
@@ -575,18 +580,7 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 
 fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     super::validate_current_ui_contract(paths)?;
-    let dirty_files = workspace_dirty_files(paths)?;
-    if dirty_files.is_empty() {
-        println!("  worktree clean");
-    } else {
-        println!(
-            "  worktree dirty ({} files — included in release):",
-            dirty_files.len()
-        );
-        for file in &dirty_files {
-            println!("    {file}");
-        }
-    }
+    require_published_source(paths)?;
     for command in [
         "cargo", "curl", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
     ] {
@@ -692,15 +686,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
 }
 
 fn preflight_android(paths: &Paths) -> Result<()> {
-    let dirty_files = workspace_dirty_files(paths)?;
-    if dirty_files.is_empty() {
-        println!("  worktree clean");
-    } else {
-        println!(
-            "  worktree dirty ({} files — Android build uses current workspace):",
-            dirty_files.len()
-        );
-    }
+    require_published_source(paths)?;
     for command in ["adb", "java"] {
         if !Command::new("/bin/sh")
             .args(["-c", &format!("command -v {command} >/dev/null")])
@@ -800,6 +786,31 @@ fn workspace_dirty_files(paths: &Paths) -> Result<Vec<String>> {
         .lines()
         .map(str::to_string)
         .collect())
+}
+
+fn require_published_source(paths: &Paths) -> Result<super::SourceIdentity> {
+    if !workspace_dirty_files(paths)?.is_empty() {
+        bail!("release source must be committed and publicly available before building");
+    }
+    let source = super::source_identity(paths)?;
+    let status = super::output(
+        "curl",
+        &[
+            "-fsSL",
+            "--max-time",
+            "20",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            &source.url,
+        ],
+    )?;
+    if status != "200" {
+        bail!("release source is not publicly available: {}", source.url);
+    }
+    println!("  published source: {}", source.url);
+    Ok(source)
 }
 
 fn relay_worker_count() -> Result<usize> {
@@ -1342,7 +1353,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
 fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let local = paths.root.join("dist/freebsd-bin");
     let fingerprint = input_fingerprint(
-        "freebsd-v4",
+        "freebsd-v5",
         "",
         &[
             &paths.root.join("Cargo.toml"),
@@ -1351,6 +1362,9 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
             &paths.root.join("sow-data"),
             &paths.root.join("sow-net"),
             &paths.root.join("sow-server"),
+            // Compile-time assets referenced from outside the Rust crates.
+            &paths.root.join("assets/geo_entities.json"),
+            &paths.root.join("assets/maps/world/map.bin.br"),
         ],
     )?;
     let cache = paths.root.join("dist/.sow-state/freebsd-build");
@@ -1650,6 +1664,7 @@ fn assemble_release(
     config: &Config,
 ) -> Result<Release> {
     let revision = output("git", &["rev-parse", "--short=12", "HEAD"])?;
+    let source = super::source_identity(paths)?;
     let dirty_files = workspace_dirty_files(paths)?;
     let work = paths.root.join("dist/.release");
     if work.exists() {
@@ -1802,6 +1817,21 @@ fn assemble_release(
     require_file(&work.join("web/sitemap.xml"), "sitemap.xml")?;
     require_file(&work.join("web/game-manifest.json"), "game manifest")?;
     require_file(&work.join("maps/world/map.bin"), "server map")?;
+    require_file(&work.join("maps/NOTICE"), "map attribution notice")?;
+    let game_manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(work.join("web/game-manifest.json"))?)?;
+    if game_manifest
+        .get("source_sha")
+        .and_then(serde_json::Value::as_str)
+        != Some(source.sha.as_str())
+        || game_manifest
+            .get("source_url")
+            .and_then(serde_json::Value::as_str)
+            != Some(source.url.as_str())
+        || !fs::read_to_string(work.join("web/play/index.html"))?.contains(&source.url)
+    {
+        bail!("game source link does not match the release source revision");
+    }
 
     let components = [
         ("web", component_hash(&work.join("web"))?),
@@ -1833,6 +1863,8 @@ fn assemble_release(
         serde_json::to_vec_pretty(&json!({
             "version": version,
             "git": revision,
+            "source_sha": source.sha,
+            "source_url": source.url,
             "dirty": !dirty_files.is_empty(),
             "dirty_files": dirty_files,
             "components": components.iter().map(|(name, hash)| json!({"name": name, "sha256": hash})).collect::<Vec<_>>(),
@@ -2221,7 +2253,7 @@ fn activate_control_host(
 ) -> Result<()> {
     let stage = format!("{}/release", config.remote_stage.trim_end_matches('/'));
     let target = format!("{REMOTE_RELEASES}/{}", release.id);
-    let server_restart = plan.server || plan.ops;
+    let server_restart = plan.server || plan.maps || plan.ops;
     let db_restart = plan.database || plan.ops;
     let nginx_reload = plan.ops;
     let runtime_env = plan.server || plan.database || plan.ops;

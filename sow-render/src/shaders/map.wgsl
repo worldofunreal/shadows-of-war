@@ -9,6 +9,7 @@ struct Globals {
     shore_thickness: f32,
     shore_darkness: f32,
     threat_slots: array<vec4<f32>, 8>,
+    alliance_celebration_slots: array<vec4<f32>, 16>,
     effect_shockwave: f32,
     effect_breathe: f32,
     effect_energy_flow: f32,
@@ -141,6 +142,35 @@ fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>) -> vec3<f32>
         return mix(base, vec3<f32>(1.0, 0.78, 0.30), lattice * 0.28);
     }
     return base;
+}
+
+fn apply_alliance_celebration(
+    base: vec3<f32>,
+    world_pos: vec2<f32>,
+    center: vec2<f32>,
+    age: f32,
+    accent: vec3<f32>,
+    is_border: bool
+) -> vec3<f32> {
+    let fade = 1.0 - smoothstep(0.72, 1.0, age);
+    let intro = 1.0 - smoothstep(0.0, 0.3, age);
+    let wave_radius = age * 24.0;
+    let wave = 1.0 - smoothstep(0.6, 2.2, abs(distance(world_pos, center) - wave_radius));
+
+    let tile = floor(world_pos);
+    let tile_hash = fract(sin(dot(tile, vec2<f32>(127.1, 311.7))) * 43758.5453);
+    let sparkle_phase = fract(age * 5.0 + tile_hash);
+    let sparkle_pulse = smoothstep(0.68, 0.82, sparkle_phase)
+        * (1.0 - smoothstep(0.90, 0.98, sparkle_phase));
+    let sparkle = select(0.0, sparkle_pulse, tile_hash > 0.76);
+
+    let fill_alpha = clamp(fade * (0.10 + intro * 0.28 + wave * 0.48 + sparkle * 0.42), 0.0, 0.78);
+    var color = mix(base, accent, fill_alpha);
+    color += accent * sparkle * fade * 0.32;
+    if is_border {
+        color = mix(color, accent, fade * 0.72);
+    }
+    return color;
 }
 
 fn blend_channel_overlay(base: f32, blend: f32) -> f32 {
@@ -422,6 +452,33 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         }
     }
 
+    // ── Bilateral alliance celebration: wave + territorial shimmer ──
+    if owner_id > 0u && is_land {
+        for (var ai = 0; ai < 8; ai = ai + 1) {
+            let first = globals.alliance_celebration_slots[ai * 2];
+            let second = globals.alliance_celebration_slots[ai * 2 + 1];
+            if first.x > 0.0 && u32(round(first.x)) == owner_id {
+                base_color = apply_alliance_celebration(
+                    base_color,
+                    hex_center,
+                    first.yz,
+                    first.w,
+                    vec3<f32>(0.18, 0.78, 1.0),
+                    is_border
+                );
+            } else if second.x > 0.0 && u32(round(second.x)) == owner_id {
+                base_color = apply_alliance_celebration(
+                    base_color,
+                    hex_center,
+                    second.yz,
+                    second.w,
+                    vec3<f32>(1.0, 0.70, 0.18),
+                    is_border
+                );
+            }
+        }
+    }
+
     // ── WAR FOG + FRONTIER GLOW ──
     if (globals.effect_war_fog > 0.0) {
         let world_pos_hex = hex_to_world(cell_hex);
@@ -681,6 +738,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     // ── Building Placement Holographic Grid ──
     if (globals.effect_holo_grid > 0.0 && globals.hover_building_kind > 0.0) {
         var cell_in_nobuild_zone = false;
+        var is_upgrade_target = false;
         for (var i = 0; i < 32; i = i + 1) {
             let slot = globals.nobuild_slots[i];
             let active_flag = slot.w;
@@ -688,7 +746,9 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                 let b_hex = vec2<i32>(i32(slot.x), i32(slot.y));
                 let b_dist = hex_distance(cell_hex, b_hex);
                 let block_radius = i32(slot.z);
-                if (b_dist < block_radius) {
+                if (active_flag > 1.0 && b_dist == 0) {
+                    is_upgrade_target = true;
+                } else if (active_flag == 1.0 && b_dist < block_radius) {
                     cell_in_nobuild_zone = true;
                 }
             }
@@ -699,12 +759,15 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         let cell_w = hex_to_world(cell_hex);
         let dist_w = distance(hover_w, cell_w);
 
-        if (dist_w <= 6.0) {
+        if (dist_w <= 6.0 || is_upgrade_target) {
             let is_mine = owner_id == u32(globals.my_player_id);
             if (is_land && is_mine) {
                 var overlay_color = vec3<f32>(0.0, 0.85, 1.0);
                 var fill_intensity = 0.28;
-                if (cell_in_nobuild_zone) {
+                if (is_upgrade_target) {
+                    overlay_color = vec3<f32>(1.0, 0.72, 0.16);
+                    fill_intensity = 0.42;
+                } else if (cell_in_nobuild_zone) {
                     overlay_color = vec3<f32>(1.0, 0.15, 0.15);
                     fill_intensity = 0.38;
                 }
