@@ -304,10 +304,11 @@
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
         }
         if (machineView.reactionData && machineView.reactionTarget !== runtime.cameraReactionTarget) {
-            runtime.cameraReactionTarget = machineView.reactionTarget;
             var faction = (hud.players || []).find(function (item) { return item && item.name === machineView.reactionTarget; });
             if (faction && Number.isFinite(Number(faction.centroid_x)) && Number.isFinite(Number(faction.centroid_y))) {
-                send("focus_world", { x: Number(faction.centroid_x), y: Number(faction.centroid_y) });
+                if (send("focus_world", { x: Number(faction.centroid_x), y: Number(faction.centroid_y) })) {
+                    runtime.cameraReactionTarget = machineView.reactionTarget;
+                }
             }
         } else if (!machineView.reactionData) runtime.cameraReactionTarget = null;
         if (machineView.choices && machineView.choices.length) {

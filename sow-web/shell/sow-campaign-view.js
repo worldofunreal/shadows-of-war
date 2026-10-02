@@ -6,6 +6,7 @@
         const doc = root.ownerDocument;
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
+        let objectiveExpanded = false, objectiveStepId = null;
         let guideWasVisible = false, guideX = null, guideY = null, nudgeTimer = 0;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
@@ -17,20 +18,21 @@
                 '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
             '</article>' +
             '<aside class="sow-story__objective" hidden><span class="sow-story__objective-mark" aria-hidden="true">◇</span>' +
-                '<div class="sow-story__objective-copy"><div class="sow-story__objective-speaker" hidden><img alt="" draggable="false"><span></span></div><h3></h3><p></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
-                '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
+                '<div class="sow-story__objective-copy"><h3></h3><div class="sow-story__objective-details" id="' + uid + '-objective-details"><div class="sow-story__objective-speaker" hidden><img alt="" draggable="false"><span></span></div><p></p></div><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
+                '<button class="sow-story__locate" type="button" data-story-focus>⌖</button><button class="sow-story__objective-toggle" type="button" data-story-objective-toggle aria-controls="' + uid + '-objective-details" aria-expanded="false" aria-label="">⌄</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
-            '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span></div>';
+            '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__gesture-label" hidden></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
         const portrait = find(".sow-story__portrait"), image = portrait.querySelector("img");
         const speaker = find(".sow-story__speaker"), title = find(".sow-story__title"), body = find(".sow-story__body");
-        const conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
+        const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
+        const objectiveToggle = find("[data-story-objective-toggle]");
         const objectiveSpeaker = find(".sow-story__objective-speaker"), objectiveSpeakerImage = objectiveSpeaker.querySelector("img"), objectiveSpeakerName = objectiveSpeaker.querySelector("span");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
-        const gesture = find(".sow-story__gesture"), spotlight = find(".sow-story__spotlight");
+        const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), spotlight = find(".sow-story__spotlight");
         const view = doc.defaultView;
         let portraitFrame = 0;
         function clearNudge() {
@@ -60,10 +62,12 @@
             const shortLandscape = Boolean(view && view.matchMedia && view.matchMedia("(orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse)").matches);
             if (root.clientWidth > 640 && !shortLandscape) { root.style.removeProperty("--story-portrait-size"); return; }
             if (portrait.hidden) return;
-            const contentHeight = conversation.getBoundingClientRect().height;
-            const maxSize = Math.min(144, root.clientWidth * 0.36);
+            const headingStyle = view && typeof view.getComputedStyle === "function" ? view.getComputedStyle(heading) : null;
+            const headingGap = headingStyle ? parseFloat(headingStyle.marginBottom) || 0 : 0;
+            const contentHeight = heading.getBoundingClientRect().height + headingGap + scrollContent.scrollHeight;
+            const maxSize = Math.min(root.clientWidth * 0.36, root.clientHeight * 0.4);
             if (!contentHeight || !maxSize) return;
-            const size = Math.max(64, Math.min(contentHeight, maxSize));
+            const size = Math.min(contentHeight, maxSize);
             const current = parseFloat(root.style.getPropertyValue("--story-portrait-size"));
             if (!Number.isFinite(current) || Math.abs(current - size) >= 1) root.style.setProperty("--story-portrait-size", size + "px");
         }
@@ -72,11 +76,17 @@
             if (portraitFrame || !view) return;
             portraitFrame = view.requestAnimationFrame(() => { portraitFrame = 0; syncMobilePortrait(); });
         }) : null;
-        if (portraitObserver) portraitObserver.observe(conversation);
+        if (portraitObserver) { portraitObserver.observe(conversation); portraitObserver.observe(root); }
         find(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
         const dismissButtons = Array.from(root.querySelectorAll("[data-story-dismiss]"));
         const t = key => key ? options.translate(key) : "";
         function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
+        function setObjectiveExpanded(expanded) {
+            objectiveExpanded = Boolean(expanded);
+            objective.classList.toggle("is-expanded", objectiveExpanded);
+            objectiveToggle.setAttribute("aria-expanded", String(objectiveExpanded));
+            objectiveToggle.textContent = objectiveExpanded ? "⌃" : "⌄";
+        }
         function releaseFocus() {
             if (focusBefore && focusBefore.isConnected && typeof focusBefore.focus === "function") focusBefore.focus({ preventScroll: true });
             focusBefore = null;
@@ -90,8 +100,9 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { guideWasVisible = false; clearNudge(); if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { guideWasVisible = false; clearNudge(); objectiveStepId = null; setObjectiveExpanded(false); if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
+            if (objectiveStepId !== step.id) { objectiveStepId = step.id; setObjectiveExpanded(false); }
             footer.hidden = step.type === "choice" || step.pause_game === true;
             const beatKey = JSON.stringify([step.id, model.state && model.state.line]);
             const beatChanged = Boolean(lastBeatKey && beatKey !== lastBeatKey);
@@ -100,7 +111,7 @@
             const reducedMotion = Boolean(context.reducedMotion || (doc.defaultView && doc.defaultView.matchMedia && doc.defaultView.matchMedia("(prefers-reduced-motion: reduce)").matches));
             root.dir = context.direction || doc.documentElement.dir || "ltr";
             root.dataset.localeScript = context.localeScript || doc.documentElement.dataset.localeScript || "latin";
-            const modal = Boolean(model.paused);
+            const modal = ["scene", "choice", "end"].includes(step.type);
             root.classList.toggle("is-modal", modal);
             root.classList.toggle("is-chapter", step.presentation === "chapter");
             root.classList.toggle("is-reduced", reducedMotion);
@@ -178,6 +189,7 @@
             setText(continueButton.querySelector("span"), t(step.type === "end" ? "tutorial.complete" : "tutorial.continue"));
             dismissButtons.forEach(button => { button.hidden = !options.onDismiss; button.setAttribute("aria-label", t("hud.leave_match")); });
             setText(objectiveTitle, t(step.title_key));
+            objectiveToggle.setAttribute("aria-label", t("tutorial.objective_details"));
             objectiveSpeaker.hidden = !step.speaker || !speakerName;
             setText(objectiveSpeakerName, speakerName);
             const objectiveAvatar = character.avatar ? options.asset("gameplay/avatars/" + character.avatar + ".webp") : "";
@@ -201,6 +213,9 @@
                 { duration: 180, easing: "cubic-bezier(.2,.7,.2,1)" }
             );
             const anchor = context.anchor;
+            const zoomGuide = step.guide && step.guide.gesture && step.guide.gesture.startsWith("zoom_");
+            gestureLabel.hidden = !zoomGuide;
+            if (zoomGuide) setText(gestureLabel, t(step.title_key));
             const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
             gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
             if (guideVisible) {
@@ -238,6 +253,7 @@
             if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
             else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
+            else if (button.hasAttribute("data-story-objective-toggle")) setObjectiveExpanded(!objectiveExpanded);
             else if (button.hasAttribute("data-story-dismiss") && options.onDismiss) options.onDismiss();
         }
         function outsideClick(event) {
@@ -260,7 +276,7 @@
             if (model.paused) event.stopPropagation();
             if (event.repeat) return;
             if (event.key === "Escape" && options.onDismiss) { event.preventDefault(); options.onDismiss(); }
-            else if (event.key === "Tab" && model.paused) {
+            else if (event.key === "Tab" && model.paused && ["scene", "choice", "end"].includes(model.step.type)) {
                 const buttons = Array.from(dialog.querySelectorAll("button")).filter(button => !button.hidden && !button.closest("[hidden]"))
                     .sort((a, b) => Number(a.hasAttribute("data-story-dismiss")) - Number(b.hasAttribute("data-story-dismiss")));
                 const index = buttons.indexOf(doc.activeElement);

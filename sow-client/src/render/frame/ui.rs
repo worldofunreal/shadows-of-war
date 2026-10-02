@@ -1,5 +1,6 @@
 use crate::ClientPhase;
 use crate::app::SowApp;
+use crate::input::surface::clamp_camera_offset;
 use web_time::{Duration, Instant};
 
 impl SowApp {
@@ -26,19 +27,42 @@ impl SowApp {
         }
         if self.input.dragging {
             self.input.camera_focus_target = None;
+            self.input.tutorial_camera_focus = false;
         }
         if let Some((world_x, world_y)) = self.input.camera_focus_target {
             let rate = if self.input.tutorial_camera_focus { 2.0 } else { 12.0 };
             let lerp = (1.0 - f32::exp(-rate * dt)).clamp(0.0, 1.0);
             self.input.camera_zoom += (self.input.target_zoom - self.input.camera_zoom) * lerp;
-            let target_x = self.input.screen_w * 0.5 - world_x * self.input.camera_zoom;
-            let target_y = self.input.screen_h * 0.5 - world_y * self.input.camera_zoom;
+            self.clamp_camera_to_map();
+            let target_x = clamp_camera_offset(
+                self.input.screen_w,
+                self.sim.map_w as f32 * self.input.camera_zoom,
+                self.input.screen_w * 0.5 - world_x * self.input.camera_zoom,
+            );
+            let target_y = clamp_camera_offset(
+                self.input.screen_h,
+                self.sim.map_h as f32 * self.input.camera_zoom,
+                self.input.screen_h * 0.5 - world_y * self.input.camera_zoom,
+            );
             self.input.camera_x += (target_x - self.input.camera_x) * lerp;
             self.input.camera_y += (target_y - self.input.camera_y) * lerp;
             self.clamp_camera_to_map();
             if (target_x - self.input.camera_x).abs() < 0.5
                 && (target_y - self.input.camera_y).abs() < 0.5
+                && (self.input.target_zoom - self.input.camera_zoom).abs() < 0.001
             {
+                self.input.camera_zoom = self.input.target_zoom;
+                self.input.camera_x = clamp_camera_offset(
+                    self.input.screen_w,
+                    self.sim.map_w as f32 * self.input.camera_zoom,
+                    self.input.screen_w * 0.5 - world_x * self.input.camera_zoom,
+                );
+                self.input.camera_y = clamp_camera_offset(
+                    self.input.screen_h,
+                    self.sim.map_h as f32 * self.input.camera_zoom,
+                    self.input.screen_h * 0.5 - world_y * self.input.camera_zoom,
+                );
+                self.clamp_camera_to_map();
                 self.input.camera_focus_target = None;
                 if self.input.tutorial_camera_focus {
                     self.input.tutorial_camera_focus = false;

@@ -803,10 +803,14 @@ impl SowApp {
                 self.add_action_feedback("Building under construction. 🏗️");
                 return false;
             }
-            if building.level >= kind.max_level()
-                || !self.structure_upgrade_requirement_met(&building)
-            {
-                self.add_action_feedback("Action unavailable here.");
+            if building.level >= kind.max_level() {
+                self.add_map_feedback(crate::ui::UiText::new("hud.building_max_level"));
+                return false;
+            }
+            if !self.structure_upgrade_requirement_met(&building) {
+                self.add_map_feedback(crate::ui::UiText::new(
+                    "hud.building_requires_city_level",
+                ));
                 return false;
             }
             let cost = self

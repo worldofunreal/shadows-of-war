@@ -136,7 +136,7 @@ const PLAYER_COLOR = "#f0902a";
 const ALLY_COLOR = "#4b91ff", ENEMY_COLOR = "#ff5656";
 const FACTION_COLORS = ["#4ca572", "#a88c40", "#8c59a8", "#40999e", "#b87366", "#7380b8"];
 const RELATIONS = { neutral:"Neutral", allied:"Ally", enemy:"Enemy" };
-const HOSTILITIES = { passive:"Passive", aggressive:"Aggressive" };
+const HOSTILITIES = { passive:"Passive", aggressive:"Aggressive", food:"Food · no attacks or defense" };
 const BETRAYALS = { never:"Never", opportunistic:"Opportunistic" };
 function factionColor(f){ return f.relation==="allied" ? ALLY_COLOR : f.relation==="enemy" ? ENEMY_COLOR : (f.color || FACTION_COLORS[0]); }
 // Bot IQ tiers grounded in the engine (sow-core player/diplomacy/intent): default 100; AI smarts
@@ -154,6 +154,7 @@ let entityCatalog = null;
 let atlasEntityPicker = null;
 let rosterEtag = null;
 let rosterDirty = false, rosterExternal = false, rosterSaving = false;
+const factionRenameOrigins = new WeakMap(), factionRenames = new Map();
 let sel = -1;                  // index into factions, or -2 = player spawn
 let scale = 1, ox = 0, oy = 0, fitScale = 1, minScale = 0.5, maxScale = 12, viewWidth = 1, viewHeight = 1, dpr = 1; // view: sx = mx*scale+ox
 let hovered = -1, panning = false, panStart = null;
@@ -321,6 +322,8 @@ function renderSide() {
     document.getElementById("playerColor").oninput = e => { roster.player_color=e.target.value; markRosterDirty(); draw(); };
   } else if (sel >= 0) {
     const f = roster.factions[sel];
+    const originalName = factionRenameOrigins.get(f) || f.name;
+    factionRenameOrigins.set(f, originalName);
     const opts = Object.keys(ROLES).map(k=>`<option value="${k}" ${k===f.role?"selected":""}>${ROLES[k].label}</option>`).join("");
     const relationOpts = Object.entries(RELATIONS).map(([value,label])=>`<option value="${value}" ${value===f.relation?"selected":""}>${label}</option>`).join("");
     const hostilityOpts = Object.entries(HOSTILITIES).map(([value,label])=>`<option value="${value}" ${value===f.hostility?"selected":""}>${label}</option>`).join("");
@@ -331,6 +334,7 @@ function renderSide() {
     const iq = f.iq ?? 100;
     const goldLootBonus = f.gold_loot_bonus ?? 0;
     const standardGoldBounty = ["boss", "big_boss"].includes(f.role) ? 1250 : 500;
+    const goldLootOverride = f.gold_loot_override;
     host.innerHTML = `<label>Name</label><input id="fn" value="${escapeHtml(f.name)}">
       <label>Role</label><select id="fr">${opts}</select>
       <label>Initial relationship to the player</label><select id="frelation">${relationOpts}</select>
@@ -339,8 +343,9 @@ function renderSide() {
       <label>Neutral faction color</label><input id="fcolor" type="color" value="${escapeHtml(f.color || FACTION_COLORS[0])}">
       <label>Nameplate and dialogue portrait</label><div class="faction-avatar-picker"><img id="fportrait" width="256" height="256" alt=""><select id="fa">${avatarHtml}</select></div>
       <label>Ally support interval (seconds; blank disables)</label><input id="finterval" type="number" min="5" max="600" value="${f.support_interval_seconds ?? ""}" placeholder="Disabled">
+      <label>Fixed gold loot on defeat (blank uses normal scaling)</label><input id="fgoldlootoverride" type="number" min="0" max="1000000" step="1" value="${goldLootOverride ?? ""}" placeholder="Normal: ${standardGoldBounty} base">
       <label>Bonus gold loot on defeat</label><input id="fgoldloot" type="number" min="0" max="1000000" step="1" value="${goldLootBonus}">
-      <div class="hint" id="goldLootPreview">Defeat loot: ${standardGoldBounty.toLocaleString()} base + ${goldLootBonus.toLocaleString()} bonus; base grows 0.01% per game tick.</div>
+      <div class="hint" id="goldLootPreview"></div>
       <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
       <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
       <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
@@ -369,7 +374,12 @@ function renderSide() {
       factionPortrait.src = "/assets/gameplay/avatars/null.webp";
     };
     updateFactionPortrait(f.avatar);
-    document.getElementById("fn").oninput = e => { f.name=e.target.value; factionPortrait.alt=`${f.name} portrait`; renderList(); draw(); };
+    document.getElementById("fn").oninput = e => {
+      f.name=e.target.value;
+      if (f.name === originalName) factionRenames.delete(originalName);
+      else factionRenames.set(originalName, f.name);
+      factionPortrait.alt=`${f.name} portrait`; markRosterDirty(); renderList(); draw();
+    };
     document.getElementById("fr").onchange = e => { f.role=e.target.value; renderList(); renderSide(); draw(); };
     document.getElementById("frelation").onchange = e => { f.relation=e.target.value; markRosterDirty(); updateFactionHint(); renderList(); draw(); };
     document.getElementById("fhostility").onchange = e => { f.hostility=e.target.value; markRosterDirty(); updateFactionHint(); };
@@ -377,10 +387,24 @@ function renderSide() {
     document.getElementById("fcolor").oninput = e => { f.color=e.target.value; markRosterDirty(); draw(); };
     document.getElementById("fa").onchange = e => { if(e.target.value) f.avatar=e.target.value; else delete f.avatar; updateFactionPortrait(f.avatar); markRosterDirty(); };
     document.getElementById("finterval").oninput = e => { if(e.target.value==="") delete f.support_interval_seconds; else f.support_interval_seconds=Number(e.target.value); markRosterDirty(); };
+    const updateGoldLootPreview = () => {
+      const override = f.gold_loot_override;
+      const bonus = f.gold_loot_bonus ?? 0;
+      document.getElementById("goldLootPreview").textContent = override == null
+        ? `Defeat loot: ${standardGoldBounty.toLocaleString()} base + ${bonus.toLocaleString()} bonus; base grows 0.01% per game tick.`
+        : `Defeat loot: ${override.toLocaleString()} fixed; ignores the bonus and survival-time increase.`;
+    };
+    updateGoldLootPreview();
+    document.getElementById("fgoldlootoverride").oninput = e => {
+      if (e.target.value === "") delete f.gold_loot_override;
+      else f.gold_loot_override = Number(e.target.value);
+      updateGoldLootPreview();
+      markRosterDirty();
+    };
     document.getElementById("fgoldloot").oninput = e => {
       const value = e.target.value === "" ? 0 : Number(e.target.value);
       if (value > 0) f.gold_loot_bonus = value; else delete f.gold_loot_bonus;
-      document.getElementById("goldLootPreview").textContent = `Defeat loot: ${standardGoldBounty.toLocaleString()} base + ${Math.max(0, value).toLocaleString()} bonus; base grows 0.01% per game tick.`;
+      updateGoldLootPreview();
       markRosterDirty();
     };
     document.getElementById("fgroup").oninput = e => { if(e.target.value.trim()) f.alliance_group=e.target.value.trim(); else delete f.alliance_group; markRosterDirty(); };
@@ -495,7 +519,7 @@ function serialize() {
     map: roster.map || "eastanglia",
     player_spawn: roster.player_spawn.map(n=>Math.round(n)),
     player_color: roster.player_color || PLAYER_COLOR,
-    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, relation:f.relation, hostility:f.hostility, betrayal:f.betrayal, color:f.color, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
+    factions: roster.factions.map(f=>({ name:f.name, x:Math.round(f.x), y:Math.round(f.y), role:f.role, relation:f.relation, hostility:f.hostility, betrayal:f.betrayal, color:f.color, iq:f.iq??100, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.gold_loot_override!=null?{gold_loot_override:Number(f.gold_loot_override)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.civ?{civ:f.civ}:{}), ...(f.leader?{leader:f.leader}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
@@ -505,13 +529,22 @@ async function saveRoster(){
   try {
     const file = `${episodeId}.json`;
     const savedDraft = serialize();
-    const res = await fetch(`/__save?file=${encodeURIComponent(file)}`, {method:"POST", headers:{"Content-Type":"application/json", "If-Match":rosterEtag||""}, body:savedDraft});
+    const renames = Array.from(factionRenames, ([from, to]) => ({ from, to }));
+    const body = renames.length ? JSON.stringify({ roster: JSON.parse(savedDraft), faction_renames: renames }) : savedDraft;
+    const res = await fetch(`/__save?file=${encodeURIComponent(file)}`, {method:"POST", headers:{"Content-Type":"application/json", "If-Match":rosterEtag||""}, body});
     if(!res.ok){ if(res.status===409){ rosterExternal=true; document.getElementById("rosterStatus").textContent="Changed elsewhere · draft preserved"; } throw new Error(await res.text()); }
     rosterEtag = res.headers.get("ETag");
     rosterDirty = serialize() !== savedDraft; rosterExternal = false;
+    const savedRoster = JSON.parse(savedDraft);
+    factionRenames.clear();
+    roster.factions.forEach((faction, index) => {
+      const savedName = savedRoster.factions[index].name;
+      factionRenameOrigins.set(faction, savedName);
+      if (faction.name !== savedName) factionRenames.set(savedName, faction.name);
+    });
     document.getElementById("rosterStatus").textContent = rosterDirty ? "Newer edits not saved" : "Saved";
     document.getElementById("rosterStatus").className = rosterDirty ? "hint warn" : "hint";
-    toast(rosterDirty ? "Saved; newer map edits remain" : `Saved → assets/campaign/${file}`);
+    toast(rosterDirty ? "Saved; newer map edits remain" : renames.length ? "Saved name and updated campaign references" : `Saved → assets/campaign/${file}`);
     return !rosterDirty;
   } catch(e){ toast("Save failed: "+e.message); }
   finally { rosterSaving = false; }
@@ -543,7 +576,7 @@ document.getElementById("fileIn").onchange = e => {
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 
 function normalize(j){
-  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], player_color:j.player_color||PLAYER_COLOR, factions:(j.factions||[]).map((f,index)=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",relation:f.relation||"neutral",hostility:f.hostility||"passive",betrayal:f.betrayal||"never",color:f.color||FACTION_COLORS[index%FACTION_COLORS.length],iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
+  const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], player_color:j.player_color||PLAYER_COLOR, factions:(j.factions||[]).map((f,index)=>({name:f.name,x:f.x|0,y:f.y|0,role:f.role||"neutral",relation:f.relation||"neutral",hostility:f.hostility||"passive",betrayal:f.betrayal||"never",color:f.color||FACTION_COLORS[index%FACTION_COLORS.length],iq:(f.iq==null?100:f.iq|0),...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}),...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}),...(f.gold_loot_override!=null?{gold_loot_override:Number(f.gold_loot_override)}:{}),...(f.alliance_group?{alliance_group:f.alliance_group}:{}),...(f.civ?{civ:f.civ}:{}),...(f.leader?{leader:f.leader}:{}),...(f.avatar?{avatar:f.avatar}:{})})) };
   validateRoster(result);
   return result;
 }
@@ -552,7 +585,7 @@ function validateRoster(value){
   const names = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || !Object.prototype.hasOwnProperty.call(HOSTILITIES,f.hostility) || !Object.prototype.hasOwnProperty.call(BETRAYALS,f.betrayal) || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
+    if(!f.name || names.has(f.name) || !Object.prototype.hasOwnProperty.call(ROLES,f.role) || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || !Object.prototype.hasOwnProperty.call(HOSTILITIES,f.hostility) || !Object.prototype.hasOwnProperty.call(BETRAYALS,f.betrayal) || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isFinite(f.x) || !Number.isFinite(f.y) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.gold_loot_override!=null && (!Number.isInteger(f.gold_loot_override) || f.gold_loot_override<0 || f.gold_loot_override>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate name, or missing portrait asset");
     names.add(f.name);
   }
 }

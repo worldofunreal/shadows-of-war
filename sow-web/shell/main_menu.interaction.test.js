@@ -68,6 +68,7 @@ const eliminationSource = fs.readFileSync(path.join(shell, "../../sow-client/src
 const snapshotFxSource = fs.readFileSync(path.join(shell, "../../sow-client/src/sim/snapshot_fx.rs"), "utf8");
 const actionsSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/interact/actions.rs"), "utf8");
 const surfaceSource = fs.readFileSync(path.join(shell, "../../sow-client/src/input/surface.rs"), "utf8");
+const cameraFrameUiSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/ui.rs"), "utf8");
 const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
 const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
@@ -119,6 +120,39 @@ test("public landing keeps the video hero, interactive leader roster, community 
     assert.doesNotMatch(updates, /disabled|type="email"/);
     assert.match(siteCss, /\.hero-grid[^\n]*760px/);
     assert.match(siteCss, /\.faq-list \{ display: grid; grid-template-columns: 1fr;/);
+});
+
+test("CrazyGames menu links open the matching pages on the public site", () => {
+    const helper = shellSource.match(/function renderSiteLink\(path, key, className\) \{[\s\S]*?\n    \}/)?.[0];
+    assert.ok(helper, "main menu has no shared site-link renderer");
+    const portal = { SOW_PORTAL: "crazygames" };
+    const render = vm.runInNewContext(`(${helper})`, {
+        window: portal,
+        SOW_t: key => key,
+        esc: value => String(value)
+    });
+    assert.equal(
+        render("/terms/", "auth.terms", "sow-auth__terms"),
+        "<a class='sow-auth__terms' href='https://shadowsofwar.io/terms/' target='_blank' rel='noopener noreferrer'>auth.terms</a>"
+    );
+    portal.SOW_PORTAL = "site";
+    assert.equal(render("/terms/", "menu.terms"), "<a href='/terms/'>menu.terms</a>");
+
+    for (const [path, key] of [
+        ["/#faq", "site.faq"],
+        ["/support/", "menu.support"],
+        ["/terms/", "menu.terms"],
+        ["/privacy/", "menu.privacy"],
+        ["/cookies/", "menu.cookies"]
+    ]) {
+        assert.ok(shellSource.includes(`renderSiteLink("${path}", "${key}")`), `${path} is not routed through the shared link renderer`);
+    }
+    assert.ok(shellSource.includes('renderSiteLink("/terms/", "auth.terms", "sow-auth__terms")'));
+});
+
+test("CrazyGames font stylesheet and server keep the same cross-origin path", () => {
+    assert.ok(siteDistSource.includes('"https://shadowsofwar.io/fonts/fonts.css"'));
+    assert.match(siteRedirectConfig, /location \^~ \/fonts\/ \{\s*add_header Access-Control-Allow-Origin \*;\s*try_files \$uri =404;/);
 });
 
 test("landing alpha badges link to the iOS and Android tests in every locale", () => {
@@ -197,7 +231,7 @@ test("retired marketing pages stay deleted and redirect to the landing", () => {
         assert.ok(footer);
         assert.doesNotMatch(footer, /site\.nav_leaders|href=["']\/#leaders["']/);
     }
-    assert.match(shellSource, /href='\/#faq'/);
+    assert.ok(shellSource.includes('renderSiteLink("/#faq", "site.faq")'));
     assert.doesNotMatch(shellSource, /\/how-to-play\//);
     assert.ok(siteRedirectConfig.includes("location ~ ^/(leaders|how-to-play)/?$"));
     assert.ok(siteRedirectConfig.includes("return 301 https://shadowsofwar.io/;"));
@@ -1186,7 +1220,7 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         assert.ok(Object.values(definition.speakers || {}).some(speaker => speaker.avatar === expected[episodeId][1]), episodeId + " card leader portrait");
         for (const faction of roster.factions) {
             assert.ok(["allied", "neutral", "enemy"].includes(faction.relation), `${episodeId}/${faction.name}: relationship`);
-            assert.ok(["passive", "aggressive"].includes(faction.hostility), `${episodeId}/${faction.name}: hostility`);
+            assert.ok(["passive", "aggressive", "food"].includes(faction.hostility), `${episodeId}/${faction.name}: hostility`);
             assert.ok(["never", "opportunistic"].includes(faction.betrayal), `${episodeId}/${faction.name}: betrayal`);
             assert.match(faction.color, /^#[0-9a-f]{6}$/i, `${episodeId}/${faction.name}: map color`);
         }
@@ -1207,6 +1241,28 @@ test("campaign zoom input mode prioritizes TWA and touch devices, then Mac track
     assert.equal(campaign.zoomInputMode({ platform: "Linux x86_64" }), "wheel");
 });
 
+test("renaming a campaign faction updates linked objectives, settings, speakers and story text", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = {
+        settings: { buildings_unlock_after_defeated: "Old Name", campaign_support: { after_defeated: "Old Name", share_percent: 50 } },
+        speakers: { roman: { faction: "Old Name" } },
+        steps: [{ trigger: { target: "Old Name", targets: ["Old Name", "Other"] }, marker: { target: "Old Name" } }],
+        reactions: [{ when: { type: "contact", target: "Old Name" } }],
+        strings: { en: { hint: "Attack Old Name!", similar: "Old Namesake" }, es: { hint: "¡Ataca a Old Name!" } }
+    };
+    const renamed = campaign.renameFactionReferences(definition, [{ from: "Old Name", to: "Roman Outpost" }]);
+    assert.equal(renamed.settings.buildings_unlock_after_defeated, "Roman Outpost");
+    assert.equal(renamed.settings.campaign_support.after_defeated, "Roman Outpost");
+    assert.equal(renamed.speakers.roman.faction, "Roman Outpost");
+    assert.deepEqual(renamed.steps[0].trigger, { target: "Roman Outpost", targets: ["Roman Outpost", "Other"] });
+    assert.equal(renamed.steps[0].marker.target, "Roman Outpost");
+    assert.equal(renamed.reactions[0].when.target, "Roman Outpost");
+    assert.equal(renamed.strings.en.hint, "Attack Roman Outpost!");
+    assert.equal(renamed.strings.en.similar, "Old Namesake", "similar faction names stay unchanged");
+    assert.equal(renamed.strings.es.hint, "¡Ataca a Roman Outpost!");
+    assert.equal(definition.steps[0].trigger.target, "Old Name", "renaming preserves the original story draft");
+});
+
 test("Boudica opens with a choice, then guides allied support, rebuilding and three Roman outposts", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
@@ -1216,7 +1272,7 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(definition.settings.starting_troops, 2000);
     assert.equal(roster.factions.some(faction => faction.relation === "allied"), false, "Boudica starts without pre-made allies");
     assert.equal(roster.factions.filter(faction => faction.relation === "enemy").length, 11, "declared Roman enemies start red");
-    const target = roster.factions.find(faction => faction.name === "The Iceni Despoilers");
+    const target = roster.factions.find(faction => faction.name === "Roman Outpost");
     assert.deepEqual({ role: target.role, civ: target.civ, x: target.x, y: target.y }, { role: "vassal", civ: "Roman Empire", x: 706, y: 64 });
     for (const name of ["Colonia Veterans", "Tax Collectors"]) {
         const faction = roster.factions.find(item => item.name === name);
@@ -1260,12 +1316,10 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     direct.advance(null, victory.step.id);
     assert.equal(direct.view().step.id, "boudica_first_expansion");
     const expansion = direct.update({ ...victoryFacts, tiles_gained: 250 }, {});
-    assert.equal(expansion.step.id, "boudica_zoom_in");
-    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 0, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_in");
-    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 1, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_out");
-    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 1, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_out");
-    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_in_events: 1, zoom_out_events: 1 }, {}).step.id, "boudica_first_contact_intro");
-    direct.advance(null, direct.view().step.id);
+    assert.equal(expansion.step.id, "boudica_zoom_out");
+    assert.equal(expansion.step.pause_game, true);
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_out_events: 0 }, {}).step.id, "boudica_zoom_out");
+    assert.equal(direct.update({ ...victoryFacts, tiles_gained: 250, zoom_out_events: 1 }, {}).step.id, "boudica_first_contact");
     assert.equal(direct.view().step.id, "boudica_first_contact");
     assert.deepEqual(direct.view().step.trigger.targets, ["Stonea", "Snettisham", "Thetford"]);
     const stoneaContact = direct.update({ ...victoryFacts, tiles_gained: 250, contact_names: ["Stonea"] }, {});
@@ -1294,11 +1348,7 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(contactsOnly.update(twoContacts, {}).progress.current, 2);
     assert.equal(contactsOnly.view().progress.target, 3);
     const threeContacts = { ...twoContacts, contact_names: ["Stonea", "Snettisham", "Thetford"] };
-    assert.equal(contactsOnly.update(threeContacts, {}).step.id, "boudica_first_contact_response");
-    contactsOnly.advance(null, contactsOnly.view().step.id);
-    assert.equal(contactsOnly.view().step.id, "boudica_trinovantes_intro");
-    contactsOnly.advance(null, contactsOnly.view().step.id);
-    assert.equal(contactsOnly.view().step.id, "boudica_trinovantes_alliance");
+    assert.equal(contactsOnly.update(threeContacts, {}).step.id, "boudica_roman_outposts");
     const support = definition.steps.find(step => step.id === "boudica_ally_support_wait");
     assert.deepEqual(support.trigger, { type: "support", value: 1, scope: "total" });
     const iceniReactions = definition.reactions.filter(reaction => ["Stonea", "Snettisham", "Thetford"].includes(reaction.when.target));
@@ -1343,20 +1393,23 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(definition.steps.find(step => step.id === "boudica_choose_city").guide.target, "dock_city");
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_build_city").trigger, { type: "city", value: 1, scope: "step" });
     assert.deepEqual(definition.steps.find(step => step.id === "boudica_first_expansion").trigger, { type: "territory", value: 250, scope: "step" });
-    assert.deepEqual([step("boudica_zoom_in").trigger, step("boudica_zoom_out").trigger], [
-        { type: "zoom_in", value: 1, scope: "step" }, { type: "zoom_out", value: 1, scope: "step" }
-    ]);
-    assert.equal(step("boudica_zoom_in").guide.target, "player");
-    assert.equal(step("boudica_zoom_in").guide.gesture, "zoom_in");
-    assert.equal(step("boudica_zoom_in").next, "boudica_zoom_out");
+    assert.equal(step("boudica_zoom_in"), undefined);
+    assert.deepEqual(step("boudica_zoom_out").trigger, { type: "zoom_out", value: 1, scope: "step" });
+    assert.equal(step("boudica_zoom_out").pause_game, true);
     assert.equal(step("boudica_zoom_out").guide.gesture, "zoom_out");
-    assert.equal(step("boudica_zoom_out").next, "boudica_first_contact_intro");
-    for (const locale of ["en", "es"]) for (const direction of ["zoom_in", "zoom_out"]) {
-        for (const input of ["pinch", "trackpad", "wheel"]) assert.ok(definition.strings[locale][`tutorial.boudica_${direction}_${input}_hint`]);
+    assert.equal(step("boudica_zoom_out").next, "boudica_first_contact");
+    assert.equal(definition.strings.en["tutorial.boudica_zoom_out_title"], "Zoom out");
+    assert.equal(definition.strings.es["tutorial.boudica_zoom_out_title"], "Aleja el mapa");
+    for (const locale of ["en", "es"]) {
+        for (const input of ["pinch", "trackpad", "wheel"]) assert.ok(definition.strings[locale][`tutorial.boudica_zoom_out_${input}_hint`]);
+        assert.equal(definition.strings[locale]["tutorial.boudica_zoom_in_title"], undefined);
     }
     assert.match(windowInput, /record_tutorial_zoom\(self\.input\.camera_zoom - previous_zoom\)/);
     assert.match(windowInput, /record_tutorial_zoom\(self\.input\.target_zoom - previous_zoom\)/);
     assert.match(surfaceSource, /process_camera_zoom[\s\S]*?self\.input\.target_zoom = self\.input\.camera_zoom/);
+    assert.match(webMenu, /WebMenuCommand::FocusWorld \{ x, y \}[\s\S]*?camera_focus_target = Some\(\(x, y\)\);\s*self\.input\.tutorial_camera_focus = true/);
+    assert.match(cameraFrameUiSource, /target_zoom - self\.input\.camera_zoom\)\.abs\(\) < 0\.001/);
+    assert.match(cameraFrameUiSource, /clamp_camera_offset\(/);
     assert.doesNotMatch(actionsSource, /record_tutorial_zoom/);
     assert.match(tutorial, /step\.trigger\.type === "territory" && step\.guide\.target === "expand" && view && view\.progress\.current > 0\) return null/);
     assert.match(tutorial, /window\.SOWCampaign\.zoomInputMode/);
@@ -2056,10 +2109,18 @@ test("campaign saves use the current validator and call Save by its real action"
     const report = campaign.validate(definition, roster, { allowMissingFactionReferences: true, hasText: () => true, hasAvatar: () => true });
     assert.deepEqual(report.errors.filter(issue => issue.step === zoomOut.id), []);
 
+    const pausedScene = JSON.parse(JSON.stringify(definition));
+    pausedScene.steps.find(step => step.id === zoomOut.id).type = "scene";
+    const sceneReport = campaign.validate(pausedScene, roster, { allowMissingFactionReferences: true, hasText: () => true, hasAvatar: () => true });
+    assert.equal(sceneReport.errors.some(issue => issue.step === zoomOut.id && issue.field === "fields" && issue.message.includes("pause_game")), false,
+        "pause_game is accepted on every step type where the runtime reads it");
+
     assert.match(campaignEditorServer, /function loadCampaignRuntime\(\) \{\s*const modulePath = campaignRequire\.resolve\(campaignFile\);\s*delete campaignRequire\.cache\[modulePath\];\s*return campaignRequire\(modulePath\);\s*\}/);
     assert.match(campaignEditorServer, /loadCampaignRuntime\(\)\.validate\(definition, roster,/);
+    assert.match(campaignEditorServer, /renameFactionReferences\([\s\S]*?validatePair\(episodeId, value, definition\)/);
     assert.match(campaignMapEditorHtml, /<h2>Save<\/h2>[\s\S]*?<button class="primary" id="exportBtn">Save<\/button>/);
     assert.match(campaignMapEditorHtml, /<button id="reloadBtn">Reload saved<\/button>/);
+    assert.match(campaignMapEditorHtml, /faction_renames/);
     assert.match(campaignMapEditorHtml, /async function saveRoster\(\)/);
     assert.match(campaignMapEditorHtml, /Save failed: /);
     assert.match(campaignEditorHtml, /<button id="reloadBtn">Reload saved<\/button><button id="exportBtn" class="primary">Save<\/button>/);
@@ -2644,10 +2705,20 @@ test("outside tap on a pending choice ignites the golden button nudge", () => {
 });
 
 test("campaign dialogue keeps a compact speaker portrait on narrow screens", () => {
-    assert.match(storyCss, /@container \(max-width: 640px\) \{[\s\S]*?\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 144px\)\) minmax\(0, 1fr\); \}/);
-    assert.match(storyCss, /\.sow-story__portrait \{ width: var\(--story-portrait-size,[^}]*height: var\(--story-portrait-size,[^}]*aspect-ratio: 1;[^}]*align-self: center/);
-    assert.match(campaignView, /function syncMobilePortrait\(\)[\s\S]*?conversation\.getBoundingClientRect\(\)\.height[\s\S]*?new ResizeObserverCtor\(\(\) => \{[\s\S]*?view\.requestAnimationFrame\([\s\S]*?syncMobilePortrait\(\)/);
+    const mobileStart = storyCss.indexOf("@container (max-width: 640px)");
+    const mobileEnd = storyCss.indexOf("@container (max-width: 380px)", mobileStart);
+    const landscapeStart = storyCss.indexOf("@media (orientation: landscape) and (max-height: 560px)");
+    const landscapeEnd = storyCss.indexOf("/* Decision nudge", landscapeStart);
+    const mobileStory = storyCss.slice(mobileStart, mobileEnd);
+    const landscapeStory = storyCss.slice(landscapeStart, landscapeEnd);
+    assert.match(mobileStory, /\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\); \}/);
+    assert.match(storyCss, /\.sow-story__portrait \{ width: var\(--story-portrait-size,[^}]*height: var\(--story-portrait-size,[^}]*aspect-ratio: 1;[^}]*align-self: start/);
+    assert.match(landscapeStory, /\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\); \}/);
+    assert.doesNotMatch(mobileStory + landscapeStory, /(?:144px|64px)/);
+    assert.match(campaignView, /function syncMobilePortrait\(\)[\s\S]*?heading\.getBoundingClientRect\(\)\.height \+ headingGap \+ scrollContent\.scrollHeight[\s\S]*?Math\.min\(root\.clientWidth \* 0\.36, root\.clientHeight \* 0\.4\)[\s\S]*?const size = Math\.min\(contentHeight, maxSize\)[\s\S]*?new ResizeObserverCtor\(\(\) => \{[\s\S]*?view\.requestAnimationFrame\([\s\S]*?syncMobilePortrait\(\)/);
+    assert.doesNotMatch(campaignView, /const contentHeight = conversation\.getBoundingClientRect\(\)\.height/);
     assert.match(campaignView, /portraitObserver\.observe\(conversation\)/);
+    assert.match(campaignView, /portraitObserver\.observe\(root\)/);
     assert.match(campaignView, /portraitObserver\.disconnect\(\)/);
     assert.doesNotMatch(storyCss, /grid-template-columns: (?:72px|64px|clamp\(64px, 17vw, 72px\)) minmax\(0, 1fr\)/);
     assert.doesNotMatch(storyCss, /@container \(max-width: 380px\) \{[\s\S]*?\.sow-story__portrait \{ display: none/);
@@ -2665,7 +2736,7 @@ test("campaign dialogue resolves episode-local copy before the global catalog", 
 
 test("mobile chapter dialogue hugs its copy while staying centered", () => {
     const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
-    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 12px/);
+    assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__main \{[^}]*flex: 0 1 auto;[^}]*padding-block: 8px/);
     assert.match(mobileStory, /\.sow-story\.is-chapter \.sow-story__conversation \{ padding-block: 0; \}/);
     assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
 });
@@ -2680,6 +2751,22 @@ test("mobile story dialogs scroll long text and choices while keeping speaker co
     assert.match(campaignView, /<div class="sow-story__main"><div class="sow-story__portrait"[\s\S]*?<div class="sow-story__conversation"><header class="sow-story__heading"[\s\S]*?data-story-dismiss[\s\S]*?<div class="sow-story__scroll"><h2[\s\S]*?<p class="sow-story__body"[\s\S]*?<\/div><\/div><\/div>'\s*\+\s*'<div class="sow-story__actions"><div class="sow-story__choices"><\/div><footer class="sow-story__footer"[\s\S]*?data-story-continue/);
     assert.match(campaignView, /footer\.hidden = step\.type === "choice"/);
     assert.match(campaignView, /button\.className = "sow-story__choice"[\s\S]*?choices\.appendChild\(button\)/);
+});
+
+test("mobile campaign objective stays compact until expanded and resets on step change", () => {
+    assert.match(campaignView, /data-story-objective-toggle aria-controls=.*aria-expanded="false"/);
+    assert.match(campaignView, /function setObjectiveExpanded\(expanded\)[\s\S]*?objective\.classList\.toggle\("is-expanded", objectiveExpanded\)[\s\S]*?setAttribute\("aria-expanded", String\(objectiveExpanded\)\)/);
+    assert.match(campaignView, /objectiveStepId !== step\.id\)[\s\S]*?setObjectiveExpanded\(false\)/);
+    assert.match(campaignView, /data-story-objective-toggle"\)\) setObjectiveExpanded\(!objectiveExpanded\)/);
+    const mobileObjective = storyCss.slice(storyCss.indexOf("@container (max-width: 720px)"), storyCss.indexOf("@container (max-width: 640px)"));
+    assert.match(mobileObjective, /top: max\(64px, calc\(var\(--story-inset-top\) \+ 56px\)\)/);
+    assert.match(mobileObjective, /\.sow-story__objective-toggle \{[^}]*44px/);
+    assert.match(mobileObjective, /\.sow-story__objective\.is-expanded \{[^}]*max-height: 40dvh; overflow-y: auto; pointer-events: auto/);
+    const stringsRoot = path.join(shell, "../../sow-i18n/strings");
+    fs.readdirSync(stringsRoot).filter((locale) => fs.existsSync(path.join(stringsRoot, locale, "web.toml"))).forEach((locale) => {
+        const catalog = fs.readFileSync(path.join(stringsRoot, locale, "web.toml"), "utf8");
+        assert.match(catalog, /^objective_details = ".+"$/m, `${locale} objective disclosure label`);
+    });
 });
 
 test("short landscape compaction stays on mobile and the editor reuses the shared dialogue", () => {
@@ -3085,15 +3172,18 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
         assert.match(campaignEditor, new RegExp(`value: "${type}"`), `Campaign Studio cannot select ${type}`);
     }
     const step = id => definition.steps.find(candidate => candidate.id === id);
+    for (const obsolete of ["boudica_zoom_in", "boudica_first_contact_intro", "boudica_first_contact_response", "boudica_trinovantes_intro", "boudica_trinovantes_pact", "boudica_share_intro", "boudica_rebuild_intro", "boudica_farm_intro", "boudica_ratio_intro", "boudica_posts_fall", "boudica_foundry_ready", "boudica_factory_intro", "boudica_factory_ready", "boudica_bunker_intro", "boudica_bunker_ready", "boudica_pact_formed", "boudica_port_intro", "boudica_fleet_intro", "boudica_fleet_ready"]) {
+        assert.equal(step(obsolete), undefined, `obsolete dialogue step returned: ${obsolete}`);
+    }
     assert.equal(step("boudica_first_victory").attack_ratio_on_enter, 1);
     assert.equal(step("boudica_ratio_guide").attack_ratio_on_enter, 0.5);
     assert.equal(step("boudica_first_victory_scene").next, "boudica_first_expansion");
-    assert.equal(step("boudica_first_expansion").next, "boudica_zoom_in");
-    assert.equal(step("boudica_zoom_in").next, "boudica_zoom_out");
-    assert.equal(step("boudica_zoom_out").next, "boudica_first_contact_intro");
+    assert.equal(step("boudica_first_expansion").next, "boudica_zoom_out");
+    assert.equal(step("boudica_zoom_out").pause_game, true);
+    assert.equal(step("boudica_zoom_out").next, "boudica_first_contact");
     assert.deepEqual(step("boudica_first_contact").trigger.targets, ["Stonea", "Snettisham", "Thetford"]);
     assert.equal(step("boudica_first_contact").trigger.value, 3);
-    assert.equal(step("boudica_first_contact").next, "boudica_first_contact_response");
+    assert.equal(step("boudica_first_contact").next, "boudica_roman_outposts");
     assert.equal(definition.steps.some(candidate => /boudica_contact_.*pledge/.test(candidate.id)), false);
     assert.equal(step("boudica_first_contact").guide.target, "target_action");
     assert.deepEqual(roster.factions.filter(faction => faction.role === "kin").map(faction => faction.name).sort(), ["Snettisham", "Stonea", "Thetford"]);
@@ -3140,33 +3230,38 @@ test("Boudica completion offers localized Campaign and tutorial replay guidance"
     assert.match(campaignMapEditorHtml, /Alliance betrayal/);
     assert.match(campaignMapEditorHtml, /const BETRAYALS = \{ never:"Never", opportunistic:"Opportunistic" \}/);
     assert.deepEqual(step("boudica_roman_outposts").trigger.targets, ["Colonia Veterans", "Tax Collectors", "Roman Supply Depot"]);
-    assert.equal(step("boudica_roman_outposts").next, "boudica_posts_fall");
+    assert.equal(step("boudica_roman_outposts").next, "boudica_trinovantes_alliance");
+    assert.equal(step("boudica_ratio_guide").next, "boudica_upgrade_choice");
+    assert.equal(step("boudica_trinovantes_alliance").next, "boudica_ally_support_wait");
+    assert.match(definition.strings.en["tutorial.boudica_upgrade_choice_body"], /Three Roman posts are down/);
+    assert.match(definition.strings.es["tutorial.boudica_upgrade_choice_body"], /Tres puestos romanos cayeron/);
     assert.equal(step("boudica_structure_upgrade").trigger.type, "city_level");
     assert.equal(step("boudica_structure_upgrade").trigger.value, 3);
     assert.deepEqual(step("boudica_pact_offer").trigger, { type: "contact", target: "Catuvellauni", value: 1, scope: "total" });
-    assert.equal(step("boudica_pact_formed").type, "scene");
-    assert.equal(step("boudica_pact_formed").next, "boudica_port_choice");
+    assert.equal(step("boudica_pact_offer").next, "boudica_port_choice");
     assert.ok(step("boudica_factory_choice").choices.some(choice => choice.id === "foundry"));
     assert.deepEqual(step("boudica_foundry_select_menu").trigger, { type: "ui", action: "map_build", scope: "step" });
     assert.deepEqual(step("boudica_foundry_upgrade").trigger, { type: "foundry_level", value: 1, scope: "step" });
     assert.equal(step("boudica_foundry_upgrade").guide.target, "map_upgrade_foundry");
     assert.match(mapClick, /self\.sim\.config\.tutorial && building\.kind == sow_core::game::BuildingKind::City[\s\S]*?actions\.push\(MapMenuAction::UpgradeFoundry\)/);
     assert.match(mapClick, /if self\.sim\.config\.tutorial \{\s*actions\.push\(MapMenuAction::UpgradeTile\)/);
-    assert.equal(step("boudica_foundry_ready").next, "boudica_bunker_choice");
+    assert.equal(step("boudica_foundry_upgrade").next, "boudica_bunker_choice");
     assert.equal(step("boudica_port_upgrade").trigger.type, "port_upgrade");
     assert.equal(step("boudica_port_ready").trigger.type, "port_level");
+    assert.equal(step("boudica_port_ready").next, "boudica_fleet_target");
     assert.equal(step("boudica_fleet_target").trigger.type, "fleet");
     assert.deepEqual(step("boudica_fleet_target").trigger, { type: "fleet", unit: "TransportShip", target: "Legio XIV Gemina", value: 1, scope: "step" });
     assert.equal(step("boudica_fleet_target").guide.target, "player");
-    assert.equal(step("boudica_fleet_target").next, "boudica_fleet_ready");
-    assert.equal(step("boudica_fleet_ready").next, "boudica_ship_choice");
+    assert.equal(step("boudica_fleet_target").next, "boudica_ship_choice");
+    assert.match(definition.strings.en["tutorial.boudica_ship_choice_body"], /The sea is open/);
+    assert.match(definition.strings.es["tutorial.boudica_ship_choice_body"], /El mar está abierto/);
     assert.equal(step("boudica_ship_choice").choices.find(choice => choice.id === "march").next, "boudica_final_battle_intro");
     assert.deepEqual(step("boudica_trade_city").trigger, { type: "city_level", value: 4, scope: "total" });
     assert.deepEqual(step("boudica_trade_port").trigger, { type: "port_level", value: 3, scope: "total" });
     assert.equal(step("boudica_trade_menu").trigger.action, "map_build");
     assert.deepEqual(step("boudica_trade_ship").trigger, { type: "fleet", unit: "TradeShip", value: 1, scope: "step" });
     assert.equal(step("boudica_trade_ship").guide.target, "map_build_trade_ship");
-    assert.equal(step("boudica_trade_ready").next, "boudica_final_battle_intro");
+    assert.equal(step("boudica_trade_ready").next, "boudica_final_battle");
     assert.match(mapClick, /BuildingKind::Port if building\.level >= 3\s*=>\s*\{\s*actions\.push\(MapMenuAction::BuildTradeShip\);/);
     assert.match(campaignEngine, /map_build_trade_ship: '#sow-hud \[data-map-action="build_trade_ship"\]'/);
     assert.equal(step("boudica_camulodunum").next, "boudica_ninth_legion_intro");
@@ -3206,9 +3301,15 @@ test("tutorial locale and UI guides resolve per episode and point to actual HUD 
     assert.match(tutorial, /SOWCampaign\.resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
     assert.match(tutorial, /tutorial\[guide\.target\]/);
     assert.match(campaignView, /sow-story__gesture/);
+    assert.match(campaignView, /sow-story__gesture-label/);
     assert.match(campaignView, /sow-story__zoom-fingers/);
+    assert.match(campaignView, /const modal = \["scene", "choice", "end"\]\.includes\(step\.type\)/);
+    assert.match(storyCss, /\.sow-story__gesture-label \{[^}]*text-transform: uppercase/);
     assert.match(storyCss, /data-gesture="zoom_in"/);
     assert.match(storyCss, /data-gesture="zoom_out"/);
+    assert.match(storyCss, /\.sow-story__zoom \{[^}]*width: 108px; height: 108px/);
+    assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-left-push-out/);
+    assert.match(storyCss, /story-left-push-out[^\n]*cubic-bezier\(\.16, 1, \.3, 1\)/);
     assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : "wheel"/);
     assert.match(campaignEngine, /menu_campaign:/);
     assert.match(campaignEngine, /map_attack:/);
@@ -3321,14 +3422,23 @@ test("building mode upgrades same-kind targets, marks them, and has a cancel con
     assert.ok(buildStart >= 0 && buildEnd > buildStart);
     assert.match(buildBody, /find_stack_target_tile\([\s\S]*?snapshot\.buildings/);
     assert.match(buildBody, /if let Some\(building\) = stack_target \{[\s\S]*?cancel_hold_build\(\)[\s\S]*?GameplayIntent::UpgradeStructure \{[\s\S]*?building_id: building\.id/);
+    assert.match(buildBody, /building\.under_construction[\s\S]*?add_action_feedback\("Building under construction\./);
+    assert.match(mapClick, /"Building under construction\. 🏗️" => UiText::new\("hud\.building_in_progress"\)/);
+    assert.match(buildBody, /building\.level >= kind\.max_level\(\)[\s\S]*?building_max_level/);
+    assert.match(buildBody, /!self\.structure_upgrade_requirement_met\(&building\)[\s\S]*?building_requires_city_level/);
     assert.match(buildBody, /return true;\s*\}\s*let Some\(snapshot\)/);
     assert.match(frameSource, /nobuild_slots\[slot\]\s*=\s*\[[\s\S]*?0\.0,[\s\S]*?2\.0/);
     assert.match(mapShader, /active_flag > 1\.0 && b_dist == 0[\s\S]*?is_upgrade_target = true/);
     assert.match(mapShader, /overlay_color = vec3<f32>\(1\.0, 0\.72, 0\.16\)/);
     assert.match(hud, /data-command="cancel_building_mode"/);
     assert.match(hud, /if \(selectedBuilding\) send\("select_building", \{ kind: selectedBuilding \}\)/);
-    assert.match(hud, /buildingCancel\.hidden = !selectedBuilding/);
-    assert.match(hudCss, /\.sow-hud__building-cancel[\s\S]*?flex: 0 0 48px/);
+    assert.match(hud, /buildingCancel\.hidden = !hud\.selected_building/);
+    assert.match(hudCss, /\.sow-hud__building-cancel[\s\S]*?width: 48px;[\s\S]*?height: 48px;/);
+    const dockStart = hud.indexOf('<footer class="sow-hud__dock"');
+    const dockEnd = hud.indexOf('</footer>', dockStart);
+    assert.ok(dockStart >= 0 && dockEnd > dockStart);
+    assert.ok(!hud.slice(dockStart, dockEnd).includes('data-command="cancel_building_mode"'));
+    assert.ok(hud.slice(dockEnd).includes('data-command="cancel_building_mode"'));
     assert.match(mapClick, /\*selected != Some\(kind\)\)\.then_some\(kind\)/);
     assert.match(buildingOverlaySource, /celebration_budget = 24/);
     assert.match(buildingOverlaySource, /!reduced_motion[\s\S]*?celebration_budget >= BUILDING_CELEBRATION_OFFSETS\.len\(\)/);
@@ -3342,6 +3452,27 @@ test("building upgrade uses snapshot gold and keeps the card open for the server
     assert.match(hud, /id="sow-hud-building-card-upgrade" data-map-action="upgrade_structure"/);
     assert.ok(mapClick.includes("let keep_building_card_open = action == MapMenuAction::UpgradeStructure"));
     assert.ok(mapClick.includes("if !keep_building_card_open {"));
+});
+
+test("building upgrade sends the selected card identity instead of the radial menu", () => {
+    const start = hud.indexOf('hudRoot.addEventListener("click", function (event) {');
+    const end = hud.indexOf('            var btn = event.target.closest("[data-command]");', start);
+    const calls = [];
+    const card = { dataset: { session: "12", tileIdx: "240" } };
+    const button = {
+        dataset: { mapAction: "upgrade_structure" }, disabled: false,
+        getAttribute() { return null; },
+        closest(selector) { return selector === ".sow-hud__building-card" ? card : null; }
+    };
+    const click = vm.runInNewContext("(" + hud.slice(start + 'hudRoot.addEventListener("click", '.length, end) + "})", {
+        hudRefs: { mapMenu: { dataset: { session: "3", tileIdx: "99" } } },
+        send: (command, payload) => calls.push({ command, payload })
+    });
+    click({ target: { closest: selector => selector === "[data-map-action]" ? button : null }, preventDefault() {}, stopPropagation() {} });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].payload.session, 12);
+    assert.equal(calls[0].payload.tile_idx, 240);
+    assert.equal(calls[0].payload.action, "upgrade_structure");
 });
 
 test("building card anchors to the building and shows compact visual stats", () => {
@@ -3380,13 +3511,15 @@ test("building card anchors to the building and shows compact visual stats", () 
         buildingCardBenefit: element(),
         buildingCardNext: element(),
         buildingCardGold: element(),
-        buildingCardUpgrade: element()
+        buildingCardUpgrade: element(),
+        buildingCardUpgradeLevel: element()
     };
     const renderBuildingCard = vm.runInNewContext(
         hud.slice(renderStart, renderEnd) + "\nrenderBuildingCard;",
         {
             hudRefs,
             window: { innerWidth: 400, innerHeight: 300 },
+            SOW_t: key => key === "hud.building_requires_city_level" ? "Requires a level 3 City." : key,
             hudIcon: (name) => "<svg data-icon=\"" + name + "\"></svg>",
             buildingIcon: (kind) => "<img data-building=\"" + kind + "\">"
         }
@@ -3456,6 +3589,19 @@ test("building card anchors to the building and shows compact visual stats", () 
     assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
     assert.equal(hudRefs.buildingCard.style.left, "104px");
     assert.equal(hudRefs.buildingCard.style.top, "40px");
+
+    renderBuildingCard(menu({
+        kind: "Factory",
+        level: 1,
+        metrics: [{ icon: "gold", label: "Gold income", value: 10, prefix: "+", unit: "/s" }],
+        next_level: 2,
+        next_metrics: [{ icon: "gold", label: "Gold income", value: 20, prefix: "+", unit: "/s" }],
+        requirements: [{ key: "hud.building_requires_city_level", met: false }],
+        cost: 50,
+        can_upgrade: false
+    }), 200);
+    assert.match(hudRefs.buildingCardNext.innerHTML, /title="Requires a level 3 City\."/);
+    assert.equal(hudRefs.buildingCardUpgrade.disabled, true);
 
     renderBuildingCard(menu({ kind: "Bunker", level: 2 }, "radial"));
     assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);

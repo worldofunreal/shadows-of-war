@@ -168,7 +168,8 @@ fn apply_alliance_celebration(
     var color = mix(base, accent, fill_alpha);
     color += accent * sparkle * fade * 0.32;
     if is_border {
-        color = mix(color, accent, fade * 0.72);
+        let border_sweep = fade * (0.18 + wave * 0.82);
+        color = mix(color, accent, border_sweep);
     }
     return color;
 }

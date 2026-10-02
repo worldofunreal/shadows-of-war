@@ -301,38 +301,41 @@ impl SowApp {
     }
 }
 
-fn mutually_allied(players: &[sow_core::protocol::PlayerSnapshot], a: u16, b: u16) -> bool {
-    let a_has_b = players
-        .iter()
-        .find(|player| player.id == a)
-        .is_some_and(|player| player.alliances.contains(&b));
-    let b_has_a = players
-        .iter()
-        .find(|player| player.id == b)
-        .is_some_and(|player| player.alliances.contains(&a));
-    a_has_b && b_has_a
-}
-
 fn new_mutual_alliances(
     old: &[sow_core::protocol::PlayerSnapshot],
     new: &[sow_core::protocol::PlayerSnapshot],
 ) -> Vec<[u16; 2]> {
-    let mut pairs = HashSet::new();
+    let old_by_id: HashMap<u16, &sow_core::protocol::PlayerSnapshot> =
+        old.iter().map(|player| (player.id, player)).collect();
+    let new_by_id: HashMap<u16, &sow_core::protocol::PlayerSnapshot> =
+        new.iter().map(|player| (player.id, player)).collect();
+    let mut pairs = Vec::new();
     for player in new {
+        if player.id == 0 {
+            continue;
+        }
         for &other_id in &player.alliances {
-            if player.id == 0
-                || other_id == 0
+            if other_id == 0
                 || player.id >= other_id
-                || !mutually_allied(new, player.id, other_id)
-                || mutually_allied(old, player.id, other_id)
+                || !new_by_id
+                    .get(&other_id)
+                    .is_some_and(|other| other.alliances.contains(&player.id))
             {
                 continue;
             }
-            pairs.insert([player.id, other_id]);
+            let was_mutual = old_by_id
+                .get(&player.id)
+                .is_some_and(|previous| previous.alliances.contains(&other_id))
+                && old_by_id
+                    .get(&other_id)
+                    .is_some_and(|previous| previous.alliances.contains(&player.id));
+            if !was_mutual {
+                pairs.push([player.id, other_id]);
+            }
         }
     }
-    let mut pairs: Vec<_> = pairs.into_iter().collect();
     pairs.sort_unstable();
+    pairs.dedup();
     pairs
 }
 
@@ -389,6 +392,26 @@ mod tests {
         let old = vec![player(1, &[2]), player(2, &[1]), player(3, &[])];
         let new = vec![player(1, &[2, 3]), player(2, &[1]), player(3, &[])];
         assert!(new_mutual_alliances(&old, &new).is_empty());
+    }
+
+    #[test]
+    fn ignores_requests_and_alliance_renewals() {
+        let old = vec![player(1, &[]), player(2, &[])];
+        let mut one = player(1, &[]);
+        one.alliance_requests.push(2);
+        let mut two = player(2, &[]);
+        two.alliance_requests.push(1);
+        assert!(new_mutual_alliances(&old, &[one, two]).is_empty());
+
+        let mut old_one = player(1, &[2]);
+        old_one.alliance_timers.insert(2, 300);
+        let mut old_two = player(2, &[1]);
+        old_two.alliance_timers.insert(1, 300);
+        let mut new_one = player(1, &[2]);
+        new_one.alliance_timers.insert(2, 600);
+        let mut new_two = player(2, &[1]);
+        new_two.alliance_timers.insert(1, 600);
+        assert!(new_mutual_alliances(&[old_one, old_two], &[new_one, new_two]).is_empty());
     }
 }
 

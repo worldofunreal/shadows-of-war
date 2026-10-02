@@ -919,6 +919,7 @@ impl SowApp {
                             if player.tile_count > 0 && player.alive {
                                 let world_cx = player.centroid_x + 0.5;
                                 let world_cy = player.centroid_y + 0.5;
+                                self.input.has_snapped_camera_to_spawn = true;
                                 self.input.camera_focus_target = Some((world_cx, world_cy));
                                 self.input.target_zoom = 8.0;
                             }
@@ -927,8 +928,9 @@ impl SowApp {
                 }
                 WebMenuCommand::FocusWorld { x, y } => {
                     if self.ui.tutorial_active && self.net.is_offline && x.is_finite() && y.is_finite() {
+                        self.input.has_snapped_camera_to_spawn = true;
                         self.input.camera_focus_target = Some((x, y));
-                        self.input.target_zoom = 8.0;
+                        self.input.tutorial_camera_focus = true;
                     }
                 }
             }
@@ -1941,7 +1943,7 @@ fn building_detail_payload(
     let maxed = next_level > building.kind.max_level();
     let factory_requirement = app.structure_upgrade_requirement_met(building);
     let requirements = if building.kind == sow_core::game::BuildingKind::Factory {
-        serde_json::json!([{ "key": "Village", "met": factory_requirement }])
+        serde_json::json!([{ "key": "hud.building_requires_city_level", "met": factory_requirement }])
     } else {
         serde_json::json!([])
     };

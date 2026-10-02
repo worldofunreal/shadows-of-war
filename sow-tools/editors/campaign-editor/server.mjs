@@ -286,6 +286,12 @@ async function handle(req, res) {
       return;
     }
     const target = path.join(campaignDir, file);
+    const isTriggerFile = file.endsWith(".triggers.json");
+    const factionRenames = !isTriggerFile && Array.isArray(value && value.faction_renames) ? value.faction_renames : null;
+    if (factionRenames) {
+      value = value.roster;
+      body = Buffer.from(JSON.stringify(value, null, 2) + "\n");
+    }
     if (saving.has(episodeId)) { reply(res, 409, "A save for this episode is already in progress."); return; }
     saving.add(episodeId);
     let bodyTag;
@@ -295,14 +301,45 @@ async function handle(req, res) {
         reply(res, 409, "This episode changed since it was loaded. Reload before saving.");
         return;
       }
-      try { await validateSave(file, value); }
-      catch (error) { reply(res, 400, error.message || "invalid campaign data"); return; }
-      const temp = path.join(editorDir, ".campaign-save-" + randomUUID() + ".tmp");
-      try {
-        await fs.writeFile(temp, body, { flag: "wx" });
-        await fs.rename(temp, target);
-      } finally {
-        await fs.rm(temp, { force: true });
+      if (factionRenames) {
+        const previousNames = new Set((JSON.parse(current.toString("utf8")).factions || []).map(faction => faction.name));
+        const nextNames = new Set((value.factions || []).map(faction => faction.name));
+        const renamedFrom = new Set();
+        if (!factionRenames.length || factionRenames.some(item => {
+          if (!item || typeof item.from !== "string" || !item.from || typeof item.to !== "string" || !item.to
+            || item.from === item.to || !previousNames.has(item.from) || !nextNames.has(item.to) || renamedFrom.has(item.from)) return true;
+          renamedFrom.add(item.from);
+          return false;
+        })) {
+          reply(res, 400, "Invalid faction rename list."); return;
+        }
+        const definitionPath = path.join(campaignDir, episodeId + ".triggers.json");
+        const definition = loadCampaignRuntime().renameFactionReferences(
+          JSON.parse(await fs.readFile(definitionPath, "utf8")), factionRenames
+        );
+        try { await validatePair(episodeId, value, definition); }
+        catch (error) { reply(res, 400, error.message || "invalid campaign data"); return; }
+        const definitionBody = Buffer.from(JSON.stringify(definition, null, 2) + "\n");
+        const definitionTemp = path.join(editorDir, ".campaign-save-" + randomUUID() + ".tmp");
+        const rosterTemp = path.join(editorDir, ".campaign-save-" + randomUUID() + ".tmp");
+        try {
+          await fs.writeFile(definitionTemp, definitionBody, { flag: "wx" });
+          await fs.writeFile(rosterTemp, body, { flag: "wx" });
+          await fs.rename(definitionTemp, definitionPath);
+          await fs.rename(rosterTemp, target);
+        } finally {
+          await Promise.all([fs.rm(definitionTemp, { force: true }), fs.rm(rosterTemp, { force: true })]);
+        }
+      } else {
+        try { await validateSave(file, value); }
+        catch (error) { reply(res, 400, error.message || "invalid campaign data"); return; }
+        const temp = path.join(editorDir, ".campaign-save-" + randomUUID() + ".tmp");
+        try {
+          await fs.writeFile(temp, body, { flag: "wx" });
+          await fs.rename(temp, target);
+        } finally {
+          await fs.rm(temp, { force: true });
+        }
       }
       bodyTag = etag(body);
     } catch (error) {

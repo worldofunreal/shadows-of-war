@@ -199,6 +199,7 @@ pub struct Faction {
     pub avatar: Option<String>,
     pub support_interval_seconds: Option<u32>,
     pub gold_loot_bonus: Option<u32>,
+    pub gold_loot_override: Option<u32>,
     pub alliance_group: Option<String>,
 }
 
@@ -221,6 +222,7 @@ impl Faction {
             avatar: None,
             support_interval_seconds: None,
             gold_loot_bonus: None,
+            gold_loot_override: None,
             alliance_group: None,
         }
     }
@@ -311,12 +313,21 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
                 leader,
                 civilization: f.civ,
                 is_nation,
-                troops: f.role.troops(),
-                troop_cap: f.role.troop_cap(),
+                troops: if f.hostility == CampaignHostility::Food {
+                    Some(0.0)
+                } else {
+                    f.role.troops()
+                },
+                troop_cap: if f.hostility == CampaignHostility::Food {
+                    Some(0.0)
+                } else {
+                    f.role.troop_cap()
+                },
                 iq: f.iq,
                 campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
                 campaign_support_interval_seconds: f.support_interval_seconds,
                 campaign_gold_loot_bonus: f.gold_loot_bonus,
+                campaign_gold_loot_override: f.gold_loot_override,
                 campaign_alliance_group: f.alliance_group.clone(),
                 campaign_relation: Some(f.relation),
                 campaign_hostility: Some(f.hostility),
@@ -358,6 +369,8 @@ struct RosterEntry {
     #[serde(default)]
     gold_loot_bonus: Option<u32>,
     #[serde(default)]
+    gold_loot_override: Option<u32>,
+    #[serde(default)]
     alliance_group: Option<String>,
 }
 
@@ -384,7 +397,7 @@ pub(crate) fn tutorial_camera_frame(
     let target = config
         .scripted_spawns
         .iter()
-        .find(|spawn| spawn.name == "The Iceni Despoilers")?;
+        .find(|spawn| spawn.campaign_avatar.as_deref() == Some("the_iceni_despoilers"))?;
     let dx = player_x.abs_diff(target.x) as f32;
     let dy = player_y.abs_diff(target.y) as f32;
     let center = (
@@ -439,6 +452,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
         let role = Role::from_name(&e.role)?;
         if e.support_interval_seconds.is_some_and(|seconds| !(5..=600).contains(&seconds))
             || e.gold_loot_bonus.is_some_and(|gold| gold > 1_000_000)
+            || e.gold_loot_override.is_some_and(|gold| gold > 1_000_000)
             || e.alliance_group
                 .as_deref()
                 .is_some_and(|group| !valid_campaign_group_id(group))
@@ -456,6 +470,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
         f.iq = e.iq;
         f.support_interval_seconds = e.support_interval_seconds;
         f.gold_loot_bonus = e.gold_loot_bonus;
+        f.gold_loot_override = e.gold_loot_override;
         f.alliance_group = e.alliance_group.clone();
         if let Some(civ_name) = e.civ.as_deref() {
             f.civ = civ_from_id(civ_name)?;

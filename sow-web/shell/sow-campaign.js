@@ -73,6 +73,22 @@
     const id = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,95}$/.test(value) && !["constructor", "prototype", "__proto__"].includes(value);
     const copy = value => JSON.parse(JSON.stringify(value));
 
+    function renameFactionReferences(definition, renames) {
+        const replacements = new Map((Array.isArray(renames) ? renames : []).filter(item =>
+            object(item) && typeof item.from === "string" && item.from && typeof item.to === "string" && item.to && item.from !== item.to
+        ).map(item => [item.from, item.to]));
+        if (!replacements.size) return copy(definition);
+        const names = Array.from(replacements.keys()).sort((a, b) => b.length - a.length);
+        const pattern = new RegExp("(^|[^\\p{L}\\p{N}_])(" + names.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?=$|[^\\p{L}\\p{N}_])", "gu");
+        function visit(value) {
+            if (typeof value === "string") return value.replace(pattern, (_, prefix, name) => prefix + replacements.get(name));
+            if (Array.isArray(value)) return value.map(visit);
+            if (object(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, visit(item)]));
+            return value;
+        }
+        return visit(definition);
+    }
+
     function resolveUiTarget(key, root, episodeId) {
         const selector = UI_TARGETS[key];
         if (!selector || !root) return null;
@@ -139,17 +155,18 @@
                     issue(null, "roster", "Faction names must be unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["name", "x", "y", "role", "relation", "hostility", "betrayal", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "alliance_group"], null, "roster.factions");
+                knownFields(faction, ["name", "x", "y", "role", "relation", "hostility", "betrayal", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group"], null, "roster.factions");
                 factions.add(faction.name);
                 rosterFactions.add(faction.name);
                 if (!["kin", "independent", "vassal", "boss", "big_boss", "neutral"].includes(faction.role) || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid faction role or spawn: " + faction.name);
                 else if (expectedMap && (faction.x >= expectedMap[1] || faction.y >= expectedMap[2])) issue(null, "roster", "Faction spawn is outside the campaign map: " + faction.name);
                 if (faction.relation != null && !["neutral", "allied", "enemy"].includes(faction.relation)) issue(null, "roster.factions.relation", "Choose neutral, allied or enemy for " + faction.name + ".");
-                if (faction.hostility != null && !["passive", "aggressive"].includes(faction.hostility)) issue(null, "roster.factions.hostility", "Choose passive or aggressive for " + faction.name + ".");
+                if (faction.hostility != null && !["passive", "aggressive", "food"].includes(faction.hostility)) issue(null, "roster.factions.hostility", "Choose passive, aggressive or food for " + faction.name + ".");
                 if (faction.betrayal != null && !["never", "opportunistic"].includes(faction.betrayal)) issue(null, "roster.factions.betrayal", "Choose never or opportunistic for " + faction.name + ".");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
                 if (faction.gold_loot_bonus != null && (!Number.isInteger(faction.gold_loot_bonus) || faction.gold_loot_bonus < 0 || faction.gold_loot_bonus > 1_000_000)) issue(null, "roster.factions.gold_loot_bonus", "Bonus gold loot must be an integer from 0 to 1,000,000.");
+                if (faction.gold_loot_override != null && (!Number.isInteger(faction.gold_loot_override) || faction.gold_loot_override < 0 || faction.gold_loot_override > 1_000_000)) issue(null, "roster.factions.gold_loot_override", "Fixed gold loot must be an integer from 0 to 1,000,000.");
                 if (faction.alliance_group != null && (typeof faction.alliance_group !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(faction.alliance_group))) issue(null, "roster.factions.alliance_group", "Use a lowercase alliance group ID.");
                 if (faction.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(faction.avatar) || faction.avatar !== "null" && options.hasAvatar && !options.hasAvatar(faction.avatar))) issue(null, "roster.factions.avatar", "Choose an existing portrait for " + faction.name + ".");
             });
@@ -214,11 +231,11 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "next", "routes", "attack_ratio_on_enter"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "next", "routes", "attack_ratio_on_enter", "pause_game"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter", "pause_game"],
             objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "next", "routes", "attack_ratio_on_enter"],
             guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "next", "routes", "attack_ratio_on_enter"],
-            end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter"]
+            end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
@@ -641,7 +658,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, METRICS, UI_TARGETS, zoomInputMode, resolveUiTarget, resolveUiAnchor, validate, create };
+    const api = { TYPES, METRICS, UI_TARGETS, zoomInputMode, resolveUiTarget, resolveUiAnchor, renameFactionReferences, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

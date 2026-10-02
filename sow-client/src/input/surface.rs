@@ -3,6 +3,14 @@ use crate::render::world::movers::world_to_tile;
 use crate::{camera_zoom_lower_bound, camera_zoom_upper_bound};
 use blade_graphics as gpu;
 
+pub(crate) fn clamp_camera_offset(screen_size: f32, map_size: f32, offset: f32) -> f32 {
+    if map_size <= screen_size {
+        (screen_size - map_size) * 0.5
+    } else {
+        offset.clamp(screen_size - map_size, 0.0)
+    }
+}
+
 impl SowApp {
     pub(crate) fn record_tutorial_zoom(&mut self, zoom_delta: f32) {
         if !self.ui.tutorial_active || !self.net.is_offline || zoom_delta.abs() < f32::EPSILON {
@@ -135,15 +143,7 @@ impl SowApp {
         let mh = self.sim.map_h as f32 * z;
         let sw = self.input.screen_w;
         let sh = self.input.screen_h;
-        self.input.camera_x = if mw <= sw {
-            (sw - mw) * 0.5
-        } else {
-            self.input.camera_x.clamp(sw - mw, 0.0)
-        };
-        self.input.camera_y = if mh <= sh {
-            (sh - mh) * 0.5
-        } else {
-            self.input.camera_y.clamp(sh - mh, 0.0)
-        };
+        self.input.camera_x = clamp_camera_offset(sw, mw, self.input.camera_x);
+        self.input.camera_y = clamp_camera_offset(sh, mh, self.input.camera_y);
     }
 }

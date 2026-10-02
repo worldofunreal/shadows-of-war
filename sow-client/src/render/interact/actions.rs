@@ -119,6 +119,7 @@ impl SowApp {
                         let world_cx = cx + 0.5;
                         let world_cy = cy + 0.5;
 
+                        self.input.has_snapped_camera_to_spawn = true;
                         self.input.camera_focus_target = Some((world_cx, world_cy));
                         self.input.target_zoom = 10.0;
                     }

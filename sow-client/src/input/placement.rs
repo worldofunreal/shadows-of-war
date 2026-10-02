@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn stack_target_is_the_nearest_owned_building_of_the_selected_kind() {
+    fn stack_target_uses_owner_kind_nearest_tie_break_and_historical_radius() {
         let map_w = 40;
         let building = |id, owner_id, kind, x, y| sow_core::protocol::BuildingSnapshot {
             id,
@@ -495,6 +495,29 @@ mod tests {
         assert_eq!(
             find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &buildings),
             Some(10 * map_w + 11)
+        );
+
+        let tied = [
+            building(8, 1, BuildingKind::City, 12, 10),
+            building(7, 1, BuildingKind::City, 10, 12),
+            building(1, 2, BuildingKind::City, 10, 10),
+            building(2, 1, BuildingKind::Farm, 10, 10),
+        ];
+        assert_eq!(
+            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &tied),
+            Some(12 * map_w + 10)
+        );
+
+        let radius = sow_core::building::placement::STRUCTURE_MIN_DIST as u32;
+        let boundary = [building(3, 1, BuildingKind::City, 10 + radius, 10)];
+        let outside = [building(4, 1, BuildingKind::City, 11 + radius, 10)];
+        assert_eq!(
+            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &boundary),
+            Some(10 * map_w + 10 + radius)
+        );
+        assert_eq!(
+            find_stack_target_tile(BuildingKind::City, 10, 10, map_w, 1, &outside),
+            None
         );
     }
 

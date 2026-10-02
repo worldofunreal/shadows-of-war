@@ -580,7 +580,6 @@ fn publish_android(paths: &Paths, version_code: u32) -> Result<()> {
 
 fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     super::validate_current_ui_contract(paths)?;
-    require_published_source(paths)?;
     for command in [
         "cargo", "curl", "node", "rsync", "rustc", "scp", "ssh", "wasm-opt",
     ] {
@@ -1350,23 +1349,27 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
     )
 }
 
-fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
-    let local = paths.root.join("dist/freebsd-bin");
-    let fingerprint = input_fingerprint(
+fn freebsd_build_fingerprint(root: &Path) -> Result<String> {
+    input_fingerprint(
         "freebsd-v5",
         "",
         &[
-            &paths.root.join("Cargo.toml"),
-            &paths.root.join("Cargo.lock"),
-            &paths.root.join("sow-core"),
-            &paths.root.join("sow-data"),
-            &paths.root.join("sow-net"),
-            &paths.root.join("sow-server"),
+            &root.join("Cargo.toml"),
+            &root.join("Cargo.lock"),
+            &root.join("sow-core"),
+            &root.join("sow-data"),
+            &root.join("sow-net"),
+            &root.join("sow-server"),
             // Compile-time assets referenced from outside the Rust crates.
-            &paths.root.join("assets/geo_entities.json"),
-            &paths.root.join("assets/maps/world/map.bin.br"),
+            &root.join("assets/geo_entities.json"),
+            &root.join("assets/maps/world/map.bin.br"),
         ],
-    )?;
+    )
+}
+
+fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
+    let local = paths.root.join("dist/freebsd-bin");
+    let fingerprint = freebsd_build_fingerprint(&paths.root)?;
     let cache = paths.root.join("dist/.sow-state/freebsd-build");
     if ["sow-server", "sow-database"]
         .iter()
@@ -2724,4 +2727,28 @@ fn verify_public(paths: &Paths, config: &Config, release: &Release) -> Result<()
     }
     println!("  public origin and assetlinks verified for {}", release.id);
     Ok(())
+}
+
+#[cfg(test)]
+mod build_fingerprint_tests {
+    use super::freebsd_build_fingerprint;
+    use std::fs;
+
+    #[test]
+    fn freebsd_cache_tracks_atlas_and_bundled_world_map() {
+        let root = tempfile::tempdir().unwrap();
+        let atlas = root.path().join("assets/geo_entities.json");
+        let map = root.path().join("assets/maps/world/map.bin.br");
+        fs::create_dir_all(map.parent().unwrap()).unwrap();
+        fs::write(&atlas, b"atlas-v1").unwrap();
+        fs::write(&map, b"map-v1").unwrap();
+
+        let before = freebsd_build_fingerprint(root.path()).unwrap();
+        fs::write(&atlas, b"atlas-v2").unwrap();
+        let after_atlas = freebsd_build_fingerprint(root.path()).unwrap();
+        assert_ne!(before, after_atlas);
+
+        fs::write(&map, b"map-v2").unwrap();
+        assert_ne!(after_atlas, freebsd_build_fingerprint(root.path()).unwrap());
+    }
 }

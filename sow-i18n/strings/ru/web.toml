@@ -84,6 +84,7 @@ copy_failed = "Копия не справилась"
 copy_unavailable = "КОПИ НЕЗАВИСИМЫЙ"
 
 [tutorial]
+objective_details = "Подробности цели"
 continue = "ВСТРЕЧА"
 complete = "ЗАВЕРШИТЬ КАМПАНИЮ"
 retry = "ПОВТОРИТЬ"
@@ -654,6 +655,8 @@ build_spacing_structure = "Для этого строения недостато
 build_no_space = "Поблизости нет подходящего места для строительства."
 build_no_farm_plots = "Нет свободных участков под фермы. Сначала улучшите город."
 building_in_progress = "Строительство еще продолжается."
+building_max_level = "Достигнут максимальный уровень."
+building_requires_city_level = "Требуется город 3-го уровня."
 need_gold = "Нужно золота: {cost}."
 fleet_need_troops = "Для отправки флота нужно не менее {troops} войск."
 fleet_invalid_target = "Это место нельзя выбрать целью флота."

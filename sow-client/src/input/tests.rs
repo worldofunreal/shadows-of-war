@@ -76,3 +76,15 @@ mod placement_tests {
         assert_ne!(resolved, city_tile);
     }
 }
+
+#[cfg(test)]
+mod camera_offset_tests {
+    use crate::input::surface::clamp_camera_offset;
+
+    #[test]
+    fn focus_offset_obeys_map_edges_and_centers_small_maps() {
+        assert_eq!(clamp_camera_offset(100.0, 300.0, -250.0), -200.0);
+        assert_eq!(clamp_camera_offset(100.0, 300.0, 20.0), 0.0);
+        assert_eq!(clamp_camera_offset(100.0, 50.0, 20.0), 25.0);
+    }
+}

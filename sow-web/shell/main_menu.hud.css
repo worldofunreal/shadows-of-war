@@ -158,6 +158,12 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     border-inline-start: 1px solid var(--sow-line);
 }
 
+@media (min-width: 721px) {
+    .sow-hud__topbar { align-items: flex-start; }
+    .sow-hud__status-right { flex-direction: column; align-items: stretch; gap: 2px; }
+    .sow-hud__fps { padding: 0 2px 4px; border-inline-start: 0; border-bottom: 1px solid var(--sow-line); text-align: center; }
+}
+
 .sow-hud__btn-danger:hover {
     border-color: var(--sow-red);
     color: var(--sow-red);
@@ -467,10 +473,16 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 .sow-hud__building-cancel {
+    position: fixed;
+    inset-inline-start: 50%;
+    bottom: max(144px, calc(var(--sow-sab) + 136px));
+    z-index: 210;
+    transform: translateX(-50%);
     display: grid;
     place-items: center;
-    flex: 0 0 48px;
-    min-height: 54px;
+    width: 48px;
+    height: 48px;
+    pointer-events: auto;
     padding: 0;
     border: 1px solid color-mix(in srgb, var(--sow-red) 55%, transparent);
     border-radius: 5px 5px 11px 4px;
@@ -1018,8 +1030,11 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     left: 0;
     top: 0;
     z-index: 205;
-    width: min(300px, calc(100vw - 16px));
-    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    width: min(252px, calc(100vw - 16px));
+    padding: 9px;
     transform: none;
     border: 1px solid var(--sow-line);
     border-top-color: color-mix(in srgb, var(--sow-gold) 58%, transparent);
@@ -1062,13 +1077,11 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 .sow-hud__building-card-head {
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-}
-
-.sow-hud__building-card-head {
     color: var(--sow-gold-bright);
     font-size: 13px;
     font-weight: 800;
@@ -1090,7 +1103,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 .sow-hud__building-card-icon .sow-hud__building-icon { width: 21px; height: 21px; font-size: 19px; }
 
 .sow-hud__building-card-level {
-    margin-top: 7px;
+    margin-inline-start: 2px;
 }
 
 .sow-hud__building-level,
@@ -1110,27 +1123,27 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 
 .sow-hud__building-card-benefit,
 .sow-hud__building-card-next {
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 5px;
-    margin-top: 7px;
+    margin: 0;
 }
 
 .sow-hud__building-card-next {
-    padding-top: 7px;
+    padding-top: 8px;
     border-top: 1px solid var(--sow-line);
 }
 
 .sow-hud__building-card-gold {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 6px;
-    padding: 5px 7px;
-    border: 1px solid var(--sow-line);
-    border-radius: 4px;
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 4px 8px;
+    margin: 0;
+    padding: 0;
     color: var(--sow-gold-bright);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
@@ -1148,8 +1161,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 .sow-hud__building-metrics { flex-wrap: wrap; gap: 5px; }
 
 .sow-hud__building-metric {
-    min-height: 25px;
-    padding: 3px 6px;
+    min-height: 22px;
+    padding: 2px 4px;
     gap: 4px;
     border: 1px solid rgb(255 255 255 / 9%);
     border-radius: 4px;
@@ -1178,9 +1191,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     align-items: center;
     justify-content: center;
     min-width: 82px;
-    min-height: 36px;
-    margin-top: 8px;
-    margin-inline-start: auto;
+    min-height: 48px;
+    margin: 0;
     padding: 0 10px;
     gap: 7px;
     border: 1px solid color-mix(in srgb, var(--sow-gold) 66%, transparent);
@@ -2070,12 +2082,10 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 
 @media (max-width: 720px) {
     .sow-hud__building-card {
-        width: min(280px, calc(100vw - 16px));
+        width: min(252px, calc(100vw - 16px));
         padding: 9px;
     }
 
-    .sow-hud__building-card-upgrade { min-height: 42px; }
-    .sow-hud__building-cancel { min-height: 48px; }
     .sow-hud__topbar {
         top: max(8px, var(--sow-sat));
         inset-inline: max(8px, var(--sow-sal)) max(8px, var(--sow-sar));

@@ -366,14 +366,15 @@ impl SowApp {
                     let snapshot = self.sim.current_snapshot.as_ref();
                     let mut slot = 0usize;
                     self.ui.alliance_celebrations.retain(|effect| {
-                        let elapsed = current_time.duration_since(effect.start_time).as_secs_f32();
-                        if elapsed >= crate::app::ALLIANCE_CELEBRATION_DURATION {
+                        let Some(age) = crate::app::alliance_celebration_age(
+                            effect.start_time,
+                            current_time,
+                        ) else {
                             return false;
-                        }
+                        };
                         let Some(snapshot) = snapshot else {
                             return true;
                         };
-                        let age = elapsed / crate::app::ALLIANCE_CELEBRATION_DURATION;
                         if slot < crate::app::MAX_ALLIANCE_CELEBRATIONS {
                             for (participant, player_id) in effect.player_ids.iter().enumerate() {
                                 if let Some(player) =

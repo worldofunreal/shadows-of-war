@@ -722,6 +722,9 @@ impl SowEngine {
             if let Some(gold) = s.campaign_gold_loot_bonus.filter(|gold| *gold <= 1_000_000) {
                 self.campaign_gold_loot_bonus.insert(bot_id, gold);
             }
+            if let Some(gold) = s.campaign_gold_loot_override.filter(|gold| *gold <= 1_000_000) {
+                self.campaign_gold_loot_override.insert(bot_id, gold);
+            }
             if let Some(group) = &s.campaign_alliance_group {
                 self.campaign_alliance_groups.insert(bot_id, group.clone());
             }

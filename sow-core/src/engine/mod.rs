@@ -185,6 +185,8 @@ pub struct SowEngine {
     pub campaign_support_intervals: std::collections::HashMap<PlayerId, u32>,
     /// Optional fixed bonus loot per scripted campaign faction.
     pub campaign_gold_loot_bonus: std::collections::HashMap<PlayerId, u32>,
+    /// Optional fixed final bounty per scripted campaign faction.
+    pub campaign_gold_loot_override: std::collections::HashMap<PlayerId, u32>,
     pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
     pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
     pub campaign_hostilities:
@@ -255,6 +257,7 @@ impl SowEngine {
             campaign_avatars: std::collections::HashMap::new(),
             campaign_support_intervals: std::collections::HashMap::new(),
             campaign_gold_loot_bonus: std::collections::HashMap::new(),
+            campaign_gold_loot_override: std::collections::HashMap::new(),
             campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_relations: std::collections::HashMap::new(),
             campaign_hostilities: std::collections::HashMap::new(),
@@ -422,8 +425,13 @@ impl SowEngine {
 
         let survived_ticks = self.state.tick;
         let bonus_percent = survived_ticks as f64 * 0.0001; // 0.01% per tick
-        let total_reward = base_reward * (1.0 + bonus_percent)
-            + f64::from(self.campaign_gold_loot_bonus.get(&victim_id).copied().unwrap_or(0));
+        let total_reward = self.campaign_gold_loot_override.get(&victim_id).copied().map_or_else(
+            || {
+                base_reward * (1.0 + bonus_percent)
+                    + f64::from(self.campaign_gold_loot_bonus.get(&victim_id).copied().unwrap_or(0))
+            },
+            f64::from,
+        );
 
         // Gather tile conquest contributions (deterministic by player id)
         let mut contributors: Vec<(u16, u32)> = self

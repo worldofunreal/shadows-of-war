@@ -90,6 +90,9 @@ pub struct ScriptedSpawn {
     /// Fixed extra gold awarded when this scripted campaign faction is defeated.
     #[serde(default)]
     pub campaign_gold_loot_bonus: Option<u32>,
+    /// Fixed final gold bounty for this scripted campaign faction; absent uses normal scaling.
+    #[serde(default)]
+    pub campaign_gold_loot_override: Option<u32>,
     /// Factions in this campaign bloc share a pact when one member forms an alliance.
     #[serde(default)]
     pub campaign_alliance_group: Option<String>,
@@ -108,6 +111,8 @@ pub enum CampaignHostility {
     #[default]
     Passive,
     Aggressive,
+    /// Campaign food that neither attacks nor defends and has no troops.
+    Food,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

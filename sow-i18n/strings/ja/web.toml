@@ -84,6 +84,7 @@ copy_failed = "コピーに失敗しました"
 copy_unavailable = "コピーできません"
 
 [tutorial]
+objective_details = "目標の詳細"
 continue = "コンセプト"
 complete = "キャンペーンを完了"
 retry = "再試行"
@@ -654,6 +655,8 @@ build_spacing_structure = "この建物を建てるスペースが足りませ�
 build_no_space = "近くに建設できる場所がありません。"
 build_no_farm_plots = "農場用の区画がありません。先に都市をアップグレードしてください。"
 building_in_progress = "建物はまだ建設中です。"
+building_max_level = "最大レベルに達しました。"
+building_requires_city_level = "レベル3の都市が必要です。"
 need_gold = "あと{cost}ゴールド必要です。"
 fleet_need_troops = "艦隊の出航には最低{troops}部隊が必要です。"
 fleet_invalid_target = "艦隊の目的地として指定できません。"

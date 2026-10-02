@@ -321,11 +321,42 @@ pub struct TransportImpact {
 
 pub const MAX_TRANSPORT_IMPACTS: usize = 256;
 pub const MAX_ALLIANCE_CELEBRATIONS: usize = 8;
-pub const ALLIANCE_CELEBRATION_DURATION: f32 = 2.4;
+pub const ALLIANCE_CELEBRATION_DURATION: f32 = 1.6;
 
 pub struct AllianceCelebration {
     pub player_ids: [u16; 2],
     pub start_time: web_time::Instant,
+}
+
+fn queue_alliance_celebration(
+    celebrations: &mut std::collections::VecDeque<AllianceCelebration>,
+    a: u16,
+    b: u16,
+    now: web_time::Instant,
+) {
+    if a == 0 || b == 0 || a == b {
+        return;
+    }
+    let player_ids = if a < b { [a, b] } else { [b, a] };
+    if let Some(index) = celebrations
+        .iter()
+        .position(|effect| effect.player_ids == player_ids)
+    {
+        let _ = celebrations.remove(index);
+    }
+    while celebrations.len() >= MAX_ALLIANCE_CELEBRATIONS {
+        celebrations.pop_front();
+    }
+    celebrations.push_back(AllianceCelebration { player_ids, start_time: now });
+}
+
+pub(crate) fn alliance_celebration_age(
+    start_time: web_time::Instant,
+    now: web_time::Instant,
+) -> Option<f32> {
+    let elapsed = now.duration_since(start_time).as_secs_f32();
+    (elapsed < ALLIANCE_CELEBRATION_DURATION)
+        .then_some(elapsed / ALLIANCE_CELEBRATION_DURATION)
 }
 
 #[derive(Clone, Debug)]
@@ -428,20 +459,7 @@ pub fn easeout_flash(elapsed: f32) -> Option<f32> {
 
 impl UiState {
     pub(crate) fn trigger_alliance_celebration(&mut self, a: u16, b: u16, now: web_time::Instant) {
-        let player_ids = if a < b { [a, b] } else { [b, a] };
-        if let Some(existing) = self
-            .alliance_celebrations
-            .iter_mut()
-            .find(|effect| effect.player_ids == player_ids)
-        {
-            existing.start_time = now;
-            return;
-        }
-        if self.alliance_celebrations.len() == MAX_ALLIANCE_CELEBRATIONS {
-            self.alliance_celebrations.pop_front();
-        }
-        self.alliance_celebrations
-            .push_back(AllianceCelebration { player_ids, start_time: now });
+        queue_alliance_celebration(&mut self.alliance_celebrations, a, b, now);
     }
 
     pub(crate) fn trigger_viewport_alert(&mut self, kind: ViewportAlertKind) {
@@ -472,6 +490,55 @@ impl UiState {
                 start_time: web_time::Instant::now(),
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod alliance_celebration_tests {
+    use super::{
+        ALLIANCE_CELEBRATION_DURATION, MAX_ALLIANCE_CELEBRATIONS, alliance_celebration_age,
+        queue_alliance_celebration,
+    };
+    use std::collections::VecDeque;
+    use web_time::{Duration, Instant};
+
+    #[test]
+    fn deduplicates_pairs_and_refreshes_their_age_and_eviction_order() {
+        let now = Instant::now();
+        let refreshed = now + Duration::from_millis(100);
+        let mut effects = VecDeque::new();
+        for id in 1..=MAX_ALLIANCE_CELEBRATIONS as u16 {
+            queue_alliance_celebration(&mut effects, id, id + 100, now);
+        }
+
+        queue_alliance_celebration(&mut effects, 101, 1, refreshed);
+        queue_alliance_celebration(&mut effects, 109, 9, refreshed);
+
+        assert_eq!(effects.len(), MAX_ALLIANCE_CELEBRATIONS);
+        assert_eq!(effects.front().unwrap().player_ids, [2, 102]);
+        assert_eq!(effects.back().unwrap().player_ids, [9, 109]);
+        assert_eq!(effects.back().unwrap().start_time, refreshed);
+        assert_eq!(
+            effects.iter().filter(|effect| effect.player_ids == [1, 101]).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn celebrations_expire_after_the_configured_duration() {
+        let start = Instant::now();
+        assert!(alliance_celebration_age(
+            start,
+            start + Duration::from_millis(1599)
+        )
+        .is_some());
+        assert_eq!(
+            alliance_celebration_age(
+                start,
+                start + Duration::from_secs_f32(ALLIANCE_CELEBRATION_DURATION)
+            ),
+            None
+        );
     }
 }
 

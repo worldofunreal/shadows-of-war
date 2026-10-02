@@ -107,11 +107,19 @@
         return error + notice;
     }
 
+    function renderSiteLink(path, key, className) {
+        var crazyGames = window.SOW_PORTAL === "crazygames";
+        var href = crazyGames ? "https://shadowsofwar.io" + path : path;
+        var classAttr = className ? " class='" + esc(className) + "'" : "";
+        var targetAttr = crazyGames ? " target='_blank' rel='noopener noreferrer'" : "";
+        return "<a" + classAttr + " href='" + esc(href) + "'" + targetAttr + ">" + esc(SOW_t(key)) + "</a>";
+    }
+
     function renderFooter(label) {
         var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
         var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
         return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
-            "<a href='/#faq'>" + esc(SOW_t("site.faq")) + "</a><a href='/support/'>" + esc(SOW_t("menu.support")) + "</a><a href='/terms/'>" + esc(SOW_t("menu.terms")) + "</a><a href='/privacy/'>" + esc(SOW_t("menu.privacy")) + "</a><a href='/cookies/'>" + esc(SOW_t("menu.cookies")) + "</a>" +
+            renderSiteLink("/#faq", "site.faq") + renderSiteLink("/support/", "menu.support") + renderSiteLink("/terms/", "menu.terms") + renderSiteLink("/privacy/", "menu.privacy") + renderSiteLink("/cookies/", "menu.cookies") +
             "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a>" +
             "</nav><span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
     }
@@ -343,7 +351,7 @@
         return "<div class='sow-menu__overlay' data-menu-overlay='auth' data-auth-overlay><section class='sow-menu__modal sow-auth' role='dialog' aria-modal='true' aria-label='" + esc(SOW_t("auth.account")) + "'>" +
             "<div class='sow-auth__glow sow-auth__glow--cyan'></div><div class='sow-auth__head'><div class='sow-auth__logos'><img class='sow-auth__game-logo' src='/sow-long.svg' alt='" + esc(SOW_t("menu.brand")) + "'><span class='sow-auth__logo-divider' aria-hidden='true'></span><img class='sow-auth__wou-logo' src='https://worldofunreal.com/wouid.svg' alt='WouID'></div><button class='sow-menu__icon-button' type='button' data-command='close_auth' aria-label='" + esc(SOW_t("auth.close")) + "'>×</button></div>" +
             error + notice + "<div class='sow-auth__body'>" + emailPanel + "<div class='sow-auth__social-list'>" + renderAuthSocial() + "</div></div>" +
-            "<a class='sow-auth__terms' href='/terms/'>" + esc(SOW_t("auth.terms")) + "</a></section></div>";
+            renderSiteLink("/terms/", "auth.terms", "sow-auth__terms") + "</section></div>";
     }
 
     /* POKI_RENDER_REPLACEMENT_END */

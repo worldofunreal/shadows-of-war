@@ -75,6 +75,11 @@ impl SowEngine {
         decisions: &mut Vec<BotDecision>,
     ) {
         let (bot_id, bot_iq) = bot;
+        if self.campaign_hostilities.get(&bot_id)
+            == Some(&crate::game_config::CampaignHostility::Food)
+        {
+            return;
+        }
         let (attack_cost, alliance_cost) = costs;
         let is_mfo = slot.tier == AiTier::Nation;
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
