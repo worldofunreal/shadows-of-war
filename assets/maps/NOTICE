@@ -1,0 +1,19 @@
+OpenFront-derived map attribution and license
+============================================
+
+The OpenFront-derived map sources and generated map files identified in
+SOURCES.toml are licensed under Creative Commons Attribution-ShareAlike 4.0
+International (CC BY-SA 4.0).
+
+Attribution: OpenFront Inc. and Contributors.
+Source: https://github.com/openfrontio/OpenFrontIO/tree/f51f165b947a92cc683ade3a72c3800300e86e61/map-generator/assets
+Source commit: f51f165b947a92cc683ade3a72c3800300e86e61.
+
+Shadows of War crops, corrects, classifies, downsizes, filters, packs, and
+renders these sources into map.bin, map.bin.br, and thumbnail.webp files, as
+recorded in SOURCES.toml.
+
+License: https://creativecommons.org/licenses/by-sa/4.0/
+
+OpenStreetMap-derived maps have their own source attribution and terms in
+SOURCES.toml; this notice does not replace those terms.

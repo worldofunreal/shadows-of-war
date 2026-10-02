@@ -34,6 +34,7 @@ assets/maps/*
 !assets/maps/world/
 !assets/maps/catalog.bin
 !assets/maps/SOURCES.toml
+!assets/maps/NOTICE
 wasm-pack*.*
 .cursor/
 # The following were local checkouts in old dev setup — now dependencies
