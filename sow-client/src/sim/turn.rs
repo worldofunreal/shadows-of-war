@@ -12,8 +12,9 @@ impl TutorialObservation {
             if attack.owner_id == my_id
                 && self.seen_attacks.insert(attack.id)
                 && let Some(target) = engine.state.player(attack.target_owner)
+                && let Some(faction_id) = engine.campaign_faction_ids.get(&target.id)
             {
-                let count = self.attacks_by_target.entry(target.name.clone()).or_default();
+                let count = self.attacks_by_faction_id.entry(faction_id.clone()).or_default();
                 *count = count.saturating_add(1);
             }
         }
@@ -33,10 +34,11 @@ impl TutorialObservation {
             *count = count.saturating_add(1);
             if fleet.unit_type == sow_core::game::UnitType::TransportShip
                 && let Some(target) = engine.state.player(fleet.target_owner)
+                && let Some(faction_id) = engine.campaign_faction_ids.get(&target.id)
             {
                 let count = self
-                    .seen_transport_fleets_by_target
-                    .entry(target.name.clone())
+                    .seen_transport_fleets_by_faction_id
+                    .entry(faction_id.clone())
                     .or_default();
                 *count = count.saturating_add(1);
             }
@@ -85,7 +87,9 @@ impl TutorialObservation {
                 self.alliances_formed = self.alliances_formed.saturating_add(1);
             }
             if let Some(ally) = engine.state.player(*ally_id) {
-                self.seen_alliance_names.insert(ally.name.clone());
+                if let Some(faction_id) = engine.campaign_faction_ids.get(&ally.id) {
+                    self.seen_alliance_faction_ids.insert(faction_id.clone());
+                }
             }
         }
         self.alliances_initialized = true;
@@ -155,7 +159,9 @@ impl TutorialObservation {
                     && other.alive
                     && self.seen_contacts.insert(owner)
                 {
-                    self.seen_contact_names.insert(other.name.clone());
+                    if let Some(faction_id) = engine.campaign_faction_ids.get(&other.id) {
+                        self.seen_contact_faction_ids.insert(faction_id.clone());
+                    }
                 }
             });
         }
@@ -173,19 +179,12 @@ impl TutorialObservation {
                 if *sender_id == my_id {
                     self.resource_transfers = self.resource_transfers.saturating_add(1);
                     if let Some(receiver) = engine.state.player(*receiver_id) {
-                        let counts = self
-                            .resource_transfers_by_recipient
-                            .entry(receiver.name.clone())
-                            .or_default();
-                        counts.total = counts.total.saturating_add(1);
-                        if *gold > 0.0 {
-                            counts.gold = counts.gold.saturating_add(1);
-                        }
-                        if *troops > 0.0 {
-                            counts.troops = counts.troops.saturating_add(1);
-                        }
-                        if *gold > 0.0 && *troops > 0.0 {
-                            counts.gold_troops = counts.gold_troops.saturating_add(1);
+                        if let Some(faction_id) = engine.campaign_faction_ids.get(&receiver.id) {
+                            let counts = self.resource_transfers_by_recipient_faction_id.entry(faction_id.clone()).or_default();
+                            counts.total = counts.total.saturating_add(1);
+                            if *gold > 0.0 { counts.gold = counts.gold.saturating_add(1); }
+                            if *troops > 0.0 { counts.troops = counts.troops.saturating_add(1); }
+                            if *gold > 0.0 && *troops > 0.0 { counts.gold_troops = counts.gold_troops.saturating_add(1); }
                         }
                     }
                 }
@@ -198,16 +197,13 @@ impl TutorialObservation {
                         || sender.alliances.contains(receiver_id))
                 {
                     self.ally_support_deliveries = self.ally_support_deliveries.saturating_add(1);
-                    let receipt = self
-                        .support_deliveries_by_faction
-                        .entry(sender.name.clone())
-                        .or_default();
-                    if receipt.deliveries == 0 {
-                        receipt.first_tick = engine.state.tick;
+                    if let Some(faction_id) = engine.campaign_faction_ids.get(&sender.id) {
+                        let receipt = self.support_deliveries_by_faction_id.entry(faction_id.clone()).or_default();
+                        if receipt.deliveries == 0 { receipt.first_tick = engine.state.tick; }
+                        receipt.deliveries = receipt.deliveries.saturating_add(1);
+                        receipt.gold += (*gold).max(0.0);
+                        receipt.troops += (*troops).max(0.0);
                     }
-                    receipt.deliveries = receipt.deliveries.saturating_add(1);
-                    receipt.gold += (*gold).max(0.0);
-                    receipt.troops += (*troops).max(0.0);
                 }
             }
             // Construction runs before combat. Keep a completion even if the building
@@ -257,7 +253,9 @@ impl TutorialObservation {
                 && let Some(player) = engine.state.player(*player_id)
             {
                 self.seen_defeated.insert(*player_id);
-                self.seen_defeated_names.insert(player.name.clone());
+                if let Some(faction_id) = engine.campaign_faction_ids.get(&player.id) {
+                    self.seen_defeated_faction_ids.insert(faction_id.clone());
+                }
             }
         }
     }
@@ -390,7 +388,12 @@ mod tests {
             state.register_player(player);
             state.set_tile_owner(x, 1, id);
         }
-        SowEngine::new(state, WaterComponents::default())
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.campaign_faction_ids.extend([
+            (2, "neighbor".to_string()),
+            (3, "distant".to_string()),
+        ]);
+        engine
     }
 
     #[test]
@@ -450,7 +453,7 @@ mod tests {
         observation.observe_sim(&engine, 1);
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.seen_attacks.len(), 1);
-        assert_eq!(observation.attacks_by_target.get("Neighbor"), Some(&1));
+        assert_eq!(observation.attacks_by_faction_id.get("neighbor"), Some(&1));
         assert_eq!(observation.seen_fleets, [1].into_iter().collect());
         assert_eq!(observation.seen_nukes.len(), 2);
         assert_eq!(observation.seen_structures, [10].into_iter().collect());
@@ -530,13 +533,13 @@ mod tests {
 
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.alliances_formed, 0);
-        assert!(observation.seen_alliance_names.contains("Neighbor"));
+        assert!(observation.seen_alliance_faction_ids.contains("neighbor"));
 
         engine.state.player_mut(1).unwrap().alliances.push(3);
         observation.observe_sim(&engine, 1);
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.alliances_formed, 1);
-        assert!(observation.seen_alliance_names.contains("Distant"));
+        assert!(observation.seen_alliance_faction_ids.contains("distant"));
     }
 
     #[test]
@@ -600,10 +603,10 @@ mod tests {
         assert_eq!(observation.seen_fleets_by_type.get("TradeShip"), Some(&1));
         assert_eq!(observation.seen_fleets_by_type.get("Warship"), Some(&1));
         assert_eq!(
-            observation.seen_transport_fleets_by_target.get("Neighbor"),
+            observation.seen_transport_fleets_by_faction_id.get("neighbor"),
             Some(&1)
         );
-        assert_eq!(observation.seen_transport_fleets_by_target.len(), 1);
+        assert_eq!(observation.seen_transport_fleets_by_faction_id.len(), 1);
     }
 
     #[test]
@@ -660,8 +663,8 @@ mod tests {
 
         observation.observe_events(&engine, 1);
         let receipt = observation
-            .support_deliveries_by_faction
-            .get("Neighbor")
+            .support_deliveries_by_faction_id
+            .get("neighbor")
             .unwrap();
         assert_eq!(receipt.deliveries, 2);
         assert_eq!(receipt.gold, 20.0);
@@ -731,18 +734,18 @@ mod tests {
         engine.state.map.terrain[9] = MapTile::from_byte(0x80);
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.seen_contacts, [2].into_iter().collect());
-        assert!(observation.seen_contact_names.contains("Neighbor"));
+        assert!(observation.seen_contact_faction_ids.contains("neighbor"));
 
         // Diagonal adjacency is also a land border in the simulation.
         engine.state.set_tile_owner(6, 1, 0);
         engine.state.set_tile_owner(2, 2, 3);
         observation.observe_sim(&engine, 1);
         assert_eq!(observation.seen_contacts, [2, 3].into_iter().collect());
-        assert!(observation.seen_contact_names.contains("Distant"));
+        assert!(observation.seen_contact_faction_ids.contains("distant"));
 
         engine.state.player_mut(2).unwrap().alive = false;
         observation.observe_sim(&engine, 1);
-        assert!(!observation.seen_defeated_names.contains("Neighbor"));
+        assert!(!observation.seen_defeated_faction_ids.contains("neighbor"));
         engine.state.events.push(GameEvent::PlayerEliminated {
             player_id: 2,
             conqueror_id: 3,
@@ -753,14 +756,14 @@ mod tests {
             by_nuke: false,
         });
         observation.observe_events(&engine, 1);
-        assert!(!observation.seen_defeated_names.contains("Neighbor"));
+        assert!(!observation.seen_defeated_faction_ids.contains("neighbor"));
         if let Some(GameEvent::PlayerEliminated { assists, .. }) = engine.state.events.last_mut() {
             assists.push((1, 1));
         }
         observation.observe_events(&engine, 1);
-        assert!(observation.seen_defeated_names.contains("Neighbor"));
+        assert!(observation.seen_defeated_faction_ids.contains("neighbor"));
         assert_eq!(engine.state.player(1).unwrap().kills, 0);
-        assert!(observation.seen_contact_names.contains("Neighbor"));
+        assert!(observation.seen_contact_faction_ids.contains("neighbor"));
     }
 
     #[test]

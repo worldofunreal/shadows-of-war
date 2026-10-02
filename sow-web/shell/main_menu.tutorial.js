@@ -22,6 +22,11 @@
         latestHud: null,
         uiCounts: Object.create(null),
         uiPaused: false,
+        cameraOnly: false,
+        hoverEvents: 0,
+        hoveredEntityId: null,
+        hoverStepId: null,
+        hoverStepRecorded: false,
         completionSent: false,
         lastActionStepId: null,
         resolvedReactions: new Set(),
@@ -79,9 +84,16 @@
             reducedMotion: Boolean(hud && hud.settings && hud.settings.reduced_motion),
             direction: document.documentElement.dir
         };
-        if (step && step.guide && (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out")) {
+        if (step && step.guide) {
             context.zoomMode = zoomMode();
-            var hintKey = String(step.hint_key || "").replace(/_hint$/, "_" + context.zoomMode + "_hint");
+            var hintKey = "";
+            if (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out") {
+                hintKey = String(step.hint_key || "").replace(/_hint$/, "_" + context.zoomMode + "_hint");
+                var labelKey = hintKey.replace(/_hint$/, "_label");
+                if (labelKey && tr(labelKey) !== labelKey) context.gestureLabel = tr(labelKey);
+            } else if (["drag", "hover"].includes(step.guide.gesture)) {
+                hintKey = "tutorial." + step.id + "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint";
+            }
             if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey);
         }
         return context;
@@ -125,7 +137,7 @@
         console.error("[SOW CAMPAIGN]", error);
         if (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.active) {
             runtime.uiPaused = true;
-            send("set_tutorial_paused", { paused: true });
+            send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly });
         }
         var previous = document.getElementById("sow-campaign-error");
         if (previous) previous.remove();
@@ -173,7 +185,7 @@
             onFocus: focusMarker,
             onDismiss: runtime.menuGuide
                 ? (runtime.definition.menu_guide.dismissible === false ? null : dismissMenuGuide)
-                : openLeaveMatch
+                : null
         });
     }
 
@@ -196,6 +208,11 @@
             runtime.active = false;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
+            runtime.cameraOnly = null;
+            runtime.hoverEvents = 0;
+            runtime.hoveredEntityId = null;
+            runtime.hoverStepId = null;
+            runtime.hoverStepRecorded = false;
             runtime.markerId = undefined;
             runtime.completionSent = false;
             runtime.lastActionStepId = null;
@@ -235,6 +252,13 @@
             runtime.active = true;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
+            runtime.cameraOnly = null;
+            runtime.hoverEvents = 0;
+            var hovered = runtime.latestHud.hovered;
+            runtime.hoveredEntityId = hovered && !hovered.is_me && Number.isInteger(Number(hovered.id))
+                ? Number(hovered.id) : null;
+            runtime.hoverStepId = null;
+            runtime.hoverStepRecorded = false;
             runtime.markerId = undefined;
             runtime.completionSent = false;
             runtime.lastActionStepId = null;
@@ -253,7 +277,7 @@
         var guide = step.guide, tutorial = hud.tutorial || {};
         if (step.trigger && step.trigger.type === "territory" && step.guide.target === "expand" && view && view.progress.current > 0) return null;
         if (step.id === "boudica_first_victory" && step.trigger && step.trigger.type === "defeated" && step.trigger.target) {
-            var attacks = tutorial.facts && tutorial.facts.attacks_by_target;
+            var attacks = tutorial.facts && tutorial.facts.attacks_by_faction_id;
             if (Number(attacks && attacks[step.trigger.target]) > 0) return null;
         }
         var result;
@@ -285,7 +309,7 @@
     function markerTargetFor(step) {
         var facts = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts || {};
         if (step.trigger && Array.isArray(step.trigger.targets)) {
-            var observed = step.trigger.type === "contact" ? facts.contact_names || [] : facts.defeated_names || [];
+            var observed = step.trigger.type === "contact" ? facts.contact_faction_ids || [] : facts.defeated_faction_ids || [];
             var remaining = step.trigger.targets.find(function (target) { return !observed.includes(target); });
             if (remaining) return remaining;
         }
@@ -299,14 +323,30 @@
         if (!runtime.machine || runtime.modalOpen || !hud || !hud.tutorial || !hud.tutorial.active) return;
         if (!root.isConnected) document.body.appendChild(root);
         var tutorial = hud.tutorial;
-        var machineView = runtime.machine.update(tutorial.facts || {}, runtime.uiCounts);
+        var currentStep = runtime.machine.view().step;
+        if (runtime.hoverStepId !== currentStep.id) {
+            runtime.hoverStepId = currentStep.id;
+            runtime.hoverStepRecorded = false;
+        }
+        var hoveredEntityId = hud.hovered && !hud.hovered.is_me && Number.isInteger(Number(hud.hovered.id))
+            ? Number(hud.hovered.id) : null;
+        if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded && hoveredEntityId !== null && hoveredEntityId !== runtime.hoveredEntityId) {
+            runtime.hoverStepRecorded = true;
+            runtime.hoverEvents++;
+        }
+        runtime.hoveredEntityId = hoveredEntityId;
+        var facts = Object.assign({}, tutorial.facts || {}, {
+            hover_events: runtime.hoverEvents,
+            touch_controls: zoomMode() === "pinch" ? 1 : 0
+        });
+        var machineView = runtime.machine.update(facts, runtime.uiCounts);
         if (machineView.reactionData && machineView.reactionData.outcome) {
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
         }
         if (machineView.reactionData && machineView.reactionTarget !== runtime.cameraReactionTarget) {
-            var faction = (hud.players || []).find(function (item) { return item && item.name === machineView.reactionTarget; });
+            var faction = (hud.players || []).find(function (item) { return item && item.campaign_faction_id === machineView.reactionTarget; });
             if (faction && Number.isFinite(Number(faction.centroid_x)) && Number.isFinite(Number(faction.centroid_y))) {
-                if (send("focus_world", { x: Number(faction.centroid_x), y: Number(faction.centroid_y) })) {
+                if (send("focus_world", { x: Number(faction.centroid_x) + 0.5, y: Number(faction.centroid_y) + 0.5 })) {
                     runtime.cameraReactionTarget = machineView.reactionTarget;
                 }
             }
@@ -326,16 +366,18 @@
             runtime.lastActionStepId = machineView.step.id;
             if (Number.isFinite(machineView.step.attack_ratio_on_enter)) send("set_attack_ratio", { ratio: machineView.step.attack_ratio_on_enter });
         }
-        if (machineView.paused !== runtime.uiPaused) {
+        var cameraOnly = machineView.step.camera_only === true;
+        if (machineView.paused !== runtime.uiPaused || cameraOnly !== runtime.cameraOnly) {
             runtime.uiPaused = machineView.paused;
-            send("set_tutorial_paused", { paused: machineView.paused });
+            runtime.cameraOnly = cameraOnly;
+            send("set_tutorial_paused", { paused: machineView.paused, camera_only: cameraOnly });
         }
         var markerId = null;
         var markerTarget = markerTargetFor(machineView.step);
         if (markerTarget) {
             var marked = markerTarget === "player"
                 ? (hud.players || []).find(function (player) { return player && player.is_me; })
-                : (hud.players || []).find(function (player) { return player && player.name === markerTarget; });
+                : (hud.players || []).find(function (player) { return player && player.campaign_faction_id === markerTarget; });
             if (marked && Number.isInteger(Number(marked.id))) markerId = Number(marked.id);
         }
         if (markerId !== runtime.markerId) {
@@ -438,7 +480,7 @@
         if (!outcome) return true;
         var key = reaction.id + "@" + targetName;
         if (runtime.resolvedReactions.has(key)) return true;
-        var target = (hud && hud.players || []).find(function (player) { return player && player.name === targetName; });
+        var target = (hud && hud.players || []).find(function (player) { return player && player.campaign_faction_id === targetName; });
         var human = (hud && hud.players || []).find(function (player) { return player && player.is_me; });
         var goldCost = Number(choice ? choice.gold_cost || 0 : reaction.gold_cost || 0);
         if (!target || !human || availableGold(hud) < goldCost) return false;
@@ -454,7 +496,7 @@
         if (!hud || !runtime.machine) return;
         var step = runtime.machine.view().step;
         var target = markerTargetFor(step);
-        var player = target === "player" ? (hud.players || []).find(function (item) { return item && item.is_me; }) : (hud.players || []).find(function (item) { return item && item.name === target; });
+        var player = target === "player" ? (hud.players || []).find(function (item) { return item && item.is_me; }) : (hud.players || []).find(function (item) { return item && item.campaign_faction_id === target; });
         if (player) send("focus_player", { player_id: Number(player.id) });
     }
 
@@ -471,10 +513,10 @@
         if (runtime.machine) runtime.machine.setPaused(open);
         if (open) {
             runtime.resumeAfterModal = runtime.machine ? runtime.machine.view().paused : false;
-            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: true });
+            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly });
             root.hidden = true;
         } else if (runtime.machine) {
-            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false });
+            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false, camera_only: runtime.cameraOnly });
             var model = runtime.machine.view();
             runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
         }
@@ -560,6 +602,11 @@
         runtime.latestHud = null;
         runtime.menuGuide = false;
         runtime.uiPaused = false;
+        runtime.cameraOnly = false;
+        runtime.hoverEvents = 0;
+        runtime.hoveredEntityId = null;
+        runtime.hoverStepId = null;
+        runtime.hoverStepRecorded = false;
         runtime.modalOpen = false;
         runtime.resumeAfterModal = false;
         runtime.completionSent = false;

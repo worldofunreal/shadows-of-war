@@ -1423,11 +1423,7 @@ fn s4_nation_defends_when_struck() {
     engine
         .campaign_relations
         .insert(2, crate::protocol::CampaignRelation::Enemy);
-    engine
-        .campaign_hostilities
-        .insert(2, crate::game_config::CampaignHostility::Passive);
-
-    // Strike first as player 1 so the passive enemy only responds after the attack.
+    // Strike first as player 1 so defense must take precedence over the enemy's normal attack.
     use crate::protocol::StampedIntent;
     let strike = StampedIntent {
         player_id: 1,

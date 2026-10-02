@@ -189,3 +189,41 @@ impl SowEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod zero_troop_bot_income_tests {
+    use crate::engine::SowEngine;
+    use crate::game::{GamePhase, GameState};
+    use crate::game_config::GameConfig;
+    use crate::map::MapTile;
+    use crate::player::Player;
+    use crate::water_components::WaterComponents;
+
+    #[test]
+    fn bot_with_zero_starting_troops_uses_normal_income() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(7, 2, 1, config.clone());
+        state.phase = GamePhase::Playing;
+        for (id, tile) in [(1, 0), (2, 1)] {
+            let mut player = if id == 1 {
+                Player::new_bot(id, format!("Faction {id}"), [0.2, 0.5, 1.0], &config)
+            } else {
+                Player::new_human(id, format!("Faction {id}"), [0.2, 0.5, 1.0], &config)
+            };
+            player.alive = true;
+            player.tile_count = 1;
+            player.troops = 0.0;
+            state.players.push(player);
+            state.map.set_owner_id(tile, 0, id);
+            let ref_id = state.map.ref_id(tile, 0);
+            state.map.terrain[ref_id] = MapTile::from_byte(0b1000_0000);
+        }
+        state.player_lookup = vec![None, Some(0), Some(1)];
+
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        engine.execute_income();
+
+        assert!(engine.state.player(1).unwrap().troops > 0.0);
+        assert!(engine.state.player(2).unwrap().troops > 0.0);
+    }
+}

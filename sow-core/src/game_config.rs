@@ -63,6 +63,17 @@ pub enum BotDifficulty {
     Terminator,
 }
 
+/// Scripted campaign combat behavior. Absent = ordinary bot AI.
+/// `Aggressive` initiates war; `Passive` only answers attacks; `NonCombatant`
+/// neither attacks, expands, nor retaliates.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CampaignHostility {
+    Aggressive,
+    Passive,
+    NonCombatant,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ScriptedSpawn {
     pub name: String,
@@ -72,11 +83,8 @@ pub struct ScriptedSpawn {
     pub team: Option<crate::protocol::Team>,
     pub leader: crate::player::Leader,
     pub civilization: crate::player::Civilization,
-    pub is_nation: bool,
     #[serde(default)]
     pub troops: Option<f64>,
-    #[serde(default)]
-    pub troop_cap: Option<f64>,
     /// Bot intelligence override (`Player.iq`). `None` = engine default. AI tiers unlock at 100 and
     /// 130; bots normally roll 130–180. Lets a scripted clan be deliberately dull or sharp.
     #[serde(default)]
@@ -99,28 +107,15 @@ pub struct ScriptedSpawn {
     /// Campaign relationship to the human player; absent for ordinary spawns.
     #[serde(default)]
     pub campaign_relation: Option<crate::protocol::CampaignRelation>,
+    /// Campaign combat behavior override; absent keeps ordinary behavior.
     #[serde(default)]
     pub campaign_hostility: Option<CampaignHostility>,
+    /// Stable catalog identity for a Campaign Episode faction.
     #[serde(default)]
-    pub campaign_betrayal: Option<CampaignBetrayal>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum CampaignHostility {
-    #[default]
-    Passive,
-    Aggressive,
-    /// Campaign food that neither attacks nor defends and has no troops.
-    Food,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum CampaignBetrayal {
-    #[default]
-    Never,
-    Opportunistic,
+    pub campaign_faction_id: Option<String>,
+    /// Whether campaign AI may send outgoing alliance offers. Missing keeps ordinary behavior.
+    #[serde(default)]
+    pub campaign_can_request_alliance: Option<bool>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -95,11 +95,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "K'inichil Kab",
+        "target": "k_inichil_kab",
         "scope": "total"
       },
       "marker": {
-        "target": "K'inichil Kab"
+        "target": "k_inichil_kab"
       },
       "guide": {
         "kind": "world",
@@ -125,11 +125,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Caracol War Host",
+        "target": "caracol_war_host",
         "scope": "total"
       },
       "marker": {
-        "target": "Caracol War Host"
+        "target": "caracol_war_host"
       },
       "guide": {
         "kind": "world",
@@ -155,11 +155,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Xunantunich Rebels",
+        "target": "xunantunich_rebels",
         "scope": "total"
       },
       "marker": {
-        "target": "Xunantunich Rebels"
+        "target": "xunantunich_rebels"
       },
       "guide": {
         "kind": "world",
@@ -215,11 +215,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Tikal Vanguard",
+        "target": "tikal_vanguard",
         "scope": "total"
       },
       "marker": {
-        "target": "Tikal Vanguard"
+        "target": "tikal_vanguard"
       },
       "guide": {
         "kind": "world",
@@ -275,11 +275,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Tikal",
+        "target": "tikal",
         "scope": "total"
       },
       "marker": {
-        "target": "Tikal"
+        "target": "tikal"
       },
       "guide": {
         "kind": "world",

@@ -2,6 +2,11 @@ use crate::app::SowApp;
 
 impl SowApp {
     pub(crate) fn send_intent(&mut self, intent: sow_core::protocol::GameplayIntent) {
+        if self.ui.tutorial_camera_only
+            && !matches!(&intent, sow_core::protocol::GameplayIntent::Resign)
+        {
+            return;
+        }
         match &intent {
             sow_core::protocol::GameplayIntent::LaunchFleet { target_tile, .. }
             | sow_core::protocol::GameplayIntent::MoveWarships { target_tile, .. } => {

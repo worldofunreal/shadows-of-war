@@ -3,7 +3,7 @@ mod alliance_lifecycle_tests {
     use crate::diplomacy::{ALLIANCE_REQUEST_TTL_TICKS, AllianceProposal};
     use crate::engine::SowEngine;
     use crate::game::{GamePhase, GameState};
-    use crate::game_config::{CampaignBetrayal, CampaignHostility, GameConfig};
+    use crate::game_config::GameConfig;
     use crate::player::{Player, PlayerType};
     use crate::protocol::{GameplayIntent, StampedIntent};
     use crate::water_components::WaterComponents;
@@ -120,10 +120,49 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
-    fn opportunistic_campaign_betrayal_becomes_a_red_aggressive_enemy() {
+    fn declining_scripted_terms_still_allows_the_player_to_form_a_neutral_alliance() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.campaign_can_request_alliance.insert(2, false);
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ResolveCampaignDiplomacy {
+                    target_player: 2,
+                    relation: crate::protocol::CampaignRelation::Neutral,
+                    gold_cost: 0.0,
+                },
+            },
+            0,
+        );
+
+        assert!(engine.campaign_contact_resolved.contains(&2));
+        assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Neutral));
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ProposeAlliance { target_player: 2 },
+            },
+            1,
+        );
+        assert!(engine.alliances_proposed.iter().any(|proposal| proposal.proposer == 1 && proposal.target == 2));
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::AcceptAlliance { target_player: 1 },
+            },
+            2,
+        );
+        assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Allied));
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+    }
+
+    #[test]
+    fn campaign_alliance_break_marks_the_faction_as_an_enemy() {
         let mut engine = campaign_contact_engine(100.0, true);
         engine.campaign_relations.insert(2, crate::protocol::CampaignRelation::Allied);
-        engine.campaign_betrayal.insert(2, CampaignBetrayal::Opportunistic);
         engine.state.player_mut(1).unwrap().alliances.push(2);
         engine.state.player_mut(2).unwrap().alliances.push(1);
         engine.apply_stamped_intent(&StampedIntent {
@@ -131,7 +170,6 @@ mod alliance_lifecycle_tests {
             intent: GameplayIntent::BreakAlliance { target_player: 1 },
         }, 0);
         assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Enemy));
-        assert_eq!(engine.campaign_hostilities.get(&2), Some(&CampaignHostility::Aggressive));
         let snapshot = engine.build_snapshot();
         assert_eq!(snapshot.players.iter().find(|player| player.id == 2).unwrap().color, [1.0, 0.2, 0.2]);
     }

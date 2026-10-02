@@ -608,7 +608,12 @@ mod tests {
         assert_eq!(engine.state.player(2).unwrap().troops, 250.0);
         assert!(engine.state.events.iter().any(|event| matches!(
             event,
-            GameEvent::ResourceTransferred { sender_id: 2, receiver_id: 1, gold: 250.0, troops: 250.0 }
+            GameEvent::ResourceTransferred {
+                sender_id: 2,
+                receiver_id: 1,
+                gold: 250.0,
+                troops: 250.0
+            }
         )));
 
         engine.state.tick = 2;

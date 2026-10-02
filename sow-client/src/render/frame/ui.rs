@@ -25,11 +25,15 @@ impl SowApp {
                 self.clamp_camera_to_map();
             }
         }
-        if self.input.dragging {
+        let pointer_gesture_active = self.input.is_pointer_gesture_active();
+        if pointer_gesture_active && !self.input.camera_focus_waiting_for_input_release {
             self.input.camera_focus_target = None;
             self.input.tutorial_camera_focus = false;
         }
-        if let Some((world_x, world_y)) = self.input.camera_focus_target {
+        if !pointer_gesture_active
+            && let Some((world_x, world_y)) = self.input.camera_focus_target
+        {
+            self.input.camera_focus_waiting_for_input_release = false;
             let rate = if self.input.tutorial_camera_focus { 2.0 } else { 12.0 };
             let lerp = (1.0 - f32::exp(-rate * dt)).clamp(0.0, 1.0);
             self.input.camera_zoom += (self.input.target_zoom - self.input.camera_zoom) * lerp;
@@ -64,6 +68,7 @@ impl SowApp {
                 );
                 self.clamp_camera_to_map();
                 self.input.camera_focus_target = None;
+                self.input.camera_focus_waiting_for_input_release = false;
                 if self.input.tutorial_camera_focus {
                     self.input.tutorial_camera_focus = false;
                     self.input.has_snapped_camera_to_spawn = true;

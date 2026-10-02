@@ -161,7 +161,8 @@ impl MapTarget {
 
 impl SowApp {
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
-        if self.ui.observing
+        if self.ui.tutorial_camera_only
+            || self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
             || self.ui.app.hud_state.selected_building_kind.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
@@ -190,6 +191,9 @@ impl SowApp {
     }
 
     pub(crate) fn handle_map_click(&mut self, x: f64, y: f64) {
+        if self.ui.tutorial_camera_only {
+            return;
+        }
         if self.ui.observing {
             self.clear_placement();
             return;
@@ -259,7 +263,7 @@ impl SowApp {
     }
 
     pub(crate) fn open_map_context_menu(&mut self, x: f64, y: f64) {
-        if self.ui.observing {
+        if self.ui.tutorial_camera_only || self.ui.observing {
             return;
         }
         if self.ui.app.phase != crate::ClientPhase::Playing {
@@ -589,6 +593,9 @@ impl SowApp {
         tile_idx: u32,
         action: MapMenuAction,
     ) {
+        if self.ui.tutorial_camera_only {
+            return;
+        }
         let Some(menu) = self.input.map_context_menu else {
             return;
         };

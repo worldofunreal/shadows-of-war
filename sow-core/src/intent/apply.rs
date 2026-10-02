@@ -80,14 +80,6 @@ impl SowEngine {
                             crate::protocol::CampaignRelation::Allied,
                         );
                     }
-                    if self.campaign_relations.contains_key(&proposer_id) {
-                        self.campaign_alliance_started_tick
-                            .insert(proposer_id, self.current_tick_u32());
-                    }
-                    if self.campaign_relations.contains_key(&target_id) {
-                        self.campaign_alliance_started_tick
-                            .insert(target_id, self.current_tick_u32());
-                    }
                 }
                 self.retreat_mutual_aggression(proposer_id, target_id);
             }
@@ -114,7 +106,6 @@ impl SowEngine {
         }
         for id in breakers.into_iter().chain(targets) {
             self.campaign_support_next_tick.remove(&id);
-            self.campaign_alliance_started_tick.remove(&id);
         }
     }
 
@@ -202,8 +193,6 @@ impl SowEngine {
             }
         }
         if allied {
-            self.campaign_alliance_started_tick
-                .insert(target_id, self.current_tick_u32());
             if self.state.config.campaign_support.is_some()
                 && self.campaign_support_intervals.contains_key(&target_id)
             {
@@ -213,7 +202,6 @@ impl SowEngine {
             self.retreat_mutual_aggression(human_id, target_id);
         } else {
             self.campaign_support_next_tick.remove(&target_id);
-            self.campaign_alliance_started_tick.remove(&target_id);
         }
         self.campaign_relations.insert(target_id, relation);
         self.campaign_contact_resolved.insert(target_id);
@@ -663,12 +651,6 @@ impl SowEngine {
                 if human_id == Some(target) && self.campaign_relations.contains_key(&breaker) {
                     self.campaign_relations
                         .insert(breaker, crate::protocol::CampaignRelation::Enemy);
-                    if self.campaign_betrayal.get(&breaker)
-                        == Some(&crate::game_config::CampaignBetrayal::Opportunistic)
-                    {
-                        self.campaign_hostilities
-                            .insert(breaker, crate::game_config::CampaignHostility::Aggressive);
-                    }
                 } else if human_id == Some(breaker)
                     && self.campaign_relations.contains_key(&target)
                 {

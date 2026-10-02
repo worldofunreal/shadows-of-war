@@ -383,7 +383,15 @@ impl SowEngine {
         let current_points = self.state.player(bot_id).unwrap().iq_points;
         let expand_first = has_neutral && !is_under_attack;
 
-        if current_points >= alliance_cost && !neighbor_players.is_empty() && !expand_first {
+        if self
+            .campaign_can_request_alliance
+            .get(&bot_id)
+            .copied()
+            .unwrap_or(true)
+            && current_points >= alliance_cost
+            && !neighbor_players.is_empty()
+            && !expand_first
+        {
             let mut proposed_target = None;
             let (me_alliances, me_troops, me_tile_count) = {
                 let p_me = self.state.player(bot_id).unwrap();

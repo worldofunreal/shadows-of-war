@@ -84,6 +84,7 @@ impl SowApp {
         self.input.tutorial_zoom_in_events = 0;
         self.input.tutorial_zoom_out_events = 0;
         self.input.camera_focus_target = config.tutorial.then_some(focus);
+        self.input.camera_focus_waiting_for_input_release = false;
         if config.tutorial {
             self.input.camera_x = self.input.screen_w * 0.5 - focus.0 * self.input.camera_zoom;
             self.input.camera_y = self.input.screen_h * 0.5 - focus.1 * self.input.camera_zoom;

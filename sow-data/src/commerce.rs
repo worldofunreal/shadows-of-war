@@ -106,8 +106,8 @@ pub struct LeaderResolution {
 
 pub fn current_rotation_period() -> u64 {
     rotation_period(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        web_time::SystemTime::now()
+            .duration_since(web_time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
     )

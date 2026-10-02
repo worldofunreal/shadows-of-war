@@ -191,10 +191,9 @@ pub struct SowEngine {
     pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
     pub campaign_hostilities:
         std::collections::HashMap<PlayerId, crate::game_config::CampaignHostility>,
-    pub campaign_betrayal:
-        std::collections::HashMap<PlayerId, crate::game_config::CampaignBetrayal>,
+    pub campaign_faction_ids: std::collections::HashMap<PlayerId, String>,
+    pub campaign_can_request_alliance: std::collections::HashMap<PlayerId, bool>,
     pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
-    pub campaign_alliance_started_tick: std::collections::HashMap<PlayerId, u32>,
     /// Next campaign-support send tick for each eligible ally.
     pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
     pub port_queues:
@@ -261,9 +260,9 @@ impl SowEngine {
             campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_relations: std::collections::HashMap::new(),
             campaign_hostilities: std::collections::HashMap::new(),
-            campaign_betrayal: std::collections::HashMap::new(),
+            campaign_faction_ids: std::collections::HashMap::new(),
+            campaign_can_request_alliance: std::collections::HashMap::new(),
             campaign_contact_resolved: std::collections::HashSet::new(),
-            campaign_alliance_started_tick: std::collections::HashMap::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
@@ -425,13 +424,17 @@ impl SowEngine {
 
         let survived_ticks = self.state.tick;
         let bonus_percent = survived_ticks as f64 * 0.0001; // 0.01% per tick
-        let total_reward = self.campaign_gold_loot_override.get(&victim_id).copied().map_or_else(
-            || {
-                base_reward * (1.0 + bonus_percent)
-                    + f64::from(self.campaign_gold_loot_bonus.get(&victim_id).copied().unwrap_or(0))
-            },
-            f64::from,
-        );
+        let total_reward = if let Some(gold) = self.campaign_gold_loot_override.get(&victim_id) {
+            f64::from(*gold)
+        } else {
+            base_reward * (1.0 + bonus_percent)
+                + f64::from(
+                    self.campaign_gold_loot_bonus
+                        .get(&victim_id)
+                        .copied()
+                        .unwrap_or(0),
+                )
+        };
 
         // Gather tile conquest contributions (deterministic by player id)
         let mut contributors: Vec<(u16, u32)> = self
@@ -602,10 +605,15 @@ mod tests {
                 engine.campaign_gold_loot_bonus.insert(2, bonus);
             }
             engine.eliminate_player(2, 1, 0, 0, false);
-            let bounty = engine.state.events.iter().find_map(|event| match event {
-                GameEvent::PlayerEliminated { gold_bounty, .. } => Some(*gold_bounty),
-                _ => None,
-            }).unwrap();
+            let bounty = engine
+                .state
+                .events
+                .iter()
+                .find_map(|event| match event {
+                    GameEvent::PlayerEliminated { gold_bounty, .. } => Some(*gold_bounty),
+                    _ => None,
+                })
+                .unwrap();
             (engine.state.player(1).unwrap().gold, bounty)
         };
 

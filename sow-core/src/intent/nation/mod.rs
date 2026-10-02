@@ -105,7 +105,6 @@ impl SowEngine {
                 continue;
             }
             let bot_id = p.id;
-
             let profile = ai_profile_for(tier, self.state.config.bot_difficulty);
 
             // Unified metronomic scheduler for Nations, Tribes, AND ghost

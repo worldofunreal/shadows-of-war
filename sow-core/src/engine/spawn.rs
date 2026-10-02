@@ -693,21 +693,12 @@ impl SowEngine {
                 );
                 continue;
             };
-            let mut player = if s.is_nation {
-                Player::new_nation(bot_id, s.name.clone(), s.color, &config)
-            } else {
-                Player::new_bot(bot_id, s.name.clone(), s.color, &config)
-            };
+            let mut player = Player::new_bot(bot_id, s.name.clone(), s.color, &config);
             player.team = s.team;
             player.leader = s.leader;
             player.civilization = s.civilization;
             if let Some(t) = s.troops {
                 player.troops = t;
-            }
-            if let Some(c) = s.troop_cap {
-                player.max_troops = c;
-                player.max_troops_cap = Some(c);
-                player.troops = player.troops.min(c);
             }
             if let Some(iq) = s.iq {
                 player.iq = iq;
@@ -722,18 +713,24 @@ impl SowEngine {
             if let Some(gold) = s.campaign_gold_loot_bonus.filter(|gold| *gold <= 1_000_000) {
                 self.campaign_gold_loot_bonus.insert(bot_id, gold);
             }
-            if let Some(gold) = s.campaign_gold_loot_override.filter(|gold| *gold <= 1_000_000) {
+            if let Some(gold) = s
+                .campaign_gold_loot_override
+                .filter(|gold| *gold <= 1_000_000)
+            {
                 self.campaign_gold_loot_override.insert(bot_id, gold);
             }
             if let Some(group) = &s.campaign_alliance_group {
                 self.campaign_alliance_groups.insert(bot_id, group.clone());
             }
+            if let Some(faction_id) = &s.campaign_faction_id {
+                self.campaign_faction_ids.insert(bot_id, faction_id.clone());
+            }
+            if let Some(can_request) = s.campaign_can_request_alliance {
+                self.campaign_can_request_alliance
+                    .insert(bot_id, can_request);
+            }
             if let Some(relation) = s.campaign_relation {
                 self.campaign_relations.insert(bot_id, relation);
-                self.campaign_hostilities
-                    .insert(bot_id, s.campaign_hostility.unwrap_or_default());
-                self.campaign_betrayal
-                    .insert(bot_id, s.campaign_betrayal.unwrap_or_default());
                 if relation == crate::protocol::CampaignRelation::Allied
                     && let Some(human_id) = human_id
                 {
@@ -743,9 +740,10 @@ impl SowEngine {
                     if let Some(ally) = self.state.player_mut(bot_id) {
                         ally.alliances.push(human_id);
                     }
-                    self.campaign_alliance_started_tick
-                        .insert(bot_id, self.current_tick_u32());
                 }
+            }
+            if let Some(hostility) = s.campaign_hostility {
+                self.campaign_hostilities.insert(bot_id, hostility);
             }
             placed += 1;
             log::info!(

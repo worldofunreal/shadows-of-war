@@ -56,22 +56,22 @@ pub struct LoadTelemetry {
 #[derive(Default)]
 pub struct TutorialObservation {
     pub seen_attacks: std::collections::HashSet<u64>,
-    pub attacks_by_target: std::collections::BTreeMap<String, u64>,
+    pub attacks_by_faction_id: std::collections::BTreeMap<String, u64>,
     pub seen_fleets: std::collections::HashSet<u64>,
     pub seen_fleets_by_type: std::collections::BTreeMap<String, u64>,
-    pub seen_transport_fleets_by_target: std::collections::BTreeMap<String, u64>,
+    pub seen_transport_fleets_by_faction_id: std::collections::BTreeMap<String, u64>,
     pub seen_structures: std::collections::HashSet<u64>,
     pub seen_buildings_by_kind: std::collections::BTreeMap<String, std::collections::HashSet<u64>>,
     pub owned_structures: std::collections::HashSet<u64>,
     pub owned_structure_kinds: std::collections::HashMap<u64, sow_core::game::BuildingKind>,
     pub seen_cities: std::collections::HashSet<u64>,
     pub seen_defeated: std::collections::HashSet<u16>,
-    pub seen_defeated_names: std::collections::HashSet<String>,
+    pub seen_defeated_faction_ids: std::collections::HashSet<String>,
     pub seen_contacts: std::collections::HashSet<u16>,
-    pub seen_contact_names: std::collections::HashSet<String>,
+    pub seen_contact_faction_ids: std::collections::HashSet<String>,
     pub seen_nukes: std::collections::HashSet<u64>,
     pub ally_support_deliveries: u64,
-    pub support_deliveries_by_faction: std::collections::BTreeMap<String, CampaignSupportReceipt>,
+    pub support_deliveries_by_faction_id: std::collections::BTreeMap<String, CampaignSupportReceipt>,
     pub structure_upgrades: u64,
     pub city_upgrades: u64,
     pub city_levels: u64,
@@ -79,10 +79,10 @@ pub struct TutorialObservation {
     pub port_levels: u64,
     pub tile_upgrades: u64,
     pub resource_transfers: u64,
-    pub resource_transfers_by_recipient: std::collections::BTreeMap<String, ResourceTransferCounts>,
+    pub resource_transfers_by_recipient_faction_id: std::collections::BTreeMap<String, ResourceTransferCounts>,
     pub foundry_level: u64,
     pub seen_alliances: std::collections::HashSet<u16>,
-    pub seen_alliance_names: std::collections::HashSet<String>,
+    pub seen_alliance_faction_ids: std::collections::HashSet<String>,
     pub alliances_formed: u64,
     pub alliances_initialized: bool,
     /// Sum of positive per-update territory changes, excluding the initial spawn.
@@ -248,10 +248,20 @@ pub struct InputState {
     pub key_pan_left: bool,
     pub key_pan_right: bool,
     pub camera_focus_target: Option<(f32, f32)>,
+    pub camera_focus_waiting_for_input_release: bool,
     pub tutorial_camera_focus: bool,
     pub tutorial_zoom_in_events: u64,
     pub tutorial_zoom_out_events: u64,
+    pub tutorial_camera_drag_events: u64,
+    pub tutorial_camera_key_pan_events: u64,
+    pub tutorial_camera_drag_recorded: bool,
     pub input_focused: bool,
+}
+
+impl InputState {
+    pub fn is_pointer_gesture_active(&self) -> bool {
+        self.dragging || self.last_pinch_state.is_some() || !self.active_touches.is_empty()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -372,6 +382,7 @@ pub struct UiState {
     pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
+    pub tutorial_camera_only: bool,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
     /// Player whose avatar the current tutorial step points at; None points to the local player.

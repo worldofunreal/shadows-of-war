@@ -25318,6 +25318,19 @@
       "fallback_tribe_order": null
     },
     {
+      "id": "roman_outpost",
+      "name": "Roman Outpost",
+      "kind": "kingdom",
+      "era": "unspecified",
+      "region": "unassigned",
+      "lat": null,
+      "lon": null,
+      "flag": "",
+      "maps": [],
+      "fallback_nation_order": null,
+      "fallback_tribe_order": null
+    },
+    {
       "id": "tax_collectors",
       "name": "Tax Collectors",
       "kind": "kingdom",

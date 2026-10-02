@@ -24,6 +24,20 @@ impl SowApp {
         *count = count.saturating_add(1);
     }
 
+    pub(crate) fn record_tutorial_camera_drag(&mut self) {
+        if self.ui.tutorial_active && self.ui.tutorial_camera_only && self.net.is_offline {
+            self.input.tutorial_camera_drag_events =
+                self.input.tutorial_camera_drag_events.saturating_add(1);
+        }
+    }
+
+    pub(crate) fn record_tutorial_camera_key_pan(&mut self) {
+        if self.ui.tutorial_active && self.ui.tutorial_camera_only && self.net.is_offline {
+            self.input.tutorial_camera_key_pan_events =
+                self.input.tutorial_camera_key_pan_events.saturating_add(1);
+        }
+    }
+
     pub(crate) fn mouse_to_tile(&self, x: f64, y: f64) -> Option<(i32, i32)> {
         let world_x = (x as f32 - self.input.camera_x) / self.input.camera_zoom;
         let world_y = (y as f32 - self.input.camera_y) / self.input.camera_zoom;

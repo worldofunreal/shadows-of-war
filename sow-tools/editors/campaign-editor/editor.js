@@ -21,7 +21,9 @@
         { value: "nuke", label: "Launch a nuke" }, { value: "elapsed", label: "Wait for game time" },
         { value: "contact", label: "Reach a faction" }, { value: "defeated", label: "Defeat a faction" },
         { value: "ui", label: "Use a control" },
-        { value: "zoom_in", label: "Zoom in" }, { value: "zoom_out", label: "Zoom out" }
+        { value: "zoom_in", label: "Zoom in" }, { value: "zoom_out", label: "Zoom out" },
+        { value: "camera_drag", label: "Pan camera by dragging" }, { value: "camera_key_pan", label: "Pan camera with keys" },
+        { value: "hover", label: "Hover an entity" }
     ];
     var locales = ["en", "es"], localeNames = { en: "English", es: "Español" }, catalogLoads = Object.create(null);
 
@@ -81,14 +83,14 @@
         picker.textContent = state.pickingFaction ? "Cancel map pick" : "Pick target on map";
         if (wasPicking !== state.pickingFaction) renderRosterMapPreview();
     }
-    function chooseFactionTarget(name) {
+    function chooseFactionTarget(factionId) {
         var step = state.definition && state.definition.steps.find(function (item) { return item.id === state.selected; });
         if (!step || !["objective", "guide"].includes(step.type)) return;
         if (step.trigger && ["contact", "defeated"].includes(step.trigger.type) && Array.isArray(step.trigger.targets)) {
-            if (!step.trigger.targets.includes(name)) step.trigger.targets.push(name);
+            if (!step.trigger.targets.includes(factionId)) step.trigger.targets.push(factionId);
             if (step.trigger.type === "defeated") step.trigger.value = step.trigger.targets.length;
-        } else if (["contact", "defeated", "attack"].includes(step.trigger && step.trigger.type)) step.trigger.target = name;
-        else step.marker = { target: name };
+        } else if (["contact", "defeated", "attack"].includes(step.trigger && step.trigger.type)) step.trigger.target = factionId;
+        else step.marker = { target: factionId };
         setFactionPicker(false);
         markDirty(); renderInspector(); renderPreview(step.id);
     }
@@ -109,7 +111,7 @@
             canvas.getContext("2d").drawImage(map.image, 0, 0);
             markers.replaceChildren();
             state.roster.factions.forEach(function (faction) {
-                var marker = el("span", { class: "sample-map-marker sample-faction", title: faction.name, "aria-label": faction.name, dataset: { factionName: faction.name, role: faction.role } });
+                var marker = el("span", { class: "sample-map-marker sample-faction", title: faction.name, "aria-label": faction.name, dataset: { factionId: faction.id } });
                 marker.style.left = (Number(faction.x) / map.width * 100) + "%";
                 marker.style.top = (Number(faction.y) / map.height * 100) + "%";
                 if ($("#factionLabels").checked || state.pickingFaction) {
@@ -459,7 +461,8 @@
         }
         if (step.type === "objective" || step.type === "guide") {
             var objective = section("Mechanic and guide");
-            objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else delete step.pause_game; markDirty(); }));
+            objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else { delete step.pause_game; delete step.camera_only; } markDirty(); renderInspector(); }));
+            objective.appendChild(checkboxField("Allow camera controls only while paused", step.camera_only === true, function (value) { if (value) { step.pause_game = true; step.camera_only = true; } else delete step.camera_only; markDirty(); renderInspector(); }));
             step.trigger = step.trigger || { type: "territory", value: 1, scope: "step" };
             if (step.type === "guide" && !step.guide) step.guide = { kind: "world", target: "expand", gesture: "tap" };
             var availableTriggers = state.flow === "menu"
@@ -521,7 +524,7 @@
                 objective.appendChild(selectField("Hand points at", step.guide.kind + ":" + step.guide.target, [
                     { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }, { value: "world:player", label: "Map · player base" }
                 ].concat(inGameUiTargets().map(function (key) { return { value: "ui:" + key, label: "Interface · " + key.replace(/_/g, " ") }; })), function (value) { var pair = value.split(":"); if (pair[0] !== step.guide.kind) delete step.guide.to; step.guide.kind = pair[0]; step.guide.target = pair[1]; markDirty(); renderInspector(); }));
-                objective.appendChild(selectField("Gesture", step.guide.gesture || "tap", ["tap", "hold", "drag", "zoom_in", "zoom_out"], function (value) {
+                objective.appendChild(selectField("Gesture", step.guide.gesture || "tap", ["tap", "hold", "drag", "hover", "pan_keys", "zoom_in", "zoom_out"], function (value) {
                     step.guide.gesture = value;
                     if (value !== "drag") delete step.guide.to;
                     if (["zoom_in", "zoom_out"].includes(value)) { step.guide.kind = "world"; step.guide.target = "player"; step.trigger.type = value; }
@@ -578,7 +581,7 @@
                         var pair = value.split("@"); route.when.choice = pair[0] || ""; route.when.equals = pair[1] || ""; markDirty();
                     }));
                 } else {
-                    var gameFacts = Object.values(window.SOWCampaign.METRICS).concat(["tiles"]).filter(function (value, index, all) { return all.indexOf(value) === index; });
+                    var gameFacts = Object.values(window.SOWCampaign.METRICS).concat(["tiles", "touch_controls"]).filter(function (value, index, all) { return all.indexOf(value) === index; });
                     card.appendChild(selectField("Fact", route.when.fact, gameFacts, function (value) { route.when.fact = value; markDirty(); }));
                     card.appendChild(inputField("At least", route.when.gte, function (value) { route.when.gte = Number(value); markDirty(); }, { type: "number", min: 0, step: 1 }));
                 }
@@ -642,9 +645,10 @@
     function destinationOptions(except) {
         return state.definition.steps.filter(function (step) { return step.id !== except; }).map(stepOption);
     }
-    function factionOptions() { return state.roster.factions.map(function (faction) { return { value: faction.name, label: faction.name }; }); }
-    function supportFactionOptions() { return state.roster.factions.filter(function (faction) { return Number.isInteger(faction.support_interval_seconds); }).map(function (faction) { return { value: faction.name, label: faction.name }; }); }
-    function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id]; return { value: id, label: speaker.faction || speaker.name || id }; })); }
+    function factionOptions() { return state.roster.factions.map(function (faction) { return { value: faction.id, label: faction.name }; }); }
+    function supportFactionOptions() { return state.roster.factions.filter(function (faction) { return Number.isInteger(faction.support_interval_seconds); }).map(function (faction) { return { value: faction.id, label: faction.name }; }); }
+    function factionName(factionId) { var faction = state.roster.factions.find(function (item) { return item.id === factionId; }); return faction ? faction.name : factionId; }
+    function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id], faction = state.roster.factions.find(function (item) { return item.id === speaker.faction; }); return { value: id, label: faction ? faction.name : speaker.name || id }; })); }
     function inGameUiTargets() { return Object.keys(window.SOWCampaign.UI_TARGETS).filter(function (key) { return state.flow === "menu" ? key.startsWith("menu_") || key === "campaign_replay" : !key.startsWith("menu_") && key !== "campaign_replay"; }); }
     function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : "expand"; }
     function flowEntry() { return state.flow === "menu" ? state.definition.menu_guide && state.definition.menu_guide.entry : state.definition.entry; }
@@ -668,7 +672,7 @@
         host.appendChild(checkboxField("Allied support after milestone", Boolean(settings.campaign_support), function (enabled) {
             if (!enabled) delete settings.campaign_support;
             else {
-                var defaultMilestone = settings.buildings_unlock_after_defeated || (state.roster.factions.find(function (faction) { return faction.avatar === "the_iceni_despoilers"; }) || {}).name || "";
+                var defaultMilestone = settings.buildings_unlock_after_defeated || (state.roster.factions.find(function (faction) { return faction.avatar === "the_iceni_despoilers"; }) || {}).id || "";
                 settings.campaign_support = settings.campaign_support || { after_defeated: defaultMilestone, share_percent: 50 };
             }
             markDirty(); renderSettings();
@@ -691,15 +695,9 @@
                     else { delete reaction.when.relation; reaction.when.target = value; }
                     markDirty(); renderSettings();
                 }));
+                card.appendChild(selectField("Show after", reaction.after || "", [{ value: "", label: "Immediately" }].concat(state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption)), function (value) { if (value) reaction.after = value; else delete reaction.after; markDirty(); }));
             } else if (isFirstContact) {
-                card.appendChild(selectField("Eligible group", reaction.when.role || "selected", [
-                    { value: "kin", label: "All factions with role Kin" }, { value: "selected", label: "Choose specific factions" }
-                ], function (value) {
-                    if (value === "selected") { delete reaction.when.role; reaction.when.targets = reaction.when.targets || state.roster.factions.filter(function (item) { return item.role === "kin"; }).map(function (item) { return item.name; }); }
-                    else { reaction.when.role = value; delete reaction.when.targets; }
-                    markDirty(); renderSettings();
-                }));
-                if (!reaction.when.role) card.appendChild(multiFactionField("Eligible factions (first matching contact)", reaction.when.targets || [], function (value) { reaction.when.targets = value; markDirty(); }));
+                card.appendChild(multiFactionField("Eligible factions (first matching contact)", reaction.when.targets || [], function (value) { reaction.when.targets = value; markDirty(); }));
             } else {
                 card.appendChild(selectField("Show after", reaction.after, state.definition.steps.filter(function (step) { return ["objective", "guide"].includes(step.type); }).map(stepOption), function (value) { reaction.after = value; markDirty(); }));
                 card.appendChild(selectField("First aid from", reaction.when.target, supportFactionOptions(), function (value) { reaction.when.target = value; markDirty(); }));
@@ -779,17 +777,17 @@
             var isFirstContact = type === "first_contact", isNeutralContact = type === "neutral_contact";
             var eventType = isNeutralContact ? "contact" : type;
             var used = new Set((state.definition.reactions || []).filter(function (item) { return item.when.type === eventType; }).map(function (item) { return item.when.target || (item.when.relation === "neutral" ? "any_neutral" : null); }));
-            var factions = eventType === "support" ? supportFactionOptions().map(function (option) { return state.roster.factions.find(function (item) { return item.name === option.value; }); }) : state.roster.factions;
-            var faction = isFirstContact || isNeutralContact ? null : factions.find(function (item) { return item && !used.has(item.name); });
+            var factions = eventType === "support" ? supportFactionOptions().map(function (option) { return state.roster.factions.find(function (item) { return item.id === option.value; }); }) : state.roster.factions;
+            var faction = isFirstContact || isNeutralContact ? null : factions.find(function (item) { return item && !used.has(item.id); });
             if (type === "first_contact" && (state.definition.reactions || []).some(function (item) { return item.when.type === "first_contact"; })) return;
             if (isNeutralContact && used.has("any_neutral")) return;
             var after = eventType === "support" && state.definition.steps.find(function (step) { return step.type === "objective" || step.type === "guide"; });
             if (!isFirstContact && !isNeutralContact && !faction || eventType === "support" && !after) return;
-            var responseId = isFirstContact ? "first_contact" : isNeutralContact ? "neutral_contact" : eventType + "_" + faction.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+            var responseId = isFirstContact ? "first_contact" : isNeutralContact ? "neutral_contact" : eventType + "_" + faction.id;
             while (state.definition.steps.some(function (step) { return step.id === responseId; }) || (state.definition.reactions || []).some(function (item) { return item.id === responseId; })) responseId += "_2";
-            var speakerId = faction && Object.keys(state.definition.speakers || {}).find(function (key) { return state.definition.speakers[key].faction === faction.name; });
-            var when = isFirstContact ? { type: type, role: "kin" }
-                : isNeutralContact ? { type: "contact", relation: "neutral" } : { type: eventType, target: faction.name };
+            var speakerId = faction && Object.keys(state.definition.speakers || {}).find(function (key) { return state.definition.speakers[key].faction === faction.id; });
+            var when = isFirstContact ? { type: type, targets: state.roster.factions.filter(function (item) { return item.relation === "neutral"; }).map(function (item) { return item.id; }) }
+                : isNeutralContact ? { type: "contact", relation: "neutral" } : { type: eventType, target: faction.id };
             var reaction = { id: responseId, when: when, title_key: "tutorial." + responseId + "_title", body_key: "tutorial." + responseId + "_body" };
             if (after) reaction.after = after.id;
             if (speakerId) reaction.speaker = speakerId;
@@ -811,13 +809,13 @@
             markDirty(); renderSettings();
         }
         var addContactReaction = el("button", { type: "button" }, "Add contact response");
-        addContactReaction.disabled = !state.roster.factions.some(function (item) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "contact" && reaction.when.target === item.name; }); });
+        addContactReaction.disabled = !state.roster.factions.some(function (item) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "contact" && reaction.when.target === item.id; }); });
         addContactReaction.addEventListener("click", function () { addReaction("contact"); });
         var addNeutralNegotiation = el("button", { type: "button" }, "Add any-neutral negotiation");
         addNeutralNegotiation.disabled = (state.definition.reactions || []).some(function (item) { return item.when.type === "contact" && item.when.relation === "neutral"; });
         addNeutralNegotiation.addEventListener("click", function () { addReaction("neutral_contact"); });
         var addFirstContact = el("button", { type: "button" }, "Add first-contact scene");
-        addFirstContact.disabled = (state.definition.reactions || []).some(function (item) { return item.when.type === "first_contact"; }) || !state.roster.factions.some(function (item) { return item.role === "kin"; });
+        addFirstContact.disabled = (state.definition.reactions || []).some(function (item) { return item.when.type === "first_contact"; }) || !state.roster.factions.some(function (item) { return item.relation === "neutral"; });
         addFirstContact.addEventListener("click", function () { addReaction("first_contact"); });
         var addSupportReaction = el("button", { type: "button" }, "Add support response");
         addSupportReaction.disabled = !state.definition.steps.some(function (step) { return ["objective", "guide"].includes(step.type); }) || !supportFactionOptions().some(function (option) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "support" && reaction.when.target === option.value; }); });
@@ -841,7 +839,7 @@
                 markDirty(); renderSettings();
             }));
             if (speaker.faction) {
-                var boundFaction = speaker.faction && state.roster.factions.find(function (faction) { return faction.name === speaker.faction; });
+                var boundFaction = speaker.faction && state.roster.factions.find(function (faction) { return faction.id === speaker.faction; });
                 var boundName = boundFaction ? boundFaction.name : speaker.faction;
                 var boundAvatar = boundFaction ? boundFaction.avatar || "null" : "null";
                 var boundPortrait = el("img", { class: "speaker-avatar", alt: boundName, loading: "lazy" });
@@ -1211,6 +1209,7 @@
     function paintPreview(updateMachine) {
         if (!state.machine || state.validation.errors.length) return;
         $("#previewFrame").dataset.device = $("#device").value;
+        state.facts.touch_controls = $("#device").value === "mobile" ? 1 : 0;
         var model;
         var previousStep = state.playingStep;
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui); }
@@ -1224,9 +1223,12 @@
         }
         var anchor = previewAnchor(model.step);
         var zoomMode = $("#device").value === "mobile" ? "pinch" : "wheel";
-        var zoomHint = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture)
-            ? translated("tutorial." + model.step.id + "_" + zoomMode + "_hint", state.previewLanguage) : null;
-        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: zoomHint }); }
+        var zoomGuide = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture);
+        var zoomHint = zoomGuide ? translated("tutorial." + model.step.id + "_" + zoomMode + "_hint", state.previewLanguage) : null;
+        var zoomLabel = zoomGuide ? translated("tutorial." + model.step.id + "_" + zoomMode + "_label", state.previewLanguage) : null;
+        var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
+            ? translated("tutorial." + model.step.id + "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint", state.previewLanguage) : null;
+        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: zoomHint || deviceHint, gestureLabel: zoomLabel }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
@@ -1288,21 +1290,21 @@
         if (target === "player") {
             var playerTarget = step.marker && step.marker.target;
             if (!playerTarget || playerTarget === "player") return frame.querySelector(".player-base");
-            var playerFaction = factions.find(function (item) { return item.name === playerTarget; });
-            return playerFaction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionName === playerFaction.name; }) || null;
+            var playerFaction = factions.find(function (item) { return item.id === playerTarget; });
+            return playerFaction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionId === playerFaction.id; }) || null;
         }
-        var observed = step.trigger && step.trigger.type === "contact" ? state.facts && state.facts.contact_names || [] : state.facts && state.facts.defeated_names || [];
+        var observed = step.trigger && step.trigger.type === "contact" ? state.facts && state.facts.contact_faction_ids || [] : state.facts && state.facts.defeated_faction_ids || [];
         var requested = target === "target_action" && (Array.isArray(step.trigger && step.trigger.targets)
             ? step.trigger.targets.find(function (name) { return !observed.includes(name); })
             : step.trigger && step.trigger.target || step.marker && step.marker.target !== "player" && step.marker.target);
-        var faction = requested && factions.find(function (item) { return item.name === requested; });
+        var faction = requested && factions.find(function (item) { return item.id === requested; });
         if (!faction && state.roster) {
             var spawn = state.roster.player_spawn;
-            faction = factions.filter(function (item) { return item.role !== "kin"; }).sort(function (a, b) {
+            faction = factions.filter(function (item) { return item.relation !== "allied"; }).sort(function (a, b) {
                 return Math.hypot(a.x - spawn[0], a.y - spawn[1]) - Math.hypot(b.x - spawn[0], b.y - spawn[1]);
             })[0];
         }
-        return faction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionName === faction.name; }) || null;
+        return faction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionId === faction.id; }) || null;
     }
     function focusPreviewTarget() {
         if (state.flow !== "episode" || !state.machine) return;
@@ -1312,12 +1314,12 @@
     }
     function applyPreviewFocus() {
         if (!state.previewFocusActive || !state.machine) return;
-        var step = state.machine.view().step, observed = step.trigger && step.trigger.type === "contact" ? state.facts && state.facts.contact_names || [] : state.facts && state.facts.defeated_names || [];
+        var step = state.machine.view().step, observed = step.trigger && step.trigger.type === "contact" ? state.facts && state.facts.contact_faction_ids || [] : state.facts && state.facts.defeated_faction_ids || [];
         var target = step.guide && step.guide.kind === "world" && step.guide.target === "target_action"
             ? Array.isArray(step.trigger && step.trigger.targets) ? step.trigger.targets.find(function (name) { return !observed.includes(name); }) : step.trigger && step.trigger.target || step.marker && step.marker.target
             : step.marker && step.marker.target;
         var marker = target === "player" ? $("#campaignPreviewMarkers .player-base")
-            : target ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(function (item) { return item.dataset.factionName === target; })
+            : target ? Array.from(document.querySelectorAll("#campaignPreviewMarkers .sample-faction")).find(function (item) { return item.dataset.factionId === target; })
                 : null;
         if (!marker) return;
         var layer = $("#campaignPreviewLayer"), scale = 1.8;
@@ -1374,31 +1376,31 @@
         if (!trigger) host.appendChild(el("small", {}, timedRoute ? "Advance game time to test this route." : "This beat waits for dialogue, a decision or an incoming story event."));
         else {
             var progress = model.progress, description = trigger.type;
-            if (trigger.type === "contact" && trigger.targets) description += " · contact " + (trigger.value || 1) + " of " + trigger.targets.length + " tribes";
-            if (trigger.type === "fleet") description += " · " + (trigger.unit || "any ship") + (trigger.target ? " to " + trigger.target : "");
-            if (trigger.type === "resource_transfer") description += (trigger.recipient ? " · to " + trigger.recipient : " · any recipient") + (trigger.resources ? " · " + trigger.resources.join(" + ") : " · any resources");
+            if (trigger.type === "contact" && trigger.targets) description += " · contact " + (trigger.value || 1) + " of " + trigger.targets.length + " factions";
+            if (trigger.type === "fleet") description += " · " + (trigger.unit || "any ship") + (trigger.target ? " to " + factionName(trigger.target) : "");
+            if (trigger.type === "resource_transfer") description += (trigger.recipient ? " · to " + factionName(trigger.recipient) : " · any recipient") + (trigger.resources ? " · " + trigger.resources.join(" + ") : " · any resources");
             host.appendChild(el("small", {}, "Waiting for " + description + " · " + progress.current + " / " + progress.target));
             if (!["troops", "elapsed", "contact", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
                 var button = el("button", { type: "button" }, "+1 " + trigger.type);
                 button.addEventListener("click", function () { simulateObjective(1); });
                 host.appendChild(button);
             }
-            if (trigger.type === "contact") (trigger.targets || [trigger.target]).filter(Boolean).forEach(function (name) {
-                var contact = el("button", { type: "button" }, "Contact · " + name);
-                contact.disabled = (state.facts.contact_names || []).includes(name);
-                contact.addEventListener("click", function () { simulateObjective(1, { faction: name }); });
+            if (trigger.type === "contact") (trigger.targets || [trigger.target]).filter(Boolean).forEach(function (factionId) {
+                var contact = el("button", { type: "button" }, "Contact · " + factionName(factionId));
+                contact.disabled = (state.facts.contact_faction_ids || []).includes(factionId);
+                contact.addEventListener("click", function () { simulateObjective(1, { factionId: factionId }); });
                 host.appendChild(contact);
             });
             if (trigger.type === "alliance") factionOptions().forEach(function (option) {
                 var alliance = el("button", { type: "button" }, "Alliance · " + option.label);
-                alliance.disabled = (state.facts.alliance_names || []).includes(option.value);
-                alliance.addEventListener("click", function () { simulateObjective(1, { faction: option.value }); });
+                alliance.disabled = (state.facts.alliance_faction_ids || []).includes(option.value);
+                alliance.addEventListener("click", function () { simulateObjective(1, { factionId: option.value }); });
                 host.appendChild(alliance);
             });
             if (trigger.type === "fleet") ["TransportShip", "TradeShip", "Warship"].forEach(function (unit) {
                 if (trigger.target && unit === "TransportShip") {
                     [trigger.target, factionOptions().find(function (option) { return option.value !== trigger.target; })?.value].filter(Boolean).forEach(function (target) {
-                        var ship = el("button", { type: "button" }, "Simulate · " + unit + " to " + target);
+                        var ship = el("button", { type: "button" }, "Simulate · " + unit + " to " + factionName(target));
                         ship.addEventListener("click", function () { simulateObjective(1, { unit: unit, target: target }); });
                         host.appendChild(ship);
                     });
@@ -1409,15 +1411,15 @@
                 }
             });
             if (trigger.type === "resource_transfer") {
-                var recipient = trigger.recipient || (state.roster.factions[0] && state.roster.factions[0].name);
-                var wrongRecipient = state.roster.factions.find(function (faction) { return faction.name !== recipient; });
+                var recipient = trigger.recipient || (state.roster.factions[0] && state.roster.factions[0].id);
+                var wrongRecipient = state.roster.factions.find(function (faction) { return faction.id !== recipient; });
                 if (wrongRecipient) {
                     var wrongTarget = el("button", { type: "button" }, "Simulate wrong recipient · " + wrongRecipient.name);
-                    wrongTarget.addEventListener("click", function () { simulateObjective(1, { recipient: wrongRecipient.name, resources: ["gold", "troops"] }); });
+                    wrongTarget.addEventListener("click", function () { simulateObjective(1, { recipient: wrongRecipient.id, resources: ["gold", "troops"] }); });
                     host.appendChild(wrongTarget);
                 }
                 [["gold"], ["troops"], ["gold", "troops"]].forEach(function (resources) {
-                    var transfer = el("button", { type: "button" }, "Simulate " + resources.join(" + ") + " to " + recipient);
+                    var transfer = el("button", { type: "button" }, "Simulate " + resources.join(" + ") + " to " + factionName(recipient));
                     transfer.addEventListener("click", function () { simulateObjective(1, { recipient: recipient, resources: resources }); });
                     host.appendChild(transfer);
                 });
@@ -1425,15 +1427,15 @@
         }
         (state.definition.reactions || []).forEach(function (reaction) {
             var isContact = reaction.when.type === "contact";
-            var button = el("button", { type: "button" }, "Simulate first " + (isContact ? "contact" : "support") + " · " + reaction.when.target);
+            var button = el("button", { type: "button" }, "Simulate first " + (isContact ? "contact" : "support") + " · " + factionName(reaction.when.target));
             button.disabled = isContact
-                ? (state.facts.contact_names || []).includes(reaction.when.target)
-                : Boolean((state.facts.support_deliveries_by_faction || {})[reaction.when.target]);
+                ? (state.facts.contact_faction_ids || []).includes(reaction.when.target)
+                : Boolean((state.facts.support_deliveries_by_faction_id || {})[reaction.when.target]);
             button.addEventListener("click", function () {
-                if (isContact) state.facts.contact_names = Array.from(new Set((state.facts.contact_names || []).concat(reaction.when.target)));
+                if (isContact) state.facts.contact_faction_ids = Array.from(new Set((state.facts.contact_faction_ids || []).concat(reaction.when.target)));
                 else {
-                    state.facts.support_deliveries_by_faction = state.facts.support_deliveries_by_faction || {};
-                    state.facts.support_deliveries_by_faction[reaction.when.target] = { deliveries: 1, gold: 100, troops: 100, first_tick: ++state.facts.elapsed_ticks };
+                    state.facts.support_deliveries_by_faction_id = state.facts.support_deliveries_by_faction_id || {};
+                    state.facts.support_deliveries_by_faction_id[reaction.when.target] = { deliveries: 1, gold: 100, troops: 100, first_tick: ++state.facts.elapsed_ticks };
                     state.facts.ally_support_deliveries = Number(state.facts.ally_support_deliveries || 0) + 1;
                 }
                 paintPreview();
@@ -1449,31 +1451,31 @@
         if (amount == null) { var progress = state.machine.view().progress; amount = Math.max(1, progress.target - progress.current); }
         amount = Number(amount || 1);
         if (trigger.type === "contact") {
-            var contacts = state.facts.contact_names || [];
+            var contacts = state.facts.contact_faction_ids || [];
             var candidates = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
-            var contacted = sample.faction || candidates.find(function (name) { return name && !contacts.includes(name); }) || candidates[0];
-            if (contacted) state.facts.contact_names = Array.from(new Set(contacts.concat(contacted)));
+            var contacted = sample.factionId || candidates.find(function (factionId) { return factionId && !contacts.includes(factionId); }) || candidates[0];
+            if (contacted) state.facts.contact_faction_ids = Array.from(new Set(contacts.concat(contacted)));
         }
         else if (trigger.type === "defeated") {
             var targets = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
-            var defeated = state.facts.defeated_names || [];
-            state.facts.defeated_names = Array.from(new Set(defeated.concat(targets.filter(function (name) { return name && !defeated.includes(name); }).slice(0, amount))));
+            var defeated = state.facts.defeated_faction_ids || [];
+            state.facts.defeated_faction_ids = Array.from(new Set(defeated.concat(targets.filter(function (factionId) { return factionId && !defeated.includes(factionId); }).slice(0, amount))));
         }
         else if (trigger.type === "ui") state.ui[trigger.action] = Number(state.ui[trigger.action] || 0) + amount;
         else if (trigger.type === "alliance") {
-            state.facts.alliance_names = Array.from(new Set((state.facts.alliance_names || []).concat(sample.faction || trigger.target || "Simulated ally")));
-            state.facts.alliances_formed = state.facts.alliance_names.length;
+            state.facts.alliance_faction_ids = Array.from(new Set((state.facts.alliance_faction_ids || []).concat(sample.factionId || trigger.target || "simulated_ally")));
+            state.facts.alliances_formed = state.facts.alliance_faction_ids.length;
         }
         else if (trigger.type === "fleet") {
             var unit = sample.unit || trigger.unit || "TransportShip";
             state.facts.fleets_by_type[unit] = Number(state.facts.fleets_by_type[unit] || 0) + amount;
             var target = sample.target || trigger.target;
-            if (unit === "TransportShip" && target) state.facts.transport_fleets_by_target[target] = Number(state.facts.transport_fleets_by_target[target] || 0) + amount;
+            if (unit === "TransportShip" && target) state.facts.transport_fleets_by_faction_id[target] = Number(state.facts.transport_fleets_by_faction_id[target] || 0) + amount;
             state.facts.fleets += amount;
         }
         else if (trigger.type === "resource_transfer") {
-            var receiver = sample.recipient || trigger.recipient || "Simulated ally", received = sample.resources || trigger.resources || ["gold", "troops"];
-            var sent = state.facts.resource_transfers_by_recipient[receiver] || (state.facts.resource_transfers_by_recipient[receiver] = { total: 0, gold: 0, troops: 0, gold_troops: 0 });
+            var receiver = sample.recipient || trigger.recipient || "simulated_ally", received = sample.resources || trigger.resources || ["gold", "troops"];
+            var sent = state.facts.resource_transfers_by_recipient_faction_id[receiver] || (state.facts.resource_transfers_by_recipient_faction_id[receiver] = { total: 0, gold: 0, troops: 0, gold_troops: 0 });
             sent.total += amount;
             if (received.includes("gold")) sent.gold += amount;
             if (received.includes("troops")) sent.troops += amount;
@@ -1482,13 +1484,13 @@
         }
         else {
             var metric = window.SOWCampaign.METRICS[trigger.type];
-            if (trigger.type === "attack" && trigger.target) { state.facts.attacks_by_target = state.facts.attacks_by_target || {}; state.facts.attacks_by_target[trigger.target] = Number(state.facts.attacks_by_target[trigger.target] || 0) + amount; }
+            if (trigger.type === "attack" && trigger.target) { state.facts.attacks_by_faction_id = state.facts.attacks_by_faction_id || {}; state.facts.attacks_by_faction_id[trigger.target] = Number(state.facts.attacks_by_faction_id[trigger.target] || 0) + amount; }
             else state.facts[metric] = Number(state.facts[metric] || 0) + amount;
             if (trigger.type === "territory") state.facts.tiles = Number(state.facts.tiles || 0) + amount;
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_target: {}, nukes: 0, attacks: 0, attacks_by_target: {}, contact_names: [], defeated_names: [], resource_transfers: 0, resource_transfers_by_recipient: {}, alliance_names: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
+    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;
@@ -1764,14 +1766,14 @@
         $("#campaignPreviewMarkers").addEventListener("click", function (event) {
             var marker = state.pickingFaction && event.target.closest(".sample-faction.is-faction-pickable");
             if (!marker) return;
-            event.preventDefault(); event.stopPropagation(); chooseFactionTarget(marker.dataset.factionName);
+            event.preventDefault(); event.stopPropagation(); chooseFactionTarget(marker.dataset.factionId);
             $("#pickFactionTarget").focus({ preventScroll: true });
         });
         $("#campaignPreviewMarkers").addEventListener("keydown", function (event) {
             if (event.key !== "Enter" && event.key !== " ") return;
             var marker = state.pickingFaction && event.target.closest(".sample-faction.is-faction-pickable");
             if (!marker) return;
-            event.preventDefault(); event.stopPropagation(); chooseFactionTarget(marker.dataset.factionName);
+            event.preventDefault(); event.stopPropagation(); chooseFactionTarget(marker.dataset.factionId);
             $("#pickFactionTarget").focus({ preventScroll: true });
         });
         $("#previewLocale").addEventListener("change", function () {

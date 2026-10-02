@@ -118,6 +118,100 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
+    fn campaign_neutral_retaliates_only_after_being_attacked() {
+        use crate::protocol::CampaignRelation;
+
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        engine
+            .campaign_relations
+            .insert(1, CampaignRelation::Neutral);
+
+        let idle = run_nation_attack(&mut engine, &[2], false);
+        assert!(attack_targets(&idle).is_empty());
+
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 1,
+            owner_id: 2,
+            target_owner: 1,
+            troops: 5000.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(42),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+        let defense = run_nation_attack(&mut engine, &[2], false);
+        assert_eq!(attack_targets(&defense), vec![2]);
+    }
+
+    #[test]
+    fn campaign_non_combatant_does_not_attack_expand_or_retaliate() {
+        use crate::game_config::CampaignHostility;
+        use crate::protocol::CampaignRelation;
+
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        engine.campaign_relations.insert(1, CampaignRelation::Enemy);
+        engine
+            .campaign_hostilities
+            .insert(1, CampaignHostility::NonCombatant);
+
+        let expansion = run_nation_attack(&mut engine, &[2], true);
+        assert!(attack_targets(&expansion).is_empty());
+
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 1,
+            owner_id: 2,
+            target_owner: 1,
+            troops: 5000.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(42),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+        let defense = run_nation_attack(&mut engine, &[2], false);
+        assert!(attack_targets(&defense).is_empty());
+    }
+
+    #[test]
+    fn campaign_passive_enemy_retaliates_only_after_being_attacked() {
+        use crate::game_config::CampaignHostility;
+        use crate::protocol::CampaignRelation;
+
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        engine.campaign_relations.insert(1, CampaignRelation::Enemy);
+        engine
+            .campaign_hostilities
+            .insert(1, CampaignHostility::Passive);
+
+        let idle = run_nation_attack(&mut engine, &[2], false);
+        assert!(attack_targets(&idle).is_empty());
+
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 1,
+            owner_id: 2,
+            target_owner: 1,
+            troops: 5000.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(42),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+        let defense = run_nation_attack(&mut engine, &[2], false);
+        assert_eq!(attack_targets(&defense), vec![2]);
+    }
+
+    #[test]
     fn test_nation_prefers_tribe_before_human() {
         let mut engine = test_engine_two_players(42);
         engine.state.player_mut(1).unwrap().player_type = PlayerType::Nation;
@@ -988,5 +1082,63 @@ mod bot_iq_alliance_tests {
             GameplayIntent::AcceptResourceRequest { target_player: 2 }
         )));
         assert_eq!(engine.state.player(1).unwrap().iq_points, 45.0);
+    }
+
+    #[test]
+    fn campaign_enemy_with_alliance_offers_disabled_never_proposes_one() {
+        use crate::protocol::{CampaignRelation, GameplayIntent};
+
+        let mut engine = test_engine_two_players(42);
+        engine.campaign_relations.insert(1, CampaignRelation::Enemy);
+        engine.campaign_can_request_alliance.insert(1, false);
+        engine.state.player_mut(1).unwrap().troops = 100.0;
+        engine.state.player_mut(1).unwrap().tile_count = 5;
+        engine.state.player_mut(2).unwrap().troops = 1_000.0;
+        engine.state.player_mut(2).unwrap().tile_count = 10;
+
+        for _ in 0..128 {
+            let mut decisions = Vec::new();
+            engine.nation_run_diplomacy_for_slot(
+                (1, 135),
+                (5.0, 5.0),
+                &[2],
+                false,
+                false,
+                &mut decisions,
+            );
+            assert!(
+                !decisions.iter().any(|decision| matches!(
+                    decision.intent,
+                    GameplayIntent::ProposeAlliance { .. }
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn campaign_relationships_do_not_disable_normal_bot_ai() {
+        use crate::protocol::CampaignRelation;
+
+        for relation in [
+            CampaignRelation::Allied,
+            CampaignRelation::Neutral,
+            CampaignRelation::Enemy,
+        ] {
+            let mut engine = test_engine_two_players(42);
+            engine.campaign_relations.insert(1, relation);
+            let mut scheduled = false;
+            for _ in 0..128 {
+                engine.execute_ai_think();
+                scheduled |= engine
+                    .test_last_ai_intents
+                    .iter()
+                    .any(|intent| intent.player_id == 1);
+                engine.state.tick += 1;
+            }
+            assert!(
+                scheduled,
+                "{relation:?} campaign faction receives normal AI decisions"
+            );
+        }
     }
 }

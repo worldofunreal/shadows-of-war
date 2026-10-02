@@ -55,6 +55,8 @@ enum WebMenuCommand {
     },
     SetTutorialPaused {
         paused: bool,
+        #[serde(default)]
+        camera_only: bool,
     },
     SetTutorialMarker {
         #[serde(default)]
@@ -515,9 +517,20 @@ impl SowApp {
                             Some(crate::ui::UiText::new("tutorial.invalid"));
                     }
                 }
-                WebMenuCommand::SetTutorialPaused { paused } => {
+                WebMenuCommand::SetTutorialPaused {
+                    paused,
+                    camera_only,
+                } => {
                     if self.ui.tutorial_active && self.net.is_offline {
                         self.sim.paused = paused;
+                        self.ui.tutorial_camera_only = paused && camera_only;
+                        self.input.tutorial_camera_drag_recorded = false;
+                        if self.ui.tutorial_camera_only {
+                            self.sim.offline_intents.clear();
+                            self.clear_placement();
+                            self.cancel_hold_build();
+                            self.close_map_context_menu();
+                        }
                     }
                 }
                 WebMenuCommand::SetTutorialMarker { player_id } => {
@@ -559,7 +572,9 @@ impl SowApp {
                     tile_idx,
                     action,
                 } => {
-                    self.handle_map_menu_action(session, tile_idx, action);
+                    if !self.ui.tutorial_camera_only {
+                        self.handle_map_menu_action(session, tile_idx, action);
+                    }
                 }
                 WebMenuCommand::CloseMapContextMenu => self.close_map_context_menu(),
                 WebMenuCommand::CompleteCampaignEpisode { episode_id } => {
@@ -733,7 +748,9 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::SelectBuilding { kind } => {
-                    self.select_building_kind(kind);
+                    if !self.ui.tutorial_camera_only {
+                        self.select_building_kind(kind);
+                    }
                 }
                 WebMenuCommand::ToggleInbox => {
                     self.ui.app.hud_state.show_alliance_inbox =
@@ -922,6 +939,8 @@ impl SowApp {
                                 self.input.has_snapped_camera_to_spawn = true;
                                 self.input.camera_focus_target = Some((world_cx, world_cy));
                                 self.input.target_zoom = 8.0;
+                                self.input.tutorial_camera_focus = false;
+                                self.input.camera_focus_waiting_for_input_release = false;
                             }
                         }
                     }
@@ -929,8 +948,11 @@ impl SowApp {
                 WebMenuCommand::FocusWorld { x, y } => {
                     if self.ui.tutorial_active && self.net.is_offline && x.is_finite() && y.is_finite() {
                         self.input.has_snapped_camera_to_spawn = true;
+                        self.input.target_zoom = self.input.camera_zoom;
                         self.input.camera_focus_target = Some((x, y));
                         self.input.tutorial_camera_focus = true;
+                        self.input.camera_focus_waiting_for_input_release =
+                            self.input.is_pointer_gesture_active();
                     }
                 }
             }
@@ -1417,34 +1439,46 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
         .unwrap_or(serde_json::Value::Null);
     let observation = &app.sim.tutorial_observation;
-    let mut alliance_names = observation
-        .seen_alliance_names
+    let attacks_by_faction_id = observation
+        .attacks_by_faction_id
+        .iter()
+        .map(|(faction_id, count)| (faction_id.clone(), count))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let transport_fleets_by_faction_id = observation
+        .seen_transport_fleets_by_faction_id
+        .iter()
+        .map(|(faction_id, count)| (faction_id.clone(), count))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut alliance_faction_ids = observation
+        .seen_alliance_faction_ids
         .iter()
         .cloned()
         .collect::<Vec<_>>();
-    alliance_names.sort_unstable();
+    alliance_faction_ids.sort_unstable();
     let me = snapshot.players.iter().find(|player| player.id == my_pid);
+    let campaign_faction_ids = app.sim.engine.as_ref().map(|engine| &engine.campaign_faction_ids);
     let players = snapshot
         .players
         .iter()
-        .map(|player| player_json(player, my_pid, snapshot.total_land_tiles, None))
+        .map(|player| {
+            let mut value = player_json(player, my_pid, snapshot.total_land_tiles, None);
+            if let Some(faction_id) = campaign_faction_ids.and_then(|ids| ids.get(&player.id)) {
+                value["campaign_faction_id"] = serde_json::json!(faction_id);
+            }
+            value
+        })
         .collect::<Vec<_>>();
     let fleets_by_type = observation
         .seen_fleets_by_type
         .iter()
         .map(|(kind, count)| (kind.clone(), count))
         .collect::<std::collections::BTreeMap<_, _>>();
-    let transport_fleets_by_target = observation
-        .seen_transport_fleets_by_target
+    let support_deliveries_by_faction_id = observation
+        .support_deliveries_by_faction_id
         .iter()
-        .map(|(name, count)| (name.clone(), count))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    let support_deliveries_by_faction = observation
-        .support_deliveries_by_faction
-        .iter()
-        .map(|(name, receipt)| {
+        .map(|(faction_id, receipt)| {
             (
-                name.clone(),
+                faction_id.clone(),
                 serde_json::json!({
                     "deliveries": receipt.deliveries,
                     "gold": receipt.gold,
@@ -1454,12 +1488,12 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             )
         })
         .collect::<std::collections::BTreeMap<_, _>>();
-    let resource_transfers_by_recipient = observation
-        .resource_transfers_by_recipient
+    let resource_transfers_by_recipient_faction_id = observation
+        .resource_transfers_by_recipient_faction_id
         .iter()
-        .map(|(name, counts)| {
+        .map(|(faction_id, counts)| {
             (
-                name.clone(),
+                faction_id.clone(),
                 serde_json::json!({
                     "total": counts.total,
                     "gold": counts.gold,
@@ -1482,14 +1516,16 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "tiles_gained": observation.tiles_gained,
             "zoom_in_events": app.input.tutorial_zoom_in_events,
             "zoom_out_events": app.input.tutorial_zoom_out_events,
+            "camera_drag_events": app.input.tutorial_camera_drag_events,
+            "camera_key_pan_events": app.input.tutorial_camera_key_pan_events,
             "troops": me.map(|player| player.troops).unwrap_or(0.0),
             "kills": me.map(|player| player.kills).unwrap_or(0),
             "defeated": observation.seen_defeated.len(),
-            "defeated_names": observation.seen_defeated_names,
+            "defeated_faction_ids": observation.seen_defeated_faction_ids,
             "contacts": observation.seen_contacts.len(),
-            "contact_names": observation.seen_contact_names,
+            "contact_faction_ids": observation.seen_contact_faction_ids,
             "attacks": observation.seen_attacks.len(),
-            "attacks_by_target": observation.attacks_by_target,
+            "attacks_by_faction_id": attacks_by_faction_id,
             "buildings": observation.seen_structures.len(),
             "cities": observation.seen_cities.len(),
             "farms": observation.seen_buildings_by_kind.get("farms").map_or(0, |ids| ids.len()),
@@ -1497,7 +1533,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "ports": observation.seen_buildings_by_kind.get("ports").map_or(0, |ids| ids.len()),
             "bunkers": observation.seen_buildings_by_kind.get("bunkers").map_or(0, |ids| ids.len()),
             "ally_support_deliveries": observation.ally_support_deliveries,
-            "support_deliveries_by_faction": support_deliveries_by_faction,
+            "support_deliveries_by_faction_id": support_deliveries_by_faction_id,
             "structure_upgrades": observation.structure_upgrades,
             "city_upgrades": observation.city_upgrades,
             "city_levels": observation.city_levels,
@@ -1506,12 +1542,12 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "port_levels": observation.port_levels,
             "tile_upgrades": observation.tile_upgrades,
             "resource_transfers": observation.resource_transfers,
-            "resource_transfers_by_recipient": resource_transfers_by_recipient,
+            "resource_transfers_by_recipient_faction_id": resource_transfers_by_recipient_faction_id,
             "alliances_formed": observation.alliances_formed,
-            "alliance_names": alliance_names,
+            "alliance_faction_ids": alliance_faction_ids,
             "fleets": observation.seen_fleets.len(),
             "fleets_by_type": fleets_by_type,
-            "transport_fleets_by_target": transport_fleets_by_target,
+            "transport_fleets_by_faction_id": transport_fleets_by_faction_id,
             "nukes": observation.seen_nukes.len(),
             "elapsed_ticks": snapshot.tick,
             "elapsed_seconds": snapshot.tick as f64 * f64::from(app.sim.config.tick_rate_ms) / 1000.0,

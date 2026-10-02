@@ -121,10 +121,14 @@ impl SowApp {
 
                         self.input.has_snapped_camera_to_spawn = true;
                         self.input.camera_focus_target = Some((world_cx, world_cy));
+                        self.input.camera_focus_waiting_for_input_release = false;
                         self.input.target_zoom = 10.0;
                     }
                 }
                 UiAction::FocusTile(col, row) => {
+                    self.input.camera_focus_target = None;
+                    self.input.camera_focus_waiting_for_input_release = false;
+                    self.input.tutorial_camera_focus = false;
                     let world_cx = col + 0.5;
                     let world_cy = row + 0.5;
 

@@ -87,6 +87,7 @@ impl SowApp {
         self.ui.leaderboard_publish_pending = false;
         self.ui.last_resource_notice_tick = None;
         self.ui.tutorial_active = false;
+        self.ui.tutorial_camera_only = false;
 
         self.dispatch_sim_command(SimCommand::Shutdown);
         self.gfx.needs_first_upload = true;
@@ -334,6 +335,8 @@ impl SowApp {
                         // tutorial can't leak onto them. This is the ONLY writer of `tutorial_active`
                         // after startup; the render gate additionally requires `is_offline`.
                         self.ui.tutorial_active = start_msg.config.tutorial;
+                        self.ui.tutorial_camera_only = false;
+                        self.input.tutorial_camera_drag_recorded = false;
 
                         for turn in &start_msg.missed_turns {
                             self.dispatch_sim_command(SimCommand::Turn(turn.clone()));

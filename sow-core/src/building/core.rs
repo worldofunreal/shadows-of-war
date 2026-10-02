@@ -255,14 +255,10 @@ pub struct DefenseGrid {
 }
 
 pub const DEFENSE_GRID_CELL_SIZE: u32 = 16;
+const DEFENSE_OWNER_INDEX_THRESHOLD: usize = 8;
 
 #[inline]
-fn defense_sample(
-    match_seed: u64,
-    attacker_id: u16,
-    target_owner: u16,
-    tile_idx: u64,
-) -> f64 {
+fn defense_sample(match_seed: u64, attacker_id: u16, target_owner: u16, tile_idx: u64) -> f64 {
     let key = match_seed
         .wrapping_add((attacker_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
         .wrapping_add((target_owner as u64).wrapping_mul(0xD1B5_4A32_D192_ED03))
@@ -317,6 +313,40 @@ impl DefenseGrid {
                 }
             }
         }
+
+        for cell in &mut self.cells[..num_cells] {
+            cell.sort_unstable_by_key(|tower| {
+                (
+                    tower.owner_id,
+                    tower.x,
+                    tower.y,
+                    tower.active_level,
+                    tower.range,
+                )
+            });
+        }
+    }
+
+    #[inline]
+    fn add_weighted_coverage<const NEED_CAPTURE_FALLOFF: bool>(
+        tower: &DefenseTower,
+        tile_x: u32,
+        tile_y: u32,
+        weighted_levels: &mut f64,
+        strongest_coverage: &mut f64,
+    ) {
+        let distance = hex_distance(tile_x as i32, tile_y as i32, tower.x as i32, tower.y as i32);
+        if tower.range > 0 && distance <= tower.range {
+            let coverage = if distance * 4 <= tower.range * 3 {
+                1.0
+            } else {
+                (4 * (tower.range - distance)) as f64 / tower.range as f64
+            };
+            *weighted_levels += coverage * tower.active_level as f64;
+            if NEED_CAPTURE_FALLOFF {
+                *strongest_coverage = strongest_coverage.max(coverage);
+            }
+        }
     }
 
     #[inline]
@@ -341,22 +371,32 @@ impl DefenseGrid {
         let mut strongest_coverage: f64 = 0.0;
         for cy in cy_min..=cy_max {
             for cx in cx_min..=cx_max {
-                for b in &self.cells[(cy * self.grid_w + cx) as usize] {
-                    if b.owner_id != target_owner {
-                        continue;
-                    }
-                    let d = hex_distance(tile_x as i32, tile_y as i32, b.x as i32, b.y as i32);
-                    let range = b.range;
-                    if range > 0 && d <= range {
-                        let coverage = if d * 4 <= range * 3 {
-                            1.0
-                        } else {
-                            (4 * (range - d)) as f64 / range as f64
-                        };
-                        weighted_levels += coverage * b.active_level as f64;
-                        if NEED_CAPTURE_FALLOFF {
-                            strongest_coverage = strongest_coverage.max(coverage);
+                let cell = &self.cells[(cy * self.grid_w + cx) as usize];
+                if cell.len() < DEFENSE_OWNER_INDEX_THRESHOLD {
+                    for tower in cell {
+                        if tower.owner_id == target_owner {
+                            Self::add_weighted_coverage::<NEED_CAPTURE_FALLOFF>(
+                                tower,
+                                tile_x,
+                                tile_y,
+                                &mut weighted_levels,
+                                &mut strongest_coverage,
+                            );
                         }
+                    }
+                } else {
+                    let owner_start = cell.partition_point(|tower| tower.owner_id < target_owner);
+                    for tower in cell[owner_start..]
+                        .iter()
+                        .take_while(|tower| tower.owner_id == target_owner)
+                    {
+                        Self::add_weighted_coverage::<NEED_CAPTURE_FALLOFF>(
+                            tower,
+                            tile_x,
+                            tile_y,
+                            &mut weighted_levels,
+                            &mut strongest_coverage,
+                        );
                     }
                 }
             }
@@ -653,11 +693,18 @@ mod defense_influence_tests {
     #[test]
     fn influence_matches_weighted_formula_and_stays_repeatable() {
         let width = 64;
-        let tower = tower(32, 32, width, 2, 2);
+        let target_tower = tower(32, 32, width, 2, 2);
+        let other_owners = [tower(32, 32, width, 1, 4), tower(32, 32, width, 3, 4)];
         let cfg = crate::game_config::GameConfig::default();
-        assert_eq!(tower.defense_range_cfg(&cfg), 16);
+        assert_eq!(target_tower.defense_range_cfg(&cfg), 16);
         let mut grid = DefenseGrid::default();
-        grid.rebuild(&[tower], width, width, DEFENSE_GRID_CELL_SIZE, &cfg);
+        grid.rebuild(
+            &[target_tower, other_owners[0], other_owners[1]],
+            width,
+            width,
+            DEFENSE_GRID_CELL_SIZE,
+            &cfg,
+        );
 
         let seed = 0x1234_5678;
         let center = grid.influence(32, 32, width, 2, 1, seed, &cfg);
@@ -706,7 +753,7 @@ mod defense_influence_tests {
             DefenseInfluence::NONE
         );
         assert_eq!(
-            grid.influence(32, 32, width, 3, 1, seed, &cfg),
+            grid.influence(32, 32, width, 4, 1, seed, &cfg),
             DefenseInfluence::NONE
         );
     }

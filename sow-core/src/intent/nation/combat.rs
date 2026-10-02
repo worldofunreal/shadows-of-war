@@ -1,4 +1,4 @@
-use crate::diplomacy::{maybe_betray_campaign_for_attack, maybe_betray_for_attack};
+use crate::diplomacy::maybe_betray_for_attack;
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, NukeKind};
 use crate::protocol::{AttackIntent, GameplayIntent};
@@ -29,42 +29,47 @@ pub(super) fn nation_target_allowed(
 fn human_betrayal_allowed(
     is_nation: bool,
     relation: Option<crate::protocol::CampaignRelation>,
-    betrayal: Option<crate::game_config::CampaignBetrayal>,
 ) -> bool {
     match relation {
-        Some(crate::protocol::CampaignRelation::Allied) => {
-            betrayal == Some(crate::game_config::CampaignBetrayal::Opportunistic)
-        }
         Some(_) => false,
         None => !is_nation,
     }
 }
 
-impl SowEngine {
-    fn campaign_betrayal_is_safe(&self, bot_id: u16, bordering_players: &[u16]) -> bool {
-        let Some(bot_troops) = self.state.player(bot_id).map(|player| player.troops) else {
-            return false;
-        };
-        let mut seen = std::collections::HashSet::new();
-        let nearby_threats: f64 = bordering_players
-            .iter()
-            .copied()
-            .filter(|id| seen.insert(*id))
-            .filter_map(|id| self.state.player(id))
-            .filter(|player| player.alive)
-            .map(|player| {
-                player.troops.max(0.0)
-                    + self
-                        .attacks
-                        .iter()
-                        .filter(|attack| attack.owner_id == player.id)
-                        .map(|attack| attack.troops.max(0.0))
-                        .sum::<f64>()
-            })
-            .sum();
-        nearby_threats < bot_troops.max(1.0) / 3.0
+#[inline]
+fn campaign_attacks_players(
+    relation: Option<crate::protocol::CampaignRelation>,
+    hostility: Option<crate::game_config::CampaignHostility>,
+    profile_default: bool,
+) -> bool {
+    match relation {
+        Some(crate::protocol::CampaignRelation::Enemy) => match hostility {
+            Some(
+                crate::game_config::CampaignHostility::Passive
+                | crate::game_config::CampaignHostility::NonCombatant,
+            ) => false,
+            Some(crate::game_config::CampaignHostility::Aggressive) | None => true,
+        },
+        Some(
+            crate::protocol::CampaignRelation::Allied | crate::protocol::CampaignRelation::Neutral,
+        ) => false,
+        None => match hostility {
+            Some(crate::game_config::CampaignHostility::Aggressive) => true,
+            Some(
+                crate::game_config::CampaignHostility::Passive
+                | crate::game_config::CampaignHostility::NonCombatant,
+            ) => false,
+            None => profile_default,
+        },
     }
+}
 
+#[inline]
+fn campaign_combat_enabled(hostility: Option<crate::game_config::CampaignHostility>) -> bool {
+    hostility != Some(crate::game_config::CampaignHostility::NonCombatant)
+}
+
+impl SowEngine {
     pub(super) fn nation_run_combat_for_slot(
         &mut self,
         slot: &AiSlot,
@@ -75,33 +80,17 @@ impl SowEngine {
         decisions: &mut Vec<BotDecision>,
     ) {
         let (bot_id, bot_iq) = bot;
-        if self.campaign_hostilities.get(&bot_id)
-            == Some(&crate::game_config::CampaignHostility::Food)
-        {
-            return;
-        }
         let (attack_cost, alliance_cost) = costs;
         let is_mfo = slot.tier == AiTier::Nation;
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
-        let campaign_betrayal = self.campaign_betrayal.get(&bot_id).copied();
-        let passive_campaign_enemy = campaign_relation
-            == Some(crate::protocol::CampaignRelation::Enemy)
-            && self.campaign_hostilities.get(&bot_id)
-                == Some(&crate::game_config::CampaignHostility::Passive);
-        let attacks_players = self
-            .campaign_hostilities
-            .get(&bot_id)
-            .map(|hostility| {
-                *hostility == crate::game_config::CampaignHostility::Aggressive
-                    && campaign_relation == Some(crate::protocol::CampaignRelation::Enemy)
-            })
-            .unwrap_or(slot.profile.attacks_players);
-        let opportunistic_campaign_betrayal = campaign_relation
-            == Some(crate::protocol::CampaignRelation::Allied)
-            && campaign_betrayal == Some(crate::game_config::CampaignBetrayal::Opportunistic);
-        let campaign_can_attack_human = attacks_players && campaign_relation.is_some();
+        let campaign_hostility = self.campaign_hostilities.get(&bot_id).copied();
+        let attacks_players = campaign_attacks_players(
+            campaign_relation,
+            campaign_hostility,
+            slot.profile.attacks_players,
+        );
         // ── Attack logic (both Bots and Nations) ────────────────────
-        if slot.do_attack {
+        if slot.do_attack && campaign_combat_enabled(campaign_hostility) {
             // War still spends iq_points (clamped at zero below); growth and
             // defense never freeze for lack of budget.
             {
@@ -123,42 +112,24 @@ impl SowEngine {
                         let Some(p_ally) = self.state.player(ally_id) else {
                             continue;
                         };
-                        if p_ally.is_human()
-                            && !human_betrayal_allowed(
-                                is_mfo,
-                                campaign_relation,
-                                campaign_betrayal,
-                            )
-                        {
+                        if p_ally.is_human() && !human_betrayal_allowed(is_mfo, campaign_relation) {
                             continue;
                         }
-                        if opportunistic_campaign_betrayal && p_ally.is_human() {
-                            let started = self
-                                .campaign_alliance_started_tick
-                                .get(&bot_id)
-                                .copied()
-                                .unwrap_or(tick);
-                            let safe = self.campaign_betrayal_is_safe(bot_id, neighbor_players);
-                            maybe_betray_campaign_for_attack(
-                                p_me, p_ally, tick, started, betray_cd, safe,
-                            )
-                        } else {
-                            let mut rng = WyRand::new(
-                                self.state
-                                    .seed
-                                    .wrapping_add(bot_id as u64)
-                                    .wrapping_add(ally_id as u64)
-                                    .wrapping_add(tick as u64),
-                            );
-                            maybe_betray_for_attack(
-                                p_me,
-                                p_ally,
-                                bordering_count,
-                                tick,
-                                betray_cd,
-                                &mut rng,
-                            )
-                        }
+                        let mut rng = WyRand::new(
+                            self.state
+                                .seed
+                                .wrapping_add(bot_id as u64)
+                                .wrapping_add(ally_id as u64)
+                                .wrapping_add(tick as u64),
+                        );
+                        maybe_betray_for_attack(
+                            p_me,
+                            p_ally,
+                            bordering_count,
+                            tick,
+                            betray_cd,
+                            &mut rng,
+                        )
                     };
                     if should_betray {
                         betray_then_attack = Some(ally_id);
@@ -183,9 +154,12 @@ impl SowEngine {
                 // D1 — OpenFront `sendBoatAttackToNearbyTerraNullius` parity:
                 // with no free land on our own frontier, cross water to the
                 // nearest neutral shores. Free like land expansion (growth,
-                // not war); every tier including passive tribes — neutral
+                // not war); every tier — neutral
                 // never means combat.
-                let passive_enemy_attackers = if passive_campaign_enemy {
+                let defensive_player_attackers = if campaign_relation
+                    == Some(crate::protocol::CampaignRelation::Neutral)
+                    || campaign_hostility == Some(crate::game_config::CampaignHostility::Passive)
+                {
                     let mut attackers = std::collections::HashSet::new();
                     if let (Some(defender), Some(inbound_attacks)) = (
                         self.state.player(bot_id),
@@ -204,11 +178,8 @@ impl SowEngine {
                                 continue;
                             };
                             let is_friendly = defender.alliances.contains(&attack.owner_id)
-                                || (defender.team.is_some()
-                                    && defender.team == attacker.team);
-                            if attacker.player_type != crate::player::PlayerType::Bot
-                                && !is_friendly
-                            {
+                                || (defender.team.is_some() && defender.team == attacker.team);
+                            if is_real_human(attacker) && !is_friendly {
                                 attackers.insert(attack.owner_id);
                             }
                         }
@@ -218,7 +189,7 @@ impl SowEngine {
                     std::collections::HashSet::new()
                 };
                 if !has_neutral
-                    && passive_enemy_attackers.is_empty()
+                    && defensive_player_attackers.is_empty()
                     && self.try_expansion_boat(bot_id, decisions)
                 {
                     return;
@@ -237,8 +208,8 @@ impl SowEngine {
                 // Build candidate targets. Exclude allies AND teammates so a
                 // bot never wastes its (rare) action deciding to hit a friend —
                 // `apply_attack_intent` would silently block it anyway.
-                // Passive tribes (attacks_players=false) additionally exclude
-                // all player targets up front: they never initiate vs anyone.
+                // Neutral and passive campaign factions target a human only
+                // to answer an attack already launched against them.
                 let targets: Vec<u16> = neighbor_players
                     .iter()
                     .copied()
@@ -256,9 +227,9 @@ impl SowEngine {
                             if !attacks_players
                                 && let Some(t) = self.state.player(id)
                                 && t.player_type != crate::player::PlayerType::Bot
-                                && !passive_enemy_attackers.contains(&id)
+                                && !defensive_player_attackers.contains(&id)
                             {
-                                return false; // passive tribe: skip players
+                                return false;
                             }
                             true
                         } else {
@@ -284,7 +255,7 @@ impl SowEngine {
                     });
 
                 let mut defender_target = None;
-                if bot_iq >= 100 || !passive_enemy_attackers.is_empty() {
+                if bot_iq >= 100 || !defensive_player_attackers.is_empty() {
                     let mut largest_attack = 0.0;
                     let inbound_attacks = self
                         .ai_attack_index
@@ -332,7 +303,6 @@ impl SowEngine {
                                     || (p_me.team.is_some() && p_me.team == p.team)
                             };
                             let target_allowed = !is_mfo
-                                || campaign_can_attack_human
                                 || nation_target_allowed(p.id, is_real_human(p), defender_target);
                             if !is_friendly && target_allowed && !p.border_tiles.is_empty() {
                                 if p.troops < min_overall {
@@ -442,9 +412,7 @@ impl SowEngine {
                         if has_tribe_target && p_t.player_type != crate::player::PlayerType::Bot {
                             continue;
                         }
-                        if !campaign_can_attack_human
-                            && !nation_target_allowed(t_id, is_real_human(p_t), defender_target)
-                        {
+                        if !nation_target_allowed(t_id, is_real_human(p_t), defender_target) {
                             continue;
                         }
                         if p_t.troops < min_troops {
@@ -914,9 +882,7 @@ impl SowEngine {
                 continue;
             }
             let mut score = match b.kind {
-                BuildingKind::City => {
-                    25000.0 + 10000.0 * (b.active_level() as f64)
-                }
+                BuildingKind::City => 25000.0 + 10000.0 * (b.active_level() as f64),
                 BuildingKind::Bunker => 5000.0 * (b.level as f64),
                 BuildingKind::Factory => 15000.0 * (b.level as f64),
                 BuildingKind::Port => 10000.0 * (b.level as f64),
@@ -984,29 +950,66 @@ impl SowEngine {
 }
 
 #[cfg(test)]
-mod campaign_betrayal_tests {
-    use super::human_betrayal_allowed;
-    use crate::game_config::CampaignBetrayal;
+mod campaign_relationship_tests {
+    use super::{campaign_attacks_players, campaign_combat_enabled, human_betrayal_allowed};
+    use crate::game_config::CampaignHostility;
     use crate::protocol::CampaignRelation;
 
     #[test]
-    fn only_opportunistic_allies_can_betray_in_campaign_combat() {
-        assert!(!human_betrayal_allowed(
-            true,
-            Some(CampaignRelation::Allied),
-            Some(CampaignBetrayal::Never)
+    fn campaign_hostility_controls_attack_and_defense_behavior() {
+        assert!(campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            None,
+            false
         ));
-        assert!(human_betrayal_allowed(
-            true,
-            Some(CampaignRelation::Allied),
-            Some(CampaignBetrayal::Opportunistic)
-        ));
-        assert!(!human_betrayal_allowed(
-            true,
+        assert!(!campaign_attacks_players(
             Some(CampaignRelation::Neutral),
-            Some(CampaignBetrayal::Opportunistic)
+            None,
+            true
         ));
-        assert!(!human_betrayal_allowed(true, None, None));
-        assert!(human_betrayal_allowed(false, None, None));
+        assert!(!campaign_attacks_players(
+            Some(CampaignRelation::Allied),
+            None,
+            true
+        ));
+        assert!(campaign_attacks_players(None, None, true));
+        assert!(!campaign_attacks_players(None, None, false));
+        assert!(!campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            Some(CampaignHostility::Passive),
+            true
+        ));
+        assert!(!campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            Some(CampaignHostility::NonCombatant),
+            true
+        ));
+        assert!(campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            Some(CampaignHostility::Aggressive),
+            false
+        ));
+        assert!(campaign_combat_enabled(Some(CampaignHostility::Passive)));
+        assert!(!campaign_combat_enabled(Some(
+            CampaignHostility::NonCombatant
+        )));
+    }
+
+    #[test]
+    fn campaign_allies_never_betray_humans_but_other_bot_rules_stay_intact() {
+        assert!(!human_betrayal_allowed(
+            false,
+            Some(CampaignRelation::Allied)
+        ));
+        assert!(!human_betrayal_allowed(
+            false,
+            Some(CampaignRelation::Neutral)
+        ));
+        assert!(!human_betrayal_allowed(
+            false,
+            Some(CampaignRelation::Enemy)
+        ));
+        assert!(!human_betrayal_allowed(true, None));
+        assert!(human_betrayal_allowed(false, None));
     }
 }

@@ -1414,7 +1414,7 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
 
     let root = shell_quote(&config.build_root);
     let command = format!(
-        "set -eu; cd {root}; cargo test --locked -p sow-core; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
+        "set -eu; cd {root}; cargo test --locked -p sow-core -- --test-threads=1; cargo test --locked -p sow-data --features server; cargo test --locked -p sow-server; cargo build --locked --profile deploy -p sow-server; cargo build --locked --profile deploy -p sow-data --features server --bin sow-database"
     );
     run("ssh", &[&config.build_host, &command], None)?;
 
@@ -1428,19 +1428,24 @@ fn build_freebsd(paths: &Paths, config: &Config) -> Result<PathBuf> {
             config.build_host, config.build_root
         );
         let destination = local.join(name);
-        if destination.exists() {
-            fs::remove_file(&destination)?;
+        let temporary = local.join(format!(".{name}.{}.tmp", std::process::id()));
+        if temporary.exists() {
+            fs::remove_file(&temporary)?;
         }
-        run(
+        if let Err(error) = run(
             "scp",
             &[
                 &remote,
-                destination.to_str().context("binary path is not UTF-8")?,
+                temporary.to_str().context("binary path is not UTF-8")?,
             ],
             None,
-        )?;
-        require_file(&destination, name)?;
-        fs::set_permissions(&destination, fs::Permissions::from_mode(0o550))?;
+        ) {
+            let _ = fs::remove_file(&temporary);
+            return Err(error);
+        }
+        require_file(&temporary, name)?;
+        fs::set_permissions(&temporary, fs::Permissions::from_mode(0o550))?;
+        fs::rename(temporary, destination)?;
     }
     fs::create_dir_all(cache.parent().context("FreeBSD cache parent missing")?)?;
     fs::write(cache, format!("{fingerprint}\n"))?;

@@ -132,34 +132,6 @@ pub fn maybe_betray_for_attack(
     false
 }
 
-/// Campaign betrayal is deterministic: require a genuine attack opening, advantage, safety,
-/// alliance age, and the faction's configured Opportunistic mode at the caller.
-pub fn maybe_betray_campaign_for_attack(
-    bot: &Player,
-    ally: &Player,
-    current_tick: u32,
-    alliance_started_tick: u32,
-    betray_cooldown_until: Option<u32>,
-    is_safe: bool,
-) -> bool {
-    if betray_cooldown_until.is_some_and(|until| current_tick < until)
-        || current_tick.saturating_sub(alliance_started_tick) < ALLY_GRACE_AFTER_FORM_TICKS
-        || !bot.alliances.contains(&ally.id)
-        || !ally.alive
-        || ally.disconnected
-        || (bot.team.is_some() && bot.team == ally.team)
-        || !is_safe
-    {
-        return false;
-    }
-
-    let bot_troops = bot.troops.max(1.0);
-    let ally_troops = ally.troops.max(1.0);
-    (ally.troops < ally.max_troops.max(1.0) * 0.2 && bot_troops > ally_troops)
-        || bot_troops >= ally_troops * 3.0
-        || (is_traitor_active(ally, current_tick) && ally_troops < bot_troops * 1.2)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,40 +171,6 @@ mod tests {
         let mut rng = WyRand::new(1);
         assert!(maybe_betray_for_attack(
             &bot, &ally, 1, 5000, None, &mut rng,
-        ));
-    }
-
-    #[test]
-    fn campaign_betrayal_requires_advantage_safety_and_an_old_alliance() {
-        let mut bot = sample_player(1, 100);
-        bot.troops = 3000.0;
-        bot.alliances.push(2);
-        let mut ally = sample_player(2, 100);
-        ally.troops = 1000.0;
-        ally.max_troops = 5_000.0;
-        let tick = ALLY_GRACE_AFTER_FORM_TICKS + 1;
-
-        assert!(maybe_betray_campaign_for_attack(
-            &bot, &ally, tick, 0, None, true
-        ));
-        assert!(!maybe_betray_campaign_for_attack(
-            &bot, &ally, tick, 0, None, false
-        ));
-        assert!(!maybe_betray_campaign_for_attack(
-            &bot, &ally, tick, tick, None, true
-        ));
-        assert!(!maybe_betray_campaign_for_attack(
-            &bot,
-            &ally,
-            tick,
-            0,
-            Some(tick + 1),
-            true
-        ));
-
-        bot.troops = 2000.0;
-        assert!(!maybe_betray_campaign_for_attack(
-            &bot, &ally, tick, 0, None, true
         ));
     }
 

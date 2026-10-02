@@ -162,6 +162,22 @@ impl SowApp {
         }
     }
 
+    fn record_tutorial_camera_drag_if_moved(&mut self, x: f64, y: f64) {
+        if !self.ui.tutorial_camera_only || self.input.tutorial_camera_drag_recorded {
+            return;
+        }
+        let moved_sq = self
+            .input
+            .map_pointer_start
+            .as_ref()
+            .map(|start| (x - start.x).powi(2) + (y - start.y).powi(2))
+            .unwrap_or(0.0);
+        if moved_sq > 400.0 {
+            self.record_tutorial_camera_drag();
+            self.input.tutorial_camera_drag_recorded = true;
+        }
+    }
+
     fn handle_key_event(&mut self, pressed: bool, key: winit::keyboard::PhysicalKey) {
         let in_game =
             self.ui.app.phase == ClientPhase::Playing && self.ui.app.hud_state.sync_state.is_none();
@@ -174,6 +190,21 @@ impl SowApp {
         }
         let winit::keyboard::PhysicalKey::Code(code) = key else {
             return;
+        };
+        let pan_key_was_pressed = match code {
+            winit::keyboard::KeyCode::KeyW | winit::keyboard::KeyCode::ArrowUp => {
+                self.input.key_pan_up
+            }
+            winit::keyboard::KeyCode::KeyS | winit::keyboard::KeyCode::ArrowDown => {
+                self.input.key_pan_down
+            }
+            winit::keyboard::KeyCode::KeyA | winit::keyboard::KeyCode::ArrowLeft => {
+                self.input.key_pan_left
+            }
+            winit::keyboard::KeyCode::KeyD | winit::keyboard::KeyCode::ArrowRight => {
+                self.input.key_pan_right
+            }
+            _ => false,
         };
         match code {
             winit::keyboard::KeyCode::KeyW | winit::keyboard::KeyCode::ArrowUp => {
@@ -190,7 +221,10 @@ impl SowApp {
             }
             _ => {}
         }
-        if !pressed {
+        if pressed && self.ui.tutorial_camera_only && !pan_key_was_pressed {
+            self.record_tutorial_camera_key_pan();
+        }
+        if !pressed || self.ui.tutorial_camera_only {
             return;
         }
 
@@ -262,6 +296,7 @@ impl SowApp {
                 let first_touch = self.input.active_touches.is_empty();
                 self.input.active_touches.insert(id, (x, y));
                 if first_touch {
+                    self.input.tutorial_camera_drag_recorded = false;
                     self.input.map_pointer_start = Some(MapPointerStart {
                         started_at: web_time::Instant::now(),
                         x,
@@ -302,6 +337,7 @@ impl SowApp {
                 // into a new click at every move.
                 if !is_touch && pointer_was_down {
                     if self.input.dragging {
+                        self.record_tutorial_camera_drag_if_moved(x, y);
                         self.close_map_context_menu();
                         self.input.camera_x += (x - previous_mouse_x) as f32;
                         self.input.camera_y += (y - previous_mouse_y) as f32;
@@ -310,10 +346,14 @@ impl SowApp {
                     return;
                 }
                 self.close_map_context_menu();
-                self.input.dragging =
-                    !build_tool_selected && self.ui.app.hud_state.selected_nuke_kind.is_none();
+                if !is_touch && !pointer_was_down {
+                    self.input.tutorial_camera_drag_recorded = false;
+                }
+                self.input.dragging = self.ui.tutorial_camera_only
+                    || (!build_tool_selected && self.ui.app.hud_state.selected_nuke_kind.is_none());
                 if !is_touch {
-                    let action_sent = build_tool_selected || self.try_attack_at(x, y);
+                    let action_sent = !self.ui.tutorial_camera_only
+                        && (build_tool_selected || self.try_attack_at(x, y));
                     self.input.map_pointer_start = Some(MapPointerStart {
                         started_at: web_time::Instant::now(),
                         x,
@@ -374,7 +414,11 @@ impl SowApp {
                     self.handle_map_click(start.x, start.y);
                 }
             }
-        } else if right && pressed && self.ui.app.phase == ClientPhase::Playing {
+        } else if right
+            && pressed
+            && self.ui.app.phase == ClientPhase::Playing
+            && !self.ui.tutorial_camera_only
+        {
             if self.ui.app.hud_state.selected_building_kind.is_some()
                 || self.ui.app.hud_state.selected_nuke_kind.is_some()
             {
@@ -433,6 +477,7 @@ impl SowApp {
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
                 if distance_sq > 400.0 {
                     if !self.input.hold_build_active {
+                        self.record_tutorial_camera_drag_if_moved(x, y);
                         self.input.map_pointer_start = None;
                         crossed_drag_threshold = true;
                     }
@@ -441,12 +486,24 @@ impl SowApp {
             if (crossed_drag_threshold || self.input.map_pointer_start.is_none())
                 && self.input.dragging
             {
+                if self.ui.tutorial_camera_only && !self.input.tutorial_camera_drag_recorded {
+                    self.record_tutorial_camera_drag();
+                    self.input.tutorial_camera_drag_recorded = true;
+                }
                 self.close_map_context_menu();
                 self.input.camera_x += (x - self.input.last_mouse_x) as f32;
                 self.input.camera_y += (y - self.input.last_mouse_y) as f32;
                 self.clamp_camera_to_map();
             }
-        } else if primary && self.input.dragging {
+        } else if matches!(source, winit::event::PointerSource::Mouse)
+            && self.input.dragging
+            && self
+                .input
+                .map_pointer_start
+                .as_ref()
+                .is_some_and(|start| !start.is_touch)
+        {
+            self.record_tutorial_camera_drag_if_moved(x, y);
             self.close_map_context_menu();
             self.input.camera_x += (x - self.input.last_mouse_x) as f32;
             self.input.camera_y += (y - self.input.last_mouse_y) as f32;
@@ -505,6 +562,7 @@ impl SowApp {
         };
         if !start.is_touch
             || self.input.active_touches.len() != 1
+            || self.ui.tutorial_camera_only
             || self.ui.app.phase != ClientPhase::Playing
             || start.action_sent
             || self.ui.app.hud_state.selected_building_kind.is_some()
@@ -520,6 +578,9 @@ impl SowApp {
     }
 
     pub(crate) fn begin_hold_build(&mut self, x: f64, y: f64) {
+        if self.ui.tutorial_camera_only {
+            return;
+        }
         self.input.hold_build_active = true;
         self.input.hold_build_accum = HOLD_BUILD_INTERVAL_SECS;
         self.handle_map_click(x, y);

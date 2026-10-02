@@ -124,20 +124,21 @@ function hasText(key, definition) {
   }
 }
 
-async function validatePair(episodeId, roster, definition, allowMissingFactionReferences = false) {
+async function validatePair(episodeId, roster, definition) {
   if (!roster || typeof roster.map !== "string" || !Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2 || !roster.player_spawn.every(Number.isFinite) || !Array.isArray(roster.factions) || !roster.factions.length) throw new Error("Invalid campaign map or factions.");
-  const roles = new Set(["kin", "independent", "vassal", "boss", "big_boss", "neutral"]);
-  const names = new Set();
+  const names = new Set(), ids = new Set();
   for (const faction of roster.factions) {
-    if (!faction || typeof faction.name !== "string" || !faction.name.trim() || names.has(faction.name) || !roles.has(faction.role) || !Number.isFinite(faction.x) || !Number.isFinite(faction.y)) throw new Error("Invalid or repeated faction in map.");
-    names.add(faction.name);
+    if (!faction || typeof faction.id !== "string" || !entityId.test(faction.id) || ids.has(faction.id)
+      || typeof faction.name !== "string" || !faction.name.trim() || names.has(faction.name)
+      || !Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000
+      || !Number.isFinite(faction.x) || !Number.isFinite(faction.y)) throw new Error("Invalid or repeated faction in map.");
+    ids.add(faction.id); names.add(faction.name);
   }
   const avatarFiles = new Set((await fs.readdir(path.join(root, "assets/gameplay/avatars")))
     .filter(name => /^[a-z][a-z0-9_]*\.webp$/.test(name)).map(name => name.slice(0, -5)));
   const result = loadCampaignRuntime().validate(definition, roster, {
     hasText: key => hasText(key, definition),
     hasAvatar: avatar => avatarFiles.has(avatar),
-    allowMissingFactionReferences
   });
   if (definition.episode_id !== episodeId) throw new Error("Episode ID must match its file name.");
   if (result.errors.length) throw new Error(result.errors.map(issue => [issue.step, issue.field, issue.message].filter(Boolean).join(" · ")).join("\n"));
@@ -182,7 +183,7 @@ async function validateSave(file, value) {
   const episodeId = file.replace(/(?:\.triggers)?\.json$/, "");
   const companion = trigger ? JSON.parse(await fs.readFile(path.join(campaignDir, episodeId + ".json"), "utf8")) : value;
   const definition = trigger ? value : JSON.parse(await fs.readFile(path.join(campaignDir, episodeId + ".triggers.json"), "utf8"));
-  await validatePair(episodeId, companion, definition, !trigger);
+  await validatePair(episodeId, companion, definition);
 }
 
 async function handle(req, res) {
@@ -314,7 +315,7 @@ async function handle(req, res) {
           reply(res, 400, "Invalid faction rename list."); return;
         }
         const definitionPath = path.join(campaignDir, episodeId + ".triggers.json");
-        const definition = loadCampaignRuntime().renameFactionReferences(
+        const definition = loadCampaignRuntime().renameFactionText(
           JSON.parse(await fs.readFile(definitionPath, "utf8")), factionRenames
         );
         try { await validatePair(episodeId, value, definition); }

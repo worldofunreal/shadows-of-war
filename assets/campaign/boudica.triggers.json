@@ -4,9 +4,9 @@
   "default_locale": "en",
   "settings": {
     "buildings_enabled": false,
-    "buildings_unlock_after_defeated": "Roman Outpost",
+    "buildings_unlock_after_defeated": "roman_outpost",
     "campaign_support": {
-      "after_defeated": "Roman Outpost",
+      "after_defeated": "roman_outpost",
       "share_percent": 50
     },
     "starting_troops": 2000
@@ -21,7 +21,7 @@
       "id": "contact_stonea",
       "when": {
         "type": "contact",
-        "target": "Stonea"
+        "target": "stonea"
       },
       "speaker": "stonea",
       "outcome": "allied",
@@ -32,7 +32,7 @@
       "id": "contact_snettisham",
       "when": {
         "type": "contact",
-        "target": "Snettisham"
+        "target": "snettisham"
       },
       "speaker": "snettisham",
       "title_key": "tutorial.boudica_snettisham_tribute_title",
@@ -58,7 +58,7 @@
       "id": "contact_thetford",
       "when": {
         "type": "contact",
-        "target": "Thetford"
+        "target": "thetford"
       },
       "speaker": "thetford",
       "title_key": "tutorial.boudica_thetford_respect_title",
@@ -76,6 +76,33 @@
           "label_key": "tutorial.boudica_thetford_demand",
           "body_key": "tutorial.boudica_thetford_demand_detail",
           "relation": "enemy",
+          "gold_cost": 0
+        }
+      ]
+    },
+    {
+      "id": "contact_trinovantes",
+      "after": "boudica_outpost_roman_supply_depot",
+      "when": {
+        "type": "contact",
+        "target": "trinovantes"
+      },
+      "speaker": "trinovantes",
+      "title_key": "tutorial.boudica_trinovantes_offer_title",
+      "body_key": "tutorial.boudica_trinovantes_offer_body",
+      "choices": [
+        {
+          "id": "accept",
+          "label_key": "tutorial.boudica_trinovantes_offer_accept",
+          "body_key": "tutorial.boudica_trinovantes_offer_accept_detail",
+          "relation": "allied",
+          "gold_cost": 0
+        },
+        {
+          "id": "later",
+          "label_key": "tutorial.boudica_trinovantes_offer_later",
+          "body_key": "tutorial.boudica_trinovantes_offer_later_detail",
+          "relation": "neutral",
           "gold_cost": 0
         }
       ]
@@ -103,7 +130,8 @@
           "relation": "enemy",
           "gold_cost": 0
         }
-      ]
+      ],
+      "after": "boudica_outpost_roman_supply_depot"
     }
   ],
   "strings": {
@@ -113,6 +141,26 @@
       "tutorial.boudica_zoom_out_pinch_hint": "Bring two fingers together to zoom out.",
       "tutorial.boudica_zoom_out_trackpad_hint": "Pinch two fingers together on your trackpad to zoom out.",
       "tutorial.boudica_zoom_out_wheel_hint": "Scroll the mouse wheel down to zoom out.",
+      "tutorial.boudica_zoom_out_pinch_label": "Zoom out · pinch in",
+      "tutorial.boudica_zoom_out_trackpad_label": "Zoom out · pinch in",
+      "tutorial.boudica_zoom_out_wheel_label": "Zoom out · scroll down",
+      "tutorial.boudica_zoom_in_title": "Zoom in",
+      "tutorial.boudica_zoom_in_hint": "Zoom in to inspect the battlefield.",
+      "tutorial.boudica_zoom_in_pinch_hint": "Spread two fingers apart to zoom in.",
+      "tutorial.boudica_zoom_in_trackpad_hint": "Spread two fingers apart on your trackpad to zoom in.",
+      "tutorial.boudica_zoom_in_wheel_hint": "Scroll the mouse wheel up to zoom in.",
+      "tutorial.boudica_zoom_in_pinch_label": "Zoom in · pinch out",
+      "tutorial.boudica_zoom_in_trackpad_label": "Zoom in · pinch out",
+      "tutorial.boudica_zoom_in_wheel_label": "Zoom in · scroll up",
+      "tutorial.boudica_camera_drag_title": "Move the map",
+      "tutorial.boudica_camera_drag_hint": "Hold the left mouse button and drag the map.",
+      "tutorial.boudica_camera_drag_desktop_hint": "Hold the left mouse button and drag the map.",
+      "tutorial.boudica_camera_drag_mobile_hint": "Drag the map with one finger.",
+      "tutorial.boudica_camera_keys_title": "Move with arrow keys",
+      "tutorial.boudica_camera_keys_hint": "Press an arrow key or WASD to move the map.",
+      "tutorial.boudica_camera_hover_title": "Inspect another entity",
+      "tutorial.boudica_camera_hover_desktop_hint": "Move the cursor over Camulodunum until its nameplate appears.",
+      "tutorial.boudica_camera_hover_mobile_hint": "Keep one finger over Camulodunum until its nameplate appears.",
       "tutorial.boudica_council_title": "A Queen's Answer",
       "tutorial.boudica_council_body": "Rome took our land and humiliated my family. The Iceni council waits for my answer.",
       "tutorial.boudica_decision_title": "What do we do?",
@@ -131,7 +179,7 @@
       "tutorial.boudica_support_title": "Aid Arrives",
       "tutorial.boudica_support_hint": "The tribes are sending gold and warriors.",
       "tutorial.boudica_trinovantes_alliance_title": "Win the Trinovantes",
-      "tutorial.boudica_trinovantes_alliance_hint": "Touch Trinovantian land to hear their terms.",
+      "tutorial.boudica_trinovantes_alliance_hint": "Form an alliance with the Trinovantes.",
       "tutorial.boudica_snettisham_tribute_title": "Snettisham asks for tribute",
       "tutorial.boudica_snettisham_tribute_body": "Pay 200 gold for our support. Refuse, and we become enemies, but we will not attack first. We may still expand, and you can attack us at any time.",
       "tutorial.boudica_snettisham_refuse_detail": "Snettisham becomes a passive enemy. It may expand, but will not attack first; you can attack it at any time.",
@@ -272,7 +320,19 @@
       "tutorial.neutral_terms_accept": "Pay the tribute",
       "tutorial.neutral_terms_accept_detail": "Pay 200 gold and form an alliance.",
       "tutorial.neutral_terms_refuse": "Refuse",
-      "tutorial.neutral_terms_refuse_detail": "The clan ends talks and becomes an enemy."
+      "tutorial.neutral_terms_refuse_detail": "The clan ends talks and becomes an enemy.",
+      "tutorial.boudica_outpost_colonia_veterans_title": "Colonia Veterans",
+      "tutorial.boudica_outpost_colonia_veterans_hint": "Defeat Colonia Veterans to cut the first Roman supply line.",
+      "tutorial.boudica_outpost_tax_collectors_title": "Tax Collectors",
+      "tutorial.boudica_outpost_tax_collectors_hint": "Defeat the Tax Collectors. The supply depot is next.",
+      "tutorial.boudica_outpost_roman_supply_depot_title": "Roman Supply Depot",
+      "tutorial.boudica_outpost_roman_supply_depot_hint": "Destroy the supply depot, then meet the Trinovantes.",
+      "tutorial.boudica_trinovantes_offer_title": "The Trinovantes Offer an Alliance",
+      "tutorial.boudica_trinovantes_offer_body": "Unite against Rome. Will the Iceni accept our alliance?",
+      "tutorial.boudica_trinovantes_offer_accept": "Accept alliance",
+      "tutorial.boudica_trinovantes_offer_accept_detail": "The Trinovantes join the rising.",
+      "tutorial.boudica_trinovantes_offer_later": "Not yet",
+      "tutorial.boudica_trinovantes_offer_later_detail": "They remain neutral. Form the alliance from their map menu to continue."
     },
     "es": {
       "tutorial.boudica_zoom_out_title": "Aleja el mapa",
@@ -280,6 +340,26 @@
       "tutorial.boudica_zoom_out_pinch_hint": "Junta dos dedos para alejar el mapa.",
       "tutorial.boudica_zoom_out_trackpad_hint": "Junta dos dedos en el trackpad para alejar el mapa.",
       "tutorial.boudica_zoom_out_wheel_hint": "Mueve la rueda del ratón hacia abajo para alejar el mapa.",
+      "tutorial.boudica_zoom_out_pinch_label": "Alejar · junta los dedos",
+      "tutorial.boudica_zoom_out_trackpad_label": "Alejar · junta los dedos",
+      "tutorial.boudica_zoom_out_wheel_label": "Alejar · rueda abajo",
+      "tutorial.boudica_zoom_in_title": "Acerca el mapa",
+      "tutorial.boudica_zoom_in_hint": "Acércalo para inspeccionar el campo de batalla.",
+      "tutorial.boudica_zoom_in_pinch_hint": "Separa dos dedos para acercar el mapa.",
+      "tutorial.boudica_zoom_in_trackpad_hint": "Separa dos dedos en el trackpad para acercar el mapa.",
+      "tutorial.boudica_zoom_in_wheel_hint": "Mueve la rueda del ratón hacia arriba para acercar el mapa.",
+      "tutorial.boudica_zoom_in_pinch_label": "Acercar · separa los dedos",
+      "tutorial.boudica_zoom_in_trackpad_label": "Acercar · separa los dedos",
+      "tutorial.boudica_zoom_in_wheel_label": "Acercar · rueda arriba",
+      "tutorial.boudica_camera_drag_title": "Mueve el mapa",
+      "tutorial.boudica_camera_drag_hint": "Mantén el botón izquierdo y arrastra el mapa.",
+      "tutorial.boudica_camera_drag_desktop_hint": "Mantén el botón izquierdo y arrastra el mapa.",
+      "tutorial.boudica_camera_drag_mobile_hint": "Arrastra el mapa con un dedo.",
+      "tutorial.boudica_camera_keys_title": "Muévete con las flechas",
+      "tutorial.boudica_camera_keys_hint": "Pulsa una flecha o WASD para mover el mapa.",
+      "tutorial.boudica_camera_hover_title": "Inspecciona otra entidad",
+      "tutorial.boudica_camera_hover_desktop_hint": "Pasa el cursor sobre Camulodunum hasta ver su nombre.",
+      "tutorial.boudica_camera_hover_mobile_hint": "Mantén un dedo sobre Camulodunum hasta ver su nombre.",
       "tutorial.boudica_council_title": "La respuesta de una reina",
       "tutorial.boudica_council_body": "Roma arrebató nuestras tierras y humilló a mi familia. El consejo iceno espera mi respuesta.",
       "tutorial.boudica_decision_title": "¿Qué hacemos?",
@@ -298,7 +378,7 @@
       "tutorial.boudica_support_title": "Llega la ayuda",
       "tutorial.boudica_support_hint": "Las tribus envían oro y guerreros.",
       "tutorial.boudica_trinovantes_alliance_title": "Gana a los trinovantes",
-      "tutorial.boudica_trinovantes_alliance_hint": "Toca el territorio trinovante para escuchar sus condiciones.",
+      "tutorial.boudica_trinovantes_alliance_hint": "Forma una alianza con los trinovantes.",
       "tutorial.boudica_snettisham_tribute_title": "Snettisham pide tributo",
       "tutorial.boudica_snettisham_tribute_body": "Paga 200 de oro por nuestro apoyo. Si te niegas, seremos enemigos, pero no atacaremos primero. Aun así podemos expandirnos y puedes atacarnos cuando quieras.",
       "tutorial.boudica_snettisham_refuse_detail": "Snettisham será un enemigo pasivo. Puede expandirse, pero no atacará primero; puedes atacarlo cuando quieras.",
@@ -439,7 +519,19 @@
       "tutorial.neutral_terms_accept": "Pagar el tributo",
       "tutorial.neutral_terms_accept_detail": "Entregar 200 de oro y formar una alianza.",
       "tutorial.neutral_terms_refuse": "Rechazar",
-      "tutorial.neutral_terms_refuse_detail": "La tribu rompe relaciones y se vuelve enemiga."
+      "tutorial.neutral_terms_refuse_detail": "La tribu rompe relaciones y se vuelve enemiga.",
+      "tutorial.boudica_outpost_colonia_veterans_title": "Veteranos de la colonia",
+      "tutorial.boudica_outpost_colonia_veterans_hint": "Derrota a los veteranos de la colonia y corta la primera ruta romana.",
+      "tutorial.boudica_outpost_tax_collectors_title": "Recaudadores de impuestos",
+      "tutorial.boudica_outpost_tax_collectors_hint": "Derrota a los recaudadores. El depósito será el siguiente.",
+      "tutorial.boudica_outpost_roman_supply_depot_title": "Depósito romano",
+      "tutorial.boudica_outpost_roman_supply_depot_hint": "Destruye el depósito y luego reúnete con los trinovantes.",
+      "tutorial.boudica_trinovantes_offer_title": "Los trinovantes ofrecen una alianza",
+      "tutorial.boudica_trinovantes_offer_body": "Unámonos contra Roma. ¿Aceptarán los icenos nuestra alianza?",
+      "tutorial.boudica_trinovantes_offer_accept": "Aceptar alianza",
+      "tutorial.boudica_trinovantes_offer_accept_detail": "Los trinovantes se unen al levantamiento.",
+      "tutorial.boudica_trinovantes_offer_later": "Más tarde",
+      "tutorial.boudica_trinovantes_offer_later_detail": "Seguirán neutrales. Forma la alianza desde su menú del mapa para continuar."
     }
   },
   "speakers": {
@@ -452,16 +544,16 @@
       "avatar": "iceni_council"
     },
     "snettisham": {
-      "faction": "Snettisham"
+      "faction": "snettisham"
     },
     "stonea": {
-      "faction": "Stonea"
+      "faction": "stonea"
     },
     "thetford": {
-      "faction": "Thetford"
+      "faction": "thetford"
     },
     "trinovantes": {
-      "faction": "Trinovantes"
+      "faction": "trinovantes"
     }
   },
   "steps": [
@@ -510,12 +602,12 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "target": "Roman Outpost",
+        "target": "roman_outpost",
         "scope": "step"
       },
       "attack_ratio_on_enter": 1,
       "marker": {
-        "target": "Roman Outpost"
+        "target": "roman_outpost"
       },
       "guide": {
         "kind": "world",
@@ -563,6 +655,7 @@
       "hint_key": "tutorial.boudica_zoom_out_hint",
       "speaker": "boudica",
       "pause_game": true,
+      "camera_only": true,
       "trigger": {
         "type": "zoom_out",
         "value": 1,
@@ -576,6 +669,85 @@
         "target": "player",
         "gesture": "zoom_out"
       },
+      "next": "boudica_zoom_in"
+    },
+    {
+      "id": "boudica_zoom_in",
+      "type": "objective",
+      "title_key": "tutorial.boudica_zoom_in_title",
+      "hint_key": "tutorial.boudica_zoom_in_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "camera_only": true,
+      "trigger": {
+        "type": "zoom_in",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "zoom_in"
+      },
+      "next": "boudica_camera_drag"
+    },
+    {
+      "id": "boudica_camera_drag",
+      "type": "objective",
+      "title_key": "tutorial.boudica_camera_drag_title",
+      "hint_key": "tutorial.boudica_camera_drag_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "camera_only": true,
+      "trigger": {
+        "type": "camera_drag",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "drag",
+        "to": "expand"
+      },
+      "routes": [
+        {
+          "when": {
+            "fact": "touch_controls",
+            "gte": 1
+          },
+          "next": "boudica_first_contact"
+        }
+      ],
+      "next": "boudica_camera_keys"
+    },
+    {
+      "id": "boudica_camera_keys",
+      "type": "objective",
+      "title_key": "tutorial.boudica_camera_keys_title",
+      "hint_key": "tutorial.boudica_camera_keys_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "camera_only": true,
+      "trigger": {
+        "type": "camera_key_pan",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "pan_keys"
+      },
       "next": "boudica_first_contact"
     },
     {
@@ -587,22 +759,22 @@
       "trigger": {
         "type": "contact",
         "targets": [
-          "Stonea",
-          "Snettisham",
-          "Thetford"
+          "stonea",
+          "snettisham",
+          "thetford"
         ],
         "value": 3,
         "scope": "total"
       },
       "marker": {
-        "target": "Stonea"
+        "target": "stonea"
       },
       "guide": {
         "kind": "world",
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_roman_outposts"
+      "next": "boudica_outpost_colonia_veterans"
     },
     {
       "id": "boudica_trinovantes_alliance",
@@ -611,13 +783,13 @@
       "hint_key": "tutorial.boudica_trinovantes_alliance_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "contact",
-        "target": "Trinovantes",
+        "type": "alliance",
+        "target": "trinovantes",
         "value": 1,
         "scope": "total"
       },
       "marker": {
-        "target": "Trinovantes"
+        "target": "trinovantes"
       },
       "guide": {
         "kind": "world",
@@ -670,7 +842,7 @@
         "scope": "step"
       },
       "marker": {
-        "target": "Stonea"
+        "target": "stonea"
       },
       "guide": {
         "kind": "world",
@@ -723,7 +895,7 @@
       "speaker": "boudica",
       "trigger": {
         "type": "resource_transfer",
-        "recipient": "Stonea",
+        "recipient": "stonea",
         "resources": [
           "gold",
           "troops"
@@ -880,29 +1052,6 @@
         "gesture": "drag"
       },
       "next": "boudica_upgrade_choice"
-    },
-    {
-      "id": "boudica_roman_outposts",
-      "type": "objective",
-      "title_key": "tutorial.boudica_outposts_title",
-      "hint_key": "tutorial.boudica_outposts_hint",
-      "speaker": "boudica",
-      "trigger": {
-        "type": "defeated",
-        "targets": [
-          "Colonia Veterans",
-          "Tax Collectors",
-          "Roman Supply Depot"
-        ],
-        "value": 3,
-        "scope": "total"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "target_action",
-        "gesture": "tap"
-      },
-      "next": "boudica_trinovantes_alliance"
     },
     {
       "id": "boudica_upgrade_choice",
@@ -1111,7 +1260,7 @@
         {
           "id": "skip",
           "label_key": "tutorial.boudica_bunker_choice_skip",
-          "next": "boudica_camulodunum_intro"
+          "next": "boudica_camera_hover"
         }
       ]
     },
@@ -1152,7 +1301,93 @@
         "target": "player",
         "gesture": "tap"
       },
+      "next": "boudica_camera_hover"
+    },
+    {
+      "id": "boudica_camera_hover",
+      "type": "objective",
+      "title_key": "tutorial.boudica_camera_hover_title",
+      "hint_key": "tutorial.boudica_camera_hover_desktop_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "camera_only": true,
+      "trigger": {
+        "type": "hover",
+        "value": 1,
+        "scope": "step"
+      },
+      "marker": {
+        "target": "camulodunum"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "player",
+        "gesture": "hover"
+      },
       "next": "boudica_camulodunum_intro"
+    },
+    {
+      "id": "boudica_outpost_colonia_veterans",
+      "type": "objective",
+      "title_key": "tutorial.boudica_outpost_colonia_veterans_title",
+      "hint_key": "tutorial.boudica_outpost_colonia_veterans_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "colonia_veterans",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "colonia_veterans"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_outpost_tax_collectors"
+    },
+    {
+      "id": "boudica_outpost_tax_collectors",
+      "type": "objective",
+      "title_key": "tutorial.boudica_outpost_tax_collectors_title",
+      "hint_key": "tutorial.boudica_outpost_tax_collectors_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "tax_collectors",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "tax_collectors"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_outpost_roman_supply_depot"
+    },
+    {
+      "id": "boudica_outpost_roman_supply_depot",
+      "type": "objective",
+      "title_key": "tutorial.boudica_outpost_roman_supply_depot_title",
+      "hint_key": "tutorial.boudica_outpost_roman_supply_depot_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "defeated",
+        "target": "roman_supply_depot",
+        "scope": "total"
+      },
+      "marker": {
+        "target": "roman_supply_depot"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "target_action",
+        "gesture": "tap"
+      },
+      "next": "boudica_trinovantes_alliance"
     },
     {
       "id": "boudica_camulodunum_intro",
@@ -1171,11 +1406,11 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "target": "Camulodunum",
+        "target": "camulodunum",
         "scope": "total"
       },
       "marker": {
-        "target": "Camulodunum"
+        "target": "camulodunum"
       },
       "guide": {
         "kind": "world",
@@ -1201,11 +1436,11 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "target": "Londinium",
+        "target": "londinium",
         "scope": "total"
       },
       "marker": {
-        "target": "Londinium"
+        "target": "londinium"
       },
       "guide": {
         "kind": "world",
@@ -1231,11 +1466,11 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "target": "Verulamium",
+        "target": "verulamium",
         "scope": "total"
       },
       "marker": {
-        "target": "Verulamium"
+        "target": "verulamium"
       },
       "guide": {
         "kind": "world",
@@ -1261,11 +1496,11 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "target": "Legio IX Hispana",
+        "target": "legio_ix_hispana",
         "scope": "total"
       },
       "marker": {
-        "target": "Legio IX Hispana"
+        "target": "legio_ix_hispana"
       },
       "guide": {
         "kind": "world",
@@ -1301,12 +1536,12 @@
       "speaker": "council",
       "trigger": {
         "type": "contact",
-        "target": "Catuvellauni",
+        "target": "catuvellauni",
         "value": 1,
         "scope": "total"
       },
       "marker": {
-        "target": "Catuvellauni"
+        "target": "catuvellauni"
       },
       "guide": {
         "kind": "world",
@@ -1419,12 +1654,12 @@
       "trigger": {
         "type": "fleet",
         "unit": "TransportShip",
-        "target": "Legio XIV Gemina",
+        "target": "legio_xiv_gemina",
         "value": 1,
         "scope": "step"
       },
       "marker": {
-        "target": "Legio XIV Gemina"
+        "target": "legio_xiv_gemina"
       },
       "guide": {
         "kind": "world",
@@ -1563,11 +1798,11 @@
       "speaker": "boudica",
       "trigger": {
         "type": "defeated",
-        "target": "Legio XIV Gemina",
+        "target": "legio_xiv_gemina",
         "scope": "total"
       },
       "marker": {
-        "target": "Legio XIV Gemina"
+        "target": "legio_xiv_gemina"
       },
       "guide": {
         "kind": "world",
@@ -1691,12 +1926,28 @@
       "x": 70,
       "y": 450
     },
-    "boudica_first_contact": {
+    "boudica_zoom_in": {
       "x": 350,
       "y": 450
     },
-    "boudica_trinovantes_alliance": {
+    "boudica_camera_drag": {
       "x": 630,
+      "y": 450
+    },
+    "boudica_camera_keys": {
+      "x": 910,
+      "y": 450
+    },
+    "boudica_camera_hover": {
+      "x": 1190,
+      "y": 450
+    },
+    "boudica_first_contact": {
+      "x": 1470,
+      "y": 450
+    },
+    "boudica_trinovantes_alliance": {
+      "x": 1750,
       "y": 450
     },
     "boudica_ally_support_wait": {
@@ -1758,10 +2009,6 @@
     "boudica_ratio_guide": {
       "x": 630,
       "y": 1400
-    },
-    "boudica_roman_outposts": {
-      "x": 70,
-      "y": 1590
     },
     "boudica_upgrade_choice": {
       "x": 350,
@@ -1918,6 +2165,18 @@
     "boudica_return_multiplayer": {
       "x": 630,
       "y": 4060
+    },
+    "boudica_outpost_colonia_veterans": {
+      "x": 70,
+      "y": 1590
+    },
+    "boudica_outpost_tax_collectors": {
+      "x": 70,
+      "y": 1720
+    },
+    "boudica_outpost_roman_supply_depot": {
+      "x": 70,
+      "y": 1850
     }
   }
 }

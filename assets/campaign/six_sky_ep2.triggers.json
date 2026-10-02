@@ -95,11 +95,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Uaxactun Rebels",
+        "target": "uaxactun_rebels",
         "scope": "total"
       },
       "marker": {
-        "target": "Uaxactun Rebels"
+        "target": "uaxactun_rebels"
       },
       "guide": {
         "kind": "world",
@@ -125,11 +125,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Yaxha Rebels",
+        "target": "yaxha_rebels",
         "scope": "total"
       },
       "marker": {
-        "target": "Yaxha Rebels"
+        "target": "yaxha_rebels"
       },
       "guide": {
         "kind": "world",
@@ -155,11 +155,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Tayasal Rebels",
+        "target": "tayasal_rebels",
         "scope": "total"
       },
       "marker": {
-        "target": "Tayasal Rebels"
+        "target": "tayasal_rebels"
       },
       "guide": {
         "kind": "world",
@@ -185,11 +185,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Seibal Rebels",
+        "target": "seibal_rebels",
         "scope": "total"
       },
       "marker": {
-        "target": "Seibal Rebels"
+        "target": "seibal_rebels"
       },
       "guide": {
         "kind": "world",
@@ -215,11 +215,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Caracol",
+        "target": "caracol",
         "scope": "total"
       },
       "marker": {
-        "target": "Caracol"
+        "target": "caracol"
       },
       "guide": {
         "kind": "world",
@@ -275,11 +275,11 @@
       "speaker": "lady_six_sky",
       "trigger": {
         "type": "defeated",
-        "target": "Tikal Coalition",
+        "target": "tikal_coalition",
         "scope": "total"
       },
       "marker": {
-        "target": "Tikal Coalition"
+        "target": "tikal_coalition"
       },
       "guide": {
         "kind": "world",

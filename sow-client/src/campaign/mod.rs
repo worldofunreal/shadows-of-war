@@ -1,9 +1,7 @@
 //! Campaign data validation and conversion. The browser owns episode JSON and sends a validated
-//! roster to the engine as `GameConfig.scripted_spawns`; Rust keeps only the generic faction rules
-//! that turn a role into team, color, AI, and troop tier.
+//! roster to the engine as `GameConfig.scripted_spawns`.
 
-use sow_core::game_config::ScriptedSpawn;
-use sow_core::game_config::{CampaignBetrayal, CampaignHostility};
+use sow_core::game_config::{CampaignHostility, ScriptedSpawn};
 use sow_core::player::{Civilization, Leader};
 use sow_core::protocol::CampaignRelation;
 
@@ -115,86 +113,21 @@ impl CampaignId {
     }
 }
 
-/// A faction's role fixes its AI tier, civilization default, and starting troop tier. The ladder runs
-/// Independent (500) → Vassal (1 000) → Boss (2 500) → BigBoss (5 000); the player (Boudica)
-/// starts at 1 000 and grows by conquest, so the ladder climbs as the campaign progresses.
-#[derive(Clone, Copy, PartialEq)]
-pub enum Role {
-    /// Iceni identity; diplomacy is configured per faction, not by this role.
-    Kin,
-    /// Lone clan — **500** starting troops.
-    Independent,
-    /// Client tribe — **1 000** starting troops.
-    Vassal,
-    /// A city — expanding nation, **2 500**.
-    Boss,
-    /// A major power — expanding nation, **5 000** (the apex).
-    BigBoss,
-    /// Unaligned bystander — **500** starting troops.
-    Neutral,
-}
-
-impl Role {
-    /// **Starting** troop count for this tier — the unit then grows normally with territory
-    /// (so an expanding tribe's nameplate climbs, not freezes). The ladder is the head start.
-    fn troops(self) -> Option<f64> {
-        match self {
-            Role::Kin | Role::Independent | Role::Neutral => Some(500.0),
-            Role::Vassal => Some(1000.0),
-            Role::Boss => Some(2500.0),
-            Role::BigBoss => Some(5000.0),
-        }
-    }
-    /// **Hard** max-troop ceiling. Currently unused (`None` for all) — every faction grows
-    /// naturally with territory, so nameplates track reality (no frozen-at-500 look). Kept as a
-    /// knob in case a future flavor unit must stay pinned; allies stay small by being passive +
-    /// starting at 500, not by a hard cap.
-    fn troop_cap(self) -> Option<f64> {
-        None
-    }
-    /// Only the city and major-power tiers use the expanding nation AI.
-    fn is_nation(self) -> bool {
-        matches!(self, Role::Boss | Role::BigBoss)
-    }
-    /// Civilization implied by the role (kin = Iceni, Rome's cities/empire = Rome, rest Gallic).
-    fn civ(self) -> Civilization {
-        match self {
-            Role::Kin => Civilization::Iceni,
-            Role::Boss | Role::BigBoss => Civilization::Rome,
-            _ => Civilization::Gallic,
-        }
-    }
-    /// Parse a role name from a data file (the JSON roster authored by tools/campaign-editor).
-    fn from_name(s: &str) -> Option<Role> {
-        Some(match s {
-            "kin" => Role::Kin,
-            "independent" => Role::Independent,
-            "vassal" => Role::Vassal,
-            "boss" => Role::Boss,
-            "big_boss" => Role::BigBoss,
-            "neutral" => Role::Neutral,
-            _ => return None,
-        })
-    }
-}
-
-/// One placed faction in an episode roster. `name` is owned so rosters can come from a data file
-/// (the JSON authored by tools/campaign-editor), not only from `&'static` literals.
+/// One placed episode faction. Identity is stable; the display name can change independently.
 pub struct Faction {
+    pub id: String,
     pub name: String,
     pub x: u32,
     pub y: u32,
-    pub role: Role,
+    pub starting_troops: u32,
     pub relation: CampaignRelation,
-    pub hostility: CampaignHostility,
-    pub betrayal: CampaignBetrayal,
+    pub hostility: Option<CampaignHostility>,
+    pub can_request_alliance: bool,
     pub color: [f32; 3],
     pub civ: Civilization,
     /// Bot intelligence override; `None` = engine default. Only the JSON loader sets it.
     pub iq: Option<u32>,
-    /// Portrait/perk identity override; `None` = the role default (bosses Caesar,
-    /// kin the episode advisor). Only the JSON loader sets it.
-    pub leader: Option<Leader>,
+    pub leader: Leader,
     /// Shared by the map nameplate and story dialogue; absent uses the generic portrait.
     pub avatar: Option<String>,
     pub support_interval_seconds: Option<u32>,
@@ -203,34 +136,7 @@ pub struct Faction {
     pub alliance_group: Option<String>,
 }
 
-impl Faction {
-    /// Build a faction; civ is implied by role so it stays consistent between the hardcoded
-    /// roster and the JSON loader.
-    fn new(name: impl Into<String>, x: u32, y: u32, role: Role, color: [f32; 3]) -> Faction {
-        Faction {
-            name: name.into(),
-            x,
-            y,
-            role,
-            relation: CampaignRelation::Neutral,
-            hostility: CampaignHostility::Passive,
-            betrayal: CampaignBetrayal::Never,
-            color,
-            civ: role.civ(),
-            iq: None,
-            leader: None,
-            avatar: None,
-            support_interval_seconds: None,
-            gold_loot_bonus: None,
-            gold_loot_override: None,
-            alliance_group: None,
-        }
-    }
-}
-
-// Rosters are authored only as JSON (assets/campaign/*.json) and built via `parse_roster` →
-// `Faction::new`; there are deliberately no hand-rolled `kin()/boss()/…` builders, so there is one
-// and only one way to define a faction. `Faction::new` stays private to this module.
+// Rosters are authored only as JSON (assets/campaign/*.json) and parsed through this module.
 
 /// Distinct own-colors for the neutral bystander factions (Welsh tribes, Gaul).
 const NEUTRAL_PALETTE: [[f32; 3]; 6] = [
@@ -244,7 +150,7 @@ const NEUTRAL_PALETTE: [[f32; 3]; 6] = [
 
 pub const PLAYER_COLOR: [f32; 3] = [0.94, 0.56, 0.16];
 
-/// Log the episode roster grouped by role before the engine places it.
+/// Log the episode roster summary before the engine places it.
 pub fn log_plan(episode: &str, player_spawn: (u32, u32), factions: &[Faction]) {
     log_plan_for(episode, "Boudica/Iceni, 1000", player_spawn, factions);
 }
@@ -256,83 +162,51 @@ pub fn log_plan_for(
     player_spawn: (u32, u32),
     factions: &[Faction],
 ) {
-    let join = |roles: &[Role]| -> String {
-        let v: Vec<&str> = factions
-            .iter()
-            .filter(|f| roles.contains(&f.role))
-            .map(|f| f.name.as_str())
-            .collect();
-        if v.is_empty() {
-            "(none)".into()
-        } else {
-            v.join(", ")
-        }
-    };
     log::info!(
-        "campaign: {} — player ({}) spawns at ({},{}); {} scripted bots",
+        "campaign: {} — player ({}) spawns at ({},{}); {} bots ({} allied, {} neutral, {} enemy)",
         episode,
         player_desc,
         player_spawn.0,
         player_spawn.1,
-        factions.len()
-    );
-    log::info!(
-        "campaign:   major powers {} | cities {} | client tribes {}",
-        join(&[Role::BigBoss]),
-        join(&[Role::Boss]),
-        join(&[Role::Vassal])
-    );
-    log::info!(
-        "campaign:   INDEPENDENT (gray, 500): {}",
-        join(&[Role::Independent])
-    );
-    log::info!(
-        "campaign:   NEUTRAL (own colors): {}",
-        join(&[Role::Neutral])
+        factions.len(),
+        factions
+            .iter()
+            .filter(|f| f.relation == CampaignRelation::Allied)
+            .count(),
+        factions
+            .iter()
+            .filter(|f| f.relation == CampaignRelation::Neutral)
+            .count(),
+        factions
+            .iter()
+            .filter(|f| f.relation == CampaignRelation::Enemy)
+            .count(),
     );
 }
 
-/// Turn an episode's faction list into engine-ready scripted spawns (team + color + tier).
+/// Turn an episode's faction list into engine-ready normal bot spawns.
 pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
     factions
         .iter()
-        .map(|f| {
-            let is_nation = f.role.is_nation();
-            let leader = match f.role {
-                Role::Boss | Role::BigBoss => Leader::Caesar,
-                Role::Kin => Leader::Boudica,
-                _ => Leader::default(),
-            };
-            let leader = f.leader.unwrap_or(leader);
-            ScriptedSpawn {
-                name: f.name.clone(),
-                x: f.x,
-                y: f.y,
-                color: f.color,
-                team: None,
-                leader,
-                civilization: f.civ,
-                is_nation,
-                troops: if f.hostility == CampaignHostility::Food {
-                    Some(0.0)
-                } else {
-                    f.role.troops()
-                },
-                troop_cap: if f.hostility == CampaignHostility::Food {
-                    Some(0.0)
-                } else {
-                    f.role.troop_cap()
-                },
-                iq: f.iq,
-                campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
-                campaign_support_interval_seconds: f.support_interval_seconds,
-                campaign_gold_loot_bonus: f.gold_loot_bonus,
-                campaign_gold_loot_override: f.gold_loot_override,
-                campaign_alliance_group: f.alliance_group.clone(),
-                campaign_relation: Some(f.relation),
-                campaign_hostility: Some(f.hostility),
-                campaign_betrayal: Some(f.betrayal),
-            }
+        .map(|f| ScriptedSpawn {
+            name: f.name.clone(),
+            x: f.x,
+            y: f.y,
+            color: f.color,
+            team: None,
+            leader: f.leader,
+            civilization: f.civ,
+            troops: Some(f.starting_troops as f64),
+            iq: f.iq,
+            campaign_avatar: Some(f.avatar.clone().unwrap_or_else(|| "null".into())),
+            campaign_support_interval_seconds: f.support_interval_seconds,
+            campaign_gold_loot_bonus: f.gold_loot_bonus,
+            campaign_gold_loot_override: f.gold_loot_override,
+            campaign_alliance_group: f.alliance_group.clone(),
+            campaign_relation: Some(f.relation),
+            campaign_hostility: f.hostility,
+            campaign_faction_id: Some(f.id.clone()),
+            campaign_can_request_alliance: Some(f.can_request_alliance),
         })
         .collect()
 }
@@ -341,27 +215,24 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
 
 /// Faction identity, diplomacy, and presentation come from the same editor-authored roster.
 #[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RosterEntry {
+    id: String,
     name: String,
     x: u32,
     y: u32,
-    role: String,
-    #[serde(default)]
+    starting_troops: u32,
     relation: CampaignRelation,
     #[serde(default)]
-    hostility: CampaignHostility,
+    hostility: Option<CampaignHostility>,
     #[serde(default)]
-    betrayal: CampaignBetrayal,
+    can_request_alliance: Option<bool>,
     #[serde(default)]
     color: Option<String>,
     #[serde(default)]
     iq: Option<u32>,
-    /// Civilization override (`"maya"`, …); absent = the role default.
-    #[serde(default)]
-    civ: Option<String>,
-    /// Leader override (`"lady_six_sky"`, …); absent = the role default.
-    #[serde(default)]
-    leader: Option<String>,
+    civ: String,
+    leader: String,
     #[serde(default)]
     avatar: Option<String>,
     #[serde(default)]
@@ -397,7 +268,7 @@ pub(crate) fn tutorial_camera_frame(
     let target = config
         .scripted_spawns
         .iter()
-        .find(|spawn| spawn.campaign_avatar.as_deref() == Some("the_iceni_despoilers"))?;
+        .find(|spawn| spawn.campaign_faction_id.as_deref() == Some("roman_outpost"))?;
     let dx = player_x.abs_diff(target.x) as f32;
     let dy = player_y.abs_diff(target.y) as f32;
     let center = (
@@ -407,17 +278,13 @@ pub(crate) fn tutorial_camera_frame(
     let fit_zoom = (screen_w.max(1.0) / (dx + 8.0))
         .min(screen_h.max(1.0) / (dy + 8.0))
         .min(28.0);
-    let min_zoom = crate::camera_zoom_lower_bound(
-        screen_w,
-        screen_h,
-        config.map_width,
-        config.map_height,
-    );
+    let min_zoom =
+        crate::camera_zoom_lower_bound(screen_w, screen_h, config.map_width, config.map_height);
     Some((center, fit_zoom.max(min_zoom)))
 }
 
-/// Resolve a civilization id from roster JSON (`"maya"`, `"Maya"`,
-/// `"Maya Civilization"`, …). `None` = unknown, keep the role default.
+/// Resolve a civilization from its roster value (`"maya"`, `"Maya"`,
+/// `"Maya Civilization"`, …).
 fn civ_from_id(value: &str) -> Option<Civilization> {
     let normalized: String = value
         .chars()
@@ -438,19 +305,25 @@ fn civ_from_id(value: &str) -> Option<Civilization> {
     })
 }
 
-/// Parse an episode roster from JSON text. `None` on any problem (bad JSON, unknown role, empty
+/// Parse an episode roster from JSON text. `None` on any problem (invalid identity, empty
 /// list). This is the **single** roster code path — shared by the runtime file override and the
 /// embedded committed default — so there is exactly one format and no second way to define a roster.
 pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> {
     let rf: RosterFile = serde_json::from_str(text).ok()?;
     let mut factions = Vec::with_capacity(rf.factions.len());
     let mut names = std::collections::HashSet::new();
+    let mut ids = std::collections::HashSet::new();
     for (index, e) in rf.factions.iter().enumerate() {
-        if e.name.trim().is_empty() || !names.insert(e.name.as_str()) {
+        if !valid_campaign_entity_id(&e.id)
+            || e.name.trim().is_empty()
+            || e.starting_troops > 1_000_000
+            || !ids.insert(e.id.as_str())
+            || !names.insert(e.name.as_str())
+        {
             return None;
         }
-        let role = Role::from_name(&e.role)?;
-        if e.support_interval_seconds.is_some_and(|seconds| !(5..=600).contains(&seconds))
+        if e.support_interval_seconds
+            .is_some_and(|seconds| !(5..=600).contains(&seconds))
             || e.gold_loot_bonus.is_some_and(|gold| gold > 1_000_000)
             || e.gold_loot_override.is_some_and(|gold| gold > 1_000_000)
             || e.alliance_group
@@ -463,28 +336,34 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             Some(color) => parse_campaign_color(color)?,
             None => NEUTRAL_PALETTE[index % NEUTRAL_PALETTE.len()],
         };
-        let mut f = Faction::new(e.name.clone(), e.x, e.y, role, color);
-        f.relation = e.relation;
-        f.hostility = e.hostility;
-        f.betrayal = e.betrayal;
-        f.iq = e.iq;
-        f.support_interval_seconds = e.support_interval_seconds;
-        f.gold_loot_bonus = e.gold_loot_bonus;
-        f.gold_loot_override = e.gold_loot_override;
-        f.alliance_group = e.alliance_group.clone();
-        if let Some(civ_name) = e.civ.as_deref() {
-            f.civ = civ_from_id(civ_name)?;
+        let civ = civ_from_id(&e.civ)?;
+        let leader = sow_data::commerce::leader_from_id(&e.leader)?;
+        let relation = e.relation;
+        if e.avatar
+            .as_deref()
+            .is_some_and(|avatar| !valid_avatar_id(avatar))
+        {
+            return None;
         }
-        if let Some(leader_name) = e.leader.as_deref() {
-            f.leader = Some(sow_data::commerce::leader_from_id(leader_name)?);
-        }
-        if let Some(avatar) = e.avatar.as_deref() {
-            if !valid_avatar_id(avatar) {
-                return None;
-            }
-            f.avatar = Some(avatar.to_string());
-        }
-        factions.push(f);
+        factions.push(Faction {
+            id: e.id.clone(),
+            name: e.name.clone(),
+            x: e.x,
+            y: e.y,
+            starting_troops: e.starting_troops,
+            relation,
+            hostility: e.hostility,
+            can_request_alliance: e.can_request_alliance.unwrap_or(true),
+            color,
+            civ,
+            iq: e.iq,
+            leader,
+            avatar: e.avatar.clone(),
+            support_interval_seconds: e.support_interval_seconds,
+            gold_loot_bonus: e.gold_loot_bonus,
+            gold_loot_override: e.gold_loot_override,
+            alliance_group: e.alliance_group.clone(),
+        });
     }
     if factions.is_empty() {
         return None;
@@ -501,7 +380,11 @@ pub fn parse_campaign_color(value: &str) -> Option<[f32; 3]> {
     if hex.len() != 6 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return None;
     }
-    let channel = |start| u8::from_str_radix(&hex[start..start + 2], 16).ok().map(|value| value as f32 / 255.0);
+    let channel = |start| {
+        u8::from_str_radix(&hex[start..start + 2], 16)
+            .ok()
+            .map(|value| value as f32 / 255.0)
+    };
     Some([channel(0)?, channel(2)?, channel(4)?])
 }
 
@@ -509,6 +392,15 @@ fn valid_avatar_id(value: &str) -> bool {
     let mut chars = value.chars();
     matches!(chars.next(), Some('a'..='z'))
         && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+}
+
+fn valid_campaign_entity_id(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.count() < 96
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn valid_campaign_group_id(value: &str) -> bool {
@@ -520,15 +412,65 @@ fn valid_campaign_group_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{parse_roster, to_scripted};
+    use sow_core::protocol::CampaignRelation;
 
     #[test]
     fn gold_loot_bonus_survives_roster_parse_and_scripted_spawn_conversion() {
-        let roster = r##"{"player_spawn":[1,1],"factions":[{"name":"Rome","x":2,"y":1,"role":"vassal","gold_loot_bonus":275}]}"##;
+        let roster = r##"{"player_spawn":[1,1],"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","civ":"Roman Empire","leader":"Caesar","gold_loot_bonus":275}]}"##;
         let (factions, _, _) = parse_roster(roster).unwrap();
         assert_eq!(factions[0].gold_loot_bonus, Some(275));
-        assert_eq!(to_scripted(&factions)[0].campaign_gold_loot_bonus, Some(275));
+        assert_eq!(
+            to_scripted(&factions)[0].campaign_gold_loot_bonus,
+            Some(275)
+        );
+        assert_eq!(
+            to_scripted(&factions)[0].campaign_faction_id.as_deref(),
+            Some("rome")
+        );
+        assert_eq!(to_scripted(&factions)[0].troops, Some(1000.0));
 
-        let invalid = r##"{"factions":[{"name":"Rome","x":2,"y":1,"role":"vassal","gold_loot_bonus":1000001}]}"##;
+        let invalid = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","civ":"Roman Empire","leader":"Caesar","gold_loot_bonus":1000001}]}"##;
         assert!(parse_roster(invalid).is_none());
+    }
+
+    #[test]
+    fn roster_identity_and_starting_troops_are_required_and_unique() {
+        let entry = r##"{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":0,"relation":"neutral","civ":"Roman Empire","leader":"Caesar"}"##;
+        let roster = format!(r##"{{"factions":[{entry}]}}"##);
+        let (factions, _, _) = parse_roster(&roster).unwrap();
+        let scripted = to_scripted(&factions);
+        assert_eq!(scripted[0].troops, Some(0.0));
+        assert_eq!(scripted[0].campaign_faction_id.as_deref(), Some("rome"));
+
+        let duplicate = format!(r##"{{"factions":[{entry},{entry}]}}"##);
+        assert!(parse_roster(&duplicate).is_none());
+        assert!(
+            parse_roster(r##"{"factions":[{"name":"Rome","x":2,"y":1,"role":"vassal"}]}"##)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn campaign_relationship_and_alliance_offer_setting_reach_scripted_spawns() {
+        let roster = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"non_combatant","can_request_alliance":false,"civ":"Roman Empire","leader":"Caesar","gold_loot_override":200}]}"##;
+        let (factions, _, _) = parse_roster(roster).unwrap();
+        let spawn = &to_scripted(&factions)[0];
+        assert!(!factions[0].can_request_alliance);
+        assert_eq!(factions[0].hostility, Some(CampaignHostility::NonCombatant));
+        assert_eq!(spawn.campaign_can_request_alliance, Some(false));
+        assert_eq!(spawn.campaign_relation, Some(CampaignRelation::Enemy));
+        assert_eq!(
+            spawn.campaign_hostility,
+            Some(CampaignHostility::NonCombatant)
+        );
+        assert_eq!(spawn.campaign_gold_loot_override, Some(200));
+
+        let legacy = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","civ":"Roman Empire","leader":"Caesar"}]}"##;
+        let (legacy, _, _) = parse_roster(legacy).unwrap();
+        assert!(legacy[0].can_request_alliance);
+        assert_eq!(legacy[0].hostility, None);
+        assert_eq!(to_scripted(&legacy)[0].campaign_hostility, None);
+        let invalid_hostility = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"friendly","civ":"Roman Empire","leader":"Caesar"}]}"##;
+        assert!(parse_roster(invalid_hostility).is_none());
     }
 }
