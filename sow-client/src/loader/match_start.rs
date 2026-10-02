@@ -99,15 +99,18 @@ impl SowApp {
             .and_then(serde_json::Value::as_f64)
             .filter(|value| value.is_finite() && (1.0..=100_000.0).contains(value))
             .ok_or_else(|| "Campaign starting_troops is invalid.".to_string())?;
-        let faction_names: std::collections::HashSet<&str> =
-            factions.iter().map(|faction| faction.name.as_str()).collect();
+        let resolve_faction_display_name = |reference: &str| {
+            factions
+                .iter()
+                .find(|faction| faction.id == reference || faction.name == reference)
+                .map(|faction| faction.name.clone())
+        };
         let buildings_unlock_after_defeated = options
             .get("buildings_unlock_after_defeated")
             .map(|value| {
                 value
                     .as_str()
-                    .filter(|name| faction_names.contains(name))
-                    .map(str::to_string)
+                    .and_then(&resolve_faction_display_name)
                     .ok_or_else(|| "Campaign building unlock target is invalid.".to_string())
             })
             .transpose()?;
@@ -125,9 +128,8 @@ impl SowApp {
                 let after_defeated = support
                     .get("after_defeated")
                     .and_then(serde_json::Value::as_str)
-                    .filter(|name| faction_names.contains(name))
-                    .ok_or_else(|| "Campaign support milestone is invalid.".to_string())?
-                    .to_string();
+                    .and_then(&resolve_faction_display_name)
+                    .ok_or_else(|| "Campaign support milestone is invalid.".to_string())?;
                 let share_percent = support
                     .get("share_percent")
                     .and_then(serde_json::Value::as_u64)
