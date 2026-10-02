@@ -795,14 +795,10 @@ fn require_published_source(paths: &Paths) -> Result<super::SourceIdentity> {
     let root = paths.root.to_str().context("workspace path is not UTF-8")?;
     let source = super::source_identity(paths)?;
     // AGPL §5(a): identify the modified source revision and its relevant date.
-    let source_date = super::output(
-        "git",
-        &["-C", root, "show", "-s", "--format=%cs", "HEAD"],
-    )?;
+    let source_date = super::output("git", &["-C", root, "show", "-s", "--format=%cs", "HEAD"])?;
     let readme = fs::read_to_string(paths.root.join("README.md"))?;
-    let modified_source_notice = format!(
-        "Modified from OpenFrontIO. Source revision date: `{source_date}`."
-    );
+    let modified_source_notice =
+        format!("Modified from OpenFrontIO. Source revision date: `{source_date}`.");
     if !readme.contains(&modified_source_notice) {
         bail!(
             "README must identify the modified OpenFront source and its revision date ({source_date})"
