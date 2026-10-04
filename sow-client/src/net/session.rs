@@ -189,13 +189,8 @@ impl SowApp {
         let reward_match_id = (was_playing && !self.net.is_offline)
             .then(|| self.sim.my_lobby_id)
             .flatten();
-        let mut exit_leader = self.ui.app.splash_state.loader_leader;
-        let leaving_unfinished_boudica_intro = self.ui.tutorial_active
-            && was_offline
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
-            && !self.ui.tutorial_campaign.is_completed(&self.progress);
-        if leaving_unfinished_boudica_intro {
-            }
+        let exit_leader = self.ui.app.splash_state.loader_leader;
+        if was_playing {
             if !self.progress_match_recorded {
                 crate::store_portals::measure("match", "round", "abandon");
             }
