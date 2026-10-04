@@ -1703,7 +1703,9 @@ fn assemble_release(
     }
     for name in ["sow-server", "sow-database"] {
         let destination = work.join("bin").join(name);
-        fs::copy(binaries.join(name), &destination)?;
+        let source = binaries.join(name);
+        fs::copy(&source, &destination)
+            .with_context(|| format!("copy {} to {}", source.display(), destination.display()))?;
         fs::set_permissions(&destination, fs::Permissions::from_mode(0o550))?;
     }
     copy_dir(
@@ -1727,18 +1729,28 @@ fn assemble_release(
     let relay = work.join("relay");
     fs::create_dir_all(relay.join("bin"))?;
     fs::create_dir_all(relay.join("conf"))?;
-    fs::copy(
-        paths.root.join("dist/relay-bin/sow-relay"),
-        relay.join("bin/sow-relay"),
-    )?;
+    let relay_source = paths.root.join("dist/relay-bin/sow-relay");
+    let relay_destination = relay.join("bin/sow-relay");
+    fs::copy(&relay_source, &relay_destination).with_context(|| {
+        format!(
+            "copy {} to {}",
+            relay_source.display(),
+            relay_destination.display()
+        )
+    })?;
     fs::set_permissions(
         relay.join("bin/sow-relay"),
         fs::Permissions::from_mode(0o550),
     )?;
-    fs::copy(
-        paths.root.join("fstack-bridge/echo-vf.ini"),
-        relay.join("conf/echo-vf.ini"),
-    )?;
+    let relay_config_source = paths.root.join("fstack-bridge/echo-vf.ini");
+    let relay_config_destination = relay.join("conf/echo-vf.ini");
+    fs::copy(&relay_config_source, &relay_config_destination).with_context(|| {
+        format!(
+            "copy {} to {}",
+            relay_config_source.display(),
+            relay_config_destination.display()
+        )
+    })?;
     let ops = relay.join("ops/linux");
     fs::create_dir_all(&ops)?;
     let env = RelayEnv::load()?;
@@ -1774,17 +1786,18 @@ fn assemble_release(
             .root
             .join("sow-dist/deploy/linux")
             .join(format!("{name}.tmpl"));
-        let mut content = fs::read_to_string(&src)?;
+        let mut content = fs::read_to_string(&src)
+            .with_context(|| format!("read relay template {}", src.display()))?;
         for (token, value) in tokens {
             content = content.replace(token, value);
         }
         fs::write(ops.join(name), content)?;
     }
-    let mut override_tpl = fs::read_to_string(
-        paths
-            .root
-            .join("sow-dist/deploy/linux/sow-relay-override.conf.tmpl"),
-    )?;
+    let override_source = paths
+        .root
+        .join("sow-dist/deploy/linux/sow-relay-override.conf.tmpl");
+    let mut override_tpl = fs::read_to_string(&override_source)
+        .with_context(|| format!("read relay override template {}", override_source.display()))?;
     let relay_fstack = fstack_version(config)?;
     for (token, value) in [
         ("__SOW_RELAY_WORKER_COUNT__", env.count.to_string()),
@@ -1818,11 +1831,11 @@ fn assemble_release(
     require_file(&relay.join("bin/sow-relay"), "relay binary")?;
     require_file(&relay.join("conf/echo-vf.ini"), "relay config")?;
 
-    let nginx_site = fs::read_to_string(
-        paths
-            .root
-            .join("sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf"),
-    )?;
+    let nginx_source = paths
+        .root
+        .join("sow-dist/deploy/freebsd/conf.d/shadowsofwar.io.conf");
+    let nginx_site = fs::read_to_string(&nginx_source)
+        .with_context(|| format!("read nginx template {}", nginx_source.display()))?;
     let relay_ip = env_or("SOW_RELAY_DB_SOURCE_IP", "20.230.49.9");
     let nginx_site = nginx_site
         .replace("__SOW_RELAY_DB_SOURCE_IP__", &relay_ip)

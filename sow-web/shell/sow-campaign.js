@@ -6,7 +6,7 @@
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
         building: "buildings", city: "cities", farm: "farms", factory: "factories",
-        port: "ports", bunker: "bunkers", structure_upgrade: "structure_upgrades",
+        port: "ports", bunker: "bunkers", structure_upgrade: "structure_upgrades", structure_level: "structure_levels",
         city_upgrade: "city_upgrades", city_level: "city_levels",
         foundry_level: "foundry_level",
         port_upgrade: "port_upgrades", port_level: "port_levels",
@@ -14,9 +14,11 @@
         alliance: "alliances_formed", support: "ally_support_deliveries",
         fleet: "fleets", nuke: "nukes", elapsed: "elapsed_seconds",
         zoom_in: "zoom_in_events", zoom_out: "zoom_out_events",
-        camera_drag: "camera_drag_events", camera_key_pan: "camera_key_pan_events", hover: "hover_events"
+        camera_drag: "camera_drag_events", camera_key_pan: "camera_key_pan_events", hover: "hover_events",
+        zoom_out_complete: "zoom_out_complete", zoom_in_complete: "zoom_in_complete", camera_target: "camera_target"
     };
-    const WORLD_TARGETS = ["expand", "assault", "target_action", "player"];
+    const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate"];
+    const STRUCTURE_LEVEL_LIMITS = { City: 6, Farm: 3, Factory: 4, Bunker: 4, Port: 5 };
     const UI_TARGETS = {
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
         campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
@@ -135,7 +137,8 @@
             x: focus ? rect.left + rect.width * x / 100 : rect.left + rect.width / 2,
             y: focus ? rect.top + rect.height * y / 100 : rect.top + rect.height / 2,
             width: focusRect.width,
-            height: focusRect.height
+            height: focusRect.height,
+            cutout: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, width: rect.width, height: rect.height }
         };
     }
 
@@ -326,7 +329,7 @@
                 const trigger = step.trigger;
                 if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "ui"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
-                    knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources"], step, "trigger");
+                    knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
                     if (trigger.type === "contact") {
                         if (trigger.targets != null) {
@@ -340,6 +343,12 @@
                         } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
+                    } else if (trigger.type === "camera_target") {
+                        if (!trigger.target) issue(step, "trigger.target", "Choose a faction or the player as the camera target.");
+                        if (!Number.isFinite(trigger.distance) || trigger.distance <= 0) issue(step, "trigger.distance", "Set the maximum distance from the camera target.");
+                    } else if (trigger.type === "structure_level") {
+                        if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
+                        else if (!Number.isInteger(trigger.value) || trigger.value < 1 || trigger.value > STRUCTURE_LEVEL_LIMITS[trigger.kind]) issue(step, "trigger.value", "Choose a level that this building can reach.");
                     } else {
                         if (!Number.isFinite(trigger.value) || trigger.value <= 0) issue(step, "trigger.value", "Objective value must be greater than zero.");
                         if (trigger.type === "fleet" && trigger.unit != null && !["TransportShip", "TradeShip", "Warship"].includes(trigger.unit)) issue(step, "trigger.unit", "Choose a ship type supported by the game.");
@@ -366,8 +375,8 @@
                 if (!["objective", "guide"].includes(step.type)) issue(step, "guide", "Only mechanics use the hand; decisions never do.");
                 if (!object(guide) || !["world", "ui"].includes(guide.kind) || !["tap", "hold", "drag", "hover", "pan_keys", "zoom_in", "zoom_out"].includes(guide.gesture)) issue(step, "guide", "Choose a world/control target and a gesture.");
                 else if (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.target) : !own(UI_TARGETS, guide.target)) issue(step, "guide.target", "Unknown guide target.");
-                if (guide.gesture === "drag" && (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.to) : guide.to != null && !own(UI_TARGETS, guide.to))) issue(step, "guide.to", "Choose a valid drag destination.");
-                if (["zoom_in", "zoom_out"].includes(guide.gesture) && (guide.kind !== "world" || guide.target !== "player" || !step.trigger || step.trigger.type !== guide.gesture)) issue(step, "guide", "Zoom guides must match a zoom objective and point at the player.");
+                if (guide.gesture === "drag" && guide.to != null && (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.to) : !own(UI_TARGETS, guide.to))) issue(step, "guide.to", "Choose a valid drag destination.");
+                if (["zoom_in", "zoom_out"].includes(guide.gesture) && (guide.kind !== "world" || guide.target !== "player" || !step.trigger || ![guide.gesture, guide.gesture + "_complete"].includes(step.trigger.type))) issue(step, "guide", "Zoom guides must match a zoom objective and point at the player.");
             } else if (step.type === "guide") issue(step, "guide", "A guide step needs a hand target.");
         });
         const reactions = Array.isArray(definition.reactions) ? definition.reactions : [];
@@ -518,6 +527,10 @@
                 const uiReference = trigger.scope === "step" ? uiBaseline : trigger.scope === "episode" ? initialUi : {};
                 current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
                 target = 1;
+            } else if (trigger.type === "camera_target" && Number.isFinite(trigger.distance)) {
+                const distance = facts.camera_target_distance;
+                current = typeof distance === "number" && Number.isFinite(distance) && distance <= trigger.distance ? 1 : 0;
+                target = 1;
             } else if (trigger.type === "alliance" && trigger.target) {
                 current = (facts.alliance_faction_ids || []).includes(trigger.target) && !(reference.alliance_faction_ids || []).includes(trigger.target) ? 1 : 0;
                 target = 1;
@@ -536,6 +549,12 @@
                 const currentCounts = (facts.resource_transfers_by_recipient_faction_id || {})[trigger.recipient] || {};
                 const baselineCounts = (reference.resource_transfers_by_recipient_faction_id || {})[trigger.recipient] || {};
                 current = Number(currentCounts[resources] || 0) - Number(baselineCounts[resources] || 0);
+            } else if (trigger.type === "structure_level") {
+                const kind = String(trigger.kind || "").toLowerCase();
+                const currentLevels = facts.structure_levels || {};
+                const baselineLevels = reference.structure_levels || {};
+                current = Number(currentLevels[kind] || 0) - Number(baselineLevels[kind] || 0);
+                target = Number(trigger.value || 1);
             } else {
                 let field = METRICS[trigger.type];
                 if (trigger.type === "territory" && trigger.scope === "total") field = "tiles";

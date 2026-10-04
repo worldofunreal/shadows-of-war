@@ -74,6 +74,7 @@ pub struct TutorialObservation {
     pub support_deliveries_by_faction_id:
         std::collections::BTreeMap<String, CampaignSupportReceipt>,
     pub structure_upgrades: u64,
+    pub structure_levels: std::collections::BTreeMap<String, u64>,
     pub city_upgrades: u64,
     pub city_levels: u64,
     pub port_upgrades: u64,
@@ -253,6 +254,7 @@ pub struct InputState {
     pub tutorial_camera_focus: bool,
     pub tutorial_zoom_in_events: u64,
     pub tutorial_zoom_out_events: u64,
+    pub tutorial_zoom_out_completed: bool,
     pub tutorial_camera_drag_events: u64,
     pub tutorial_camera_key_pan_events: u64,
     pub tutorial_camera_drag_recorded: bool,

@@ -26,6 +26,8 @@ var avatar_atlas: texture_2d<f32>;
 var avatar_sampler: sampler;
 var building_atlas: texture_2d<f32>;
 var building_sampler: sampler;
+var status_atlas: texture_2d<f32>;
+var status_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
@@ -182,6 +184,15 @@ fn shade_building_sprite(in: VertexOutput) -> vec4<f32> {
     return vec4<f32>(tex.rgb * in.color.rgb, tex.a * in.color.a);
 }
 
+fn shade_status_sprite(in: VertexOutput) -> vec4<f32> {
+    let tex = textureSample(
+        status_atlas,
+        status_sampler,
+        clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw),
+    );
+    return vec4<f32>(tex.rgb * in.color.rgb, tex.a * in.color.a);
+}
+
 // Anti-aliased filled rectangle (KIND_RECT). `uv_rect` is unused; `in.uv` is the local
 // 0..1 quad coordinate. `color` is the fill color; alpha is modulated by the coverage of
 // the rect's four edges via smoothstep, giving sub-pixel anti-aliasing.
@@ -236,6 +247,9 @@ fn shade_cross(in: VertexOutput) -> vec4<f32> {
 }
 
 fn shade_text(in: VertexOutput) -> vec4<f32> {
+    if (in.kind > 11.5) {
+        return shade_status_sprite(in);
+    }
     if (in.kind > 10.5) {
         return shade_building_sprite(in);
     }

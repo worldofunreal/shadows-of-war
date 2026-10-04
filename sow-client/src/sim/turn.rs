@@ -83,6 +83,25 @@ impl TutorialObservation {
                 }
             }
         }
+        for (kind, key) in [
+            (sow_core::game::BuildingKind::City, "city"),
+            (sow_core::game::BuildingKind::Farm, "farm"),
+            (sow_core::game::BuildingKind::Factory, "factory"),
+            (sow_core::game::BuildingKind::Bunker, "bunker"),
+            (sow_core::game::BuildingKind::Port, "port"),
+        ] {
+            let level = engine
+                .buildings
+                .iter()
+                .filter(|building| building.owner_id == my_id && building.kind == kind)
+                .map(|building| u64::from(building.active_level()))
+                .max()
+                .unwrap_or_default();
+            self.structure_levels
+                .entry(key.to_string())
+                .and_modify(|current| *current = (*current).max(level))
+                .or_insert(level);
+        }
         let Some(me) = engine.state.player(my_id) else {
             return;
         };

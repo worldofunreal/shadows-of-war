@@ -13,7 +13,7 @@
         { value: "building", label: "Complete a building" }, { value: "city", label: "Complete a city" },
         { value: "farm", label: "Complete a farm" }, { value: "factory", label: "Complete a factory" },
         { value: "port", label: "Complete a port" }, { value: "bunker", label: "Complete a bunker" },
-        { value: "structure_upgrade", label: "Upgrade a structure" }, { value: "city_upgrade", label: "Upgrade a city" },
+        { value: "structure_upgrade", label: "Upgrade a structure" }, { value: "structure_level", label: "Reach a building level" }, { value: "city_upgrade", label: "Upgrade a city" },
         { value: "city_level", label: "Reach a city level" }, { value: "foundry_level", label: "Reach a foundry level" },
         { value: "port_upgrade", label: "Upgrade a port" }, { value: "port_level", label: "Reach port level" }, { value: "tile_upgrade", label: "Upgrade territory" },
         { value: "resource_transfer", label: "Send resources" }, { value: "alliance", label: "Form an alliance" },
@@ -23,7 +23,10 @@
         { value: "ui", label: "Use a control" },
         { value: "zoom_in", label: "Zoom in" }, { value: "zoom_out", label: "Zoom out" },
         { value: "camera_drag", label: "Pan camera by dragging" }, { value: "camera_key_pan", label: "Pan camera with keys" },
-        { value: "hover", label: "Hover an entity" }
+        { value: "hover", label: "Hover an entity" },
+        { value: "zoom_out_complete", label: "Reach full zoom out" },
+        { value: "zoom_in_complete", label: "Reach close zoom" },
+        { value: "camera_target", label: "Center the camera on a target" }
     ];
     var locales = ["en", "es"], localeNames = { en: "English", es: "Español" }, catalogLoads = Object.create(null);
 
@@ -72,6 +75,15 @@
     }
     function translated(key, locale) {
         return textValue(key, locale || state.previewLanguage) || (key ? "[" + key + "]" : "");
+    }
+    function previewZoom(value) {
+        var number = Number(value);
+        return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
+    }
+    function previewMetric(key, values) {
+        var text = translated(key, state.previewLanguage);
+        Object.keys(values).forEach(function (name) { text = text.replace(new RegExp("\\{" + name + "\\}", "g"), String(values[name])); });
+        return text;
     }
     function asset(path) { return "/assets/" + path.split("/").map(encodeURIComponent).join("/"); }
     function setFactionPicker(active) {
@@ -470,9 +482,11 @@
                 : step.type === "guide" ? triggerTypes.filter(function (trigger) { return trigger.value !== "elapsed"; }) : triggerTypes;
             objective.appendChild(selectField("Complete when", step.trigger.type, availableTriggers, function (value) {
                 step.trigger = { type: value, scope: value === "troops" ? "total" : step.trigger.scope || "step" };
-                if (["contact", "defeated"].includes(value)) step.trigger.target = "";
+                if (["contact", "defeated", "hover", "camera_target"].includes(value)) step.trigger.target = "";
+                if (value === "camera_target") step.trigger.distance = 12;
                 if (value === "fleet") step.trigger.unit = "TransportShip";
                 if (value === "resource_transfer") { step.trigger.recipient = ""; step.trigger.resources = ["gold", "troops"]; }
+                if (value === "structure_level") step.trigger.kind = "City";
                 else if (value === "ui") {
                     step.trigger.action = state.flow === "menu" ? inGameUiTargets()[0] || "menu_campaign" : "map_attack";
                     if (step.guide) Object.assign(step.guide, { kind: "ui", target: step.trigger.action });
@@ -517,22 +531,36 @@
                 objective.appendChild(checkboxField("Must include troops", requiredResources.includes("troops"), function (enabled) { step.trigger.resources = requiredResources.filter(function (item) { return item !== "troops"; }); if (enabled) step.trigger.resources.push("troops"); if (!step.trigger.resources.length) delete step.trigger.resources; markDirty(); renderInspector(); }));
                 objective.appendChild(inputField("Required amount", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             }
+            else if (step.trigger.type === "structure_level") {
+                var structureLevelLimits = { City: 6, Farm: 3, Factory: 4, Bunker: 4, Port: 5 };
+                objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Bunker", "Port"], function (value) {
+                    step.trigger.kind = value;
+                    step.trigger.value = Math.min(Number(step.trigger.value || 1), structureLevelLimits[value]);
+                    markDirty(); renderInspector();
+                }));
+                objective.appendChild(inputField("Target level", step.trigger.value || 1, function (value) { step.trigger.value = Math.min(Number(value), structureLevelLimits[step.trigger.kind] || 1); markDirty(); }, { type: "number", min: 1, max: structureLevelLimits[step.trigger.kind] || 1, step: 1 }));
+            }
+            else if (step.trigger.type === "camera_target") {
+                objective.appendChild(selectField("Target to locate", step.trigger.target || "", [{ value: "", label: "Choose a target" }, { value: "player", label: "Player" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); renderInspector(); }));
+                objective.appendChild(inputField("Max distance (tiles)", step.trigger.distance || 12, function (value) { step.trigger.distance = Number(value); markDirty(); }, { type: "number", min: 1, max: 1000, step: 1 }));
+            }
+            else if (step.trigger.type === "hover") objective.appendChild(selectField("Target to locate", step.trigger.target || "", [{ value: "", label: "Choose a target" }, { value: "player", label: "Player" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); renderInspector(); }));
             else if (step.trigger.type === "ui") objective.appendChild(selectField("Control action", step.trigger.action, inGameUiTargets(), function (value) { step.trigger.action = value; markDirty(); }));
             else objective.appendChild(inputField(step.trigger.type === "troops" ? "Minimum troops" : step.trigger.type === "elapsed" ? "Wait (seconds)" : "Required amount", step.trigger.value, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             if (step.trigger.type !== "troops") objective.appendChild(selectField("Count from", step.trigger.scope || "step", ["step", "episode", "total"], function (value) { step.trigger.scope = value; markDirty(); }));
             if (step.guide) {
                 objective.appendChild(selectField("Hand points at", step.guide.kind + ":" + step.guide.target, [
-                    { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }, { value: "world:player", label: "Map · player base" }
+                    { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }, { value: "world:player", label: "Map · player base" }, { value: "world:nameplate", label: "Map · faction nameplate" }
                 ].concat(inGameUiTargets().map(function (key) { return { value: "ui:" + key, label: "Interface · " + key.replace(/_/g, " ") }; })), function (value) { var pair = value.split(":"); if (pair[0] !== step.guide.kind) delete step.guide.to; step.guide.kind = pair[0]; step.guide.target = pair[1]; markDirty(); renderInspector(); }));
                 objective.appendChild(selectField("Gesture", step.guide.gesture || "tap", ["tap", "hold", "drag", "hover", "pan_keys", "zoom_in", "zoom_out"], function (value) {
                     step.guide.gesture = value;
                     if (value !== "drag") delete step.guide.to;
-                    if (["zoom_in", "zoom_out"].includes(value)) { step.guide.kind = "world"; step.guide.target = "player"; step.trigger.type = value; }
+                    if (["zoom_in", "zoom_out"].includes(value)) { step.guide.kind = "world"; step.guide.target = "player"; step.trigger.type = step.trigger.type === value + "_complete" ? value + "_complete" : value; }
                     markDirty(); renderInspector();
                 }));
                 if (step.guide.gesture === "drag") {
                     var dragTargets = step.guide.kind === "world"
-                        ? [{ value: "expand", label: "Map · expansion" }, { value: "assault", label: "Map · attack" }, { value: "target_action", label: "Map · target action" }, { value: "player", label: "Map · player base" }]
+                        ? [{ value: "expand", label: "Map · expansion" }, { value: "assault", label: "Map · attack" }, { value: "target_action", label: "Map · target action" }, { value: "player", label: "Map · player base" }, { value: "nameplate", label: "Map · faction nameplate" }]
                         : [{ value: "", label: "Within this control" }].concat(inGameUiTargets().map(function (key) { return { value: key, label: "Interface · " + key.replace(/_/g, " ") }; }));
                     objective.appendChild(selectField("Drag destination", step.guide.to, dragTargets, function (value) { if (value) step.guide.to = value; else delete step.guide.to; markDirty(); }));
                 }
@@ -650,7 +678,7 @@
     function factionName(factionId) { var faction = state.roster.factions.find(function (item) { return item.id === factionId; }); return faction ? faction.name : factionId; }
     function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id], faction = state.roster.factions.find(function (item) { return item.id === speaker.faction; }); return { value: id, label: faction ? faction.name : speaker.name || id }; })); }
     function inGameUiTargets() { return Object.keys(window.SOWCampaign.UI_TARGETS).filter(function (key) { return state.flow === "menu" ? key.startsWith("menu_") || key === "campaign_replay" : !key.startsWith("menu_") && key !== "campaign_replay"; }); }
-    function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : "expand"; }
+    function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : ["hover", "camera_target"].includes(type) ? "player" : "expand"; }
     function flowEntry() { return state.flow === "menu" ? state.definition.menu_guide && state.definition.menu_guide.entry : state.definition.entry; }
     function choiceAnswerOptions() {
         var result = [];
@@ -944,7 +972,8 @@
         var definition = triggerTypes.find(function (item) { return item.value === trigger.type; });
         var parts = [definition ? definition.label : "Set a condition"];
         if (trigger.type === "contact" && Array.isArray(trigger.targets)) parts[0] += " · " + (trigger.value || 1) + " of " + trigger.targets.join(", ");
-        else if (["contact", "defeated", "attack"].includes(trigger.type) && trigger.target) parts[0] += " · " + trigger.target;
+        else if (["contact", "defeated", "attack", "hover", "camera_target"].includes(trigger.type) && trigger.target) parts[0] += " · " + trigger.target;
+        if (trigger.type === "structure_level" && trigger.kind) parts[0] += " · " + trigger.kind;
         if (trigger.type === "fleet" && trigger.unit) parts[0] += " · " + trigger.unit + (trigger.target ? " to " + trigger.target : "");
         if (trigger.type === "resource_transfer") parts[0] += (trigger.recipient ? " · to " + trigger.recipient : "") + (trigger.resources && trigger.resources.length ? " · " + trigger.resources.join(" + ") : "");
         else if (trigger.type === "ui" && typeof trigger.action === "string") parts[0] += " · " + trigger.action.replace(/_/g, " ");
@@ -1228,7 +1257,21 @@
         var zoomLabel = zoomGuide ? translated("tutorial." + model.step.id + "_" + zoomMode + "_label", state.previewLanguage) : null;
         var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
             ? translated("tutorial." + model.step.id + "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint", state.previewLanguage) : null;
-        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: zoomHint || deviceHint, gestureLabel: zoomLabel }); }
+        var previewHint = zoomHint || deviceHint || "", previewLabel = zoomLabel, zoomMetric = null;
+        if (zoomGuide) {
+            var zoomTarget = model.step.trigger && model.step.trigger.type === "zoom_out_complete" ? state.facts.camera_zoom_floor
+                : model.step.trigger && model.step.trigger.type === "zoom_in_complete" ? state.facts.camera_zoom_target : null;
+            if (zoomTarget != null && Number.isFinite(Number(zoomTarget)) && Number.isFinite(Number(state.facts.camera_zoom))) {
+                zoomMetric = {
+                    current: Number(state.facts.camera_zoom),
+                    target: Number(zoomTarget),
+                    direction: model.step.guide.gesture === "zoom_in" ? "min" : "max"
+                };
+            }
+        } else if (model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
+            previewHint += " " + previewMetric("tutorial." + model.step.id + "_progress", { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance });
+        }
+        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, gestureLabel: previewLabel, zoomMetric: zoomMetric }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
@@ -1259,6 +1302,7 @@
         frame.querySelectorAll(".is-guide-target").forEach(function (marker) { marker.classList.remove("is-guide-target"); });
         if (!step.guide) return null;
         var frameRect = frame.getBoundingClientRect(), guide = step.guide;
+        if (["zoom_in", "zoom_out"].includes(guide.gesture)) return { x: frame.clientWidth * 0.5, y: frame.clientHeight * 0.5 };
         var target;
         if (guide.kind === "world") target = previewWorldMarker(frame, guide.target, step);
         else {
@@ -1270,6 +1314,7 @@
         var rect = target.getBoundingClientRect();
         var anchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(target) : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         anchor.x -= frameRect.left; anchor.y -= frameRect.top;
+        if (anchor.cutout) { anchor.cutout.x -= frameRect.left; anchor.cutout.y -= frameRect.top; }
         if (guide.gesture === "drag" && guide.to) {
             var end;
             if (guide.kind === "world") end = previewWorldMarker(frame, guide.to, step);
@@ -1287,8 +1332,14 @@
     function previewWorldMarker(frame, target, step) {
         if (target === "expand") return frame.querySelector(".player-base");
         var factions = state.roster && state.roster.factions || [];
+        if (target === "nameplate") {
+            var nameplateTarget = step.marker && step.marker.target || step.trigger && step.trigger.target;
+            var nameplateFaction = factions.find(function (item) { return item.id === nameplateTarget; });
+            return nameplateFaction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionId === nameplateFaction.id; }) || null;
+        }
         if (target === "player") {
-            var playerTarget = step.marker && step.marker.target;
+            var playerTarget = step.trigger && ["camera_target", "hover"].includes(step.trigger.type) && step.trigger.target
+                ? step.trigger.target : step.marker && step.marker.target;
             if (!playerTarget || playerTarget === "player") return frame.querySelector(".player-base");
             var playerFaction = factions.find(function (item) { return item.id === playerTarget; });
             return playerFaction && Array.from(frame.querySelectorAll(".sample-faction")).find(function (marker) { return marker.dataset.factionId === playerFaction.id; }) || null;
@@ -1482,6 +1533,22 @@
             if (received.includes("gold") && received.includes("troops")) sent.gold_troops += amount;
             state.facts.resource_transfers += amount;
         }
+        else if (trigger.type === "camera_target") {
+            state.facts.camera_target_distance = Number(trigger.distance || 12);
+            state.facts.camera_target = 1;
+        }
+        else if (trigger.type === "zoom_out_complete") {
+            state.facts.camera_zoom = Number(state.facts.camera_zoom_floor || 0.75);
+            state.facts.zoom_out_complete = 1;
+        }
+        else if (trigger.type === "zoom_in_complete") {
+            state.facts.camera_zoom = Number(state.facts.camera_zoom_target || 0.75);
+            state.facts.zoom_in_complete = 1;
+        }
+        else if (trigger.type === "structure_level") {
+            var kind = String(trigger.kind || "City").toLowerCase();
+            state.facts.structure_levels[kind] = Math.max(Number(state.facts.structure_levels[kind] || 0), Number(trigger.value || 1));
+        }
         else {
             var metric = window.SOWCampaign.METRICS[trigger.type];
             if (trigger.type === "attack" && trigger.target) { state.facts.attacks_by_faction_id = state.facts.attacks_by_faction_id || {}; state.facts.attacks_by_faction_id[trigger.target] = Number(state.facts.attacks_by_faction_id[trigger.target] || 0) + amount; }
@@ -1490,7 +1557,7 @@
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
+    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_floor: 0.75, camera_zoom_target: 0.75, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;

@@ -7,8 +7,7 @@
     var hudRoot = document.getElementById("sow-hud");
     var hudState = null;
     var lastHudRaw = "";
-    var leaderboardOpen = false;
-    var inboxOpen = false;
+    var activeHudPanel = null;
     var transferOpen = false;
     var betrayalOpen = false;
     var pinEmoji = false;
@@ -16,7 +15,6 @@
     var surrenderMessage = null;
     var emojiPickerOpen = false;
     var devSidebarOpen = false;
-    var hudSettingsOpen = false;
 
     var hudInitialized = false;
     var hudRefs = null;
@@ -59,6 +57,16 @@
         var command = Object.assign({ type: type }, extra || {});
         window.SOW_menu_command(JSON.stringify(command));
         return true;
+    }
+
+    function setHudPanel(panel) {
+        var previous = activeHudPanel;
+        var next = previous === panel ? null : panel;
+        if (previous === "leaderboard" && next !== previous) send("toggle_leaderboard");
+        if (previous === "inbox" && next !== previous) send("toggle_inbox");
+        activeHudPanel = next;
+        if (next === "leaderboard") send("toggle_leaderboard");
+        if (next === "inbox") send("toggle_inbox");
     }
 
     function asset(path) {
@@ -168,6 +176,13 @@
         return leaders[0] || { id: "Caesar", name: "Caesar", slug: "caesar" };
     }
 
+    function formatNameplateTroops(value) {
+        var count = Math.max(0, Math.floor(Number(value) || 0));
+        if (count < 100000) return count.toLocaleString();
+        var useMillions = count >= 999950;
+        return (count / (useMillions ? 1000000 : 1000)).toFixed(1) + (useMillions ? "M" : "K");
+    }
+
     function ensureHudDom() {
         if (!hudRoot || hudInitialized) return;
         hudInitialized = true;
@@ -181,14 +196,13 @@
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">' + hudIcon("settings", "sow-hud__action-icon") + '</button>'
             + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">' + hudIcon("inbox") + '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>'
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.rankings") + '" title="' + SOW_t("hud.rankings") + '">' + hudIcon("rankings", "sow-hud__action-icon") + '</button>'
-            + '    <div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden>'
-            + '      <img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false">'
-            + '      <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>'
-            + '      <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i></div>'
-            + '      <span id="sow-hud-nameplate-troops"></span></div>'
-            + '    </div>'
             + '  </div>'
             + '</header>'
+            + '<div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden>'
+            + '  <img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false">'
+            + '  <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>'
+            + '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' + hudIcon("troops", "sow-hud__inline-icon") + '</span></div></div>'
+            + '</div>'
             + '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">'
             + '  <div class="sow-hud__hover-header"><span id="sow-hud-hover-avatar">👑</span> <b id="sow-hud-hover-name">' + SOW_t("hud.territory") + '</b></div>'
             + '  <div class="sow-hud__hover-stats">'
@@ -236,7 +250,7 @@
             + '    </div>'
             + '  </div>'
             + '</aside>'
-            + '<aside class="sow-hud__settings hidden" id="sow-hud-settings">'
+            + '<aside class="sow-hud__panel sow-hud__settings hidden" id="sow-hud-settings">'
             + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("menu.settings") + '</h3><button class="sow-hud__close-btn" type="button" data-command="toggle_settings" aria-label="' + SOW_t("hud.close_settings") + '">✕</button></div>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.sound") + '</span><input type="checkbox" data-hud-setting="mute_all"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
@@ -274,7 +288,7 @@
             + '  </div>'
             + '</footer>'
             + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden>✕</button>'
-            + '<aside class="sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
+            + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
             + '  <div class="sow-hud__panel-header">'
             + '    <h3>' + hudIcon("rankings", "sow-hud__inline-icon") + ' ' + SOW_t("hud.rankings_title") + '</h3>'
             + '    <button class="sow-hud__close-btn" type="button" data-command="toggle_leaderboard" aria-label="' + SOW_t("hud.close_rankings") + '">✕</button>'
@@ -1452,13 +1466,11 @@
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
             hudRoot.hidden = true;
-            leaderboardOpen = false;
-            inboxOpen = false;
+            activeHudPanel = null;
             transferOpen = false;
             betrayalOpen = false;
             emojiPickerOpen = false;
             devSidebarOpen = false;
-            hudSettingsOpen = false;
 
             hudRoot.dataset.overlayOpen = "false";
             if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
@@ -1480,6 +1492,9 @@
         hudRoot.hidden = false;
 
         var hud = hudState.hud;
+        var settingsOpen = activeHudPanel === "settings";
+        var inboxOpen = activeHudPanel === "inbox";
+        var leaderboardOpen = activeHudPanel === "leaderboard";
         hudRoot.classList.toggle("is-reduced-motion", Boolean(hudState.settings && hudState.settings.reduced_motion));
         var devTools = hud.dev_tools || {};
         if (hudRefs.devBtn) {
@@ -1534,7 +1549,7 @@
                 if (hudRefs.plateName && hudRefs.plateName.textContent !== plateLeader.name) {
                     hudRefs.plateName.textContent = plateLeader.name;
                 }
-                var plateText = troops.toLocaleString() + " / " + maxTroops.toLocaleString();
+                var plateText = formatNameplateTroops(troops) + " / " + formatNameplateTroops(maxTroops);
                 if (hudRefs.plateTroops && hudRefs.plateTroops.textContent !== plateText) {
                     hudRefs.plateTroops.textContent = plateText;
                 }
@@ -1644,8 +1659,8 @@
         }
 
         if (hudRefs.settings) {
-            hudRefs.settings.classList.toggle("hidden", !hudSettingsOpen);
-            if (hudSettingsOpen && hudState.settings) {
+            hudRefs.settings.classList.toggle("hidden", !settingsOpen);
+            if (settingsOpen && hudState.settings) {
                 var settings = hudState.settings;
                 var muteInput = hudRefs.settings.querySelector('[data-hud-setting="mute_all"]');
                 var musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
@@ -1766,7 +1781,7 @@
         var mapMenuOpen = renderMapMenu(hud.map_menu);
         if (hudRefs.buildingCancel) hudRefs.buildingCancel.hidden = !hud.selected_building;
         renderBuildingCard(hud.map_menu, hud.gold);
-        var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: hudSettingsOpen, toggle_dev_sidebar: devSidebarOpen, toggle_emoji: emojiPickerOpen };
+        var panelStates = { toggle_leaderboard: leaderboardOpen, toggle_inbox: inboxOpen, toggle_settings: settingsOpen, toggle_dev_sidebar: devSidebarOpen, toggle_emoji: emojiPickerOpen };
         hudRefs.panelButtons.forEach(function (button) {
             var expanded = Boolean(panelStates[button.dataset.command]);
             button.classList.toggle("active", expanded);
@@ -1776,11 +1791,54 @@
         hudRoot.dataset.overlayOpen = String(Boolean(
             leaderboardOpen || inboxOpen || transferOpen || betrayalOpen ||
             surrenderModalOpen || emojiPickerOpen || isOver
-            || devSidebarOpen || hudSettingsOpen || mapMenuOpen
+            || devSidebarOpen || settingsOpen || mapMenuOpen
         ));
     }
 
     if (hudRoot) {
+        var zoomHold = null;
+        function stopZoomHold() {
+            if (!zoomHold) return;
+            window.clearInterval(zoomHold.repeat);
+            window.clearTimeout(zoomHold.complete);
+            zoomHold.button.classList.remove("is-holding", "is-zoom-limited");
+            zoomHold = null;
+        }
+        function zoomAtLimit(command) {
+            var facts = hudState && hudState.hud && hudState.hud.tutorial && hudState.hud.tutorial.facts;
+            if (!facts || !Number.isFinite(Number(facts.camera_zoom))) return false;
+            return command === "zoom_out"
+                ? Number(facts.camera_zoom) <= Number(facts.camera_zoom_floor) + 0.02
+                : Number(facts.camera_zoom) >= Number(facts.camera_zoom_ceiling) - 0.02;
+        }
+        hudRoot.addEventListener("pointerdown", function (event) {
+            var button = event.target.closest && event.target.closest('[data-command="zoom_in"], [data-command="zoom_out"]');
+            if (!button || button.disabled || event.button !== 0) return;
+            stopZoomHold();
+            event.preventDefault();
+            event.stopPropagation();
+            var command = button.dataset.command;
+            button.classList.add("is-holding");
+            send(command);
+            zoomHold = {
+                button: button,
+                repeat: window.setInterval(function () {
+                    if (zoomAtLimit(command)) {
+                        window.clearInterval(zoomHold.repeat);
+                        button.classList.add("is-zoom-limited");
+                        return;
+                    }
+                    send(command);
+                }, 180),
+                complete: window.setTimeout(function () {
+                    if (!zoomHold || zoomHold.button !== button) return;
+                    document.dispatchEvent(new CustomEvent("sow:tutorial-ui-action", { detail: { action: "hud_" + command } }));
+                }, 1000)
+            };
+        });
+        ["pointerup", "pointercancel", "blur"].forEach(function (type) {
+            window.addEventListener(type, stopZoomHold, { passive: true });
+        });
         hudRoot.addEventListener("click", function (event) {
             var mapButton = event.target.closest("[data-map-action]");
             var mapGroup = event.target.closest("[data-map-group]");
@@ -1809,20 +1867,23 @@
             var btn = event.target.closest("[data-command]");
             if (!btn) return;
             var cmd = btn.dataset.command;
+            if (cmd === "zoom_in" || cmd === "zoom_out") {
+                if (event.detail === 0) send(cmd);
+                return;
+            }
             if (cmd === "toggle_dev_sidebar") {
+                setHudPanel(null);
                 devSidebarOpen = !devSidebarOpen;
                 send("toggle_dev_sidebar");
                 renderHud();
             } else if (cmd === "toggle_leaderboard") {
-                leaderboardOpen = !leaderboardOpen;
-                send("toggle_leaderboard");
+                setHudPanel("leaderboard");
                 renderHud();
             } else if (cmd === "toggle_inbox") {
-                inboxOpen = !inboxOpen;
-                send("toggle_inbox");
+                setHudPanel("inbox");
                 renderHud();
             } else if (cmd === "toggle_settings") {
-                hudSettingsOpen = !hudSettingsOpen;
+                setHudPanel("settings");
                 renderHud();
             } else if (cmd === "reset_dev_config") {
                 send("reset_dev_config");
@@ -1831,10 +1892,7 @@
                 send("set_emoji_pinned", { pinned: pinEmoji });
                 renderHud();
             } else if (cmd === "open_transfer") {
-                if (leaderboardOpen) {
-                    leaderboardOpen = false;
-                    send("toggle_leaderboard");
-                }
+                setHudPanel(null);
                 transferOpen = true;
                 send("open_transfer", { target_player_id: Number(btn.dataset.playerId) });
                 renderHud();

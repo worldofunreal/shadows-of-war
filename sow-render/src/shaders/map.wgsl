@@ -29,7 +29,7 @@ struct Globals {
     attack_flash_t: f32,
     alert_intensity: f32,
     fog_of_war: f32,
-    _pad1: f32,
+    tutorial_target_player: f32,
     _pad2: f32,
     alert_color: vec4<f32>,
 }
@@ -445,6 +445,11 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                     if globals.attack_flash_t > 0.0 && owner_id == u32(globals.attack_flash_target) {
                         let red_glow = vec3<f32>(1.0, 0.15, 0.1);
                         border_albedo = mix(border_albedo, red_glow, globals.attack_flash_t * 0.85);
+                    }
+                    if globals.tutorial_target_player > 0.0 && owner_id == u32(globals.tutorial_target_player) {
+                        let gold_glow = vec3<f32>(1.0, 0.72, 0.2);
+                        let pulse = 0.52 + sin(globals.time * 3.0) * 0.14;
+                        border_albedo = mix(border_albedo, gold_glow, pulse);
                     }
                 }
 

@@ -97,6 +97,9 @@ pub(crate) fn render_overlays(
         now,
         my_id,
         leaderboard_top_three,
+        ui.tutorial_active
+            .then_some(ui.tutorial_marker_player_id)
+            .flatten(),
     );
     feedback::render(text, snapshot, sim, ui, input, &dev, sf, now);
 

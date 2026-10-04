@@ -211,6 +211,9 @@ enum WebMenuCommand {
         x: f32,
         y: f32,
     },
+    FocusTutorialTarget {
+        player_id: u16,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -287,6 +290,8 @@ struct HudPublishKey {
     endgame_team: Option<sow_core::protocol::Team>,
     player_kda: [u32; 3],
     snapshot_tick: u64,
+    tutorial_camera_zoom_hundredths: i32,
+    tutorial_target_zoom_hundredths: i32,
     hovered_tile: u32,
     hovered_owner: u16,
     map_menu_view: Option<MapContextMenuView>,
@@ -954,6 +959,42 @@ impl SowApp {
                             self.input.is_pointer_gesture_active();
                     }
                 }
+                WebMenuCommand::FocusTutorialTarget { player_id } => {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && let Some(snapshot) = self.sim.current_snapshot.as_ref()
+                        && let (Some(me), Some(target)) = (
+                            snapshot.players.iter().find(|player| {
+                                Some(player.id) == self.sim.my_player_id
+                                    && player.alive
+                                    && player.tile_count > 0
+                            }),
+                            snapshot.players.iter().find(|player| {
+                                player.id == player_id && player.alive && player.tile_count > 0
+                            }),
+                        )
+                    {
+                        let (player_x, player_y) = (me.centroid_x + 0.5, me.centroid_y + 0.5);
+                        let (target_x, target_y) =
+                            (target.centroid_x + 0.5, target.centroid_y + 0.5);
+                        let dx = (player_x - target_x).abs();
+                        let dy = (player_y - target_y).abs();
+                        let fit_zoom = (self.input.screen_w / (dx + 16.0))
+                            .min(self.input.screen_h / (dy + 16.0))
+                            .min(28.0);
+                        self.input.target_zoom = fit_zoom.max(crate::camera_zoom_lower_bound(
+                            self.input.screen_w,
+                            self.input.screen_h,
+                            self.sim.map_w,
+                            self.sim.map_h,
+                        ));
+                        self.input.camera_focus_target =
+                            Some(((player_x + target_x) * 0.5, (player_y + target_y) * 0.5));
+                        self.input.tutorial_camera_focus = true;
+                        self.input.camera_focus_waiting_for_input_release =
+                            self.input.is_pointer_gesture_active();
+                    }
+                }
             }
         }
     }
@@ -1056,6 +1097,16 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .map(|player| [player.kills, player.deaths, player.assists])
             .unwrap_or_default(),
         tutorial_active,
+        tutorial_camera_zoom_hundredths: if tutorial_active {
+            (app.input.camera_zoom * 100.0).round() as i32
+        } else {
+            0
+        },
+        tutorial_target_zoom_hundredths: if tutorial_active {
+            (app.input.target_zoom * 100.0).round() as i32
+        } else {
+            0
+        },
         dev_sidebar_open,
         dev_thickness: dev_config_key[0],
         dev_darkness: dev_config_key[1],
@@ -1267,6 +1318,20 @@ fn tutorial_screen_point_visible(point: [f32; 2], width: f32, height: f32) -> bo
         && point[1] <= height
 }
 
+fn tutorial_screen_anchor(point: [f32; 2], width: f32, height: f32) -> Option<([f32; 2], bool)> {
+    if !point[0].is_finite() || !point[1].is_finite() || width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let margin = width.min(height).min(32.0).max(12.0);
+    let max_x = (width - margin).max(margin);
+    let max_y = (height - margin).max(margin);
+    let visible = tutorial_screen_point_visible(point, width, height);
+    Some((
+        [point[0].clamp(margin, max_x), point[1].clamp(margin, max_y)],
+        !visible,
+    ))
+}
+
 fn tutorial_project_tile(
     tile: Option<u32>,
     map_w: u32,
@@ -1417,6 +1482,51 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
     let viewport_w = app.input.screen_w / sf;
     let viewport_h = app.input.screen_h / sf;
+    let nameplate_screen = app
+        .ui
+        .nameplates
+        .anchor_for(marker_player_id)
+        .map(|[x, y]| crate::render::world::overlays::world_to_screen(x, y, &app.input, sf))
+        .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
+        .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
+        .unwrap_or(serde_json::Value::Null);
+    let zoom_floor = app.zoom_floor();
+    let zoom_out_complete = app.input.camera_zoom <= zoom_floor + 0.02
+        && app.input.target_zoom <= zoom_floor + 0.02;
+    if zoom_out_complete {
+        app.input.tutorial_zoom_out_completed = true;
+    }
+    let opening_zoom = crate::campaign::tutorial_camera_frame(
+        app.ui.tutorial_campaign,
+        &app.sim.config,
+        app.input.screen_w,
+        app.input.screen_h,
+    )
+    .map(|(_, zoom)| zoom.max(zoom_floor))
+    .unwrap_or(app.input.target_zoom.max(zoom_floor));
+    let zoom_in_target = (opening_zoom * 0.75).max(zoom_floor);
+    let zoom_in_complete = app.input.tutorial_zoom_out_completed
+        && app.input.camera_zoom.is_finite()
+        && app.input.camera_zoom >= zoom_in_target;
+    let camera_center = if app.input.camera_zoom > 0.0 {
+        Some((
+            (app.input.screen_w * 0.5 - app.input.camera_x) / app.input.camera_zoom,
+            (app.input.screen_h * 0.5 - app.input.camera_y) / app.input.camera_zoom,
+        ))
+    } else {
+        None
+    };
+    let camera_target_distance = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == marker_player_id && player.alive && player.tile_count > 0)
+        .and_then(|player| camera_center.map(|(x, y)| (player.centroid_x - x).hypot(player.centroid_y - y)));
+    let camera_target_radius = (viewport_w.min(viewport_h)
+        / app.input.camera_zoom.max(0.01)
+        * 0.24)
+        .max(12.0);
+    let camera_target_complete = camera_target_distance
+        .is_some_and(|distance| distance <= camera_target_radius);
     let guide_screen = |tile: Option<u32>| {
         tutorial_project_tile(tile, map_w, map_h, &app.input, sf)
             .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
@@ -1435,8 +1545,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
                 sf,
             )
         })
-        .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
-        .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
+        .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
+        .map(|([x, y], offscreen)| serde_json::json!({ "x": x, "y": y, "offscreen": offscreen }))
         .unwrap_or(serde_json::Value::Null);
     let observation = &app.sim.tutorial_observation;
     let attacks_by_faction_id = observation
@@ -1514,12 +1624,29 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "expand": guide_screen(expand_tile),
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
+        "nameplate": nameplate_screen,
         "player": player_screen,
+        "camera": {
+            "x": app.input.camera_x,
+            "y": app.input.camera_y,
+            "zoom": app.input.camera_zoom,
+            "width": app.input.screen_w,
+            "height": app.input.screen_h,
+            "scale": sf,
+        },
         "facts": {
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
             "zoom_in_events": app.input.tutorial_zoom_in_events,
             "zoom_out_events": app.input.tutorial_zoom_out_events,
+            "zoom_out_complete": zoom_out_complete,
+            "zoom_in_complete": zoom_in_complete,
+            "camera_zoom": app.input.camera_zoom,
+            "camera_zoom_floor": zoom_floor,
+            "camera_zoom_target": zoom_in_target,
+            "camera_zoom_ceiling": crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h).max(zoom_floor),
+            "camera_target": camera_target_complete,
+            "camera_target_distance": camera_target_distance,
             "camera_drag_events": app.input.tutorial_camera_drag_events,
             "camera_key_pan_events": app.input.tutorial_camera_key_pan_events,
             "troops": me.map(|player| player.troops).unwrap_or(0.0),
@@ -1539,6 +1666,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "ally_support_deliveries": observation.ally_support_deliveries,
             "support_deliveries_by_faction_id": support_deliveries_by_faction_id,
             "structure_upgrades": observation.structure_upgrades,
+            "structure_levels": observation.structure_levels,
             "city_upgrades": observation.city_upgrades,
             "city_levels": observation.city_levels,
             "foundry_level": observation.foundry_level,

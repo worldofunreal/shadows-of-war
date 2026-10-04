@@ -27,6 +27,7 @@
         hoveredEntityId: null,
         hoverStepId: null,
         hoverStepRecorded: false,
+        cameraTargetFactionId: null,
         completionSent: false,
         lastActionStepId: null,
         resolvedReactions: new Set(),
@@ -78,6 +79,53 @@
         });
     }
 
+    function targetPlayer(step, hud) {
+        var target = step && step.trigger && step.trigger.target;
+        var players = hud && hud.players || [];
+        return players.find(function (player) {
+            return player && (target === "player" ? player.is_me : player.campaign_faction_id === target);
+        }) || null;
+    }
+
+    function cameraTargetDistance(step, hud) {
+        var player = targetPlayer(step, hud), camera = hud && hud.tutorial && hud.tutorial.camera || {};
+        var zoom = Number(camera.zoom), width = Number(camera.width), height = Number(camera.height);
+        if (!player || !Number.isFinite(Number(player.centroid_x)) || !Number.isFinite(Number(player.centroid_y))
+            || !Number.isFinite(zoom) || zoom <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return null;
+        var centerX = (width * 0.5 - Number(camera.x || 0)) / zoom;
+        var centerY = (height * 0.5 - Number(camera.y || 0)) / zoom;
+        return Math.hypot(Number(player.centroid_x) - centerX, Number(player.centroid_y) - centerY);
+    }
+
+    function cameraTargetAnchor(step, hud) {
+        var player = targetPlayer(step, hud), camera = hud && hud.tutorial && hud.tutorial.camera || {};
+        var zoom = Number(camera.zoom), scale = Math.max(Number(camera.scale) || 1, 0.01);
+        var width = Number(camera.width) / scale, height = Number(camera.height) / scale;
+        if (!player || !Number.isFinite(Number(player.centroid_x)) || !Number.isFinite(Number(player.centroid_y))
+            || !Number.isFinite(zoom) || zoom <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return null;
+        var x = (Number(camera.x || 0) + Number(player.centroid_x) * zoom) / scale;
+        var y = (Number(camera.y || 0) + Number(player.centroid_y) * zoom) / scale;
+        var margin = Math.min(80, Math.max(24, Math.min(width, height) * 0.35));
+        return {
+            x: Math.max(margin, Math.min(width - margin, x)),
+            y: Math.max(margin, Math.min(height - margin, y)),
+            offscreen: x < 0 || x > width || y < 0 || y > height
+        };
+    }
+
+    function formatZoom(value) {
+        var number = Number(value);
+        return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
+    }
+
+    function metricText(key, values) {
+        var text = tr(key);
+        Object.keys(values).forEach(function (name) {
+            text = text.replace(new RegExp("\\{" + name + "\\}", "g"), String(values[name]));
+        });
+        return text;
+    }
+
     function renderContext(step, hud, anchor) {
         var context = {
             anchor: anchor,
@@ -86,15 +134,40 @@
         };
         if (step && step.guide) {
             context.zoomMode = zoomMode();
+            var facts = hud && hud.tutorial && hud.tutorial.facts || {};
+            if (step.guide.kind === "ui" && ["hud_zoom_in", "hud_zoom_out"].includes(step.guide.target) && Number.isFinite(Number(facts.camera_zoom))) {
+                var zoomInButton = step.guide.target === "hud_zoom_in";
+                context.zoomMetric = {
+                    current: Number(facts.camera_zoom),
+                    target: Number(zoomInButton ? facts.camera_zoom_target : facts.camera_zoom_floor),
+                    direction: zoomInButton ? "min" : "max"
+                };
+            }
             var hintKey = "";
+            var hintText = "";
             if (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out") {
                 hintKey = String(step.hint_key || "").replace(/_hint$/, "_" + context.zoomMode + "_hint");
                 var labelKey = hintKey.replace(/_hint$/, "_label");
                 if (labelKey && tr(labelKey) !== labelKey) context.gestureLabel = tr(labelKey);
+                var zoomTarget = step.trigger && step.trigger.type === "zoom_out_complete" ? facts.camera_zoom_floor
+                    : step.trigger && step.trigger.type === "zoom_in_complete" ? facts.camera_zoom_target : null;
+                if (zoomTarget != null && Number.isFinite(Number(zoomTarget)) && Number.isFinite(Number(facts.camera_zoom))) {
+                    context.zoomMetric = {
+                        current: Number(facts.camera_zoom),
+                        target: Number(zoomTarget),
+                        direction: step.guide.gesture === "zoom_in" ? "min" : "max"
+                    };
+                }
             } else if (["drag", "hover"].includes(step.guide.gesture)) {
                 hintKey = "tutorial." + step.id + "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint";
+                if (step.trigger && step.trigger.type === "camera_target" && Number.isFinite(Number(step.trigger.distance))) {
+                    var distance = cameraTargetDistance(step, hud);
+                    if (Number.isFinite(distance)) hintText = metricText("tutorial." + step.id + "_progress", {
+                        current: Math.ceil(distance), target: step.trigger.distance
+                    });
+                }
             }
-            if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey);
+            if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey) + (hintText ? " " + hintText : "");
         }
         return context;
     }
@@ -210,6 +283,7 @@
             runtime.uiPaused = null;
             runtime.cameraOnly = null;
             runtime.hoverEvents = 0;
+            runtime.cameraTargetFactionId = null;
             runtime.hoveredEntityId = null;
             runtime.hoverStepId = null;
             runtime.hoverStepRecorded = false;
@@ -254,6 +328,7 @@
             runtime.uiPaused = null;
             runtime.cameraOnly = null;
             runtime.hoverEvents = 0;
+            runtime.cameraTargetFactionId = null;
             var hovered = runtime.latestHud.hovered;
             runtime.hoveredEntityId = hovered && !hovered.is_me && Number.isInteger(Number(hovered.id))
                 ? Number(hovered.id) : null;
@@ -272,13 +347,14 @@
         });
     }
 
-    function anchorFor(step, hud, view) {
+    function anchorFor(step, hud) {
         if (!step || !step.guide) return null;
         var guide = step.guide, tutorial = hud.tutorial || {};
-        if (step.trigger && step.trigger.type === "territory" && step.guide.target === "expand" && view && view.progress.current > 0) return null;
-        if (step.id === "boudica_first_victory" && step.trigger && step.trigger.type === "defeated" && step.trigger.target) {
-            var attacks = tutorial.facts && tutorial.facts.attacks_by_faction_id;
-            if (Number(attacks && attacks[step.trigger.target]) > 0) return null;
+
+        if (guide.kind === "world" && guide.target === "player" && step.trigger
+            && ["camera_target", "hover"].includes(step.trigger.type)) {
+            var cameraTarget = cameraTargetAnchor(step, hud);
+            if (cameraTarget) return cameraTarget;
         }
         var result;
         if (guide.kind === "world") {
@@ -316,6 +392,9 @@
         if (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target) {
             return step.trigger.target;
         }
+        if (step.trigger && ["camera_target", "hover"].includes(step.trigger.type) && step.trigger.target) {
+            return step.trigger.target;
+        }
         return step.marker && step.marker.target;
     }
 
@@ -324,13 +403,18 @@
         if (!root.isConnected) document.body.appendChild(root);
         var tutorial = hud.tutorial;
         var currentStep = runtime.machine.view().step;
-        if (runtime.hoverStepId !== currentStep.id) {
+        var stepChanged = runtime.hoverStepId !== currentStep.id;
+        if (stepChanged) {
             runtime.hoverStepId = currentStep.id;
             runtime.hoverStepRecorded = false;
         }
         var hoveredEntityId = hud.hovered && !hud.hovered.is_me && Number.isInteger(Number(hud.hovered.id))
             ? Number(hud.hovered.id) : null;
-        if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded && hoveredEntityId !== null && hoveredEntityId !== runtime.hoveredEntityId) {
+        var hoverTarget = currentStep.trigger && currentStep.trigger.type === "hover" && currentStep.trigger.target;
+        var hoverMatchesTarget = !hoverTarget || (hud.players || []).some(function (player) {
+            return player && Number(player.id) === hoveredEntityId && (hoverTarget === "player" ? player.is_me : player.campaign_faction_id === hoverTarget);
+        });
+        if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded && hoveredEntityId !== null && hoverMatchesTarget && (stepChanged || hoveredEntityId !== runtime.hoveredEntityId)) {
             runtime.hoverStepRecorded = true;
             runtime.hoverEvents++;
         }
@@ -339,6 +423,10 @@
             hover_events: runtime.hoverEvents,
             touch_controls: zoomMode() === "pinch" ? 1 : 0
         });
+        if (currentStep.trigger && currentStep.trigger.type === "camera_target") {
+            var targetDistance = cameraTargetDistance(currentStep, hud);
+            if (Number.isFinite(targetDistance)) facts.camera_target_distance = targetDistance;
+        }
         var machineView = runtime.machine.update(facts, runtime.uiCounts);
         if (machineView.reactionData && machineView.reactionData.outcome) {
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
@@ -366,6 +454,17 @@
             runtime.lastActionStepId = machineView.step.id;
             if (Number.isFinite(machineView.step.attack_ratio_on_enter)) send("set_attack_ratio", { ratio: machineView.step.attack_ratio_on_enter });
         }
+        var targetFactionId = machineView.step.trigger && machineView.step.trigger.type === "defeated"
+            ? markerTargetFor(machineView.step) : null;
+        if (targetFactionId !== runtime.cameraTargetFactionId) {
+            runtime.cameraTargetFactionId = targetFactionId;
+            var targetPlayer = targetFactionId && (hud.players || []).find(function (player) {
+                return player && player.campaign_faction_id === targetFactionId;
+            });
+            if (targetPlayer && Number.isInteger(Number(targetPlayer.id))) {
+                send("focus_tutorial_target", { player_id: Number(targetPlayer.id) });
+            }
+        }
         var cameraOnly = machineView.step.camera_only === true;
         if (machineView.paused !== runtime.uiPaused || cameraOnly !== runtime.cameraOnly) {
             runtime.uiPaused = machineView.paused;
@@ -384,7 +483,7 @@
             runtime.markerId = markerId;
             send("set_tutorial_marker", { player_id: markerId });
         }
-        if (!runtime.modalOpen) runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud, machineView)));
+        if (!runtime.modalOpen) runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud)));
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
             if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
@@ -543,6 +642,7 @@
         if (root.contains(event.target)) return;
         var changed = false;
         Object.keys(window.SOWCampaign.UI_TARGETS).forEach(function (key) {
+            if (key === "hud_zoom_in" || key === "hud_zoom_out") return;
             var control = window.SOWCampaign.resolveUiTarget(key, document, runtime.episodeId);
             var actionEvent = control && control.matches("input") ? "change" : "click";
             if (event.type === actionEvent && control && !control.disabled && control.getClientRects().length && (control === event.target || control.contains(event.target))) {
@@ -554,6 +654,12 @@
             window.setTimeout(updateMenuGuide, 650);
         }
     }
+    document.addEventListener("sow:tutorial-ui-action", function (event) {
+        var action = event.detail && event.detail.action;
+        if (!runtime.machine || !["hud_zoom_in", "hud_zoom_out"].includes(action)) return;
+        runtime.uiCounts[action] = (runtime.uiCounts[action] || 0) + 1;
+        update(runtime.latestHud);
+    });
     ["click", "input", "change"].forEach(function (type) { document.addEventListener(type, recordUiAction, true); });
 
     window.SOW_startCampaignEpisode = function (episodeId) { startEpisode(episodeId, false); };
@@ -605,6 +711,7 @@
         runtime.menuGuide = false;
         runtime.uiPaused = false;
         runtime.cameraOnly = false;
+        runtime.cameraTargetFactionId = null;
         runtime.hoverEvents = 0;
         runtime.hoveredEntityId = null;
         runtime.hoverStepId = null;

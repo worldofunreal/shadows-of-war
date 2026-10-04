@@ -130,7 +130,7 @@ const FACTION_COLORS = ["#4ca572", "#a88c40", "#8c59a8", "#40999e", "#b87366", "
 const RELATIONS = { neutral:"Neutral", allied:"Ally", enemy:"Enemy" };
 function factionColor(f){ return f.relation==="allied" ? ALLY_COLOR : f.relation==="enemy" ? ENEMY_COLOR : (f.color || FACTION_COLORS[0]); }
 // Bot IQ tiers grounded in the engine (sow-core player/diplomacy/intent): default 100; AI smarts
-// unlock at 100 and 130; bots roll 130–180; the lowest value the codebase exercises is 85.
+// unlock at 100 and 130; bots roll 130–180; lower roster IQ values remain valid.
 function iqTier(iq){ return iq>=130 ? "sharp (≥130)" : iq>=100 ? "standard" : "dull"; }
 function escapeHtml(value){ return String(value).replace(/[&<>"']/g, character=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character])); }
 
@@ -337,7 +337,7 @@ function renderSide() {
       <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
       <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
       <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
-      <div class="row"><input id="fiq" type="range" min="85" max="180" step="5" value="${iq}" style="flex:3"><input id="fiqn" type="number" min="85" max="180" value="${iq}" style="flex:1;min-width:56px"></div>
+      <div class="row"><input id="fiq" type="range" min="0" max="180" step="5" value="${iq}" style="flex:3"><input id="fiqn" type="number" min="0" max="180" value="${iq}" style="flex:1;min-width:56px"></div>
       <div class="hint" id="factionHint"></div>
       <div class="btns" style="margin-top:10px"><button class="danger" id="del">Delete</button></div>`;
     const updateFactionHint = () => {
@@ -396,7 +396,7 @@ function renderSide() {
     document.getElementById("fgroup").oninput = e => { if(e.target.value.trim()) f.alliance_group=e.target.value.trim(); else delete f.alliance_group; markRosterDirty(); };
     document.getElementById("fx").oninput = e => { f.x=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
     document.getElementById("fy").oninput = e => { f.y=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
-    const setIq = v => { v=Math.max(85,Math.min(180,v|0)); f.iq=v; document.getElementById("fiq").value=v; document.getElementById("fiqn").value=v; document.getElementById("iqtier").textContent=iqTier(v); };
+    const setIq = v => { v=Math.max(0,Math.min(180,v|0)); f.iq=v; document.getElementById("fiq").value=v; document.getElementById("fiqn").value=v; document.getElementById("iqtier").textContent=iqTier(v); };
     document.getElementById("fiq").oninput = e => setIq(+e.target.value);
     document.getElementById("fiqn").oninput = e => setIq(+e.target.value);
     document.getElementById("del").onclick = deleteSelected;
@@ -582,7 +582,7 @@ function validateRoster(value){
   const names = new Set(), ids = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(!/^[a-z][a-z0-9_]{0,95}$/.test(f.id) || ids.has(f.id) || !f.name.trim() || names.has(f.name) || !Number.isInteger(f.starting_troops) || f.starting_troops<0 || f.starting_troops>1000000 || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || typeof f.can_request_alliance!=="boolean" || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isInteger(f.x) || !Number.isInteger(f.y) || !f.civ || !f.leader || (f.iq!=null && (!Number.isInteger(f.iq) || f.iq<85 || f.iq>180)) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.gold_loot_override!=null && (!Number.isInteger(f.gold_loot_override) || f.gold_loot_override<0 || f.gold_loot_override>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate identity/name, or missing portrait asset");
+    if(!/^[a-z][a-z0-9_]{0,95}$/.test(f.id) || ids.has(f.id) || !f.name.trim() || names.has(f.name) || !Number.isInteger(f.starting_troops) || f.starting_troops<0 || f.starting_troops>1000000 || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || typeof f.can_request_alliance!=="boolean" || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isInteger(f.x) || !Number.isInteger(f.y) || !f.civ || !f.leader || (f.iq!=null && (!Number.isInteger(f.iq) || f.iq<0 || f.iq>180)) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.gold_loot_override!=null && (!Number.isInteger(f.gold_loot_override) || f.gold_loot_override<0 || f.gold_loot_override>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate identity/name, or missing portrait asset");
     ids.add(f.id); names.add(f.name);
   }
 }
@@ -616,7 +616,13 @@ async function loadRoster(){
     roster = normalize(await res.json());
     storyDefinition = await storyRes.json();
     rosterDirty=false; rosterExternal=false; document.getElementById("rosterStatus").textContent="Saved"; document.getElementById("rosterStatus").className="hint";
-  } catch(e){ toast("Roster load failed: "+e.message); }
+  } catch(e){
+    const message = "Roster load failed: "+e.message;
+    const status = document.getElementById("rosterStatus");
+    status.textContent = message;
+    status.className = "hint warn";
+    toast(message);
+  }
   sel=-1; renderAll();
 }
 

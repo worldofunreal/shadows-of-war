@@ -502,7 +502,11 @@ impl SowApp {
                         attack_flash_t,
                         alert_intensity,
                         fog_of_war: if dev.fog_of_war { 1.0 } else { 0.0 },
-                        _pad1: 0.0,
+                        tutorial_target_player: if self.ui.tutorial_active {
+                            self.ui.tutorial_marker_player_id.unwrap_or(0) as f32
+                        } else {
+                            0.0
+                        },
                         _pad2: 0.0,
                         alert_color,
                     };

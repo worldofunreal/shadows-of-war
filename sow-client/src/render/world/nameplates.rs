@@ -12,6 +12,7 @@ use sow_render::nameplate::{
     sample_due as nameplate_sample_due,
     size_needs_interpolation as nameplate_size_needs_interpolation,
 };
+use sow_render::text::NameplateStatusSprite;
 use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
@@ -162,6 +163,7 @@ pub(super) fn render_nameplates(
     now: Instant,
     my_id: u16,
     leaderboard_top_three: [Option<u16>; 3],
+    tutorial_target_player: Option<u16>,
 ) {
     let sf = if sf.is_finite() { sf.max(0.01) } else { 1.0 };
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
@@ -179,7 +181,12 @@ pub(super) fn render_nameplates(
     for &player_index in order.iter() {
         let player = &snapshot.players[player_index];
         let is_me = player.id == my_id;
-        let is_human = player.player_type == PlayerType::Human;
+        let presentation_type = if tutorial_target_player == Some(player.id) {
+            PlayerType::Human
+        } else {
+            player.player_type
+        };
+        let is_human = presentation_type == PlayerType::Human;
         let Some(state) = visuals.get(&player.id) else {
             continue;
         };
@@ -275,7 +282,7 @@ pub(super) fn render_nameplates(
         };
         let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
         let layout = compute_nameplate_layout(
-            player.player_type,
+            presentation_type,
             show_bot_avatars,
             center,
             scaled_size,
@@ -327,6 +334,7 @@ pub(super) fn render_nameplates(
             scaled_size,
             layout,
             fit_scale,
+            presentation_type,
             dev,
             campaign_avatar_slots,
             sf,
@@ -651,6 +659,7 @@ fn prepare_full_nameplate(
     scaled_size: f32,
     layout: NameplateLayout,
     fit_scale: f32,
+    presentation_type: PlayerType,
     dev: &DevConfig,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
@@ -660,7 +669,7 @@ fn prepare_full_nameplate(
     let font_scale = font_size_scale(dev.font_size_scale);
     let metrics = NameplateMetrics::compute(
         scaled_size,
-        player.player_type,
+        presentation_type,
         dev.vfx_bot_avatars || player.campaign_avatar.is_some(),
     );
     let name_font_size = metrics.render_size() * font_scale;
@@ -846,14 +855,22 @@ fn paint_prepared_nameplate(
         paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
     }
     for badge in plan.badges[..plan.badge_count].iter().flatten() {
+        let status_sprite = match badge.kind {
+            BadgeKind::Request => Some(NameplateStatusSprite::Request),
+            BadgeKind::Allied => Some(NameplateStatusSprite::Allied),
+            BadgeKind::Traitor => Some(NameplateStatusSprite::Traitor),
+            _ => None,
+        };
+        if let Some(sprite) = status_sprite {
+            text.push_status_sprite(sprite, badge.center, badge.diameter, badge.tint);
+            continue;
+        }
         let icon = match badge.kind {
             BadgeKind::Rank1 => Some("👑"),
             BadgeKind::Rank2 => Some("🥈"),
             BadgeKind::Rank3 => Some("🥉"),
             BadgeKind::Star => Some("⭐"),
-            BadgeKind::Request => Some("📨"),
-            BadgeKind::Allied => Some("🤝"),
-            BadgeKind::Traitor => Some("🗡️"),
+            BadgeKind::Request | BadgeKind::Allied | BadgeKind::Traitor => None,
             BadgeKind::Active => player.active_emoji.as_deref(),
             BadgeKind::Disconnected => Some("🔌"),
         };

@@ -1,6 +1,13 @@
 /* ─────────────────────────────────────────────────────────────
    IN-GAME HUD (DOM Overlay for Real-Time Gameplay)
    ───────────────────────────────────────────────────────────── */
+:root {
+    --sow-tutorial-player-panel-height: 72px;
+    --sow-tutorial-player-panel-gap: 8px;
+    --sow-tutorial-progress-height: 32px;
+    --sow-tutorial-progress-label-size: 17px;
+}
+
 #sow-hud {
     --sow-gold: #e9bb64;
     --sow-gold-bright: #f5d898;
@@ -140,73 +147,108 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 
 .sow-hud__icon-pill .sow-hud__action-icon { width: 30px; height: 30px; }
 
-/* Tutorial player nameplate: avatar + name + live troop bar under the buttons. */
+/* Tutorial player nameplate: avatar + name + live troop bar above quests. */
 .sow-hud__nameplate {
+    position: absolute;
+    top: max(12px, var(--sow-sat));
+    inset-inline-start: max(16px, var(--sow-sal));
     display: none;
+    grid-template-columns: 54px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
-    min-width: 148px;
-    padding: 6px;
-    margin-top: 4px;
-    border: 1px solid var(--sow-line);
-    border-radius: 5px;
-    background: rgb(255 255 255 / 3%);
+    gap: 4px 8px;
+    width: 280px;
+    min-width: 0;
+    height: var(--sow-tutorial-player-panel-height);
+    padding: 8px;
+    border: 1px solid rgb(211 223 219 / 18%);
+    border-inline-start: 2px solid color-mix(in srgb, var(--sow-gold) 72%, transparent);
+    border-radius: 7px 3px 10px 3px;
+    background: var(--sow-panel);
+    box-shadow: var(--sow-surface-shadow), 0 8px 24px rgb(0 0 0 / 32%);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
     pointer-events: none;
 }
 
-.sow-hud__nameplate:not([hidden]) { display: flex; }
+.sow-hud__nameplate:not([hidden]) { display: grid; }
 
 .sow-hud__nameplate-avatar {
-    flex: 0 0 40px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 1px solid rgb(233 187 100 / 45%);
+    grid-column: 1;
+    grid-row: 1 / -1;
+    width: 54px;
+    height: 100%;
+    border-radius: 6px;
+    border: 1px solid rgb(233 187 100 / 66%);
+    box-shadow: 0 0 0 2px rgb(5 10 13 / 84%), 0 0 12px rgb(233 187 100 / 12%);
     object-fit: cover;
-    background: rgb(0 0 0 / 40%);
+    background: rgb(0 0 0 / 55%);
 }
 
 .sow-hud__nameplate-copy {
-    display: grid;
-    gap: 3px;
-    min-width: 0;
-    flex: 1;
+    display: contents;
 }
 
 .sow-hud__nameplate-copy strong {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .04em;
-    color: #f2eee4;
+    font-size: 20px;
+    line-height: 1.1;
+    font-weight: 750;
+    letter-spacing: .01em;
+    color: #f5f1e8;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 55%);
 }
 
 .sow-hud__nameplate-bar {
-    height: 6px;
-    border-radius: 3px;
-    background: rgb(5 10 13 / 78%);
-    border: 1px solid var(--sow-line);
+    position: relative;
+    grid-column: 2;
+    grid-row: 2;
+    height: 24px;
+    border-radius: 7px;
+    background: linear-gradient(180deg, #0a1112, #1c2925);
+    border: 1px solid rgb(211 223 219 / 18%);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 72%);
     overflow: hidden;
 }
 
 .sow-hud__nameplate-bar i {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
     display: block;
     height: 100%;
     width: 0;
-    background: linear-gradient(90deg, rgb(119 162 169 / 80%), rgb(159 188 151 / 90%));
-    border-radius: 2px;
+    background: linear-gradient(90deg, #718f75, #b6c998);
+    border-radius: 6px;
+    box-shadow: 0 0 8px rgb(166 197 168 / 28%);
     transition: width 0.15s ease;
 }
 
-.sow-hud__nameplate-copy span {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--sow-muted);
+.sow-hud__nameplate-bar > span {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 8px;
+    color: #fff;
+    font-size: var(--sow-tutorial-progress-label-size);
+    line-height: 1;
+    font-weight: 800;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    text-shadow: 0 1px 2px #000, 0 0 5px rgb(0 0 0 / 75%);
+    pointer-events: none;
 }
+
+.sow-hud__nameplate-readout .sow-hud__inline-icon { flex: 0 0 auto; }
 
 .sow-hud__inbox-pill { position: relative; }
 
@@ -417,6 +459,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 .sow-hud__icon-btn:active {
     transform: scale(0.96);
 }
+.sow-hud__icon-btn.is-holding { border-color: var(--sow-gold-bright); background: rgb(233 187 100 / 20%); color: var(--sow-gold-bright); box-shadow: 0 0 0 3px rgb(233 187 100 / 20%), 0 0 18px rgb(233 187 100 / 32%); }
+.sow-hud__icon-btn.is-zoom-limited { border-color: var(--sow-line); background: var(--sow-panel); color: #dedfd9; box-shadow: var(--sow-surface-shadow); }
 
 /* Floating Emoji Picker */
 .sow-hud__emoji-popout {
@@ -825,8 +869,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     height: 16px;
 }
 
-.sow-hud__dev-sidebar,
-.sow-hud__settings {
+.sow-hud__dev-sidebar {
     position: absolute;
     top: max(70px, calc(var(--sow-sat) + 58px));
     width: min(300px, calc(100vw - 32px));
@@ -845,7 +888,6 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 .sow-hud__dev-sidebar { inset-inline-start: max(16px, var(--sow-sal)); }
-.sow-hud__settings { inset-inline-end: max(16px, var(--sow-sar)); }
 
 .sow-hud__dev-header {
     display: flex;
@@ -902,26 +944,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 
 /* Leaderboard Drawer */
 .sow-hud__leaderboard {
-    position: absolute;
-    top: 70px;
-    inset-inline-end: max(16px, var(--sow-sar));
-    width: min(380px, calc(100vw - 32px));
-    max-height: calc(100vh - 94px);
-    max-height: calc(100dvh - 94px);
-    overflow-x: hidden;
-    overflow-y: auto;
     scrollbar-gutter: stable;
-    background: var(--sow-panel);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    border: 1px solid var(--sow-line);
-    border-top-color: color-mix(in srgb, var(--sow-gold) 56%, transparent);
-    border-radius: 6px 6px 16px 4px;
-    padding: 14px;
-    box-shadow: var(--sow-surface-shadow);
-    pointer-events: auto;
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
-    z-index: 60;
 }
 
 .sow-hud__leaderboard.hidden {
@@ -2071,7 +2095,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 
 .sow-hud__panel {
     position: absolute;
-    top: 70px;
+    top: calc(max(12px, var(--sow-sat)) + 204px);
     inset-inline-end: max(16px, var(--sow-sar));
     width: min(360px, calc(100vw - 32px));
     max-height: min(60vh, 440px);
@@ -2158,6 +2182,12 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 }
 
 @media (max-width: 720px) {
+    :root {
+        --sow-tutorial-player-panel-height: 64px;
+        --sow-tutorial-progress-height: 28px;
+        --sow-tutorial-progress-label-size: 15px;
+    }
+
     .sow-hud__building-card {
         width: min(252px, calc(100vw - 16px));
         padding: 9px;
@@ -2169,6 +2199,23 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
         align-items: center;
     }
 
+    .sow-hud__nameplate {
+        top: max(8px, var(--sow-sat));
+        inset-inline-start: max(8px, var(--sow-sal));
+        width: min(224px, calc(100vw - 16px));
+        padding: 6px;
+        grid-template-columns: 50px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 4px 8px;
+    }
+
+    .sow-hud__nameplate-avatar {
+        width: 50px;
+        height: 100%;
+    }
+
+    .sow-hud__nameplate-copy strong { font-size: 18px; }
+    .sow-hud__nameplate-bar { height: 20px; }
     .sow-hud__status-left, .sow-hud__status-right { gap: 2px; padding: 3px; }
     .sow-hud__icon-pill { width: 40px; height: 40px; }
 
@@ -2244,7 +2291,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     }
 
     .sow-hud__panel {
-        top: 56px;
+        top: calc(max(8px, var(--sow-sat)) + 186px);
         inset-inline-end: 8px;
         max-height: 52vh;
     }
@@ -2462,6 +2509,24 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     #sow-hud[data-overlay-open="true"] .sow-hud__dock { display: none; }
 }
 
+@media (orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse) {
+    :root {
+        --sow-tutorial-player-panel-height: 56px;
+        --sow-tutorial-progress-height: 24px;
+        --sow-tutorial-progress-label-size: 14px;
+    }
+    .sow-hud__nameplate {
+        width: min(272px, calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 64px));
+        padding: 5px 7px;
+        grid-template-columns: 46px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 4px 8px;
+    }
+    .sow-hud__nameplate-avatar { width: 46px; height: 100%; }
+    .sow-hud__nameplate-copy strong { font-size: 16px; }
+    .sow-hud__nameplate-bar { height: 18px; }
+}
+
 @media (hover: none), (pointer: coarse) {
     #sow-hud * { transition-property: transform, opacity !important; }
     #sow-hud button { touch-action: manipulation; }
@@ -2487,15 +2552,4 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     .sow-hud__building-icon { width: 32px; height: 32px; }
     .sow-hud__resource-row { gap: 4px; }
     .sow-hud__res-rate, .sow-hud__res-gold { padding-inline: 5px; font-size: 10px; }
-}
-
-/* Desktop gameplay chrome: left quest column + right vertical panel anchors.
- * This block lives last so it beats the base rules above at equal specificity. */
-@media (min-width: 721px) {
-    .sow-hud__leaderboard { top: calc(max(12px, var(--sow-sat)) + 272px); }
-    .sow-hud__notifications {
-        left: max(16px, var(--sow-sal));
-        top: calc(max(12px, var(--sow-sat)) + 132px);
-        transform: none;
-    }
 }

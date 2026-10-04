@@ -4,8 +4,8 @@ use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_CORNER_RADIUS_RATIO, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC,
     KIND_BUILDING_SPRITE, KIND_CROSS, KIND_DISC, KIND_EMOJI, KIND_GLYPH, KIND_RECT, KIND_RING,
-    KIND_ROUNDED_RECT, KIND_SPRITE, KIND_TRIANGLE, OutlineStyle, TextGlobals, TextInstanceGpu,
-    TextPaintStyle, TextShaderData, avatar_slot_uv,
+    KIND_ROUNDED_RECT, KIND_SPRITE, KIND_STATUS_SPRITE, KIND_TRIANGLE, NameplateStatusSprite,
+    OutlineStyle, TextGlobals, TextInstanceGpu, TextPaintStyle, TextShaderData, avatar_slot_uv,
 };
 use blade_graphics as gpu;
 
@@ -396,6 +396,7 @@ pub struct TextRenderer {
     emoji_atlas_tex: FontAtlasTexture,
     avatar_atlas_tex: FontAtlasTexture,
     building_atlas_tex: FontAtlasTexture,
+    status_atlas_tex: FontAtlasTexture,
     avatar_loaded: [bool; AVATAR_SLOT_COUNT],
     avatar_dirty_slots: Vec<usize>,
     prepared_text_scratch: Vec<PreparedTextItem>,
@@ -405,6 +406,7 @@ pub struct TextRenderer {
     emoji_sampler: gpu::Sampler,
     avatar_sampler: gpu::Sampler,
     building_sampler: gpu::Sampler,
+    status_sampler: gpu::Sampler,
     upload_instances: Vec<TextInstanceGpu>,
 }
 
@@ -429,6 +431,12 @@ impl TextRenderer {
             context,
             crate::BUILDING_ATLAS_BYTES,
             "building_atlas",
+            gpu::TextureFormat::Rgba8UnormSrgb,
+        );
+        let status_atlas_tex = FontAtlasTexture::from_bytes(
+            context,
+            crate::NAMEPLATE_STATUS_ATLAS_BYTES,
+            "nameplate_status_atlas",
             gpu::TextureFormat::Rgba8UnormSrgb,
         );
         let shader_source = include_str!("../shaders/text_glow.wgsl");
@@ -514,12 +522,20 @@ impl TextRenderer {
             ..Default::default()
         });
 
+        let status_sampler = context.create_sampler(gpu::SamplerDesc {
+            name: "nameplate_status_pixel_sampler",
+            mag_filter: gpu::FilterMode::Nearest,
+            min_filter: gpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
         Self {
             font_atlas_desc,
             font_atlas_tex,
             emoji_atlas_tex,
             avatar_atlas_tex,
             building_atlas_tex,
+            status_atlas_tex,
             avatar_loaded: [false; AVATAR_SLOT_COUNT],
             avatar_dirty_slots: Vec::with_capacity(AVATAR_SLOT_COUNT),
             prepared_text_scratch: Vec::with_capacity(32),
@@ -529,6 +545,7 @@ impl TextRenderer {
             emoji_sampler,
             avatar_sampler,
             building_sampler,
+            status_sampler,
             upload_instances: Vec::with_capacity(4096),
         }
     }
@@ -540,6 +557,7 @@ impl TextRenderer {
         encoder.init_texture(self.emoji_atlas_tex.texture);
         encoder.init_texture(self.avatar_atlas_tex.texture);
         encoder.init_texture(self.building_atlas_tex.texture);
+        encoder.init_texture(self.status_atlas_tex.texture);
     }
 
     pub fn upload_atlas(&self, encoder: &mut gpu::CommandEncoder, context: &gpu::Context) {
@@ -547,6 +565,7 @@ impl TextRenderer {
         self.emoji_atlas_tex.upload(encoder, context);
         self.avatar_atlas_tex.upload(encoder, context);
         self.building_atlas_tex.upload(encoder, context);
+        self.status_atlas_tex.upload(encoder, context);
     }
 
     pub fn begin_frame(&mut self) {
@@ -915,6 +934,30 @@ impl TextRenderer {
         });
     }
 
+    /// Push one of the pixel-art diplomacy sprites used by nameplates.
+    pub fn push_status_sprite(
+        &mut self,
+        sprite: NameplateStatusSprite,
+        center: [f32; 2],
+        diameter: f32,
+        tint: [f32; 4],
+    ) {
+        let diameter = diameter.max(0.0);
+        self.push_inst(TextInstanceGpu {
+            screen_pos: [center[0] - diameter * 0.5, center[1] - diameter * 0.5],
+            size: [diameter; 2],
+            uv_rect: sprite.uv_rect(),
+            content_rect: [0.0, 0.0, 1.0, 1.0],
+            color: tint,
+            outline_color: [0.0; 4],
+            face_dilate: 0.0,
+            outline_thickness: 0.0,
+            underlay_offset_y: 0.0,
+            underlay_softness: 0.0,
+            kind: KIND_STATUS_SPRITE,
+        });
+    }
+
     /// Push an anti-aliased filled rectangle. `screen_pos`/`size` are physical pixels.
     pub fn push_rect(&mut self, screen_pos: [f32; 2], size: [f32; 2], color: [f32; 4]) {
         self.push_inst(TextInstanceGpu {
@@ -1063,6 +1106,8 @@ impl TextRenderer {
             avatar_sampler: self.avatar_sampler,
             building_atlas: self.building_atlas_tex.view,
             building_sampler: self.building_sampler,
+            status_atlas: self.status_atlas_tex.view,
+            status_sampler: self.status_sampler,
         };
 
         let mut rc = pass.with(&self.pipeline);
@@ -1080,6 +1125,7 @@ impl TextRenderer {
         render_ctx.context.destroy_sampler(self.emoji_sampler);
         render_ctx.context.destroy_sampler(self.avatar_sampler);
         render_ctx.context.destroy_sampler(self.building_sampler);
+        render_ctx.context.destroy_sampler(self.status_sampler);
         render_ctx
             .context
             .destroy_texture_view(self.font_atlas_tex.view);
@@ -1116,6 +1162,15 @@ impl TextRenderer {
         render_ctx
             .context
             .destroy_buffer(self.building_atlas_tex.buffer);
+        render_ctx
+            .context
+            .destroy_texture_view(self.status_atlas_tex.view);
+        render_ctx
+            .context
+            .destroy_texture(self.status_atlas_tex.texture);
+        render_ctx
+            .context
+            .destroy_buffer(self.status_atlas_tex.buffer);
     }
 }
 

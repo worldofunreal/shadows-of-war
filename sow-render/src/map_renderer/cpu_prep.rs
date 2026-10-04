@@ -40,7 +40,8 @@ pub struct MapGlobals {
     /// Viewport alert vignette intensity: 0.0 → 1.0.
     pub alert_intensity: f32,
     pub fog_of_war: f32,
-    pub _pad1: f32,
+    /// Player ID highlighted by the active tutorial objective (0 = none).
+    pub tutorial_target_player: f32,
     pub _pad2: f32,
     /// Viewport alert vignette color: [r, g, b, a].
     pub alert_color: [f32; 4],

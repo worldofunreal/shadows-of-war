@@ -241,6 +241,7 @@ impl SowApp {
                 tutorial_camera_focus: false,
                 tutorial_zoom_in_events: 0,
                 tutorial_zoom_out_events: 0,
+                tutorial_zoom_out_completed: false,
                 tutorial_camera_drag_events: 0,
                 tutorial_camera_key_pan_events: 0,
                 tutorial_camera_drag_recorded: false,

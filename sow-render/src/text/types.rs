@@ -135,7 +135,27 @@ pub const KIND_CROSS: f32 = 7.0;
 pub const KIND_ARC: f32 = 8.0;
 pub const KIND_ROUNDED_RECT: f32 = 10.0;
 pub const KIND_BUILDING_SPRITE: f32 = 11.0;
+pub const KIND_STATUS_SPRITE: f32 = 12.0;
 pub const AVATAR_CORNER_RADIUS_RATIO: f32 = 0.14;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NameplateStatusSprite {
+    Request,
+    Allied,
+    Traitor,
+}
+
+impl NameplateStatusSprite {
+    pub const fn uv_rect(self) -> [f32; 4] {
+        const CELL_WIDTH: f32 = 1.0 / 3.0;
+        let column = match self {
+            Self::Request => 0.0,
+            Self::Allied => 1.0,
+            Self::Traitor => 2.0,
+        };
+        [column * CELL_WIDTH, 0.0, (column + 1.0) * CELL_WIDTH, 1.0]
+    }
+}
 
 // 64 portrait slots cover current leaders and every distinct geo-entity portrait, with room to grow.
 pub const AVATAR_CELL: u32 = 256;
@@ -189,4 +209,6 @@ pub struct TextShaderData {
     pub avatar_sampler: gpu::Sampler,
     pub building_atlas: gpu::TextureView,
     pub building_sampler: gpu::Sampler,
+    pub status_atlas: gpu::TextureView,
+    pub status_sampler: gpu::Sampler,
 }

@@ -20,3 +20,5 @@ macro_rules! repo_asset_bytes {
 
 pub static EMOJI_ATLAS_BYTES: &[u8] = repo_asset_bytes!("gameplay/emoji/atlas.webp");
 pub static BUILDING_ATLAS_BYTES: &[u8] = repo_asset_bytes!("gameplay/buildings/atlas.webp");
+pub static NAMEPLATE_STATUS_ATLAS_BYTES: &[u8] =
+    repo_asset_bytes!("gameplay/icons/nameplate_status_atlas.webp");
