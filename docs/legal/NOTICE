@@ -1,37 +1,30 @@
-Third-Party Notices for Shadows of War
-======================================
+Shadows of War
+Copyright (c) 2024–2026 World of Unreal.
+
+Third-Party Notices
+===================
 
 This game incorporates material from OpenFront (OpenFrontIO), copyright OpenFront Inc.
 and Contributors, licensed under AGPL-3.0-only with OpenFront's additional terms in
 section 7 preserved in LICENSE.
 
-OpenFront map-generator assets
-------------------------------
-The OpenFront-derived map sources and generated map artifacts listed in
-assets/maps/SOURCES.toml are licensed under CC BY-SA 4.0:
-https://creativecommons.org/licenses/by-sa/4.0/
-
-Source: OpenFront Inc. and Contributors, OpenFrontIO map-generator assets,
-commit f51f165b947a92cc683ade3a72c3800300e86e61.
-Shadows of War crops, corrects, classifies, downsizes, filters, packs, and
-renders these sources into its map.bin, map.bin.br, and thumbnail.webp files.
-OSM-derived maps are covered by their own source declarations. The player-facing
-map notice is included in assets/maps/NOTICE and served alongside map files.
+Browser client dependencies
+---------------------------
+The client’s runtime dependency notices and license texts are in
+WASM-THIRD-PARTY-NOTICES.zip.
 
 Fonts
 -----
-Press Start 2P (SIL Open Font License 1.1)
-https://fonts.google.com/specimen/Press+Start+2P
-
-Rust dependencies
------------------
-See docs/legal/NOTICE.deps (generated from Cargo.lock; not required for player runtime).
+Work Sans and Noto Sans are licensed under the SIL Open Font License 1.1.
+Copyright notices and the full license text are in fonts/OFL.txt in the client
+packages and at https://shadowsofwar.io/fonts/OFL.txt for hosted fonts.
 
 Emoji atlas
 -----------
-Twemoji by Twitter/X (community-maintained).
-CC-BY-4.0 — https://github.com/twitter/twemoji
+Twemoji graphics copyright 2019 Twitter, Inc. and other contributors, CC BY 4.0:
+https://github.com/twitter/twemoji/blob/master/LICENSE-GRAPHICS
+The curated glyph atlas is packed by Shadows of War from Twemoji 14.0.2.
 
 Other assets
 ------------
-See assets/SOURCES.toml and docs/legal/LICENSE-ASSETS for art licensing.
+Other shipped art uses the terms in LICENSE-ASSETS.

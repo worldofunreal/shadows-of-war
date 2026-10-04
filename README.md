@@ -92,12 +92,4 @@ The native build and the browser preview use the same client. The desktop shell 
 
 **Modified from OpenFrontIO. Source revision date: `2026-10-04`.** The in-game source link identifies the exact revision.
 
-The integrated game code is licensed under [AGPL-3.0-only](LICENSE), with OpenFront's additional terms in section 7 preserved in that file. Map files derived from OpenFront are separately licensed under CC BY-SA 4.0; their sources, attribution, and changes are recorded in [assets/maps/SOURCES.toml](assets/maps/SOURCES.toml) and included in the served map notice. See [COPYRIGHT](docs/legal/COPYRIGHT) and [NOTICE](docs/legal/NOTICE).
-
-**What this means if you build on this code:**
-
-- You may use, study, modify and redistribute it — including commercially — under the same AGPL-3.0 license.
-- If you run a modified version as a service over a network (a hosted game, a web client, or a relay), AGPL section 13 requires you to offer its **full corresponding source** to users who interact with it remotely.
-- Derivative game code remains under AGPL-3.0-only, including the OpenFront additional terms. Map and other artwork keep the separate terms recorded in [docs/legal/LICENSE-ASSETS](docs/legal/LICENSE-ASSETS).
-- The license does **not** grant the right to distribute your version under the *Shadows of War* name, logo or brand. Please rebrand derivatives entirely; we enforce our brand as a trademark matter separate from the code license.
-- AGPL cannot require you to notify the upstream project, and we ask nothing of you as a license condition — but if you run something public built on this code, we would genuinely like to hear about it. Non-compliance (closed-source network use, stripped notices, brand reuse) is copyright infringement and we do monitor and enforce it.
+Game code is licensed under [AGPL-3.0-only](LICENSE), including OpenFront's additional terms. The main menu links to the exact source revision for AGPL section 13. OpenFront-derived maps use CC BY-SA 4.0; their attribution, source, and changes are in the [map notice](assets/maps/NOTICE), served alongside map files. Other asset and client dependency notices are in [LICENSE-ASSETS](docs/legal/LICENSE-ASSETS) and [NOTICE](docs/legal/NOTICE).

@@ -10,7 +10,7 @@
 [map_license]
 name = "CC-BY-SA-4.0"
 url = "https://creativecommons.org/licenses/by-sa/4.0/"
-license_doc = "docs/legal/LICENSE-ASSETS"
+license_doc = "assets/maps/NOTICE"
 source = "https://github.com/openfrontio/OpenFrontIO/tree/f51f165b947a92cc683ade3a72c3800300e86e61/map-generator/assets"
 source_commit = "f51f165b947a92cc683ade3a72c3800300e86e61"
 attribution = "OpenFront Inc. and Contributors"

@@ -12,6 +12,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.android.gms.games.PlayGames
 import com.google.android.gms.games.PlayGamesSdk
+import com.google.android.gms.oss.licenses.v2.OssLicensesMenuActivity
 import com.google.androidbrowserhelper.trusted.LauncherActivity
 import com.google.androidbrowserhelper.trusted.TwaLauncher
 import org.json.JSONArray
@@ -115,6 +116,7 @@ class TwaLauncherActivity : LauncherActivity() {
                         .put("purchase")
                         .put("restore")
                         .put("playgames_silent_auth")
+                        .put("open_source_licenses")
                 )
                 .put("products", products)
             val result = session.postMessage(ready.toString(), null)
@@ -130,6 +132,7 @@ class TwaLauncherActivity : LauncherActivity() {
         try {
             val request = JSONObject(message)
             when (request.optString("type")) {
+                "open_source_licenses" -> startActivity(Intent(this, OssLicensesMenuActivity::class.java))
                 "playgames_silent_auth" -> startSilentPlayGamesAuth(request)
                 "purchase" -> handlePurchaseRequest(request)
                 "restore" -> handleRestoreRequest(request)

@@ -119,9 +119,14 @@
         var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
         var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
         var licenseUrl = sourceUrl ? sourceUrl.replace("/tree/", "/blob/") + "/LICENSE" : "";
+        var androidOssLicenses = isAndroidTwa() &&
+            typeof window.SOW_androidOssLicensesAvailable === "function" &&
+            window.SOW_androidOssLicensesAvailable()
+            ? "<a href='#' data-command='open_android_oss_licenses'>" + esc(SOW_t("menu.third_party_licenses")) + "</a>"
+            : "";
         return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
             renderSiteLink("/#faq", "site.faq") + renderSiteLink("/support/", "menu.support") + renderSiteLink("/terms/", "menu.terms") + renderSiteLink("/privacy/", "menu.privacy") + renderSiteLink("/cookies/", "menu.cookies") +
-            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a class='sow-menu__source-link' href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a><a class='sow-menu__license-link' href='" + esc(licenseUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.license_notice")) + "</a>" +
+            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a class='sow-menu__source-link' href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a><a class='sow-menu__license-link' href='" + esc(licenseUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.license_notice")) + "</a>" + androidOssLicenses +
             "</nav><span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
     }
 
@@ -1255,6 +1260,13 @@
             }
             return;
         }
+        if (command === "open_android_oss_licenses") {
+            event.preventDefault();
+            if (typeof window.SOW_openAndroidOssLicenses === "function") {
+                window.SOW_openAndroidOssLicenses();
+            }
+            return;
+        }
         if (command === "load_profile_more") {
             loadMoreProfileHistory();
             return;
@@ -1680,7 +1692,7 @@
 
     /* POKI_SHARED_STORE_EVENTS_BEGIN */
     window.addEventListener("sow:android-purchase-bridge-ready", function () {
-        if (state && !root.hidden && currentScreen() === "store") render();
+        if (state && !root.hidden) render();
     });
 
     window.addEventListener("sow:android-purchase-result", function (event) {

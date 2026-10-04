@@ -59,6 +59,21 @@ source = "original"
 license = "AGPL-3.0-or-later"
 files = ["icon-192.png", "icon-512.png", "icon-512-maskable.png"]
 
+[site_fonts]
+path = "sow-web/site/fonts/"
+source = "google_fonts"
+license = "SIL Open Font License 1.1"
+license_doc = "sow-web/site/fonts/OFL.txt"
+files = [
+  "work-sans-italic-latin-ext.woff2",
+  "work-sans-italic-latin.woff2",
+  "work-sans-latin-ext.woff2",
+  "work-sans-latin.woff2",
+  "noto-sans-regular.ttf",
+  "noto-sans-arabic-regular.ttf",
+  "noto-sans-cjk-regular.ttc",
+]
+
 [gameplay_avatars]
 path = "assets/gameplay/avatars/"
 source = "ai_generated"
@@ -92,6 +107,7 @@ notes = "Optimized transparent gem-bundle artwork for the three configured produ
 path = "assets/gameplay/fonts/"
 source = "google_fonts"
 license = "SIL Open Font License 1.1"
+license_doc = "sow-web/site/fonts/OFL.txt"
 files = ["WorkSans-Black.ttf", "WorkSans-Regular.ttf", "msdf-atlas.png", "msdf-atlas.json"]
 notes = "Compile-time gameplay renderer/UI assets."
 

@@ -1239,6 +1239,17 @@ fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
         out.join("sow-controls.css"),
     )?;
     copy_dir(&paths.shell.join("sdk"), &out.join("sdk"))?;
+    for (source, destination) in [
+        ("LICENSE", "LICENSE"),
+        ("docs/legal/NOTICE", "NOTICE"),
+        ("docs/legal/LICENSE-ASSETS", "LICENSE-ASSETS"),
+        (
+            "docs/legal/WASM-THIRD-PARTY-NOTICES.zip",
+            "WASM-THIRD-PARTY-NOTICES.zip",
+        ),
+    ] {
+        fs::copy(paths.root.join(source), out.join(destination))?;
+    }
     Ok(())
 }
 
@@ -1969,6 +1980,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "styles.css",
         "legal.css",
         "fonts/fonts.css",
+        "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
         "fonts/work-sans-latin-ext.woff2",
         "fonts/work-sans-italic-latin.woff2",
@@ -1983,9 +1995,14 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "support/index.html",
         "8d227b8f9e6140d39e3381a1829e1db3.txt",
         "sow.svg",
+        "LICENSE",
+        "NOTICE",
+        "LICENSE-ASSETS",
+        "WASM-THIRD-PARTY-NOTICES.zip",
         "manifest.webmanifest",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
+        "maps/NOTICE",
         "icon-192.png",
         "icon-512.png",
         "icon-512-maskable.png",
@@ -2196,6 +2213,10 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         "sw.js",
         "game-manifest.json",
         "sdk/store_portals.js",
+        "LICENSE",
+        "NOTICE",
+        "LICENSE-ASSETS",
+        "WASM-THIRD-PARTY-NOTICES.zip",
     ] {
         if !dir.join(required).is_file() {
             bail!("crazygames bundle missing {}", required);
@@ -2208,6 +2229,10 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         }
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
+    let notice = fs::read_to_string(dir.join("NOTICE"))?;
+    if !notice.contains("https://shadowsofwar.io/fonts/OFL.txt") {
+        bail!("crazygames notice is missing the hosted font license link");
+    }
     verify_cg_local_resources(dir, &html)?;
     for needle in [
         "sdk.crazygames.com/crazygames-sdk-v3.js",
@@ -2238,7 +2263,12 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "game-manifest.json",
         "manifest.webmanifest",
         "sdk/store_portals.js",
+        "LICENSE",
+        "NOTICE",
+        "LICENSE-ASSETS",
+        "WASM-THIRD-PARTY-NOTICES.zip",
         "fonts/fonts.css",
+        "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
         "fonts/noto-sans-regular.ttf",
         "fonts/noto-sans-arabic-regular.ttf",
@@ -2973,7 +3003,12 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "game-manifest.json",
         "manifest.webmanifest",
         "sdk/store_portals.js",
+        "LICENSE",
+        "NOTICE",
+        "LICENSE-ASSETS",
+        "WASM-THIRD-PARTY-NOTICES.zip",
         "fonts/fonts.css",
+        "fonts/OFL.txt",
         "fonts/work-sans-latin.woff2",
         "fonts/noto-sans-regular.ttf",
         "fonts/noto-sans-arabic-regular.ttf",
@@ -4074,6 +4109,9 @@ mod tests {
         }
         for required in [
             "sdk/store_portals.js",
+            "LICENSE",
+            "NOTICE",
+            "LICENSE-ASSETS",
             "sdk/poki_portals.js",
             "sdk/jest_portals.js",
         ] {

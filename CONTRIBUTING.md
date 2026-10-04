@@ -58,9 +58,9 @@ See also “License & derivatives” in the README for obligations that apply to
 
 ## Attribution
 
-- **Player-facing UI:** brand (`© Shadows of War`), OpenFront attribution on the main menu, full notices in Credits.
+- **Player-facing UI:** keep the OpenFront credit and exact source/license links in the main menu.
 - **Marketing HTML:** same footer pattern as `sow-web/site/`; do not add the copyright holder’s personal name.
-- **Legal files:** update only under `docs/legal/` (COPYRIGHT, NOTICE, LICENSE-ASSETS).
+- **Legal notices:** update the root `LICENSE`, `docs/legal/NOTICE`, `docs/legal/LICENSE-ASSETS`, or `assets/maps/NOTICE` at its existing source.
 - **Upstream OpenFront:** legal entity is OpenFront Inc. and Contributors (see their LICENSING.md); player UI uses “OpenFront and Contributors”.
 
 ## Code of conduct

@@ -240,6 +240,7 @@
   var ANDROID_PENDING_KEY = "sow_playgames_pending";
   var androidPurchasePort = null;
   var androidPurchaseProducts = null;
+  var androidBridgeCapabilities = [];
   var androidAuthAttempt = 0;
   var androidLoaderReady = false;
   var androidSilentAuthTimer = 0;
@@ -326,6 +327,7 @@
     if (!port) return;
     androidPurchasePort = port;
     androidPurchaseProducts = Array.isArray(ready.products) ? ready.products : null;
+    androidBridgeCapabilities = Array.isArray(ready.capabilities) ? ready.capabilities : [];
     window.dispatchEvent(new CustomEvent("sow:android-purchase-bridge-ready"));
     requestAndroidSilentAuth();
     port.onmessage = function (messageEvent) {
@@ -339,6 +341,16 @@
 
   window.SOW_isAndroidPurchaseBridgeReady = function () {
     return isAndroidTwa() && !!androidPurchasePort;
+  };
+
+  window.SOW_androidOssLicensesAvailable = function () {
+    return window.SOW_isAndroidPurchaseBridgeReady() &&
+      androidBridgeCapabilities.indexOf("open_source_licenses") !== -1;
+  };
+
+  window.SOW_openAndroidOssLicenses = function () {
+    return window.SOW_androidOssLicensesAvailable() &&
+      postAndroidBridgeMessage({ type: "open_source_licenses" });
   };
 
   window.SOW_androidPurchaseSupports = function (productId) {

@@ -90,8 +90,9 @@ writes exactly one lossless **512×288 WebP** at
 The OpenFront-derived image recipes and their generated `map.bin`, `map.bin.br`,
 and `thumbnail.webp` artifacts are CC BY-SA 4.0. The pinned source commit,
 attribution, and Shadows of War modifications are recorded in
-`assets/maps/SOURCES.toml`; the full notice is in `docs/legal/NOTICE` and
-`docs/legal/LICENSE-ASSETS`. OSM-derived maps retain their own source terms.
+`assets/maps/SOURCES.toml`; the player notice and license link are in
+`assets/maps/NOTICE`, served at `/maps/NOTICE`. OSM-derived maps retain their own
+source terms.
 
 ## Current generation and packaging code
 

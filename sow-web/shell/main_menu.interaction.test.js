@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const shell = __dirname;
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
+const portalSource = fs.readFileSync(path.join(shell, "sdk/store_portals.js"), "utf8");
 const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.js"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
 const profileCss = fs.readFileSync(path.join(shell, "main_menu.profile.css"), "utf8");
@@ -275,6 +276,10 @@ test("AGPL legal notice links to each release license and stays visible in the c
     assert.match(pokiSource, /data-command='poki_license'/);
     assert.match(pokiSource, /window\.SOW_pokiOpenExternalLink\(licenseUrl\)/);
     assert.match(licenseMenuLayout, /:not\(\.sow-menu__source-link\):not\(\.sow-menu__license-link\)/);
+    assert.match(shellSource, /SOW_androidOssLicensesAvailable/);
+    assert.match(shellSource, /data-command='open_android_oss_licenses'/);
+    assert.match(shellSource, /window\.SOW_openAndroidOssLicenses\(\)/);
+    assert.match(portalSource, /androidBridgeCapabilities\.indexOf\("open_source_licenses"\)/);
 
     const localeRoot = path.join(shell, "../../sow-i18n/strings");
     const localeFiles = fs.readdirSync(localeRoot)
@@ -283,6 +288,7 @@ test("AGPL legal notice links to each release license and stays visible in the c
     assert.equal(localeFiles.length, 15);
     for (const file of localeFiles) {
         assert.match(fs.readFileSync(file, "utf8"), /^license_notice = ".+"$/m, `${file} lacks the notice translation`);
+        assert.match(fs.readFileSync(file, "utf8"), /^third_party_licenses = ".+"$/m, `${file} lacks Android OSS translation`);
     }
 });
 
