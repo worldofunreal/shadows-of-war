@@ -793,6 +793,13 @@ fn strip_marked_section(source: &str, begin: &str, end: &str) -> Result<String> 
     Ok(output)
 }
 
+fn strip_optional_marked_section(source: &str, begin: &str, end: &str) -> Result<String> {
+    if !source.contains(begin) && !source.contains(end) {
+        return Ok(source.to_string());
+    }
+    strip_marked_section(source, begin, end)
+}
+
 struct IndexBuild<'a> {
     version: &'a str,
     js: &'a str,
@@ -982,7 +989,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     fs::write(&index, &html)?;
     let mut loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     if poki || jest {
-        loader = strip_marked_section(
+        loader = strip_optional_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
@@ -1825,6 +1832,25 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
     for (episode_id, roster_path) in &rosters {
         let roster: serde_json::Value = serde_json::from_str(&fs::read_to_string(roster_path)?)
             .with_context(|| format!("parse {}", roster_path.display()))?;
+        let map_id = roster
+            .get("map")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| {
+                !id.is_empty()
+                    && id.bytes().all(|byte| {
+                        byte.is_ascii_lowercase()
+                            || byte.is_ascii_digit()
+                            || matches!(byte, b'-' | b'_')
+                    })
+            })
+            .with_context(|| format!("campaign roster has invalid map id: {episode_id}"))?;
+        let map_path = paths.assets_maps.join(map_id).join("map.bin.br");
+        if !map_path.is_file() {
+            bail!(
+                "campaign map asset missing: {episode_id} -> {map_id} ({})",
+                map_path.display()
+            );
+        }
         let trigger_path = triggers
             .get(episode_id)
             .with_context(|| format!("missing triggers for {episode_id}"))?;
@@ -2924,7 +2950,7 @@ fn package_poki(
     let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     fs::write(
         &loader_path,
-        strip_marked_section(
+        strip_optional_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
@@ -3198,7 +3224,7 @@ fn package_jest(
     let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     fs::write(
         &loader_path,
-        strip_marked_section(
+        strip_optional_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
