@@ -36,6 +36,33 @@ impl SowApp {
 
         // ── UI State ────────────────────────────────────────────────────────────
         let asset_config = crate::AssetConfig::resolve();
+        let mut app = ClientApp::new();
+        crate::map_cache::hydrate_asset_maps(&mut app.asset_loader.maps);
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(mql)) = window.match_media("(prefers-reduced-motion: reduce)") {
+                    if mql.matches() {
+                        app.settings_state.reduced_motion = true;
+                    }
+                }
+            }
+        }
+
+        // ── Network State ───────────────────────────────────────────────────────
+        let net_client: Option<SowClient> = None;
+        let turn_queue = std::collections::VecDeque::new();
+        let my_player_id: Option<u16> = None;
+        let my_lobby_id: Option<u64> = None;
+        let (map_tx_raw, map_rx) = crossbeam_channel::unbounded::<MapDownloadEvent>();
+        let map_tx = WakeSender::new(map_tx_raw);
+        let (db_tx_raw, db_rx) = crossbeam_channel::unbounded::<crate::player_progress::DbEvent>();
+        let db_tx = WakeSender::new(db_tx_raw);
+        type EngineInitData = (
+            sow_core::game::GameState,
+            sow_core::water_components::WaterComponents,
+            sow_core::protocol::ServerStartMessage,
+        );
         let (engine_init_tx_raw, engine_init_rx) =
             crossbeam_channel::unbounded::<EngineInitEvent>();
         let engine_init_tx = WakeSender::new(engine_init_tx_raw);
