@@ -1821,6 +1821,25 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
     for (episode_id, roster_path) in &rosters {
         let roster: serde_json::Value = serde_json::from_str(&fs::read_to_string(roster_path)?)
             .with_context(|| format!("parse {}", roster_path.display()))?;
+        let map_id = roster
+            .get("map")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| {
+                !id.is_empty()
+                    && id.bytes().all(|byte| {
+                        byte.is_ascii_lowercase()
+                            || byte.is_ascii_digit()
+                            || matches!(byte, b'-' | b'_')
+                    })
+            })
+            .with_context(|| format!("campaign roster has invalid map id: {episode_id}"))?;
+        let map_path = paths.assets_maps.join(map_id).join("map.bin.br");
+        if !map_path.is_file() {
+            bail!(
+                "campaign map asset missing: {episode_id} -> {map_id} ({})",
+                map_path.display()
+            );
+        }
         let trigger_path = triggers
             .get(episode_id)
             .with_context(|| format!("missing triggers for {episode_id}"))?;
