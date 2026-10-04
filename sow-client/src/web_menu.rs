@@ -436,6 +436,9 @@ impl SowApp {
         for command in take_commands() {
             match command {
                 WebMenuCommand::QuickMatch => {
+                    self.request_join(None, false, None, None);
+                }
+                WebMenuCommand::JoinLobby { lobby_id } => {
                     self.process_ui_actions(Some(UiAction::JoinLobby(lobby_id)));
                 }
                 WebMenuCommand::JoinWithPassword { lobby_id, password } => {
@@ -444,6 +447,54 @@ impl SowApp {
                     self.process_ui_actions(Some(UiAction::JoinWithPassword(lobby_id)));
                 }
                 WebMenuCommand::JoinCode { code } => {
+                    self.ui.app.main_menu_state.join_lobby_code = code;
+                    self.process_ui_actions(Some(UiAction::JoinWithCode));
+                }
+                WebMenuCommand::CreateGame {
+                    config,
+                    is_private,
+                    password,
+                } => {
+                    match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
+                        Ok(config) => self.process_ui_actions(Some(UiAction::CreateGame {
+                            config: Box::new(config),
+                            is_private,
+                            password,
+                        })),
+                        Err(error) => {
+                            log::warn!("[WEB MENU] invalid create-game config: {error}");
+                            self.ui.app.main_menu_state.error_message =
+                                Some(crate::ui::UiText::new("menu.invalid_game_configuration"));
+                        }
+                    }
+                }
+                WebMenuCommand::StartSinglePlayer { config } => {
+                    match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
+                        Ok(config) => self.process_ui_actions(Some(UiAction::StartSinglePlayer(
+                            Box::new(config),
+                        ))),
+                        Err(error) => {
+                            log::warn!("[WEB MENU] invalid single-player config: {error}");
+                            self.ui.app.main_menu_state.error_message =
+                                Some(crate::ui::UiText::new("menu.invalid_game_configuration"));
+                        }
+                    }
+                }
+                WebMenuCommand::StartCampaignEpisode {
+                    episode_id,
+                    roster,
+                    match_config,
+                } => {
+                    let Some(campaign) = CampaignId::from_episode_id(&episode_id) else {
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("tutorial.unavailable"));
+                        continue;
+                    };
+                    if !campaign.is_unlocked(&self.progress) {
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("menu.campaign_episode_locked"));
+                        continue;
+                    }
                     self.ui.tutorial_marker_player_id = None;
                     self.boot_campaign_pending = None;
                     if let Err(error) =

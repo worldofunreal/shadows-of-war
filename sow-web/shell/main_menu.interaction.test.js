@@ -562,7 +562,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const loaderStateSync = shellSource.indexOf("syncWebLoaderForState(state)", tutorialStateUpdate);
     assert.ok(tutorialStateUpdate >= 0 && loaderStateSync > tutorialStateUpdate,
         "the same menu-state update starts the tutorial request before syncing the existing loader");
-    const campaignCommandStart = webMenu.indexOf("WebMenuCommand::StartCampaignEpisode {");
+    const campaignCommandStart = webMenu.lastIndexOf("WebMenuCommand::StartCampaignEpisode {");
     const campaignCommandEnd = webMenu.indexOf("WebMenuCommand::CompleteCampaignEpisode {", campaignCommandStart);
     assert.ok(campaignCommandStart >= 0 && campaignCommandEnd > campaignCommandStart);
     assert.match(webMenu.slice(campaignCommandStart, campaignCommandEnd),
