@@ -85,15 +85,6 @@ impl SowApp {
         };
         let defeats = self.progress_session_defeats;
         let (kills, deaths, assists) = (me.kills, me.deaths, me.assists);
-        crate::analytics::track_with(
-            "match_ended_client",
-            serde_json::json!({
-                "won": won,
-                "offline": self.net.is_offline,
-                "tutorial": self.sim.config.tutorial,
-                "kills": kills,
-            }),
-        );
         let server_owned_tutorial = self.progress_account_id.is_some()
             && self.net.is_offline
             && self.sim.config.tutorial

@@ -158,22 +158,6 @@ impl LoadTelemetry {
         let now = web_time::Instant::now();
         *target = Some(now);
         Self::log_phase(phase, self.started_at, now);
-        crate::analytics::track_with("load_stage", serde_json::json!({ "stage": phase }));
-    }
-
-    fn log_phase(
-        phase: &'static str,
-        started_at: Option<web_time::Instant>,
-        now: web_time::Instant,
-    ) {
-        let elapsed_ms = started_at
-            .map(|start| now.duration_since(start).as_millis())
-            .unwrap_or(0);
-        log::info!(
-            "[CLIENT TELEMETRY] phase={} elapsed_ms={}",
-            phase,
-            elapsed_ms
-        );
     }
 }
 

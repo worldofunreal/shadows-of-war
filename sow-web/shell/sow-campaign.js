@@ -181,13 +181,12 @@
                     issue(null, "roster", "Faction IDs and names must be valid, unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "hostility", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group"], null, "roster.factions");
+                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group"], null, "roster.factions");
                 factions.add(faction.id); factionNames.add(faction.name);
                 rosterFactions.add(faction.id);
                 if (!Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000 || typeof faction.civ !== "string" || !faction.civ || typeof faction.leader !== "string" || !faction.leader || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid starting troops, civilization, leader or spawn: " + faction.name);
                 else if (expectedMap && (faction.x >= expectedMap[1] || faction.y >= expectedMap[2])) issue(null, "roster", "Faction spawn is outside the campaign map: " + faction.name);
                 if (!["neutral", "allied", "enemy"].includes(faction.relation)) issue(null, "roster.factions.relation", "Choose neutral, allied or enemy for " + faction.name + ".");
-                if (faction.hostility != null && !["aggressive", "passive", "non_combatant"].includes(faction.hostility)) issue(null, "roster.factions.hostility", "Choose aggressive, passive or non-combatant combat behavior.");
                 if (faction.can_request_alliance != null && typeof faction.can_request_alliance !== "boolean") issue(null, "roster.factions.can_request_alliance", "Choose whether this faction can send alliance offers.");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");

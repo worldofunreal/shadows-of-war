@@ -1,7 +1,7 @@
 //! Campaign data validation and conversion. The browser owns episode JSON and sends a validated
 //! roster to the engine as `GameConfig.scripted_spawns`.
 
-use sow_core::game_config::{CampaignHostility, ScriptedSpawn};
+use sow_core::game_config::ScriptedSpawn;
 use sow_core::player::{Civilization, Leader};
 use sow_core::protocol::CampaignRelation;
 
@@ -123,7 +123,6 @@ pub struct Faction {
     pub y: u32,
     pub starting_troops: u32,
     pub relation: CampaignRelation,
-    pub hostility: Option<CampaignHostility>,
     pub can_request_alliance: bool,
     pub color: [f32; 3],
     pub civ: Civilization,
@@ -206,7 +205,6 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_gold_loot_override: f.gold_loot_override,
             campaign_alliance_group: f.alliance_group.clone(),
             campaign_relation: Some(f.relation),
-            campaign_hostility: f.hostility,
             campaign_faction_id: Some(f.id.clone()),
             campaign_can_request_alliance: Some(f.can_request_alliance),
         })
@@ -225,8 +223,6 @@ struct RosterEntry {
     y: u32,
     starting_troops: u32,
     relation: CampaignRelation,
-    #[serde(default)]
-    hostility: Option<CampaignHostility>,
     #[serde(default)]
     can_request_alliance: Option<bool>,
     #[serde(default)]
@@ -354,7 +350,6 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             y: e.y,
             starting_troops: e.starting_troops,
             relation,
-            hostility: e.hostility,
             can_request_alliance: e.can_request_alliance.unwrap_or(true),
             color,
             civ,
@@ -454,25 +449,20 @@ mod tests {
 
     #[test]
     fn campaign_relationship_and_alliance_offer_setting_reach_scripted_spawns() {
-        let roster = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"non_combatant","can_request_alliance":false,"civ":"Roman Empire","leader":"Caesar","gold_loot_override":200}]}"##;
+        let roster = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","can_request_alliance":false,"civ":"Roman Empire","leader":"Caesar","gold_loot_override":200}]}"##;
         let (factions, _, _) = parse_roster(roster).unwrap();
         let spawn = &to_scripted(&factions)[0];
         assert!(!factions[0].can_request_alliance);
-        assert_eq!(factions[0].hostility, Some(CampaignHostility::NonCombatant));
+        assert_eq!(factions[0].starting_troops, 0);
         assert_eq!(spawn.campaign_can_request_alliance, Some(false));
         assert_eq!(spawn.campaign_relation, Some(CampaignRelation::Enemy));
-        assert_eq!(
-            spawn.campaign_hostility,
-            Some(CampaignHostility::NonCombatant)
-        );
         assert_eq!(spawn.campaign_gold_loot_override, Some(200));
 
         let legacy = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","civ":"Roman Empire","leader":"Caesar"}]}"##;
         let (legacy, _, _) = parse_roster(legacy).unwrap();
         assert!(legacy[0].can_request_alliance);
-        assert_eq!(legacy[0].hostility, None);
-        assert_eq!(to_scripted(&legacy)[0].campaign_hostility, None);
-        let invalid_hostility = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"friendly","civ":"Roman Empire","leader":"Caesar"}]}"##;
-        assert!(parse_roster(invalid_hostility).is_none());
+        assert_eq!(to_scripted(&legacy)[0].campaign_relation, Some(CampaignRelation::Enemy));
+        let removed_behavior = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"aggressive","civ":"Roman Empire","leader":"Caesar"}]}"##;
+        assert!(parse_roster(removed_behavior).is_none());
     }
 }

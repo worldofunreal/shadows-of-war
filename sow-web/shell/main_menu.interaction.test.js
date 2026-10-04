@@ -1298,7 +1298,7 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
             assert.ok(typeof faction.civ === "string" && faction.civ, `${episodeId}/${faction.name}: civilization`);
             assert.ok(typeof faction.leader === "string" && faction.leader, `${episodeId}/${faction.name}: leader`);
             for (const removed of ["role", "betrayal"]) assert.equal(Object.hasOwn(faction, removed), false, `${episodeId}/${faction.name}: no ${removed}`);
-            if (episodeId !== "boudica") assert.equal(Object.hasOwn(faction, "hostility"), false, `${episodeId}/${faction.name}: no Boudica combat override`);
+            assert.equal(Object.hasOwn(faction, "hostility"), false, `${episodeId}/${faction.name}: no combat override`);
             assert.match(faction.color, /^#[0-9a-f]{6}$/i, `${episodeId}/${faction.name}: map color`);
         }
         const actualTroops = roster.factions.reduce((counts, faction) => {
@@ -1411,9 +1411,9 @@ test("Boudica opens with a choice, then guides allied support, rebuilding and th
     assert.equal(roster.factions.filter(faction => faction.relation === "enemy").length, 11, "declared Roman enemies start red");
     const target = roster.factions.find(faction => faction.name === "Roman Outpost");
     assert.deepEqual({ id: target.id, civ: target.civ, x: target.x, y: target.y }, { id: "roman_outpost", civ: "Roman Empire", x: 706, y: 64 });
-    assert.deepEqual({ troops: target.starting_troops, relation: target.relation, hostility: target.hostility, canRequestAlliance: target.can_request_alliance, loot: target.gold_loot_override }, { troops: 0, relation: "enemy", hostility: "non_combatant", canRequestAlliance: false, loot: 200 });
+    assert.deepEqual({ troops: target.starting_troops, relation: target.relation, canRequestAlliance: target.can_request_alliance, loot: target.gold_loot_override }, { troops: 0, relation: "enemy", canRequestAlliance: false, loot: 200 });
     assert.ok(roster.factions.filter(faction => faction.civ === "Roman Empire").every(faction => faction.relation === "enemy" && faction.can_request_alliance === false), "Roman factions stay enemies and never send alliance offers");
-    assert.ok(roster.factions.filter(faction => ["colonia_veterans", "tax_collectors", "roman_supply_depot"].includes(faction.id)).every(faction => faction.relation === "enemy" && faction.hostility === "passive"));
+    assert.ok(roster.factions.filter(faction => ["colonia_veterans", "tax_collectors", "roman_supply_depot"].includes(faction.id)).every(faction => faction.relation === "enemy"));
     for (const name of ["Colonia Veterans", "Tax Collectors"]) {
         const faction = roster.factions.find(item => item.name === name);
         assert.equal(faction.civ, "Roman Empire");
@@ -1916,12 +1916,9 @@ test("campaign validation rejects unsupported rules and duplicate event response
         reactions: [{ id: "aid", after: "objective", when: { type: "support", target: "ally" }, title_key: "tutorial.aid_title", body_key: "tutorial.aid_body" }]
     };
     assert.deepEqual(campaign.validate(definition, roster).errors, []);
-    const supportedCombatBehavior = JSON.parse(JSON.stringify(roster));
-    supportedCombatBehavior.factions[0].hostility = "aggressive";
-    assert.deepEqual(campaign.validate(definition, supportedCombatBehavior).errors, []);
-    const invalidHostility = JSON.parse(JSON.stringify(roster));
-    invalidHostility.factions[0].hostility = "friendly";
-    assert.ok(campaign.validate(definition, invalidHostility).errors.some(issue => issue.field === "roster.factions.hostility"));
+    const removedCombatBehavior = JSON.parse(JSON.stringify(roster));
+    removedCombatBehavior.factions[0].hostility = "passive";
+    assert.ok(campaign.validate(definition, removedCombatBehavior).errors.some(issue => issue.field === "roster.factions"));
     const legacyTransportTarget = JSON.parse(JSON.stringify(definition));
     delete legacyTransportTarget.steps[0].trigger.unit;
     assert.deepEqual(campaign.validate(legacyTransportTarget, roster).errors, [], "version 2 target-only fleet goals remain valid");
@@ -3393,9 +3390,6 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     const report = campaign.validate(definition, roster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) });
     assert.deepEqual(report.errors, []);
     assert.deepEqual(report.warnings, []);
-    const combatBehaviorRoster = structuredClone(roster);
-    combatBehaviorRoster.factions.find(faction => faction.id === "camulodunum").hostility = "aggressive";
-    assert.deepEqual(campaign.validate(definition, combatBehaviorRoster, { hasText: () => true, hasAvatar: avatar => avatars.has(avatar) }).errors, []);
     assert.equal(definition.menu_guide.dismissible, true);
     assert.equal(definition.menu_guide.entry, "boudica_return_lobby");
     assert.equal(definition.steps.find(step => step.id === definition.menu_guide.entry).trigger.action, "menu_lobby");
@@ -3476,8 +3470,7 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.match(campaignMapEditorHtml, /factionColor\(f\).*ALLY_COLOR.*ENEMY_COLOR/s);
     assert.match(campaignMapEditorHtml, /ctx\.fillStyle = roster\.player_color \|\| PLAYER_COLOR/);
     assert.doesNotMatch(campaignMapEditorHtml, /Alliance betrayal|BETRAYALS|ROLES/);
-    assert.match(campaignMapEditorHtml, /id="fhostility"/);
-    assert.match(campaignMapEditorHtml, /hostility:f\.hostility/);
+    assert.doesNotMatch(campaignMapEditorHtml, /fhostility|hostility/);
     assert.match(campaignMapEditorHtml, /id="fcanrequest"/);
     assert.match(campaignMapEditorHtml, /Allow AI requests and generic neutral terms/);
     assert.equal(step("boudica_outpost_colonia_veterans").next, "boudica_outpost_tax_collectors");
@@ -3524,7 +3517,6 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
         const faction = roster.factions.find(item => item.id === id);
         assert.equal(faction.name, id[0].toUpperCase() + id.slice(1));
         assert.equal(faction.relation, "enemy");
-        assert.equal(faction.hostility, "aggressive");
         assert.equal(faction.can_request_alliance, false);
     }
     assert.equal(roster.factions.find(faction => faction.name === "Catuvellauni").iq, 60);

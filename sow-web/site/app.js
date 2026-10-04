@@ -7,42 +7,6 @@
     return value === `[${key}]` ? fallback : value;
   };
 
-  // First-party, vendor-free landing funnel telemetry. The game shell owns
-  // gameplay events; this page only measures entry and the Play now CTA.
-  const siteSessionId = (() => {
-    try {
-      const key = 'sow_site_session_id';
-      const existing = sessionStorage.getItem(key);
-      if (existing) return existing;
-      const created = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      sessionStorage.setItem(key, created);
-      return created;
-    } catch (_) {
-      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    }
-  })();
-
-  function siteTrack(name, props) {
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '::1') return;
-    const event = {
-      v: 1,
-      name,
-      ts_ms: Date.now(),
-      session_id: siteSessionId,
-      portal: 'site',
-      platform: 'web',
-      build: 'site',
-      locale: (typeof window.SOW_getLocale === 'function' ? window.SOW_getLocale() : 'en').slice(0, 32),
-    };
-    if (props && typeof props === 'object') event.props = props;
-    fetch('/api/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ events: [event] }),
-      keepalive: true,
-    }).catch(() => {});
-  }
-
   const heroVideo = $('.hero-video');
   if (heroVideo) {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -147,13 +111,6 @@
     });
   }
 
-  function bindSiteAnalytics() {
-    siteTrack('landing_visit');
-    $$('a[href="/play/"]').forEach(link => {
-      link.addEventListener('click', () => siteTrack('play_now_click'));
-    });
-  }
-
   bindLeaderGrid();
   if (leaders.length) {
     updateLeader(0);
@@ -162,5 +119,4 @@
   if (window.SOW_I18N_READY && typeof window.SOW_I18N_READY.then === 'function') {
     window.SOW_I18N_READY.then(() => updateLeader(activeLeaderIndex)).catch(() => {});
   }
-  bindSiteAnalytics();
 })();

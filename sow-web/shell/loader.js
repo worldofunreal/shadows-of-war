@@ -500,33 +500,6 @@
         }
     }
 
-    function sowAnalyticsEnvelope(name) {
-        let session = window.SOW_ANALYTICS_SESSION_ID;
-        if (!session) {
-            try { session = sessionStorage.getItem('sow_analytics_session'); } catch (_) {}
-            if (!session) {
-                session = window.crypto && typeof window.crypto.randomUUID === 'function'
-                    ? window.crypto.randomUUID()
-                    : String(Date.now()) + Math.random().toString(16).slice(2);
-            }
-            window.SOW_ANALYTICS_SESSION_ID = session;
-            try { sessionStorage.setItem('sow_analytics_session', session); } catch (_) {}
-        }
-        const userAgent = String(window.navigator.userAgent || '').toLowerCase();
-        return {
-            v: 1,
-            name: name,
-            ts_ms: Date.now(),
-            session_id: session,
-            portal: window.SOW_PORTAL || 'site',
-            platform: userAgent.includes('android') ? 'android' : /iphone|ipad|ipod/.test(userAgent) ? 'ios' : 'web',
-            build: window.SOW_BUILD_VERSION || 'unknown',
-            locale: typeof window.SOW_getLocale === 'function' ? window.SOW_getLocale() : (window.SOW_LOCALE_DEFAULT || 'en'),
-            viewport_class: window.innerWidth <= 640 ? 'mobile' : 'desktop',
-            experience_cohort: 'unknown',
-        };
-    }
-
     function sowTrack(name) {
         if (window.SOW_PORTAL === 'poki') {
             if (typeof window.SOW_pokiMeasure === 'function') {
@@ -535,17 +508,6 @@
             return;
         }
         if (window.SOW_PORTAL === 'jest') return;
-        /* SOW_FIRST_PARTY_ANALYTICS_BEGIN */
-        try {
-            const base = String(window.SOW_DATABASE_URL || '/api').replace(/\/$/, '');
-            fetch(base + '/event', {
-                method: 'POST',
-                keepalive: true,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ events: [sowAnalyticsEnvelope(name)] }),
-            }).catch(() => {});
-        } catch (_) {}
-        /* SOW_FIRST_PARTY_ANALYTICS_END */
     }
 
     function finish(cycleId) {

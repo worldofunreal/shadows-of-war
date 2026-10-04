@@ -33,7 +33,7 @@ struct AppState {
     stripe_webhook_secret: Option<String>,
     revenuecat_stripe_api_key: Option<String>,
     redb_path: String,
-    events: std::sync::Mutex<sow_data::events::EventSink>,
+    legacy_events: std::sync::Mutex<sow_data::events::EventSink>,
     playgames_handoffs: std::sync::Mutex<HashMap<String, PlayGamesHandoff>>,
     playgames_sessions: std::sync::Mutex<HashMap<String, PlayGamesSession>>,
     playgames_access_tokens: std::sync::Mutex<HashMap<String, PlayGamesAccessToken>>,
@@ -1529,6 +1529,14 @@ struct SelfDeleteResponse {
     keys_removed: u64,
 }
 
+fn erase_legacy_events(state: &AppState, account_id: &str) -> std::io::Result<u64> {
+    let mut events = state
+        .legacy_events
+        .lock()
+        .map_err(|_| std::io::Error::other("legacy event retention lock poisoned"))?;
+    events.erase_account_id(account_id)
+}
+
 async fn handle_self_delete(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SelfDeleteRequest>,
@@ -1540,6 +1548,16 @@ async fn handle_self_delete(
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
                 error: "account ownership proof failed".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    if let Err(error) = erase_legacy_events(&state, account_id) {
+        error!("[privacy] self-delete legacy event scrub failed: {error}");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "account deletion unavailable".to_string(),
             }),
         )
             .into_response();
@@ -1787,6 +1805,16 @@ async fn handle_internal_profile_delete(
             .into_response();
     }
     let account_id = payload.account_id.trim().to_string();
+    if let Err(error) = erase_legacy_events(&state, &account_id) {
+        error!("[privacy] account-delete legacy event scrub failed: {error}");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "account deletion unavailable".to_string(),
+            }),
+        )
+            .into_response();
+    }
     match state.db.delete_account(&account_id).await {
         Ok(report) => {
             info!(
@@ -2075,8 +2103,8 @@ async fn main() {
         .unwrap_or_else(|| "analytics".to_string());
 
     let analytics_dir = std::env::var("SOW_ANALYTICS_DIR").unwrap_or(default_analytics_dir);
-    let event_sink = sow_data::events::EventSink::new(&analytics_dir).unwrap_or_else(|error| {
-        panic!("Failed to initialize analytics event sink at {analytics_dir}: {error}");
+    let legacy_events = sow_data::events::EventSink::new(&analytics_dir).unwrap_or_else(|error| {
+        panic!("Failed to initialize legacy event retention at {analytics_dir}: {error}");
     });
 
     let (replay_verification_tx, replay_verification_rx) = tokio::sync::mpsc::channel(16);
@@ -2094,7 +2122,7 @@ async fn main() {
         stripe_webhook_secret,
         revenuecat_stripe_api_key,
         redb_path: redb_path.clone(),
-        events: std::sync::Mutex::new(event_sink),
+        legacy_events: std::sync::Mutex::new(legacy_events),
         playgames_handoffs: std::sync::Mutex::new(HashMap::new()),
         playgames_sessions: std::sync::Mutex::new(HashMap::new()),
         playgames_access_tokens: std::sync::Mutex::new(HashMap::new()),
@@ -2115,6 +2143,22 @@ async fn main() {
         }
     });
 
+    let event_retention_state = Arc::clone(&state);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(24 * 60 * 60));
+        loop {
+            interval.tick().await;
+            match event_retention_state.legacy_events.lock() {
+                Ok(events) => {
+                    if let Err(error) = events.prune_old() {
+                        error!("legacy event retention cleanup failed: {error}");
+                    }
+                }
+                Err(error) => error!("legacy event retention lock failed: {error}"),
+            }
+        }
+    });
+
     // Configure CORS for web portal compatibility
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -2130,8 +2174,7 @@ async fn main() {
     // Define router
     let app = Router::new()
         .route("/healthz", get(handle_healthz))
-        .route("/event", post(handle_event))
-        .route("/internal/analytics", get(handle_internal_analytics))
+        .route("/event", post(handle_event_gone))
         .route("/profile", get(handle_get_profile))
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
         .route("/auth/playgames/consume", post(handle_playgames_consume))
@@ -2547,143 +2590,9 @@ async fn handle_healthz() -> impl IntoResponse {
     (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
 }
 
-const MAX_EVENT_BATCH: usize = 100;
-
-#[derive(Deserialize)]
-struct EventBatchRequest {
-    events: Vec<sow_data::events::AnalyticsEvent>,
-}
-
-/// Append one validated event line to the daily JSONL sink.
-fn emit_event_line(
-    state: &AppState,
-    name: &str,
-    account_id: Option<&str>,
-    props: serde_json::Value,
-) {
-    let ts_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-    let mut event = serde_json::json!({
-        "v": sow_data::events::SCHEMA_VERSION,
-        "name": name,
-        "ts_ms": ts_ms,
-        "session_id": "server",
-        "platform": "server",
-    });
-    if let Some(account_id) = account_id {
-        event["account_id"] = serde_json::Value::String(account_id.to_string());
-    }
-    if !props.is_null() {
-        event["props"] = props;
-    }
-    if let Err(e) = state
-        .events
-        .lock()
-        .map(|mut sink| sink.append_line(&event.to_string()))
-    {
-        warn!("analytics append failed for {name}: {e:?}");
-    }
-}
-
-/// POST /event — public anonymous product-analytics ingestion. Valid events go
-/// to the durable JSONL sink; bot accounts are dropped and never marked active.
-async fn handle_event(
-    State(state): State<Arc<AppState>>,
-    Json(payload): Json<EventBatchRequest>,
-) -> impl IntoResponse {
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-    let mut accepted = 0usize;
-    let mut rejected = 0usize;
-    for event in payload.events.into_iter().take(MAX_EVENT_BATCH) {
-        if let Err(reason) = event.validate(now_ms) {
-            warn!("Dropping analytics event '{}': {reason}", event.name);
-            rejected += 1;
-            continue;
-        }
-        if let Some(account_id) = &event.account_id {
-            match state.db.is_bot_account_checked(account_id).await {
-                Ok(true) => {
-                    rejected += 1;
-                    continue;
-                }
-                Ok(false) => {}
-                Err(error) => {
-                    rejected += 1;
-                    warn!("analytics bot-pool lookup failed: {error}");
-                    continue;
-                }
-            }
-        }
-        let write_result = {
-            let Ok(mut sink) = state.events.lock() else {
-                rejected += 1;
-                continue;
-            };
-            serde_json::to_string(&event)
-                .map_err(|e| e.to_string())
-                .and_then(|line| sink.append_line(&line).map_err(|e| e.to_string()))
-        };
-        match write_result {
-            Ok(()) => {
-                if let Err(e) = state
-                    .db
-                    .record_product_event(&event.name, event.account_id.as_deref())
-                    .await
-                {
-                    warn!("analytics counter write failed for {}: {e}", event.name);
-                }
-                accepted += 1;
-            }
-            Err(e) => {
-                rejected += 1;
-                warn!("analytics write failed: {e}");
-            }
-        }
-    }
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({ "accepted": accepted, "rejected": rejected })),
-    )
-}
-
-#[derive(Deserialize)]
-struct AnalyticsQuery {
-    days: Option<u32>,
-}
-
-/// GET /internal/analytics — operator-only funnel and retention snapshot.
-async fn handle_internal_analytics(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    Query(query): Query<AnalyticsQuery>,
-) -> impl IntoResponse {
-    if !verify_internal_auth(&headers, &state.secret_token) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Unauthorized".to_string(),
-            }),
-        )
-            .into_response();
-    }
-    match state.db.analytics_summary(query.days.unwrap_or(30)).await {
-        Ok(summary) => (StatusCode::OK, Json(summary)).into_response(),
-        Err(error) => {
-            error!("analytics summary failed: {error}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "analytics unavailable".to_string(),
-                }),
-            )
-                .into_response()
-        }
-    }
+/// Retired public analytics endpoint. Old clients receive no stored response.
+async fn handle_event_gone() -> StatusCode {
+    StatusCode::GONE
 }
 
 /// POST /profile/anonymous — load the canonical anonymous account and issue
@@ -3839,24 +3748,6 @@ async fn handle_match_start(
         .await
     {
         Ok(()) => {
-            let humans = state.db.count_human_players(&payload.player_ids).await;
-            emit_event_line(
-                &state,
-                "match_started",
-                None,
-                serde_json::json!({
-                    "match_id": payload.match_id,
-                    "players": payload.player_ids.len(),
-                    "humans": humans,
-                }),
-            );
-            if let Err(e) = state
-                .db
-                .record_product_event("match_started", None)
-                .await
-            {
-                warn!("match_started analytics counter failed: {e}");
-            }
             (StatusCode::OK, Json(serde_json::json!({ "status": "ok" }))).into_response()
         }
         Err(e) => (
@@ -4090,29 +3981,6 @@ async fn handle_match_finalize(
                     }),
                 )
                     .into_response();
-            }
-            if !participants.is_empty() {
-                let humans = state.db.count_human_players(&participants).await;
-                emit_event_line(
-                    &state,
-                    "match_ended",
-                    None,
-                    serde_json::json!({
-                        "match_id": payload.match_id,
-                        "players": participants.len(),
-                        "humans": humans,
-                    }),
-                );
-                if let Err(e) = state
-                    .db
-                    .record_product_event("match_ended", None)
-                    .await
-                {
-                    warn!("match_ended analytics counter failed: {e}");
-                }
-                if let Err(e) = state.db.record_match_activation(&participants).await {
-                    warn!("match activation analytics failed: {e}");
-                }
             }
             (
                 StatusCode::OK,

@@ -189,8 +189,6 @@ pub struct SowEngine {
     pub campaign_gold_loot_override: std::collections::HashMap<PlayerId, u32>,
     pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
     pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
-    pub campaign_hostilities:
-        std::collections::HashMap<PlayerId, crate::game_config::CampaignHostility>,
     pub campaign_faction_ids: std::collections::HashMap<PlayerId, String>,
     pub campaign_can_request_alliance: std::collections::HashMap<PlayerId, bool>,
     pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
@@ -259,7 +257,6 @@ impl SowEngine {
             campaign_gold_loot_override: std::collections::HashMap::new(),
             campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_relations: std::collections::HashMap::new(),
-            campaign_hostilities: std::collections::HashMap::new(),
             campaign_faction_ids: std::collections::HashMap::new(),
             campaign_can_request_alliance: std::collections::HashMap::new(),
             campaign_contact_resolved: std::collections::HashSet::new(),

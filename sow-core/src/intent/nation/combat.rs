@@ -39,34 +39,15 @@ fn human_betrayal_allowed(
 #[inline]
 fn campaign_attacks_players(
     relation: Option<crate::protocol::CampaignRelation>,
-    hostility: Option<crate::game_config::CampaignHostility>,
     profile_default: bool,
 ) -> bool {
     match relation {
-        Some(crate::protocol::CampaignRelation::Enemy) => match hostility {
-            Some(
-                crate::game_config::CampaignHostility::Passive
-                | crate::game_config::CampaignHostility::NonCombatant,
-            ) => false,
-            Some(crate::game_config::CampaignHostility::Aggressive) | None => true,
-        },
+        Some(crate::protocol::CampaignRelation::Enemy) => true,
         Some(
             crate::protocol::CampaignRelation::Allied | crate::protocol::CampaignRelation::Neutral,
         ) => false,
-        None => match hostility {
-            Some(crate::game_config::CampaignHostility::Aggressive) => true,
-            Some(
-                crate::game_config::CampaignHostility::Passive
-                | crate::game_config::CampaignHostility::NonCombatant,
-            ) => false,
-            None => profile_default,
-        },
+        None => profile_default,
     }
-}
-
-#[inline]
-fn campaign_combat_enabled(hostility: Option<crate::game_config::CampaignHostility>) -> bool {
-    hostility != Some(crate::game_config::CampaignHostility::NonCombatant)
 }
 
 impl SowEngine {
@@ -83,14 +64,9 @@ impl SowEngine {
         let (attack_cost, alliance_cost) = costs;
         let is_mfo = slot.tier == AiTier::Nation;
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
-        let campaign_hostility = self.campaign_hostilities.get(&bot_id).copied();
-        let attacks_players = campaign_attacks_players(
-            campaign_relation,
-            campaign_hostility,
-            slot.profile.attacks_players,
-        );
+        let attacks_players = campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
         // ── Attack logic (both Bots and Nations) ────────────────────
-        if slot.do_attack && campaign_combat_enabled(campaign_hostility) {
+        if slot.do_attack {
             // War still spends iq_points (clamped at zero below); growth and
             // defense never freeze for lack of budget.
             {
@@ -158,7 +134,6 @@ impl SowEngine {
                 // never means combat.
                 let defensive_player_attackers = if campaign_relation
                     == Some(crate::protocol::CampaignRelation::Neutral)
-                    || campaign_hostility == Some(crate::game_config::CampaignHostility::Passive)
                 {
                     let mut attackers = std::collections::HashSet::new();
                     if let (Some(defender), Some(inbound_attacks)) = (
@@ -208,8 +183,8 @@ impl SowEngine {
                 // Build candidate targets. Exclude allies AND teammates so a
                 // bot never wastes its (rare) action deciding to hit a friend —
                 // `apply_attack_intent` would silently block it anyway.
-                // Neutral and passive campaign factions target a human only
-                // to answer an attack already launched against them.
+                // Neutral campaign factions target a human only to answer an
+                // attack already launched against them.
                 let targets: Vec<u16> = neighbor_players
                     .iter()
                     .copied()
@@ -951,48 +926,16 @@ impl SowEngine {
 
 #[cfg(test)]
 mod campaign_relationship_tests {
-    use super::{campaign_attacks_players, campaign_combat_enabled, human_betrayal_allowed};
-    use crate::game_config::CampaignHostility;
+    use super::{campaign_attacks_players, human_betrayal_allowed};
     use crate::protocol::CampaignRelation;
 
     #[test]
-    fn campaign_hostility_controls_attack_and_defense_behavior() {
-        assert!(campaign_attacks_players(
-            Some(CampaignRelation::Enemy),
-            None,
-            false
-        ));
-        assert!(!campaign_attacks_players(
-            Some(CampaignRelation::Neutral),
-            None,
-            true
-        ));
-        assert!(!campaign_attacks_players(
-            Some(CampaignRelation::Allied),
-            None,
-            true
-        ));
-        assert!(campaign_attacks_players(None, None, true));
-        assert!(!campaign_attacks_players(None, None, false));
-        assert!(!campaign_attacks_players(
-            Some(CampaignRelation::Enemy),
-            Some(CampaignHostility::Passive),
-            true
-        ));
-        assert!(!campaign_attacks_players(
-            Some(CampaignRelation::Enemy),
-            Some(CampaignHostility::NonCombatant),
-            true
-        ));
-        assert!(campaign_attacks_players(
-            Some(CampaignRelation::Enemy),
-            Some(CampaignHostility::Aggressive),
-            false
-        ));
-        assert!(campaign_combat_enabled(Some(CampaignHostility::Passive)));
-        assert!(!campaign_combat_enabled(Some(
-            CampaignHostility::NonCombatant
-        )));
+    fn campaign_relation_alone_controls_player_attack_permission() {
+        assert!(campaign_attacks_players(Some(CampaignRelation::Enemy), false));
+        assert!(!campaign_attacks_players(Some(CampaignRelation::Neutral), true));
+        assert!(!campaign_attacks_players(Some(CampaignRelation::Allied), true));
+        assert!(campaign_attacks_players(None, true));
+        assert!(!campaign_attacks_players(None, false));
     }
 
     #[test]

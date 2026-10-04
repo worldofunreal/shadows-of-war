@@ -742,9 +742,6 @@ impl SowEngine {
                     }
                 }
             }
-            if let Some(hostility) = s.campaign_hostility {
-                self.campaign_hostilities.insert(bot_id, hostility);
-            }
             placed += 1;
             log::info!(
                 "spawn_scripted: [{}] '{}' team={:?} at ({},{})",

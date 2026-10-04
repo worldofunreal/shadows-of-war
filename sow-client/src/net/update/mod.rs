@@ -8,47 +8,6 @@ mod messages;
 
 impl SowApp {
     pub fn update_net(&mut self, now: Instant) {
-        crate::analytics::flush_if_due(false);
-        self.poll_portal_intents();
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            let doc_visible = web_sys::window()
-                .and_then(|w| w.document())
-                .map(|d| d.visibility_state() == web_sys::VisibilityState::Visible)
-                .unwrap_or(true);
-            if doc_visible && !self.wasm_doc_was_visible {
-                self.net.ws_reconnect_after_resume = true;
-                if self.ui.app.phase == crate::ClientPhase::MainMenu
-                    && !self.pending_reward_receipt_ids.is_empty()
-                {
-                    self.reward_profile_retry_at = Some(now);
-                    self.fetch_cloud_progress();
-                }
-            }
-            self.wasm_doc_was_visible = doc_visible;
-        }
-
-        if self.net.ws_reconnect_after_resume {
-            self.net.ws_reconnect_after_resume = false;
-            self.net.ws_connect_not_before = self.net.ws_connect_not_before.min(now);
-        }
-
-        if matches!(
-            self.ui.app.phase,
-            crate::ClientPhase::MainMenu | crate::ClientPhase::Splash
-        ) {
-            self.fetch_map_catalog_if_needed();
-        }
-
-        // No fake map download simulation! Progress is real!
-
-        while let Ok(res) = self.net.connect_rx.try_recv() {
-            match res {
-                Ok(client) => {
-                    log::info!(
-                        "[CLIENT NET] ✅ Received successfully connected WebSocket client from channel!"
-                    );
                     self.ui.app.main_menu_state.is_connected = true;
                     self.ui.app.main_menu_state.is_connecting = false;
                     self.net.ws_connect_fail_backoff_ms = 400;

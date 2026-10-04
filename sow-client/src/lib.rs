@@ -93,7 +93,6 @@ pub(crate) fn get_build_version() -> String {
     "unknown".to_string()
 }
 
-mod analytics;
 mod anonymous_identity;
 mod asset_config;
 mod death_nameplate;

@@ -63,17 +63,6 @@ pub enum BotDifficulty {
     Terminator,
 }
 
-/// Scripted campaign combat behavior. Absent = ordinary bot AI.
-/// `Aggressive` initiates war; `Passive` only answers attacks; `NonCombatant`
-/// neither attacks, expands, nor retaliates.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum CampaignHostility {
-    Aggressive,
-    Passive,
-    NonCombatant,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ScriptedSpawn {
     pub name: String,
@@ -107,9 +96,6 @@ pub struct ScriptedSpawn {
     /// Campaign relationship to the human player; absent for ordinary spawns.
     #[serde(default)]
     pub campaign_relation: Option<crate::protocol::CampaignRelation>,
-    /// Campaign combat behavior override; absent keeps ordinary behavior.
-    #[serde(default)]
-    pub campaign_hostility: Option<CampaignHostility>,
     /// Stable catalog identity for a Campaign Episode faction.
     #[serde(default)]
     pub campaign_faction_id: Option<String>,

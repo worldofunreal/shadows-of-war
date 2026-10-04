@@ -6,8 +6,8 @@
 //! are pruned on day rotation. No external storage vendor is involved.
 
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::{Path, PathBuf};
 
 pub const SCHEMA_VERSION: u8 = 1;
 pub const RETENTION_DAYS: u64 = 90;
@@ -140,11 +140,13 @@ impl EventSink {
     pub fn new(dir: impl Into<PathBuf>) -> std::io::Result<Self> {
         let dir = dir.into();
         std::fs::create_dir_all(&dir)?;
-        Ok(Self {
+        let sink = Self {
             dir,
             day: utc_date_string(),
             file: None,
-        })
+        };
+        sink.prune_old()?;
+        Ok(sink)
     }
 
     pub fn append_line(&mut self, line: &str) -> std::io::Result<()> {
@@ -171,16 +173,15 @@ impl EventSink {
                 .append(true)
                 .open(path)?,
         );
-        self.prune_old();
+        self.prune_old()?;
         Ok(())
     }
 
-    fn prune_old(&self) {
-        let Ok(entries) = std::fs::read_dir(&self.dir) else {
-            return;
-        };
+    pub fn prune_old(&self) -> std::io::Result<()> {
+        let entries = std::fs::read_dir(&self.dir)?;
         let keep_from = Self::retention_floor_date();
-        for entry in entries.flatten() {
+        for entry in entries {
+            let entry = entry?;
             let name = entry.file_name();
             let Some(name) = name.to_str() else { continue };
             let Some(date) = name
@@ -190,9 +191,38 @@ impl EventSink {
                 continue;
             };
             if date < keep_from.as_str() {
-                let _ = std::fs::remove_file(entry.path());
+                std::fs::remove_file(entry.path())?;
             }
         }
+        Ok(())
+    }
+
+    /// Remove account-linked legacy event rows before completing an account
+    /// erasure. Session-only rows remain under the existing 90-day retention.
+    pub fn erase_account_id(&mut self, account_id: &str) -> std::io::Result<u64> {
+        if account_id.len() != 32 || !account_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "invalid account_id",
+            ));
+        }
+        self.file = None;
+        let entries = std::fs::read_dir(&self.dir)?;
+        let files = entries
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+        let mut removed = 0_u64;
+        for path in files {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !name.starts_with("events-") || !name.ends_with(".jsonl") {
+                continue;
+            }
+            removed = removed.saturating_add(scrub_event_file(&path, account_id)?);
+        }
+        self.rotate(utc_date_string())?;
+        Ok(removed)
     }
 
     fn retention_floor_date() -> String {
@@ -202,6 +232,53 @@ impl EventSink {
         let days = days_from_civil(dt.year, dt.month, dt.day);
         let (year, month, day) = civil_from_days(days - RETENTION_DAYS as i64);
         format!("{year:04}-{month:02}-{day:02}")
+    }
+}
+
+fn scrub_event_file(path: &Path, account_id: &str) -> std::io::Result<u64> {
+    let metadata = std::fs::metadata(path)?;
+    let temp_path = path.with_extension("jsonl.tmp");
+    let result = (|| {
+        let input = std::fs::File::open(path)?;
+        let output = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&temp_path)?;
+        let mut output = BufWriter::new(output);
+        let mut removed = 0_u64;
+        for line in BufReader::new(input).lines() {
+            let line = line?;
+            let event: serde_json::Value = serde_json::from_str(&line)
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+            if event.get("account_id").and_then(serde_json::Value::as_str) == Some(account_id) {
+                removed = removed.saturating_add(1);
+            } else {
+                writeln!(output, "{line}")?;
+            }
+        }
+        if removed == 0 {
+            return Ok((removed, false));
+        }
+        let output = output
+            .into_inner()
+            .map_err(|error| error.into_error())?;
+        output.sync_all()?;
+        std::fs::set_permissions(&temp_path, metadata.permissions())?;
+        std::fs::rename(&temp_path, path)?;
+        Ok((removed, true))
+    })();
+    match result {
+        Ok((removed, changed)) => {
+            if !changed {
+                let _ = std::fs::remove_file(&temp_path);
+            }
+            Ok(removed)
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp_path);
+            Err(error)
+        }
     }
 }
 

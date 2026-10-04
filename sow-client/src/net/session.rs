@@ -195,22 +195,6 @@ impl SowApp {
             && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
             && !self.ui.tutorial_campaign.is_completed(&self.progress);
         if leaving_unfinished_boudica_intro {
-            crate::analytics::track("tutorial_exit_early");
-            self.complete_boudica_tutorial();
-        }
-        if was_playing {
-            if let Some(player_id) = self.sim.my_player_id
-                && let Some(player) = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| snapshot.players.iter().find(|p| p.id == player_id))
-            {
-                exit_leader = Some(player.leader);
-                self.ui.app.main_menu_state.sync_selected_leader_from_match(
-                    player.leader,
-                    was_offline && self.ui.tutorial_active,
-                );
             }
             if !self.progress_match_recorded {
                 crate::store_portals::measure("match", "round", "abandon");

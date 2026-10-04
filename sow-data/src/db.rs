@@ -14,14 +14,6 @@ use redb::ReadableTable;
 use redis::{AsyncCommands, Client};
 use serde::{Deserialize, Serialize};
 
-const ANALYTICS_UNIQUE: &str = "sow:analytics:unique_users";
-const ANALYTICS_ACTIVE_PREFIX: &str = "sow:analytics:active:";
-const ANALYTICS_DAU_TTL_SECS: i64 = 35 * 24 * 3600;
-const ANALYTICS_EVENT_COUNT_PREFIX: &str = "sow:analytics:event:";
-const ANALYTICS_EVENT_USERS_PREFIX: &str = "sow:analytics:event_users:";
-const ANALYTICS_COHORT_PREFIX: &str = "sow:analytics:cohort:";
-const ANALYTICS_ACTIVATED_PREFIX: &str = "sow:analytics:activated:";
-const ANALYTICS_RETENTION_TTL_SECS: i64 = 90 * 24 * 3600;
 
 fn verified_victory_key(wins: u32, account_id: &str) -> String {
     format!("{:010}:{account_id}", u32::MAX.saturating_sub(wins))
@@ -1556,121 +1548,10 @@ impl PlayerDb {
         Ok(migrated)
     }
 
-    async fn record_analytics(
-        con: &mut redis::aio::MultiplexedConnection,
-        account_id: &str,
-        is_new: bool,
-    ) -> Result<(), redis::RedisError> {
-        if is_new {
-            let _: () = con.pfadd(ANALYTICS_UNIQUE, account_id).await?;
-            // The HyperLogLog is a probabilistic counter with no per-member
-            // removal, so it must stay bounded by the same 90-day retention
-            // window as every other analytics key (see Privacy Policy).
-            let _: () = con
-                .expire(ANALYTICS_UNIQUE, ANALYTICS_RETENTION_TTL_SECS)
-                .await?;
-        }
-        let day_key = format!("{ANALYTICS_ACTIVE_PREFIX}{}", utc_date_string());
-        let _: () = con.pfadd(&day_key, account_id).await?;
-        let _: () = con.expire(&day_key, ANALYTICS_DAU_TTL_SECS).await?;
-        let active_key = Self::daily_active_key(&utc_date_string());
-        let _: () = con.sadd(&active_key, account_id).await?;
-        let _: () = con.expire(&active_key, ANALYTICS_DAU_TTL_SECS).await?;
-        Ok(())
-    }
-
-    async fn record_activation_in_connection(
-        con: &mut redis::aio::MultiplexedConnection,
-        account_id: &str,
-        date: &str,
-    ) -> Result<(), redis::RedisError> {
-        let activated_key = format!("{ANALYTICS_ACTIVATED_PREFIX}{account_id}");
-        let first_match: bool = con.set_nx(&activated_key, date).await?;
-        if first_match {
-            let cohort_key = format!("{ANALYTICS_COHORT_PREFIX}{date}");
-            let _: () = redis::pipe()
-                .expire(&activated_key, ANALYTICS_RETENTION_TTL_SECS)
-                .sadd(&cohort_key, account_id)
-                .expire(&cohort_key, ANALYTICS_RETENTION_TTL_SECS)
-                .query_async(con)
-                .await?;
-        }
-        Ok(())
-    }
-
-    /// Record a client-originated product event in hot counters and exact
-    /// daily activity sets. The JSONL sink remains the durable event source;
-    /// these keys make DAU/funnel/retention queries cheap without a vendor.
-    pub async fn record_product_event(
-        &self,
-        name: &str,
-        account_id: Option<&str>,
-    ) -> Result<(), redis::RedisError> {
-        let mut con = self.get_connection().await?;
-        let date = utc_date_string();
-        let count_key = format!("{ANALYTICS_EVENT_COUNT_PREFIX}{date}:{name}");
-        let _: u64 = con.incr(&count_key, 1_u64).await?;
-        let _: () = con.expire(&count_key, ANALYTICS_RETENTION_TTL_SECS).await?;
-
-        let Some(account_id) = account_id else {
-            return Ok(());
-        };
-        let is_bot: i8 = con.sismember(BOT_POOL_KEY, account_id).await?;
-        if is_bot == 1 {
-            return Ok(());
-        }
-
-        let event_users_key = format!("{ANALYTICS_EVENT_USERS_PREFIX}{date}:{name}");
-        let active_key = Self::daily_active_key(&date);
-        let _: () = redis::pipe()
-            .sadd(&event_users_key, account_id)
-            .expire(&event_users_key, ANALYTICS_RETENTION_TTL_SECS)
-            .sadd(&active_key, account_id)
-            .expire(&active_key, ANALYTICS_RETENTION_TTL_SECS)
-            .query_async(&mut con)
-            .await?;
-
-        if matches!(name, "match_ended" | "match_ended_client") {
-            Self::record_activation_in_connection(&mut con, account_id, &date).await?;
-        }
-        Ok(())
-    }
-
-    /// Mark every human participant in an authoritative completed match as
-    /// active and put first-time completers into the activation cohort.
-    pub async fn record_match_activation(
-        &self,
-        account_ids: &[String],
-    ) -> Result<(), redis::RedisError> {
-        let mut con = self.get_connection().await?;
-        let date = utc_date_string();
-        for account_id in account_ids {
-            let is_bot: i8 = con.sismember(BOT_POOL_KEY, account_id).await?;
-            if is_bot == 1 {
-                continue;
-            }
-            let active_key = Self::daily_active_key(&date);
-            let _: () = redis::pipe()
-                .sadd(&active_key, account_id)
-                .expire(&active_key, ANALYTICS_RETENTION_TTL_SECS)
-                .query_async(&mut con)
-                .await?;
-            Self::record_activation_in_connection(&mut con, account_id, &date).await?;
-        }
-        Ok(())
-    }
-
-    /// Permanently erase one account: the Valkey account record plus its
-    /// identity mappings, the redb mirror rows (`PLAYERS_TABLE` and the
-    /// public-profile index), and the account's membership in every dated
-    /// analytics set. Operator-only — see `POST /internal/profile/delete`.
-    ///
-    /// Deliberately out of scope: match-history rows (aggregate competitive
-    /// record), JSONL event lines (pseudonymous `session_id` + `account_id`
-    /// pairs that age out via the 90-day file rotation once the account
-    /// record they point to is gone), and the HyperLogLog unique counter
-    /// (probabilistic structure with no per-member removal, bounded by its
-    /// own 90-day key TTL).
+    /// Permanently erase one account: the Valkey account record and identity
+    /// mappings, the redb profile rows, and its memberships in legacy dated
+    /// analytics sets. The authenticated deletion handlers also remove this
+    /// account's legacy JSONL event lines before calling this method.
     pub async fn delete_account(
         &self,
         account_id: &str,
@@ -2082,98 +1963,6 @@ impl PlayerDb {
         })
     }
 
-    /// Return a compact, authenticated-only analytics snapshot for operators.
-    /// Retention uses exact daily sets, not HLL intersections.
-    pub async fn analytics_summary(
-        &self,
-        requested_days: u32,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        let days = requested_days.clamp(1, 90) as i64;
-        let today = utc_date_string();
-        let names = [
-            "landing_visit",
-            "play_now_click",
-            "shell_loaded",
-            "matchmaking_joined",
-            "match_started",
-            "match_ended",
-        ];
-        let mut con = self.get_connection().await?;
-        let mut daily = Vec::new();
-        let mut funnel = serde_json::Map::new();
-        for offset in 0..days {
-            let date = crate::events::shift_date(&today, -offset).ok_or("invalid UTC date")?;
-            let mut counts = serde_json::Map::new();
-            for name in names {
-                let key = format!("{ANALYTICS_EVENT_COUNT_PREFIX}{date}:{name}");
-                // GET on a missing counter returns nil, which is a normal
-                // zero-count day—not a Redis failure.
-                let count: u64 = con.get::<_, Option<u64>>(&key).await?.unwrap_or(0);
-                counts.insert(name.to_string(), serde_json::json!(count));
-                let total = funnel
-                    .entry(name.to_string())
-                    .or_insert_with(|| serde_json::json!(0_u64));
-                *total = serde_json::json!(total.as_u64().unwrap_or(0).saturating_add(count));
-            }
-            let active_key = Self::daily_active_key(&date);
-            let active: usize = con.scard(&active_key).await?;
-            daily.push(serde_json::json!({
-                "date": date,
-                "active_users": active,
-                "events": counts,
-            }));
-        }
-
-        let mut eligible_cohorts = 0_u64;
-        let mut d1_returned = 0_u64;
-        let mut d7_returned = 0_u64;
-        for offset in 7..days {
-            let cohort_date =
-                crate::events::shift_date(&today, -offset).ok_or("invalid cohort date")?;
-            let members: Vec<String> = con
-                .smembers(format!("{ANALYTICS_COHORT_PREFIX}{cohort_date}"))
-                .await?;
-            if members.is_empty() {
-                continue;
-            }
-            eligible_cohorts += members.len() as u64;
-            let day_one = crate::events::shift_date(&cohort_date, 1).ok_or("invalid D1 date")?;
-            let day_seven = crate::events::shift_date(&cohort_date, 7).ok_or("invalid D7 date")?;
-            for account_id in members {
-                if con
-                    .sismember::<_, _, bool>(Self::daily_active_key(&day_one), &account_id)
-                    .await?
-                {
-                    d1_returned += 1;
-                }
-                if con
-                    .sismember::<_, _, bool>(Self::daily_active_key(&day_seven), &account_id)
-                    .await?
-                {
-                    d7_returned += 1;
-                }
-            }
-        }
-        Ok(serde_json::json!({
-            "generated_at": today,
-            "days": days,
-            "funnel": funnel,
-            "daily": daily,
-            "retention": {
-                "eligible_activated_players": eligible_cohorts,
-                "d1_returned": d1_returned,
-                "d7_returned": d7_returned,
-            }
-        }))
-    }
-
-    /// Key holding the SET of account_ids active on a UTC date. Exact
-    /// membership (unlike the DAU HyperLogLog) is what makes D1/Dn retention
-    /// computable.
-    fn daily_active_key(date: &str) -> String {
-        format!("sow:active:{date}")
-    }
-
     /// Membership check against the bot pool index — used to exclude synthetic
     /// players from analytics ingestion and human counters.
     pub async fn is_bot_account_checked(
@@ -2339,20 +2128,6 @@ impl PlayerDb {
         Ok(Some(account))
     }
 
-    /// Record exact daily activity for an account (retention cohorts).
-    pub async fn mark_daily_activity(&self, account_id: &str) {
-        let Ok(mut con) = self.get_connection().await else {
-            return;
-        };
-        let date = utc_date_string();
-        let key = Self::daily_active_key(&date);
-        let _: Result<(), _> = redis::pipe()
-            .sadd(&key, account_id)
-            .expire(&key, ANALYTICS_DAU_TTL_SECS)
-            .query_async(&mut con)
-            .await;
-    }
-
     /// Load an existing provider account without creating a new one. This is
     /// scoped to an environment. New human accounts must arrive through the
     /// canonical WOU-ID account_id bridge.
@@ -2370,7 +2145,6 @@ impl PlayerDb {
         let Ok(account) = Self::load_account(&mut con, &account_id).await else {
             return Ok(None);
         };
-        let _: () = Self::record_analytics(&mut con, &account.id, false).await?;
         Ok(Some(self.ensure_human_onboarding(account).await?))
     }
 
@@ -2518,7 +2292,6 @@ impl PlayerDb {
                 .await?;
             return self.ensure_human_onboarding(account).await;
         }
-        let _: () = Self::record_analytics(&mut con, account_id, true).await?;
         let new_account = self.ensure_human_onboarding(new_account).await?;
         self.save_player_account_to_redb(&new_account);
         info!(
@@ -2582,7 +2355,6 @@ impl PlayerDb {
         if let Some(account_id) = con.get::<_, Option<String>>(&id_key).await?
             && let Ok(account) = Self::load_account(&mut con, &account_id).await
         {
-            let _: () = Self::record_analytics(&mut con, &account.id, false).await?;
             return self.ensure_starting_leader(account).await;
         }
 
@@ -2627,8 +2399,6 @@ impl PlayerDb {
             .set(&id_key, &random_id)
             .query_async::<()>(&mut con)
             .await?;
-
-        let _: () = Self::record_analytics(&mut con, &random_id, true).await?;
 
         info!(
             "Created new account {} in Valkey for identity {:?}/{:?}",
@@ -2717,7 +2487,6 @@ impl PlayerDb {
             // second identity mapping or a distributed lock.
             if con.set_nx::<_, _, bool>(&acc_key, acc_json).await? {
                 let account = self.ensure_welcome_grant(account).await?;
-                let _: () = Self::record_analytics(&mut con, &random_id, true).await?;
                 self.save_player_account_to_redb(&account);
                 info!("Created anonymous account {}", account.id);
                 return Ok(account);
