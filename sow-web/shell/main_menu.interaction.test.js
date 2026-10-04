@@ -588,8 +588,10 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const exitStart = sessionSource.indexOf("pub(crate) fn begin_exit_to_main_menu");
     const exitEnd = sessionSource.indexOf("/// Enter the EnterGame splash", exitStart);
     assert.match(sessionSource.slice(exitStart, exitEnd),
-        /sync_selected_leader_from_match\(\s*player\.leader,\s*was_offline && self\.ui\.tutorial_active,?\s*\)/,
-        "leaving a tutorial keeps its leader for the splash but not as the menu selection");
+        /self\.ui\.app\.splash_state\.loader_leader = exit_leader;/,
+        "leaving a tutorial keeps its campaign leader for the exit splash");
+    assert.doesNotMatch(sessionSource.slice(exitStart, exitEnd), /sync_selected_leader_from_match\(/,
+        "leaving a tutorial does not replace the account's menu selection");
     assert.match(nativeProfileSource,
         /fn sync_selected_leader_from_match\([\s\S]*?if !tutorial \{[\s\S]*?set_selected_leader\(leader, false\)/,
         "MainMenuState owns the rule for keeping campaign heroes separate from account selection");
