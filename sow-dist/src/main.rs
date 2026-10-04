@@ -793,6 +793,13 @@ fn strip_marked_section(source: &str, begin: &str, end: &str) -> Result<String> 
     Ok(output)
 }
 
+fn strip_optional_marked_section(source: &str, begin: &str, end: &str) -> Result<String> {
+    if !source.contains(begin) && !source.contains(end) {
+        return Ok(source.to_string());
+    }
+    strip_marked_section(source, begin, end)
+}
+
 struct IndexBuild<'a> {
     version: &'a str,
     js: &'a str,
@@ -982,7 +989,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     fs::write(&index, &html)?;
     let mut loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     if poki || jest {
-        loader = strip_marked_section(
+        loader = strip_optional_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
@@ -2894,7 +2901,7 @@ fn package_poki(
     let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     fs::write(
         &loader_path,
-        strip_marked_section(
+        strip_optional_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
@@ -3163,7 +3170,7 @@ fn package_jest(
     let loader = fs::read_to_string(paths.shell.join("loader.js"))?;
     fs::write(
         &loader_path,
-        strip_marked_section(
+        strip_optional_marked_section(
             &loader,
             "/* SOW_FIRST_PARTY_ANALYTICS_BEGIN */",
             "/* SOW_FIRST_PARTY_ANALYTICS_END */",
