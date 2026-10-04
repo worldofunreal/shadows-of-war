@@ -90,7 +90,7 @@ The native build and the browser preview use the same client. The desktop shell 
 
 ## License & derivatives
 
-**Modified from OpenFrontIO. Source revision date: `2026-10-01`.** The in-game source link identifies the exact revision.
+**Modified from OpenFrontIO. Source revision date: `2026-10-04`.** The in-game source link identifies the exact revision.
 
 The integrated game code is licensed under [AGPL-3.0-only](LICENSE), with OpenFront's additional terms in section 7 preserved in that file. Map files derived from OpenFront are separately licensed under CC BY-SA 4.0; their sources, attribution, and changes are recorded in [assets/maps/SOURCES.toml](assets/maps/SOURCES.toml) and included in the served map notice. See [COPYRIGHT](docs/legal/COPYRIGHT) and [NOTICE](docs/legal/NOTICE).
 
