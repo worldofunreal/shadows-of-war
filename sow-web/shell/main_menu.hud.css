@@ -975,6 +975,11 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 .sow-hud__setting-row input[type="range"] { width: 130px; accent-color: var(--sow-gold); }
 .sow-hud__setting-row + .sow-hud__setting-row { border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .sow-hud__setting-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--sow-gold); }
+.sow-hud__setting-row--hint { align-items: flex-start; }
+.sow-hud__setting-row--hint > span { display: flex; flex: 1; flex-direction: column; gap: 4px; }
+.sow-hud__setting-row--hint b { color: #f5f1e8; font-size: 11px; font-weight: 600; }
+.sow-hud__setting-row--hint small { max-width: 280px; color: var(--sow-muted); font-size: 10px; line-height: 1.4; }
+.sow-hud__setting-row--hint input[type="checkbox"] { flex: 0 0 20px; margin-top: 1px; }
 
 .sow-hud__dev-reset {
     min-height: 36px;
@@ -1379,8 +1384,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     height: 100%;
     border-radius: 50%;
     isolation: isolate;
-    background: radial-gradient(circle, rgb(20 30 35 / 98%) 0 20%, rgb(13 20 25 / 94%) 21% 57%, transparent 58%);
-    box-shadow: inset 0 0 0 1px var(--sow-line), 0 0 0 1px rgb(233 187 100 / 14%), 0 12px 36px rgb(0 0 0 / 28%);
+    background: radial-gradient(circle, rgb(21 31 35 / 99%) 0 20%, rgb(11 18 22 / 97%) 21% 57%, transparent 58%);
+    box-shadow: inset 0 0 0 1px rgb(237 216 173 / 28%), 0 0 0 1px rgb(233 187 100 / 18%), 0 12px 36px rgb(0 0 0 / 42%);
 }
 
 .sow-hud__map-radial::before {
@@ -1446,11 +1451,25 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     filter: brightness(1.08);
 }
 
-.sow-hud__map-sector .sow-hud__map-action-title {
+.sow-hud__map-sector:active:not(:disabled) {
+    transform: scale(.975);
+    filter: brightness(1.16);
+}
+
+.sow-hud__map-sector:focus-visible {
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 92%);
+}
+
+.sow-hud__map-sector .sow-hud__map-action-content {
     position: absolute;
     z-index: 2;
-    font-size: 30px;
-    line-height: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: max-content;
+    max-width: 78px;
+    text-align: center;
     pointer-events: none;
 }
 
@@ -1479,8 +1498,64 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     filter: brightness(1.16);
 }
 
+.sow-hud__map-center:focus-visible {
+    outline: 2px solid #fff8e8;
+    outline-offset: 3px;
+}
+
+.sow-hud__map-center:active:not(:disabled) {
+    transform: translate(-50%, -50%) scale(.96);
+}
+
+.sow-hud__map-center .sow-hud__map-action-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    max-width: 64px;
+    pointer-events: none;
+}
+
 .sow-hud__map-action-title {
     display: block;
+    line-height: 1;
+}
+
+.sow-hud__map-sector-caption {
+    display: block;
+    max-width: 78px;
+    padding: 2px 5px;
+    border: 1px solid rgb(238 231 209 / 18%);
+    border-radius: 999px;
+    background: rgb(8 13 16 / 82%);
+    color: #fff8e8;
+    font-size: clamp(8px, 3.1vw, 10px);
+    font-weight: 850;
+    line-height: 1.05;
+    text-align: center;
+    text-shadow: 0 1px 3px #000;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+}
+
+.sow-hud__map-center .sow-hud__map-sector-caption {
+    max-width: 58px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 8px;
+}
+
+.sow-hud__map-sector[data-alliance-state="active"] {
+    --sector-color: var(--sow-green);
+    filter: saturate(.7) brightness(.78);
+    opacity: .86;
+}
+
+.sow-hud__map-sector[data-alliance-state="pending"] {
+    --sector-color: var(--sow-gold);
+    filter: saturate(.82) brightness(.82);
+    opacity: .9;
 }
 
 .sow-hud__map-action-label {
@@ -1503,7 +1578,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     overflow-wrap: anywhere;
 }
 
-.sow-hud__map-sector .sow-hud__map-action-title {
+.sow-hud__map-sector .sow-hud__map-action-content,
+.sow-hud__map-center .sow-hud__map-action-content {
     pointer-events: none;
 }
 
@@ -1515,6 +1591,16 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     cursor: help;
     filter: grayscale(.75) brightness(.62);
     opacity: .62;
+}
+
+.sow-hud__map-sector[data-alliance-state="active"]:disabled {
+    filter: saturate(.7) brightness(.78);
+    opacity: .86;
+}
+
+.sow-hud__map-sector[data-alliance-state="pending"]:disabled {
+    filter: saturate(.82) brightness(.82);
+    opacity: .9;
 }
 
 .sow-hud__map-submenu {

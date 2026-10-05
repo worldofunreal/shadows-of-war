@@ -327,12 +327,13 @@
             var next = step.type === "choice" ? sharedChoiceTarget : step.next || "";
             var keepsFlow = ["scene", "objective", "guide"].includes(value);
             var keepsMechanics = ["objective", "guide"].includes(value);
+            var keepsMarker = ["scene", "objective", "guide"].includes(value);
             var discarded = [];
             if (step.lines && value !== "scene") discarded.push("dialogue lines");
             if (step.choices && value !== "choice") discarded.push("decision answers");
             if (step.trigger && (!keepsMechanics || (value === "guide" && step.trigger.type === "elapsed"))) discarded.push("mechanic condition");
             if (step.guide && (!keepsMechanics || (value === "guide" && step.trigger && step.trigger.type === "elapsed"))) discarded.push("hand guide");
-            if (step.marker && !keepsMechanics) discarded.push("map marker");
+            if (step.marker && !keepsMarker) discarded.push("map marker");
             if (step.routes && !keepsFlow) discarded.push("conditional routes");
             if (step.hint_key && !keepsMechanics) discarded.push("player hint");
             if (step.presentation && !["scene", "end"].includes(value)) discarded.push("presentation style");
@@ -363,7 +364,6 @@
                 replacement.trigger = step.trigger && !(value === "guide" && step.trigger.type === "elapsed")
                     ? step.trigger
                     : state.flow === "menu" ? { type: "ui", action: menuAction, scope: "step" } : { type: "territory", value: 1, scope: "step" };
-                if (step.marker) replacement.marker = step.marker;
                 if (Array.isArray(step.routes)) replacement.routes = step.routes;
                 if (step.guide && !(value === "guide" && step.trigger && step.trigger.type === "elapsed")) replacement.guide = step.guide;
                 else if (value === "guide") replacement.guide = replacement.trigger.type === "ui"
@@ -371,6 +371,7 @@
                     : { kind: "world", target: "expand", gesture: "tap" };
                 if (next) replacement.next = next;
             }
+            if (step.marker && keepsMarker) replacement.marker = step.marker;
             Object.keys(step).forEach(function (key) { delete step[key]; });
             Object.assign(step, replacement);
             if (xy) state.definition.layout[id] = xy;
@@ -587,13 +588,21 @@
                 objective.appendChild(addGuide);
             }
             objective.appendChild(selectField("Next step", step.next, destinationOptions(step.id), function (value) { step.next = value; markDirty(); }));
-            if (step.marker) objective.appendChild(selectField("Map marker", step.marker.target, [{ value: "player", label: "Player" }].concat(factionOptions()), function (value) { step.marker.target = value; markDirty(); }));
-            else { var addMarker = el("button", { type: "button" }, "Add map marker"); addMarker.addEventListener("click", function () { step.marker = { target: "player" }; markDirty(); renderInspector(); }); objective.appendChild(addMarker); }
             host.appendChild(objective);
         } else if (step.type !== "choice" && step.type !== "end") {
             var next = section("Flow");
             next.appendChild(selectField("Next step", step.next, destinationOptions(step.id), function (value) { step.next = value; markDirty(); }));
             host.appendChild(next);
+        }
+        if (["scene", "objective", "guide"].includes(step.type)) {
+            var markerPanel = section("Map marker");
+            if (step.marker) markerPanel.appendChild(selectField("Highlight faction", step.marker.target, [{ value: "player", label: "Player" }].concat(factionOptions()), function (value) { step.marker.target = value; markDirty(); }));
+            else {
+                var addMarkerButton = el("button", { type: "button" }, "Add map marker");
+                addMarkerButton.addEventListener("click", function () { step.marker = { target: "player" }; markDirty(); renderInspector(); });
+                markerPanel.appendChild(addMarkerButton);
+            }
+            host.appendChild(markerPanel);
         }
         if (step.type !== "choice" && step.type !== "end") {
             var paths = section("Conditional paths");

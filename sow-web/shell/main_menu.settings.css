@@ -55,6 +55,35 @@
     gap: 8px;
 }
 
+.sow-menu__settings-controls .sow-menu__sticky-setting {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 12px;
+    text-transform: none;
+}
+
+.sow-menu__sticky-setting > span {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sow-menu__sticky-setting small {
+    color: var(--sow-muted);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+}
+
+.sow-menu__sticky-setting input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--sow-gold);
+}
+
 .sow-menu__settings-actions {
     padding-top: 18px;
     border-top: 1px solid var(--sow-line);
@@ -92,4 +121,3 @@
     min-height: 44px;
     margin-top: 0;
 }
-

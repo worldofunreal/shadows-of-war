@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod alliance_lifecycle_tests {
-    use crate::diplomacy::{ALLIANCE_REQUEST_TTL_TICKS, AllianceProposal};
+    use crate::diplomacy::{ALLIANCE_REQUEST_TTL_TICKS, AllianceActionState, AllianceProposal};
     use crate::engine::SowEngine;
     use crate::game::{GamePhase, GameState};
     use crate::game_config::GameConfig;
@@ -30,6 +30,36 @@ mod alliance_lifecycle_tests {
         let mut engine = SowEngine::new(game, WaterComponents::default());
         engine.campaign_relations.insert(2, crate::protocol::CampaignRelation::Neutral);
         engine
+    }
+
+    #[test]
+    fn alliance_action_state_matches_request_and_renewal_lifecycle() {
+        use AllianceActionState::*;
+
+        assert_eq!(
+            AllianceActionState::resolve(false, false, false, false),
+            Request
+        );
+        assert_eq!(
+            AllianceActionState::resolve(false, false, true, false),
+            Accept
+        );
+        assert_eq!(
+            AllianceActionState::resolve(false, false, false, true),
+            Pending
+        );
+        assert_eq!(
+            AllianceActionState::resolve(true, false, false, false),
+            Active
+        );
+        assert_eq!(
+            AllianceActionState::resolve(true, true, false, false),
+            Renew
+        );
+        assert_eq!(AllianceActionState::resolve(true, true, true, true), Accept);
+        assert!(!Pending.can_act());
+        assert!(!Active.can_act());
+        assert!(Request.can_act() && Accept.can_act() && Renew.can_act());
     }
 
     #[test]
@@ -155,6 +185,25 @@ mod alliance_lifecycle_tests {
             2,
         );
         assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Allied));
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+    }
+
+    #[test]
+    fn accepting_an_incoming_request_consolidates_reciprocal_requests() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.push_alliance_proposal(1, 2);
+        engine.push_alliance_proposal(2, 1);
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::AcceptAlliance { target_player: 1 },
+            },
+            1,
+        );
+
+        assert!(engine.alliances_proposed.is_empty());
         assert!(engine.state.player(1).unwrap().alliances.contains(&2));
         assert!(engine.state.player(2).unwrap().alliances.contains(&1));
     }

@@ -137,6 +137,7 @@ impl SowApp {
         self.input.camera_x = cx - map_x * self.input.camera_zoom;
         self.input.camera_y = cy - map_y * self.input.camera_zoom;
         self.clamp_camera_to_map();
+        self.record_tutorial_zoom(self.input.camera_zoom - old_zoom);
     }
 
     /// Keep the visible rect inside `[0,map_w]x[0,map_h]` so void is never shown,

@@ -185,9 +185,7 @@
             root.classList.toggle("is-reduced", reducedMotion);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
-            dialog.hidden = !modal; shade.hidden = !modal; objective.hidden = false;
-            // Owner decision: the main-menu guide hides the card; gameplay never does.
-            if (context.hideObjective) objective.hidden = true;
+            dialog.hidden = !modal; shade.hidden = !modal; objective.hidden = modal || context.hideObjective === true;
             dialog.setAttribute("role", "dialog");
             dialog.setAttribute("aria-modal", "true");
             dialog.setAttribute("aria-labelledby", uid + (line.title_key || step.title_key ? "-title" : "-body"));
@@ -283,10 +281,7 @@
             const gestureType = step.guide && step.guide.gesture;
             const zoomGuide = gestureType && gestureType.startsWith("zoom_");
             const zoomButtonGuide = step.guide && step.guide.kind === "ui" && ["hud_zoom_in", "hud_zoom_out"].includes(step.guide.target);
-            const anchor = zoomGuide ? {
-                x: (root.clientWidth || Number(view && view.innerWidth) || 0) * 0.5,
-                y: (root.clientHeight || Number(view && view.innerHeight) || 0) * 0.5
-            } : context.anchor;
+            const anchor = context.anchor;
             const labeledGesture = zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel);
             gestureLabel.hidden = !labeledGesture;
             const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")

@@ -3,6 +3,7 @@
     "use strict";
 
     const TYPES = ["scene", "choice", "objective", "guide", "end"];
+    const TEAMS = Object.freeze(["Red", "Blue"]);
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
         building: "buildings", city: "cities", farm: "farms", factory: "factories",
@@ -217,12 +218,13 @@
                     issue(null, "roster", "Faction IDs and names must be valid, unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group"], null, "roster.factions");
+                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group"], null, "roster.factions");
                 factions.add(faction.id); factionNames.add(faction.name);
                 rosterFactions.add(faction.id);
                 if (!Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000 || typeof faction.civ !== "string" || !faction.civ || typeof faction.leader !== "string" || !faction.leader || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid starting troops, civilization, leader or spawn: " + faction.name);
                 else if (expectedMap && (faction.x >= expectedMap[1] || faction.y >= expectedMap[2])) issue(null, "roster", "Faction spawn is outside the campaign map: " + faction.name);
                 if (!["neutral", "allied", "enemy"].includes(faction.relation)) issue(null, "roster.factions.relation", "Choose neutral, allied or enemy for " + faction.name + ".");
+                if (faction.team != null && !TEAMS.includes(faction.team)) issue(null, "roster.factions.team", "Choose Red, Blue or no team for " + faction.name + ".");
                 if (faction.can_request_alliance != null && typeof faction.can_request_alliance !== "boolean") issue(null, "roster.factions.can_request_alliance", "Choose whether this faction can send alliance offers.");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
@@ -297,7 +299,7 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "next", "routes", "attack_ratio_on_enter", "pause_game"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "pause_game"],
             choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter", "pause_game"],
             objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter"],
             guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter"],
@@ -320,6 +322,9 @@
             }
             if (step.trigger && step.trigger.type === "camera_target") dynamicText("_progress");
             if (step.id === "boudica_first_expansion" && step.guide && step.guide.gesture === "tap") {
+                ["_mobile_action", "_desktop_action"].forEach(dynamicText);
+            }
+            if (step.trigger && step.trigger.type === "attack" && step.guide && step.guide.gesture === "tap") {
                 ["_mobile_action", "_desktop_action"].forEach(dynamicText);
             }
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
@@ -381,6 +386,7 @@
                 else {
                     knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
+                    if (trigger.targets != null && !["contact", "defeated"].includes(trigger.type)) issue(step, "trigger.targets", "Only contact and defeat objectives can list multiple factions.");
                     if (trigger.type === "contact") {
                         if (trigger.targets != null) {
                             if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (roster && !rosterFactions.has(target) && !allowMissingFactionReferences))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
@@ -420,6 +426,15 @@
                     if (trigger.resources != null && trigger.type !== "resource_transfer") issue(step, "trigger.resources", "Only transfer objectives can require specific resources.");
                     if (trigger.recipient != null && roster && !factions.has(trigger.recipient) && !allowMissingFactionReferences) issue(step, "trigger.recipient", "Unknown transfer recipient.");
                     if (trigger.target && roster && !factions.has(trigger.target) && !allowMissingFactionReferences) issue(step, "trigger.target", "Unknown faction.");
+                    const targetedFactions = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target];
+                    const targetableFactions = targetedFactions.filter(target => typeof target === "string" && target !== "player");
+                    if (["attack", "contact", "alliance", "defeated", "fleet", "camera_target", "hover", "zoom_in_complete"].includes(trigger.type) && targetableFactions.length) {
+                        if (!step.marker || !targetableFactions.includes(step.marker.target)) issue(step, "marker", "Faction objectives need a marker on one of their targets.");
+                        if (["attack", "contact", "alliance", "defeated", "fleet"].includes(trigger.type)
+                            && (!step.guide || step.guide.kind !== "world" || !["target_action", "nameplate", "player"].includes(step.guide.target))) {
+                            issue(step, "guide", "Faction objectives need a hand guide that points to their target.");
+                        }
+                    }
                 }
                 if (trigger && trigger.type === "elapsed" && step.guide) issue(step, "guide", "Timed waits do not need a hand guide.");
             } else if (step.trigger) issue(step, "trigger", "Only objectives and guides have completion conditions.");
@@ -535,7 +550,10 @@
         const checked = new Set(), visiting = new Set();
         const canAdvanceWithoutInput = step => {
             if (!step || !["objective", "guide"].includes(step.type) || !step.trigger) return false;
-            return step.trigger.type === "elapsed" || step.trigger.type === "troops" || step.trigger.scope !== "step";
+            const trigger = step.trigger;
+            const canLoseTarget = ["attack", "contact", "alliance", "defeated", "fleet", "resource_transfer", "camera_target", "hover", "zoom_in_complete"].includes(trigger.type)
+                && (trigger.target || trigger.recipient || Array.isArray(trigger.targets));
+            return trigger.type === "elapsed" || trigger.type === "troops" || trigger.scope !== "step" || canLoseTarget;
         };
         function cycle(key) {
             const step = byId.get(key);
@@ -637,6 +655,25 @@
             }
             return { current: Math.min(target, Math.max(0, current)), target };
         }
+        function targetUnavailable(step, result) {
+            const trigger = step.trigger;
+            if (!trigger || !["objective", "guide"].includes(step.type)) return false;
+            const eliminated = facts.eliminated_faction_ids || [];
+            const targets = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target || trigger.recipient];
+            const factionTargets = targets.filter(target => typeof target === "string" && target !== "player");
+            if (!factionTargets.length) return false;
+            const field = trigger.type === "contact" ? "contact_faction_ids" : trigger.type === "defeated" ? "defeated_faction_ids" : null;
+            const observed = field ? facts[field] || [] : [];
+            const reference = trigger.scope === "step" ? baseline : trigger.scope === "episode" ? initial || {} : {};
+            const priorObserved = field ? reference[field] || [] : [];
+            const remaining = factionTargets.filter(target => !eliminated.includes(target)
+                && !(observed.includes(target) && !priorObserved.includes(target))
+                && !(trigger.type === "contact" && observed.includes(target)));
+            if (factionTargets.length > 1) return result.current + remaining.length < result.target;
+            if (trigger.type === "contact" && observed.includes(factionTargets[0]) && result.current < result.target) return true;
+            if (trigger.type === "alliance" && (facts.alliance_faction_ids || []).includes(factionTargets[0]) && result.current < result.target) return true;
+            return eliminated.includes(factionTargets[0]) && result.current < result.target;
+        }
         let activeReaction = null;
         function nextReaction() {
             const contactFactionIds = facts.contact_faction_ids || [];
@@ -690,7 +727,7 @@
             return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type) || step.pause_game === true, done: state.done, choices: step.choices || [], state };
         }
         function setPaused(paused) { externallyPaused = Boolean(paused); }
-        function advance(choiceId, expectedStepId) {
+        function advance(choiceId, expectedStepId, allowUnavailable) {
             if (state.done || externallyPaused) return false;
             if (activeReaction) {
                 const reaction = activeReaction.reaction;
@@ -710,7 +747,7 @@
             if (step.type === "scene" && step.lines && state.line + 1 < step.lines.length) { state.line++; return true; }
             if (["objective", "guide"].includes(step.type)) {
                 const result = progress();
-                if (result.current < result.target) return false;
+                if (result.current < result.target && !(allowUnavailable && targetUnavailable(step, result))) return false;
             }
             if (step.type === "end") {
                 if (!state.completed.includes(step.id)) state.completed.push(step.id);
@@ -748,7 +785,8 @@
                 const step = byId.get(state.id);
                 if (!["objective", "guide"].includes(step.type)) break;
                 const result = progress();
-                if (result.current < result.target || !advance(null, step.id)) break;
+                if (result.current < result.target && !targetUnavailable(step, result)) break;
+                if (!advance(null, step.id, true)) break;
             }
             return view();
         }
@@ -784,7 +822,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, METRICS, UI_TARGETS, zoomInputMode, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, replaceFactionStoryNames, factionReferenceIds, validate, create };
+    const api = { TYPES, TEAMS, METRICS, UI_TARGETS, zoomInputMode, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, replaceFactionStoryNames, factionReferenceIds, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

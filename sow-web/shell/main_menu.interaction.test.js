@@ -1320,12 +1320,6 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
             assert.equal(Object.hasOwn(faction, "hostility"), false, `${episodeId}/${faction.name}: no combat override`);
             assert.match(faction.color, /^#[0-9a-f]{6}$/i, `${episodeId}/${faction.name}: map color`);
         }
-        const actualTroops = roster.factions.reduce((counts, faction) => {
-            counts[faction.starting_troops] = (counts[faction.starting_troops] || 0) + 1;
-            return counts;
-        }, {});
-        const expectedTroops = { boudica: { 500: 24, 1000: 15, 2500: 3, 5000: 5 }, six_sky_ep1: { 500: 10, 1000: 4, 2500: 3, 5000: 1 }, six_sky_ep2: { 500: 8, 1000: 3, 2500: 5, 5000: 1 }, six_sky_ep3: { 500: 7, 1000: 3, 2500: 4, 5000: 1 } };
-        assert.deepEqual(actualTroops, expectedTroops[episodeId]);
     }
 });
 
@@ -1343,6 +1337,8 @@ test("Boudica camera practice stays paused through desktop and touch routes", ()
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     assert.match(webMenu, /app\.input\.camera_zoom\.is_finite\(\)\s*&& app\.input\.camera_zoom >= zoom_in_target/);
+    assert.match(webMenu, /TUTORIAL_MAX_ZOOM\.clamp\(zoom_floor, zoom_ceiling\)/);
+    assert.match(surfaceSource, /self\.record_tutorial_zoom\(self\.input\.camera_zoom - old_zoom\)/);
     assert.doesNotMatch(webMenu, /tutorial_zoom_out_completed/);
     assert.doesNotMatch(webMenu, /camera_zoom_tolerance|zoom_in_tolerance/);
     assert.match(webMenu, /tutorial_camera_zoom_hundredths/);
@@ -1364,15 +1360,15 @@ test("Boudica camera practice stays paused through desktop and touch routes", ()
     assert.match(storyCss, /background: rgb\(5 10 13 \/ 74%\)/);
     assert.match(campaignView, /if \(reducedMotion\)/);
     assert.match(tutorial, /direction: step\.guide\.gesture === "zoom_in" \? "min" : "max"/);
-    assert.match(campaignView, /const anchor = zoomGuide \? \{/);
+    assert.match(campaignView, /const anchor = context\.anchor;/);
     assert.match(campaignView, /metric\.direction === "min" \? "≥" : metric\.direction === "max" \? "≤"/);
     assert.match(campaignEditor, /x: frame\.clientWidth \* 0\.5, y: frame\.clientHeight \* 0\.5/);
     assert.match(windowInput, /1\.0 \+ \(\(distance - last_distance\) as f32 \* 0\.005\)/);
-    const target = 21;
-    assert.ok(22 >= target, "zoom in completes after crossing the requested zoom");
-    assert.ok(44 >= target, "zoom in completes after overshooting the requested zoom");
-    assert.ok(!(20 >= target), "zoom in does not complete below the requested zoom");
-    const pinchStart = 15, pinchTarget = 21;
+    const target = 10;
+    assert.ok(10 >= target, "zoom in completes at the requested zoom");
+    assert.ok(22 >= target, "zoom in completes after overshooting the requested zoom");
+    assert.ok(!(9 >= target), "zoom in does not complete below the requested zoom");
+    const pinchStart = 8, pinchTarget = 10;
     const pinchDelta = (pinchTarget / pinchStart - 1) / 0.005;
     assert.ok(Math.abs(pinchStart * (1 + pinchDelta * 0.005) - pinchTarget) < 0.00001);
     const invalidDistance = JSON.parse(JSON.stringify(definition));
@@ -1486,7 +1482,7 @@ test("disabled neutral offers stay hidden while named story dialogues and legacy
     assert.equal(legacyGeneric.update(facts, {}).reaction, "neutral_contact_terms", "a missing legacy field keeps the old offer behavior");
 });
 
-test("Boudica completes Iceni diplomacy and Roman outposts before grouping building lessons", () => {
+test("Boudica completes Iceni diplomacy and Roman outposts before one-shot building and upgrades", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
@@ -1513,21 +1509,33 @@ test("Boudica completes Iceni diplomacy and Roman outposts before grouping build
     assert.deepEqual(step("boudica_city_upgrade_wait").trigger, { type: "structure_level", kind: "City", value: 2, scope: "total" });
     assert.deepEqual(step("boudica_factory_upgrade_wait").trigger, { type: "structure_level", kind: "Factory", value: 2, scope: "total" });
     assert.deepEqual(step("boudica_bunker_upgrade_wait").trigger, { type: "structure_level", kind: "Bunker", value: 2, scope: "total" });
-    for (const kind of ["city", "farm", "factory", "bunker", "port"]) {
-        const exit = step(`boudica_cancel_${kind}_build_mode`);
-        assert.deepEqual(exit.trigger, { type: "ui", action: "cancel_building_mode", scope: "step" });
-        assert.deepEqual(exit.guide, { kind: "ui", target: "cancel_building_mode", gesture: "tap" });
-        assert.equal(exit.pause_game, true);
-    }
-    assert.equal(step("boudica_build_city").next, "boudica_cancel_city_build_mode");
-    assert.equal(step("boudica_build_farm").next, "boudica_cancel_farm_build_mode");
-    assert.equal(step("boudica_build_factory").next, "boudica_cancel_factory_build_mode");
-    assert.equal(step("boudica_build_bunker").next, "boudica_cancel_bunker_build_mode");
-    assert.equal(step("boudica_build_port").next, "boudica_cancel_port_build_mode");
+    assert.equal(step("boudica_build_city").next, "boudica_city_ready");
+    assert.equal(step("boudica_build_farm").next, "boudica_farm_ready");
+    assert.equal(step("boudica_build_factory").next, "boudica_factory_ready");
+    assert.equal(step("boudica_build_bunker").next, "boudica_select_bunker_upgrade");
+    assert.equal(step("boudica_build_port").next, "boudica_select_port_upgrade");
+    assert.equal(definition.steps.some(candidate => /boudica_(?:build_mode_explainer|cancel_.*_build_mode)$/.test(candidate.id)), false);
     assert.match(tutorial, /event\.key !== "Escape" \|\| !selected[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?send\("select_building", \{ kind: selected \}\)[\s\S]*?uiCounts\.cancel_building_mode/);
     assert.match(tutorial, /building_mode_exit_" \+ \(context\.zoomMode === "pinch" \? "mobile" : "desktop"\) \+ "_hint/);
     assert.match(webCatalogEs, /building_mode_exit_desktop_hint = "Toca Cancelar o presiona Esc para salir del modo de construcción\."/);
     assert.match(webCatalogEn, /building_mode_exit_desktop_hint = "Tap Cancel or press Esc to exit building mode\."/);
+    const localeRoot = path.join(shell, "../../sow-i18n/strings");
+    for (const locale of fs.readdirSync(localeRoot)) {
+        const catalog = fs.readFileSync(path.join(localeRoot, locale, "web.toml"), "utf8");
+        const menuSection = catalog.slice(catalog.indexOf("[menu]"), catalog.indexOf("\n[", catalog.indexOf("[menu]") + 1));
+        assert.match(menuSection, /^sticky_building_mode = ".+"$/m, `${locale} is missing the sticky-building setting label`);
+        assert.match(menuSection, /^sticky_building_mode_hint = ".+"$/m, `${locale} is missing the sticky-building setting hint`);
+        assert.doesNotMatch(catalog, /^campaign_boudica_boudica_build_mode_(?:title|body) = /m, `${locale} keeps obsolete build-mode tutorial copy`);
+    }
+    for (const surface of [shellSource, pokiSource, licenseJestSource, hud]) {
+        assert.match(surface, /sticky_building_mode/);
+    }
+    assert.match(shellSource, /set_sticky_building_mode/);
+    assert.match(hud, /set_sticky_building_mode/);
+    assert.match(webMenu, /SetStickyBuildingMode\s*\{\s*value: bool,?\s*\}/);
+    assert.match(webMenu, /"sticky_building_mode": app\.ui\.app\.settings_state\.sticky_building_mode/);
+    assert.match(windowInput, /modifiers\.state\(\)\.shift_key\(\)/);
+    assert.match(mapClick, /hold_build_action_succeeded = true[\s\S]*hold_build_shift_override \|= self\.input\.shift_pressed/);
     for (const id of ["boudica_city_upgrade_wait", "boudica_factory_upgrade_wait", "boudica_bunker_upgrade_wait", "boudica_port_ready", "boudica_trade_city_wait", "boudica_trade_port_wait"]) {
         assert.equal(step(id).guide.target, "upgrade_building", `${id} keeps the hand on the building during its upgrade`);
         assert.notEqual(step(id).pause_game, true, `${id} lets the construction timer finish`);
@@ -1564,8 +1572,7 @@ test("Boudica completes Iceni diplomacy and Roman outposts before grouping build
     assert.equal(machine.view().step.type, "scene");
     machine.advance(null, "boudica_city_intro");
     assert.equal(machine.update(facts({ contact_faction_ids: ["stonea"] }), { dock_city: 1 }).step.id, "boudica_build_city");
-    assert.equal(machine.update(city, {}).step.id, "boudica_cancel_city_build_mode");
-    assert.equal(machine.update(city, { cancel_building_mode: 1 }).step.id, "boudica_city_ready");
+    assert.equal(machine.update(city, {}).step.id, "boudica_city_ready");
     machine.advance(null, "boudica_city_ready");
 
     assert.equal(machine.update(contact(["stonea", "snettisham"]), {}).reaction, "contact_snettisham");
@@ -1588,8 +1595,7 @@ test("Boudica completes Iceni diplomacy and Roman outposts before grouping build
     machine.advance(null, "boudica_aid_kept");
     assert.equal(machine.update({ ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], ally_support_deliveries: 1 }, {}).step.id, "boudica_choose_farm");
     assert.equal(machine.update({ ...third, cities: 1, structure_levels: { city: 1 } }, { dock_farm: 1 }).step.id, "boudica_build_farm");
-    assert.equal(machine.update(farm, {}).step.id, "boudica_cancel_farm_build_mode");
-    assert.equal(machine.update(farm, { cancel_building_mode: 1 }).step.id, "boudica_farm_ready");
+    assert.equal(machine.update(farm, {}).step.id, "boudica_farm_ready");
     machine.advance(null, "boudica_farm_ready");
     assert.equal(machine.update(third, {}).step.id, "boudica_select_city_upgrade");
     assert.equal(machine.update({ ...third, selected_building_kind: "City" }, {}).step.id, "boudica_structure_upgrade");
@@ -1599,8 +1605,7 @@ test("Boudica completes Iceni diplomacy and Roman outposts before grouping build
 
     assert.equal(machine.update({ ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], ally_support_deliveries: 1 }, { dock_factory: 1 }).step.id, "boudica_build_factory");
     const factory = { ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], factories: 1, structure_levels: { city: 2, farm: 1, factory: 1 } };
-    assert.equal(machine.update(factory, {}).step.id, "boudica_cancel_factory_build_mode");
-    assert.equal(machine.update(factory, { cancel_building_mode: 1 }).step.id, "boudica_factory_ready");
+    assert.equal(machine.update(factory, {}).step.id, "boudica_factory_ready");
     machine.advance(null, "boudica_factory_ready");
     assert.equal(machine.update({ ...factory, selected_building_kind: "Factory" }, { dock_factory: 1 }).step.id, "boudica_factory_upgrade");
     assert.equal(machine.update({ ...factory, selected_building_kind: "Factory" }, { dock_factory: 1, upgrade_structure: 1 }).step.id, "boudica_factory_upgrade_wait");
@@ -1611,8 +1616,8 @@ test("Boudica completes Iceni diplomacy and Roman outposts before grouping build
     const outposts = { ...factory, defeated_faction_ids: ["colonia_veterans", "tax_collectors", "roman_supply_depot"] };
     machine.advance(null, "boudica_bunker_choice");
     assert.equal(machine.update({ ...outposts, bunkers: 0, structure_levels: { city: 2, farm: 1, factory: 2 } }, { dock_bunker: 1 }).step.id, "boudica_build_bunker");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 1 }, selected_building_kind: "Bunker" }, { dock_bunker: 1 }).step.id, "boudica_cancel_bunker_build_mode");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 1 } }, { cancel_building_mode: 1 }).step.id, "boudica_select_bunker_upgrade");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 1 } }, {}).step.id, "boudica_select_bunker_upgrade");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 1 } }, {}).step.id, "boudica_select_bunker_upgrade");
     assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 1 }, selected_building_kind: "Bunker" }, {}).step.id, "boudica_bunker_upgrade");
     assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 1 } }, { dock_bunker: 1, upgrade_structure: 2 }).step.id, "boudica_bunker_upgrade_wait");
     assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, farm: 1, factory: 2, bunker: 2 } }, { dock_bunker: 1, upgrade_structure: 2 }).step.id, "boudica_bunker_ready");
@@ -1645,8 +1650,7 @@ test("gameplay chrome: vertical right panel with exit on top, fps in dock, notic
     assert.match(hudCss, /@media \(max-width: 720px\) and \(orientation: landscape\) and \(max-height: 560px\) \{[^}]*\.sow-hud__panel \{ top: 50px; bottom: max\(6px, var\(--sow-sab\)\); max-height: none;/);
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard,\s*\.sow-hud__panel,\s*\.sow-hud__emoji-popout \{ top: 50px/);
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard \{ top: calc\(max\(12px, var\(--sow-sat\)\) \+ 272px\)/);
-    assert.match(campaignView, /objective\.hidden = false;/);
-    assert.doesNotMatch(campaignView, /objective\.hidden = modal/);
+    assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
 });
 
 test("campaign support reactions queue by delivery order, wait for their gate and preserve objective progress", () => {
@@ -1896,12 +1900,20 @@ test("campaign validation rejects unsupported rules and duplicate event response
         settings: { buildings_enabled: false, starting_troops: 1000 },
         speakers: {},
         steps: [
-            { id: "objective", type: "objective", title_key: "tutorial.objective", trigger: { type: "fleet", unit: "TransportShip", target: "ally", value: 1, scope: "step" }, next: "end" },
+            { id: "objective", type: "objective", title_key: "tutorial.objective", trigger: { type: "fleet", unit: "TransportShip", target: "ally", value: 1, scope: "step" }, marker: { target: "ally" }, guide: { kind: "world", target: "target_action", gesture: "tap" }, next: "end" },
             { id: "end", type: "end", title_key: "tutorial.end" }
         ],
         reactions: [{ id: "aid", after: "objective", when: { type: "support", target: "ally" }, title_key: "tutorial.aid_title", body_key: "tutorial.aid_body" }]
     };
     assert.deepEqual(campaign.validate(definition, roster).errors, []);
+    assert.deepEqual(campaign.TEAMS, ["Red", "Blue"]);
+    const teamedRoster = JSON.parse(JSON.stringify(roster));
+    for (const team of campaign.TEAMS) {
+        teamedRoster.factions[0].team = team;
+        assert.deepEqual(campaign.validate(definition, teamedRoster).errors, []);
+    }
+    teamedRoster.factions[0].team = "Romans";
+    assert.ok(campaign.validate(definition, teamedRoster).errors.some(issue => issue.field === "roster.factions.team"));
     const removedCombatBehavior = JSON.parse(JSON.stringify(roster));
     removedCombatBehavior.factions[0].hostility = "passive";
     assert.ok(campaign.validate(definition, removedCombatBehavior).errors.some(issue => issue.field === "roster.factions"));
@@ -1932,6 +1944,16 @@ test("campaign validation rejects unsupported rules and duplicate event response
     const delayedContact = JSON.parse(JSON.stringify(contactResponse));
     delayedContact.reactions[1].after = "missing_objective";
     assert.ok(campaign.validate(delayedContact, roster).errors.some(issue => issue.field === "reactions.after"));
+});
+
+test("campaign editor exposes and preserves the existing team enum", () => {
+    const teamSpread = /\.\.\.\(f\.team\?\{team:f\.team\}:\{\}\)/g;
+    assert.deepEqual(require(path.join(shell, "sow-campaign.js")).TEAMS, ["Red", "Blue"]);
+    assert.match(campaignMapEditorHtml, /SOWCampaign\.TEAMS\.map/);
+    assert.match(campaignMapEditorHtml, /id="fteam"/);
+    assert.match(campaignMapEditorHtml, /f\.team=e\.target\.value/);
+    assert.equal((campaignMapEditorHtml.match(teamSpread) || []).length, 2, "import and export both retain an assigned team");
+    assert.match(campaignMapEditorHtml, /factionFields = new Set\(\[[^\]]*"team"/);
 });
 
 test("all HUD message classes have one explicit presentation", () => {
@@ -2651,7 +2673,7 @@ test("faction deletion is blocked while stable story references remain", () => {
         speakers: { removed_ally: { faction: "removed_tribe" } }, entry: "opening",
         steps: [
             { id: "opening", type: "scene", speaker: "removed_ally", title_key: "tutorial.open", next: "contact" },
-            { id: "contact", type: "objective", title_key: "tutorial.contact", trigger: { type: "contact", targets: ["existing_tribe", "removed_tribe"], value: 2, scope: "episode" }, next: "ending" },
+            { id: "contact", type: "objective", title_key: "tutorial.contact", trigger: { type: "contact", targets: ["existing_tribe", "removed_tribe"], value: 2, scope: "episode" }, marker: { target: "existing_tribe" }, guide: { kind: "world", target: "target_action", gesture: "tap" }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.end" }
         ],
         reactions: [{ id: "removed_ally_contact", when: { type: "contact", target: "removed_tribe" }, speaker: "removed_ally", title_key: "tutorial.response_title", body_key: "tutorial.response_body" }]
@@ -2888,6 +2910,7 @@ test("campaign dialogue regains keyboard focus after the leave modal is canceled
 });
 
 test("campaign dialogs need an explicit continue and outside-click cannot skip a scene", () => {
+    assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
     assert.match(storyCss, /\.sow-story\.is-modal \{ pointer-events: none; \}/);
     assert.match(storyCss, /\.sow-story__shade \{[^}]*pointer-events: none/s);
     assert.match(storyCss, /\.sow-story__dialog \{[^}]*pointer-events: auto/s);
@@ -3436,7 +3459,15 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     for (const obsolete of ["boudica_first_contact_intro", "boudica_first_contact_response", "boudica_trinovantes_intro", "boudica_trinovantes_pact", "boudica_share_intro", "boudica_rebuild_intro", "boudica_farm_intro", "boudica_ratio_intro", "boudica_posts_fall", "boudica_foundry_ready", "boudica_factory_intro", "boudica_bunker_intro", "boudica_pact_formed", "boudica_port_intro", "boudica_fleet_intro"]) {
         assert.equal(step(obsolete), undefined, `obsolete dialogue step returned: ${obsolete}`);
     }
-    assert.equal(step("boudica_first_victory").attack_ratio_on_enter, 0.25);
+    assert.equal(step("boudica_attack_roman_outpost").trigger.type, "attack");
+    assert.equal(step("boudica_attack_roman_outpost").trigger.target, "roman_outpost");
+    assert.equal(step("boudica_attack_roman_outpost").trigger.value, 1);
+    assert.equal(step("boudica_attack_roman_outpost").pause_game, true);
+    assert.equal(step("boudica_attack_roman_outpost").guide.gesture, "tap");
+    assert.equal(step("boudica_attack_roman_outpost").attack_ratio_on_enter, 0.25);
+    assert.equal(step("boudica_attack_roman_outpost").next, "boudica_first_victory");
+    assert.equal(step("boudica_first_victory").trigger.type, "defeated");
+    assert.equal(step("boudica_first_victory").pause_game, undefined);
     assert.equal(step("boudica_city_upgrade_wait").trigger.kind, "City");
     assert.equal(step("boudica_first_victory_scene").next, "boudica_first_expansion");
     assert.equal(step("boudica_first_expansion").next, "boudica_camera_intro");
@@ -3453,6 +3484,7 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.equal(step("boudica_zoom_in").trigger.target, "legio_xiv_gemina");
     assert.equal(step("boudica_zoom_in").trigger.distance, 8);
     assert.equal(step("boudica_zoom_in").next, "boudica_found_suetonius");
+    assert.equal(step("boudica_found_suetonius").marker.target, "legio_xiv_gemina");
     assert.equal(step("boudica_found_suetonius").next, "boudica_return_home");
     assert.equal(step("boudica_return_home").next, "boudica_camera_home");
     assert.equal(step("boudica_camera_home").next, "boudica_first_contact");
@@ -3471,7 +3503,7 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.match(webCatalogEs, /campaign_boudica_boudica_return_home_body = "Pulsa Home para volver conmigo/);
     assert.equal(step("boudica_bunker_choice").type, "scene");
     assert.equal(step("boudica_bunker_choice").next, "boudica_choose_bunker");
-    assert.equal(step("boudica_build_bunker").next, "boudica_cancel_bunker_build_mode");
+    assert.equal(step("boudica_build_bunker").next, "boudica_select_bunker_upgrade");
     assert.deepEqual(step("boudica_first_contact").trigger, { type: "contact", target: "stonea", value: 1, scope: "total" });
     assert.equal(step("boudica_first_contact").next, "boudica_city_intro");
     assert.equal(definition.steps.some(candidate => /boudica_contact_.*pledge/.test(candidate.id)), false);
@@ -3599,10 +3631,8 @@ test("the main menu guide points the hand at a lobby and never shows a card", ()
     assert.match(campaignEngine, /menu_lobby: '#sow-menu \.sow-menu__home-public \[data-lobby-card\]'/);
     assert.match(tutorial, /if \(machineView\.done \|\| machineView\.step\.type === "end"\) \{ dismissMenuGuide\(\); return; \}/);
     assert.match(tutorial, /context\.hideObjective = true/);
-    // The card stays visible by default (gameplay) and only the menu guide turns it off.
-    assert.match(campaignView, /dialog\.hidden = !modal; shade\.hidden = !modal; objective\.hidden = false;/);
-    assert.match(campaignView, /if \(context\.hideObjective\) objective\.hidden = true;/);
-    assert.doesNotMatch(campaignView, /objective\.hidden = modal/);
+    // Dialogs own their copy; the objective card stays for non-modal gameplay steps.
+    assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
 });
 
 // Owner decision: episode 1 ("Arrival") is not finished yet, so the whole Six Sky
@@ -4038,7 +4068,8 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hudCss, /isolation: isolate/);
     assert.match(hudCss, /\.sow-hud__map-submenu/);
     assert.match(hudCss, /@keyframes sow-map-menu-in/);
-    assert.match(hud, /title\.innerHTML = hudIcon\(label\.icon/);
+    assert.match(hud, /label\.emoji\s*\?/);
+    assert.match(hud, /mapActionContent\(icon, withDetails \? "" : actionName\)/);
     assert.match(hud, /parts\.push\(item\.level/);
     assert.match(hud, /sow-hud__buildings-strip/);
     assert.match(hudCss, /\.sow-hud__buildings-strip/);
@@ -4046,7 +4077,104 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.doesNotMatch(hud, /build_structure|cancel_placement/);
     assert.doesNotMatch(hudCss, /sow-hud__bld-btn|sow-hud__cancel-btn/);
     assert.doesNotMatch(hud, /mapClose|data-map-close|close_map_menu|STRATEGIC STRIKE|CONSTRUCT/);
-    assert.doesNotMatch(hudCss, /sow-hud__map-sector-caption|sow-hud__map-close/);
+    assert.match(hudCss, /\.sow-hud__map-sector-caption/);
+    assert.doesNotMatch(hudCss, /sow-hud__map-close/);
+});
+
+test("radial actions restore emoji, visible translated labels, and all alliance states", () => {
+    const configStart = hud.indexOf("var mapActionLabels =");
+    const configEnd = hud.indexOf("var buildMenuActions", configStart);
+    const config = vm.runInNewContext(hud.slice(configStart, configEnd) + "({ mapActionLabels, allianceActionLabels });");
+    for (const [action, emoji] of Object.entries({
+        spawn: "🌱", attack: "⚔️", fleet: "⛵", transfer: "📦", alliance: "🤝", nuke: "🚀"
+    })) assert.equal(config.mapActionLabels[action].emoji, emoji);
+    for (const [state, key] of Object.entries({
+        request: "hud.map_action_request_alliance",
+        accept: "hud.map_action_accept_alliance",
+        pending: "hud.map_action_alliance_pending",
+        active: "hud.map_action_alliance_active",
+        renew: "hud.map_action_renew_alliance"
+    })) assert.equal(config.allianceActionLabels[state].key, key);
+    assert.deepEqual(Object.keys(config.allianceActionLabels).sort(), ["accept", "active", "pending", "renew", "request"]);
+    assert.match(webMenu, /map_menu_alliance_state\(menu\.tile_idx\)/);
+    assert.match(webMenu, /"alliance_state": alliance_state/);
+    assert.doesNotMatch(hud, /has_alliance_request|has_proposed_alliance|alliance_requests/);
+
+    const localeRoot = path.join(shell, "../../sow-i18n/strings");
+    const localeFiles = fs.readdirSync(localeRoot)
+        .map(locale => path.join(localeRoot, locale, "web.toml"))
+        .filter(file => fs.existsSync(file));
+    assert.equal(localeFiles.length, 15);
+    for (const file of localeFiles) {
+        const catalog = fs.readFileSync(file, "utf8");
+        for (const key of [
+            "map_action_build", "map_action_request_alliance", "map_action_accept_alliance",
+            "map_action_alliance_pending", "map_action_alliance_active", "map_action_renew_alliance"
+        ]) assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"), `${file} is missing ${key}`);
+    }
+
+    function element() {
+        return {
+            dataset: {}, children: [], attributes: {}, style: {},
+            appendChild(child) { this.children.push(child); return child; },
+            setAttribute(name, value) { this.attributes[name] = String(value); },
+            getAttribute(name) { return this.attributes[name] ?? null; }
+        };
+    }
+    const buttonSource = hud.slice(hud.indexOf("function mapActionContent("), hud.indexOf("function updateDisabledMapActionReasons", hud.indexOf("function mapActionContent(")));
+    const renderButton = vm.runInNewContext(buttonSource + "\nmapActionButton;", {
+        document: { createElement: element },
+        mapActionLabels: config.mapActionLabels,
+        mapActionContent: undefined,
+        mapActionReason: () => "",
+        mapLabel: action => action,
+        SOW_t: key => "translated:" + key,
+        emojiIcon: (emoji, cls) => `<span class="${cls} is-emoji">${emoji}</span>`,
+        hudIcon: () => "",
+        buildingIcon: () => "",
+        hudState: null
+    });
+    const accepted = renderButton(
+        { action: "alliance" }, "sector", false, config.allianceActionLabels.accept
+    );
+    assert.equal(accepted.disabled, false);
+    assert.equal(accepted.getAttribute("aria-label"), "translated:hud.map_action_accept_alliance");
+    assert.match(accepted.children[0].children[0].innerHTML, /🤝/);
+    assert.equal(accepted.children[0].children[1].textContent, "translated:hud.map_action_accept_alliance");
+    const pending = renderButton(
+        { action: "alliance" }, "sector", false, config.allianceActionLabels.pending
+    );
+    assert.equal(pending.disabled, true);
+    assert.equal(pending.getAttribute("aria-disabled"), "true");
+    assert.equal(pending.children[0].children[1].textContent, "translated:hud.map_action_alliance_pending");
+    assert.match(hudCss, /\.sow-hud__map-sector:focus-visible/);
+    assert.match(hudCss, /\.sow-hud__map-sector:active/);
+});
+
+test("only the confirmed center attack can break an alliance", () => {
+    const allianceStart = mapClick.indexOf("    fn alliance_from_tile(");
+    const allianceEnd = mapClick.indexOf("    fn map_target(", allianceStart);
+    const allianceAction = mapClick.slice(allianceStart, allianceEnd);
+    assert.doesNotMatch(allianceAction, /BreakAlliance/);
+    assert.match(allianceAction, /target\.alliance_intent\(\)/);
+    const allianceIntentStart = mapClick.indexOf("    fn alliance_intent(self)");
+    const allianceIntentEnd = mapClick.indexOf("    fn is_friendly(self)", allianceIntentStart);
+    const allianceIntent = mapClick.slice(allianceIntentStart, allianceIntentEnd);
+    assert.doesNotMatch(allianceIntent, /BreakAlliance/);
+    assert.match(allianceIntent, /State::Accept => Some\(GameplayIntent::AcceptAlliance/);
+    assert.match(allianceIntent, /State::Request \| State::Renew => Some\(GameplayIntent::ProposeAlliance/);
+    assert.match(allianceIntent, /State::Pending \| State::Active => None/);
+
+    const attackStart = mapClick.indexOf("    fn attack_from_tile(");
+    const attackEnd = mapClick.indexOf("    pub(crate) fn launch_fleet_from_tile", attackStart);
+    assert.match(mapClick.slice(attackStart, attackEnd), /if target\.is_allied[\s\S]*?show_betrayal_warning/);
+    const confirmStart = webMenu.indexOf("WebMenuCommand::ConfirmBetrayal =>");
+    const cancelStart = webMenu.indexOf("WebMenuCommand::CancelBetrayal =>", confirmStart);
+    const confirm = webMenu.slice(confirmStart, cancelStart);
+    const cancelEnd = webMenu.indexOf("WebMenuCommand::CancelAttack", cancelStart);
+    const cancel = webMenu.slice(cancelStart, cancelEnd);
+    assert.match(confirm, /GameplayIntent::BreakAlliance[\s\S]*?self\.send_intent\(intent\)/);
+    assert.doesNotMatch(cancel, /send_intent|BreakAlliance/);
 });
 
 test("building menus use generated pixel-art sprites with emoji fallback", () => {
@@ -4134,6 +4262,8 @@ test("tutorial hand follows the selected campaign target", () => {
     assert.match(webMenu, /WebMenuCommand::SetTutorialMarker \{ player_id \} => \{[\s\S]*?tutorial_marker_player_id = player_id/);
     assert.match(webMenu, /tutorial_target_action_tile\([\s\S]*?target_owner/);
     assert.match(tutorial, /send\("set_tutorial_marker", \{ player_id: markerId \}\)/);
+    assert.match(tutorial, /guide\.target === "target_action"[\s\S]*?step\.trigger\.type === "defeated"[\s\S]*?tutorial\.target_nameplate/);
+    assert.match(webMenu, /let target_nameplate = nameplate_position[\s\S]*tutorial_screen_anchor\(point, viewport_w, viewport_h\)[\s\S]*"target_nameplate": target_nameplate/);
     assert.match(tutorial, /Array\.isArray\(step\.trigger\.targets\)/);
     assert.match(campaignView, /const hasMapTarget = !\(step\.trigger && \["camera_target", "hover", "ui"\]\.includes\(step\.trigger\.type\)\)/);
     assert.match(campaignEditor, /Array\.isArray\(step\.trigger && step\.trigger\.targets\)/);

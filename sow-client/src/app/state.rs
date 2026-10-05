@@ -67,6 +67,7 @@ pub struct TutorialObservation {
     pub seen_cities: std::collections::HashSet<u64>,
     pub seen_defeated: std::collections::HashSet<u16>,
     pub seen_defeated_faction_ids: std::collections::HashSet<String>,
+    pub eliminated_faction_ids: std::collections::BTreeSet<String>,
     pub seen_contacts: std::collections::HashSet<u16>,
     pub seen_contact_faction_ids: std::collections::HashSet<String>,
     pub seen_nukes: std::collections::HashSet<u64>,
@@ -244,6 +245,9 @@ pub struct InputState {
     /// Hold-to-build
     pub hold_build_active: bool,
     pub hold_build_accum: f32,
+    pub hold_build_action_succeeded: bool,
+    pub hold_build_shift_override: bool,
+    pub shift_pressed: bool,
     pub has_snapped_camera_to_spawn: bool,
     pub selected_warships: Vec<u64>,
     pub key_pan_up: bool,
@@ -395,6 +399,8 @@ pub struct UiState {
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
     pub tutorial_camera_only: bool,
+    /// Boudica remains frozen until the player starts the first Roman attack.
+    pub tutorial_waiting_for_first_attack: bool,
     /// Which scripted campaign the running tutorial match belongs to.
     pub tutorial_campaign: crate::campaign::CampaignId,
     /// Player whose avatar the current tutorial step points at; None points to the local player.

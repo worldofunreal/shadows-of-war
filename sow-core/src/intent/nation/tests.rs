@@ -1052,6 +1052,42 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
+    fn same_team_campaign_enemies_ignore_each_other_but_can_attack_boudica() {
+        use crate::game_config::BotDifficulty;
+        use crate::protocol::{CampaignRelation, Team};
+
+        let mut engine = test_engine_two_players(42);
+        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(2).unwrap().team = Some(Team::Red);
+        let config = crate::game_config::GameConfig::default();
+        let mut boudica = Player::new_human(3, "Boudica".into(), [0.2, 0.5, 1.0], &config);
+        boudica.troops = 200.0;
+        boudica.max_troops = 1_000.0;
+        boudica.tile_count = 1;
+        boudica.border_insert(2);
+        engine.state.register_player(boudica);
+        engine.campaign_relations.insert(1, CampaignRelation::Enemy);
+        engine.campaign_relations.insert(2, CampaignRelation::Enemy);
+
+        let mut profile = ai_profile_for(AiTier::Tribe, BotDifficulty::Terminator);
+        profile.refuse_human_chance = 0;
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Tribe,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: false,
+            profile,
+        };
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(&slot, (1, 135), (5.0, 5.0), &[2, 3], false, &mut decisions);
+
+        assert_eq!(attack_targets(&decisions), vec![3]);
+        assert_eq!(engine.campaign_relations.get(&1), Some(&CampaignRelation::Enemy));
+        assert_eq!(engine.campaign_relations.get(&2), Some(&CampaignRelation::Enemy));
+    }
+
+    #[test]
     fn campaign_relationships_do_not_disable_normal_bot_ai() {
         use crate::protocol::CampaignRelation;
 

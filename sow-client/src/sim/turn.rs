@@ -64,22 +64,24 @@ impl TutorialObservation {
                 self.owned_structures.insert(building.id);
                 self.owned_structure_kinds
                     .insert(building.id, building.kind);
-                if building.active_level() > 0 {
-                    self.seen_structures.insert(building.id);
-                    let kind = match building.kind {
-                        sow_core::game::BuildingKind::City => "cities",
-                        sow_core::game::BuildingKind::Bunker => "bunkers",
-                        sow_core::game::BuildingKind::Factory => "factories",
-                        sow_core::game::BuildingKind::Port => "ports",
-                        sow_core::game::BuildingKind::Farm => "farms",
-                    };
-                    self.seen_buildings_by_kind
-                        .entry(kind.to_string())
-                        .or_default()
-                        .insert(building.id);
-                    if building.kind == sow_core::game::BuildingKind::City {
-                        self.seen_cities.insert(building.id);
-                    }
+                // Campaign build objectives mean "placement accepted", not
+                // "construction completed". The authoritative snapshot contains
+                // the new building (including level-0 construction) as soon as the
+                // server accepts the intent.
+                self.seen_structures.insert(building.id);
+                let kind = match building.kind {
+                    sow_core::game::BuildingKind::City => "cities",
+                    sow_core::game::BuildingKind::Bunker => "bunkers",
+                    sow_core::game::BuildingKind::Factory => "factories",
+                    sow_core::game::BuildingKind::Port => "ports",
+                    sow_core::game::BuildingKind::Farm => "farms",
+                };
+                self.seen_buildings_by_kind
+                    .entry(kind.to_string())
+                    .or_default()
+                    .insert(building.id);
+                if building.kind == sow_core::game::BuildingKind::City {
+                    self.seen_cities.insert(building.id);
                 }
             }
         }
@@ -295,13 +297,18 @@ impl TutorialObservation {
                 assists,
                 ..
             } = event
-                && (*conqueror_id == my_id
-                    || assists.iter().any(|(player_id, _)| *player_id == my_id))
                 && let Some(player) = engine.state.player(*player_id)
             {
-                self.seen_defeated.insert(*player_id);
                 if let Some(faction_id) = engine.campaign_faction_ids.get(&player.id) {
-                    self.seen_defeated_faction_ids.insert(faction_id.clone());
+                    self.eliminated_faction_ids.insert(faction_id.clone());
+                }
+                if *conqueror_id == my_id
+                    || assists.iter().any(|(player_id, _)| *player_id == my_id)
+                {
+                    self.seen_defeated.insert(*player_id);
+                    if let Some(faction_id) = engine.campaign_faction_ids.get(&player.id) {
+                        self.seen_defeated_faction_ids.insert(faction_id.clone());
+                    }
                 }
             }
         }
@@ -502,7 +509,8 @@ mod tests {
         assert_eq!(observation.attacks_by_faction_id.get("neighbor"), Some(&1));
         assert_eq!(observation.seen_fleets, [1].into_iter().collect());
         assert_eq!(observation.seen_nukes.len(), 2);
-        assert_eq!(observation.seen_structures, [10].into_iter().collect());
+        assert_eq!(observation.seen_structures, [10, 11].into_iter().collect());
+        assert_eq!(observation.seen_cities, [10, 11].into_iter().collect());
 
         engine.execute_construction();
         engine.buildings.clear();

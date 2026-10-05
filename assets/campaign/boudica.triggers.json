@@ -178,7 +178,7 @@
         {
           "id": "attack",
           "label_key": "tutorial.campaign_boudica_boudica_decision_attack",
-          "next": "boudica_first_victory"
+          "next": "boudica_attack_roman_outpost"
         },
         {
           "id": "wait",
@@ -197,6 +197,30 @@
       "next": "boudica_council_decision"
     },
     {
+      "id": "boudica_attack_roman_outpost",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_first_victory_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_first_victory_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "attack",
+        "target": "roman_outpost",
+        "value": 1,
+        "scope": "step"
+      },
+      "attack_ratio_on_enter": 0.25,
+      "marker": {
+        "target": "roman_outpost"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "nameplate",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "next": "boudica_first_victory"
+    },
+    {
       "id": "boudica_first_victory",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_first_victory_title",
@@ -207,13 +231,12 @@
         "target": "roman_outpost",
         "scope": "step"
       },
-      "attack_ratio_on_enter": 0.25,
       "marker": {
         "target": "roman_outpost"
       },
       "guide": {
         "kind": "world",
-        "target": "nameplate",
+        "target": "target_action",
         "gesture": "tap"
       },
       "next": "boudica_first_victory_scene"
@@ -360,6 +383,9 @@
       "body_key": "tutorial.campaign_boudica_boudica_found_suetonius_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "marker": {
+        "target": "legio_xiv_gemina"
+      },
       "next": "boudica_return_home"
     },
     {
@@ -608,17 +634,6 @@
         "target": "build_site",
         "gesture": "tap"
       },
-      "next": "boudica_cancel_city_build_mode"
-    },
-    {
-      "id": "boudica_cancel_city_build_mode",
-      "type": "guide",
-      "title_key": "tutorial.building_mode_exit_title",
-      "hint_key": "tutorial.building_mode_exit_mobile_hint",
-      "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "cancel_building_mode", "scope": "step" },
-      "guide": { "kind": "ui", "target": "cancel_building_mode", "gesture": "tap" },
-      "pause_game": true,
       "next": "boudica_city_ready"
     },
     {
@@ -689,17 +704,6 @@
         "target": "build_site",
         "gesture": "tap"
       },
-      "next": "boudica_cancel_farm_build_mode"
-    },
-    {
-      "id": "boudica_cancel_farm_build_mode",
-      "type": "guide",
-      "title_key": "tutorial.building_mode_exit_title",
-      "hint_key": "tutorial.building_mode_exit_mobile_hint",
-      "speaker": "boudica",
-      "trigger": { "type": "ui", "action": "cancel_building_mode", "scope": "step" },
-      "guide": { "kind": "ui", "target": "cancel_building_mode", "gesture": "tap" },
-      "pause_game": true,
       "next": "boudica_farm_ready"
     },
     {
@@ -786,7 +790,11 @@
         "value": 2,
         "scope": "total"
       },
-      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
       "next": "boudica_city_upgrade_ready"
     },
     {
@@ -857,17 +865,6 @@
         "target": "build_site",
         "gesture": "tap"
       },
-      "next": "boudica_cancel_factory_build_mode"
-    },
-    {
-      "id": "boudica_cancel_factory_build_mode",
-      "type": "guide",
-      "title_key": "tutorial.building_mode_exit_title",
-      "hint_key": "tutorial.building_mode_exit_mobile_hint",
-      "speaker": "council",
-      "trigger": { "type": "ui", "action": "cancel_building_mode", "scope": "step" },
-      "guide": { "kind": "ui", "target": "cancel_building_mode", "gesture": "tap" },
-      "pause_game": true,
       "next": "boudica_factory_ready"
     },
     {
@@ -932,7 +929,11 @@
         "value": 2,
         "scope": "total"
       },
-      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
       "next": "boudica_factory_upgrade_ready"
     },
     {
@@ -990,17 +991,6 @@
         "target": "build_site",
         "gesture": "tap"
       },
-      "next": "boudica_cancel_bunker_build_mode"
-    },
-    {
-      "id": "boudica_cancel_bunker_build_mode",
-      "type": "guide",
-      "title_key": "tutorial.building_mode_exit_title",
-      "hint_key": "tutorial.building_mode_exit_mobile_hint",
-      "speaker": "council",
-      "trigger": { "type": "ui", "action": "cancel_building_mode", "scope": "step" },
-      "guide": { "kind": "ui", "target": "cancel_building_mode", "gesture": "tap" },
-      "pause_game": true,
       "next": "boudica_select_bunker_upgrade"
     },
     {
@@ -1056,7 +1046,11 @@
         "value": 2,
         "scope": "total"
       },
-      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
       "next": "boudica_bunker_ready"
     },
     {
@@ -1348,17 +1342,6 @@
         "target": "build_site",
         "gesture": "tap"
       },
-      "next": "boudica_cancel_port_build_mode"
-    },
-    {
-      "id": "boudica_cancel_port_build_mode",
-      "type": "guide",
-      "title_key": "tutorial.building_mode_exit_title",
-      "hint_key": "tutorial.building_mode_exit_mobile_hint",
-      "speaker": "council",
-      "trigger": { "type": "ui", "action": "cancel_building_mode", "scope": "step" },
-      "guide": { "kind": "ui", "target": "cancel_building_mode", "gesture": "tap" },
-      "pause_game": true,
       "next": "boudica_select_port_upgrade"
     },
     {
@@ -1416,7 +1399,11 @@
       "marker": {
         "target": "player"
       },
-      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
       "next": "boudica_fleet_target"
     },
     {
@@ -1513,7 +1500,11 @@
         "value": 4,
         "scope": "total"
       },
-      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
       "next": "boudica_select_trade_port"
     },
     {
@@ -1568,7 +1559,11 @@
         "value": 3,
         "scope": "total"
       },
-      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
       "next": "boudica_trade_menu"
     },
     {
@@ -1954,5 +1949,8 @@
       "x": 70,
       "y": 1850
     }
+  },
+  "faction_story_names": {
+    "picts_1": "Picts 1"
   }
 }

@@ -87,6 +87,30 @@ struct MapTarget {
 }
 
 impl MapTarget {
+    fn alliance_action_state(self) -> sow_core::diplomacy::AllianceActionState {
+        sow_core::diplomacy::AllianceActionState::resolve(
+            self.is_allied,
+            self.is_in_renewal_window,
+            self.has_alliance_request,
+            self.has_proposed_alliance,
+        )
+    }
+
+    fn alliance_intent(self) -> Option<sow_core::protocol::GameplayIntent> {
+        use sow_core::diplomacy::AllianceActionState as State;
+        use sow_core::protocol::GameplayIntent;
+
+        match self.alliance_action_state() {
+            State::Request | State::Renew => Some(GameplayIntent::ProposeAlliance {
+                target_player: self.owner,
+            }),
+            State::Accept => Some(GameplayIntent::AcceptAlliance {
+                target_player: self.owner,
+            }),
+            State::Pending | State::Active => None,
+        }
+    }
+
     fn is_friendly(self) -> bool {
         self.is_allied || self.is_teammate
     }
@@ -152,7 +176,7 @@ impl MapTarget {
                 actions.push(MapMenuAction::Nuke);
             }
         }
-        if !self.is_teammate {
+        if !self.is_teammate && self.alliance_action_state().can_act() {
             actions.push(MapMenuAction::Alliance);
         }
         actions
@@ -160,6 +184,14 @@ impl MapTarget {
 }
 
 impl SowApp {
+    pub(crate) fn map_menu_alliance_state(
+        &self,
+        tile_idx: u32,
+    ) -> Option<sow_core::diplomacy::AllianceActionState> {
+        let target = self.map_target(tile_idx)?;
+        (target.is_player() && !target.is_teammate).then(|| target.alliance_action_state())
+    }
+
     pub(crate) fn try_attack_at(&mut self, x: f64, y: f64) -> bool {
         if self.ui.tutorial_camera_only
             || self.ui.observing
@@ -217,7 +249,10 @@ impl SowApp {
             return;
         }
         if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
-            self.build_structure_at(kind, col, row);
+            if self.build_structure_at(kind, col, row) {
+                self.input.hold_build_action_succeeded = true;
+                self.input.hold_build_shift_override |= self.input.shift_pressed;
+            }
             return;
         }
 
@@ -1306,35 +1341,10 @@ impl SowApp {
         if !target.is_player() || target.is_teammate {
             return false;
         }
-        if target.is_allied {
-            if target.is_in_renewal_window {
-                if target.has_alliance_request {
-                    self.send_intent(sow_core::protocol::GameplayIntent::AcceptAlliance {
-                        target_player: target.owner,
-                    });
-                } else if target.has_proposed_alliance {
-                    self.add_action_feedback("Alliance renewal is already pending.");
-                } else {
-                    self.send_intent(sow_core::protocol::GameplayIntent::ProposeAlliance {
-                        target_player: target.owner,
-                    });
-                }
-            } else {
-                self.send_intent(sow_core::protocol::GameplayIntent::BreakAlliance {
-                    target_player: target.owner,
-                });
-            }
-        } else if target.has_alliance_request {
-            self.send_intent(sow_core::protocol::GameplayIntent::AcceptAlliance {
-                target_player: target.owner,
-            });
-        } else if target.has_proposed_alliance {
-            self.add_action_feedback("Alliance request already pending.");
-        } else {
-            self.send_intent(sow_core::protocol::GameplayIntent::ProposeAlliance {
-                target_player: target.owner,
-            });
-        }
+        let Some(intent) = target.alliance_intent() else {
+            return false;
+        };
+        self.send_intent(intent);
         true
     }
 
@@ -1476,6 +1486,8 @@ impl SowApp {
         self.ui.app.hud_state.selected_building_kind = None;
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.cancel_hold_build();
+        self.input.hold_build_action_succeeded = false;
+        self.input.hold_build_shift_override = false;
     }
 
     pub(crate) fn select_building_kind(&mut self, kind: sow_core::game::BuildingKind) {
@@ -1491,6 +1503,8 @@ impl SowApp {
         *selected = (*selected != Some(kind)).then_some(kind);
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.cancel_hold_build();
+        self.input.hold_build_action_succeeded = false;
+        self.input.hold_build_shift_override = false;
     }
 }
 
@@ -1715,11 +1729,7 @@ mod tests {
         };
         assert_eq!(
             ally.menu_actions(false, false, false),
-            vec![
-                MapMenuAction::Transfer,
-                MapMenuAction::Fleet,
-                MapMenuAction::Alliance
-            ]
+            vec![MapMenuAction::Transfer, MapMenuAction::Fleet]
         );
         assert_eq!(
             ally.menu_actions(false, true, false),
@@ -1727,8 +1737,37 @@ mod tests {
                 MapMenuAction::Transfer,
                 MapMenuAction::Attack,
                 MapMenuAction::Fleet,
-                MapMenuAction::Alliance,
             ]
+        );
+
+        let renewable_ally = MapTarget {
+            is_in_renewal_window: true,
+            ..ally
+        };
+        assert!(
+            renewable_ally
+                .menu_actions(false, false, false)
+                .contains(&MapMenuAction::Alliance)
+        );
+
+        let incoming_request = MapTarget {
+            has_alliance_request: true,
+            ..enemy
+        };
+        assert!(
+            incoming_request
+                .menu_actions(false, false, false)
+                .contains(&MapMenuAction::Alliance)
+        );
+
+        let outgoing_request = MapTarget {
+            has_proposed_alliance: true,
+            ..enemy
+        };
+        assert!(
+            !outgoing_request
+                .menu_actions(false, false, false)
+                .contains(&MapMenuAction::Alliance)
         );
 
         let teammate = MapTarget {
@@ -1762,6 +1801,59 @@ mod tests {
         assert_eq!(
             enemy.menu_actions(true, false, false),
             vec![MapMenuAction::Spawn]
+        );
+    }
+
+    #[test]
+    fn lower_alliance_action_only_requests_or_accepts() {
+        use sow_core::protocol::GameplayIntent;
+
+        let enemy = MapTarget {
+            owner: 2,
+            is_land: true,
+            my_id: 1,
+            is_allied: false,
+            is_teammate: false,
+            has_alliance_request: false,
+            has_proposed_alliance: false,
+            is_in_renewal_window: false,
+        };
+        assert_eq!(
+            enemy.alliance_intent(),
+            Some(GameplayIntent::ProposeAlliance { target_player: 2 })
+        );
+
+        let incoming = MapTarget {
+            has_alliance_request: true,
+            ..enemy
+        };
+        assert_eq!(
+            incoming.alliance_intent(),
+            Some(GameplayIntent::AcceptAlliance { target_player: 2 })
+        );
+
+        let outgoing = MapTarget {
+            has_proposed_alliance: true,
+            ..enemy
+        };
+        assert_eq!(outgoing.alliance_action_state().as_str(), "pending");
+        assert_eq!(outgoing.alliance_intent(), None);
+
+        let active = MapTarget {
+            is_allied: true,
+            ..enemy
+        };
+        assert_eq!(active.alliance_action_state().as_str(), "active");
+        assert_eq!(active.alliance_intent(), None);
+
+        let renewable = MapTarget {
+            is_allied: true,
+            is_in_renewal_window: true,
+            ..enemy
+        };
+        assert_eq!(
+            renewable.alliance_intent(),
+            Some(GameplayIntent::ProposeAlliance { target_player: 2 })
         );
     }
 }

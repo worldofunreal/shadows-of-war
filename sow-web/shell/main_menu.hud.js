@@ -285,6 +285,7 @@
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input type="checkbox" data-hud-setting="free_zoom_out"></label>'
+            + '  <label class="sow-hud__setting-row sow-hud__setting-row--hint" title="' + SOW_t("menu.sticky_building_mode_hint") + '"><span><b>' + SOW_t("menu.sticky_building_mode") + '</b><small>' + SOW_t("menu.sticky_building_mode_hint") + '</small></span><input type="checkbox" data-hud-setting="sticky_building_mode"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
             + '</aside>'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
@@ -566,29 +567,38 @@
             if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
             if (setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
+            if (setting === "sticky_building_mode") send("set_sticky_building_mode", { value: input.checked });
             if (setting === "show_dev_tools") send("set_show_dev_tools", { value: input.checked });
         });
     }
 
     var mapActionLabels = {
-        spawn: { icon: "spawn", key: "hud.map_action_deploy" },
-        attack: { icon: "attack", key: "hud.map_action_attack" },
-        fleet: { icon: "fleet", key: "hud.map_action_fleet" },
-        transfer: { icon: "transfer", key: "hud.map_action_transfer" },
-        alliance: { icon: "alliance", key: "hud.map_action_alliance" },
+        spawn: { icon: "spawn", emoji: "🌱", key: "hud.map_action_deploy" },
+        attack: { icon: "attack", emoji: "⚔️", key: "hud.map_action_attack" },
+        fleet: { icon: "fleet", emoji: "⛵", key: "hud.map_action_fleet" },
+        transfer: { icon: "transfer", emoji: "📦", key: "hud.map_action_transfer" },
+        alliance: { icon: "alliance", emoji: "🤝", key: "hud.map_action_alliance" },
         build_city: { key: "hud.map_action_city" },
         build_factory: { key: "hud.map_action_factory" },
         build_port: { key: "hud.map_action_port" },
         build_bunker: { key: "hud.map_action_bunker" },
         build_farm: { text: "Farm" },
         upgrade_structure: { icon: "upgrade", text: "Upgrade" },
-        nuke: { icon: "nuke", key: "hud.map_action_nuke" },
+        nuke: { icon: "nuke", emoji: "🚀", key: "hud.map_action_nuke" },
         upgrade_tile: { icon: "upgrade", key: "hud.map_action_upgrade_tile" },
         upgrade_arsenal: { icon: "nuke", key: "hud.map_action_upgrade_arsenal" },
         upgrade_port: { icon: "anchor", key: "hud.map_action_upgrade_port" },
         upgrade_foundry: { icon: "factory", key: "hud.map_action_upgrade_foundry" },
         build_warship: { icon: "warship", key: "hud.map_action_build_warship" },
         build_trade_ship: { icon: "trade_ship", key: "hud.map_action_build_trade_ship" }
+    };
+
+    var allianceActionLabels = {
+        request: { state: "request", key: "hud.map_action_request_alliance", emoji: "🤝", disabled: false },
+        accept: { state: "accept", key: "hud.map_action_accept_alliance", emoji: "🤝", disabled: false },
+        pending: { state: "pending", key: "hud.map_action_alliance_pending", emoji: "⏳", disabled: true },
+        active: { state: "active", key: "hud.map_action_alliance_active", emoji: "🛡️", disabled: true },
+        renew: { state: "renew", key: "hud.map_action_renew_alliance", emoji: "🔄", disabled: false }
     };
 
     var buildMenuActions = {
@@ -672,7 +682,23 @@
         });
     }
 
-    function mapActionButton(item, className, withDetails) {
+    function mapActionContent(icon, label) {
+        var content = document.createElement("span");
+        content.className = "sow-hud__map-action-content";
+        var title = document.createElement("span");
+        title.className = "sow-hud__map-action-title";
+        title.innerHTML = icon;
+        content.appendChild(title);
+        if (label) {
+            var caption = document.createElement("span");
+            caption.className = "sow-hud__map-sector-caption";
+            caption.textContent = label;
+            content.appendChild(caption);
+        }
+        return content;
+    }
+
+    function mapActionButton(item, className, withDetails, presentation) {
         var label = mapActionLabels[item.action] || { icon: "•", text: item.action };
         var button = document.createElement("button");
         var action = item.action;
@@ -680,27 +706,25 @@
         button.className = className;
         button.dataset.mapAction = action;
         button.setAttribute("role", "menuitem");
-        button.disabled = Boolean(item.disabled);
-        button.setAttribute("aria-disabled", String(Boolean(item.disabled)));
-        var title = document.createElement("span");
-        title.className = "sow-hud__map-action-title";
+        var disabled = Boolean(item.disabled || (presentation && presentation.disabled));
+        button.disabled = disabled;
+        button.setAttribute("aria-disabled", String(disabled));
         var buildingKind = action.indexOf("build_") === 0 ? action.slice(6) : "";
         buildingKind = buildingKind.charAt(0).toUpperCase() + buildingKind.slice(1);
         var buildingImg = buildingKind ? buildingIcon(buildingKind) : "";
-        if (buildingImg) {
-            title.innerHTML = buildingImg;
-        } else if (label.icon) {
-            title.innerHTML = hudIcon(label.icon, "sow-hud__map-action-icon");
-        } else {
-            title.textContent = "•";
-        }
-        button.appendChild(title);
-        var actionName = mapLabel(action);
+        var icon = presentation && presentation.emoji
+            ? emojiIcon(presentation.emoji, "sow-hud__map-action-icon")
+            : label.emoji
+                ? emojiIcon(label.emoji, "sow-hud__map-action-icon")
+                : buildingImg || (label.icon ? hudIcon(label.icon, "sow-hud__map-action-icon") : "•");
+        var actionName = presentation ? SOW_t(presentation.key) : mapLabel(action);
         button.dataset.mapActionLabel = actionName;
+        if (presentation && presentation.state) button.dataset.allianceState = presentation.state;
         var reason = withDetails ? mapActionReason(item, hudState && hudState.hud && hudState.hud.gold) : "";
         var accessibleLabel = reason ? actionName + ". " + reason : actionName;
         button.setAttribute("aria-label", accessibleLabel);
         button.title = reason ? accessibleLabel : "";
+        button.appendChild(mapActionContent(icon, withDetails ? "" : actionName));
         if (withDetails) {
             var copy = document.createElement("span");
             var name = document.createElement("span");
@@ -776,33 +800,35 @@
         var anchorY = 50 + Math.sin(midpointRadians) * anchorRadius;
         button.dataset.tutorialAnchorX = String(anchorX);
         button.dataset.tutorialAnchorY = String(anchorY);
-        var icon = button.querySelector(".sow-hud__map-action-title");
-        if (icon) {
-            icon.style.left = anchorX + "%";
-            icon.style.top = anchorY + "%";
-            icon.style.transform = "translate(-50%, -50%)";
+        var content = button.querySelector(".sow-hud__map-action-content");
+        if (content) {
+            content.style.left = anchorX + "%";
+            content.style.top = anchorY + "%";
+            content.style.transform = "translate(-50%, -50%)";
         }
     }
 
-    function mapSector(radial, item, index, count, kind) {
-        var button = mapActionButton(item, "sow-hud__map-sector sow-hud__map-sector--" + kind, false);
+    function mapSector(radial, item, index, count, kind, presentation) {
+        var button = mapActionButton(item, "sow-hud__map-sector sow-hud__map-sector--" + kind, false, presentation);
         radialSectorGeometry(button, index, count);
         radial.appendChild(button);
     }
 
-    function mapDisabledSector(radial, index, count, kind, icon, label) {
+    function mapDisabledSector(radial, index, count, kind, icon, label, presentation) {
         var button = document.createElement("button");
         button.type = "button";
         button.className = "sow-hud__map-sector sow-hud__map-sector--" + kind;
         button.setAttribute("role", "menuitem");
-        button.setAttribute("aria-label", label);
+        var actionName = presentation ? SOW_t(presentation.key) : label;
+        button.setAttribute("aria-label", actionName);
         button.setAttribute("aria-disabled", "true");
         button.disabled = true;
-        button.title = label;
-        var title = document.createElement("span");
-        title.className = "sow-hud__map-action-title";
-        title.innerHTML = icon;
-        button.appendChild(title);
+        button.title = actionName;
+        if (presentation && presentation.state) button.dataset.allianceState = presentation.state;
+        button.appendChild(mapActionContent(
+            presentation ? emojiIcon(presentation.emoji, "sow-hud__map-action-icon") : icon,
+            actionName
+        ));
         radialSectorGeometry(button, index, count);
         radial.appendChild(button);
     }
@@ -814,10 +840,7 @@
         button.dataset.mapGroup = group;
         button.setAttribute("role", "menuitem");
         button.setAttribute("aria-label", text);
-        var title = document.createElement("span");
-        title.className = "sow-hud__map-action-title";
-        title.innerHTML = icon;
-        button.appendChild(title);
+        button.appendChild(mapActionContent(icon, text));
         radialSectorGeometry(button, index, count);
         radial.appendChild(button);
     }
@@ -845,7 +868,7 @@
         }
         if (!showRadial) return false;
         var items = mapItems(mapMenu);
-        var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + String(showRadial) + ":" + JSON.stringify(items);
+        var stateKey = String(window.SOW_LOCALE || "en") + ":" + String(mapMenu.session) + ":" + String(mapMenu.tile_idx) + ":" + String(showRadial) + ":" + String(mapMenu.alliance_state || "") + ":" + JSON.stringify(items);
         if (stateKey !== mapMenuStateKey) {
             mapMenuStateKey = stateKey;
             mapMenuView = "root";
@@ -862,11 +885,9 @@
                 var centerItem = items.find(function (item) { return item.action === "spawn" || item.action === "attack"; });
                 if (centerItem) {
                     var center = mapActionButton(centerItem, "sow-hud__map-center " + (centerItem.action === "spawn" ? "is-spawn" : "is-attack"), false);
-                    center.querySelector(".sow-hud__map-action-title").innerHTML = hudIcon(centerItem.action === "spawn" ? "spawn" : "attack", "sow-hud__map-action-icon");
                     radial.appendChild(center);
                 } else {
                     var disabledCenter = mapActionButton({ action: "attack", disabled: true }, "sow-hud__map-center is-attack", false);
-                    disabledCenter.querySelector(".sow-hud__map-action-title").innerHTML = hudIcon("attack", "sow-hud__map-action-icon");
                     disabledCenter.disabled = true;
                     disabledCenter.removeAttribute("data-map-action");
                     disabledCenter.setAttribute("aria-label", mapLabel("attack"));
@@ -876,20 +897,21 @@
                 var transfer = items.find(function (item) { return item.action === "transfer"; });
                 var fleet = items.find(function (item) { return item.action === "fleet"; });
                 var alliance = items.find(function (item) { return item.action === "alliance"; });
+                var alliancePresentation = allianceActionLabels[mapMenu.alliance_state] || null;
                 var radialCount = 4;
                 if (transfer) mapSector(radial, transfer, 0, radialCount, "transfer");
-                else mapDisabledSector(radial, 0, radialCount, "transfer", hudIcon("transfer", "sow-hud__map-action-icon"), mapLabel("transfer"));
+                else mapDisabledSector(radial, 0, radialCount, "transfer", emojiIcon("📦", "sow-hud__map-action-icon"), mapLabel("transfer"));
                 if (fleet) mapSector(radial, fleet, 1, radialCount, "fleet");
-                else mapDisabledSector(radial, 1, radialCount, "fleet", hudIcon("fleet", "sow-hud__map-action-icon"), mapLabel("fleet"));
-                if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance");
-                else mapDisabledSector(radial, 2, radialCount, "alliance", hudIcon("alliance", "sow-hud__map-action-icon"), mapLabel("alliance"));
+                else mapDisabledSector(radial, 1, radialCount, "fleet", emojiIcon("⛵", "sow-hud__map-action-icon"), mapLabel("fleet"));
+                if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance", alliancePresentation);
+                else mapDisabledSector(radial, 2, radialCount, "alliance", emojiIcon("🤝", "sow-hud__map-action-icon"), mapLabel("alliance"), alliancePresentation);
                 if (buildItems.length) {
                     var buildIcon = emojiIcon("🏗️", "sow-hud__map-action-icon");
-                    mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, "Build");
+                    mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, SOW_t("hud.map_action_build"));
                 } else if (nukeItem) {
                     mapSector(radial, nukeItem, 3, radialCount, "nuke");
                 } else {
-                    mapDisabledSector(radial, 3, radialCount, "build", emojiIcon("🏗️", "sow-hud__map-action-icon"), "Build");
+                    mapDisabledSector(radial, 3, radialCount, "build", emojiIcon("🏗️", "sow-hud__map-action-icon"), SOW_t("hud.map_action_build"));
                 }
                 menu.appendChild(radial);
             } else {
@@ -1705,11 +1727,13 @@
                 var musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
                 var motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
                 var freeZoomInput = hudRefs.settings.querySelector('[data-hud-setting="free_zoom_out"]');
+                var stickyBuildingInput = hudRefs.settings.querySelector('[data-hud-setting="sticky_building_mode"]');
                 var devToolsInput = hudRefs.settings.querySelector('[data-hud-setting="show_dev_tools"]');
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
                 if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
                 if (motionInput && document.activeElement !== motionInput) motionInput.checked = Boolean(settings.reduced_motion);
                 if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
+                if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
                 if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
             }
         }

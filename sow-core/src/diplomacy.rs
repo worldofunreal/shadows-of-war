@@ -30,6 +30,50 @@ pub struct AllianceProposal {
     pub created_tick: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AllianceActionState {
+    Request,
+    Accept,
+    Pending,
+    Active,
+    Renew,
+}
+
+impl AllianceActionState {
+    pub const fn resolve(
+        is_allied: bool,
+        in_renewal_window: bool,
+        has_incoming_request: bool,
+        has_outgoing_request: bool,
+    ) -> Self {
+        if has_incoming_request {
+            Self::Accept
+        } else if has_outgoing_request {
+            Self::Pending
+        } else if is_allied && in_renewal_window {
+            Self::Renew
+        } else if is_allied {
+            Self::Active
+        } else {
+            Self::Request
+        }
+    }
+
+    pub const fn can_act(self) -> bool {
+        matches!(self, Self::Request | Self::Accept | Self::Renew)
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Request => "request",
+            Self::Accept => "accept",
+            Self::Pending => "pending",
+            Self::Active => "active",
+            Self::Renew => "renew",
+        }
+    }
+}
+
 /// Chaotic diplomats: well below 1% of typical bot id space.
 #[inline]
 pub fn is_chaotic_diplomat(bot_id: PlayerId) -> bool {

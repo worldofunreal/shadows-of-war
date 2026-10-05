@@ -55,7 +55,11 @@ impl SowApp {
                 }
             }
             WindowEvent::Focused(false) => {
+                self.input.shift_pressed = false;
                 self.cancel_pointer_gesture();
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.input.shift_pressed = modifiers.state().shift_key();
             }
             WindowEvent::PointerEntered {
                 position,
@@ -100,9 +104,9 @@ impl SowApp {
     }
 
     fn handle_pointer_left(&mut self, kind: PointerKind) {
+        self.finish_build_pointer_gesture();
         match kind {
             PointerKind::Touch(finger_id) => {
-                self.cancel_hold_build();
                 self.input
                     .active_touches
                     .remove(&(finger_id.into_raw() as u64));
@@ -116,8 +120,6 @@ impl SowApp {
                 self.sync_hover_pointer(HoverPointer::Touch, None);
             }
             _ => {
-                self.cancel_hold_build();
-                self.input.map_pointer_start = None;
                 self.input.dragging = false;
                 self.sync_hover_pointer(HoverPointer::None, None);
             }
@@ -305,8 +307,8 @@ impl SowApp {
                         action_sent: false,
                     });
                 } else {
+                    self.finish_build_pointer_gesture();
                     self.cancel_hold_build();
-                    self.input.map_pointer_start = None;
                     self.input.dragging = false;
                     self.close_map_context_menu();
                 }
@@ -389,13 +391,15 @@ impl SowApp {
                     }
                 }
             } else {
-                self.cancel_hold_build();
+                let Some(start) = self.finish_build_pointer_gesture() else {
+                    if self.input.active_touches.is_empty() {
+                        self.input.dragging = false;
+                    }
+                    return;
+                };
                 if self.input.active_touches.is_empty() {
                     self.input.dragging = false;
                 }
-                let Some(start) = self.input.map_pointer_start.take() else {
-                    return;
-                };
                 let distance_sq = (x - start.x).powi(2) + (y - start.y).powi(2);
                 if distance_sq > 400.0 || self.ui.app.phase != ClientPhase::Playing {
                     return;
@@ -446,8 +450,8 @@ impl SowApp {
         }
         let is_touch = matches!(source, winit::event::PointerSource::Touch { .. });
         if self.input.active_touches.len() >= 2 {
+            self.finish_build_pointer_gesture();
             self.cancel_hold_build();
-            self.input.map_pointer_start = None;
             self.input.dragging = false;
             self.input.hover_pointer = HoverPointer::None;
             self.close_map_context_menu();
@@ -462,13 +466,11 @@ impl SowApp {
             if let Some((last_distance, last_x, last_y)) = self.input.last_pinch_state {
                 self.input.camera_x += (cx - last_x) as f32;
                 self.input.camera_y += (cy - last_y) as f32;
-                let previous_zoom = self.input.camera_zoom;
                 self.process_camera_zoom(
                     1.0 + ((distance - last_distance) as f32 * 0.005),
                     cx as f32,
                     cy as f32,
                 );
-                self.record_tutorial_zoom(self.input.camera_zoom - previous_zoom);
             }
             self.input.last_pinch_state = Some((distance, cx, cy));
         } else if is_touch {
@@ -543,9 +545,8 @@ impl SowApp {
     }
 
     fn cancel_pointer_gesture(&mut self) {
-        self.cancel_hold_build();
+        self.finish_build_pointer_gesture();
         self.input.dragging = false;
-        self.input.map_pointer_start = None;
         self.input.active_touches.clear();
         self.input.last_pinch_state = None;
         self.sync_hover_pointer(HoverPointer::None, None);
@@ -576,9 +577,32 @@ impl SowApp {
         if self.ui.tutorial_camera_only {
             return;
         }
+        self.input.hold_build_action_succeeded = false;
+        self.input.hold_build_shift_override = false;
         self.input.hold_build_active = true;
         self.input.hold_build_accum = HOLD_BUILD_INTERVAL_SECS;
         self.handle_map_click(x, y);
+    }
+
+    fn finish_build_pointer_gesture(&mut self) -> Option<MapPointerStart> {
+        let start = self.input.map_pointer_start.take();
+        let held_mobile = start.as_ref().is_some_and(|start| {
+            start.is_touch
+                && start.started_at.elapsed().as_secs_f32() >= HOLD_BUILD_INTERVAL_SECS
+        });
+        let should_exit = should_exit_build_mode_after_gesture(
+            self.ui.app.settings_state.sticky_building_mode,
+            self.input.hold_build_action_succeeded,
+            self.input.hold_build_shift_override,
+            held_mobile,
+        );
+        self.cancel_hold_build();
+        self.input.hold_build_action_succeeded = false;
+        self.input.hold_build_shift_override = false;
+        if should_exit {
+            self.clear_placement();
+        }
+        start
     }
 
     pub(crate) fn cancel_hold_build(&mut self) {
@@ -610,6 +634,15 @@ impl SowApp {
     }
 }
 
+fn should_exit_build_mode_after_gesture(
+    sticky: bool,
+    action_succeeded: bool,
+    shift_override: bool,
+    held_mobile: bool,
+) -> bool {
+    action_succeeded && !sticky && !shift_override && !held_mobile
+}
+
 fn single_touch_position(
     active_touches: &std::collections::HashMap<u64, (f64, f64)>,
 ) -> Option<(f64, f64)> {
@@ -622,7 +655,7 @@ fn single_touch_position(
 mod tests {
     use super::{
         HOLD_BUILD_BURST_INTERVAL_SECS, HOLD_BUILD_INTERVAL_SECS, advance_hold_build_timer,
-        hold_build_repeat_interval, single_touch_position,
+        hold_build_repeat_interval, should_exit_build_mode_after_gesture, single_touch_position,
     };
     use std::collections::HashMap;
 
@@ -654,5 +687,14 @@ mod tests {
         remaining = 0.001;
         assert!(advance_hold_build_timer(&mut remaining, 0.001, 2.0));
         assert_eq!(remaining, HOLD_BUILD_BURST_INTERVAL_SECS);
+    }
+
+    #[test]
+    fn building_mode_exits_only_after_success_without_a_keep_override() {
+        assert!(should_exit_build_mode_after_gesture(false, true, false, false));
+        assert!(!should_exit_build_mode_after_gesture(false, false, false, false));
+        assert!(!should_exit_build_mode_after_gesture(true, true, false, false));
+        assert!(!should_exit_build_mode_after_gesture(false, true, true, false));
+        assert!(!should_exit_build_mode_after_gesture(false, true, false, true));
     }
 }

@@ -197,6 +197,10 @@
                                 "<span>" + esc(SOW_t("menu.free_zoom_out")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='free_zoom_out' data-setting='free_zoom_out'" + (settings.free_zoom_out ? " checked" : "") + ">" +
                             "</label>" +
+                            "<label class='sow-menu__form-field sow-menu__sticky-setting' title='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'>" +
+                                "<span>" + esc(SOW_t("menu.sticky_building_mode")) + "<small>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</small></span>" +
+                                "<input class='sow-menu__field' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + ">" +
+                            "</label>" +
                             "<label class='sow-menu__form-field'>" +
                                 "<span>" + esc(SOW_t("menu.show_dev_tools")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='show_dev_tools' data-setting='show_dev_tools'" + (settings.show_dev_tools ? " checked" : "") + ">" +
@@ -1066,11 +1070,13 @@
         var musicInput = root.querySelector("[data-setting='music_volume']");
         var motionInput = root.querySelector("[data-setting='reduced_motion']");
         var freeZoomInput = root.querySelector("[data-setting='free_zoom_out']");
+        var stickyBuildingInput = root.querySelector("[data-setting='sticky_building_mode']");
         var devToolsInput = root.querySelector("[data-setting='show_dev_tools']");
         if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
         if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
         if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
         if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
+        if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
         var musicValBadge = root.querySelector("[data-val-for='music_vol']");
         if (musicValBadge && musicInput) musicValBadge.textContent = Math.round(Number(musicInput.value) * 100) + "%";
         var timer = panel.querySelector("[data-live-countdown]");
@@ -2005,6 +2011,7 @@
         if (input.dataset.setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
         if (input.dataset.setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
+        if (input.dataset.setting === "sticky_building_mode") send("set_sticky_building_mode", { value: input.checked });
         if (input.dataset.setting === "show_dev_tools") send("set_show_dev_tools", { value: input.checked });
     });
 

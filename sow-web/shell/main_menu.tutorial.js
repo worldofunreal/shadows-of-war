@@ -156,7 +156,8 @@
                 }
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
                 context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
-            } else if (step.id === "boudica_first_expansion" && step.guide.gesture === "tap") {
+            } else if (step.guide.gesture === "tap" && (step.id === "boudica_first_expansion"
+                || step.trigger && step.trigger.type === "attack")) {
                 context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
             }
             if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey);
@@ -342,6 +343,16 @@
     function anchorFor(step, hud) {
         if (!step || !step.guide) return null;
         var guide = step.guide, tutorial = hud.tutorial || {};
+        var triggerType = step.trigger && step.trigger.type;
+        var factionAction = step.trigger && ["attack", "contact", "alliance", "defeated", "fleet"].includes(triggerType);
+        if (guide.kind === "world" && factionAction
+            && ["target_action", "nameplate", "player"].includes(guide.target)) {
+            var factionNameplate = tutorial.target_nameplate;
+            if (factionNameplate && Number.isFinite(Number(factionNameplate.x)) && Number.isFinite(Number(factionNameplate.y))) {
+                return { x: Number(factionNameplate.x), y: Number(factionNameplate.y), offscreen: Boolean(factionNameplate.offscreen) };
+            }
+            return null;
+        }
 
         if (guide.kind === "world" && guide.target === "upgrade_building") {
             var trigger = step.trigger || {};
@@ -358,11 +369,24 @@
             if (["hover", "zoom_in_complete"].includes(step.trigger.type)) {
                 var nameplate = tutorial.nameplate;
                 if (nameplate && Number.isFinite(Number(nameplate.x)) && Number.isFinite(Number(nameplate.y))) {
+                    var pointer = tutorial.pointer;
+                    if (step.trigger.type === "hover" && pointer
+                        && Number.isFinite(Number(pointer.x)) && Number.isFinite(Number(pointer.y))
+                        && Math.hypot(Number(pointer.x) - Number(nameplate.x), Number(pointer.y) - Number(nameplate.y)) <= HOVER_TARGET_RADIUS) {
+                        return { x: Number(pointer.x), y: Number(pointer.y) };
+                    }
                     return { x: Number(nameplate.x), y: Number(nameplate.y) };
                 }
             }
             var cameraTarget = cameraTargetAnchor(step, hud);
             if (cameraTarget) return cameraTarget;
+        }
+        if (guide.kind === "world" && guide.target === "target_action"
+            && step.trigger && step.trigger.type === "defeated") {
+            var targetNameplate = tutorial.target_nameplate;
+            if (targetNameplate && Number.isFinite(Number(targetNameplate.x)) && Number.isFinite(Number(targetNameplate.y))) {
+                return { x: Number(targetNameplate.x), y: Number(targetNameplate.y), offscreen: Boolean(targetNameplate.offscreen) };
+            }
         }
         var result;
         if (guide.kind === "world") {
@@ -398,18 +422,24 @@
 
     function markerTargetFor(step) {
         var facts = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts || {};
+        var eliminated = facts.eliminated_faction_ids || [];
         if (step.trigger && Array.isArray(step.trigger.targets)) {
             var observed = step.trigger.type === "contact" ? facts.contact_faction_ids || [] : facts.defeated_faction_ids || [];
-            var remaining = step.trigger.targets.find(function (target) { return !observed.includes(target); });
+            var remaining = step.trigger.targets.find(function (target) { return !observed.includes(target) && !eliminated.includes(target); });
             if (remaining) return remaining;
+            return null;
+        }
+        if (step.trigger && ["attack", "contact", "alliance", "defeated", "fleet", "resource_transfer"].includes(step.trigger.type)) {
+            var targetFaction = step.trigger.target || step.trigger.recipient;
+            if (targetFaction && targetFaction !== "player") return eliminated.includes(targetFaction) ? null : targetFaction;
         }
         if (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target) {
-            return step.trigger.target;
+            return eliminated.includes(step.trigger.target) ? null : step.trigger.target;
         }
         if (step.trigger && ["camera_target", "hover", "zoom_in_complete"].includes(step.trigger.type) && step.trigger.target) {
-            return step.trigger.target;
+            return eliminated.includes(step.trigger.target) ? null : step.trigger.target;
         }
-        return step.marker && step.marker.target;
+        return step.marker && !eliminated.includes(step.marker.target) ? step.marker.target : null;
     }
 
     function update(hud) {
@@ -495,14 +525,17 @@
             runtime.lastActionStepId = machineView.step.id;
             if (Number.isFinite(machineView.step.attack_ratio_on_enter)) send("set_attack_ratio", { ratio: machineView.step.attack_ratio_on_enter });
         }
-        var targetFactionId = machineView.step.trigger && machineView.step.trigger.type === "defeated"
-            ? markerTargetFor(machineView.step) : null;
+        var targetStep = machineView.step;
+        var targetFactionId = targetStep.guide && targetStep.guide.kind === "world"
+            && ["target_action", "nameplate", "player"].includes(targetStep.guide.target)
+            && targetStep.trigger && ["attack", "contact", "alliance", "defeated", "fleet"].includes(targetStep.trigger.type)
+            ? markerTargetFor(targetStep) : null;
         if (targetFactionId !== runtime.cameraTargetFactionId) {
             runtime.cameraTargetFactionId = targetFactionId;
             var targetPlayer = targetFactionId && (hud.players || []).find(function (player) {
                 return player && player.campaign_faction_id === targetFactionId;
             });
-            if (targetPlayer && Number.isInteger(Number(targetPlayer.id))) {
+            if (targetPlayer && targetPlayer.is_alive === true && Number.isInteger(Number(targetPlayer.id))) {
                 send("focus_tutorial_target", { player_id: Number(targetPlayer.id) });
             }
         }

@@ -62,6 +62,7 @@ function renderSettings() {
                         "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
                             SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [{ value: "full", label: SOW_t("menu.full") }, { value: "reduced", label: SOW_t("menu.reduced_motion") }] }) +
                         "</label>" +
+                        "<label class='sow-menu__form-field sow-menu__sticky-setting' title='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'><span>" + esc(SOW_t("menu.sticky_building_mode")) + "<small>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</small></span><input class='sow-menu__field' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + "></label>" +
                         "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                             SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: jestLocaleOptions() }) +
                         "</label>" +

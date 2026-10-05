@@ -3,7 +3,7 @@
 
 use sow_core::game_config::ScriptedSpawn;
 use sow_core::player::{Civilization, Leader};
-use sow_core::protocol::CampaignRelation;
+use sow_core::protocol::{CampaignRelation, Team};
 
 /// Which scripted campaign the running tutorial match belongs to. Boudica is
 /// the first-run teaching intro; the Six Sky episodes are the retention chain
@@ -123,6 +123,7 @@ pub struct Faction {
     pub y: u32,
     pub starting_troops: u32,
     pub relation: CampaignRelation,
+    pub team: Option<Team>,
     pub can_request_alliance: bool,
     pub color: [f32; 3],
     pub civ: Civilization,
@@ -194,7 +195,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             x: f.x,
             y: f.y,
             color: f.color,
-            team: None,
+            team: f.team,
             leader: f.leader,
             civilization: f.civ,
             troops: Some(f.starting_troops as f64),
@@ -223,6 +224,8 @@ struct RosterEntry {
     y: u32,
     starting_troops: u32,
     relation: CampaignRelation,
+    #[serde(default)]
+    team: Option<Team>,
     #[serde(default)]
     can_request_alliance: Option<bool>,
     #[serde(default)]
@@ -350,6 +353,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             y: e.y,
             starting_troops: e.starting_troops,
             relation,
+            team: e.team,
             can_request_alliance: e.can_request_alliance.unwrap_or(true),
             color,
             civ,
@@ -409,7 +413,7 @@ fn valid_campaign_group_id(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{parse_roster, to_scripted};
-    use sow_core::protocol::CampaignRelation;
+    use sow_core::protocol::{CampaignRelation, Team};
 
     #[test]
     fn gold_loot_bonus_survives_roster_parse_and_scripted_spawn_conversion() {
@@ -464,5 +468,36 @@ mod tests {
         assert_eq!(to_scripted(&legacy)[0].campaign_relation, Some(CampaignRelation::Enemy));
         let removed_behavior = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"aggressive","civ":"Roman Empire","leader":"Caesar"}]}"##;
         assert!(parse_roster(removed_behavior).is_none());
+    }
+
+    #[test]
+    fn campaign_team_enum_reaches_spawns_and_unifies_boudica_romans() {
+        let roster = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","team":"Red","civ":"Roman Empire","leader":"Caesar"}]}"##;
+        let (factions, _, _) = parse_roster(roster).unwrap();
+        let spawn = &to_scripted(&factions)[0];
+        assert_eq!(factions[0].team, Some(Team::Red));
+        assert_eq!(spawn.team, Some(Team::Red));
+        assert_eq!(spawn.campaign_relation, Some(CampaignRelation::Enemy));
+        let blue_roster = roster.replace("Red", "Blue");
+        assert_eq!(to_scripted(&parse_roster(&blue_roster).unwrap().0)[0].team, Some(Team::Blue));
+
+        let without_team = r##"{"factions":[{"id":"clan","name":"Clan","x":2,"y":1,"starting_troops":500,"relation":"neutral","civ":"Iceni Kingdom","leader":"Boudica"}]}"##;
+        assert_eq!(to_scripted(&parse_roster(without_team).unwrap().0)[0].team, None);
+        let invalid_team = roster.replace("Red", "Romans");
+        assert!(parse_roster(&invalid_team).is_none());
+
+        let (boudica, _, _) = parse_roster(include_str!("../../../assets/campaign/boudica.json")).unwrap();
+        let romans: Vec<_> = boudica
+            .iter()
+            .filter(|faction| faction.civ == Civilization::Rome)
+            .collect();
+        assert_eq!(romans.len(), 11);
+        assert!(romans.iter().all(|faction| {
+            faction.team == Some(Team::Red) && faction.relation == CampaignRelation::Enemy
+        }));
+        assert!(boudica
+            .iter()
+            .filter(|faction| faction.civ != Civilization::Rome)
+            .all(|faction| faction.team.is_none()));
     }
 }

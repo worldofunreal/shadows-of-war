@@ -19,6 +19,7 @@ use crate::app::{HoverPointer, MapContextMenuView, SowApp};
 use crate::campaign::CampaignId;
 
 const LEADERBOARD_LIMIT: usize = 100;
+const TUTORIAL_MAX_ZOOM: f32 = 10.0;
 const TUTORIAL_ATTACK_NEIGHBORS: [(i32, i32); 8] = [
     (1, 0),
     (-1, 0),
@@ -143,6 +144,9 @@ enum WebMenuCommand {
         value: bool,
     },
     SetFreeZoomOut {
+        value: bool,
+    },
+    SetStickyBuildingMode {
         value: bool,
     },
     SetAttackRatio {
@@ -303,6 +307,7 @@ struct HudPublishKey {
     settings_music_volume: u32,
     settings_reduced_motion: bool,
     settings_free_zoom_out: bool,
+    settings_sticky_building_mode: bool,
     settings_show_dev_tools: bool,
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
@@ -326,6 +331,7 @@ struct HudPublishKey {
     camera_zoom_ceiling_hundredths: i32,
     tutorial_camera_zoom_hundredths: i32,
     tutorial_target_zoom_hundredths: i32,
+    tutorial_pointer: Option<(u64, u64)>,
     hovered_tile: u32,
     hovered_owner: u16,
     map_menu_view: Option<MapContextMenuView>,
@@ -777,6 +783,9 @@ impl SowApp {
                     self.ui.app.settings_state.free_zoom_out = value;
                     self.clamp_camera_to_map();
                 }
+                WebMenuCommand::SetStickyBuildingMode { value } => {
+                    self.ui.app.settings_state.sticky_building_mode = value;
+                }
                 WebMenuCommand::SetAttackRatio { ratio } => {
                     self.ui.app.hud_state.attack_ratio = ratio.clamp(0.05, 1.0);
                 }
@@ -1121,13 +1130,14 @@ impl SowApp {
                         let dy = (player_y - target_y).abs();
                         let fit_zoom = (self.input.screen_w / (dx + 16.0))
                             .min(self.input.screen_h / (dy + 16.0))
-                            .min(28.0);
-                        self.input.target_zoom = fit_zoom.max(crate::camera_zoom_lower_bound(
-                            self.input.screen_w,
-                            self.input.screen_h,
-                            self.sim.map_w,
-                            self.sim.map_h,
-                        ));
+                            .min(TUTORIAL_MAX_ZOOM);
+                        self.input.target_zoom = fit_zoom
+                            .max(crate::camera_zoom_lower_bound(
+                                self.input.screen_w,
+                                self.input.screen_h,
+                                self.sim.map_w,
+                                self.sim.map_h,
+                            ));
                         self.input.camera_focus_target =
                             Some(((player_x + target_x) * 0.5, (player_y + target_y) * 0.5));
                         self.input.tutorial_camera_focus = true;
@@ -1221,6 +1231,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
         settings_free_zoom_out: app.ui.app.settings_state.free_zoom_out,
+        settings_sticky_building_mode: app.ui.app.settings_state.sticky_building_mode,
         settings_show_dev_tools: app.ui.app.settings_state.show_dev_tools,
         leaderboard_open: app.ui.show_leaderboard,
         leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
@@ -1256,6 +1267,11 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             (app.input.target_zoom * 100.0).round() as i32
         } else {
             0
+        },
+        tutorial_pointer: if tutorial_active {
+            Some((app.input.last_mouse_x.to_bits(), app.input.last_mouse_y.to_bits()))
+        } else {
+            None
         },
         dev_sidebar_open,
         dev_config: dev_config_key,
@@ -1815,13 +1831,18 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
     let viewport_w = app.input.screen_w / sf;
     let viewport_h = app.input.screen_h / sf;
-    let nameplate_screen = app
+    let nameplate_position = app
         .ui
         .nameplates
         .anchor_for(marker_player_id)
-        .map(|[x, y]| crate::render::world::overlays::world_to_screen(x, y, &app.input, sf))
+        .map(|[x, y]| crate::render::world::overlays::world_to_screen(x, y, &app.input, sf));
+    let nameplate_screen = nameplate_position
         .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
         .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
+        .unwrap_or(serde_json::Value::Null);
+    let target_nameplate = nameplate_position
+        .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
+        .map(|([x, y], offscreen)| serde_json::json!({ "x": x, "y": y, "offscreen": offscreen }))
         .unwrap_or(serde_json::Value::Null);
     let zoom_floor = app.zoom_floor();
     let zoom_out_complete =
@@ -1834,7 +1855,9 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     )
     .map(|(_, zoom)| zoom.max(zoom_floor))
     .unwrap_or(app.input.target_zoom.max(zoom_floor));
-    let zoom_in_target = (opening_zoom * 0.75).max(zoom_floor);
+    let zoom_ceiling = crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h)
+        .max(zoom_floor);
+    let zoom_in_target = TUTORIAL_MAX_ZOOM.clamp(zoom_floor, zoom_ceiling);
     let zoom_in_complete =
         app.input.camera_zoom.is_finite() && app.input.camera_zoom >= zoom_in_target;
     let hover_pointer = match app.input.hover_pointer {
@@ -1991,6 +2014,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "upgrade_buildings": upgrade_buildings,
         "upgrading_buildings": upgrading_buildings,
         "nameplate": nameplate_screen,
+        "target_nameplate": target_nameplate,
         "player": player_screen,
         "camera": {
             "x": app.input.camera_x,
@@ -2012,7 +2036,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "camera_zoom_start": opening_zoom,
             "camera_zoom_floor": zoom_floor,
             "camera_zoom_target": zoom_in_target,
-            "camera_zoom_ceiling": crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h).max(zoom_floor),
+            "camera_zoom_ceiling": zoom_ceiling,
             "camera_target": camera_target_complete,
             "camera_target_distance": camera_target_distance,
             "camera_target_radius": camera_target_radius,
@@ -2022,6 +2046,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "kills": me.map(|player| player.kills).unwrap_or(0),
             "defeated": observation.seen_defeated.len(),
             "defeated_faction_ids": observation.seen_defeated_faction_ids,
+            "eliminated_faction_ids": observation.eliminated_faction_ids,
             "contacts": observation.seen_contacts.len(),
             "contact_faction_ids": observation.seen_contact_faction_ids,
             "attacks": observation.seen_attacks.len(),
@@ -2615,6 +2640,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .input
         .map_context_menu
         .map(|menu| {
+            let alliance_state = app
+                .map_menu_alliance_state(menu.tile_idx)
+                .map(sow_core::diplomacy::AllianceActionState::as_str);
             let items = app
                 .map_menu_items(menu.tile_idx)
                 .into_iter()
@@ -2654,6 +2682,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 "session": menu.session,
                 "actions": actions,
                 "items": items,
+                "alliance_state": alliance_state,
                 "building": building,
             })
         })
@@ -2975,6 +3004,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
+                "sticky_building_mode": app.ui.app.settings_state.sticky_building_mode,
                 "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
             },
         })
@@ -3161,6 +3191,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
+                "sticky_building_mode": app.ui.app.settings_state.sticky_building_mode,
                 "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
             },
         })

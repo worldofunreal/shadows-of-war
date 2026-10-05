@@ -88,6 +88,7 @@ impl SowApp {
         self.ui.last_resource_notice_tick = None;
         self.ui.tutorial_active = false;
         self.ui.tutorial_camera_only = false;
+        self.ui.tutorial_waiting_for_first_attack = false;
 
         self.dispatch_sim_command(SimCommand::Shutdown);
         self.gfx.needs_first_upload = true;
