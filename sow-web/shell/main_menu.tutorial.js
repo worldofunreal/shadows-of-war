@@ -148,8 +148,10 @@
                 hintKey = stepTextKey(step, "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
                 if (step.trigger && step.trigger.type === "camera_target" && Number.isFinite(Number(step.trigger.distance))) {
                     var distance = cameraTargetDistance(step, hud);
+                    var targetRadius = Number(facts.camera_target_radius);
+                    if (!Number.isFinite(targetRadius) || targetRadius <= 0) targetRadius = step.trigger.distance;
                     if (Number.isFinite(distance)) context.guideMetric = { text: metricText(stepTextKey(step, "_progress"), {
-                        current: Math.ceil(distance), target: step.trigger.distance
+                        current: Math.ceil(distance), target: Math.ceil(targetRadius)
                     }) };
                 }
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
@@ -342,7 +344,11 @@
         var guide = step.guide, tutorial = hud.tutorial || {};
 
         if (guide.kind === "world" && guide.target === "upgrade_building") {
-            var buildingAnchor = tutorial.upgrade_buildings && tutorial.upgrade_buildings[step.trigger && step.trigger.kind];
+            var trigger = step.trigger || {};
+            var buildingKind = trigger.kind || ({ city_level: "City", port_level: "Port" })[trigger.type];
+            var anchors = ["structure_level", "city_level", "port_level"].includes(trigger.type)
+                ? tutorial.upgrading_buildings : tutorial.upgrade_buildings;
+            var buildingAnchor = anchors && anchors[buildingKind];
             if (!buildingAnchor || !Number.isFinite(Number(buildingAnchor.x)) || !Number.isFinite(Number(buildingAnchor.y))) return null;
             return { x: Number(buildingAnchor.x), y: Number(buildingAnchor.y) };
         }
@@ -693,6 +699,9 @@
         var selected = runtime.latestHud && runtime.latestHud.selected_building;
         if (event.key !== "Escape" || !selected || !step || !step.trigger
             || step.trigger.type !== "ui" || step.trigger.action !== "cancel_building_mode") return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        send("select_building", { kind: selected });
         runtime.uiCounts.cancel_building_mode = (runtime.uiCounts.cancel_building_mode || 0) + 1;
         update(runtime.latestHud);
     }, true);

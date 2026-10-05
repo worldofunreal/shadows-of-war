@@ -268,6 +268,34 @@ impl SowApp {
         let mut notifications = Vec::new();
 
         for transfer in &snapshot.resource_transfers {
+            if transfer.sender_id == my_id {
+                let other_id = transfer.receiver_id;
+                let name = snapshot
+                    .players
+                    .iter()
+                    .find(|player| player.id == other_id)
+                    .map(|player| player.name.as_str())
+                    .unwrap_or("Ally");
+                let text = match (transfer.gold > 0.0, transfer.troops > 0.0) {
+                    (true, true) => crate::ui::UiText::new("hud.resource_sent_both")
+                        .with("gold", crate::utils::format_number(transfer.gold))
+                        .with("troops", crate::utils::format_number(transfer.troops))
+                        .with("name", name),
+                    (true, false) => crate::ui::UiText::new("hud.resource_sent_gold")
+                        .with("gold", crate::utils::format_number(transfer.gold))
+                        .with("name", name),
+                    (false, true) => crate::ui::UiText::new("hud.resource_sent_troops")
+                        .with("troops", crate::utils::format_number(transfer.troops))
+                        .with("name", name),
+                    _ => continue,
+                };
+                notifications.push((
+                    text,
+                    [Some(my_id), Some(other_id)],
+                    3,
+                    format!("resource:sent:{other_id}"),
+                ));
+            }
             if transfer.receiver_id != my_id {
                 continue;
             }
@@ -310,6 +338,24 @@ impl SowApp {
                 [Some(rejection.rejector_id), Some(my_id)],
                 2,
                 format!("resource-rejected:{}", rejection.rejector_id),
+            ));
+        }
+
+        for rejection in &snapshot.resource_transfer_rejections {
+            if rejection.sender_id != my_id {
+                continue;
+            }
+            let name = snapshot
+                .players
+                .iter()
+                .find(|player| player.id == rejection.receiver_id)
+                .map(|player| player.name.as_str())
+                .unwrap_or("Ally");
+            notifications.push((
+                crate::ui::UiText::new("hud.resource_send_failed").with("name", name),
+                [Some(my_id), Some(rejection.receiver_id)],
+                2,
+                format!("resource:send-failed:{}", rejection.receiver_id),
             ));
         }
 

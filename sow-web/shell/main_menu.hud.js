@@ -1261,7 +1261,7 @@
         parts.card.className = "sow-hud__notification sow-hud__notification--premium"
             + (contextual ? " sow-hud__notification--contextual" : "")
             + (item.priority >= 4 ? " sow-hud__notification--urgent" : "")
-            + (/resource_received|ally_support/.test(key) ? " sow-hud__notification--support" : "");
+            + (/resource_(received|sent)|ally_support/.test(key) ? " sow-hud__notification--support" : "");
         parts.seal.innerHTML = notificationIcon(key);
         parts.avatars.forEach(function (slot, index) {
             var presentation = avatars[index] || null;
@@ -1943,6 +1943,8 @@
                 var targetId = transfer ? Number(transfer.dataset.targetId) : 0;
                 var gold = hudRefs && hudRefs.transferGold ? Number(hudRefs.transferGold.value) : 0;
                 var transferTroops = hudRefs && hudRefs.transferTroops ? Number(hudRefs.transferTroops.value) : 0;
+                if (!Number.isFinite(gold)) gold = 0;
+                if (!Number.isFinite(transferTroops)) transferTroops = 0;
                 if (targetId > 0) send(cmd, { target_player_id: targetId, gold: gold, troops: transferTroops });
                 transferOpen = false;
                 renderHud();

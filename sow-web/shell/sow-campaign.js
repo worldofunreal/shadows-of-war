@@ -594,13 +594,17 @@
                 const zoomEvents = Number(facts.zoom_in_events || 0) - Number(reference.zoom_in_events || 0);
                 const reachedZoom = Number.isFinite(Number(facts.camera_zoom))
                     && Number(facts.camera_zoom) >= Number(facts.camera_zoom_target);
+                const cameraTargetRadius = Number.isFinite(facts.camera_target_radius) && facts.camera_target_radius > 0
+                    ? facts.camera_target_radius : Number(trigger.distance || 12);
                 const reachedFaction = !trigger.target || (Number.isFinite(Number(facts.camera_target_distance))
-                    && Number(facts.camera_target_distance) <= Number(trigger.distance || 12));
+                    && Number(facts.camera_target_distance) <= cameraTargetRadius);
                 current = zoomEvents > 0 && reachedZoom && reachedFaction ? 1 : 0;
                 target = 1;
             } else if (trigger.type === "camera_target" && Number.isFinite(trigger.distance)) {
                 const distance = facts.camera_target_distance;
-                current = typeof distance === "number" && Number.isFinite(distance) && distance <= trigger.distance ? 1 : 0;
+                const cameraTargetRadius = Number.isFinite(facts.camera_target_radius) && facts.camera_target_radius > 0
+                    ? facts.camera_target_radius : trigger.distance;
+                current = typeof distance === "number" && Number.isFinite(distance) && distance <= cameraTargetRadius ? 1 : 0;
                 target = 1;
             } else if (trigger.type === "alliance" && trigger.target) {
                 current = (facts.alliance_faction_ids || []).includes(trigger.target) && !(reference.alliance_faction_ids || []).includes(trigger.target) ? 1 : 0;

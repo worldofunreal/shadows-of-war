@@ -273,6 +273,25 @@ impl SowEngine {
                     }
                 })
                 .collect(),
+            resource_transfer_rejections: self
+                .state
+                .events
+                .iter()
+                .filter_map(|e| {
+                    if let crate::game::GameEvent::ResourceTransferRejected {
+                        sender_id,
+                        receiver_id,
+                    } = e
+                    {
+                        Some(crate::protocol::ResourceTransferRejection {
+                            sender_id: *sender_id,
+                            receiver_id: *receiver_id,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
             winner: self.state.winner,
             winning_team: self.state.winning_team,
             total_land_tiles: self.state.total_land_tiles,

@@ -268,6 +268,10 @@ pub enum GameEvent {
         rejector_id: u16,
         requester_id: u16,
     },
+    ResourceTransferRejected {
+        sender_id: u16,
+        receiver_id: u16,
+    },
     TransportShipLanded {
         owner_id: u16,
         x: u32,

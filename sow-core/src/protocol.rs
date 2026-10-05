@@ -602,6 +602,12 @@ pub struct ResourceRejection {
     pub requester_id: u16,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ResourceTransferRejection {
+    pub sender_id: u16,
+    pub receiver_id: u16,
+}
+
 /// Snapshot sent from the simulation thread to the main thread every tick.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SimSnapshot {
@@ -620,6 +626,8 @@ pub struct SimSnapshot {
     pub resource_transfers: Vec<ResourceTransfer>,
     #[serde(default)]
     pub resource_rejections: Vec<ResourceRejection>,
+    #[serde(default)]
+    pub resource_transfer_rejections: Vec<ResourceTransferRejection>,
     pub winner: Option<u16>,
     #[serde(default)]
     pub winning_team: Option<Team>,

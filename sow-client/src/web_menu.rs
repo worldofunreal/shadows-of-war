@@ -1092,17 +1092,7 @@ impl SowApp {
                         && y.is_finite()
                     {
                         self.input.has_snapped_camera_to_spawn = true;
-                        // Terms dialog framing: pull back a bit for context, never closer.
-                        self.input.target_zoom =
-                            self.input
-                                .camera_zoom
-                                .min(6.0)
-                                .max(crate::camera_zoom_lower_bound(
-                                    self.input.screen_w,
-                                    self.input.screen_h,
-                                    self.sim.map_w,
-                                    self.sim.map_h,
-                                ));
+                        self.input.target_zoom = self.input.camera_zoom;
                         self.input.camera_focus_target = Some((x, y));
                         self.input.tutorial_camera_focus = true;
                         self.input.camera_focus_waiting_for_input_release =
@@ -1561,6 +1551,65 @@ fn tutorial_project_tile(
     ))
 }
 
+fn tutorial_building_anchors(
+    snapshot: &sow_core::protocol::SimSnapshot,
+    my_pid: u16,
+    map_w: u32,
+    map_h: u32,
+    input: &crate::app::InputState,
+    sf: f32,
+    under_construction: bool,
+) -> std::collections::BTreeMap<String, serde_json::Value> {
+    if map_w == 0 {
+        return std::collections::BTreeMap::new();
+    }
+    let viewport_w = input.screen_w / sf;
+    let viewport_h = input.screen_h / sf;
+    sow_core::game::BuildingKind::ALL
+        .iter()
+        .filter_map(|kind| {
+            snapshot
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_pid
+                        && building.kind == *kind
+                        && building.under_construction == under_construction
+                })
+                .min_by_key(|building| (building.active_level(), building.id))
+                .and_then(|building| {
+                    let x = building.tile_idx % map_w;
+                    let y = building.tile_idx / map_w;
+                    let footprint = sow_core::building::BuildingFootprint::at(*kind, x, y);
+                    tutorial_project_tile(
+                        Some(
+                            (footprint.left + footprint.width as i32 / 2) as u32
+                                + (footprint.top + footprint.height as i32 / 2) as u32 * map_w,
+                        ),
+                        map_w,
+                        map_h,
+                        input,
+                        sf,
+                    )
+                    .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
+                    .map(|([x, y], offscreen)| {
+                        let key = match kind {
+                            sow_core::game::BuildingKind::City => "City",
+                            sow_core::game::BuildingKind::Farm => "Farm",
+                            sow_core::game::BuildingKind::Factory => "Factory",
+                            sow_core::game::BuildingKind::Bunker => "Bunker",
+                            sow_core::game::BuildingKind::Port => "Port",
+                        };
+                        (
+                            key.to_string(),
+                            serde_json::json!({"x":x,"y":y,"offscreen":offscreen}),
+                        )
+                    })
+                })
+        })
+        .collect()
+}
+
 /// Tutorial hand anchors, as tile indices cached per snapshot tick.
 /// `expand` is neutral land touching the player's border (where to tap to grow);
 /// `assault` is attackable land touching the player's border;
@@ -1685,8 +1734,17 @@ fn tutorial_guide_tiles(
     observation.guide_expand = expand;
     observation.guide_assault = assault;
     observation.guide_target_action = target_action;
+    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let viewport_w = app.input.screen_w / sf;
+    let viewport_h = app.input.screen_h / sf;
+    let nameplate_screen = crate::render::world::overlays::world_to_screen(
+        nameplate_anchor[0],
+        nameplate_anchor[1],
+        &app.input,
+        sf,
+    );
     let mut build_site = None;
-    let mut build_site_distance = 0_i64;
+    let mut build_site_distance = 0.0_f32;
     let radius = 48_i32.min(map_w.min(map_h) as i32);
     let occupied_tiles = snapshot
         .buildings
@@ -1725,9 +1783,17 @@ fn tutorial_guide_tiles(
             {
                 continue;
             }
-            let distance = (((col as f32 + 0.5 - nameplate_anchor[0]).powi(2)
-                + (row as f32 + 0.5 - nameplate_anchor[1]).powi(2))
-                * 100.0) as i64;
+            let screen = crate::render::world::overlays::world_to_screen(
+                col as f32 + 0.5,
+                row as f32 + 0.5,
+                &app.input,
+                sf,
+            );
+            if !tutorial_screen_point_visible(screen, viewport_w, viewport_h) {
+                continue;
+            }
+            let distance = (screen[0] - nameplate_screen[0]).powi(2)
+                + (screen[1] - nameplate_screen[1]).powi(2);
             if distance > build_site_distance {
                 build_site = Some(idx);
                 build_site_distance = distance;
@@ -1798,7 +1864,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             camera_center.map(|(x, y)| (player.centroid_x - x).hypot(player.centroid_y - y))
         });
     let camera_target_radius =
-        (viewport_w.min(viewport_h) / app.input.camera_zoom.max(0.01) * 0.24).max(12.0);
+        (app.input.screen_w.min(app.input.screen_h) / app.input.camera_zoom.max(0.01) * 0.24)
+            .max(12.0);
     let camera_target_complete =
         camera_target_distance.is_some_and(|distance| distance <= camera_target_radius);
     let guide_screen = |tile: Option<u32>| {
@@ -1826,52 +1893,24 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
         .map(|([x, y], offscreen)| serde_json::json!({ "x": x, "y": y, "offscreen": offscreen }))
         .unwrap_or(serde_json::Value::Null);
-    let upgrade_buildings = sow_core::game::BuildingKind::ALL
-        .iter()
-        .filter_map(|kind| {
-            if map_w == 0 {
-                return None;
-            }
-            snapshot
-                .buildings
-                .iter()
-                .filter(|building| {
-                    building.owner_id == my_pid
-                        && building.kind == *kind
-                        && !building.under_construction
-                })
-                .min_by_key(|building| (building.active_level(), building.id))
-                .and_then(|building| {
-                    let x = building.tile_idx % map_w;
-                    let y = building.tile_idx / map_w;
-                    let footprint = sow_core::building::BuildingFootprint::at(*kind, x, y);
-                    tutorial_project_tile(
-                        Some(
-                            (footprint.left + footprint.width as i32 / 2) as u32
-                                + (footprint.top + footprint.height as i32 / 2) as u32 * map_w,
-                        ),
-                        map_w,
-                        map_h,
-                        &app.input,
-                        sf,
-                    )
-                    .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
-                    .map(|([x, y], offscreen)| {
-                        let key = match kind {
-                            sow_core::game::BuildingKind::City => "City",
-                            sow_core::game::BuildingKind::Farm => "Farm",
-                            sow_core::game::BuildingKind::Factory => "Factory",
-                            sow_core::game::BuildingKind::Bunker => "Bunker",
-                            sow_core::game::BuildingKind::Port => "Port",
-                        };
-                        (
-                            key.to_string(),
-                            serde_json::json!({"x":x,"y":y,"offscreen":offscreen}),
-                        )
-                    })
-                })
-        })
-        .collect::<std::collections::BTreeMap<_, _>>();
+    let upgrade_buildings = tutorial_building_anchors(
+        &snapshot,
+        my_pid,
+        map_w,
+        map_h,
+        &app.input,
+        sf,
+        false,
+    );
+    let upgrading_buildings = tutorial_building_anchors(
+        &snapshot,
+        my_pid,
+        map_w,
+        map_h,
+        &app.input,
+        sf,
+        true,
+    );
     let observation = &app.sim.tutorial_observation;
     let attacks_by_faction_id = observation
         .attacks_by_faction_id
@@ -1950,6 +1989,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "target_action": guide_screen(target_tile),
         "build_site": build_site_screen,
         "upgrade_buildings": upgrade_buildings,
+        "upgrading_buildings": upgrading_buildings,
         "nameplate": nameplate_screen,
         "player": player_screen,
         "camera": {
@@ -1975,6 +2015,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "camera_zoom_ceiling": crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h).max(zoom_floor),
             "camera_target": camera_target_complete,
             "camera_target_distance": camera_target_distance,
+            "camera_target_radius": camera_target_radius,
             "camera_drag_events": app.input.tutorial_camera_drag_events,
             "camera_key_pan_events": app.input.tutorial_camera_key_pan_events,
             "troops": me.map(|player| player.troops).unwrap_or(0.0),
@@ -3247,6 +3288,7 @@ mod tests {
             nuke_alerts: Vec::new(),
             resource_transfers: Vec::new(),
             resource_rejections: Vec::new(),
+            resource_transfer_rejections: Vec::new(),
             winner: None,
             winning_team: None,
             defense_posts: Vec::new(),

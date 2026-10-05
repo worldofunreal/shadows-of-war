@@ -1207,6 +1207,8 @@
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.playingStep = model.step.id;
+        var cancelBuildMode = $("#sow-hud [data-command='cancel_building_mode']");
+        if (cancelBuildMode) cancelBuildMode.hidden = !model.step.trigger || model.step.trigger.action !== "cancel_building_mode";
         var actionRatio = Number.isFinite(model.step.attack_ratio_on_enter) ? model.step.attack_ratio_on_enter : null;
         if (model.step.id !== state.previewActionStep || actionRatio !== state.previewActionRatio) {
             state.previewActionStep = model.step.id;

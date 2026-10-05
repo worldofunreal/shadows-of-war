@@ -786,6 +786,7 @@
         "value": 2,
         "scope": "total"
       },
+      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
       "next": "boudica_city_upgrade_ready"
     },
     {
@@ -931,6 +932,7 @@
         "value": 2,
         "scope": "total"
       },
+      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
       "next": "boudica_factory_upgrade_ready"
     },
     {
@@ -1054,6 +1056,7 @@
         "value": 2,
         "scope": "total"
       },
+      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
       "next": "boudica_bunker_ready"
     },
     {
@@ -1413,6 +1416,7 @@
       "marker": {
         "target": "player"
       },
+      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
       "next": "boudica_fleet_target"
     },
     {
@@ -1509,6 +1513,7 @@
         "value": 4,
         "scope": "total"
       },
+      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
       "next": "boudica_select_trade_port"
     },
     {
@@ -1563,6 +1568,7 @@
         "value": 3,
         "scope": "total"
       },
+      "guide": { "kind": "world", "target": "upgrade_building", "gesture": "tap" },
       "next": "boudica_trade_menu"
     },
     {

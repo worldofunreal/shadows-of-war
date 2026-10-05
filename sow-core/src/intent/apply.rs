@@ -676,31 +676,32 @@ impl SowEngine {
                                 && p.team == self.state.player(target).and_then(|t| t.team))
                     })
                     .unwrap_or(false);
-                if sender != target
-                    && is_allied
-                    && (g > 0.0 || t > 0.0)
-                    && !g.is_nan()
-                    && !t.is_nan()
-                {
+                let sender_alive = self.state.player(sender).is_some_and(|p| p.alive);
+                let target_alive = self.state.player(target).is_some_and(|p| p.alive);
+                let valid_amounts = (g > 0.0 || t > 0.0) && g.is_finite() && t.is_finite();
+                if sender != target && is_allied && sender_alive && target_alive && valid_amounts {
+                    let target_troop_room = self
+                        .state
+                        .player(target)
+                        .map(|player| (player.max_troops - player.troops).max(0.0))
+                        .unwrap_or(0.0);
                     let mut actual_g = 0.0;
                     let mut actual_t = 0.0;
-                    let mut sender_ok = false;
-                    if let Some(s_player) = self.state.player_mut(sender)
-                        && s_player.alive
-                    {
+                    if let Some(s_player) = self.state.player_mut(sender) {
                         actual_g = if g > 0.0 { g.min(s_player.gold) } else { 0.0 };
                         let max_t_to_send = (s_player.troops - 1.0).max(0.0);
-                        actual_t = if t > 0.0 { t.min(max_t_to_send) } else { 0.0 };
+                        actual_t = if t > 0.0 {
+                            t.min(max_t_to_send).min(target_troop_room)
+                        } else {
+                            0.0
+                        };
                         s_player.gold -= actual_g;
                         s_player.troops -= actual_t;
-                        sender_ok = true;
                     }
-                    if sender_ok && (actual_g > 0.0 || actual_t > 0.0) {
-                        if let Some(t_player) = self.state.player_mut(target)
-                            && t_player.alive
-                        {
+                    if actual_g > 0.0 || actual_t > 0.0 {
+                        if let Some(t_player) = self.state.player_mut(target) {
                             t_player.gold += actual_g;
-                            t_player.troops = (t_player.troops + actual_t).min(t_player.max_troops);
+                            t_player.troops += actual_t;
                         }
                         self.state
                             .events
@@ -710,7 +711,21 @@ impl SowEngine {
                                 gold: actual_g,
                                 troops: actual_t,
                             });
+                    } else if self.state.player(sender).is_some_and(|player| player.is_human()) {
+                        self.state.events.push(
+                            crate::game::GameEvent::ResourceTransferRejected {
+                                sender_id: sender,
+                                receiver_id: target,
+                            },
+                        );
                     }
+                } else if self.state.player(sender).is_some_and(|player| player.is_human()) {
+                    self.state.events.push(
+                        crate::game::GameEvent::ResourceTransferRejected {
+                            sender_id: sender,
+                            receiver_id: target,
+                        },
+                    );
                 }
             }
             GameplayIntent::RequestResources {
