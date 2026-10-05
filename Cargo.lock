@@ -3732,6 +3732,7 @@ dependencies = [
  "bytemuck",
  "image",
  "log",
+ "naga",
  "raw-window-handle",
  "serde",
  "serde_json",

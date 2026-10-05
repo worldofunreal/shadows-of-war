@@ -32,11 +32,11 @@
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy");
-        const gestureMetric = find(".sow-story__gesture-metric"), zoomCurrent = find(".sow-story__zoom-current"), zoomTarget = find(".sow-story__zoom-target");
+        const gestureMetric = find(".sow-story__gesture-metric"), guideCurrent = find(".sow-story__zoom-current"), guideTarget = find(".sow-story__zoom-target");
         const spotlight = find(".sow-story__spotlight");
         const guideShade = find(".sow-story__guide-shade");
         const view = doc.defaultView;
-        let portraitFrame = 0, zoomStepId = "", zoomLastPulseValue = NaN, zoomLastPulseAt = 0, zoomPulse = null;
+        let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
         function clearNudge() {
             if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = 0; }
             dialog.classList.remove("is-nudged", "is-waiting");
@@ -105,42 +105,53 @@
             const number = Number(value);
             return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
         }
-        function clearZoomReadout() {
-            if (zoomPulse) { zoomPulse.cancel(); zoomPulse = null; }
-            zoomStepId = ""; zoomLastPulseValue = NaN; zoomLastPulseAt = 0;
+        function clearGuideMetric() {
+            if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
+            guideStepId = ""; guideLastPulseValue = NaN; guideLastPulseAt = 0;
             gestureMetric.hidden = true;
+            gestureMetric.classList.remove("is-text");
+            setText(guideCurrent, ""); setText(guideTarget, "");
         }
-        function renderZoomReadout(metric, reducedMotion, stepId) {
-            if (!metric || metric.current == null || metric.target == null) { clearZoomReadout(); return; }
+        function renderGuideMetric(metric, reducedMotion, stepId) {
+            if (!metric) { clearGuideMetric(); return; }
+            if (typeof metric.text === "string" && metric.text) {
+                if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
+                guideStepId = stepId; guideLastPulseValue = NaN; guideLastPulseAt = 0;
+                gestureMetric.hidden = false; gestureMetric.classList.add("is-text");
+                setText(guideCurrent, ""); setText(guideTarget, metric.text);
+                return;
+            }
+            if (metric.current == null || metric.target == null) { clearGuideMetric(); return; }
             const current = Number(metric && metric.current), target = Number(metric && metric.target);
-            if (!Number.isFinite(current) || !Number.isFinite(target)) { clearZoomReadout(); return; }
+            if (!Number.isFinite(current) || !Number.isFinite(target)) { clearGuideMetric(); return; }
+            gestureMetric.classList.remove("is-text");
             gestureMetric.hidden = false;
             const operator = metric.direction === "min" ? "≥" : metric.direction === "max" ? "≤" : "";
-            setText(zoomTarget, operator + formatZoom(target));
+            setText(guideTarget, operator + formatZoom(target));
             const now = view && view.performance ? view.performance.now() : Date.now();
-            if (stepId !== zoomStepId) {
-                if (zoomPulse) { zoomPulse.cancel(); zoomPulse = null; }
-                zoomStepId = stepId;
-                zoomLastPulseValue = current; zoomLastPulseAt = now;
-                setText(zoomCurrent, formatZoom(current));
+            if (stepId !== guideStepId) {
+                if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
+                guideStepId = stepId;
+                guideLastPulseValue = current; guideLastPulseAt = now;
+                setText(guideCurrent, formatZoom(current));
                 return;
             }
             if (reducedMotion) {
-                if (zoomPulse) { zoomPulse.cancel(); zoomPulse = null; }
-                zoomLastPulseValue = current; zoomLastPulseAt = now;
+                if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
+                guideLastPulseValue = current; guideLastPulseAt = now;
             }
             const currentText = formatZoom(current);
-            if (zoomCurrent.textContent === currentText) return;
-            setText(zoomCurrent, currentText);
+            if (guideCurrent.textContent === currentText) return;
+            setText(guideCurrent, currentText);
             if (reducedMotion) return;
-            if (Math.abs(current - zoomLastPulseValue) >= 0.2 && now - zoomLastPulseAt >= 100 && zoomCurrent.animate) {
-                if (zoomPulse) zoomPulse.cancel();
-                zoomPulse = zoomCurrent.animate([
+            if (Math.abs(current - guideLastPulseValue) >= 0.2 && now - guideLastPulseAt >= 100 && guideCurrent.animate) {
+                if (guidePulse) guidePulse.cancel();
+                guidePulse = guideCurrent.animate([
                     { opacity: 0.35, transform: "translateY(7px) scale(.78) rotateX(-22deg)", filter: "blur(2px)" },
                     { opacity: 1, transform: "translateY(-2px) scale(1.14) rotateX(0)", filter: "blur(0)", offset: 0.68 },
                     { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0)" }
                 ], { duration: 300, easing: "cubic-bezier(.16, 1.25, .3, 1)" });
-                zoomLastPulseValue = current; zoomLastPulseAt = now;
+                guideLastPulseValue = current; guideLastPulseAt = now;
             }
         }
         function releaseFocus() {
@@ -156,7 +167,7 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { guideWasVisible = false; clearNudge(); clearZoomReadout(); objectiveStepId = null; if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { guideWasVisible = false; clearNudge(); clearGuideMetric(); objectiveStepId = null; if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
             if (objectiveStepId !== step.id) { objectiveStepId = step.id; }
             footer.hidden = step.type === "choice" || step.pause_game === true;
@@ -170,6 +181,7 @@
             const modal = ["scene", "choice", "end"].includes(step.type);
             root.classList.toggle("is-modal", modal);
             root.classList.toggle("is-chapter", step.presentation === "chapter");
+            root.classList.toggle("is-celebration", step.presentation === "celebration");
             root.classList.toggle("is-reduced", reducedMotion);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
@@ -275,22 +287,19 @@
                 x: (root.clientWidth || Number(view && view.innerWidth) || 0) * 0.5,
                 y: (root.clientHeight || Number(view && view.innerHeight) || 0) * 0.5
             } : context.anchor;
-            const labeledGesture = zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType);
+            const labeledGesture = zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel);
             gestureLabel.hidden = !labeledGesture;
-            if (zoomGuide) {
-                setText(gestureCopy, context.gestureLabel || t(step.title_key));
-                renderZoomReadout(context.zoomMetric, reducedMotion, step.id);
-            } else {
-                if (zoomButtonGuide) renderZoomReadout(context.zoomMetric, reducedMotion, step.id);
-                else clearZoomReadout();
-                if (labeledGesture) setText(gestureCopy, t(step.title_key));
-            }
+            const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")
+                : zoomButtonGuide ? (step.guide.target === "hud_zoom_in" ? "hud.zoom_in" : "hud.zoom_out") : step.title_key;
+            if (labeledGesture) setText(gestureCopy, zoomGuide || zoomButtonGuide ? t(gestureTitleKey) : context.gestureLabel || t(gestureTitleKey));
+            renderGuideMetric(context.guideMetric, reducedMotion, step.id);
             const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
             placeGuideShade(guideVisible && step.guide.kind === "ui" ? anchor.cutout || anchor : null);
             gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
             if (guideVisible) {
                 gesture.dataset.gesture = step.guide.gesture;
                 gesture.dataset.zoomMode = context.zoomMode || "pinch";
+                gesture.dataset.guidePath = anchor.toX != null && anchor.toY != null ? "true" : "false";
                 const follow = guideWasVisible && !wasHidden;
                 gesture.classList.toggle("is-following", follow);
                 if (!follow || anchor.x !== guideX || anchor.y !== guideY) {
@@ -298,7 +307,7 @@
                 }
                 guideX = anchor.x; guideY = anchor.y; guideWasVisible = true;
                 if (labeledGesture) {
-                    const measureKey = gestureCopy.textContent + ":" + root.clientWidth;
+                    const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth;
                     if (measureKey !== guideLabelMeasureKey) {
                         guideLabelMeasureKey = measureKey;
                         guideLabelWidth = gestureLabel.getBoundingClientRect().width;
@@ -342,6 +351,7 @@
             if (control) return;
             event.preventDefault();
             event.stopPropagation();
+            if (model.step.type === "scene") return;
             if (model.step.type !== "choice" && event.timeStamp - lastAction >= 220) {
                 lastAction = event.timeStamp;
                 options.onContinue();
@@ -378,7 +388,7 @@
             destroy() {
                 releaseFocus();
                 clearNudge();
-                clearZoomReadout();
+                clearGuideMetric();
                 if (portraitObserver) portraitObserver.disconnect();
                 root.style.removeProperty("--story-portrait-size");
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);

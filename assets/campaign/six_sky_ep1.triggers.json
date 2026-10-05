@@ -1,16 +1,11 @@
 {
   "version": 2,
   "episode_id": "six_sky_ep1",
-  "default_locale": "en",
   "settings": {
     "buildings_enabled": false,
     "starting_troops": 1000
   },
   "entry": "six_sky_ep1_landfall_intro",
-  "strings": {
-    "en": {},
-    "es": {}
-  },
   "speakers": {
     "lady_six_sky": {
       "name": "Lady Six Sky",

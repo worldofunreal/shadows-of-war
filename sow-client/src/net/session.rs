@@ -179,6 +179,7 @@ impl SowApp {
     /// Tear down the current match and use ExitGame only for an active game.
     pub(crate) fn begin_exit_to_main_menu(&mut self) {
         self.ui.tutorial_camera_only = false;
+        self.ui.dialog_border_highlight = None;
         self.input.tutorial_camera_drag_recorded = false;
         let phase = self.ui.app.phase;
         let entering_game = matches!(phase, ClientPhase::Splash)

@@ -17,8 +17,22 @@
         camera_drag: "camera_drag_events", camera_key_pan: "camera_key_pan_events", hover: "hover_events",
         zoom_out_complete: "zoom_out_complete", zoom_in_complete: "zoom_in_complete", camera_target: "camera_target"
     };
-    const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate"];
+    const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate", "build_site", "upgrade_building"];
     const STRUCTURE_LEVEL_LIMITS = { City: 6, Farm: 3, Factory: 4, Bunker: 4, Port: 5 };
+    function zoomOutProgress(facts) {
+        const start = Number(facts && facts.camera_zoom_start);
+        const floor = Number(facts && facts.camera_zoom_floor);
+        const current = Number(facts && facts.camera_zoom);
+        if (![start, floor, current].every(Number.isFinite) || start <= floor) return Number(facts && facts.zoom_out_complete || 0);
+        return Math.max(0, Math.min(1, (start - current) / (start - floor)));
+    }
+    function zoomOutTarget(facts, amount) {
+        const start = Number(facts && facts.camera_zoom_start);
+        const floor = Number(facts && facts.camera_zoom_floor);
+        const portion = Number(amount);
+        if (![start, floor].every(Number.isFinite) || start <= floor) return floor;
+        return start - (start - floor) * (Number.isFinite(portion) ? Math.max(0, Math.min(1, portion)) : 1);
+    }
     const UI_TARGETS = {
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
         campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
@@ -27,8 +41,6 @@
         menu_heroes: '#sow-menu [data-nav-screen="heroes"]',
         menu_profile: '#sow-menu [data-nav-screen="profile"]',
         attack_ratio: "#sow-hud-slider",
-        hud_zoom_in: '#sow-hud [data-command="zoom_in"]',
-        hud_zoom_out: '#sow-hud [data-command="zoom_out"]',
         hud_center_camera: '#sow-hud [data-command="center_camera"]',
         hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
         dock_city: '#sow-hud [data-command="select_building"][data-kind="City"]',
@@ -36,6 +48,7 @@
         dock_port: '#sow-hud [data-command="select_building"][data-kind="Port"]',
         dock_bunker: '#sow-hud [data-command="select_building"][data-kind="Bunker"]',
         dock_farm: '#sow-hud [data-command="select_building"][data-kind="Farm"]',
+        cancel_building_mode: '#sow-hud [data-command="cancel_building_mode"]',
         upgrade_structure: "#sow-hud-building-card-upgrade",
         transfer_gold: "#sow-hud-transfer-gold",
         transfer_troops: "#sow-hud-transfer-troops",
@@ -77,20 +90,40 @@
     const id = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,95}$/.test(value) && !["constructor", "prototype", "__proto__"].includes(value);
     const copy = value => JSON.parse(JSON.stringify(value));
 
-    function renameFactionText(definition, renames) {
+    function replaceFactionNames(text, replacements) {
+        if (typeof text !== "string" || !(replacements instanceof Map) || !replacements.size) return text;
+        const names = Array.from(replacements.keys()).sort((a, b) => b.length - a.length);
+        const pattern = new RegExp("(^|[^\\p{L}\\p{N}_])(" + names.map(name => name.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")).join("|") + ")(?=$|[^\\p{L}\\p{N}_])", "gu");
+        return text.replace(pattern, (_, prefix, name) => prefix + replacements.get(name));
+    }
+
+    function renameFactionText(definition, renames, factions) {
         const replacements = new Map((Array.isArray(renames) ? renames : []).filter(item =>
             object(item) && typeof item.from === "string" && item.from && typeof item.to === "string" && item.to && item.from !== item.to
         ).map(item => [item.from, item.to]));
-        if (!replacements.size) return copy(definition);
-        const names = Array.from(replacements.keys()).sort((a, b) => b.length - a.length);
-        const pattern = new RegExp("(^|[^\\p{L}\\p{N}_])(" + names.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")(?=$|[^\\p{L}\\p{N}_])", "gu");
         const result = copy(definition);
-        if (object(result.strings)) Object.values(result.strings).forEach(catalog => {
-            if (object(catalog)) Object.keys(catalog).forEach(key => {
-                if (typeof catalog[key] === "string") catalog[key] = catalog[key].replace(pattern, (_, prefix, name) => prefix + replacements.get(name));
+        if (replacements.size && Array.isArray(factions)) {
+            const storyNames = object(result.faction_story_names) ? result.faction_story_names : {};
+            factions.forEach(faction => {
+                if (object(faction) && replacements.has(faction.name) && typeof faction.id === "string" && !storyNames[faction.id]) {
+                    storyNames[faction.id] = faction.name;
+                }
             });
-        });
+            if (Object.keys(storyNames).length) result.faction_story_names = storyNames;
+        }
         return result;
+    }
+
+    function replaceFactionStoryNames(text, definition, roster) {
+        const sourceNames = object(definition && definition.faction_story_names) ? definition.faction_story_names : {};
+        const factions = Array.isArray(roster && roster.factions) ? roster.factions : [];
+        const replacements = new Map();
+        Object.keys(sourceNames).forEach(id => {
+            const faction = factions.find(item => item && item.id === id);
+            const source = sourceNames[id];
+            if (faction && typeof source === "string" && source && typeof faction.name === "string" && faction.name) replacements.set(source, faction.name);
+        });
+        return replaceFactionNames(text, replacements);
     }
 
     function factionReferenceIds(definition) {
@@ -154,7 +187,7 @@
             issue(null, "version", "Campaign logic must use version 2.");
             return { errors, warnings };
         }
-        knownFields(definition, ["version", "episode_id", "default_locale", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
+        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
         if (!id(definition.episode_id)) issue(null, "episode_id", "Invalid episode ID.");
         const settings = definition.settings;
         if (!object(settings) || typeof settings.buildings_enabled !== "boolean" || !Number.isInteger(settings.starting_troops) || settings.starting_troops < 1 || settings.starting_troops > 100000) {
@@ -201,20 +234,25 @@
             if (!allowMissingFactionReferences && object(settings) && settings.buildings_unlock_after_defeated && !rosterFactions.has(settings.buildings_unlock_after_defeated)) issue(null, "settings.buildings_unlock_after_defeated", "Construction unlock refers to an unknown faction.");
             if (!allowMissingFactionReferences && object(settings) && object(settings.campaign_support) && !rosterFactions.has(settings.campaign_support.after_defeated)) issue(null, "settings.campaign_support.after_defeated", "Support milestone refers to an unknown faction.");
         }
-        const strings = definition.strings || {};
-        const languageList = Array.isArray(strings) ? strings : object(strings) ? Object.keys(strings) : [];
-        if ((!object(strings) && !Array.isArray(strings)) || !/^[a-z]{2,3}(?:-[a-z]{2})?$/.test(definition.default_locale || "") || !languageList.includes(definition.default_locale)) issue(null, "strings", "Choose a base language and language dictionaries.");
-        Object.entries(object(strings) ? strings : {}).forEach(([locale, catalog]) => {
-            if (!/^[a-z]{2,3}(?:-[a-z]{2})?$/.test(locale) || !object(catalog)) issue(null, "strings", "Invalid language dictionary: " + locale);
-            else Object.entries(catalog).forEach(([key, value]) => {
-                if (!/^tutorial\.[a-zA-Z0-9_.-]+$/.test(key) || typeof value !== "string" || value.length > 12000) issue(null, "strings", "Invalid episode text: " + key);
+        const strings = definition.strings;
+        if (strings != null) {
+            if (!object(strings)) issue(null, "strings", "Campaign files store text keys only; use the shared language catalogs for text.");
+            else Object.entries(strings).forEach(([locale, catalog]) => {
+                if (!/^[a-z]{2,3}(?:-[a-z]{2})?$/.test(locale) || !object(catalog)) issue(null, "strings", "Invalid language dictionary: " + locale);
+                else if (Object.keys(catalog).length) issue(null, "strings", "Campaign text belongs in the shared language catalogs, not the episode file.");
             });
-        });
-        const base = object(strings[definition.default_locale]) ? strings[definition.default_locale] : {};
+        }
+        if (definition.faction_story_names != null) {
+            if (!object(definition.faction_story_names)) issue(null, "faction_story_names", "Invalid faction story-name map.");
+            else Object.entries(definition.faction_story_names).forEach(([factionId, name]) => {
+                if (!id(factionId) || typeof name !== "string" || !name.trim() || !rosterFactions.has(factionId)) issue(null, "faction_story_names", "Faction story names must refer to a roster faction and its original name.");
+            });
+        }
+        if (definition.text_namespace != null && (typeof definition.text_namespace !== "string" || !/^tutorial\.[a-zA-Z0-9_-]+_$/.test(definition.text_namespace))) issue(null, "text_namespace", "Use a tutorial text-key namespace ending in an underscore.");
         function text(step, field, key, required) {
             if (key == null && !required) return;
             if (typeof key !== "string" || !/^tutorial\.[a-zA-Z0-9_.-]+$/.test(key)) issue(step, field, "Choose a tutorial text key.");
-            else if (!(own(base, key) && base[key].trim()) && options.hasText && !options.hasText(key)) issue(step, field, "Missing base-language text: " + key);
+            else if (options.hasText && !options.hasText(key)) issue(step, field, "Missing shared English text: " + key);
         }
         const speakers = definition.speakers || {};
         if (!object(speakers)) issue(null, "speakers", "Invalid character dictionary.");
@@ -272,8 +310,20 @@
             if (own(step, "pause_game") && typeof step.pause_game !== "boolean") issue(step, "pause_game", "Pause game must be true or false.");
             if (own(step, "camera_only") && (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))) issue(step, "camera_only", "Camera-only input requires a paused objective.");
             ["title_key", "body_key", "hint_key"].forEach(field => text(step, field, step[field], false));
+            const textNamespace = typeof definition.text_namespace === "string" ? definition.text_namespace : "tutorial.";
+            const dynamicText = suffix => text(step, "guide.text." + suffix, textNamespace + step.id + suffix, true);
+            if (step.guide && ["zoom_in", "zoom_out"].includes(step.guide.gesture)) {
+                ["pinch", "wheel"].forEach(mode => ["_hint", "_label"].forEach(suffix => dynamicText("_" + mode + suffix)));
+            }
+            if (step.guide && ["drag", "hover"].includes(step.guide.gesture)) {
+                ["_mobile_hint", "_desktop_hint"].forEach(dynamicText);
+            }
+            if (step.trigger && step.trigger.type === "camera_target") dynamicText("_progress");
+            if (step.id === "boudica_first_expansion" && step.guide && step.guide.gesture === "tap") {
+                ["_mobile_action", "_desktop_action"].forEach(dynamicText);
+            }
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
-            if (step.presentation && !["dialogue", "chapter"].includes(step.presentation)) issue(step, "presentation", "Unknown presentation.");
+            if (step.presentation && !["dialogue", "chapter", "celebration"].includes(step.presentation)) issue(step, "presentation", "Unknown presentation.");
             if (step.lines != null) {
                 if (step.type !== "scene" || !Array.isArray(step.lines) || !step.lines.length || step.lines.length > 64) issue(step, "lines", "A conversation needs 1–64 lines.");
                 else step.lines.forEach(line => {
@@ -327,7 +377,7 @@
             }
             if (["objective", "guide"].includes(step.type)) {
                 const trigger = step.trigger;
-                if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "ui"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
+                if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "ui", "building_selected"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
                     knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
@@ -343,9 +393,15 @@
                         } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
+                    } else if (trigger.type === "building_selected") {
+                        if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
                     } else if (trigger.type === "camera_target") {
                         if (!trigger.target) issue(step, "trigger.target", "Choose a faction or the player as the camera target.");
                         if (!Number.isFinite(trigger.distance) || trigger.distance <= 0) issue(step, "trigger.distance", "Set the maximum distance from the camera target.");
+                    } else if (trigger.type === "zoom_out_complete") {
+                        if (!Number.isFinite(trigger.value) || trigger.value <= 0 || trigger.value > 1) issue(step, "trigger.value", "Set the zoom-out target between 0 and 1.");
+                    } else if (trigger.type === "zoom_in_complete" && trigger.target) {
+                        if (!Number.isFinite(trigger.distance) || trigger.distance <= 0) issue(step, "trigger.distance", "Set how close the camera must be to the zoom target.");
                     } else if (trigger.type === "structure_level") {
                         if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
                         else if (!Number.isInteger(trigger.value) || trigger.value < 1 || trigger.value > STRUCTURE_LEVEL_LIMITS[trigger.kind]) issue(step, "trigger.value", "Choose a level that this building can reach.");
@@ -526,6 +582,21 @@
             } else if (trigger.type === "ui") {
                 const uiReference = trigger.scope === "step" ? uiBaseline : trigger.scope === "episode" ? initialUi : {};
                 current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
+                target = 1;
+            } else if (trigger.type === "building_selected") {
+                current = facts.selected_building_kind === trigger.kind ? 1 : 0;
+                target = 1;
+            } else if (trigger.type === "zoom_out_complete") {
+                current = zoomOutProgress(facts);
+                target = Number(trigger.value || 1);
+                if (Number(facts.zoom_out_events || 0) - Number(reference.zoom_out_events || 0) < 1) current = 0;
+            } else if (trigger.type === "zoom_in_complete") {
+                const zoomEvents = Number(facts.zoom_in_events || 0) - Number(reference.zoom_in_events || 0);
+                const reachedZoom = Number.isFinite(Number(facts.camera_zoom))
+                    && Number(facts.camera_zoom) >= Number(facts.camera_zoom_target);
+                const reachedFaction = !trigger.target || (Number.isFinite(Number(facts.camera_target_distance))
+                    && Number(facts.camera_target_distance) <= Number(trigger.distance || 12));
+                current = zoomEvents > 0 && reachedZoom && reachedFaction ? 1 : 0;
                 target = 1;
             } else if (trigger.type === "camera_target" && Number.isFinite(trigger.distance)) {
                 const distance = facts.camera_target_distance;
@@ -709,7 +780,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, METRICS, UI_TARGETS, zoomInputMode, resolveUiTarget, resolveUiAnchor, renameFactionText, factionReferenceIds, validate, create };
+    const api = { TYPES, METRICS, UI_TARGETS, zoomInputMode, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, replaceFactionStoryNames, factionReferenceIds, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

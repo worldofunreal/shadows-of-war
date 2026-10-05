@@ -79,6 +79,7 @@ impl SowApp {
             crate::app::DeathNameplateAnimation {
                 world_x: anim_x,
                 world_y: anim_y,
+                curve_direction: if player_id % 2 == 0 { 1.0 } else { -1.0 },
                 start_time: now_instant,
                 by_nuke: info.by_nuke,
                 name: name.clone(),

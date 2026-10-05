@@ -62,6 +62,10 @@ enum WebMenuCommand {
         #[serde(default)]
         player_id: Option<u16>,
     },
+    SetDialogBorderHighlight {
+        #[serde(default)]
+        player_id: Option<u16>,
+    },
     ResolveCampaignDiplomacy {
         target_player_id: u16,
         relation: sow_core::protocol::CampaignRelation,
@@ -191,6 +195,12 @@ enum WebMenuCommand {
         value: f32,
     },
     ResetDevConfig,
+    DevVfxAll {
+        on: bool,
+    },
+    SetShowDevTools {
+        value: bool,
+    },
     ReturnToMenu,
     ContinueObserving,
     ZoomIn,
@@ -222,8 +232,32 @@ enum WebDevConfigField {
     Thickness,
     Darkness,
     ShoreThickness,
+    ShoreDarkness,
     ConquestDuration,
     TerritoryOpacity,
+    BlendMode,
+    FontSizeScale,
+    FontFaceDilate,
+    FontOutlineThickness,
+    FontShadowY,
+    FontUnderlaySoftness,
+    FontCharSpacing,
+    VfxConquer,
+    VfxBorderBreathe,
+    VfxEnergyFlow,
+    VfxHeartbeat,
+    VfxWarFog,
+    FogOfWar,
+    VfxFallout,
+    VfxAmbientGrade,
+    VfxHoloGrid,
+    VfxMoverTrails,
+    VfxClickMarkers,
+    VfxAttackBadges,
+    VfxWorldBuildings,
+    VfxBotAvatars,
+    VfxNameplateNames,
+    VfxNameplateTroops,
 }
 
 thread_local! {
@@ -269,15 +303,12 @@ struct HudPublishKey {
     settings_music_volume: u32,
     settings_reduced_motion: bool,
     settings_free_zoom_out: bool,
+    settings_show_dev_tools: bool,
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
     tutorial_active: bool,
     dev_sidebar_open: bool,
-    dev_thickness: u32,
-    dev_darkness: u32,
-    dev_shore_thickness: u32,
-    dev_conquest_duration: u32,
-    dev_territory_opacity: u32,
+    dev_config: [u32; 29],
     inbox_open: bool,
     transfer_target: Option<u16>,
     betrayal_open: bool,
@@ -290,6 +321,9 @@ struct HudPublishKey {
     endgame_team: Option<sow_core::protocol::Team>,
     player_kda: [u32; 3],
     snapshot_tick: u64,
+    camera_zoom_hundredths: i32,
+    camera_zoom_floor_hundredths: i32,
+    camera_zoom_ceiling_hundredths: i32,
     tutorial_camera_zoom_hundredths: i32,
     tutorial_target_zoom_hundredths: i32,
     hovered_tile: u32,
@@ -459,20 +493,18 @@ impl SowApp {
                     config,
                     is_private,
                     password,
-                } => {
-                    match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
-                        Ok(config) => self.process_ui_actions(Some(UiAction::CreateGame {
-                            config: Box::new(config),
-                            is_private,
-                            password,
-                        })),
-                        Err(error) => {
-                            log::warn!("[WEB MENU] invalid create-game config: {error}");
-                            self.ui.app.main_menu_state.error_message =
-                                Some(crate::ui::UiText::new("menu.invalid_game_configuration"));
-                        }
+                } => match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
+                    Ok(config) => self.process_ui_actions(Some(UiAction::CreateGame {
+                        config: Box::new(config),
+                        is_private,
+                        password,
+                    })),
+                    Err(error) => {
+                        log::warn!("[WEB MENU] invalid create-game config: {error}");
+                        self.ui.app.main_menu_state.error_message =
+                            Some(crate::ui::UiText::new("menu.invalid_game_configuration"));
                     }
-                }
+                },
                 WebMenuCommand::StartSinglePlayer { config } => {
                     match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
                         Ok(config) => self.process_ui_actions(Some(UiAction::StartSinglePlayer(
@@ -501,6 +533,7 @@ impl SowApp {
                         continue;
                     }
                     self.ui.tutorial_marker_player_id = None;
+                    self.ui.dialog_border_highlight = None;
                     self.boot_campaign_pending = None;
                     if let Err(error) =
                         self.start_campaign_episode_from_web(campaign, roster, match_config)
@@ -536,6 +569,23 @@ impl SowApp {
                                     .any(|player| player.id == *player_id)
                             })
                         });
+                    }
+                }
+                WebMenuCommand::SetDialogBorderHighlight { player_id } => {
+                    if self.ui.tutorial_active && self.net.is_offline {
+                        self.ui.dialog_border_highlight = player_id
+                            .filter(|player_id| {
+                                self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                                    snapshot
+                                        .players
+                                        .iter()
+                                        .any(|player| player.id == *player_id)
+                                })
+                            })
+                            .map(|player_id| crate::app::DialogBorderHighlight {
+                                player_id,
+                                start_time: Instant::now(),
+                            });
                     }
                 }
                 WebMenuCommand::ResolveCampaignDiplomacy {
@@ -896,11 +946,75 @@ impl SowApp {
                                 WebDevConfigField::ShoreThickness => {
                                     config.shore_thickness = value.clamp(0.0, 1.0)
                                 }
+                                WebDevConfigField::ShoreDarkness => {
+                                    config.shore_darkness = value.clamp(0.0, 1.0)
+                                }
                                 WebDevConfigField::ConquestDuration => {
                                     config.conquest_duration = value.clamp(0.1, 10.0)
                                 }
                                 WebDevConfigField::TerritoryOpacity => {
                                     config.territory_opacity = value.clamp(0.0, 1.0)
+                                }
+                                WebDevConfigField::BlendMode => {
+                                    config.blend_mode = value.clamp(0.0, 3.0)
+                                }
+                                WebDevConfigField::FontSizeScale => {
+                                    config.font_size_scale = value.clamp(0.5, 2.5)
+                                }
+                                WebDevConfigField::FontFaceDilate => {
+                                    config.font_face_dilate = value.clamp(-1.0, 2.0)
+                                }
+                                WebDevConfigField::FontOutlineThickness => {
+                                    config.font_outline_thickness = value.clamp(0.0, 3.0)
+                                }
+                                WebDevConfigField::FontShadowY => {
+                                    config.font_shadow_y = value.clamp(0.0, 5.0)
+                                }
+                                WebDevConfigField::FontUnderlaySoftness => {
+                                    config.font_underlay_softness = value.clamp(0.0, 2.0)
+                                }
+                                WebDevConfigField::FontCharSpacing => {
+                                    config.font_char_spacing = value.clamp(0.8, 1.8)
+                                }
+                                WebDevConfigField::VfxConquer => config.vfx_conquer = value != 0.0,
+                                WebDevConfigField::VfxBorderBreathe => {
+                                    config.vfx_border_breathe = value != 0.0
+                                }
+                                WebDevConfigField::VfxEnergyFlow => {
+                                    config.vfx_energy_flow = value != 0.0
+                                }
+                                WebDevConfigField::VfxHeartbeat => {
+                                    config.vfx_heartbeat = value != 0.0
+                                }
+                                WebDevConfigField::VfxWarFog => config.vfx_war_fog = value != 0.0,
+                                WebDevConfigField::FogOfWar => config.fog_of_war = value != 0.0,
+                                WebDevConfigField::VfxFallout => config.vfx_fallout = value != 0.0,
+                                WebDevConfigField::VfxAmbientGrade => {
+                                    config.vfx_ambient_grade = value != 0.0
+                                }
+                                WebDevConfigField::VfxHoloGrid => {
+                                    config.vfx_holo_grid = value != 0.0
+                                }
+                                WebDevConfigField::VfxMoverTrails => {
+                                    config.vfx_mover_trails = value != 0.0
+                                }
+                                WebDevConfigField::VfxClickMarkers => {
+                                    config.vfx_click_markers = value != 0.0
+                                }
+                                WebDevConfigField::VfxAttackBadges => {
+                                    config.vfx_attack_badges = value != 0.0
+                                }
+                                WebDevConfigField::VfxWorldBuildings => {
+                                    config.vfx_world_buildings = value != 0.0
+                                }
+                                WebDevConfigField::VfxBotAvatars => {
+                                    config.vfx_bot_avatars = value != 0.0
+                                }
+                                WebDevConfigField::VfxNameplateNames => {
+                                    config.vfx_nameplate_names = value != 0.0
+                                }
+                                WebDevConfigField::VfxNameplateTroops => {
+                                    config.vfx_nameplate_troops = value != 0.0
                                 }
                             });
                         }
@@ -908,17 +1022,43 @@ impl SowApp {
                     #[cfg(not(any(feature = "dev", debug_assertions)))]
                     let _ = (field, value);
                 }
+                WebMenuCommand::DevVfxAll { on } => {
+                    #[cfg(any(feature = "dev", debug_assertions))]
+                    {
+                        crate::theme::dev_config::DevConfig::update(|config| {
+                            config.vfx_conquer = on;
+                            config.vfx_border_breathe = on;
+                            config.vfx_energy_flow = on;
+                            config.vfx_heartbeat = on;
+                            config.vfx_war_fog = on;
+                            config.fog_of_war = on;
+                            config.vfx_fallout = on;
+                            config.vfx_ambient_grade = on;
+                            config.vfx_holo_grid = on;
+                            config.vfx_mover_trails = on;
+                            config.vfx_click_markers = on;
+                            config.vfx_attack_badges = on;
+                            config.vfx_world_buildings = on;
+                            config.vfx_bot_avatars = on;
+                            config.vfx_nameplate_names = on;
+                            config.vfx_nameplate_troops = on;
+                        });
+                    }
+                    #[cfg(not(any(feature = "dev", debug_assertions)))]
+                    let _ = on;
+                }
                 WebMenuCommand::ResetDevConfig => {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
-                        let defaults = crate::theme::dev_config::DevConfig::default();
-                        let mut config = crate::theme::dev_config::DevConfig::get();
-                        config.thickness = defaults.thickness;
-                        config.darkness = defaults.darkness;
-                        config.shore_thickness = defaults.shore_thickness;
-                        config.conquest_duration = defaults.conquest_duration;
-                        config.territory_opacity = defaults.territory_opacity;
-                        crate::theme::dev_config::DevConfig::set(config);
+                        crate::theme::dev_config::DevConfig::set(
+                            crate::theme::dev_config::DevConfig::default(),
+                        );
+                    }
+                }
+                WebMenuCommand::SetShowDevTools { value } => {
+                    self.ui.app.settings_state.show_dev_tools = value;
+                    if !value {
+                        self.ui.show_dev_sidebar = false;
                     }
                 }
                 WebMenuCommand::ExpressEmoji { emoji, pinned } => {
@@ -952,7 +1092,17 @@ impl SowApp {
                         && y.is_finite()
                     {
                         self.input.has_snapped_camera_to_spawn = true;
-                        self.input.target_zoom = self.input.camera_zoom;
+                        // Terms dialog framing: pull back a bit for context, never closer.
+                        self.input.target_zoom =
+                            self.input
+                                .camera_zoom
+                                .min(6.0)
+                                .max(crate::camera_zoom_lower_bound(
+                                    self.input.screen_w,
+                                    self.input.screen_h,
+                                    self.sim.map_w,
+                                    self.sim.map_h,
+                                ));
                         self.input.camera_focus_target = Some((x, y));
                         self.input.tutorial_camera_focus = true;
                         self.input.camera_focus_waiting_for_input_release =
@@ -1081,6 +1231,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
         settings_free_zoom_out: app.ui.app.settings_state.free_zoom_out,
+        settings_show_dev_tools: app.ui.app.settings_state.show_dev_tools,
         leaderboard_open: app.ui.show_leaderboard,
         leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
         inbox_open: hud.show_alliance_inbox,
@@ -1097,6 +1248,15 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .map(|player| [player.kills, player.deaths, player.assists])
             .unwrap_or_default(),
         tutorial_active,
+        camera_zoom_hundredths: (app.input.camera_zoom * 100.0).round() as i32,
+        camera_zoom_floor_hundredths: (app.zoom_floor() * 100.0).round() as i32,
+        camera_zoom_ceiling_hundredths: (crate::camera_zoom_upper_bound(
+            app.input.screen_w,
+            app.input.screen_h,
+        )
+        .max(app.zoom_floor())
+            * 100.0)
+            .round() as i32,
         tutorial_camera_zoom_hundredths: if tutorial_active {
             (app.input.camera_zoom * 100.0).round() as i32
         } else {
@@ -1108,11 +1268,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             0
         },
         dev_sidebar_open,
-        dev_thickness: dev_config_key[0],
-        dev_darkness: dev_config_key[1],
-        dev_shore_thickness: dev_config_key[2],
-        dev_conquest_duration: dev_config_key[3],
-        dev_territory_opacity: dev_config_key[4],
+        dev_config: dev_config_key,
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
         hovered_tile,
         hovered_owner,
@@ -1123,33 +1279,63 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
 }
 
 #[cfg(any(feature = "dev", debug_assertions))]
-fn dev_config_key(app: &SowApp) -> (bool, [u32; 5]) {
+fn dev_config_key(app: &SowApp) -> (bool, [u32; 29]) {
     if !app.ui.show_dev_sidebar {
-        return (false, [0; 5]);
+        return (false, [0; 29]);
     }
     let config = crate::theme::dev_config::DevConfig::get();
-    (
-        true,
-        [
-            config.thickness.to_bits(),
-            config.darkness.to_bits(),
-            config.shore_thickness.to_bits(),
-            config.conquest_duration.to_bits(),
-            config.territory_opacity.to_bits(),
-        ],
-    )
+    let mut key = [0u32; 29];
+    key[..13].copy_from_slice(&[
+        config.thickness.to_bits(),
+        config.darkness.to_bits(),
+        config.shore_thickness.to_bits(),
+        config.shore_darkness.to_bits(),
+        config.conquest_duration.to_bits(),
+        config.territory_opacity.to_bits(),
+        config.blend_mode.to_bits(),
+        config.font_size_scale.to_bits(),
+        config.font_face_dilate.to_bits(),
+        config.font_outline_thickness.to_bits(),
+        config.font_shadow_y.to_bits(),
+        config.font_underlay_softness.to_bits(),
+        config.font_char_spacing.to_bits(),
+    ]);
+    for (index, value) in [
+        config.vfx_conquer,
+        config.vfx_border_breathe,
+        config.vfx_energy_flow,
+        config.vfx_heartbeat,
+        config.vfx_war_fog,
+        config.fog_of_war,
+        config.vfx_fallout,
+        config.vfx_ambient_grade,
+        config.vfx_holo_grid,
+        config.vfx_mover_trails,
+        config.vfx_click_markers,
+        config.vfx_attack_badges,
+        config.vfx_world_buildings,
+        config.vfx_bot_avatars,
+        config.vfx_nameplate_names,
+        config.vfx_nameplate_troops,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        key[13 + index] = u32::from(value);
+    }
+    (true, key)
 }
 
 #[cfg(not(any(feature = "dev", debug_assertions)))]
-fn dev_config_key(_app: &SowApp) -> (bool, [u32; 5]) {
-    (false, [0; 5])
+fn dev_config_key(_app: &SowApp) -> (bool, [u32; 29]) {
+    (false, [0; 29])
 }
 
 #[cfg(any(feature = "dev", debug_assertions))]
 fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
     let open = app.ui.show_dev_sidebar;
     let mut payload = serde_json::json!({
-        "available": true,
+        "available": app.ui.app.settings_state.show_dev_tools,
         "open": open,
     });
     if open {
@@ -1158,8 +1344,32 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
             "thickness": config.thickness,
             "darkness": config.darkness,
             "shore_thickness": config.shore_thickness,
+            "shore_darkness": config.shore_darkness,
             "conquest_duration": config.conquest_duration,
             "territory_opacity": config.territory_opacity,
+            "blend_mode": config.blend_mode,
+            "font_size_scale": config.font_size_scale,
+            "font_face_dilate": config.font_face_dilate,
+            "font_outline_thickness": config.font_outline_thickness,
+            "font_shadow_y": config.font_shadow_y,
+            "font_underlay_softness": config.font_underlay_softness,
+            "font_char_spacing": config.font_char_spacing,
+            "vfx_conquer": config.vfx_conquer,
+            "vfx_border_breathe": config.vfx_border_breathe,
+            "vfx_energy_flow": config.vfx_energy_flow,
+            "vfx_heartbeat": config.vfx_heartbeat,
+            "vfx_war_fog": config.vfx_war_fog,
+            "fog_of_war": config.fog_of_war,
+            "vfx_fallout": config.vfx_fallout,
+            "vfx_ambient_grade": config.vfx_ambient_grade,
+            "vfx_holo_grid": config.vfx_holo_grid,
+            "vfx_mover_trails": config.vfx_mover_trails,
+            "vfx_click_markers": config.vfx_click_markers,
+            "vfx_attack_badges": config.vfx_attack_badges,
+            "vfx_world_buildings": config.vfx_world_buildings,
+            "vfx_bot_avatars": config.vfx_bot_avatars,
+            "vfx_nameplate_names": config.vfx_nameplate_names,
+            "vfx_nameplate_troops": config.vfx_nameplate_troops,
         });
     }
     payload
@@ -1361,13 +1571,14 @@ fn tutorial_guide_tiles(
     snapshot: &sow_core::protocol::SimSnapshot,
     my_pid: u16,
     target_owner: u16,
-) -> (Option<u32>, Option<u32>, Option<u32>) {
+) -> (Option<u32>, Option<u32>, Option<u32>, Option<u32>) {
     let observation = &mut app.sim.tutorial_observation;
     if observation.guide_tick == snapshot.tick && observation.guide_target_owner == target_owner {
         return (
             observation.guide_expand,
             observation.guide_assault,
             observation.guide_target_action,
+            observation.guide_build_site,
         );
     }
     observation.guide_tick = snapshot.tick;
@@ -1375,12 +1586,13 @@ fn tutorial_guide_tiles(
     observation.guide_expand = None;
     observation.guide_assault = None;
     observation.guide_target_action = None;
+    observation.guide_build_site = None;
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
     if map_w == 0 || map_h == 0 {
-        return (None, None, None);
+        return (None, None, None, None);
     }
     let Some(renderer) = app.gfx.map_renderer.as_ref() else {
-        return (None, None, None);
+        return (None, None, None, None);
     };
     let (owners, terrain) = (&renderer.owners, &renderer.terrain);
     let Some(me) = snapshot
@@ -1388,9 +1600,14 @@ fn tutorial_guide_tiles(
         .iter()
         .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
     else {
-        return (None, None, None);
+        return (None, None, None, None);
     };
     let (cx, cy) = (me.centroid_x as i32, me.centroid_y as i32);
+    let nameplate_anchor = app
+        .ui
+        .nameplates
+        .anchor_for(my_pid)
+        .unwrap_or([me.centroid_x, me.centroid_y]);
     const RADIUS: i32 = 48;
     let mut expand = None;
     'scan: for ring in 0..=RADIUS {
@@ -1468,7 +1685,57 @@ fn tutorial_guide_tiles(
     observation.guide_expand = expand;
     observation.guide_assault = assault;
     observation.guide_target_action = target_action;
-    (expand, assault, target_action)
+    let mut build_site = None;
+    let mut build_site_distance = 0_i64;
+    let radius = 48_i32.min(map_w.min(map_h) as i32);
+    let occupied_tiles = snapshot
+        .buildings
+        .iter()
+        .flat_map(|building| {
+            let footprint = sow_core::building::BuildingFootprint::at(
+                building.kind,
+                building.tile_idx % map_w,
+                building.tile_idx / map_w,
+            );
+            (footprint.top..footprint.top + footprint.height as i32).flat_map(move |row| {
+                (footprint.left..footprint.left + footprint.width as i32).filter_map(move |col| {
+                    (col >= 0 && row >= 0 && col < map_w as i32 && row < map_h as i32)
+                        .then_some(row as u32 * map_w + col as u32)
+                })
+            })
+        })
+        .collect::<HashSet<_>>();
+    for dy in (-radius..=radius).step_by(3) {
+        for dx in (-radius..=radius).step_by(3) {
+            let (col, row) = (cx + dx, cy + dy);
+            if dx * dx + dy * dy > radius * radius
+                || col < 0
+                || row < 0
+                || col >= map_w as i32
+                || row >= map_h as i32
+            {
+                continue;
+            }
+            let idx = row as u32 * map_w + col as u32;
+            let terrain_byte = terrain.get(idx as usize).copied().unwrap_or(0);
+            if owners.get(idx as usize).copied() != Some(my_pid)
+                || terrain_byte & 0x80 == 0
+                || terrain_byte & 0x1f >= 10
+                || occupied_tiles.contains(&idx)
+            {
+                continue;
+            }
+            let distance = (((col as f32 + 0.5 - nameplate_anchor[0]).powi(2)
+                + (row as f32 + 0.5 - nameplate_anchor[1]).powi(2))
+                * 100.0) as i64;
+            if distance > build_site_distance {
+                build_site = Some(idx);
+                build_site_distance = distance;
+            }
+        }
+    }
+    observation.guide_build_site = build_site;
+    (expand, assault, target_action, build_site)
 }
 
 fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
@@ -1476,7 +1743,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         return serde_json::json!({ "active": true, "episode_id": app.ui.tutorial_campaign.episode_id(), "tick": 0 });
     };
     let marker_player_id = app.ui.tutorial_marker_player_id.unwrap_or(my_pid);
-    let (expand_tile, assault_tile, target_tile) =
+    let (expand_tile, assault_tile, target_tile, build_site_tile) =
         tutorial_guide_tiles(app, &snapshot, my_pid, marker_player_id);
     let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
@@ -1491,11 +1758,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .map(|[x, y]| serde_json::json!({ "x": x, "y": y }))
         .unwrap_or(serde_json::Value::Null);
     let zoom_floor = app.zoom_floor();
-    let zoom_out_complete = app.input.camera_zoom <= zoom_floor + 0.02
-        && app.input.target_zoom <= zoom_floor + 0.02;
-    if zoom_out_complete {
-        app.input.tutorial_zoom_out_completed = true;
-    }
+    let zoom_out_complete =
+        app.input.camera_zoom <= zoom_floor + 0.02 && app.input.target_zoom <= zoom_floor + 0.02;
     let opening_zoom = crate::campaign::tutorial_camera_frame(
         app.ui.tutorial_campaign,
         &app.sim.config,
@@ -1505,9 +1769,19 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     .map(|(_, zoom)| zoom.max(zoom_floor))
     .unwrap_or(app.input.target_zoom.max(zoom_floor));
     let zoom_in_target = (opening_zoom * 0.75).max(zoom_floor);
-    let zoom_in_complete = app.input.tutorial_zoom_out_completed
-        && app.input.camera_zoom.is_finite()
-        && app.input.camera_zoom >= zoom_in_target;
+    let zoom_in_complete =
+        app.input.camera_zoom.is_finite() && app.input.camera_zoom >= zoom_in_target;
+    let hover_pointer = match app.input.hover_pointer {
+        HoverPointer::Mouse => Some(serde_json::json!({
+            "x": app.input.last_mouse_x / f64::from(sf),
+            "y": app.input.last_mouse_y / f64::from(sf),
+        })),
+        HoverPointer::Touch if app.input.active_touches.len() == 1 => Some(serde_json::json!({
+            "x": app.input.last_mouse_x / f64::from(sf),
+            "y": app.input.last_mouse_y / f64::from(sf),
+        })),
+        _ => None,
+    };
     let camera_center = if app.input.camera_zoom > 0.0 {
         Some((
             (app.input.screen_w * 0.5 - app.input.camera_x) / app.input.camera_zoom,
@@ -1520,19 +1794,23 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .players
         .iter()
         .find(|player| player.id == marker_player_id && player.alive && player.tile_count > 0)
-        .and_then(|player| camera_center.map(|(x, y)| (player.centroid_x - x).hypot(player.centroid_y - y)));
-    let camera_target_radius = (viewport_w.min(viewport_h)
-        / app.input.camera_zoom.max(0.01)
-        * 0.24)
-        .max(12.0);
-    let camera_target_complete = camera_target_distance
-        .is_some_and(|distance| distance <= camera_target_radius);
+        .and_then(|player| {
+            camera_center.map(|(x, y)| (player.centroid_x - x).hypot(player.centroid_y - y))
+        });
+    let camera_target_radius =
+        (viewport_w.min(viewport_h) / app.input.camera_zoom.max(0.01) * 0.24).max(12.0);
+    let camera_target_complete =
+        camera_target_distance.is_some_and(|distance| distance <= camera_target_radius);
     let guide_screen = |tile: Option<u32>| {
         tutorial_project_tile(tile, map_w, map_h, &app.input, sf)
             .filter(|point| tutorial_screen_point_visible(*point, viewport_w, viewport_h))
             .map(|[x, y]| serde_json::json!({ "x": x, "y": y, "tile_idx": tile }))
             .unwrap_or(serde_json::Value::Null)
     };
+    let build_site_screen = tutorial_project_tile(build_site_tile, map_w, map_h, &app.input, sf)
+        .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
+        .map(|([x, y], offscreen)| serde_json::json!({"x":x,"y":y,"offscreen":offscreen}))
+        .unwrap_or(serde_json::Value::Null);
     let player_screen = snapshot
         .players
         .iter()
@@ -1548,6 +1826,52 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
         .map(|([x, y], offscreen)| serde_json::json!({ "x": x, "y": y, "offscreen": offscreen }))
         .unwrap_or(serde_json::Value::Null);
+    let upgrade_buildings = sow_core::game::BuildingKind::ALL
+        .iter()
+        .filter_map(|kind| {
+            if map_w == 0 {
+                return None;
+            }
+            snapshot
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_pid
+                        && building.kind == *kind
+                        && !building.under_construction
+                })
+                .min_by_key(|building| (building.active_level(), building.id))
+                .and_then(|building| {
+                    let x = building.tile_idx % map_w;
+                    let y = building.tile_idx / map_w;
+                    let footprint = sow_core::building::BuildingFootprint::at(*kind, x, y);
+                    tutorial_project_tile(
+                        Some(
+                            (footprint.left + footprint.width as i32 / 2) as u32
+                                + (footprint.top + footprint.height as i32 / 2) as u32 * map_w,
+                        ),
+                        map_w,
+                        map_h,
+                        &app.input,
+                        sf,
+                    )
+                    .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
+                    .map(|([x, y], offscreen)| {
+                        let key = match kind {
+                            sow_core::game::BuildingKind::City => "City",
+                            sow_core::game::BuildingKind::Farm => "Farm",
+                            sow_core::game::BuildingKind::Factory => "Factory",
+                            sow_core::game::BuildingKind::Bunker => "Bunker",
+                            sow_core::game::BuildingKind::Port => "Port",
+                        };
+                        (
+                            key.to_string(),
+                            serde_json::json!({"x":x,"y":y,"offscreen":offscreen}),
+                        )
+                    })
+                })
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
     let observation = &app.sim.tutorial_observation;
     let attacks_by_faction_id = observation
         .attacks_by_faction_id
@@ -1624,6 +1948,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         "expand": guide_screen(expand_tile),
         "assault": guide_screen(assault_tile),
         "target_action": guide_screen(target_tile),
+        "build_site": build_site_screen,
+        "upgrade_buildings": upgrade_buildings,
         "nameplate": nameplate_screen,
         "player": player_screen,
         "camera": {
@@ -1634,6 +1960,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "height": app.input.screen_h,
             "scale": sf,
         },
+        "pointer": hover_pointer,
         "facts": {
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
@@ -1642,6 +1969,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "zoom_out_complete": zoom_out_complete,
             "zoom_in_complete": zoom_in_complete,
             "camera_zoom": app.input.camera_zoom,
+            "camera_zoom_start": opening_zoom,
             "camera_zoom_floor": zoom_floor,
             "camera_zoom_target": zoom_in_target,
             "camera_zoom_ceiling": crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h).max(zoom_floor),
@@ -2392,6 +2720,11 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         })
     });
     let mut payload = serde_json::json!({
+        "camera_zoom_state": {
+            "current": app.input.camera_zoom,
+            "floor": app.zoom_floor(),
+            "ceiling": crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h).max(app.zoom_floor()),
+        },
         "gold": me.map(|player| player.gold).unwrap_or(hud.gold),
         "troops": me.map(|player| player.troops).unwrap_or(hud.troops),
         "max_troops": me.map(|player| player.max_troops).unwrap_or(hud.max_troops),
@@ -2601,6 +2934,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
+                "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
             },
         })
     } else {
@@ -2786,6 +3120,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "music_volume": app.ui.app.settings_state.music_volume,
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
+                "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
             },
         })
     };

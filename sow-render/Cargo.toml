@@ -17,3 +17,8 @@ log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 image = { workspace = true }
+
+[dev-dependencies]
+# Exact same naga blade uses at runtime (incl. the web build) so the
+# headless shader tests validate with the production parser.
+naga = { git = "https://github.com/gfx-rs/wgpu", rev = "b0a44f766e95a38f0aa45565ff005173cc96d46a", features = ["wgsl-in"] }

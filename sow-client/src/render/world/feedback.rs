@@ -16,6 +16,7 @@ const TRANSPORT_TARGET_ETA_FONT_SIZE: f32 = 11.0;
 const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
+const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 
@@ -304,8 +305,9 @@ fn render_death_nameplates(
             return true;
         }
 
+        let arc = 4.0 * eased * (1.0 - eased);
         let center = world_to_screen(
-            animation.world_x,
+            animation.world_x + animation.curve_direction * DEATH_NAMEPLATE_ARC_OFFSET * arc,
             animation.world_y - DEATH_NAMEPLATE_RISE * eased,
             input,
             sf,

@@ -103,7 +103,7 @@ impl NameplateMetrics {
             render_size,
             avatar_diameter,
             avatar_radius: avatar_diameter * 0.5,
-            badge_size: render_size * BADGE_SCALE,
+            badge_size: avatar_diameter.max(render_size * BADGE_SCALE),
             troops_render_size: render_size * TROOPS_SCALE,
         }
     }
@@ -1282,6 +1282,9 @@ mod tests {
         assert_eq!(human.avatar_diameter, 14.0 * HUMAN_AVATAR_SCALE);
         assert_eq!(bot.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
         assert_eq!(nation.avatar_diameter, 14.0 * NATION_AVATAR_SCALE);
+        assert_eq!(human.badge_size(), human.avatar_diameter());
+        assert_eq!(bot.badge_size(), bot.avatar_diameter());
+        assert_eq!(nation.badge_size(), nation.avatar_diameter());
     }
 
     #[test]

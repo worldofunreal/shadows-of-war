@@ -824,10 +824,24 @@ async fn post_replay_finalize(
                 return Ok(());
             }
             Ok(response) => {
+                let status = response.status();
                 warn!(
                     "Attempt {attempt}/5: database returned HTTP status {} for match {match_id}",
-                    response.status()
+                    status
                 );
+                // A 4xx (other than timeout/rate-limit) means the payload itself
+                // is bad: retrying can never succeed, so drop the spool entry
+                // instead of retrying it forever.
+                if status.is_client_error()
+                    && status != reqwest::StatusCode::REQUEST_TIMEOUT
+                    && status != reqwest::StatusCode::TOO_MANY_REQUESTS
+                {
+                    warn!(
+                        "Match {match_id} permanently rejected by database (HTTP {}); dropping spool entry",
+                        status
+                    );
+                    return Ok(());
+                }
             }
             Err(error) => {
                 warn!("Attempt {attempt}/5: network error uploading match {match_id}: {error}");

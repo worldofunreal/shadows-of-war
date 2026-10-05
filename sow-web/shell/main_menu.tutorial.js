@@ -7,6 +7,7 @@
     root.hidden = true;
     document.body.appendChild(root);
     var pendingMenuGuide = null;
+    var HOVER_TARGET_RADIUS = 72;
 
     var runtime = {
         generation: 0,
@@ -28,6 +29,7 @@
         hoverStepId: null,
         hoverStepRecorded: false,
         cameraTargetFactionId: null,
+        reactionHighlightPlayerId: null,
         completionSent: false,
         lastActionStepId: null,
         resolvedReactions: new Set(),
@@ -57,15 +59,16 @@
 
     function tr(key) {
         var definition = runtime.definition;
-        var locale = String(typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en").toLowerCase().replace(/_/g, "-");
-        var strings = definition && definition.strings;
-        var localized = strings && !Array.isArray(strings) && (strings[locale] || strings[locale.split("-")[0]]);
-        var text = localized && localized[key];
-        if (typeof text === "string" && text.trim()) return text;
-        if (strings && !Array.isArray(strings)) text = (strings[definition.default_locale] || {})[key];
-        if (typeof text === "string" && text.trim()) return text;
         var value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
-        return !value || value === "[" + key + "]" ? key : value;
+        if (!value || value === "[" + key + "]") return key;
+        return window.SOWCampaign && typeof window.SOWCampaign.replaceFactionStoryNames === "function"
+            ? window.SOWCampaign.replaceFactionStoryNames(value, definition, runtime.roster)
+            : value;
+    }
+
+    function stepTextKey(step, suffix) {
+        var namespace = runtime.definition && runtime.definition.text_namespace;
+        return (typeof namespace === "string" ? namespace : "tutorial.") + step.id + suffix;
     }
 
     function zoomMode() {
@@ -113,11 +116,6 @@
         };
     }
 
-    function formatZoom(value) {
-        var number = Number(value);
-        return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
-    }
-
     function metricText(key, values) {
         var text = tr(key);
         Object.keys(values).forEach(function (name) {
@@ -135,39 +133,31 @@
         if (step && step.guide) {
             context.zoomMode = zoomMode();
             var facts = hud && hud.tutorial && hud.tutorial.facts || {};
-            if (step.guide.kind === "ui" && ["hud_zoom_in", "hud_zoom_out"].includes(step.guide.target) && Number.isFinite(Number(facts.camera_zoom))) {
-                var zoomInButton = step.guide.target === "hud_zoom_in";
-                context.zoomMetric = {
-                    current: Number(facts.camera_zoom),
-                    target: Number(zoomInButton ? facts.camera_zoom_target : facts.camera_zoom_floor),
-                    direction: zoomInButton ? "min" : "max"
-                };
-            }
             var hintKey = "";
-            var hintText = "";
             if (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out") {
-                hintKey = String(step.hint_key || "").replace(/_hint$/, "_" + context.zoomMode + "_hint");
-                var labelKey = hintKey.replace(/_hint$/, "_label");
-                if (labelKey && tr(labelKey) !== labelKey) context.gestureLabel = tr(labelKey);
-                var zoomTarget = step.trigger && step.trigger.type === "zoom_out_complete" ? facts.camera_zoom_floor
+                var zoomTarget = step.trigger && step.trigger.type === "zoom_out_complete" ? window.SOWCampaign.zoomOutTarget(facts, step.trigger.value)
                     : step.trigger && step.trigger.type === "zoom_in_complete" ? facts.camera_zoom_target : null;
                 if (zoomTarget != null && Number.isFinite(Number(zoomTarget)) && Number.isFinite(Number(facts.camera_zoom))) {
-                    context.zoomMetric = {
+                    context.guideMetric = {
                         current: Number(facts.camera_zoom),
                         target: Number(zoomTarget),
                         direction: step.guide.gesture === "zoom_in" ? "min" : "max"
                     };
                 }
             } else if (["drag", "hover"].includes(step.guide.gesture)) {
-                hintKey = "tutorial." + step.id + "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint";
+                hintKey = stepTextKey(step, "_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
                 if (step.trigger && step.trigger.type === "camera_target" && Number.isFinite(Number(step.trigger.distance))) {
                     var distance = cameraTargetDistance(step, hud);
-                    if (Number.isFinite(distance)) hintText = metricText("tutorial." + step.id + "_progress", {
+                    if (Number.isFinite(distance)) context.guideMetric = { text: metricText(stepTextKey(step, "_progress"), {
                         current: Math.ceil(distance), target: step.trigger.distance
-                    });
+                    }) };
                 }
+            } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
+                context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
+            } else if (step.id === "boudica_first_expansion" && step.guide.gesture === "tap") {
+                context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
             }
-            if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey) + (hintText ? " " + hintText : "");
+            if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey);
         }
         return context;
     }
@@ -351,8 +341,20 @@
         if (!step || !step.guide) return null;
         var guide = step.guide, tutorial = hud.tutorial || {};
 
+        if (guide.kind === "world" && guide.target === "upgrade_building") {
+            var buildingAnchor = tutorial.upgrade_buildings && tutorial.upgrade_buildings[step.trigger && step.trigger.kind];
+            if (!buildingAnchor || !Number.isFinite(Number(buildingAnchor.x)) || !Number.isFinite(Number(buildingAnchor.y))) return null;
+            return { x: Number(buildingAnchor.x), y: Number(buildingAnchor.y) };
+        }
+
         if (guide.kind === "world" && guide.target === "player" && step.trigger
-            && ["camera_target", "hover"].includes(step.trigger.type)) {
+            && ["camera_target", "hover", "zoom_in_complete"].includes(step.trigger.type)) {
+            if (["hover", "zoom_in_complete"].includes(step.trigger.type)) {
+                var nameplate = tutorial.nameplate;
+                if (nameplate && Number.isFinite(Number(nameplate.x)) && Number.isFinite(Number(nameplate.y))) {
+                    return { x: Number(nameplate.x), y: Number(nameplate.y) };
+                }
+            }
             var cameraTarget = cameraTargetAnchor(step, hud);
             if (cameraTarget) return cameraTarget;
         }
@@ -365,6 +367,12 @@
             var source = window.SOWCampaign.resolveUiTarget(guide.target, document, runtime.episodeId);
             if (!source || source.disabled || source.getClientRects().length === 0) return null;
             result = window.SOWCampaign.resolveUiAnchor(source);
+            if (step.id === "boudica_camera_home") {
+                result.toX = result.x; result.toY = result.y;
+                result.x = (root.clientWidth || window.innerWidth) * 0.5;
+                result.y = (root.clientHeight || window.innerHeight) * 0.5;
+                delete result.width; delete result.height;
+            }
         }
         if (guide.gesture === "drag" && guide.to) {
             if (guide.kind === "world") {
@@ -392,7 +400,7 @@
         if (step.guide && step.guide.kind === "world" && step.guide.target === "target_action" && step.trigger && step.trigger.target) {
             return step.trigger.target;
         }
-        if (step.trigger && ["camera_target", "hover"].includes(step.trigger.type) && step.trigger.target) {
+        if (step.trigger && ["camera_target", "hover", "zoom_in_complete"].includes(step.trigger.type) && step.trigger.target) {
             return step.trigger.target;
         }
         return step.marker && step.marker.target;
@@ -411,19 +419,35 @@
         var hoveredEntityId = hud.hovered && !hud.hovered.is_me && Number.isInteger(Number(hud.hovered.id))
             ? Number(hud.hovered.id) : null;
         var hoverTarget = currentStep.trigger && currentStep.trigger.type === "hover" && currentStep.trigger.target;
+        var nameplate = tutorial.nameplate;
+        var hoverAnchor = hoverTarget && nameplate && Number.isFinite(Number(nameplate.x)) && Number.isFinite(Number(nameplate.y))
+            ? { x: Number(nameplate.x), y: Number(nameplate.y) }
+            : hoverTarget ? cameraTargetAnchor(currentStep, hud) : null;
+        var pointer = tutorial.pointer;
+        var pointerNearTarget = Boolean(hoverAnchor && !hoverAnchor.offscreen && pointer
+            && Number.isFinite(Number(pointer.x)) && Number.isFinite(Number(pointer.y))
+            && Math.hypot(Number(pointer.x) - hoverAnchor.x, Number(pointer.y) - hoverAnchor.y) <= HOVER_TARGET_RADIUS);
         var hoverMatchesTarget = !hoverTarget || (hud.players || []).some(function (player) {
             return player && Number(player.id) === hoveredEntityId && (hoverTarget === "player" ? player.is_me : player.campaign_faction_id === hoverTarget);
-        });
-        if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded && hoveredEntityId !== null && hoverMatchesTarget && (stepChanged || hoveredEntityId !== runtime.hoveredEntityId)) {
+        }) || pointerNearTarget;
+        if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded
+            && (hoveredEntityId !== null && hoverMatchesTarget || pointerNearTarget)
+            && (stepChanged || hoveredEntityId !== runtime.hoveredEntityId || pointerNearTarget)) {
             runtime.hoverStepRecorded = true;
             runtime.hoverEvents++;
         }
         runtime.hoveredEntityId = hoveredEntityId;
+        var mapMenu = hud.map_menu;
+        var selectedBuildingKind = mapMenu && mapMenu.open && mapMenu.view === "building_details" && mapMenu.building
+            ? String(mapMenu.building.kind || "") : "";
+        if (selectedBuildingKind === "Defense Tower") selectedBuildingKind = "Bunker";
         var facts = Object.assign({}, tutorial.facts || {}, {
             hover_events: runtime.hoverEvents,
-            touch_controls: zoomMode() === "pinch" ? 1 : 0
+            touch_controls: zoomMode() === "pinch" ? 1 : 0,
+            selected_building_kind: selectedBuildingKind
         });
-        if (currentStep.trigger && currentStep.trigger.type === "camera_target") {
+        if (currentStep.trigger && (currentStep.trigger.type === "camera_target"
+            || (currentStep.trigger.type === "zoom_in_complete" && currentStep.trigger.target))) {
             var targetDistance = cameraTargetDistance(currentStep, hud);
             if (Number.isFinite(targetDistance)) facts.camera_target_distance = targetDistance;
         }
@@ -437,8 +461,19 @@
                 if (send("focus_world", { x: Number(faction.centroid_x) + 0.5, y: Number(faction.centroid_y) + 0.5 })) {
                     runtime.cameraReactionTarget = machineView.reactionTarget;
                 }
+                var highlightId = Number(faction.id);
+                if (Number.isInteger(highlightId) && runtime.reactionHighlightPlayerId !== highlightId) {
+                    runtime.reactionHighlightPlayerId = highlightId;
+                    send("set_dialog_border_highlight", { player_id: highlightId });
+                }
             }
-        } else if (!machineView.reactionData) runtime.cameraReactionTarget = null;
+        } else if (!machineView.reactionData) {
+            runtime.cameraReactionTarget = null;
+            if (runtime.reactionHighlightPlayerId !== null) {
+                runtime.reactionHighlightPlayerId = null;
+                send("set_dialog_border_highlight", { player_id: null });
+            }
+        }
         if (machineView.choices && machineView.choices.length) {
             var gold = availableGold(hud);
             machineView.choices = machineView.choices.map(function (choice) {
@@ -642,7 +677,6 @@
         if (root.contains(event.target)) return;
         var changed = false;
         Object.keys(window.SOWCampaign.UI_TARGETS).forEach(function (key) {
-            if (key === "hud_zoom_in" || key === "hud_zoom_out") return;
             var control = window.SOWCampaign.resolveUiTarget(key, document, runtime.episodeId);
             var actionEvent = control && control.matches("input") ? "change" : "click";
             if (event.type === actionEvent && control && !control.disabled && control.getClientRects().length && (control === event.target || control.contains(event.target))) {
@@ -654,12 +688,14 @@
             window.setTimeout(updateMenuGuide, 650);
         }
     }
-    document.addEventListener("sow:tutorial-ui-action", function (event) {
-        var action = event.detail && event.detail.action;
-        if (!runtime.machine || !["hud_zoom_in", "hud_zoom_out"].includes(action)) return;
-        runtime.uiCounts[action] = (runtime.uiCounts[action] || 0) + 1;
+    document.addEventListener("keydown", function (event) {
+        var step = runtime.machine && runtime.machine.view().step;
+        var selected = runtime.latestHud && runtime.latestHud.selected_building;
+        if (event.key !== "Escape" || !selected || !step || !step.trigger
+            || step.trigger.type !== "ui" || step.trigger.action !== "cancel_building_mode") return;
+        runtime.uiCounts.cancel_building_mode = (runtime.uiCounts.cancel_building_mode || 0) + 1;
         update(runtime.latestHud);
-    });
+    }, true);
     ["click", "input", "change"].forEach(function (type) { document.addEventListener(type, recordUiAction, true); });
 
     window.SOW_startCampaignEpisode = function (episodeId) { startEpisode(episodeId, false); };
@@ -707,6 +743,10 @@
         runtime.activating = null;
         runtime.bootEpisode = null;
         runtime.cameraReactionTarget = null;
+        if (runtime.reactionHighlightPlayerId !== null) {
+            runtime.reactionHighlightPlayerId = null;
+            send("set_dialog_border_highlight", { player_id: null });
+        }
         runtime.latestHud = null;
         runtime.menuGuide = false;
         runtime.uiPaused = false;

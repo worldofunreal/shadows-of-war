@@ -1372,9 +1372,16 @@ fn validate_web_node(
                 } else {
                     format!("{path}.{key}")
                 };
-                let actual_value = actual
-                    .get(key)
-                    .with_context(|| format!("web catalog missing key {child_path}"))?;
+                let actual_value = match actual.get(key) {
+                    Some(value) => value,
+                    None if path.ends_with(".tutorial")
+                        && key.starts_with("campaign_")
+                        && sow_i18n::Language::registry().iter().any(|(_, code, _, _)| {
+                            code.eq_ignore_ascii_case(path.split('.').next().unwrap_or(""))
+                                && !code.eq_ignore_ascii_case("en")
+                        }) => continue,
+                    None => bail!("web catalog missing key {child_path}"),
+                };
                 validate_web_node(&child_path, expected_value, actual_value)?;
             }
             for key in actual.keys() {

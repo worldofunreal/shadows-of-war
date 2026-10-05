@@ -33,11 +33,11 @@
     </div>
     <details class="diagnostics" open><summary id="validationStatus">Validation</summary><div id="errors"></div></details>
     <div class="graph-footer"><label class="file-button">Import JSON<input id="fileIn" type="file" accept=".json,application/json"></label><button id="downloadBtn">Download draft</button><button id="menuGuideBtn">Create / open menu guide</button>
-    <details class="workflow-help"><summary>Quick start</summary><ol><li>Add and select a step; edit its text, speakers, and pacing in the inspector. For an objective or guide, use Pick target on map to assign a faction. Scenes wait for Continue; objectives wait for a game action; choose Wait (seconds) for a timed beat.</li><li>Use Create next step on each decision answer to build its path in place, then connect paths where the story rejoins. The selected answer remains available to later scenes.</li><li>Use a hand guide only to teach a mechanic or control. Decisions stay free of prompts; each language has editable text.</li><li>Preview the branching sample without changing this episode. Simulate choices and objectives, then return to your draft. Save, wait for the local update, and restart the episode in the game.</li></ol></details>
+    <details class="workflow-help"><summary>Quick start</summary><ol><li>Add and select a step; set its text key, speaker, and pacing in the inspector. Story copy lives in the shared language catalogs. For an objective or guide, use Pick target on map to assign a faction. Scenes wait for Continue; objectives wait for a game action; choose Wait (seconds) for a timed beat.</li><li>Use Create next step on each decision answer to build its path in place, then connect paths where the story rejoins. The selected answer remains available to later scenes.</li><li>Use a hand guide only to teach a mechanic or control. Decisions stay free of prompts; use the Language selector in the preview to check available catalog text.</li><li>Preview the branching sample without changing this episode. Simulate choices and objectives, then return to your draft. Save, wait for the local update, and restart the episode in the game.</li></ol></details>
     </div>
   </section>
   <aside id="inspectorPanel" class="inspector-panel" aria-label="Step inspector">
-    <div class="panel-bar"><span class="eyebrow">INSPECTOR</span><label>Text language <select id="editLocale"><option value="en">English</option><option value="es">Español</option></select></label></div>
+    <div class="panel-bar"><span class="eyebrow">INSPECTOR</span></div>
     <div id="inspectorScroll" class="inspector-scroll">
       <div id="inspector"></div>
       <details class="episode-settings"><summary>Episode settings & speakers</summary><div id="settings"></div></details>

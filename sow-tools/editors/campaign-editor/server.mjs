@@ -112,16 +112,19 @@ function etag(data) {
 }
 
 function hasText(key, definition) {
-  const custom = definition.strings && definition.strings[definition.default_locale];
-  if (custom && typeof custom[key] === "string" && custom[key].trim()) return true;
-  const catalogFile = path.join(distLocaleDir, definition.default_locale || "en");
+  const catalogFile = path.join(distLocaleDir, "en");
   try {
     const catalog = JSON.parse(readFileSync(catalogFile, "utf8")).strings;
-    const value = key.split(".").reduce((node, part) => node && node[part], catalog);
-    return typeof value === "string" && value.trim().length > 0;
+    const parts = key.split(".");
+    let node = catalog;
+    if (parts[0] === "tutorial") node = node && node.tutorial;
+    const value = parts.slice(1).reduce((current, part) => current && current[part], node);
+    if (typeof value === "string" && value.trim().length > 0) return true;
   } catch {
-    return false;
   }
+  const source = readFileSync(path.join(root, "sow-i18n/strings/en/web.toml"), "utf8");
+  const textKey = key.replace(/^tutorial\./, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("^" + textKey + "\\s*=\\s*\"[^\"]+\"", "m").test(source);
 }
 
 async function validatePair(episodeId, roster, definition) {
@@ -303,7 +306,8 @@ async function handle(req, res) {
         return;
       }
       if (factionRenames) {
-        const previousNames = new Set((JSON.parse(current.toString("utf8")).factions || []).map(faction => faction.name));
+        const previousRoster = JSON.parse(current.toString("utf8"));
+        const previousNames = new Set((previousRoster.factions || []).map(faction => faction.name));
         const nextNames = new Set((value.factions || []).map(faction => faction.name));
         const renamedFrom = new Set();
         if (!factionRenames.length || factionRenames.some(item => {
@@ -316,7 +320,7 @@ async function handle(req, res) {
         }
         const definitionPath = path.join(campaignDir, episodeId + ".triggers.json");
         const definition = loadCampaignRuntime().renameFactionText(
-          JSON.parse(await fs.readFile(definitionPath, "utf8")), factionRenames
+          JSON.parse(await fs.readFile(definitionPath, "utf8")), factionRenames, previousRoster.factions
         );
         try { await validatePair(episodeId, value, definition); }
         catch (error) { reply(res, 400, error.message || "invalid campaign data"); return; }

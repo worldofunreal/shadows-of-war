@@ -3,6 +3,7 @@ pub struct SettingsState {
     pub mute_all: bool,
     pub reduced_motion: bool,
     pub free_zoom_out: bool,
+    pub show_dev_tools: bool,
 }
 
 impl Default for SettingsState {
@@ -11,7 +12,8 @@ impl Default for SettingsState {
             music_volume: 0.8,
             mute_all: false,
             reduced_motion: false,
-            free_zoom_out: false,
+            free_zoom_out: true,
+            show_dev_tools: false,
         }
     }
 }

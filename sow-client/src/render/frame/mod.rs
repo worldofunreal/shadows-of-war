@@ -393,6 +393,24 @@ impl SowApp {
                         true
                     });
 
+                    // ── Dialog Terms Border Highlight ──
+                    let dialog_border = match (&self.ui.dialog_border_highlight, snapshot) {
+                        (Some(effect), Some(snapshot))
+                            if snapshot
+                                .players
+                                .iter()
+                                .any(|player| player.id == effect.player_id) =>
+                        {
+                            [
+                                effect.player_id as f32,
+                                current_time.duration_since(effect.start_time).as_secs_f32(),
+                                0.0,
+                                0.0,
+                            ]
+                        }
+                        _ => [0.0f32; 4],
+                    };
+
                     // ── Attack Border Flash ──
                     let (attack_flash_target, attack_flash_t) = {
                         self.ui.border_flash_intensities.clear();
@@ -509,6 +527,11 @@ impl SowApp {
                         },
                         _pad2: 0.0,
                         alert_color,
+                        dialog_border: if dev.vfx_dialog_border {
+                            dialog_border
+                        } else {
+                            [0.0; 4]
+                        },
                     };
                     let colors_struct = crate::render::gpu::PlayerColors {
                         colors: player_colors,

@@ -2,12 +2,13 @@ use sow_core::player::AvatarIdentity;
 use web_time::Instant;
 
 pub const MAX_DEATH_NAMEPLATES: usize = 64;
-pub const DEATH_NAMEPLATE_DURATION: f32 = 0.6;
+pub const DEATH_NAMEPLATE_DURATION: f32 = 1.0;
 
 #[derive(Clone, Debug)]
 pub struct DeathNameplateAnimation {
     pub world_x: f32,
     pub world_y: f32,
+    pub curve_direction: f32,
     pub start_time: Instant,
     pub by_nuke: bool,
     pub name: String,
@@ -29,7 +30,7 @@ pub fn death_animation(elapsed: f32) -> Option<(f32, f32, f32)> {
         return None;
     }
     let t = (elapsed / DEATH_NAMEPLATE_DURATION).min(1.0);
-    let eased = t * (2.0 - t);
+    let eased = t * t * (3.0 - 2.0 * t);
     let alpha = if elapsed < 0.03 {
         elapsed / 0.03
     } else if elapsed > DEATH_NAMEPLATE_DURATION - 0.1 {
@@ -52,6 +53,7 @@ mod tests {
         DeathNameplateAnimation {
             world_x: 0.0,
             world_y: 0.0,
+            curve_direction: 1.0,
             start_time: Instant::now(),
             by_nuke: false,
             name: "Test".to_string(),
@@ -61,11 +63,11 @@ mod tests {
     }
 
     #[test]
-    fn animation_rises_and_expires_within_600ms() {
+    fn animation_rises_and_expires_within_one_second() {
         assert_eq!(death_animation(0.0), Some((0.0, 0.0, 0.0)));
-        assert_eq!(death_animation(0.3), Some((0.5, 0.75, 1.0)));
-        assert!(death_animation(0.55).unwrap().2 < 1.0);
-        assert!(death_animation(0.6).is_none());
+        assert_eq!(death_animation(0.5), Some((0.5, 0.5, 1.0)));
+        assert!(death_animation(0.95).unwrap().2 < 1.0);
+        assert!(death_animation(1.0).is_none());
     }
 
     #[test]

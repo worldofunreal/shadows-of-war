@@ -5,7 +5,7 @@
     var query = new URLSearchParams(location.search);
     var episodeId = /^[a-z][a-z0-9_]{0,63}$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
     var rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
-    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, pickingFaction: false, flow: "episode", language: "en", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
+    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, pickingFaction: false, flow: "episode", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
     var types = ["scene", "choice", "objective", "guide", "end"];
     var triggerTypes = [
         { value: "territory", label: "Gain territory" }, { value: "kills", label: "Defeat troops" },
@@ -24,8 +24,8 @@
         { value: "zoom_in", label: "Zoom in" }, { value: "zoom_out", label: "Zoom out" },
         { value: "camera_drag", label: "Pan camera by dragging" }, { value: "camera_key_pan", label: "Pan camera with keys" },
         { value: "hover", label: "Hover an entity" },
-        { value: "zoom_out_complete", label: "Reach full zoom out" },
-        { value: "zoom_in_complete", label: "Reach close zoom" },
+        { value: "zoom_out_complete", label: "Reach zoom-out distance" },
+        { value: "zoom_in_complete", label: "Zoom in on a faction" },
         { value: "camera_target", label: "Center the camera on a target" }
     ];
     var locales = ["en", "es"], localeNames = { en: "English", es: "Español" }, catalogLoads = Object.create(null);
@@ -56,22 +56,22 @@
         state.definition.steps.forEach(function (step, index) { state.definition.layout[step.id] = state.definition.layout[step.id] || defaultLayout(index); });
     }
     function normalizeStrings(definition) {
-        if (Array.isArray(definition.strings)) {
-            var converted = {};
-            definition.strings.forEach(function (locale) { converted[locale] = {}; });
-            definition.strings = converted;
-        }
-        definition.strings = definition.strings || {};
-        definition.default_locale = definition.default_locale || "en";
-        definition.strings[definition.default_locale] = definition.strings[definition.default_locale] || {};
-        Object.keys(state.catalogs).forEach(function (locale) { definition.strings[locale] = definition.strings[locale] || {}; });
+        var legacy = definition.strings;
+        if (Array.isArray(legacy) || legacy && typeof legacy === "object" && Object.values(legacy).every(function (catalog) {
+            return catalog && typeof catalog === "object" && !Array.isArray(catalog) && Object.keys(catalog).length === 0;
+        })) delete definition.strings;
+        delete definition.default_locale;
     }
     function catalogValue(locale, key) {
-        return String(key || "").split(".").reduce(function (value, part) { return value && value[part]; }, state.catalogs[locale] || {});
+        var parts = String(key || "").split("."), catalog = state.catalogs[locale] || {};
+        if (parts[0] === "tutorial") { catalog = catalog.tutorial || {}; parts.shift(); }
+        return parts.reduce(function (value, part) { return value && value[part]; }, catalog);
     }
     function textValue(key, locale) {
-        var dictionaries = state.definition.strings || {};
-        return dictionaries[locale] && dictionaries[locale][key] || catalogValue(locale, key) || dictionaries[state.definition.default_locale] && dictionaries[state.definition.default_locale][key] || catalogValue(state.definition.default_locale, key) || "";
+        var text = catalogValue(locale || state.previewLanguage, key) || catalogValue("en", key) || "";
+        return window.SOWCampaign && typeof window.SOWCampaign.replaceFactionStoryNames === "function"
+            ? window.SOWCampaign.replaceFactionStoryNames(text, state.definition, state.roster)
+            : text;
     }
     function translated(key, locale) {
         return textValue(key, locale || state.previewLanguage) || (key ? "[" + key + "]" : "");
@@ -166,7 +166,7 @@
     function valid() {
         if (!state.definition || !state.roster) return { errors: [], warnings: [] };
         return window.SOWCampaign.validate(state.definition, state.roster, {
-            hasText: function (key) { return Boolean(textValue(key, state.definition.default_locale)); },
+            hasText: function (key) { return Boolean(catalogValue("en", key)); },
             hasAvatar: function (avatar) { return state.avatars.includes(avatar); }
         });
     }
@@ -262,6 +262,17 @@
         wrapper.append(input, el("span", {}, label)); return wrapper;
     }
     function section(title) { var node = el("section", { class: "form-section" }); node.appendChild(el("h3", {}, title)); return node; }
+    function storyKey(suffix) { return (state.definition.text_namespace || "tutorial.") + suffix; }
+    function stepTextKey(step, suffix) { return (state.definition.text_namespace || "tutorial.") + step.id + suffix; }
+    function catalogTextField(container, label, key, rows) {
+        var field = el("textarea", { "aria-label": label, readonly: "", placeholder: "Add this key to sow-i18n/strings/en/web.toml." });
+        field.rows = rows || 4;
+        field.value = textValue(key, state.previewLanguage);
+        container.appendChild(el("label", {}, label + " · " + state.previewLanguage));
+        container.appendChild(field);
+        var note = field.value ? "Text is managed by the shared language catalogs." : "Missing shared English text. Add this key to sow-i18n/strings/en/web.toml.";
+        container.appendChild(el("small", { class: "translation-fallback", role: "status" }, note));
+    }
     function textEditor(container, label, keyPath, valuePath) {
         var step = state.definition.steps.find(function (item) { return item.id === state.selected; });
         var key = valuePath ? valuePath.split(".").reduce(function (value, part) { return value && value[part]; }, step) : step[keyPath];
@@ -272,26 +283,13 @@
                 if (parts[0] === "choices" && step.choices[index]) suffix = "_choice_" + step.choices[index].id + (keyPath === "label_key" ? "_label" : "_detail");
                 else if (parts[0] === "lines" && step.lines[index]) suffix = "_line_" + (index + 1) + "_body";
             }
-            key = "tutorial." + step.id + suffix;
+            key = storyKey(step.id + suffix);
             if (valuePath) setPath(step, valuePath, key); else step[keyPath] = key;
+            markDirty();
         }
         var box = el("div", { class: "text-key" });
-        box.appendChild(el("span", {}, label));
         box.appendChild(el("code", { class: "key-field" }, key));
-        var dictionary = state.definition.strings[state.language] || (state.definition.strings[state.language] = {});
-        var field = el("textarea", { "aria-label": label, placeholder: translated(key, state.language) });
-        field.rows = ["Title", "Choice label"].includes(label) ? 3 : 6;
-        field.value = textValue(key, state.language);
-        var hasLocaleText = Boolean(dictionary[key] || catalogValue(state.language, key));
-        var hasDefaultText = Boolean(textValue(key, state.definition.default_locale));
-        var fallbackNote = el("small", { class: "translation-fallback", role: "status", hidden: state.language === state.definition.default_locale || hasLocaleText || !hasDefaultText }, "Showing episode default-language text. Editing adds this language.");
-        field.addEventListener("input", function () {
-            dictionary[key] = field.value;
-            fallbackNote.hidden = state.language === state.definition.default_locale || Boolean(dictionary[key] || catalogValue(state.language, key)) || !hasDefaultText;
-            markDirty();
-        });
-        box.appendChild(field);
-        box.appendChild(fallbackNote);
+        catalogTextField(box, label, key, ["Title", "Choice label"].includes(label) ? 3 : 6);
         container.appendChild(box);
     }
     function renderInspector() {
@@ -345,7 +343,7 @@
             if (!next && !divergentChoiceTargets && value !== "end" && value !== "choice" && ending) next = ending.id;
             var menuAction = inGameUiTargets()[0] || "menu_campaign";
             var firstLine = step.lines && step.lines[0];
-            var replacement = { id: id, type: value, title_key: step.title_key || "tutorial." + id + "_title" };
+            var replacement = { id: id, type: value, title_key: step.title_key || storyKey(id + "_title") };
             var bodyKey = step.body_key || firstLine && firstLine.body_key || (value === "scene" && step.hint_key);
             if (bodyKey) replacement.body_key = bodyKey;
             if (step.speaker || firstLine && firstLine.speaker) replacement.speaker = step.speaker || firstLine.speaker;
@@ -359,7 +357,7 @@
             }
             if (value === "choice") replacement.choices = step.type === "choice" && Array.isArray(step.choices)
                 ? step.choices
-                : [{ id: "first_answer", label_key: "tutorial." + id + "_first", next: step.next || "" }, { id: "second_answer", label_key: "tutorial." + id + "_second", next: step.next || "" }];
+                : [{ id: "first_answer", label_key: storyKey(id + "_first"), next: step.next || "" }, { id: "second_answer", label_key: storyKey(id + "_second"), next: step.next || "" }];
             if (value === "objective" || value === "guide") {
                 if (step.hint_key) replacement.hint_key = step.hint_key;
                 replacement.trigger = step.trigger && !(value === "guide" && step.trigger.type === "elapsed")
@@ -389,7 +387,7 @@
         if (step.body_key || step.type === "choice" || (step.type === "scene" && !Array.isArray(step.lines))) textEditor(basics, step.type === "end" ? "Closing text" : "Story text", "body_key");
         else if (step.type === "end") {
             var addEnding = el("button", { type: "button" }, "Add closing text");
-            addEnding.addEventListener("click", function () { step.body_key = "tutorial." + step.id + "_body"; markDirty(); renderInspector(); });
+            addEnding.addEventListener("click", function () { step.body_key = storyKey(step.id + "_body"); markDirty(); renderInspector(); });
             basics.appendChild(addEnding);
         }
         if (step.type === "objective" || step.type === "guide") textEditor(basics, "Player hint", "hint_key");
@@ -411,11 +409,11 @@
                 basics.appendChild(lineBox);
             });
             basics.appendChild(el("button", { type: "button" }, "Add dialogue line")).addEventListener("click", function (event) {
-                event.preventDefault(); step.lines.push({ speaker: step.speaker, body_key: "tutorial." + step.id + "_line_" + (step.lines.length + 1) }); markDirty(); renderInspector();
+                event.preventDefault(); step.lines.push({ speaker: step.speaker, body_key: storyKey(step.id + "_line_" + (step.lines.length + 1)) }); markDirty(); renderInspector();
             });
         } else if (step.type === "scene") {
             var addConversation = el("button", { type: "button" }, "Split into dialogue lines");
-            addConversation.addEventListener("click", function () { step.lines = [{ speaker: step.speaker, body_key: step.body_key || "tutorial." + step.id + "_line_1" }]; delete step.body_key; markDirty(); renderInspector(); });
+            addConversation.addEventListener("click", function () { step.lines = [{ speaker: step.speaker, body_key: step.body_key || storyKey(step.id + "_line_1") }]; delete step.body_key; markDirty(); renderInspector(); });
             basics.appendChild(addConversation);
         }
         host.appendChild(basics);
@@ -454,7 +452,7 @@
                     card.appendChild(removeDetail);
                 } else {
                     var addDetail = el("button", { type: "button" }, "Add consequence detail");
-                    addDetail.addEventListener("click", function () { choice.body_key = "tutorial." + step.id + "_" + choice.id + "_detail"; markDirty(); renderInspector(); });
+                    addDetail.addEventListener("click", function () { choice.body_key = storyKey(step.id + "_" + choice.id + "_detail"); markDirty(); renderInspector(); });
                     card.appendChild(addDetail);
                 }
                 card.appendChild(selectField("Next step", choice.next, destinationOptions(step.id), function (value) { choice.next = value; markDirty(); }));
@@ -468,7 +466,7 @@
                 card.appendChild(createBranch);
                 answers.appendChild(card);
             });
-            if (step.choices.length < 4) { var add = el("button", { type: "button" }, "Add answer"); add.addEventListener("click", function () { var answerId = uniqueId("answer", step.choices); step.choices.push({ id: answerId, label_key: "tutorial." + step.id + "_" + answerId, next: state.definition.steps.find(function (item) { return item.type === "end"; })?.id || "" }); markDirty(); renderInspector(); }); answers.appendChild(add); }
+            if (step.choices.length < 4) { var add = el("button", { type: "button" }, "Add answer"); add.addEventListener("click", function () { var answerId = uniqueId("answer", step.choices); step.choices.push({ id: answerId, label_key: storyKey(step.id + "_" + answerId), next: state.definition.steps.find(function (item) { return item.type === "end"; })?.id || "" }); markDirty(); renderInspector(); }); answers.appendChild(add); }
             host.appendChild(answers);
         }
         if (step.type === "objective" || step.type === "guide") {
@@ -482,8 +480,10 @@
                 : step.type === "guide" ? triggerTypes.filter(function (trigger) { return trigger.value !== "elapsed"; }) : triggerTypes;
             objective.appendChild(selectField("Complete when", step.trigger.type, availableTriggers, function (value) {
                 step.trigger = { type: value, scope: value === "troops" ? "total" : step.trigger.scope || "step" };
-                if (["contact", "defeated", "hover", "camera_target"].includes(value)) step.trigger.target = "";
+                if (["contact", "defeated", "hover", "camera_target", "zoom_in_complete"].includes(value)) step.trigger.target = "";
                 if (value === "camera_target") step.trigger.distance = 12;
+                if (value === "zoom_in_complete") step.trigger.distance = 12;
+                if (value === "zoom_out_complete") step.trigger.value = 0.55;
                 if (value === "fleet") step.trigger.unit = "TransportShip";
                 if (value === "resource_transfer") { step.trigger.recipient = ""; step.trigger.resources = ["gold", "troops"]; }
                 if (value === "structure_level") step.trigger.kind = "City";
@@ -539,6 +539,11 @@
                     markDirty(); renderInspector();
                 }));
                 objective.appendChild(inputField("Target level", step.trigger.value || 1, function (value) { step.trigger.value = Math.min(Number(value), structureLevelLimits[step.trigger.kind] || 1); markDirty(); }, { type: "number", min: 1, max: structureLevelLimits[step.trigger.kind] || 1, step: 1 }));
+            }
+            else if (step.trigger.type === "zoom_out_complete") objective.appendChild(inputField("Zoom-out distance (% of range)", Math.round(Number(step.trigger.value || 1) * 100), function (value) { step.trigger.value = Math.max(1, Math.min(100, Number(value))) / 100; markDirty(); }, { type: "number", min: 1, max: 100, step: 5 }));
+            else if (step.trigger.type === "zoom_in_complete") {
+                objective.appendChild(selectField("Faction to inspect", step.trigger.target || "", [{ value: "", label: "Any location" }].concat(factionOptions()), function (value) { if (value) { step.trigger.target = value; step.trigger.distance = Number(step.trigger.distance || 12); } else { delete step.trigger.target; delete step.trigger.distance; } markDirty(); renderInspector(); }));
+                if (step.trigger.target) objective.appendChild(inputField("Max distance from camera (tiles)", step.trigger.distance || 12, function (value) { step.trigger.distance = Number(value); markDirty(); }, { type: "number", min: 1, max: 1000, step: 1 }));
             }
             else if (step.trigger.type === "camera_target") {
                 objective.appendChild(selectField("Target to locate", step.trigger.target || "", [{ value: "", label: "Choose a target" }, { value: "player", label: "Player" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); renderInspector(); }));
@@ -666,7 +671,7 @@
         danger.appendChild(removeStep); host.appendChild(danger);
     }
     function stepLabel(step) {
-        var title = textValue(step.title_key, state.language);
+        var title = textValue(step.title_key, state.previewLanguage);
         return [title && title !== step.id ? title : "", step.type, step.id].filter(Boolean).join(" · ");
     }
     function stepOption(step) { return { value: step.id, label: stepLabel(step) }; }
@@ -683,7 +688,7 @@
     function choiceAnswerOptions() {
         var result = [];
         state.definition.steps.filter(function (step) { return step.type === "choice"; }).forEach(function (step) {
-            (step.choices || []).forEach(function (answer) { result.push({ value: step.id + "@" + answer.id, label: stepLabel(step) + " · " + (textValue(answer.label_key, state.language) || answer.id) }); });
+            (step.choices || []).forEach(function (answer) { result.push({ value: step.id + "@" + answer.id, label: stepLabel(step) + " · " + (textValue(answer.label_key, state.previewLanguage) || answer.id) }); });
         });
         return result;
     }
@@ -742,16 +747,8 @@
                         choiceCard.appendChild(el("strong", {}, "Negotiation · " + choice.id));
                         choiceCard.appendChild(selectField("Result", choice.relation, ["allied", "enemy", "neutral"], function (value) { choice.relation = value; markDirty(); renderSettings(); }));
                         if (choice.relation === "allied") choiceCard.appendChild(inputField("Gold demanded", choice.gold_cost || 0, function (value) { choice.gold_cost = Number(value); markDirty(); }, { type: "number", min: 0, max: 1000000, step: 25 }));
-                        Object.keys(state.definition.strings || {}).sort().forEach(function (locale) {
-                            var dictionary = state.definition.strings[locale] || (state.definition.strings[locale] = {});
-                            [["Choice · " + locale, "label_key"], ["Consequence · " + locale, "body_key"]].forEach(function (fieldInfo) {
-                                var field = el("textarea", { "aria-label": fieldInfo[0] });
-                                field.rows = fieldInfo[1] === "label_key" ? 2 : 3;
-                                field.value = dictionary[choice[fieldInfo[1]]] || "";
-                                field.addEventListener("input", function () { dictionary[choice[fieldInfo[1]]] = field.value; markDirty(); });
-                                choiceCard.appendChild(el("label", {}, fieldInfo[0])); choiceCard.appendChild(field);
-                            });
-                        });
+                        catalogTextField(choiceCard, "Choice", choice.label_key, 2);
+                        catalogTextField(choiceCard, "Consequence", choice.body_key, 3);
                         var removeChoice = el("button", { type: "button", class: "danger" }, "Remove choice");
                         removeChoice.disabled = reaction.choices.length <= 2;
                         removeChoice.addEventListener("click", function () { reaction.choices = reaction.choices.filter(function (item) { return item !== choice; }); markDirty(); renderSettings(); });
@@ -760,43 +757,27 @@
                     var addChoice = el("button", { type: "button" }, "Add negotiation option");
                     addChoice.disabled = reaction.choices.length >= 4;
                     addChoice.addEventListener("click", function () {
-                        var choiceId = "offer_" + (reaction.choices.length + 1), key = "tutorial." + reaction.id + "_" + choiceId;
+                        var choiceId = "offer_" + (reaction.choices.length + 1), key = storyKey(reaction.id + "_" + choiceId);
                         reaction.choices.push({ id: choiceId, label_key: key + "_label", body_key: key + "_detail", relation: "neutral" });
-                        Object.keys(state.definition.strings || {}).forEach(function (locale) { state.definition.strings[locale][key + "_label"] = "New response"; state.definition.strings[locale][key + "_detail"] = ""; });
                         markDirty(); renderSettings();
                     });
                     card.appendChild(addChoice);
                 } else if (!reaction.outcome) {
                     var addNegotiation = el("button", { type: "button" }, "Add negotiation choices");
                     addNegotiation.addEventListener("click", function () {
-                        var prefix = "tutorial." + reaction.id;
+                        var prefix = storyKey(reaction.id);
                         reaction.choices = [
                             { id: "accept", label_key: prefix + "_accept_label", body_key: prefix + "_accept_detail", relation: "allied", gold_cost: 200 },
                             { id: "refuse", label_key: prefix + "_refuse_label", body_key: prefix + "_refuse_detail", relation: "enemy", gold_cost: 0 }
                         ];
-                        Object.keys(state.definition.strings || {}).forEach(function (locale) {
-                            var spanish = locale.toLowerCase().split("-")[0] === "es", strings = state.definition.strings[locale];
-                            strings[prefix + "_accept_label"] = spanish ? "Pagar el tributo" : "Pay the tribute";
-                            strings[prefix + "_accept_detail"] = spanish ? "Entregar 200 de oro y formar una alianza." : "Pay 200 gold and form an alliance.";
-                            strings[prefix + "_refuse_label"] = spanish ? "Rechazar" : "Refuse";
-                            strings[prefix + "_refuse_detail"] = spanish ? "La tribu rompe relaciones y se vuelve enemiga." : "The tribe breaks off talks and becomes an enemy.";
-                        });
                         markDirty(); renderSettings();
                     });
                     card.appendChild(addNegotiation);
                 }
             }
             card.appendChild(selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) { if (value) reaction.speaker = value; else delete reaction.speaker; markDirty(); }));
-            Object.keys(state.definition.strings || {}).sort().forEach(function (locale) {
-                var dictionary = state.definition.strings[locale] || (state.definition.strings[locale] = {});
-                [["Title · " + locale, "title_key"], ["Dialogue · " + locale, "body_key"]].forEach(function (entry) {
-                    var field = el("textarea", { "aria-label": entry[0] });
-                    field.rows = entry[1] === "title_key" ? 2 : 4;
-                    field.value = dictionary[reaction[entry[1]]] || "";
-                    field.addEventListener("input", function () { dictionary[reaction[entry[1]]] = field.value; markDirty(); });
-                    card.appendChild(el("label", {}, entry[0])); card.appendChild(field);
-                });
-            });
+            catalogTextField(card, "Title", reaction.title_key, 2);
+            catalogTextField(card, "Dialogue", reaction.body_key, 4);
             var remove = el("button", { type: "button", class: "danger" }, "Remove response");
             remove.addEventListener("click", function () { state.definition.reactions = state.definition.reactions.filter(function (item) { return item !== reaction; }); markDirty(); renderSettings(); });
             card.appendChild(remove); reactions.appendChild(card);
@@ -816,24 +797,11 @@
             var speakerId = faction && Object.keys(state.definition.speakers || {}).find(function (key) { return state.definition.speakers[key].faction === faction.id; });
             var when = isFirstContact ? { type: type, targets: state.roster.factions.filter(function (item) { return item.relation === "neutral"; }).map(function (item) { return item.id; }) }
                 : isNeutralContact ? { type: "contact", relation: "neutral" } : { type: eventType, target: faction.id };
-            var reaction = { id: responseId, when: when, title_key: "tutorial." + responseId + "_title", body_key: "tutorial." + responseId + "_body" };
+            var reaction = { id: responseId, when: when, title_key: storyKey(responseId + "_title"), body_key: storyKey(responseId + "_body") };
             if (after) reaction.after = after.id;
             if (speakerId) reaction.speaker = speakerId;
             if (isFirstContact) reaction.outcome = "allied";
             state.definition.reactions = (state.definition.reactions || []).concat(reaction);
-            Object.keys(state.definition.strings || {}).forEach(function (locale) {
-                var spanish = locale.toLowerCase().split("-")[0] === "es";
-                state.definition.strings[locale][reaction.title_key] = isFirstContact
-                    ? spanish ? "Una tribu Iceni responde" : "An Iceni clan answers"
-                    : isNeutralContact ? spanish ? "Una tribu pide condiciones" : "A clan asks for terms"
-                    : eventType === "contact" ? spanish ? faction.name + " se une al alzamiento" : faction.name + " joins the rising"
-                    : spanish ? faction.name + " envía apoyo" : faction.name + " sends support";
-                state.definition.strings[locale][reaction.body_key] = isFirstContact
-                    ? spanish ? "Sabemos lo que Roma hizo. Estamos contigo, Boudica." : "We know what Rome did. We stand with you, Boudica."
-                    : isNeutralContact ? spanish ? "Paga 200 de oro y tendrás nuestra ayuda. Si te niegas, nos opondremos a ti." : "Pay 200 gold for our support. Refuse, and we will stand against you."
-                    : eventType === "contact" ? spanish ? "Lucharemos junto a Boudica contra Roma." : "We stand with Boudica against Rome."
-                    : spanish ? "Han llegado tropas y oro." : "Troops and gold have arrived.";
-            });
             markDirty(); renderSettings();
         }
         var addContactReaction = el("button", { type: "button" }, "Add contact response");
@@ -849,7 +817,6 @@
         addSupportReaction.disabled = !state.definition.steps.some(function (step) { return ["objective", "guide"].includes(step.type); }) || !supportFactionOptions().some(function (option) { return !(state.definition.reactions || []).some(function (reaction) { return reaction.when.type === "support" && reaction.when.target === option.value; }); });
         addSupportReaction.addEventListener("click", function () { addReaction("support"); });
         reactions.append(addContactReaction, addNeutralNegotiation, addFirstContact, addSupportReaction); host.appendChild(reactions);
-        host.appendChild(selectField("Default story language", state.definition.default_locale, localeOptions(), function (value) { state.definition.default_locale = value; state.definition.strings[value] = state.definition.strings[value] || {}; markDirty(); renderSettings(); }));
         host.appendChild(selectField("Opening step", state.definition.entry, state.definition.steps.map(stepOption), function (value) { state.definition.entry = value; markDirty(); }));
         host.appendChild(selectField("Menu guide opening", state.definition.menu_guide && state.definition.menu_guide.entry || "", [{ value: "", label: "Not set" }].concat(state.definition.steps.map(stepOption)), function (value) { if (!value) delete state.definition.menu_guide; else state.definition.menu_guide = Object.assign({}, state.definition.menu_guide, { entry: value, dismissible: true }); markDirty(); if (state.flow === "menu") resetPreview(); }));
         if (state.definition.menu_guide) host.appendChild(checkboxField("Player can dismiss this guide", state.definition.menu_guide.dismissible !== false, function (value) { state.definition.menu_guide.dismissible = value; markDirty(); }));
@@ -884,29 +851,25 @@
                 });
                 card.appendChild(removeBoundSpeaker); host.appendChild(card); return;
             }
-            var displayName = speaker.name_key ? textValue(speaker.name_key, state.language) : speaker.name || "";
+            var displayName = speaker.name_key ? textValue(speaker.name_key, state.previewLanguage) : speaker.name || "";
             var portrait = el("img", { class: "speaker-avatar", alt: displayName || speakerId, loading: "lazy", hidden: !speaker.avatar });
             portrait.addEventListener("error", function () { portrait.hidden = true; });
             if (speaker.name_key) {
-                card.appendChild(inputField("Character name · " + state.language, displayName, function (value) {
-                    var dictionary = state.definition.strings[state.language] || (state.definition.strings[state.language] = {});
-                    dictionary[speaker.name_key] = value; portrait.alt = value || speakerId; markDirty();
-                }, { input: true }));
+                catalogTextField(card, "Character name", speaker.name_key, 2);
                 var fixedName = el("button", { type: "button" }, "Use one name for every language");
                 fixedName.addEventListener("click", function () {
-                    speaker.name = textValue(speaker.name_key, state.definition.default_locale) || speaker.name || speakerId;
+                    speaker.name = textValue(speaker.name_key, state.previewLanguage) || speaker.name || speakerId;
                     delete speaker.name_key; markDirty(); renderSettings();
                 });
                 card.appendChild(fixedName);
             } else {
-                card.appendChild(inputField("Character name", speaker.name || "", function (value) { speaker.name = value; portrait.alt = value || speakerId; markDirty(); }));
-                var localizeName = el("button", { type: "button" }, "Localize name");
+                card.appendChild(inputField("Character name", speaker.name || "", function (value) { speaker.name = value; portrait.alt = value || speakerId; markDirty(); }, { input: true }));
+                var localizeName = el("button", { type: "button" }, "Use a shared text key");
                 localizeName.addEventListener("click", function () {
-                    var keyBase = "tutorial.speaker_" + speakerId + "_name", key = keyBase, suffix = 2;
-                    while (Object.keys(state.definition.strings).some(function (locale) { var dictionary = state.definition.strings[locale]; return dictionary && Object.prototype.hasOwnProperty.call(dictionary, key); })) key = keyBase + "_" + suffix++;
+                    var keyBase = storyKey("speaker_" + speakerId + "_name"), key = keyBase, suffix = 2;
+                    while (catalogValue("en", key)) key = keyBase + "_" + suffix++;
                     speaker.name_key = key;
-                    var dictionary = state.definition.strings[state.definition.default_locale] || (state.definition.strings[state.definition.default_locale] = {});
-                    dictionary[speaker.name_key] = speaker.name || speakerId;
+                    delete speaker.name;
                     markDirty(); renderSettings();
                 });
                 card.appendChild(localizeName);
@@ -949,14 +912,14 @@
 
     function portDefinitions(step) {
         if (step.type === "end") return [];
-        if (step.type === "choice") return (step.choices || []).map(function (choice) { return { field: "choices." + choice.id + ".next", label: textValue(choice.label_key, state.language) || choice.id, target: choice.next, className: "choice-wire" }; });
+        if (step.type === "choice") return (step.choices || []).map(function (choice) { return { field: "choices." + choice.id + ".next", label: textValue(choice.label_key, state.previewLanguage) || choice.id, target: choice.next, className: "choice-wire" }; });
         var outputs = [{ field: "next", label: "Next", target: step.next }];
         (step.routes || []).forEach(function (route, index) {
             var when = route.when || {}, label = "If condition";
             if (when.choice) {
                 var decision = state.definition.steps.find(function (item) { return item.id === when.choice; });
                 var answer = decision && (decision.choices || []).find(function (item) { return item.id === when.equals; });
-                label = "If " + (answer && textValue(answer.label_key, state.language) || when.equals || when.choice);
+                label = "If " + (answer && textValue(answer.label_key, state.previewLanguage) || when.equals || when.choice);
             } else if (when.fact) label = "If " + when.fact.replace(/_/g, " ") + " ≥ " + String(when.gte);
             outputs.push({ field: "routes." + index + ".next", label: label, target: route.next, className: "route-wire" });
         });
@@ -964,10 +927,10 @@
     }
     function nodeSummary(step) {
         var firstLine = step.lines && step.lines[0];
-        var storyText = textValue(firstLine && firstLine.body_key || step.hint_key || step.body_key, state.language);
+        var storyText = textValue(firstLine && firstLine.body_key || step.hint_key || step.body_key, state.previewLanguage);
         if (step.type === "scene") return [step.lines && step.lines.length > 1 ? step.lines.length + " dialogue lines" : "Story scene", storyText].filter(Boolean).join(" · ");
-        if (step.type === "choice") return [(step.choices || []).length + " decision paths", textValue(step.body_key, state.language)].filter(Boolean).join(" · ");
-        if (step.type === "end") return ["Episode ending", textValue(step.body_key, state.language)].filter(Boolean).join(" · ");
+        if (step.type === "choice") return [(step.choices || []).length + " decision paths", textValue(step.body_key, state.previewLanguage)].filter(Boolean).join(" · ");
+        if (step.type === "end") return ["Episode ending", textValue(step.body_key, state.previewLanguage)].filter(Boolean).join(" · ");
         var trigger = step.trigger || {};
         var definition = triggerTypes.find(function (item) { return item.value === trigger.type; });
         var parts = [definition ? definition.label : "Set a condition"];
@@ -993,9 +956,9 @@
             if (condition.choice) {
                 var decision = state.definition.steps.find(function (item) { return item.id === condition.choice && item.type === "choice"; });
                 var answer = decision && (decision.choices || []).find(function (item) { return item.id === condition.equals; });
-                if (answer) result.push({ value: String(index), label: (translated(decision.title_key, state.language) || decision.id) + " · " + (translated(answer.label_key, state.language) || answer.id) + " → " + (translated(destination && destination.title_key, state.language) || route.next) });
+                if (answer) result.push({ value: String(index), label: (translated(decision.title_key, state.previewLanguage) || decision.id) + " · " + (translated(answer.label_key, state.previewLanguage) || answer.id) + " → " + (translated(destination && destination.title_key, state.previewLanguage) || route.next) });
             } else if (condition.fact && Number.isFinite(condition.gte)) {
-                result.push({ value: String(index), label: condition.fact.replace(/_/g, " ") + " ≥ " + condition.gte + " → " + (translated(destination && destination.title_key, state.language) || route.next) });
+                result.push({ value: String(index), label: condition.fact.replace(/_/g, " ") + " ≥ " + condition.gte + " → " + (translated(destination && destination.title_key, state.previewLanguage) || route.next) });
             }
             return result;
         }, []) : [];
@@ -1047,19 +1010,19 @@
             var castIds = Array.from(new Set(lines.map(function (line) { return line && line.speaker || step.speaker; }).concat(step.speaker || []).filter(Boolean)));
             var castNames = castIds.map(function (speakerId) {
                 var speaker = speakers[speakerId] || {};
-                return speaker.name_key ? textValue(speaker.name_key, state.language) : speaker.name || speakerId;
+                return speaker.name_key ? textValue(speaker.name_key, state.previewLanguage) : speaker.name || speakerId;
             });
             var summary = nodeSummary(step);
-            var card = el("article", { class: "node" + (step.id === oldSelection ? " selected" : "") + (step.id === state.playingStep ? " playing" : "") + (completedSteps.has(step.id) ? " visited" : "") + (step.id === state.definition.entry ? " is-entry" : "") + (state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? " is-menu-entry" : "") + (stepErrors ? " has-error" : "") + (stepWarnings ? " has-warning" : ""), dataset: { stepId: step.id, stepType: step.type }, tabindex: "0", role: "group", "aria-label": step.type + ": " + (translated(step.title_key, state.language) || step.id) + " · " + summary + (castNames.length ? " · " + castNames.join(", ") : "") });
+            var card = el("article", { class: "node" + (step.id === oldSelection ? " selected" : "") + (step.id === state.playingStep ? " playing" : "") + (completedSteps.has(step.id) ? " visited" : "") + (step.id === state.definition.entry ? " is-entry" : "") + (state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? " is-menu-entry" : "") + (stepErrors ? " has-error" : "") + (stepWarnings ? " has-warning" : ""), dataset: { stepId: step.id, stepType: step.type }, tabindex: "0", role: "group", "aria-label": step.type + ": " + (translated(step.title_key, state.previewLanguage) || step.id) + " · " + summary + (castNames.length ? " · " + castNames.join(", ") : "") });
             card.style.left = pos.x + "px"; card.style.top = pos.y + "px";
             var head = el("header", { class: "node-hd" }); head.append(el("span", {}, step.type), el("small", { title: step.id, "aria-label": step.id }, rootLabel)); card.appendChild(head);
-            card.appendChild(el("div", { class: "node-title" }, translated(step.title_key, state.language) || step.title_key || "Untitled"));
+            card.appendChild(el("div", { class: "node-title" }, translated(step.title_key, state.previewLanguage) || step.title_key || "Untitled"));
             card.appendChild(el("div", { class: "node-summary", title: summary }, summary));
             if (castIds.length) {
                 var cast = el("div", { class: "node-cast", "aria-hidden": "true" });
                 castIds.slice(0, 3).forEach(function (speakerId) {
                     var speaker = speakers[speakerId] || {};
-                    var name = speaker.name_key ? textValue(speaker.name_key, state.language) : speaker.name || speakerId;
+                    var name = speaker.name_key ? textValue(speaker.name_key, state.previewLanguage) : speaker.name || speakerId;
                     var badge = el("span", { class: "node-cast__member", title: name });
                     if (speaker.avatar) {
                         var portrait = el("img", { src: asset("gameplay/avatars/" + speaker.avatar + ".webp"), alt: "", loading: "lazy" });
@@ -1073,14 +1036,14 @@
             }
             if (stepErrors) card.appendChild(el("div", { class: "node-error", role: "img", "aria-label": stepErrors + " validation errors" }, stepErrors + (stepErrors === 1 ? " issue" : " issues")));
             if (stepWarnings) card.appendChild(el("div", { class: "node-warning", role: "img", "aria-label": stepWarnings + " validation warnings" }, stepWarnings + (stepWarnings === 1 ? " note" : " notes")));
-            var input = el("button", { type: "button", class: "pin in", title: "Connect here", "aria-label": "Connect a path to " + (translated(step.title_key, state.language) || step.id), dataset: { in: step.id } });
+            var input = el("button", { type: "button", class: "pin in", title: "Connect here", "aria-label": "Connect a path to " + (translated(step.title_key, state.previewLanguage) || step.id), dataset: { in: step.id } });
             input.addEventListener("keydown", connectPinByKeyboard); card.appendChild(input);
             portDefinitions(step).forEach(function (port, index) {
                 var row = el("div", { class: "port-row" + (port.className ? " " + port.className : "") });
                 row.appendChild(el("span", { class: "port-label", title: port.label }, port.label));
                 var destination = byId[port.target];
                 row.appendChild(el("small", { title: destination ? stepLabel(destination) : "Unconnected" }, destination ? stepLabel(destination) : "Unconnected"));
-                var output = el("button", { type: "button", class: "pin out", title: "Drag to connect", "aria-label": "Connect " + port.label + " from " + (translated(step.title_key, state.language) || step.id), dataset: { out: step.id, field: port.field, outputIndex: index } });
+                var output = el("button", { type: "button", class: "pin out", title: "Drag to connect", "aria-label": "Connect " + port.label + " from " + (translated(step.title_key, state.previewLanguage) || step.id), dataset: { out: step.id, field: port.field, outputIndex: index } });
                 output.addEventListener("keydown", connectPinByKeyboard); row.appendChild(output);
                 card.appendChild(row);
             });
@@ -1213,11 +1176,11 @@
             }
         }
         var menuAction = inGameUiTargets()[0] || "menu_campaign";
-        var step = { id: id, type: type, title_key: "tutorial." + id + "_title", body_key: "tutorial." + id + "_body", speaker: Object.keys(state.definition.speakers)[0] };
+        var step = { id: id, type: type, title_key: storyKey(id + "_title"), body_key: storyKey(id + "_body"), speaker: Object.keys(state.definition.speakers)[0] };
         if (type === "end") { delete step.body_key; }
-        else if (type === "choice") { step.choices = [{ id: "first", label_key: "tutorial." + id + "_first", next: next }, { id: "second", label_key: "tutorial." + id + "_second", next: next }]; }
+        else if (type === "choice") { step.choices = [{ id: "first", label_key: storyKey(id + "_first"), next: next }, { id: "second", label_key: storyKey(id + "_second"), next: next }]; }
         else if (type === "objective" || type === "guide") {
-            delete step.body_key; step.hint_key = "tutorial." + id + "_hint";
+            delete step.body_key; step.hint_key = storyKey(id + "_hint");
             step.trigger = state.flow === "menu" ? { type: "ui", action: menuAction, scope: "step" } : { type: "territory", value: 1, scope: "step" };
             if (type === "guide") step.guide = state.flow === "menu" ? { kind: "ui", target: menuAction, gesture: "tap" } : { kind: "world", target: "expand", gesture: "tap" };
             if (state.flow !== "menu") step.marker = { target: "player" };
@@ -1253,25 +1216,23 @@
         var anchor = previewAnchor(model.step);
         var zoomMode = $("#device").value === "mobile" ? "pinch" : "wheel";
         var zoomGuide = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture);
-        var zoomHint = zoomGuide ? translated("tutorial." + model.step.id + "_" + zoomMode + "_hint", state.previewLanguage) : null;
-        var zoomLabel = zoomGuide ? translated("tutorial." + model.step.id + "_" + zoomMode + "_label", state.previewLanguage) : null;
         var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
-            ? translated("tutorial." + model.step.id + "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint", state.previewLanguage) : null;
-        var previewHint = zoomHint || deviceHint || "", previewLabel = zoomLabel, zoomMetric = null;
+            ? translated(stepTextKey(model.step, "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint"), state.previewLanguage) : null;
+        var previewHint = deviceHint || "", guideMetric = null;
         if (zoomGuide) {
-            var zoomTarget = model.step.trigger && model.step.trigger.type === "zoom_out_complete" ? state.facts.camera_zoom_floor
+            var zoomTarget = model.step.trigger && model.step.trigger.type === "zoom_out_complete" ? window.SOWCampaign.zoomOutTarget(state.facts, model.step.trigger.value)
                 : model.step.trigger && model.step.trigger.type === "zoom_in_complete" ? state.facts.camera_zoom_target : null;
             if (zoomTarget != null && Number.isFinite(Number(zoomTarget)) && Number.isFinite(Number(state.facts.camera_zoom))) {
-                zoomMetric = {
+                guideMetric = {
                     current: Number(state.facts.camera_zoom),
                     target: Number(zoomTarget),
                     direction: model.step.guide.gesture === "zoom_in" ? "min" : "max"
                 };
             }
         } else if (model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
-            previewHint += " " + previewMetric("tutorial." + model.step.id + "_progress", { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance });
+            guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
-        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, gestureLabel: previewLabel, zoomMetric: zoomMetric }); }
+        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
@@ -1538,12 +1499,14 @@
             state.facts.camera_target = 1;
         }
         else if (trigger.type === "zoom_out_complete") {
-            state.facts.camera_zoom = Number(state.facts.camera_zoom_floor || 0.75);
-            state.facts.zoom_out_complete = 1;
+            state.facts.camera_zoom = window.SOWCampaign.zoomOutTarget(state.facts, trigger.value);
+            state.facts.zoom_out_events = Number(state.facts.zoom_out_events || 0) + 1;
         }
         else if (trigger.type === "zoom_in_complete") {
             state.facts.camera_zoom = Number(state.facts.camera_zoom_target || 0.75);
             state.facts.zoom_in_complete = 1;
+            state.facts.zoom_in_events = Number(state.facts.zoom_in_events || 0) + 1;
+            if (trigger.target) state.facts.camera_target_distance = Number(trigger.distance || 12);
         }
         else if (trigger.type === "structure_level") {
             var kind = String(trigger.kind || "City").toLowerCase();
@@ -1557,7 +1520,7 @@
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_floor: 0.75, camera_zoom_target: 0.75, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
+    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;
@@ -1713,37 +1676,31 @@
         var advisorId = "advisor";
         while (advisorId === leaderId) advisorId += "_2";
         speakers[advisorId] = { name: "Advisor" };
+        var key = function (name) { return "tutorial.campaign_studio_demo_" + name; };
         state.definition = {
-            version: 2, episode_id: episodeId, default_locale: "en", settings: state.definition.settings,
-            entry: id + "_opening", speakers: speakers, strings: { en: {}, es: {} }, layout: {},
+            version: 2, episode_id: episodeId, settings: state.definition.settings,
+            entry: id + "_opening", speakers: speakers, layout: {},
             steps: [
-                { id: id + "_opening", type: "scene", title_key: "tutorial." + id + "_title", lines: [{ speaker: leaderId, body_key: "tutorial." + id + "_body" }, { speaker: advisorId, body_key: "tutorial." + id + "_advisor_line" }], presentation: "chapter", next: id + "_decision" },
-                { id: id + "_decision", type: "choice", title_key: "tutorial." + id + "_decision_title", body_key: "tutorial." + id + "_decision_body", choices: [
-                    { id: "gather", label_key: "tutorial." + id + "_gather", next: id + "_grow" }, { id: "strike", label_key: "tutorial." + id + "_strike", next: id + "_attack" }
+                { id: id + "_opening", type: "scene", title_key: key("opening_title"), lines: [{ speaker: leaderId, body_key: key("opening_body") }, { speaker: advisorId, body_key: key("advisor_line") }], presentation: "chapter", next: id + "_decision" },
+                { id: id + "_decision", type: "choice", title_key: key("decision_title"), body_key: key("decision_body"), choices: [
+                    { id: "gather", label_key: key("gather"), next: id + "_grow" }, { id: "strike", label_key: key("strike"), next: id + "_attack" }
                 ] },
-                { id: id + "_grow", type: "objective", title_key: "tutorial." + id + "_grow_title", hint_key: "tutorial." + id + "_grow_hint", trigger: { type: "territory", value: 300, scope: "step" }, guide: { kind: "world", target: "expand", gesture: "tap" }, next: id + "_recall" },
-                { id: id + "_attack", type: "objective", title_key: "tutorial." + id + "_attack_title", hint_key: "tutorial." + id + "_attack_hint", trigger: { type: "kills", value: 1, scope: "total" }, guide: { kind: "world", target: "assault", gesture: "tap" }, next: id + "_recall" },
-                { id: id + "_recall", type: "scene", title_key: "tutorial." + id + "_recall_title", body_key: "tutorial." + id + "_recall_body", next: id + "_turn", routes: [
+                { id: id + "_grow", type: "objective", title_key: key("grow_title"), hint_key: key("grow_hint"), trigger: { type: "territory", value: 300, scope: "step" }, guide: { kind: "world", target: "expand", gesture: "tap" }, next: id + "_recall" },
+                { id: id + "_attack", type: "objective", title_key: key("attack_title"), hint_key: key("attack_hint"), trigger: { type: "kills", value: 1, scope: "total" }, guide: { kind: "world", target: "assault", gesture: "tap" }, next: id + "_recall" },
+                { id: id + "_recall", type: "scene", title_key: key("recall_title"), body_key: key("recall_body"), next: id + "_turn", routes: [
                     { when: { choice: id + "_decision", equals: "gather" }, next: id + "_gather_echo" },
                     { when: { choice: id + "_decision", equals: "strike" }, next: id + "_strike_echo" }
                 ] },
-                { id: id + "_gather_echo", type: "scene", title_key: "tutorial." + id + "_gather_echo_title", body_key: "tutorial." + id + "_gather_echo_body", next: id + "_turn" },
-                { id: id + "_strike_echo", type: "scene", title_key: "tutorial." + id + "_strike_echo_title", body_key: "tutorial." + id + "_strike_echo_body", next: id + "_turn" },
-                { id: id + "_turn", type: "choice", title_key: "tutorial." + id + "_turn_title", body_key: "tutorial." + id + "_turn_body", choices: [
-                    { id: "press", label_key: "tutorial." + id + "_press", next: id + "_advance" }, { id: "secure", label_key: "tutorial." + id + "_secure", next: id + "_hold" }
+                { id: id + "_gather_echo", type: "scene", title_key: key("gather_echo_title"), body_key: key("gather_echo_body"), next: id + "_turn" },
+                { id: id + "_strike_echo", type: "scene", title_key: key("strike_echo_title"), body_key: key("strike_echo_body"), next: id + "_turn" },
+                { id: id + "_turn", type: "choice", title_key: key("turn_title"), body_key: key("turn_body"), choices: [
+                    { id: "press", label_key: key("press"), next: id + "_advance" }, { id: "secure", label_key: key("secure"), next: id + "_hold" }
                 ] },
-                { id: id + "_advance", type: "objective", title_key: "tutorial." + id + "_advance_title", hint_key: "tutorial." + id + "_advance_hint", trigger: { type: "territory", value: 100, scope: "step" }, guide: { kind: "world", target: "expand", gesture: "tap" }, next: id + "_ending" },
-                { id: id + "_hold", type: "objective", title_key: "tutorial." + id + "_hold_title", hint_key: "tutorial." + id + "_hold_hint", trigger: { type: "ui", action: "attack_ratio", scope: "step" }, guide: { kind: "ui", target: "attack_ratio", gesture: "drag" }, next: id + "_ending" },
-                { id: id + "_ending", type: "end", title_key: "tutorial." + id + "_end_title", body_key: "tutorial." + id + "_end_body", presentation: "chapter" }
+                { id: id + "_advance", type: "objective", title_key: key("advance_title"), hint_key: key("advance_hint"), trigger: { type: "territory", value: 100, scope: "step" }, guide: { kind: "world", target: "expand", gesture: "tap" }, next: id + "_ending" },
+                { id: id + "_hold", type: "objective", title_key: key("hold_title"), hint_key: key("hold_hint"), trigger: { type: "ui", action: "attack_ratio", scope: "step" }, guide: { kind: "ui", target: "attack_ratio", gesture: "drag" }, next: id + "_ending" },
+                { id: id + "_ending", type: "end", title_key: key("ending_title"), body_key: key("ending_body"), presentation: "chapter" }
             ]
         };
-        var texts = {
-            en: { _title: "A story shaped by your choices", _body: "We have waited long enough. The first move is ours.", _advisor_line: "Then choose: gather strength, or strike the frontier.", _decision_title: "How should the campaign begin?", _decision_body: "Both paths teach a different mechanic, then meet again.", _gather_title: "Rally your forces", _grow_hint: "Claim territory and bring more people under your banner.", _strike_title: "Attack the frontier", _attack_hint: "Win a fight to open the road ahead.", _gather: "Gather strength", _strike: "Attack now", _recall_title: "Your choice is remembered", _recall_body: "The story can react to the path you chose.", _gather_echo_title: "The people answer", _gather_echo_body: "You chose to build strength before risking a fight.", _strike_echo_title: "The frontier is breached", _strike_echo_body: "You chose to take the fight to your enemy.", _turn_title: "The next decision is yours", _turn_body: "Keep pressing forward or give your forces time to regroup.", _press: "Keep moving", _secure: "Regroup first", _advance_title: "Press forward", _advance_hint: "Claim another stretch of ground.", _hold_title: "Set the troop balance", _hold_hint: "Drag the slider to choose how many troops to send.", _end_title: "Different paths, one campaign", _end_body: "The branches meet here. They could also continue separately." },
-            es: { _title: "Una historia que cambia con tus decisiones", _body: "Ya hemos esperado suficiente. El primer movimiento es nuestro.", _advisor_line: "Entonces elige: reunir fuerzas o atacar la frontera.", _decision_title: "¿Cómo empieza la campaña?", _decision_body: "Cada camino enseña una mecánica distinta y después se reúnen.", _gather_title: "Reúne tus fuerzas", _grow_hint: "Conquista territorio y suma gente a tu estandarte.", _strike_title: "Ataca la frontera", _attack_hint: "Gana un combate para abrir el camino.", _gather: "Reunir fuerzas", _strike: "Atacar ahora", _recall_title: "La historia recuerda tu decisión", _recall_body: "El relato puede reaccionar al camino que elegiste.", _gather_echo_title: "La gente responde", _gather_echo_body: "Elegiste reunir fuerzas antes de arriesgarte a luchar.", _strike_echo_title: "La frontera cede", _strike_echo_body: "Elegiste llevar la lucha hasta tu enemigo.", _turn_title: "Tu siguiente decisión", _turn_body: "Sigue avanzando o dale tiempo a tus fuerzas para reagruparse.", _press: "Seguir avanzando", _secure: "Reagruparse primero", _advance_title: "Presiona la frontera", _advance_hint: "Conquista otro tramo de terreno.", _hold_title: "Ajusta el reparto de tropas", _hold_hint: "Arrastra el deslizador para elegir cuántas tropas enviar.", _end_title: "Distintos caminos, una campaña", _end_body: "Las ramas se reúnen aquí; también podrían continuar separadas." }
-        };
-        Object.keys(texts).forEach(function (locale) {
-            Object.keys(texts[locale]).forEach(function (suffix) { state.definition.strings[locale]["tutorial." + id + suffix] = texts[locale][suffix]; });
-        });
         state.definition.layout = {}; state.definition.steps.forEach(function (step, index) { state.definition.layout[step.id] = { x: 70 + (index % 2) * 320, y: 70 + Math.floor(index / 2) * 220 }; });
         state.flow = "episode"; $("#flowSelect").value = "episode";
         state.selected = state.definition.entry; renderSettings(); renderInspector(); refresh(); resetPreview();
@@ -1755,10 +1712,16 @@
             state.flow = "menu"; $("#flowSelect").value = "menu"; state.selected = state.definition.menu_guide.entry;
             renderSettings(); renderInspector(); resetPreview(); return;
         }
-        var base = episodeId + "_menu_guide";
-        function unique(baseId) { return uniqueId(baseId, state.definition.steps); }
-        var opening = unique(base + "_opening"), campaign = unique(base + "_campaign"), replay = unique(base + "_replay"), ending = unique(base + "_end");
-        var keys = { opening: "tutorial." + opening, campaign: "tutorial." + campaign, replay: "tutorial." + replay, ending: "tutorial." + ending };
+        var opening = uniqueId(episodeId + "_menu_guide_opening", state.definition.steps);
+        var campaign = uniqueId(episodeId + "_menu_guide_campaign", state.definition.steps);
+        var replay = uniqueId(episodeId + "_menu_guide_replay", state.definition.steps);
+        var ending = uniqueId(episodeId + "_menu_guide_end", state.definition.steps);
+        var keys = {
+            opening: "tutorial.campaign_menu_guide_opening",
+            campaign: "tutorial.campaign_menu_guide_campaign",
+            replay: "tutorial.campaign_menu_guide_replay",
+            ending: "tutorial.campaign_menu_guide_ending"
+        };
         state.definition.steps.push(
             { id: opening, type: "scene", title_key: keys.opening + "_title", body_key: keys.opening + "_body", presentation: "chapter", next: campaign },
             { id: campaign, type: "guide", title_key: keys.campaign + "_title", hint_key: keys.campaign + "_hint", trigger: { type: "ui", action: "menu_campaign", scope: "step" }, guide: { kind: "ui", target: "menu_campaign", gesture: "tap" }, next: replay },
@@ -1766,26 +1729,6 @@
             { id: ending, type: "end", title_key: keys.ending + "_title", body_key: keys.ending + "_body", presentation: "chapter" }
         );
         state.definition.menu_guide = { entry: opening, dismissible: true };
-        state.definition.strings.en = Object.assign(state.definition.strings.en || {}, {
-            [keys.opening + "_title"]: "Choose your next battle",
-            [keys.opening + "_body"]: "Continue a campaign, replay this episode, or head into multiplayer.",
-            [keys.campaign + "_title"]: "Campaigns",
-            [keys.campaign + "_hint"]: "Open Campaigns to continue a story.",
-            [keys.replay + "_title"]: "Replay this episode",
-            [keys.replay + "_hint"]: "Select this episode to revisit its opening lesson.",
-            [keys.ending + "_title"]: "Ready",
-            [keys.ending + "_body"]: "Choose what to play next."
-        });
-        state.definition.strings.es = Object.assign(state.definition.strings.es || {}, {
-            [keys.opening + "_title"]: "Elige tu siguiente partida",
-            [keys.opening + "_body"]: "Continúa una campaña, repite este episodio o entra al multijugador.",
-            [keys.campaign + "_title"]: "Campañas",
-            [keys.campaign + "_hint"]: "Abre Campañas para continuar una historia.",
-            [keys.replay + "_title"]: "Repetir este episodio",
-            [keys.replay + "_hint"]: "Elige este episodio para volver a su lección inicial.",
-            [keys.ending + "_title"]: "Listo",
-            [keys.ending + "_body"]: "Elige qué jugar ahora."
-        });
         state.definition.layout[opening] = { x: 70, y: 80 }; state.definition.layout[campaign] = { x: 350, y: 80 };
         state.definition.layout[replay] = { x: 630, y: 80 }; state.definition.layout[ending] = { x: 910, y: 80 };
         state.flow = "menu"; $("#flowSelect").value = "menu"; state.selected = opening;
@@ -1847,10 +1790,11 @@
             var locale = this.value; state.previewLanguage = locale; paintPreview();
             loadCatalog(locale).then(function () { if (state.previewLanguage === locale) paintPreview(); });
         });
-        $("#editLocale").addEventListener("change", function () {
-            var locale = this.value; state.language = locale; renderSettings(); renderInspector(); renderGraph();
+        $("#previewLocale").addEventListener("change", function () {
+            var locale = this.value; state.previewLanguage = locale;
             loadCatalog(locale).then(function () {
-                if (state.language === locale) { renderSettings(); renderInspector(); renderGraph(); }
+                if (state.previewLanguage !== locale) return;
+                renderSettings(); renderInspector(); renderGraph(); paintPreview();
             });
         });
         document.addEventListener("visibilitychange", watchExternalFiles);
@@ -2055,13 +1999,12 @@
     function init() {
         connectControls();
         Promise.all([fillLocales(), fillAvatars(), fillEpisodes(), load()]).then(function (results) {
-            optionList($("#editLocale"), localeOptions(), state.definition.strings.en ? "en" : state.definition.default_locale);
-            optionList($("#previewLocale"), localeOptions(), state.definition.default_locale);
-            state.language = $("#editLocale").value; state.previewLanguage = $("#previewLocale").value;
-            return Promise.all([loadCatalog(state.language), loadCatalog(state.previewLanguage)]).then(function () {
+            optionList($("#previewLocale"), localeOptions(), "en");
+            state.previewLanguage = $("#previewLocale").value;
+            return Promise.all([loadCatalog("en"), loadCatalog(state.previewLanguage)]).then(function () {
                 if (!results[2]) notice("Could not load the episode list; only the built-in episodes are available.");
-                else if (state.localeRegistryFailed) notice("Language list unavailable; showing the episode's available text.");
-                else if (state.localeFailures.length) notice("Catalog unavailable for " + state.localeFailures.join(", ") + "; episode text remains editable.");
+                else if (state.localeRegistryFailed) notice("Language list unavailable; showing English and Spanish previews.");
+                else if (state.localeFailures.length) notice("Catalog unavailable for " + state.localeFailures.join(", ") + "; some shared-text previews may be incomplete.");
                 refresh(); renderSettings(); renderInspector(); renderPreview();
             });
         }).catch(function (error) { notice(error.message); status("Load failed", "error"); });

@@ -45,6 +45,8 @@ pub struct MapGlobals {
     pub _pad2: f32,
     /// Viewport alert vignette color: [r, g, b, a].
     pub alert_color: [f32; 4],
+    /// Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].
+    pub dialog_border: [f32; 4],
 }
 
 #[repr(C)]

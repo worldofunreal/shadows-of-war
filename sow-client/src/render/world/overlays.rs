@@ -105,6 +105,7 @@ pub(crate) fn render_overlays(
 
     if !ui.tutorial_active {
         ui.tutorial_marker_player_id = None;
+        ui.dialog_border_highlight = None;
     }
 }
 

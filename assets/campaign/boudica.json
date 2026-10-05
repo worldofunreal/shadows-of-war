@@ -2,16 +2,16 @@
   "_comment": "Boudica tutorial roster — edited via tools/campaign-editor.",
   "map": "eastanglia",
   "player_spawn": [
-    696,
-    64
+    711,
+    78
   ],
   "player_color": "#3380ff",
   "factions": [
     {
       "id": "stonea",
       "name": "Stonea",
-      "x": 732,
-      "y": 52,
+      "x": 687,
+      "y": 80,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -25,8 +25,8 @@
     {
       "id": "snettisham",
       "name": "Snettisham",
-      "x": 655,
-      "y": 83,
+      "x": 725,
+      "y": 36,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -40,8 +40,8 @@
     {
       "id": "thetford",
       "name": "Thetford",
-      "x": 727,
-      "y": 114,
+      "x": 715,
+      "y": 129,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -56,7 +56,7 @@
       "id": "trinovantes",
       "name": "Trinovantes",
       "x": 664,
-      "y": 246,
+      "y": 197,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": false,
@@ -70,8 +70,8 @@
     {
       "id": "trinovantian_farms",
       "name": "Trinovantian Farms",
-      "x": 763,
-      "y": 234,
+      "x": 772,
+      "y": 203,
       "starting_troops": 500,
       "relation": "neutral",
       "can_request_alliance": true,
@@ -99,8 +99,8 @@
     {
       "id": "roman_outpost",
       "name": "Roman Outpost",
-      "x": 702,
-      "y": 64,
+      "x": 713,
+      "y": 78,
       "starting_troops": 5000,
       "relation": "enemy",
       "can_request_alliance": false,
@@ -115,8 +115,8 @@
     {
       "id": "roman_supply_depot",
       "name": "Roman Supply Depot",
-      "x": 701,
-      "y": 204,
+      "x": 716,
+      "y": 250,
       "starting_troops": 1000,
       "relation": "enemy",
       "can_request_alliance": false,
@@ -129,8 +129,8 @@
     {
       "id": "tax_collectors",
       "name": "Tax Collectors",
-      "x": 611,
-      "y": 173,
+      "x": 618,
+      "y": 235,
       "starting_troops": 1000,
       "relation": "enemy",
       "can_request_alliance": false,

@@ -1589,6 +1589,10 @@ struct ReplayStartPlayer {
 enum ReplayVerificationError {
     Invalid(String),
     Unavailable(String),
+    /// The match map is not on disk. This is retryable: a later release may
+    /// ship the map (campaign maps once missed a release this way). It logs
+    /// at warn, never error, so a stuck match cannot fill the error log.
+    MissingMap(String),
 }
 
 async fn verify_match_replay_handler(
@@ -1702,6 +1706,13 @@ async fn verify_match_replay_handler(
                 axum::response::Json(serde_json::json!({"error": "replay verifier unavailable"})),
             ))
         }
+        Ok(Err(ReplayVerificationError::MissingMap(error))) => {
+            log::warn!("match {match_id} replay map unavailable, will retry after a later release: {error}");
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::response::Json(serde_json::json!({"error": "replay map unavailable"})),
+            ))
+        }
         Err(error) => {
             log::error!("match {match_id} replay verifier task failed: {error}");
             axum::response::IntoResponse::into_response((
@@ -1799,24 +1810,24 @@ fn verify_replay(
 
     let map_key = sow_core::maps::map_key(&config.map_name);
     if map_key.is_empty() {
-        return Err(ReplayVerificationError::Unavailable("trusted map name is invalid".to_string()));
+        return Err(ReplayVerificationError::MissingMap("trusted map name is invalid".to_string()));
     }
     let map_dir = maps_root.join(map_key);
     let map_path = map_dir.join("map.bin");
     let compressed_path = map_dir.join("map.bin.br");
     let map_path = if map_path.is_file() { map_path } else { compressed_path };
     let map_len = std::fs::metadata(&map_path)
-        .map_err(|error| ReplayVerificationError::Unavailable(format!("map read failed: {error}")))?
+        .map_err(|error| ReplayVerificationError::MissingMap(format!("map read failed: {error}")))?
         .len();
     if map_len > 32 * 1024 * 1024 {
-        return Err(ReplayVerificationError::Unavailable("map file exceeds size limit".to_string()));
+        return Err(ReplayVerificationError::MissingMap("map file exceeds size limit".to_string()));
     }
     let map_bytes = std::fs::read(&map_path)
-        .map_err(|error| ReplayVerificationError::Unavailable(format!("map read failed: {error}")))?;
+        .map_err(|error| ReplayVerificationError::MissingMap(format!("map read failed: {error}")))?;
     let map_file = sow_core::maps::load_map_from_payload(&map_bytes)
-        .map_err(|error| ReplayVerificationError::Unavailable(format!("map parse failed: {error}")))?;
+        .map_err(|error| ReplayVerificationError::MissingMap(format!("map parse failed: {error}")))?;
     if map_file.width != config.map_width || map_file.height != config.map_height {
-        return Err(ReplayVerificationError::Unavailable("map dimensions do not match match config".to_string()));
+        return Err(ReplayVerificationError::MissingMap("map dimensions do not match match config".to_string()));
     }
     let mut engine = sow_core::engine::initialize_match_engine(
         config.clone(),

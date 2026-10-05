@@ -32,6 +32,8 @@ struct Globals {
     tutorial_target_player: f32,
     _pad2: f32,
     alert_color: vec4<f32>,
+    // Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].
+    dialog_border: vec4<f32>,
 }
 
 struct PlayerColors {
@@ -172,6 +174,23 @@ fn apply_alliance_celebration(
         color = mix(color, accent, border_sweep);
     }
     return color;
+}
+
+// ── Dialog Terms Border Glow ─────────────────────────────────────────────────
+// Highlights the entity requesting terms while its dialog is open: a golden
+// outline that flashes on open, breathes, and carries marching light streaks
+// with per-tile glints around the whole territory border.
+fn dialog_border_glow_color(world_pos: vec2<f32>, age: f32) -> vec3<f32> {
+    let intro = 1.0 - smoothstep(0.0, 1.1, age);
+    let march = sin((world_pos.x + world_pos.y) * 2.4 - globals.time * 3.2) * 0.5 + 0.5;
+    let streak = smoothstep(0.45, 0.95, march);
+    let breathe = sin(globals.time * 2.2) * 0.5 + 0.5;
+    let tile = floor(world_pos);
+    let tile_hash = fract(sin(dot(tile, vec2<f32>(127.1, 311.7))) * 43758.5453);
+    let glint_phase = fract(globals.time * 1.6 + tile_hash);
+    let glint = smoothstep(0.80, 0.90, glint_phase) * (1.0 - smoothstep(0.95, 1.0, glint_phase));
+    let gold = vec3<f32>(1.0, 0.78, 0.22);
+    return gold * (0.55 + breathe * 0.25 + streak * 0.65 + glint * 0.50 + intro * 0.90);
 }
 
 fn blend_channel_overlay(base: f32, blend: f32) -> f32 {
@@ -318,6 +337,14 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             base_color = base_color * heartbeat;
         }
 
+        // ── Dialog Terms Interior Shimmer (requesting entity glows softly) ──
+        if globals.dialog_border.x > 0.0 && owner_id == u32(globals.dialog_border.x) {
+            let intro = 1.0 - smoothstep(0.0, 1.1, globals.dialog_border.y);
+            let shimmer = sin((world_x + world_y) * 1.8 - globals.time * 2.6) * 0.5 + 0.5;
+            let wash = 0.05 + 0.05 * shimmer + intro * 0.12;
+            base_color = mix(base_color, vec3<f32>(1.0, 0.78, 0.22), clamp(wash, 0.0, 0.35));
+        }
+
         // Conquest shockwave flash on interior
         if flash_val > 0.0 && globals.effect_shockwave > 0.0 {
             let shockwave = flash_val * globals.effect_shockwave;
@@ -350,6 +377,10 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     // Shockwave border explosion
     if flash_val > 0.0 && globals.effect_shockwave > 0.0 {
         thickness += flash_val * 0.2 * globals.effect_shockwave;
+    }
+    // Dialog terms border: the requesting entity gets a thicker, breathing line.
+    if globals.dialog_border.x > 0.0 && owner_id == u32(globals.dialog_border.x) {
+        thickness += 0.14 + 0.08 * (sin(globals.time * 2.4) * 0.5 + 0.5);
     }
 
     if is_land {
@@ -454,6 +485,12 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                 }
 
                 base_color = mix(base_color, border_albedo, border_t);
+            }
+
+            // ── Dialog Terms Border Glow (overrides normal/tribe border) ──
+            if globals.dialog_border.x > 0.0 && owner_id == u32(globals.dialog_border.x) {
+                let glow = dialog_border_glow_color(vec2<f32>(world_x, world_y), globals.dialog_border.y);
+                base_color = mix(base_color, glow, border_t * 0.95);
             }
         }
     }

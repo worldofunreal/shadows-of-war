@@ -240,14 +240,43 @@
             + '<aside class="sow-hud__dev-sidebar hidden" id="sow-hud-dev-sidebar">'
             + '  <div class="sow-hud__dev-header"><b>' + SOW_t("hud.dev_tools") + '</b><button type="button" class="sow-hud__close-btn" data-command="toggle_dev_sidebar" aria-label="' + SOW_t("hud.close_developer_tools") + '">✕</button></div>'
             + '  <div class="sow-hud__dev-body">'
-            + '    <div class="sow-hud__dev-section"><b>' + SOW_t("hud.map_borders") + '</b>'
+            + '    <details class="sow-hud__dev-section" open><summary><b>' + SOW_t("hud.map_borders") + '</b></summary>'
             + '      <label class="sow-hud__dev-row">' + SOW_t("hud.border_thickness") + ' <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="thickness"></label>'
             + '      <label class="sow-hud__dev-row">' + SOW_t("hud.border_darkness") + ' <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="darkness"></label>'
             + '      <label class="sow-hud__dev-row">' + SOW_t("hud.shore_thickness") + ' <input type="range" min="0" max="1" step="0.01" value="0.5" data-dev="shore_thickness"></label>'
+            + '      <label class="sow-hud__dev-row">Shore Drk <input type="range" min="0" max="1" step="0.01" value="1" data-dev="shore_darkness"></label>'
             + '      <label class="sow-hud__dev-row">' + SOW_t("hud.conquest_duration") + ' <input type="range" min="0.1" max="10" step="0.1" value="1.5" data-dev="conquest_duration"></label>'
             + '      <label class="sow-hud__dev-row">' + SOW_t("hud.opacity") + ' <input type="range" min="0" max="1" step="0.01" value="1" data-dev="territory_opacity"></label>'
-            + '      <button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config">' + SOW_t("hud.reset") + '</button>'
-            + '    </div>'
+            + '      <label class="sow-hud__dev-row">Blend Mode <select data-dev="blend_mode"><option value="0">Normal Mix</option><option value="1">Multiply</option><option value="2">Overlay</option><option value="3">All Albedo</option></select></label>'
+            + '    </details>'
+            + '    <details class="sow-hud__dev-section"><summary><b>Font Settings (SDF)</b></summary>'
+            + '      <label class="sow-hud__dev-row">Font Size <input type="range" min="0.5" max="2.5" step="0.01" value="2" data-dev="font_size_scale"></label>'
+            + '      <label class="sow-hud__dev-row">Face Dilate <input type="range" min="-1" max="2" step="0.01" value="-0.2" data-dev="font_face_dilate"></label>'
+            + '      <label class="sow-hud__dev-row">Outline <input type="range" min="0" max="3" step="0.01" value="1.4" data-dev="font_outline_thickness"></label>'
+            + '      <label class="sow-hud__dev-row">Shadow Y <input type="range" min="0" max="5" step="0.01" value="2" data-dev="font_shadow_y"></label>'
+            + '      <label class="sow-hud__dev-row">Softness <input type="range" min="0" max="2" step="0.01" value="0.1" data-dev="font_underlay_softness"></label>'
+            + '      <label class="sow-hud__dev-row">Spacing <input type="range" min="0.8" max="1.8" step="0.01" value="0.95" data-dev="font_char_spacing"></label>'
+            + '    </details>'
+            + '    <details class="sow-hud__dev-section"><summary><b>VFX Toggles (Benchmark)</b></summary>'
+            + '      <div class="sow-hud__dev-row"><button type="button" class="sow-hud__dev-reset" data-command="dev_vfx_all" data-on="1">All On</button><button type="button" class="sow-hud__dev-reset" data-command="dev_vfx_all" data-on="0">All Off</button></div>'
+            + '      <label class="sow-hud__dev-row">Conquer shockwave <input type="checkbox" data-dev="vfx_conquer"></label>'
+            + '      <label class="sow-hud__dev-row">Border breathe <input type="checkbox" data-dev="vfx_border_breathe"></label>'
+            + '      <label class="sow-hud__dev-row">Contested shimmer <input type="checkbox" data-dev="vfx_energy_flow"></label>'
+            + '      <label class="sow-hud__dev-row">Territory heartbeat <input type="checkbox" data-dev="vfx_heartbeat"></label>'
+            + '      <label class="sow-hud__dev-row">War fog / Frontier <input type="checkbox" data-dev="vfx_war_fog"></label>'
+            + '      <label class="sow-hud__dev-row">Fog of War <input type="checkbox" data-dev="fog_of_war"></label>'
+            + '      <label class="sow-hud__dev-row">Impact zone <input type="checkbox" data-dev="vfx_fallout"></label>'
+            + '      <label class="sow-hud__dev-row">Ambient grading <input type="checkbox" data-dev="vfx_ambient_grade"></label>'
+            + '      <label class="sow-hud__dev-row">Holographic grid <input type="checkbox" data-dev="vfx_holo_grid"></label>'
+            + '      <label class="sow-hud__dev-row">Mover trails <input type="checkbox" data-dev="vfx_mover_trails"></label>'
+            + '      <label class="sow-hud__dev-row">Click markers <input type="checkbox" data-dev="vfx_click_markers"></label>'
+            + '      <label class="sow-hud__dev-row">Attack troop badges <input type="checkbox" data-dev="vfx_attack_badges"></label>'
+            + '      <label class="sow-hud__dev-row">World buildings <input type="checkbox" data-dev="vfx_world_buildings"></label>'
+            + '      <label class="sow-hud__dev-row">Bot avatars <input type="checkbox" data-dev="vfx_bot_avatars"></label>'
+            + '      <label class="sow-hud__dev-row">Nameplate names <input type="checkbox" data-dev="vfx_nameplate_names"></label>'
+            + '      <label class="sow-hud__dev-row">Nameplate troops <input type="checkbox" data-dev="vfx_nameplate_troops"></label>'
+            + '    </details>'
+            + '    <button type="button" class="sow-hud__dev-reset" data-command="reset_dev_config">' + SOW_t("hud.reset") + '</button>'
             + '  </div>'
             + '</aside>'
             + '<aside class="sow-hud__panel sow-hud__settings hidden" id="sow-hud-settings">'
@@ -256,6 +285,7 @@
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.music") + '</span><input type="range" min="0" max="1" step="0.05" data-hud-setting="music_volume"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input type="checkbox" data-hud-setting="free_zoom_out"></label>'
+            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
             + '</aside>'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
             + '  <div class="sow-hud__dock-inner" id="sow-hud-dock-inner">'
@@ -287,7 +317,7 @@
             + '    </div>'
             + '  </div>'
             + '</footer>'
-            + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden>✕</button>'
+            + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
             + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
             + '  <div class="sow-hud__panel-header">'
             + '    <h3>' + hudIcon("rankings", "sow-hud__inline-icon") + ' ' + SOW_t("hud.rankings_title") + '</h3>'
@@ -520,7 +550,13 @@
         hudRoot.addEventListener("input", function (event) {
             var input = event.target.closest("[data-dev]");
             if (!input) return;
-            send("set_dev_config", { field: input.dataset.dev, value: Number(input.value) });
+            var value = input.type === "checkbox" ? (input.checked ? 1 : 0) : Number(input.value);
+            send("set_dev_config", { field: input.dataset.dev, value: value });
+        });
+        hudRoot.addEventListener("change", function (event) {
+            var input = event.target.closest("[data-dev]");
+            if (!input || input.type !== "checkbox") return;
+            send("set_dev_config", { field: input.dataset.dev, value: input.checked ? 1 : 0 });
         });
         hudRoot.addEventListener("change", function (event) {
             var input = event.target.closest("[data-hud-setting]");
@@ -530,6 +566,7 @@
             if (setting === "music_volume") send("set_music_volume", { value: Number(input.value) });
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
             if (setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
+            if (setting === "show_dev_tools") send("set_show_dev_tools", { value: input.checked });
         });
     }
 
@@ -1504,7 +1541,9 @@
             hudRefs.devSidebar.querySelectorAll("[data-dev]").forEach(function (input) {
                 if (document.activeElement === input) return;
                 var value = devTools.config[input.dataset.dev];
-                if (value != null) input.value = value;
+                if (value == null) return;
+                if (input.type === "checkbox") input.checked = Boolean(value);
+                else input.value = value;
             });
         }
         var gold = Math.floor(hud.gold || 0);
@@ -1666,10 +1705,12 @@
                 var musicInput = hudRefs.settings.querySelector('[data-hud-setting="music_volume"]');
                 var motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
                 var freeZoomInput = hudRefs.settings.querySelector('[data-hud-setting="free_zoom_out"]');
+                var devToolsInput = hudRefs.settings.querySelector('[data-hud-setting="show_dev_tools"]');
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
                 if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
                 if (motionInput && document.activeElement !== motionInput) motionInput.checked = Boolean(settings.reduced_motion);
                 if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
+                if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
             }
         }
 
@@ -1800,16 +1841,15 @@
         function stopZoomHold() {
             if (!zoomHold) return;
             window.clearInterval(zoomHold.repeat);
-            window.clearTimeout(zoomHold.complete);
             zoomHold.button.classList.remove("is-holding", "is-zoom-limited");
             zoomHold = null;
         }
         function zoomAtLimit(command) {
-            var facts = hudState && hudState.hud && hudState.hud.tutorial && hudState.hud.tutorial.facts;
-            if (!facts || !Number.isFinite(Number(facts.camera_zoom))) return false;
+            var zoom = hudState && hudState.hud && hudState.hud.camera_zoom_state;
+            if (!zoom || !Number.isFinite(Number(zoom.current))) return false;
             return command === "zoom_out"
-                ? Number(facts.camera_zoom) <= Number(facts.camera_zoom_floor) + 0.02
-                : Number(facts.camera_zoom) >= Number(facts.camera_zoom_ceiling) - 0.02;
+                ? Number(zoom.current) <= Number(zoom.floor) + 0.02
+                : Number(zoom.current) >= Number(zoom.ceiling) - 0.02;
         }
         hudRoot.addEventListener("pointerdown", function (event) {
             var button = event.target.closest && event.target.closest('[data-command="zoom_in"], [data-command="zoom_out"]');
@@ -1829,11 +1869,7 @@
                         return;
                     }
                     send(command);
-                }, 180),
-                complete: window.setTimeout(function () {
-                    if (!zoomHold || zoomHold.button !== button) return;
-                    document.dispatchEvent(new CustomEvent("sow:tutorial-ui-action", { detail: { action: "hud_" + command } }));
-                }, 1000)
+                }, 180)
             };
         });
         ["pointerup", "pointercancel", "blur"].forEach(function (type) {
@@ -1887,6 +1923,8 @@
                 renderHud();
             } else if (cmd === "reset_dev_config") {
                 send("reset_dev_config");
+            } else if (cmd === "dev_vfx_all") {
+                send("dev_vfx_all", { on: btn.dataset.on === "1" });
             } else if (cmd === "toggle_pin_emoji") {
                 pinEmoji = !pinEmoji;
                 send("set_emoji_pinned", { pinned: pinEmoji });

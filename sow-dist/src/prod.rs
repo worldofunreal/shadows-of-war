@@ -1310,7 +1310,7 @@ fn verify_relay_identity(config: &Config, release: &Release) -> Result<()> {
 }
 
 fn build_web(paths: &Paths, version: &str) -> Result<PathBuf> {
-    compile_wasm(paths, false)?;
+    compile_wasm(paths, true)?;
     let fingerprint = web_fingerprint(paths, version)?;
     let candidate_root = paths.root.join("dist/.sow-state/prod-web");
     let web = candidate_root.join("web");

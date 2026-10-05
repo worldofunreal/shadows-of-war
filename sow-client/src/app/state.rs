@@ -96,6 +96,7 @@ pub struct TutorialObservation {
     pub guide_expand: Option<u32>,
     pub guide_assault: Option<u32>,
     pub guide_target_action: Option<u32>,
+    pub guide_build_site: Option<u32>,
 }
 
 #[derive(Default)]
@@ -254,7 +255,6 @@ pub struct InputState {
     pub tutorial_camera_focus: bool,
     pub tutorial_zoom_in_events: u64,
     pub tutorial_zoom_out_events: u64,
-    pub tutorial_zoom_out_completed: bool,
     pub tutorial_camera_drag_events: u64,
     pub tutorial_camera_key_pan_events: u64,
     pub tutorial_camera_drag_recorded: bool,
@@ -374,6 +374,13 @@ pub(crate) fn alliance_celebration_age(
     (elapsed < ALLIANCE_CELEBRATION_DURATION).then_some(elapsed / ALLIANCE_CELEBRATION_DURATION)
 }
 
+/// Entity requesting terms in the open tutorial dialog: its territory border
+/// glows gold until the dialog is resolved.
+pub struct DialogBorderHighlight {
+    pub player_id: u16,
+    pub start_time: web_time::Instant,
+}
+
 #[derive(Clone, Debug)]
 pub struct AttackBadgeLabel {
     pub troops: f64,
@@ -392,6 +399,8 @@ pub struct UiState {
     pub tutorial_campaign: crate::campaign::CampaignId,
     /// Player whose avatar the current tutorial step points at; None points to the local player.
     pub tutorial_marker_player_id: Option<u16>,
+    /// Entity requesting terms in the open tutorial dialog; its border glows until resolved.
+    pub dialog_border_highlight: Option<DialogBorderHighlight>,
     pub show_leaderboard: bool,
     pub leaderboard_top_three: [Option<u16>; 3],
     pub leaderboard_refresh_at: Option<web_time::Instant>,
