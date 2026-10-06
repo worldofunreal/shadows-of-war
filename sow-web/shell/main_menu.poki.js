@@ -45,8 +45,8 @@ function renderSettings() {
             "<section class='sow-menu__modal sow-menu__settings-modal'>" +
                 "<div class='sow-menu__modal-head'><div><h2>" + esc(SOW_t("menu.settings")) + "</h2></div><button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button></div>" +
                 "<div class='sow-menu__settings-body'>" +
-                    accountControl +
-                    "<div class='sow-menu__settings-controls'>" +
+                    "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.account")) + "</h3>" + accountControl + "</section>" +
+                    "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.settings_preferences")) + "</h3><div class='sow-menu__settings-controls'>" +
                         "<label class='sow-menu__form-field'><div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div><input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'></label>" +
                     "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
                         SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [{ value: "full", label: SOW_t("menu.full") }, { value: "reduced", label: SOW_t("menu.reduced_motion") }] }) +
@@ -55,17 +55,19 @@ function renderSettings() {
                     "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                         SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                     "</label>" +
-                    "</div>" +
+                    "</div></section>" +
+                    "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.game_links")) + "</h3><nav class='sow-menu__settings-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
+                        "<button class='sow-menu__settings-link' type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button>" +
+                        "<button class='sow-menu__settings-link sow-menu__source-link' type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button>" +
+                        "<button class='sow-menu__settings-link sow-menu__license-link' type='button' data-command='poki_license'>" + esc(SOW_t("menu.license_notice")) + "</button>" +
+                    "</nav></section>" +
                 "</div>" +
             "</section>" +
         "</div>";
 }
 
-function renderFooter(label) {
-    return "<footer class='sow-menu__footer'>" +
-        (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") +
-        "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'><button type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button><button class='sow-menu__source-link' type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button><button class='sow-menu__license-link' type='button' data-command='poki_license'>" + esc(SOW_t("menu.license_notice")) + "</button></nav>" +
-        "<span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
+function renderMenuAttribution() {
+    return "<span class='sow-menu__attribution'>© OpenFront and Contributors</span>";
 }
 
 function pokiLicenseUrl() {

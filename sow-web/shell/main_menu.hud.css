@@ -688,14 +688,14 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     line-height: 1;
 }
 
-.sow-hud__building-btn:hover:not(:disabled),
-.sow-hud__building-btn:focus-visible:not(:disabled) {
+.sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]),
+.sow-hud__building-btn:focus-visible:not(:disabled):not([aria-disabled="true"]) {
     border-color: rgb(233 187 100 / 55%);
     background: rgb(233 187 100 / 7%);
     color: var(--sow-gold-bright);
 }
 
-.sow-hud__building-btn:hover:not(:disabled) {
+.sow-hud__building-btn:hover:not(:disabled):not([aria-disabled="true"]) {
     transform: translateY(-1px);
 }
 
@@ -706,7 +706,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     box-shadow: inset 0 0 0 1px rgb(233 187 100 / 9%);
 }
 
-.sow-hud__building-btn:disabled {
+.sow-hud__building-btn:disabled,
+.sow-hud__building-btn[aria-disabled="true"] {
     cursor: default;
     opacity: 0.35;
     filter: grayscale(0.6);
@@ -1587,7 +1588,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
 .sow-hud__map-sector[aria-disabled="true"],
 .sow-hud__map-center:disabled,
 .sow-hud__map-center[aria-disabled="true"],
-.sow-hud__map-card:disabled {
+.sow-hud__map-card:disabled,
+.sow-hud__map-card[aria-disabled="true"] {
     cursor: help;
     filter: grayscale(.75) brightness(.62);
     opacity: .62;
@@ -2040,6 +2042,31 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     z-index: 80;
 }
 
+@media (min-width: 721px) {
+    .sow-hud__notifications {
+        top: var(--sow-hud-notifications-top, var(--sow-hud-top-edge));
+        left: auto;
+        right: auto;
+        inset-inline-start: var(--sow-hud-notifications-inline-start, max(16px, var(--sow-sal)));
+        transform: none;
+    }
+    .sow-hud__notifications.is-reanchoring {
+        animation: sow-notification-reanchor 150ms ease-out both;
+    }
+    #sow-hud.is-reduced-motion .sow-hud__notifications.is-reanchoring {
+        animation: none;
+    }
+}
+
+@keyframes sow-notification-reanchor {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sow-hud__notifications.is-reanchoring { animation: none; }
+}
+
 .sow-hud__map-feedback {
     position: absolute;
     z-index: 80;
@@ -2279,35 +2306,187 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     padding: 4px 6px;
 }
 
-.sow-hud__transfer label {
+#sow-hud-transfer {
+    width: min(370px, calc(100vw - 32px));
+    max-height: min(70vh, 460px);
+    overflow: hidden;
+    padding: 0;
+    border-radius: 5px 14px 5px 14px;
+    border-color: rgb(233 187 100 / 24%);
+    border-top-color: var(--sow-gold);
+    background: linear-gradient(150deg, rgb(25 37 44 / 98%), rgb(8 14 18 / 99%) 72%);
+    box-shadow: 0 18px 56px #000b, 0 0 30px rgb(0 0 0 / 28%), inset 0 1px rgb(255 255 255 / 5%);
+}
+
+.sow-hud__transfer-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 54px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--sow-line);
+    background: linear-gradient(90deg, rgb(233 187 100 / 8%), transparent 72%);
+}
+
+.sow-hud__transfer-header h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    color: #f5f1e8;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+.sow-hud__transfer-icon {
     display: grid;
-    gap: 4px;
-    margin: 8px 0;
-    color: var(--sow-muted);
-    font-size: 10px;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgb(233 187 100 / 34%);
+    border-radius: 5px 10px 5px 5px;
+    background: rgb(233 187 100 / 10%);
+    color: var(--sow-gold-bright);
+}
+
+.sow-hud__transfer-target {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+    margin: 12px 14px 8px !important;
+    padding: 8px 10px;
+    border: 1px solid rgb(233 187 100 / 18%);
+    border-inline-start: 2px solid var(--sow-gold);
+    border-radius: 3px 8px 3px 3px;
+    background: rgb(233 187 100 / 5%);
+    color: var(--sow-gold-bright) !important;
+    font-size: 11px !important;
     font-weight: 800;
 }
 
-.sow-hud__transfer input {
+.sow-hud__transfer-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    padding: 4px 14px 14px;
+}
+
+.sow-hud__transfer label {
+    display: grid;
+    gap: 6px;
     min-width: 0;
-    padding: 7px 8px;
-    border: 1px solid var(--sow-line);
-    border-radius: 4px;
-    background: rgb(5 10 13 / 65%);
-    color: #f2eee4;
-    font: inherit;
+    margin: 0;
+    color: var(--sow-muted);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+}
+
+.sow-hud__transfer input {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid rgb(211 223 219 / 20%);
+    border-radius: 4px 8px 4px 4px;
+    background: rgb(4 9 12 / 82%);
+    color: #f5f1e8;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 750;
+    line-height: 1;
     font-variant-numeric: tabular-nums;
+    transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
 
 .sow-hud__transfer input:focus-visible,
 .sow-hud__dev-row input:focus-visible,
 .sow-hud__setting-row input:focus-visible { outline-offset: 3px; }
 
-.sow-hud__transfer p {
-    margin: 0 0 10px;
-    color: var(--sow-gold-bright);
-    font-size: 12px;
-    font-weight: 800;
+.sow-hud__transfer-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px 14px 14px;
+    border-top: 1px solid var(--sow-line);
+    background: rgb(0 0 0 / 13%);
+}
+
+.sow-hud__transfer-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid rgb(233 187 100 / 36%);
+    border-radius: 4px 9px 4px 4px;
+    background: rgb(255 255 255 / 4%);
+    color: #ddd9ce;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+
+.sow-hud__transfer-actions .sow-hud__transfer-send {
+    justify-content: space-between;
+    padding-inline: 14px;
+    border-color: var(--sow-gold);
+    background: linear-gradient(110deg, #d9a64d, #f0ca78 55%, #d8a34a);
+    box-shadow: inset 0 1px rgb(255 255 255 / 38%), 0 4px 12px rgb(0 0 0 / 30%);
+    color: #17150f;
+}
+
+.sow-hud__transfer-actions .sow-hud__transfer-send > span:last-child {
+    font-size: 18px;
+    line-height: .8;
+}
+
+.sow-hud__transfer-actions .sow-hud__transfer-request {
+    border-color: var(--sow-line);
+    background: transparent;
+    color: var(--sow-muted);
+}
+
+.sow-hud__transfer-actions button:hover {
+    transform: translateY(-1px);
+}
+
+.sow-hud__transfer-actions .sow-hud__transfer-send:hover {
+    border-color: #ffe6a7;
+    background: linear-gradient(110deg, #edc16b, #ffe09a 55%, #e7b85e);
+    box-shadow: inset 0 1px rgb(255 255 255 / 50%), 0 0 18px rgb(233 187 100 / 28%);
+}
+
+#sow-hud-transfer .sow-tutorial-guide-target {
+    position: relative;
+    z-index: 1;
+    border-color: #ffe19a;
+    outline: 2px solid rgb(245 216 152 / 88%);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 5px rgb(233 187 100 / 17%), 0 0 24px rgb(245 216 152 / 64%);
+    animation: sow-transfer-guide-pulse 1.45s ease-in-out infinite;
+}
+
+#sow-hud-transfer .sow-hud__transfer-send.sow-tutorial-guide-target {
+    background: linear-gradient(110deg, #f0c56e, #fff0bd 55%, #eabb61);
+    color: #100f0b;
+}
+
+@keyframes sow-transfer-guide-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.24); }
+}
+
+#sow-hud.is-reduced-motion #sow-hud-transfer .sow-tutorial-guide-target {
+    animation: none;
 }
 
 .sow-hud__row-action:disabled,

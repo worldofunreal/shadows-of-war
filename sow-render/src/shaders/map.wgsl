@@ -126,6 +126,18 @@ fn owner_albedo(owner_id: u32) -> vec3<f32> {
     return vec3<f32>(0.5, 0.5, 0.5); // Fallback if out of bounds
 }
 
+fn owner_map_albedo(owner_id: u32) -> vec3<f32> {
+    let base = owner_albedo(owner_id);
+    let variant = f32((owner_id * 73u) % 257u) / 256.0;
+    return min(base * mix(0.42, 1.58, variant), vec3<f32>(1.0));
+}
+
+fn owner_map_border_albedo(owner_id: u32) -> vec3<f32> {
+    let base = owner_albedo(owner_id);
+    let variant = f32((owner_id * 73u) % 257u) / 256.0;
+    return min(base * mix(1.45, 0.60, variant), vec3<f32>(1.0));
+}
+
 fn apply_skin(base: vec3<f32>, owner_id: u32, world_pos: vec2<f32>) -> vec3<f32> {
     if owner_id >= 256u {
         return base;
@@ -299,6 +311,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
     }
     if owner_id > 0u && is_land {
         let albedo = owner_albedo(owner_id);
+        let territory_albedo = owner_map_albedo(owner_id);
         
         var opacity = globals.territory_opacity;
         if (opacity <= 0.01) {
@@ -310,16 +323,16 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
         let mode = i32(round(globals.blend_mode));
         if (mode == 1) {
             // Multiply
-            blended_color = base_color * albedo;
+            blended_color = base_color * territory_albedo;
         } else if (mode == 2) {
             // Overlay
-            blended_color = blend_overlay(base_color, albedo);
+            blended_color = blend_overlay(base_color, territory_albedo);
         } else if (mode == 3) {
             // All Albedo
-            blended_color = albedo;
+            blended_color = territory_albedo;
         } else {
             // Normal Mix
-            blended_color = albedo;
+            blended_color = territory_albedo;
         }
 
         if (mode == 3) {
@@ -448,7 +461,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
             } else {
                 var border_albedo = vec3<f32>(0.025, 0.020, 0.015) * border_darkness; // Dark neutral water border line
                 if owner_id > 0u {
-                    border_albedo = owner_albedo(owner_id) * border_darkness;
+                    border_albedo = owner_map_border_albedo(owner_id) * border_darkness;
 
                     // ── Dynamic Conquest Border Shockwave Pulse ──
                     if flash_val > 0.0 && globals.effect_shockwave > 0.0 {
@@ -467,7 +480,7 @@ fn shade_map(in: VertexOutput) -> vec3<f32> {
                         let neighbor_hex_0 = get_hex_neighbor(cell_hex, 0);
                         let contested_owner = get_cell_owner(neighbor_hex_0);
                         if contested_owner > 0u && contested_owner != owner_id {
-                            let enemy_albedo = owner_albedo(contested_owner);
+                            let enemy_albedo = owner_map_border_albedo(contested_owner);
                             let energy_t = sin(globals.time * 2.5) * 0.5 + 0.5;
                             border_albedo = mix(border_albedo, enemy_albedo * border_darkness, energy_t * 0.22);
                         }

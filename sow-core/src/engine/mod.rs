@@ -190,6 +190,8 @@ pub struct SowEngine {
     pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
     pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
     pub campaign_faction_ids: std::collections::HashMap<PlayerId, String>,
+    /// Scripted campaign attackers and the faction they are ordered to pursue.
+    pub campaign_assault_targets: std::collections::HashMap<PlayerId, PlayerId>,
     pub campaign_can_request_alliance: std::collections::HashMap<PlayerId, bool>,
     pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
     /// Next campaign-support send tick for each eligible ally.
@@ -258,6 +260,7 @@ impl SowEngine {
             campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_relations: std::collections::HashMap::new(),
             campaign_faction_ids: std::collections::HashMap::new(),
+            campaign_assault_targets: std::collections::HashMap::new(),
             campaign_can_request_alliance: std::collections::HashMap::new(),
             campaign_contact_resolved: std::collections::HashSet::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
@@ -295,6 +298,11 @@ impl SowEngine {
             alive
         });
         for p in expired {
+            self.record_alliance_request_lifecycle(
+                p.proposer,
+                p.target,
+                crate::game::AllianceRequestStatus::Expired,
+            );
             self.mark_alliance_request_cooldown(p.proposer, p.target);
         }
         self.alliance_request_cooldown_until
@@ -342,6 +350,27 @@ impl SowEngine {
         self.alliance_betray_cooldown_until.insert(bot_id, until);
     }
 
+    pub(crate) fn record_alliance_request_lifecycle(
+        &mut self,
+        proposer_id: PlayerId,
+        target_id: PlayerId,
+        status: crate::game::AllianceRequestStatus,
+    ) {
+        if self
+            .state
+            .player(proposer_id)
+            .is_some_and(|player| player.player_type == crate::player::PlayerType::Human)
+        {
+            self.state
+                .events
+                .push(crate::game::GameEvent::AllianceRequestLifecycle {
+                    proposer_id,
+                    target_id,
+                    status,
+                });
+        }
+    }
+
     pub fn push_alliance_proposal(&mut self, proposer: PlayerId, target: PlayerId) {
         if self.has_alliance_proposal(proposer, target) {
             return;
@@ -351,6 +380,11 @@ impl SowEngine {
             target,
             created_tick: self.current_tick_u32(),
         });
+        self.record_alliance_request_lifecycle(
+            proposer,
+            target,
+            crate::game::AllianceRequestStatus::Submitted,
+        );
     }
 
     pub fn refresh_building_grid(&mut self) {
@@ -535,6 +569,59 @@ impl SowEngine {
             self.defense_grid_dirty = true;
             self.render_defense_dirty = true;
         }
+    }
+
+    /// Make every living scripted faction on a team hostile to, and focused on, a target.
+    /// Returns the number of campaign factions activated.
+    pub fn activate_campaign_assault(
+        &mut self,
+        team: crate::protocol::Team,
+        target_id: PlayerId,
+    ) -> usize {
+        let Some(target) = self.state.player(target_id) else {
+            return 0;
+        };
+        if !target.alive || target.tile_count == 0 || target.team == Some(team) {
+            return 0;
+        }
+
+        let attackers: Vec<PlayerId> = self
+            .state
+            .players
+            .iter()
+            .filter(|player| {
+                player.alive
+                    && player.tile_count > 0
+                    && player.id != target_id
+                    && player.team == Some(team)
+                    && self.campaign_faction_ids.contains_key(&player.id)
+            })
+            .map(|player| player.id)
+            .collect();
+        if attackers.is_empty() {
+            return 0;
+        }
+
+        self.alliances_proposed.retain(|proposal| {
+            !(proposal.target == target_id && attackers.contains(&proposal.proposer)
+                || proposal.proposer == target_id && attackers.contains(&proposal.target))
+        });
+        if let Some(target) = self.state.player_mut(target_id) {
+            target.alliances.retain(|id| !attackers.contains(id));
+            target.alliance_timers.retain(|id, _| !attackers.contains(id));
+        }
+        for attacker_id in &attackers {
+            if let Some(attacker) = self.state.player_mut(*attacker_id) {
+                attacker.alliances.retain(|id| *id != target_id);
+                attacker.alliance_timers.remove(&target_id);
+            }
+            self.campaign_relations
+                .insert(*attacker_id, crate::protocol::CampaignRelation::Enemy);
+            self.campaign_support_next_tick.remove(attacker_id);
+            self.campaign_assault_targets
+                .insert(*attacker_id, target_id);
+        }
+        attackers.len()
     }
 
     #[inline]

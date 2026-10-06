@@ -1,7 +1,7 @@
 import http from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -49,7 +49,7 @@ function contentType(file) {
     ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8",
     ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
     ".bin": "application/octet-stream", ".br": "application/octet-stream",
-    ".webp": "image/webp", ".png": "image/png", ".ttf": "font/ttf", ".ttc": "font/collection",
+    ".webp": "image/webp", ".png": "image/png", ".mp4": "video/mp4", ".webm": "video/webm", ".ttf": "font/ttf", ".ttc": "font/collection",
     ".woff2": "font/woff2", ".svg": "image/svg+xml"
   })[path.extname(file)] || "application/octet-stream";
 }
@@ -384,6 +384,44 @@ async function handle(req, res) {
   catch { reply(res, 400, "bad path"); return; }
   if (!file) { reply(res, 404, "not found"); return; }
   try {
+    if (/\.mp4$|\.webm$/i.test(file)) {
+      const stat = await fs.stat(file);
+      if (!stat.isFile()) { reply(res, 404, "not found"); return; }
+      const size = stat.size;
+      const range = req.headers.range;
+      if (!size && !range) {
+        res.writeHead(200, { "Content-Type": contentType(file), "Cache-Control": "no-store", "Accept-Ranges": "bytes", "Content-Length": 0 });
+        res.end();
+        return;
+      }
+      let start = 0, end = Math.max(0, size - 1), status = 200;
+      if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+        if (!match || !size || !match[1] && !match[2]) {
+          reply(res, 416, "range not satisfiable", "text/plain; charset=utf-8", { "Content-Range": "bytes */" + size });
+          return;
+        }
+        if (!match[1]) start = Math.max(0, size - Number(match[2]));
+        else start = Number(match[1]);
+        if (match[2] && match[1]) end = Math.min(Number(match[2]), size - 1);
+        if (start >= size || start > end) {
+          reply(res, 416, "range not satisfiable", "text/plain; charset=utf-8", { "Content-Range": "bytes */" + size });
+          return;
+        }
+        status = 206;
+      }
+      const headers = {
+        "Content-Type": contentType(file), "Cache-Control": "no-store", "Accept-Ranges": "bytes",
+        "Content-Length": end - start + 1
+      };
+      if (status === 206) headers["Content-Range"] = `bytes ${start}-${end}/${size}`;
+      res.writeHead(status, headers);
+      if (req.method === "HEAD") { res.end(); return; }
+      const stream = createReadStream(file, { start, end });
+      stream.on("error", error => { console.error(error); res.destroy(error); });
+      stream.pipe(res);
+      return;
+    }
     const body = await fs.readFile(file);
     const tag = etag(body);
     if (req.headers["if-none-match"] === tag) { res.writeHead(304, { ETag: tag, "Cache-Control": "no-store" }); res.end(); return; }

@@ -141,6 +141,7 @@
                 add(step.trigger.target); add(step.trigger.recipient);
                 (Array.isArray(step.trigger.targets) ? step.trigger.targets : []).forEach(add);
             }
+            if (object(step.campaign_assault_on_enter)) add(step.campaign_assault_on_enter.target);
             if (object(step.marker)) add(step.marker.target);
         });
         (Array.isArray(definition.reactions) ? definition.reactions : []).forEach(reaction => {
@@ -299,16 +300,25 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "pause_game"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter", "pause_game"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
             end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
             if (!TYPES.includes(step.type)) issue(step, "type", "Unknown step type.");
             if (own(step, "attack_ratio_on_enter") && (!Number.isFinite(step.attack_ratio_on_enter) || step.attack_ratio_on_enter < 0.05 || step.attack_ratio_on_enter > 1)) issue(step, "attack_ratio_on_enter", "Attack ratio must be between 0.05 and 1.");
+            if (own(step, "advance_delay_seconds") && (!Number.isFinite(step.advance_delay_seconds) || step.advance_delay_seconds < 0.1 || step.advance_delay_seconds > 10)) issue(step, "advance_delay_seconds", "Completion delay must be between 0.1 and 10 seconds.");
+            if (own(step, "campaign_assault_on_enter")) {
+                const assault = step.campaign_assault_on_enter;
+                knownFields(assault, ["attacker_team", "target"], step, "campaign_assault_on_enter");
+                if (!object(assault) || !TEAMS.includes(assault.attacker_team)) issue(step, "campaign_assault_on_enter.attacker_team", "Choose the Red or Blue campaign team.");
+                if (!object(assault) || typeof assault.target !== "string" || !assault.target || (assault.target !== "player" && roster && !rosterFactions.has(assault.target) && !allowMissingFactionReferences)) issue(step, "campaign_assault_on_enter.target", "Choose the player or an existing campaign faction.");
+                const targetFaction = object(assault) && roster && Array.isArray(roster.factions) && roster.factions.find(faction => faction.id === assault.target);
+                if (targetFaction && targetFaction.team === assault.attacker_team) issue(step, "campaign_assault_on_enter.target", "The target cannot belong to the attacking team.");
+            }
             if (own(step, "pause_game") && typeof step.pause_game !== "boolean") issue(step, "pause_game", "Pause game must be true or false.");
             if (own(step, "camera_only") && (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))) issue(step, "camera_only", "Camera-only input requires a paused objective.");
             ["title_key", "body_key", "hint_key"].forEach(field => text(step, field, step[field], false));
@@ -328,7 +338,15 @@
                 ["_mobile_action", "_desktop_action"].forEach(dynamicText);
             }
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
-            if (step.presentation && !["dialogue", "chapter", "celebration"].includes(step.presentation)) issue(step, "presentation", "Unknown presentation.");
+            if (step.presentation && (!["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation) || step.presentation === "cinematic" && step.type !== "scene")) issue(step, "presentation", "Choose a presentation supported by this step.");
+            if (step.video_src != null) {
+                const prefix = "/assets/campaign/" + definition.episode_id + "/";
+                const relative = typeof step.video_src === "string" && step.video_src.startsWith(prefix) ? step.video_src.slice(prefix.length) : "";
+                const validPath = step.type === "scene" && step.presentation === "cinematic" && relative
+                    && /\.(?:mp4|webm)$/i.test(relative)
+                    && relative.split("/").every(part => part && part !== "." && part !== ".." && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part));
+                if (!validPath) issue(step, "video_src", "Use an MP4 or WebM inside this episode's assets/campaign folder and select Cinematic presentation.");
+            }
             if (step.lines != null) {
                 if (step.type !== "scene" || !Array.isArray(step.lines) || !step.lines.length || step.lines.length > 64) issue(step, "lines", "A conversation needs 1–64 lines.");
                 else step.lines.forEach(line => {
@@ -382,7 +400,7 @@
             }
             if (["objective", "guide"].includes(step.type)) {
                 const trigger = step.trigger;
-                if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "ui", "building_selected"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
+                if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "eliminated", "ui", "building_selected"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
                     knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
@@ -397,6 +415,9 @@
                             if (!Array.isArray(trigger.targets) || !trigger.targets.length || new Set(trigger.targets).size !== trigger.targets.length || trigger.targets.some(target => typeof target !== "string" || (!rosterFactions.has(target) && !allowMissingFactionReferences))) issue(step, "trigger.targets", "Choose one or more distinct existing factions.");
                             if (!Number.isFinite(trigger.value) || trigger.value !== trigger.targets.length) issue(step, "trigger.value", "The required amount must match the selected factions.");
                         } else if (!trigger.target || trigger.target === "player" || (roster && !factions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose an existing faction.");
+                    } else if (trigger.type === "eliminated") {
+                        if (trigger.targets != null) issue(step, "trigger.targets", "Choose one faction to track for elimination.");
+                        if (!trigger.target || (trigger.target !== "player" && roster && !rosterFactions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose the player or an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
                     } else if (trigger.type === "building_selected") {
@@ -570,11 +591,12 @@
         definition = copy(definition);
         const byId = new Map(definition.steps.map(step => [step.id, step]));
         const state = { id: null, line: 0, choices: Object.create(null), completed: [], reactionsShown: [], reactionChoices: Object.create(null), contactsResolved: [], firstContactTarget: null, done: false };
-        let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, externallyPaused = false;
+        let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, externallyPaused = false, advanceDelayStartedAt = null;
         function enter(key) {
             if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
             state.id = key; state.line = 0; state.done = false;
             baseline = copy(facts); uiBaseline = { ...ui };
+            advanceDelayStartedAt = null;
         }
         function matches(when) {
             if (when.choice) return state.choices[when.choice] === when.equals;
@@ -585,8 +607,8 @@
             if (!trigger) return { current: 0, target: 0 };
             const reference = trigger.scope === "step" ? baseline : trigger.scope === "episode" ? initial || {} : {};
             let current = 0, target = Number(trigger.value || 1);
-            if (trigger.type === "contact" || trigger.type === "defeated") {
-                const field = trigger.type === "contact" ? "contact_faction_ids" : "defeated_faction_ids";
+            if (trigger.type === "contact" || trigger.type === "defeated" || trigger.type === "eliminated") {
+                const field = trigger.type === "contact" ? "contact_faction_ids" : trigger.type === "defeated" ? "defeated_faction_ids" : "eliminated_faction_ids";
                 if (trigger.type === "contact" && Array.isArray(trigger.targets)) {
                     current = trigger.targets.filter(factionId => (facts[field] || []).includes(factionId) && !(reference[field] || []).includes(factionId)).length;
                     target = Number(trigger.value || 1);
@@ -662,7 +684,7 @@
             const targets = Array.isArray(trigger.targets) ? trigger.targets : [trigger.target || trigger.recipient];
             const factionTargets = targets.filter(target => typeof target === "string" && target !== "player");
             if (!factionTargets.length) return false;
-            const field = trigger.type === "contact" ? "contact_faction_ids" : trigger.type === "defeated" ? "defeated_faction_ids" : null;
+            const field = trigger.type === "contact" ? "contact_faction_ids" : trigger.type === "defeated" ? "defeated_faction_ids" : trigger.type === "eliminated" ? "eliminated_faction_ids" : null;
             const observed = field ? facts[field] || [] : [];
             const reference = trigger.scope === "step" ? baseline : trigger.scope === "episode" ? initial || {} : {};
             const priorObserved = field ? reference[field] || [] : [];
@@ -673,6 +695,12 @@
             if (trigger.type === "contact" && observed.includes(factionTargets[0]) && result.current < result.target) return true;
             if (trigger.type === "alliance" && (facts.alliance_faction_ids || []).includes(factionTargets[0]) && result.current < result.target) return true;
             return eliminated.includes(factionTargets[0]) && result.current < result.target;
+        }
+        function completionDelayPending(step, result, unavailable) {
+            const delay = Number(step.advance_delay_seconds || 0);
+            if (unavailable || result.current < result.target || delay <= 0) return false;
+            if (advanceDelayStartedAt == null) advanceDelayStartedAt = Number(facts.elapsed_seconds || 0);
+            return Number(facts.elapsed_seconds || 0) - advanceDelayStartedAt < delay;
         }
         let activeReaction = null;
         function nextReaction() {
@@ -747,7 +775,9 @@
             if (step.type === "scene" && step.lines && state.line + 1 < step.lines.length) { state.line++; return true; }
             if (["objective", "guide"].includes(step.type)) {
                 const result = progress();
-                if (result.current < result.target && !(allowUnavailable && targetUnavailable(step, result))) return false;
+                const unavailable = allowUnavailable && targetUnavailable(step, result);
+                if (result.current < result.target && !unavailable) return false;
+                if (completionDelayPending(step, result, unavailable)) return false;
             }
             if (step.type === "end") {
                 if (!state.completed.includes(step.id)) state.completed.push(step.id);
@@ -774,6 +804,11 @@
             if (initial == null) { initial = copy(facts); initialUi = { ...ui }; baseline = copy(facts); uiBaseline = { ...ui }; }
             if (state.done || externallyPaused) return view();
             while (!state.done) {
+                const step = byId.get(state.id);
+                const objectiveStep = ["objective", "guide"].includes(step.type);
+                const result = objectiveStep ? progress() : null;
+                const unavailable = objectiveStep && targetUnavailable(step, result);
+                if (objectiveStep && completionDelayPending(step, result, unavailable)) break;
                 if (!activeReaction) {
                     const next = nextReaction();
                     if (next) {
@@ -782,10 +817,8 @@
                     }
                 }
                 if (activeReaction) return view();
-                const step = byId.get(state.id);
-                if (!["objective", "guide"].includes(step.type)) break;
-                const result = progress();
-                if (result.current < result.target && !targetUnavailable(step, result)) break;
+                if (!objectiveStep) break;
+                if (result.current < result.target && !unavailable) break;
                 if (!advance(null, step.id, true)) break;
             }
             return view();
@@ -805,6 +838,7 @@
             const nextById = new Map(replacement.steps.filter(object).map(step => [step.id, step]));
             const previousStep = byId.get(state.id), nextStep = nextById.get(state.id);
             if (!nextStep) return false;
+            if (Number(previousStep && previousStep.advance_delay_seconds || 0) !== Number(nextStep.advance_delay_seconds || 0)) advanceDelayStartedAt = null;
             const resetProgress = !previousStep || previousStep.type !== nextStep.type || JSON.stringify(previousStep.trigger) !== JSON.stringify(nextStep.trigger);
             definition = replacement;
             byId.clear();

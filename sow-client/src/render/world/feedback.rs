@@ -9,6 +9,9 @@ use sow_render::FontAtlas;
 use web_time::Instant;
 
 const CLICK_MARKER_DURATION: f32 = 0.16;
+const ATTACK_LAUNCH_NOTICE_DURATION: f32 = 1.5;
+const ATTACK_LAUNCH_NOTICE_FONT_SIZE: f32 = 14.0;
+const ATTACK_LAUNCH_NOTICE_RISE: f32 = 6.5;
 const TRANSPORT_TARGET_FADE_IN_SECS: f32 = 0.2;
 const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
 const TRANSPORT_TARGET_ROTATIONS_PER_SEC: f32 = 1.0;
@@ -63,6 +66,74 @@ pub(crate) fn render(
     render_transport_impacts(text, ui, input, sf, now);
     render_death_nameplates(text, ui, input, dev, sf, now);
     render_attack_badges(text, snapshot, sim, ui, input, dev, sf, now);
+    render_attack_launch_notices(text, ui, input, dev, sf, now);
+}
+
+fn render_attack_launch_notices(
+    text: &mut TextRenderer,
+    ui: &mut UiState,
+    input: &InputState,
+    dev: &DevConfig,
+    sf: f32,
+    now: Instant,
+) {
+    let sf = sf.max(0.01);
+    let screen_w = input.screen_w / sf;
+    let screen_h = input.screen_h / sf;
+    let font_scale = dev.font_size_scale.max(0.1);
+    let char_spacing = dev.font_char_spacing.max(0.1);
+    let base_color = crate::rgb(6, 182, 212);
+
+    ui.attack_launch_notices.retain(|notice| {
+        let elapsed = now.duration_since(notice.start_time).as_secs_f32();
+        let Some((progress, rise, scale)) =
+            attack_launch_notice_animation(elapsed, ATTACK_LAUNCH_NOTICE_DURATION)
+        else {
+            return false;
+        };
+
+        let screen = world_to_screen(notice.world_x, notice.world_y - rise, input, sf);
+        if screen[0] < -150.0
+            || screen[0] > screen_w + 150.0
+            || screen[1] < -150.0
+            || screen[1] > screen_h + 150.0
+        {
+            return true;
+        }
+
+        let alpha = 1.0 - progress;
+        let color = [base_color[0], base_color[1], base_color[2], alpha];
+        let outline = dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]);
+        text.push_string(
+            &notice.text,
+            [screen[0] * sf, screen[1] * sf],
+            ATTACK_LAUNCH_NOTICE_FONT_SIZE * scale * font_scale * sf,
+            color,
+            outline,
+            (0.5, char_spacing, INLINE_EMOJI_SCALE * 0.65),
+        );
+        true
+    });
+}
+
+fn attack_launch_notice_animation(elapsed: f32, duration: f32) -> Option<(f32, f32, f32)> {
+    if !elapsed.is_finite() || !duration.is_finite() || duration <= 0.0 || elapsed >= duration {
+        return None;
+    }
+    let progress = (elapsed / duration).clamp(0.0, 1.0);
+    let scale = if elapsed < 0.5 {
+        spring_overshoot(elapsed / 0.5)
+    } else if elapsed > duration - 0.5 {
+        spring_overshoot((duration - elapsed) / 0.5).clamp(0.0, 1.2)
+    } else {
+        1.0
+    };
+    Some((progress, progress * ATTACK_LAUNCH_NOTICE_RISE, scale))
+}
+
+#[inline]
+fn spring_overshoot(t: f32) -> f32 {
+    1.0 - (t * 7.5).cos() * (-3.5 * t).exp()
 }
 
 fn render_transport_targets(
@@ -544,6 +615,7 @@ fn attack_badge_color(attack: &AttackSnapshot, my_id: u16) -> Option<[f32; 4]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
     fn transport_eta_baseline_centers_short_and_wide_numbers() {
@@ -585,5 +657,31 @@ mod tests {
         assert_eq!(attack_badge_color(&base, 2), Some(crate::rgb(6, 182, 212)));
         assert_eq!(attack_badge_color(&base, 3), Some(crate::rgb(255, 90, 90)));
         assert_eq!(attack_badge_color(&base, 4), None);
+    }
+
+    #[wasm_bindgen_test]
+    fn attack_launch_notice_rises_fades_and_expires() {
+        let start = attack_launch_notice_animation(0.0, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
+        let middle = attack_launch_notice_animation(0.75, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
+        let rebound = attack_launch_notice_animation(1.3, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
+        assert_eq!(start.0, 0.0);
+        assert_eq!(start.1, 0.0);
+        assert_eq!(middle.0, 0.5);
+        assert_eq!(1.0 - middle.0, 0.5);
+        assert_eq!(middle.1, ATTACK_LAUNCH_NOTICE_RISE * 0.5);
+        assert_eq!(middle.2, 1.0);
+        assert_eq!(rebound.2, 1.2);
+        assert!(
+            attack_launch_notice_animation(
+                ATTACK_LAUNCH_NOTICE_DURATION,
+                ATTACK_LAUNCH_NOTICE_DURATION
+            )
+            .is_none()
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn attack_launch_notice_spring_starts_at_zero() {
+        assert_eq!(spring_overshoot(0.0), 0.0);
     }
 }

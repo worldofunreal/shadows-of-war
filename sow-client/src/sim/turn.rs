@@ -3,6 +3,19 @@ use sow_core::engine::SowEngine;
 use sow_core::game::GameEvent;
 use sow_core::protocol::Turn;
 
+fn take_alliance_request_lifecycle_events(events: &mut Vec<GameEvent>) -> Vec<GameEvent> {
+    let mut lifecycle_events = Vec::new();
+    events.retain(|event| {
+        if matches!(event, GameEvent::AllianceRequestLifecycle { .. }) {
+            lifecycle_events.push(event.clone());
+            false
+        } else {
+            true
+        }
+    });
+    lifecycle_events
+}
+
 impl TutorialObservation {
     pub(crate) fn observe_sim(&mut self, engine: &SowEngine, my_id: u16) {
         if my_id == 0 {
@@ -299,7 +312,9 @@ impl TutorialObservation {
             } = event
                 && let Some(player) = engine.state.player(*player_id)
             {
-                if let Some(faction_id) = engine.campaign_faction_ids.get(&player.id) {
+                if player.id == my_id {
+                    self.eliminated_faction_ids.insert("player".to_string());
+                } else if let Some(faction_id) = engine.campaign_faction_ids.get(&player.id) {
                     self.eliminated_faction_ids.insert(faction_id.clone());
                 }
                 if *conqueror_id == my_id
@@ -330,6 +345,7 @@ impl SowApp {
                 // Accepted launches can finish and disappear in their first tick.
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
+            let mut lifecycle_events = take_alliance_request_lifecycle_events(&mut e.state.events);
             e.tick();
             self.sim.config.buildings_enabled = e.state.config.buildings_enabled;
             if observe_tutorial {
@@ -337,7 +353,8 @@ impl SowApp {
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
             let snap = e.build_snapshot();
-            let events: Vec<_> = std::mem::take(&mut e.state.events);
+            let mut events = std::mem::take(&mut e.state.events);
+            events.append(&mut lifecycle_events);
             (snap, events)
         };
 
@@ -447,6 +464,26 @@ mod tests {
             .campaign_faction_ids
             .extend([(2, "neighbor".to_string()), (3, "distant".to_string())]);
         engine
+    }
+
+    #[test]
+    fn preserves_alliance_request_events_before_tick_clears_action_events() {
+        let alliance_event = GameEvent::AllianceRequestLifecycle {
+            proposer_id: 1,
+            target_id: 2,
+            status: sow_core::game::AllianceRequestStatus::Rejected,
+        };
+        let unrelated_event = GameEvent::ResourceRequestRejected {
+            rejector_id: 2,
+            requester_id: 1,
+        };
+        let mut events = vec![alliance_event.clone(), unrelated_event.clone()];
+
+        assert_eq!(
+            take_alliance_request_lifecycle_events(&mut events),
+            vec![alliance_event]
+        );
+        assert_eq!(events, vec![unrelated_event]);
     }
 
     #[test]
@@ -827,6 +864,19 @@ mod tests {
         assert!(observation.seen_defeated_faction_ids.contains("neighbor"));
         assert_eq!(engine.state.player(1).unwrap().kills, 0);
         assert!(observation.seen_contact_faction_ids.contains("neighbor"));
+
+        engine.state.events.clear();
+        engine.state.events.push(GameEvent::PlayerEliminated {
+            player_id: 1,
+            conqueror_id: 2,
+            gold_bounty: 0,
+            elimination_x: 1,
+            elimination_y: 1,
+            assists: vec![],
+            by_nuke: false,
+        });
+        observation.observe_events(&engine, 1);
+        assert!(observation.eliminated_faction_ids.contains("player"));
     }
 
     #[test]

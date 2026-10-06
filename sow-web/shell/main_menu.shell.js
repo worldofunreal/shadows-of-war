@@ -115,19 +115,35 @@
         return "<a" + classAttr + " href='" + esc(href) + "'" + targetAttr + ">" + esc(SOW_t(key)) + "</a>";
     }
 
-    function renderFooter(label) {
-        var externalAttrs = isAndroidTwa() ? "" : " target='_blank' rel='noopener noreferrer'";
+    function renderMenuAttribution() {
+        return "<span class='sow-menu__attribution'>© OpenFront and Contributors</span>";
+    }
+
+    function renderSettingsLink(url, key, className) {
+        if (!url) return "";
+        if (isAndroidTwa()) {
+            return "<button class='sow-menu__settings-link" + (className ? " " + esc(className) : "") + "' type='button' data-command='open_android_external_link' data-url='" + esc(url) + "'>" + esc(SOW_t(key)) + "</button>";
+        }
+        return "<a class='sow-menu__settings-link" + (className ? " " + esc(className) : "") + "' href='" + esc(url) + "' target='_blank' rel='noopener noreferrer'>" + esc(SOW_t(key)) + "</a>";
+    }
+
+    function renderSettingsLinks() {
         var sourceUrl = typeof window.SOW_SOURCE_URL === "string" ? window.SOW_SOURCE_URL : "";
         var licenseUrl = sourceUrl ? sourceUrl.replace("/tree/", "/blob/") + "/LICENSE" : "";
         var androidOssLicenses = isAndroidTwa() &&
             typeof window.SOW_androidOssLicensesAvailable === "function" &&
             window.SOW_androidOssLicensesAvailable()
-            ? "<a href='#' data-command='open_android_oss_licenses'>" + esc(SOW_t("menu.third_party_licenses")) + "</a>"
+            ? "<button class='sow-menu__settings-link' type='button' data-command='open_android_oss_licenses'>" + esc(SOW_t("menu.third_party_licenses")) + "</button>"
             : "";
-        return "<footer class='sow-menu__footer'>" + (label ? "<span data-menu-footer-label>" + esc(label) + "</span>" : "") + "<nav class='sow-menu__footer-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
-            renderSiteLink("/#faq", "site.faq") + renderSiteLink("/support/", "menu.support") + renderSiteLink("/terms/", "menu.terms") + renderSiteLink("/privacy/", "menu.privacy") + renderSiteLink("/cookies/", "menu.cookies") +
-            "<a href='https://discord.gg/d6ZDeChSE'" + externalAttrs + ">" + esc(SOW_t("menu.discord")) + "</a><a href='https://t.me/shadowsofwario'" + externalAttrs + ">" + esc(SOW_t("menu.telegram")) + "</a><a class='sow-menu__source-link' href='" + esc(sourceUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.source_code")) + "</a><a class='sow-menu__license-link' href='" + esc(licenseUrl) + "'" + externalAttrs + ">" + esc(SOW_t("menu.license_notice")) + "</a>" + androidOssLicenses +
-            "</nav><span>" + esc(SOW_t("menu.brand")) + " · <span class='sow-menu__openfront-credit'>© OpenFront and Contributors</span></span></footer>";
+        return renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq") +
+            renderSettingsLink("https://shadowsofwar.io/support/", "menu.support") +
+            renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
+            renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy") +
+            renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
+            renderSettingsLink("https://discord.gg/d6ZDeChSE", "menu.discord") +
+            renderSettingsLink("https://t.me/shadowsofwario", "menu.telegram") +
+            renderSettingsLink(sourceUrl, "menu.source_code", "sow-menu__source-link") +
+            renderSettingsLink(licenseUrl, "menu.license_notice", "sow-menu__license-link") + androidOssLicenses;
     }
 
     function renderMainNav(active) {
@@ -180,8 +196,9 @@
                         "<button class='sow-menu__icon-button' type='button' data-command='toggle_settings' aria-label='" + esc(SOW_t("menu.close")) + "'>×</button>" +
                     "</div>" +
                     "<div class='sow-menu__settings-body'>" +
-                        accountControl +
-                        "<div class='sow-menu__settings-controls'>" +
+                        "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.account")) + "</h3>" + accountControl +
+                        (signOutControl ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>" : "") + "</section>" +
+                        "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.settings_preferences")) + "</h3><div class='sow-menu__settings-controls'>" +
                             "<label class='sow-menu__form-field'>" +
                                 "<div class='sow-menu__slider-label'><span>" + esc(SOW_t("menu.music_volume")) + "</span><b data-val-for='music_vol'>" + volPct + "%</b></div>" +
                                 "<input class='sow-menu__field' type='range' name='music_volume' min='0' max='1' step='0.05' value='" + esc(vol) + "' data-setting='music_volume'>" +
@@ -208,8 +225,8 @@
                             "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                                 SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                             "</label>" +
-                        "</div>" +
-                        (signOutControl ? "<div class='sow-menu__settings-actions'>" + signOutControl + "</div>" : "") +
+                        "</div></section>" +
+                        "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.game_links")) + "</h3><nav class='sow-menu__settings-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" + renderSettingsLinks() + "</nav></section>" +
                     "</div>" +
                 "</section>" +
             "</div>";
@@ -397,17 +414,12 @@
         return "sow-menu__backdrop" + (screen === "store" ? " sow-store__backdrop" : screen === "heroes" ? " sow-heroes__backdrop" : "");
     }
 
-    function screenFooterLabel(screen) {
-        var key = ({ campaign: "menu.campaign", browser: "menu.lobby_browser", create: "menu.create_game", queue: "menu.lobby", store: "menu.shop", heroes: "menu.heroes", profile: "menu.profile" })[screen];
-        return key ? SOW_t(key) : "";
-    }
-
     function renderFrame(screen) {
         return "<div class='" + screenBackdropClass(screen) + "' data-menu-backdrop></div>" +
             "<div class='" + screenShellClass(screen) + "'>" +
                 renderTopbar() +
                 "<div class='sow-menu__screen-stage' data-screen-stage>" + renderScreenPanel(screen) + "</div>" +
-                renderMainNav(screenNav(screen)) + renderFooter(screenFooterLabel(screen)) +
+                renderMainNav(screenNav(screen)) + renderMenuAttribution() +
             "</div>" + renderPasswordModal() + renderProfileDetail();
     }
 
@@ -487,16 +499,6 @@
             if (active) item.setAttribute("aria-current", "page");
             else item.removeAttribute("aria-current");
         });
-        var footer = root.querySelector(".sow-menu__footer");
-        var label = footer && footer.querySelector("[data-menu-footer-label]");
-        var nextLabel = screenFooterLabel(screen);
-        if (footer && nextLabel && label) label.textContent = nextLabel;
-        else if (footer && nextLabel && !label) {
-            label = document.createElement("span");
-            label.dataset.menuFooterLabel = "";
-            label.textContent = nextLabel;
-            footer.insertBefore(label, footer.firstElementChild);
-        } else if (label && !nextLabel) label.remove();
         updateTopbar();
     }
 
@@ -1277,6 +1279,13 @@
             if (typeof window.SOW_openAndroidOssLicenses === "function") {
                 window.SOW_openAndroidOssLicenses();
             }
+            return;
+        }
+        if (command === "open_android_external_link") {
+            event.preventDefault();
+            var url = target.dataset.url || "";
+            var opened = typeof window.SOW_openAndroidExternalLink === "function" && window.SOW_openAndroidExternalLink(url);
+            if (!opened && url) window.open(url, "_blank", "noopener,noreferrer");
             return;
         }
         if (command === "load_profile_more") {

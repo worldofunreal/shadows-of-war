@@ -365,6 +365,7 @@ fn resolve_placement(
 mod tests {
     use super::*;
     use sow_core::building::CityModules;
+    use sow_core::game::BuildingKind;
 
     #[test]
     fn placement_index_limits_checks_to_local_buildings() {

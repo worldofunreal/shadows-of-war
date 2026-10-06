@@ -23,6 +23,13 @@ pub const ALLY_GRACE_AFTER_FORM_TICKS: u32 = 600;
 /// Alliance duration on accept (must match intent handlers).
 pub const ALLIANCE_DURATION_TICKS: u32 = 2400;
 
+/// Campaign alliances have no timer and are permanent; only timed alliances renew.
+#[inline]
+pub fn alliance_can_renew(is_allied: bool, remaining_ticks: Option<u32>) -> bool {
+    is_allied
+        && remaining_ticks.is_some_and(|ticks| ticks <= ALLIANCE_RENEWAL_WINDOW_TICKS)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AllianceProposal {
     pub proposer: PlayerId,
@@ -222,6 +229,14 @@ mod tests {
     fn standard_tribe_not_valid_target_for_nation() {
         assert!(!is_valid_alliance_target(8, 15, PlayerType::Bot,));
         assert!(is_valid_alliance_target(512, 100, PlayerType::Bot,));
+    }
+
+    #[test]
+    fn only_timed_alliances_can_renew() {
+        assert!(!alliance_can_renew(true, None));
+        assert!(alliance_can_renew(true, Some(ALLIANCE_RENEWAL_WINDOW_TICKS)));
+        assert!(!alliance_can_renew(true, Some(ALLIANCE_RENEWAL_WINDOW_TICKS + 1)));
+        assert!(!alliance_can_renew(false, Some(0)));
     }
 
     #[test]

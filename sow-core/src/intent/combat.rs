@@ -141,11 +141,13 @@ pub fn spawn_or_merge_attack_for_fleet_arrival_pure(
 
     let exec_id = engine.state.next_attack_id;
     engine.state.next_attack_id = engine.state.next_attack_id.wrapping_add(1).max(1);
+    let created_tick = engine.state.tick;
 
     engine.add_attack(AttackExecution {
         id: exec_id,
         owner_id,
         target_owner,
+        created_tick,
         troops,
         to_conquer: fresh,
         insert_seq_counter: initial_seq,
@@ -293,10 +295,12 @@ impl SowEngine {
 
         let exec_id = self.state.next_attack_id;
         self.state.next_attack_id = self.state.next_attack_id.wrapping_add(1).max(1);
+        let created_tick = self.state.tick;
         self.add_attack(AttackExecution {
             id: exec_id,
             owner_id: player_id,
             target_owner,
+            created_tick,
             troops: remaining,
             to_conquer: fresh,
             insert_seq_counter: initial_seq,

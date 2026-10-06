@@ -835,39 +835,6 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     text-align: center;
 }
 
-.sow-menu__footer {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    color: rgba(245, 241, 232, 0.45);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.sow-menu__footer-links {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-}
-
-.sow-menu__footer-links a {
-    color: rgba(245, 241, 232, 0.62);
-    text-decoration: none;
-}
-
-.sow-menu__openfront-credit {
-    text-transform: none;
-    letter-spacing: normal;
-}
-
-.sow-menu__footer-links a:hover,
-.sow-menu__footer-links a:focus-visible {
-    color: var(--sow-gold-bright);
-    text-decoration: underline;
-}
-
 .sow-menu__overlay {
     position: absolute;
     inset: 0;

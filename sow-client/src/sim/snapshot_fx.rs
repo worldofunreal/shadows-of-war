@@ -389,7 +389,7 @@ fn new_mutual_alliances(
 }
 
 #[cfg(test)]
-mod tests {
+mod nuke_alert_tests {
     use super::new_mutual_alliances;
     use sow_core::player::{Civilization, Leader, PlayerType};
     use sow_core::protocol::PlayerSnapshot;

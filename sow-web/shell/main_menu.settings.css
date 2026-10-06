@@ -14,7 +14,59 @@
 .sow-menu__settings-body {
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: 16px;
+}
+
+.sow-menu__settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--sow-line);
+}
+
+.sow-menu__settings-section:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.sow-menu__settings-section > h3 {
+    margin: 0;
+    color: var(--sow-gold-bright);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.sow-menu__settings-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.sow-menu__settings-link {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    border: 1px solid var(--sow-line);
+    border-radius: var(--sow-button-radius);
+    background: rgba(255, 255, 255, 0.035);
+    color: #f5f1e8;
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.35;
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.sow-menu__settings-link:hover,
+.sow-menu__settings-link:focus-visible {
+    border-color: var(--sow-gold);
+    color: var(--sow-gold-bright);
 }
 
 .sow-menu__settings-account {

@@ -127,5 +127,20 @@ pub(super) struct AiSlot {
     pub(super) do_attack: bool,
     pub(super) do_structures: bool,
     pub(super) is_under_attack: bool,
+    pub(super) ghost_retaliation: Option<GhostRetaliation>,
     pub(super) profile: BotAiProfile,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct GhostRetaliation {
+    pub(super) attack_id: u64,
+    pub(super) attacker_id: u16,
+    pub(super) incoming_troops: f64,
+    pub(super) ready_tick: u64,
+}
+
+impl GhostRetaliation {
+    pub(super) fn is_ready_at(self, tick: u64) -> bool {
+        tick >= self.ready_tick
+    }
 }

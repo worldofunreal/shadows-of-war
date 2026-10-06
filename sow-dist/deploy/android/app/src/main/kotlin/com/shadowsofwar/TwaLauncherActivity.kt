@@ -117,6 +117,7 @@ class TwaLauncherActivity : LauncherActivity() {
                         .put("restore")
                         .put("playgames_silent_auth")
                         .put("open_source_licenses")
+                        .put("open_external_link")
                 )
                 .put("products", products)
             val result = session.postMessage(ready.toString(), null)
@@ -133,6 +134,7 @@ class TwaLauncherActivity : LauncherActivity() {
             val request = JSONObject(message)
             when (request.optString("type")) {
                 "open_source_licenses" -> startActivity(Intent(this, OssLicensesMenuActivity::class.java))
+                "open_external_link" -> openExternalLink(request.optString("url"))
                 "playgames_silent_auth" -> startSilentPlayGamesAuth(request)
                 "purchase" -> handlePurchaseRequest(request)
                 "restore" -> handleRestoreRequest(request)
@@ -140,6 +142,15 @@ class TwaLauncherActivity : LauncherActivity() {
         } catch (error: Exception) {
             Log.w(TAG, "invalid native bridge message", error)
         }
+    }
+
+    private fun openExternalLink(rawUrl: String) {
+        val uri = Uri.parse(rawUrl)
+        if (uri.scheme != "https" || uri.host !in setOf("shadowsofwar.io", "discord.gg", "t.me", "github.com")) {
+            Log.w(TAG, "blocked external link outside the game allowlist")
+            return
+        }
+        startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
 
     private fun startSilentPlayGamesAuth(request: JSONObject) {

@@ -132,6 +132,28 @@ pub fn structure_kind_enabled(_kind: BuildingKind) -> bool {
     true
 }
 
+/// City milestones unlock structure types consistently for the server and client.
+#[inline]
+pub const fn structure_kind_unlocked(kind: BuildingKind, city_level: u8) -> bool {
+    !matches!(kind, BuildingKind::Factory) || city_level >= 3
+}
+
+#[cfg(test)]
+mod structure_unlock_tests {
+    use super::structure_kind_unlocked;
+    use crate::game::BuildingKind;
+
+    #[test]
+    fn only_factory_requires_city_level_three() {
+        assert!(!structure_kind_unlocked(BuildingKind::Factory, 2));
+        assert!(structure_kind_unlocked(BuildingKind::Factory, 3));
+        assert!(BuildingKind::ALL
+            .into_iter()
+            .filter(|kind| *kind != BuildingKind::Factory)
+            .all(|kind| structure_kind_unlocked(kind, 0)));
+    }
+}
+
 /// Whether `player_id` owns a finished Port; the AI uses this for naval strategy.
 #[inline]
 pub fn player_has_completed_port(buildings: &[Building], player_id: u16) -> bool {

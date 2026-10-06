@@ -124,10 +124,6 @@
             width: 100%;
         }
     
-        .sow-menu__footer {
-            flex-wrap: wrap;
-        }
-    
         .sow-menu__overlay {
             position: fixed;
             align-items: end;
@@ -245,8 +241,6 @@
         .sow-menu__danger,
         .sow-menu__join button { min-height: 48px; }
     
-        .sow-menu__footer-links a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
-    
         .sow-menu__battlefield { gap: 10px; overflow: visible; }
     
         .sow-menu__leader-copy {
@@ -263,8 +257,6 @@
         .sow-menu__leader-copy p { margin: 0; font-size: 11px; line-height: 1.45; }
     
         .sow-menu__public { width: 100%; min-height: 0; overflow: visible; }
-    
-        .sow-menu__footer { padding-bottom: max(2px, env(safe-area-inset-bottom)); }
     
         #sow-menu[data-screen="browser"] .sow-menu__command h1 { font-size: 30px; }
     
@@ -425,8 +417,17 @@
     outline-offset: -2px;
 }
 
-#sow-menu .sow-menu__footer {
-    grid-row: 4;
+/* OpenFront AGPL section 7(b) requires this attribution to remain visible in the menu. */
+#sow-menu .sow-menu__attribution {
+    position: absolute;
+    inset-inline-end: 0;
+    bottom: max(2px, env(safe-area-inset-bottom));
+    z-index: 1;
+    color: #999;
+    opacity: 0.75;
+    font-size: 8px;
+    line-height: 1.4;
+    pointer-events: none;
 }
 
 #sow-menu .sow-menu__screen-stage {
@@ -545,10 +546,6 @@
             padding-bottom: max(8px, env(safe-area-inset-bottom));
         }
     
-        #sow-menu .sow-menu__footer {
-            display: none;
-        }
-    
         #sow-menu .sow-menu__topbar {
             min-height: 50px;
         }
@@ -651,9 +648,6 @@
             gap: 10px;
         }
     
-        #sow-menu .sow-menu__footer {
-            display: none;
-        }
 }
 
 @media (min-width: 681px) and (orientation: landscape) {
@@ -724,11 +718,6 @@
             box-shadow: 0.5rem 0 1.5rem rgba(0, 0, 0, 0.18);
         }
     
-        #sow-menu .sow-menu__footer {
-            grid-column: 1 / -1;
-            grid-row: 3;
-            min-width: 0;
-        }
 }
 
 @media (min-width: 681px) and (orientation: landscape) and (max-height: 560px) {
@@ -745,8 +734,7 @@
             backdrop-filter: none;
         }
     
-        #sow-menu .sow-menu__profile small,
-        #sow-menu .sow-menu__footer {
+        #sow-menu .sow-menu__profile small {
             display: none;
         }
 }
@@ -814,16 +802,4 @@
     #sow-menu .sow-menu__progress { height: 32px; }
     #sow-menu .sow-menu__progress-cell { padding-inline: 4px; font-size: 9px; }
     #sow-menu .sow-menu__currency-icon { width: 14px; height: 14px; }
-}
-
-@media (max-width: 599px) and (orientation: portrait), (orientation: landscape) and (max-height: 560px) {
-    #sow-menu[data-screen="home"] .sow-menu__footer {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    #sow-menu[data-screen="home"] .sow-menu__footer-links > :not(.sow-menu__source-link):not(.sow-menu__license-link) {
-        display: none;
-    }
 }

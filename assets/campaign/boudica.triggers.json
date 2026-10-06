@@ -165,7 +165,7 @@
       "title_key": "tutorial.campaign_boudica_boudica_council_title",
       "body_key": "tutorial.campaign_boudica_boudica_council_body",
       "speaker": "boudica",
-      "presentation": "chapter",
+      "presentation": "cinematic",
       "next": "boudica_council_decision"
     },
     {
@@ -208,7 +208,7 @@
         "value": 1,
         "scope": "step"
       },
-      "attack_ratio_on_enter": 0.25,
+      "attack_ratio_on_enter": 1.0,
       "marker": {
         "target": "roman_outpost"
       },
@@ -229,8 +229,9 @@
       "trigger": {
         "type": "defeated",
         "target": "roman_outpost",
-        "scope": "step"
+        "scope": "episode"
       },
+      "advance_delay_seconds": 1,
       "marker": {
         "target": "roman_outpost"
       },
@@ -312,13 +313,13 @@
       "camera_only": true,
       "trigger": {
         "type": "camera_target",
-        "target": "legio_xiv_gemina",
+        "target": "suetonius_paulinus",
         "distance": 8,
         "value": 1,
         "scope": "step"
       },
       "marker": {
-        "target": "legio_xiv_gemina"
+        "target": "suetonius_paulinus"
       },
       "guide": {
         "kind": "world",
@@ -337,12 +338,12 @@
       "camera_only": true,
       "trigger": {
         "type": "hover",
-        "target": "legio_xiv_gemina",
+        "target": "suetonius_paulinus",
         "value": 1,
         "scope": "step"
       },
       "marker": {
-        "target": "legio_xiv_gemina"
+        "target": "suetonius_paulinus"
       },
       "guide": {
         "kind": "world",
@@ -361,13 +362,13 @@
       "camera_only": true,
       "trigger": {
         "type": "zoom_in_complete",
-        "target": "legio_xiv_gemina",
+        "target": "suetonius_paulinus",
         "distance": 8,
         "value": 1,
         "scope": "step"
       },
       "marker": {
-        "target": "legio_xiv_gemina"
+        "target": "suetonius_paulinus"
       },
       "guide": {
         "kind": "world",
@@ -384,17 +385,8 @@
       "speaker": "boudica",
       "presentation": "dialogue",
       "marker": {
-        "target": "legio_xiv_gemina"
+        "target": "suetonius_paulinus"
       },
-      "next": "boudica_return_home"
-    },
-    {
-      "id": "boudica_return_home",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_return_home_title",
-      "body_key": "tutorial.campaign_boudica_boudica_return_home_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
       "next": "boudica_camera_home"
     },
     {
@@ -586,7 +578,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_share_sent_body",
       "speaker": "boudica",
       "presentation": "celebration",
-      "next": "boudica_choose_farm"
+      "next": "boudica_choose_factory"
     },
     {
       "id": "boudica_aid_kept",
@@ -595,7 +587,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_aid_kept_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_choose_farm"
+      "next": "boudica_choose_factory"
     },
     {
       "id": "boudica_choose_city",
@@ -622,9 +614,10 @@
       "hint_key": "tutorial.campaign_boudica_boudica_build_city_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "city",
+        "type": "structure_level",
+        "kind": "City",
         "value": 1,
-        "scope": "step"
+        "scope": "total"
       },
       "marker": {
         "target": "player"
@@ -634,6 +627,7 @@
         "target": "build_site",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
       "next": "boudica_city_ready"
     },
     {
@@ -665,7 +659,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_third_contact"
+      "next": "boudica_choose_farm"
     },
     {
       "id": "boudica_choose_farm",
@@ -692,9 +686,10 @@
       "hint_key": "tutorial.campaign_boudica_boudica_build_farm_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "farm",
+        "type": "structure_level",
+        "kind": "Farm",
         "value": 1,
-        "scope": "step"
+        "scope": "total"
       },
       "marker": {
         "target": "player"
@@ -704,6 +699,7 @@
         "target": "build_site",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
       "next": "boudica_farm_ready"
     },
     {
@@ -795,6 +791,7 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
       "next": "boudica_city_upgrade_ready"
     },
     {
@@ -804,7 +801,77 @@
       "body_key": "tutorial.campaign_boudica_boudica_city_upgrade_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_choose_factory"
+      "next": "boudica_select_city_level3"
+    },
+    {
+      "id": "boudica_select_city_level3",
+      "type": "guide",
+      "title_key": "tutorial.campaign_boudica_boudica_city_level3_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_city_level3_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "building_selected",
+        "kind": "City",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "next": "boudica_city_level3_upgrade"
+    },
+    {
+      "id": "boudica_city_level3_upgrade",
+      "type": "guide",
+      "title_key": "tutorial.campaign_boudica_boudica_city_level3_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_city_level3_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "ui",
+        "action": "upgrade_structure",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "upgrade_structure",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "next": "boudica_city_level3_wait"
+    },
+    {
+      "id": "boudica_city_level3_wait",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_city_level3_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_city_level3_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "structure_level",
+        "kind": "City",
+        "value": 3,
+        "scope": "total"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "upgrade_building",
+        "gesture": "tap"
+      },
+      "advance_delay_seconds": 1,
+      "next": "boudica_city_level3_ready"
+    },
+    {
+      "id": "boudica_city_level3_ready",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_city_level3_ready_title",
+      "body_key": "tutorial.campaign_boudica_boudica_city_level3_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_third_contact"
     },
     {
       "id": "boudica_trinovantes_contact",
@@ -853,9 +920,10 @@
       "hint_key": "tutorial.campaign_boudica_boudica_build_factory_hint",
       "speaker": "council",
       "trigger": {
-        "type": "factory",
+        "type": "structure_level",
+        "kind": "Factory",
         "value": 1,
-        "scope": "step"
+        "scope": "total"
       },
       "marker": {
         "target": "player"
@@ -865,6 +933,7 @@
         "target": "build_site",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
       "next": "boudica_factory_ready"
     },
     {
@@ -934,6 +1003,7 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
       "next": "boudica_factory_upgrade_ready"
     },
     {
@@ -979,9 +1049,10 @@
       "hint_key": "tutorial.campaign_boudica_boudica_build_bunker_hint",
       "speaker": "council",
       "trigger": {
-        "type": "bunker",
+        "type": "structure_level",
+        "kind": "Bunker",
         "value": 1,
-        "scope": "step"
+        "scope": "total"
       },
       "marker": {
         "target": "player"
@@ -991,6 +1062,16 @@
         "target": "build_site",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
+      "next": "boudica_bunker_built"
+    },
+    {
+      "id": "boudica_bunker_built",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_bunker_built_title",
+      "body_key": "tutorial.campaign_boudica_boudica_bunker_built_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_select_bunker_upgrade"
     },
     {
@@ -1051,6 +1132,7 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
       "next": "boudica_bunker_ready"
     },
     {
@@ -1073,6 +1155,7 @@
         "target": "colonia_veterans",
         "scope": "total"
       },
+      "advance_delay_seconds": 1,
       "marker": {
         "target": "colonia_veterans"
       },
@@ -1081,6 +1164,15 @@
         "target": "target_action",
         "gesture": "tap"
       },
+      "next": "boudica_outpost_colonia_veterans_scene"
+    },
+    {
+      "id": "boudica_outpost_colonia_veterans_scene",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_scene_title",
+      "body_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_scene_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_outpost_tax_collectors"
     },
     {
@@ -1094,6 +1186,7 @@
         "target": "tax_collectors",
         "scope": "total"
       },
+      "advance_delay_seconds": 1,
       "marker": {
         "target": "tax_collectors"
       },
@@ -1102,6 +1195,15 @@
         "target": "target_action",
         "gesture": "tap"
       },
+      "next": "boudica_outpost_tax_collectors_scene"
+    },
+    {
+      "id": "boudica_outpost_tax_collectors_scene",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_outpost_tax_collectors_scene_title",
+      "body_key": "tutorial.campaign_boudica_boudica_outpost_tax_collectors_scene_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_outpost_roman_supply_depot"
     },
     {
@@ -1115,6 +1217,7 @@
         "target": "roman_supply_depot",
         "scope": "total"
       },
+      "advance_delay_seconds": 1,
       "marker": {
         "target": "roman_supply_depot"
       },
@@ -1123,6 +1226,15 @@
         "target": "target_action",
         "gesture": "tap"
       },
+      "next": "boudica_outpost_roman_supply_depot_scene"
+    },
+    {
+      "id": "boudica_outpost_roman_supply_depot_scene",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_outpost_roman_supply_depot_scene_title",
+      "body_key": "tutorial.campaign_boudica_boudica_outpost_roman_supply_depot_scene_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_trinovantes_contact"
     },
     {
@@ -1330,7 +1442,8 @@
       "hint_key": "tutorial.campaign_boudica_boudica_build_port_hint",
       "speaker": "council",
       "trigger": {
-        "type": "port",
+        "type": "structure_level",
+        "kind": "Port",
         "value": 1,
         "scope": "total"
       },
@@ -1342,6 +1455,16 @@
         "target": "build_site",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
+      "next": "boudica_port_built"
+    },
+    {
+      "id": "boudica_port_built",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_port_built_title",
+      "body_key": "tutorial.campaign_boudica_boudica_port_built_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_select_port_upgrade"
     },
     {
@@ -1383,10 +1506,10 @@
         "gesture": "tap"
       },
       "pause_game": true,
-      "next": "boudica_port_ready"
+      "next": "boudica_port_upgrade_wait"
     },
     {
-      "id": "boudica_port_ready",
+      "id": "boudica_port_upgrade_wait",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_port_upgrade_title",
       "hint_key": "tutorial.campaign_boudica_boudica_port_ready_hint",
@@ -1404,6 +1527,16 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
+      "advance_delay_seconds": 1,
+      "next": "boudica_port_ready"
+    },
+    {
+      "id": "boudica_port_ready",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_port_ready_title",
+      "body_key": "tutorial.campaign_boudica_boudica_port_ready_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_fleet_target"
     },
     {
@@ -1616,7 +1749,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_trade_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_final_battle"
+      "next": "boudica_final_battle_intro"
     },
     {
       "id": "boudica_final_battle_intro",
@@ -1624,27 +1757,62 @@
       "title_key": "tutorial.campaign_boudica_boudica_final_title",
       "body_key": "tutorial.campaign_boudica_boudica_final_body",
       "speaker": "boudica",
-      "presentation": "dialogue",
-      "next": "boudica_final_battle"
+      "presentation": "cinematic",
+      "next": "boudica_final_choice"
     },
     {
-      "id": "boudica_final_battle",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_final_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_final_hint",
+      "id": "boudica_final_choice",
+      "type": "choice",
+      "title_key": "tutorial.campaign_boudica_boudica_final_choice_title",
+      "body_key": "tutorial.campaign_boudica_boudica_final_choice_body",
       "speaker": "boudica",
+      "choices": [
+        {
+          "id": "poison",
+          "label_key": "tutorial.campaign_boudica_boudica_final_choice_poison",
+          "next": "boudica_poison_end"
+        },
+        {
+          "id": "fight",
+          "label_key": "tutorial.campaign_boudica_boudica_final_choice_fight",
+          "next": "boudica_last_stand_intro"
+        }
+      ]
+    },
+    {
+      "id": "boudica_poison_end",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_poison_end_title",
+      "body_key": "tutorial.campaign_boudica_boudica_poison_end_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_end"
+    },
+    {
+      "id": "boudica_last_stand_intro",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_last_stand_intro_title",
+      "body_key": "tutorial.campaign_boudica_boudica_last_stand_intro_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "next": "boudica_last_stand"
+    },
+    {
+      "id": "boudica_last_stand",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_last_stand_title",
+      "body_key": "tutorial.campaign_boudica_boudica_last_stand_body",
+      "hint_key": "tutorial.campaign_boudica_boudica_last_stand_hint",
+      "speaker": "boudica",
+      "campaign_assault_on_enter": {
+        "attacker_team": "Red",
+        "target": "player"
+      },
       "trigger": {
-        "type": "defeated",
-        "target": "legio_xiv_gemina",
-        "scope": "total"
-      },
-      "marker": {
-        "target": "legio_xiv_gemina"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "target_action",
-        "gesture": "tap"
+        "type": "eliminated",
+        "target": "player",
+        "scope": "total",
+        "value": 1
       },
       "next": "boudica_end"
     },
@@ -1925,17 +2093,29 @@
       "x": 630,
       "y": 3680
     },
-    "boudica_final_battle": {
-      "x": 70,
-      "y": 3870
+    "boudica_final_choice": {
+      "x": 910,
+      "y": 3680
+    },
+    "boudica_poison_end": {
+      "x": 1190,
+      "y": 3480
+    },
+    "boudica_last_stand_intro": {
+      "x": 1190,
+      "y": 3880
+    },
+    "boudica_last_stand": {
+      "x": 1470,
+      "y": 3880
     },
     "boudica_end": {
-      "x": 350,
-      "y": 3870
+      "x": 1750,
+      "y": 3680
     },
     "boudica_complete": {
-      "x": 630,
-      "y": 3870
+      "x": 2030,
+      "y": 3680
     },
     "boudica_outpost_colonia_veterans": {
       "x": 70,

@@ -1,6 +1,6 @@
 use crate::diplomacy::{
-    ALLIANCE_DURATION_TICKS, ALLIANCE_RENEWAL_WINDOW_TICKS, BOT_BETRAYAL_EMOJI_TICKS,
-    HUMAN_BETRAYAL_EMOJI_TICKS, TRAITOR_STATUS_TICKS,
+    ALLIANCE_DURATION_TICKS, BOT_BETRAYAL_EMOJI_TICKS, HUMAN_BETRAYAL_EMOJI_TICKS,
+    TRAITOR_STATUS_TICKS, alliance_can_renew,
 };
 use crate::engine::SowEngine;
 use crate::player::PlayerType;
@@ -543,8 +543,8 @@ impl SowEngine {
                             .player(proposer)
                             .map(|p| {
                                 let allied = p.alliances.contains(&target);
-                                let timer = p.alliance_timers.get(&target).copied().unwrap_or(0);
-                                (allied, allied && timer <= ALLIANCE_RENEWAL_WINDOW_TICKS)
+                                let remaining_ticks = p.alliance_timers.get(&target).copied();
+                                (allied, alliance_can_renew(allied, remaining_ticks))
                             })
                             .unwrap_or((false, false));
 
@@ -616,6 +616,11 @@ impl SowEngine {
                     .position(|p| p.proposer == target && p.target == rejector);
                 if let Some(idx) = prop_idx {
                     self.alliances_proposed.remove(idx);
+                    self.record_alliance_request_lifecycle(
+                        target,
+                        rejector,
+                        crate::game::AllianceRequestStatus::Rejected,
+                    );
                     self.mark_alliance_request_cooldown(target, rejector);
                 }
             }

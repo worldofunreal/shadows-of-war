@@ -26,6 +26,15 @@
     var notificationTimer = null;
     var activeNotifications = [];
     var notificationCards = [];
+    var notificationLayoutFrame = 0;
+    var notificationResizeObserver = null;
+    var notificationMutationObserver = null;
+    var notificationLayoutStarted = false;
+    var notificationLayoutStory = null;
+    var notificationLayoutObjective = null;
+    var notificationLayoutNameplate = null;
+    var notificationLayoutNotifications = null;
+    var notificationLayoutState = "";
     var mapFeedbackCursor = 0;
     var mapFeedbackTimer = null;
     var activeMapFeedback = null;
@@ -183,6 +192,133 @@
         return (count / (useMillions ? 1000000 : 1000)).toFixed(1) + (useMillions ? "M" : "K");
     }
 
+    function notificationAnchor(storyRoot, objective, nameplate, gap) {
+        if (storyRoot && !storyRoot.hidden && objective && !objective.hidden
+            && objective.offsetWidth > 0 && objective.offsetHeight > 0) {
+            var offsetParent = objective.offsetParent || storyRoot;
+            var parentRect = offsetParent.getBoundingClientRect();
+            var left = parentRect.left + objective.offsetLeft;
+            var top = parentRect.top + objective.offsetTop;
+            return {
+                source: "objective",
+                left: left,
+                right: left + objective.offsetWidth,
+                top: top + objective.offsetHeight + gap
+            };
+        }
+        if (nameplate && !nameplate.hidden) {
+            var rect = nameplate.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                return { source: "nameplate", left: rect.left, right: rect.right, top: rect.bottom + gap };
+            }
+        }
+        return { source: "safe", left: null, right: null, top: null };
+    }
+
+    function scheduleNotificationPlacement() {
+        if (!hudRefs || !hudRefs.notifications) return;
+        if (!window.requestAnimationFrame) { syncNotificationPlacement(); return; }
+        if (notificationLayoutFrame) return;
+        notificationLayoutFrame = window.requestAnimationFrame(function () {
+            notificationLayoutFrame = 0;
+            syncNotificationPlacement();
+        });
+    }
+
+    function observeNotificationObjective() {
+        var story = document.getElementById("sow-story");
+        if (story !== notificationLayoutStory) {
+            if (notificationLayoutStory && notificationMutationObserver) notificationMutationObserver.unobserve(notificationLayoutStory);
+            notificationLayoutStory = story;
+            if (story && notificationMutationObserver) {
+                notificationMutationObserver.observe(story, { childList: true, attributes: true, attributeFilter: ["hidden"] });
+            }
+        }
+        var objective = story && story.querySelector(".sow-story__objective");
+        if (objective === notificationLayoutObjective) return;
+        if (notificationLayoutObjective && notificationResizeObserver) notificationResizeObserver.unobserve(notificationLayoutObjective);
+        if (notificationLayoutObjective && notificationMutationObserver) notificationMutationObserver.unobserve(notificationLayoutObjective);
+        notificationLayoutObjective = objective;
+        if (objective && notificationResizeObserver) notificationResizeObserver.observe(objective);
+        if (objective && notificationMutationObserver) {
+            notificationMutationObserver.observe(objective, notificationResizeObserver
+                ? { attributes: true, attributeFilter: ["hidden"] }
+                : { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true, characterData: true });
+        }
+    }
+
+    function observeNotificationLayout() {
+        if (!hudRefs || !hudRefs.nameplate || !hudRefs.notifications) return;
+        if (notificationLayoutNotifications !== hudRefs.notifications) {
+            notificationLayoutNotifications = hudRefs.notifications;
+            notificationLayoutState = "";
+        }
+        if (!notificationResizeObserver && typeof window.ResizeObserver === "function") {
+            notificationResizeObserver = new window.ResizeObserver(function () {
+                syncNotificationPlacement();
+            });
+        }
+        if (!notificationMutationObserver && typeof window.MutationObserver === "function") {
+            notificationMutationObserver = new window.MutationObserver(function () {
+                observeNotificationObjective();
+                scheduleNotificationPlacement();
+            });
+        }
+        if (notificationLayoutNameplate !== hudRefs.nameplate) {
+            if (notificationLayoutNameplate && notificationResizeObserver) notificationResizeObserver.unobserve(notificationLayoutNameplate);
+            if (notificationLayoutNameplate && notificationMutationObserver) notificationMutationObserver.unobserve(notificationLayoutNameplate);
+            notificationLayoutNameplate = hudRefs.nameplate;
+            if (notificationResizeObserver) notificationResizeObserver.observe(notificationLayoutNameplate);
+            if (notificationMutationObserver) {
+                notificationMutationObserver.observe(notificationLayoutNameplate, { attributes: true, attributeFilter: ["hidden"] });
+            }
+        }
+        observeNotificationObjective();
+        if (!notificationLayoutStarted) {
+            notificationLayoutStarted = true;
+            window.addEventListener("resize", scheduleNotificationPlacement, { passive: true });
+            window.addEventListener("sow:locale-change", scheduleNotificationPlacement);
+        }
+        scheduleNotificationPlacement();
+    }
+
+    function syncNotificationPlacement() {
+        if (!hudRefs || !hudRefs.notifications) return;
+        var notifications = hudRefs.notifications;
+        if (window.innerWidth <= 720) {
+            notifications.style.removeProperty("--sow-hud-notifications-top");
+            notifications.style.removeProperty("--sow-hud-notifications-inline-start");
+            notifications.classList.remove("is-reanchoring");
+            notificationLayoutState = "mobile";
+            return;
+        }
+        var story = document.getElementById("sow-story");
+        var objective = story && story.querySelector(".sow-story__objective");
+        var anchor = notificationAnchor(story, objective, hudRefs.nameplate, 12);
+        var inlineStart = null;
+        if (anchor.source !== "safe") {
+            var direction = window.getComputedStyle ? window.getComputedStyle(hudRoot).direction : document.documentElement.dir;
+            inlineStart = direction === "rtl" ? Math.max(0, window.innerWidth - anchor.right) : Math.max(0, anchor.left);
+        }
+        var topValue = anchor.source === "safe" ? null : Math.round(Math.max(0, anchor.top));
+        var inlineStartValue = inlineStart == null ? null : Math.round(inlineStart);
+        var state = [anchor.source, topValue, inlineStartValue].join(":");
+        if (state === notificationLayoutState) return;
+        notificationLayoutState = state;
+        if (topValue == null) notifications.style.removeProperty("--sow-hud-notifications-top");
+        else notifications.style.setProperty("--sow-hud-notifications-top", topValue + "px");
+        if (inlineStartValue == null) notifications.style.removeProperty("--sow-hud-notifications-inline-start");
+        else notifications.style.setProperty("--sow-hud-notifications-inline-start", inlineStartValue + "px");
+        var hasVisibleNotification = notificationCards.some(function (parts) { return parts && parts.card && !parts.card.hidden; });
+        if (hasVisibleNotification && !hudRoot.classList.contains("is-reduced-motion")) {
+            notifications.classList.remove("is-reanchoring");
+            void notifications.offsetWidth;
+            notifications.classList.add("is-reanchoring");
+        } else {
+            notifications.classList.remove("is-reanchoring");
+        }
+    }
+
     function ensureHudDom() {
         if (!hudRoot || hudInitialized) return;
         hudInitialized = true;
@@ -331,11 +467,13 @@
             + '  <div class="sow-hud__panel-rows" id="sow-hud-inbox-rows"></div>'
             + '</aside>'
             + '<aside class="sow-hud__panel sow-hud__transfer hidden" id="sow-hud-transfer">'
-            + '  <div class="sow-hud__panel-header"><h3>' + SOW_t("hud.resource_transfer") + '</h3><button class="sow-hud__close-btn" type="button" data-command="close_transfer" aria-label="' + SOW_t("hud.close_resource_transfer") + '">✕</button></div>'
-            + '  <p id="sow-hud-transfer-target"></p>'
-            + '  <label>' + SOW_t("hud.gold") + '<input id="sow-hud-transfer-gold" type="number" min="0" step="1" value="0"></label>'
-            + '  <label>' + SOW_t("hud.troops") + '<input id="sow-hud-transfer-troops" type="number" min="0" step="1" value="0"></label>'
-            + '  <div class="sow-hud__panel-actions"><button type="button" data-command="send_resources">' + SOW_t("hud.send") + '</button><button type="button" data-command="request_resources">' + SOW_t("hud.request") + '</button></div>'
+            + '  <div class="sow-hud__transfer-header"><span class="sow-hud__transfer-icon" aria-hidden="true">' + hudIcon("transfer", "sow-hud__inline-icon") + '</span><h3>' + SOW_t("hud.resource_transfer") + '</h3><button class="sow-hud__close-btn" type="button" data-command="close_transfer" aria-label="' + SOW_t("hud.close_resource_transfer") + '">✕</button></div>'
+            + '  <p class="sow-hud__transfer-target" id="sow-hud-transfer-target"></p>'
+            + '  <div class="sow-hud__transfer-fields">'
+            + '    <label><span>' + SOW_t("hud.troops") + '</span><input id="sow-hud-transfer-troops" type="number" min="0" step="1" value="0"></label>'
+            + '    <label><span>' + SOW_t("hud.gold") + '</span><input id="sow-hud-transfer-gold" type="number" min="0" step="1" value="0"></label>'
+            + '  </div>'
+            + '  <div class="sow-hud__transfer-actions"><button class="sow-hud__transfer-send" type="button" data-command="send_resources"><span>' + SOW_t("hud.send") + '</span><span aria-hidden="true">↗</span></button><button class="sow-hud__transfer-request" type="button" data-command="request_resources">' + SOW_t("hud.request") + '</button></div>'
             + '</aside>'
             + '<div class="sow-hud__modal-backdrop hidden" id="sow-hud-betrayal-modal">'
             + '  <div class="sow-hud__modal-card"><h3>' + hudIcon("betray", "sow-hud__inline-icon") + ' ' + SOW_t("hud.break_alliance") + '</h3><p id="sow-hud-betrayal-copy">' + SOW_t("hud.break_alliance_body") + '</p><div class="sow-hud__panel-actions"><button type="button" data-command="cancel_betrayal">' + SOW_t("hud.keep_alliance") + '</button><button class="sow-hud__btn-danger" type="button" data-command="confirm_betrayal">' + SOW_t("hud.attack") + '</button></div></div>'
@@ -504,6 +642,7 @@
             return createNotificationCard(hudRefs.notifications, false);
         });
         mapFeedbackCard = createNotificationCard(hudRefs.mapFeedback, true);
+        observeNotificationLayout();
 
         if (hudRefs.slider) hudRefs.slider.style.setProperty("--sow-crossed-swords", 'url("' + asset(HUD_ICONS.troops) + '")');
         if (hudRefs.slider) {
@@ -659,6 +798,7 @@
     }
 
     function mapActionReason(item, availableGold) {
+        if (item.reason_key) return SOW_t(item.reason_key);
         if (!item.disabled || item.cost == null) return "";
         return SOW_t("hud.not_enough_gold", {
             cost: Math.ceil(item.cost).toLocaleString(),
@@ -677,7 +817,8 @@
                 action: action,
                 cost: item && item.cost != null && Number.isFinite(Number(item.cost)) ? Number(item.cost) : null,
                 level: item && Number.isFinite(Number(item.level)) ? Number(item.level) : null,
-                disabled: Boolean(item && item.disabled)
+                disabled: Boolean(item && item.disabled),
+                reason_key: item && item.reason_key || null
             };
         });
     }
@@ -707,7 +848,7 @@
         button.dataset.mapAction = action;
         button.setAttribute("role", "menuitem");
         var disabled = Boolean(item.disabled || (presentation && presentation.disabled));
-        button.disabled = disabled;
+        button.disabled = disabled && !item.reason_key && !(item.disabled && item.cost != null && !(presentation && presentation.disabled));
         button.setAttribute("aria-disabled", String(disabled));
         var buildingKind = action.indexOf("build_") === 0 ? action.slice(6) : "";
         buildingKind = buildingKind.charAt(0).toUpperCase() + buildingKind.slice(1);
@@ -719,8 +860,9 @@
                 : buildingImg || (label.icon ? hudIcon(label.icon, "sow-hud__map-action-icon") : "•");
         var actionName = presentation ? SOW_t(presentation.key) : mapLabel(action);
         button.dataset.mapActionLabel = actionName;
+        if (item.reason_key) button.dataset.reasonKey = item.reason_key;
         if (presentation && presentation.state) button.dataset.allianceState = presentation.state;
-        var reason = withDetails ? mapActionReason(item, hudState && hudState.hud && hudState.hud.gold) : "";
+        var reason = mapActionReason(item, hudState && hudState.hud && hudState.hud.gold);
         var accessibleLabel = reason ? actionName + ". " + reason : actionName;
         button.setAttribute("aria-label", accessibleLabel);
         button.title = reason ? accessibleLabel : "";
@@ -754,10 +896,14 @@
     }
 
     function updateDisabledMapActionReasons(menu, availableGold) {
-        menu.querySelectorAll(".sow-hud__map-card:disabled").forEach(function (button) {
+        menu.querySelectorAll('.sow-hud__map-card[aria-disabled="true"]').forEach(function (button) {
             var cost = Number(button.dataset.mapCost);
-            if (!Number.isFinite(cost)) return;
-            var reason = mapActionReason({ disabled: true, cost: cost }, availableGold);
+            var reason = mapActionReason({
+                disabled: true,
+                cost: Number.isFinite(cost) ? cost : null,
+                reason_key: button.dataset.reasonKey || null
+            }, availableGold);
+            if (!reason) return;
             var reasonLabel = button.querySelector(".sow-hud__map-action-reason");
             if (reasonLabel && reasonLabel.textContent !== reason) reasonLabel.textContent = reason;
             var accessibleLabel = button.dataset.mapActionLabel + ". " + reason;
@@ -1682,21 +1828,27 @@
             hudRefs.buildingsStrip.style.display = isDeploying ? "none" : "flex";
             var selectedBuilding = hud.selected_building;
             var buildingCosts = hud.building_costs || {};
+            var buildingRequirements = hud.building_requirements || {};
             hudRefs.buildingButtons.forEach(function (button) {
                 var kind = button.dataset.kind || "";
                 var cost = Number(buildingCosts[kind.toLowerCase()]);
                 var hasCost = Number.isFinite(cost) && cost > 0;
                 var affordable = !hasCost || gold >= cost;
+                var factoryLocked = kind === "Factory" && !buildingRequirements.factory_unlocked;
                 var selected = selectedBuilding === kind;
-                button.disabled = !affordable && !selected;
+                button.disabled = false;
+                var disabled = (!affordable || factoryLocked) && !selected;
+                button.setAttribute("aria-disabled", String(disabled));
                 button.classList.toggle("active", selected);
                 button.setAttribute("aria-pressed", String(selected));
                 var costText = hasCost ? Math.floor(cost).toLocaleString() + "g" : "";
                 var label = button.dataset.label || button.getAttribute("aria-label") || kind;
                 button.dataset.label = label;
-                var shortageText = mapActionReason({ disabled: !affordable, cost: cost }, gold);
-                var accessibleLabel = shortageText
-                    ? label + ". " + shortageText
+                var reason = factoryLocked
+                    ? SOW_t("hud.building_requires_city_level")
+                    : mapActionReason({ disabled: !affordable, cost: cost }, gold);
+                var accessibleLabel = reason
+                    ? label + ". " + reason
                     : (costText ? label + " " + costText : label);
                 button.setAttribute("aria-label", accessibleLabel);
                 if (button.title !== accessibleLabel) button.title = accessibleLabel;
@@ -1915,7 +2067,7 @@
                     mapMenuView = mapGroup.dataset.mapGroup || "build";
                     renderMapMenu(hudState && hudState.hud && hudState.hud.map_menu);
                 } else {
-                    if (mapButton.disabled || mapButton.getAttribute("aria-disabled") === "true") return;
+                    if (mapButton.disabled) return;
                     send("map_menu_action", {
                         session: Number(mapMenu.dataset.session),
                         tile_idx: Number(mapMenu.dataset.tileIdx),

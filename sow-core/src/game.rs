@@ -198,6 +198,13 @@ pub struct ShipProduction {
     pub ticks_until_complete: u32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AllianceRequestStatus {
+    Submitted,
+    Rejected,
+    Expired,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum GameEvent {
     TileExpanded {
@@ -228,6 +235,11 @@ pub enum GameEvent {
     GameOver {
         winner_id: u16,
         winning_team: Option<crate::protocol::Team>,
+    },
+    AllianceRequestLifecycle {
+        proposer_id: u16,
+        target_id: u16,
+        status: AllianceRequestStatus,
     },
     StructureSpawned {
         id: u64,

@@ -1,5 +1,5 @@
 use crate::diplomacy::{
-    ALLIANCE_RENEWAL_WINDOW_TICKS, alliance_propose_roll_cap, is_valid_alliance_target,
+    alliance_can_renew, alliance_propose_roll_cap, is_valid_alliance_target,
     should_reject_traitor_request,
 };
 use crate::engine::SowEngine;
@@ -8,7 +8,38 @@ use crate::protocol::GameplayIntent;
 use crate::rng::NextIntExt;
 use wyrand::WyRand;
 
-use super::profile::{BotDecision, BotDecisionKind};
+use super::profile::{AiTier, BotDecision, BotDecisionKind, ai_tier};
+
+const GHOST_ALLIANCE_CHOICE_SALT: u64 = 0x4748_414c_0000_0001;
+
+#[inline]
+fn ghost_alliance_rng(seed: u64, ghost_id: u16, other_id: u16, tick: u64) -> WyRand {
+    WyRand::new(
+        seed ^ u64::from(ghost_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ u64::from(other_id).wrapping_mul(0xD6E8_FEB8_6659_FD93)
+            ^ tick.wrapping_mul(0xA076_1D64_78BD_642F)
+            ^ GHOST_ALLIANCE_CHOICE_SALT,
+    )
+}
+
+pub(super) fn ghost_alliance_probability(
+    my_troops: f64,
+    my_tiles: u32,
+    other_troops: f64,
+    other_tiles: u32,
+) -> i32 {
+    let my_troops = my_troops.max(1.0);
+    let my_tiles = my_tiles.max(1) as f64;
+    if other_troops >= my_troops && f64::from(other_tiles) >= my_tiles {
+        100
+    } else if other_troops >= my_troops * 0.8
+        || (f64::from(other_tiles) >= my_tiles * 0.8 && other_troops >= my_troops * 0.5)
+    {
+        75
+    } else {
+        25
+    }
+}
 
 impl SowEngine {
     pub(super) fn nation_scan_neighbors(&mut self, bot_id: u16) -> (Vec<u16>, bool) {
@@ -88,6 +119,9 @@ impl SowEngine {
     ) {
         let (bot_id, bot_iq) = bot;
         let (alliance_cost, send_cost) = costs;
+        let is_ghost = self.state.player(bot_id).is_some_and(|player| {
+            ai_tier(player.player_type, player.is_ai_controlled) == Some(AiTier::Ghost)
+        });
         // ── Alliance Proposal Evaluation ───────────────────────────────
         #[cfg(feature = "ai-metrics")]
         {
@@ -114,51 +148,46 @@ impl SowEngine {
                     }
                     let current_points = self.state.player(bot_id).unwrap().iq_points;
                     if current_points >= alliance_cost {
-                        let mut accept = false;
                         let tick = self.current_tick_u32();
-                        let traitor_roll = self
-                            .state
-                            .player_mut(bot_id)
-                            .unwrap()
-                            .bot_rng
-                            .next_int(0, 100);
-                        if bot_iq >= 130 {
-                            if let (Some(p_me), Some(p_prop)) =
-                                (self.state.player(bot_id), self.state.player(proposer))
-                            {
-                                if should_reject_traitor_request(p_prop, tick, traitor_roll) {
-                                    accept = false;
-                                } else {
-                                    let me_troops = p_me.troops.max(1.0);
-                                    let me_tiles = p_me.tile_count.max(1);
-                                    if p_prop.troops >= me_troops * 0.8
-                                        && p_prop.tile_count >= (me_tiles as f64 * 0.8) as u32
-                                    {
-                                        accept = true;
-                                    }
-                                }
-                            }
-                        } else if bot_iq >= 100 {
-                            if let (Some(p_me), Some(p_prop)) =
-                                (self.state.player(bot_id), self.state.player(proposer))
-                            {
-                                if should_reject_traitor_request(p_prop, tick, traitor_roll) {
-                                    accept = false;
-                                } else {
-                                    let me_troops = p_me.troops.max(1.0);
-                                    let me_tiles = p_me.tile_count.max(1);
-                                    if p_prop.troops >= me_troops * 0.5
-                                        && p_prop.tile_count >= (me_tiles as f64 * 0.5) as u32
-                                    {
-                                        accept = true;
-                                    }
-                                }
-                            }
-                        } else if let Some(p_prop) = self.state.player(proposer) {
-                            accept = !should_reject_traitor_request(p_prop, tick, traitor_roll);
+                        let mut rng = is_ghost.then(|| {
+                            ghost_alliance_rng(self.state.seed, bot_id, proposer, u64::from(tick))
+                        });
+                        let traitor_roll = if let Some(rng) = rng.as_mut() {
+                            rng.next_int(0, 100)
                         } else {
-                            accept = false;
-                        }
+                            self.state
+                                .player_mut(bot_id)
+                                .unwrap()
+                                .bot_rng
+                                .next_int(0, 100)
+                        };
+                        let accept = match (self.state.player(bot_id), self.state.player(proposer)) {
+                            (Some(p_me), Some(p_prop))
+                                if !should_reject_traitor_request(p_prop, tick, traitor_roll) =>
+                            {
+                                if is_ghost {
+                                    let chance = ghost_alliance_probability(
+                                        p_me.troops,
+                                        p_me.tile_count,
+                                        p_prop.troops,
+                                        p_prop.tile_count,
+                                    );
+                                    rng.as_mut()
+                                        .is_some_and(|rng| rng.next_int(0, 100) < chance)
+                                } else if bot_iq >= 130 {
+                                    p_prop.troops >= p_me.troops.max(1.0) * 0.8
+                                        && p_prop.tile_count
+                                            >= (p_me.tile_count.max(1) as f64 * 0.8) as u32
+                                } else if bot_iq >= 100 {
+                                    p_prop.troops >= p_me.troops.max(1.0) * 0.5
+                                        && p_prop.tile_count
+                                            >= (p_me.tile_count.max(1) as f64 * 0.5) as u32
+                                } else {
+                                    true
+                                }
+                            }
+                            _ => false,
+                        };
 
                         if accept {
                             proposals_to_accept.push(proposer);
@@ -406,7 +435,16 @@ impl SowEngine {
                 5
             };
 
-            for &neighbor in neighbor_players {
+            let mut rng = is_ghost.then(|| {
+                ghost_alliance_rng(self.state.seed, bot_id, bot_id, self.state.tick)
+            });
+            let start_index = rng
+                .as_mut()
+                .map(|rng| rng.next_int(0, neighbor_players.len() as i32) as usize)
+                .unwrap_or(0);
+
+            for visit_index in 0..neighbor_players.len() {
+                let neighbor = neighbor_players[(start_index + visit_index) % neighbor_players.len()];
                 let (neigh_alive, neigh_troops, neigh_tile_count) =
                     match self.state.player(neighbor) {
                         Some(pn) => (pn.alive, pn.troops, pn.tile_count),
@@ -421,8 +459,8 @@ impl SowEngine {
                     let (is_allied, can_renew) = {
                         let p_me = self.state.player(bot_id).unwrap();
                         let allied = p_me.alliances.contains(&neighbor);
-                        let timer = p_me.alliance_timers.get(&neighbor).copied().unwrap_or(0);
-                        (allied, allied && timer <= ALLIANCE_RENEWAL_WINDOW_TICKS)
+                        let remaining_ticks = p_me.alliance_timers.get(&neighbor).copied();
+                        (allied, alliance_can_renew(allied, remaining_ticks))
                     };
                     let neigh_type = self
                         .state
@@ -436,34 +474,39 @@ impl SowEngine {
                     let should_propose = (has_room && !is_allied && !is_teammate) || can_renew;
 
                     if should_propose && valid_target && can_send {
-                        let mut meets_threshold = false;
-                        let roll = {
+                        let roll = if let Some(rng) = rng.as_mut() {
+                            rng.next_int(0, 100)
+                        } else {
                             let p_me = self.state.player_mut(bot_id).unwrap();
                             p_me.bot_rng.next_int(0, 100)
                         };
                         let roll_cap = alliance_propose_roll_cap(bot_id, bot_iq, can_renew);
 
-                        if can_renew {
-                            meets_threshold = roll < roll_cap;
+                        let meets_threshold = if can_renew {
+                            roll < roll_cap
+                        } else if is_ghost {
+                            let chance = ghost_alliance_probability(
+                                me_troops,
+                                me_tile_count,
+                                neigh_troops,
+                                neigh_tile_count,
+                            );
+                            roll < roll_cap * chance / 100
                         } else if bot_iq >= 130 {
                             let me_troops_val = me_troops.max(1.0);
                             let me_tiles_val = me_tile_count.max(1);
-                            if neigh_troops >= me_troops_val * 0.8
+                            roll < roll_cap
+                                && neigh_troops >= me_troops_val * 0.8
                                 && neigh_tile_count >= (me_tiles_val as f64 * 0.8) as u32
-                            {
-                                meets_threshold = roll < roll_cap;
-                            }
                         } else if bot_iq >= 100 {
                             let me_troops_val = me_troops.max(1.0);
                             let me_tiles_val = me_tile_count.max(1);
-                            if neigh_troops >= me_troops_val * 0.5
+                            roll < roll_cap
+                                && neigh_troops >= me_troops_val * 0.5
                                 && neigh_tile_count >= (me_tiles_val as f64 * 0.5) as u32
-                            {
-                                meets_threshold = roll < roll_cap;
-                            }
                         } else {
-                            meets_threshold = roll < roll_cap;
-                        }
+                            roll < roll_cap
+                        };
 
                         if meets_threshold {
                             proposed_target = Some(neighbor);

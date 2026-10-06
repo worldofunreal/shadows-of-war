@@ -57,6 +57,8 @@ pub struct AttackExecution {
     pub id: u64,
     pub owner_id: u16,
     pub target_owner: u16,
+    /// Tick when this attack first entered execution; merges keep the original tick.
+    pub created_tick: u64,
     pub troops: f64,
     pub to_conquer: BinaryHeap<PrioritizedTile>,
     pub insert_seq_counter: u32,

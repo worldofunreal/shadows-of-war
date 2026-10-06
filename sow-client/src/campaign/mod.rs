@@ -412,7 +412,7 @@ fn valid_campaign_group_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_roster, to_scripted};
+    use super::{Civilization, parse_roster, to_scripted};
     use sow_core::protocol::{CampaignRelation, Team};
 
     #[test]

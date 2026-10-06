@@ -68,6 +68,7 @@ pub(crate) struct MapMenuItem {
     pub cost: Option<f64>,
     pub level: Option<u8>,
     pub disabled: bool,
+    pub reason_key: Option<&'static str>,
 }
 
 pub(crate) fn is_quick_tap(elapsed_ms: u128, distance_sq: f64) -> bool {
@@ -209,6 +210,9 @@ impl SowApp {
         {
             return false;
         }
+        if self.try_tutorial_roman_nameplate_attack(x, y) {
+            return true;
+        }
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
             return false;
         };
@@ -228,6 +232,9 @@ impl SowApp {
         }
         if self.ui.observing {
             self.clear_placement();
+            return;
+        }
+        if self.try_tutorial_roman_nameplate_attack(x, y) {
             return;
         }
 
@@ -270,8 +277,36 @@ impl SowApp {
             if self.select_owned_building(x, y) {
                 return;
             }
-            self.primary_target(tile_idx);
         }
+        self.primary_target(tile_idx);
+    }
+
+    fn try_tutorial_roman_nameplate_attack(&mut self, x: f64, y: f64) -> bool {
+        if self.ui.tutorial_camera_only
+            || self.ui.observing
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || self.ui.app.hud_state.selected_building_kind.is_some()
+            || self.ui.app.hud_state.selected_nuke_kind.is_some()
+            || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+            })
+        {
+            return false;
+        }
+        let Some(tile_idx) = self.tutorial_roman_attack_tile() else {
+            return false;
+        };
+        let Some(target) = self.map_target(tile_idx) else {
+            return false;
+        };
+        if !self
+            .ui
+            .nameplates
+            .tutorial_target_contains(target.owner, x, y)
+        {
+            return false;
+        }
+        self.attack_from_tile(tile_idx)
     }
 
     fn select_owned_building(&mut self, x: f64, y: f64) -> bool {
@@ -608,15 +643,43 @@ impl SowApp {
 
     pub(crate) fn map_menu_items(&mut self, tile_idx: u32) -> Vec<MapMenuItem> {
         let gold = self.current_player_gold();
+        let owner_id = self.sim.my_player_id.unwrap_or(self.ui.app.hud_state.my_player_id);
+        let city_level = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                snapshot.buildings.iter()
+                    .filter(|building| building.owner_id == owner_id
+                        && building.kind == sow_core::game::BuildingKind::City)
+                    .map(|building| building.active_level())
+                    .max()
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
         self.map_menu_actions(tile_idx)
             .into_iter()
             .map(|action| {
                 let (cost, level) = self.map_menu_cost(action, tile_idx);
+                let kind = match action {
+                    MapMenuAction::BuildCity => Some(sow_core::game::BuildingKind::City),
+                    MapMenuAction::BuildFactory => Some(sow_core::game::BuildingKind::Factory),
+                    MapMenuAction::BuildPort => Some(sow_core::game::BuildingKind::Port),
+                    MapMenuAction::BuildBunker => Some(sow_core::game::BuildingKind::Bunker),
+                    MapMenuAction::BuildFarm => Some(sow_core::game::BuildingKind::Farm),
+                    _ => None,
+                };
+                let reason_key = kind
+                    .filter(|kind| self.sim.config.tutorial
+                        && !sow_core::building::structure_kind_unlocked(*kind, city_level))
+                    .map(|_| "hud.building_requires_city_level");
                 MapMenuItem {
                     action,
                     cost,
                     level,
-                    disabled: cost.is_some_and(|value| !value.is_finite() || gold < value),
+                    disabled: reason_key.is_some()
+                        || cost.is_some_and(|value| !value.is_finite() || gold < value),
+                    reason_key,
                 }
             })
             .collect()
@@ -647,6 +710,22 @@ impl SowApp {
             if !keep_building_card_open {
                 self.close_map_context_menu();
             }
+            return;
+        }
+        if action == MapMenuAction::BuildFactory
+            && self.sim.config.tutorial
+            && let Some(snapshot) = self.sim.current_snapshot.as_ref()
+            && !sow_core::building::structure_kind_unlocked(
+                sow_core::game::BuildingKind::Factory,
+                snapshot.buildings.iter()
+                    .filter(|building| building.owner_id == self.sim.my_player_id.unwrap_or(self.ui.app.hud_state.my_player_id)
+                        && building.kind == sow_core::game::BuildingKind::City)
+                    .map(|building| building.active_level())
+                    .max()
+                    .unwrap_or_default(),
+            )
+        {
+            self.add_action_feedback("Requires a level 3 City.");
             return;
         }
         if let Some(cost) = self.map_menu_cost(action, tile_idx).0
@@ -1116,16 +1195,20 @@ impl SowApp {
         building: &sow_core::protocol::BuildingSnapshot,
     ) -> bool {
         if building.kind != sow_core::game::BuildingKind::Factory
-            || building.active_level().saturating_add(1) != 2
-        {
+            || building.active_level().saturating_add(1) != 2 {
             return true;
         }
         self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot.buildings.iter().any(|city| {
-                city.owner_id == building.owner_id
-                    && city.kind == sow_core::game::BuildingKind::City
-                    && city.active_level() >= 3
-            })
+            let city_level = snapshot.buildings.iter()
+                .filter(|city| city.owner_id == building.owner_id
+                    && city.kind == sow_core::game::BuildingKind::City)
+                .map(|city| city.active_level())
+                .max()
+                .unwrap_or_default();
+            sow_core::building::structure_kind_unlocked(
+                sow_core::game::BuildingKind::Factory,
+                city_level,
+            )
         })
     }
 
@@ -1268,8 +1351,7 @@ impl SowApp {
             self.add_map_feedback(crate::ui::UiText::new("hud.attack_out_of_range"));
             return false;
         }
-        self.send_intent(intent);
-        true
+        self.send_intent(intent)
     }
 
     pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32) -> bool {
@@ -1344,8 +1426,7 @@ impl SowApp {
         let Some(intent) = target.alliance_intent() else {
             return false;
         };
-        self.send_intent(intent);
-        true
+        self.send_intent(intent)
     }
 
     fn map_target(&self, tile_idx: u32) -> Option<MapTarget> {
@@ -1373,9 +1454,7 @@ impl SowApp {
             me.is_some_and(|player| player.alliance_requests.contains(&owner));
         let has_proposed_alliance =
             other.is_some_and(|player| player.alliance_requests.contains(&my_id));
-        let alliance_timer = me
-            .and_then(|player| player.alliance_timers.get(&owner).copied())
-            .unwrap_or(2400);
+        let alliance_timer = me.and_then(|player| player.alliance_timers.get(&owner).copied());
         Some(MapTarget {
             owner,
             is_land,
@@ -1384,7 +1463,10 @@ impl SowApp {
             is_teammate,
             has_alliance_request,
             has_proposed_alliance,
-            is_in_renewal_window: is_allied && alliance_timer <= 300,
+            is_in_renewal_window: sow_core::diplomacy::alliance_can_renew(
+                is_allied,
+                alliance_timer,
+            ),
         })
     }
 
@@ -1499,6 +1581,35 @@ impl SowApp {
         {
             return;
         }
+        let snapshot = self.sim.current_snapshot.as_ref();
+        let owner_id = self.sim.my_player_id.unwrap_or(self.ui.app.hud_state.my_player_id);
+        let city_level = snapshot.map(|snapshot| snapshot.buildings.iter()
+            .filter(|building| building.owner_id == owner_id
+                && building.kind == sow_core::game::BuildingKind::City)
+            .map(|building| building.active_level())
+            .max()
+            .unwrap_or_default()).unwrap_or_default();
+        if self.sim.config.tutorial
+            && self.ui.app.hud_state.selected_building_kind != Some(kind)
+            && !sow_core::building::structure_kind_unlocked(kind, city_level)
+        {
+            self.add_action_feedback("Requires a level 3 City.");
+            return;
+        }
+        let cost_index = match kind {
+            sow_core::game::BuildingKind::City => 0,
+            sow_core::game::BuildingKind::Bunker => 1,
+            sow_core::game::BuildingKind::Factory => 2,
+            sow_core::game::BuildingKind::Port => 3,
+            sow_core::game::BuildingKind::Farm => 4,
+        };
+        let cost = self.ui.app.hud_state.building_costs[cost_index];
+        if self.ui.app.hud_state.selected_building_kind != Some(kind)
+            && self.current_player_gold() < cost
+        {
+            self.add_action_feedback(format!("Need {} gold.", crate::utils::format_number(cost)));
+            return;
+        }
         let selected = &mut self.ui.app.hud_state.selected_building_kind;
         *selected = (*selected != Some(kind)).then_some(kind);
         self.ui.app.hud_state.selected_nuke_kind = None;
@@ -1536,6 +1647,7 @@ fn action_notice(message: &str) -> crate::ui::UiText {
         };
     }
     match message {
+        "Requires a level 3 City." => UiText::new("hud.building_requires_city_level"),
         "No action is available here." | "Action unavailable here." => {
             UiText::new("hud.action_unavailable")
         }
@@ -1818,17 +1930,18 @@ mod tests {
             has_proposed_alliance: false,
             is_in_renewal_window: false,
         };
+        let request_intent = enemy.alliance_intent();
         assert_eq!(
-            enemy.alliance_intent(),
+            request_intent,
             Some(GameplayIntent::ProposeAlliance { target_player: 2 })
         );
-
         let incoming = MapTarget {
             has_alliance_request: true,
             ..enemy
         };
+        let accept_intent = incoming.alliance_intent();
         assert_eq!(
-            incoming.alliance_intent(),
+            accept_intent,
             Some(GameplayIntent::AcceptAlliance { target_player: 2 })
         );
 
@@ -1837,22 +1950,25 @@ mod tests {
             ..enemy
         };
         assert_eq!(outgoing.alliance_action_state().as_str(), "pending");
-        assert_eq!(outgoing.alliance_intent(), None);
+        let pending_intent = outgoing.alliance_intent();
+        assert_eq!(pending_intent, None);
 
         let active = MapTarget {
             is_allied: true,
             ..enemy
         };
         assert_eq!(active.alliance_action_state().as_str(), "active");
-        assert_eq!(active.alliance_intent(), None);
+        let active_intent = active.alliance_intent();
+        assert_eq!(active_intent, None);
 
         let renewable = MapTarget {
             is_allied: true,
             is_in_renewal_window: true,
             ..enemy
         };
+        let renew_intent = renewable.alliance_intent();
         assert_eq!(
-            renewable.alliance_intent(),
+            renew_intent,
             Some(GameplayIntent::ProposeAlliance { target_player: 2 })
         );
     }

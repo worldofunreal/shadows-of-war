@@ -54,6 +54,10 @@ enum WebMenuCommand {
         #[serde(rename = "match")]
         match_config: serde_json::Value,
     },
+    ActivateCampaignAssault {
+        attacker_team: sow_core::protocol::Team,
+        target_faction_id: String,
+    },
     SetTutorialPaused {
         paused: bool,
         #[serde(default)]
@@ -225,9 +229,6 @@ enum WebMenuCommand {
         x: f32,
         y: f32,
     },
-    FocusTutorialTarget {
-        player_id: u16,
-    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -303,6 +304,7 @@ struct HudPublishKey {
     spawn_timer_tenths: i32,
     selected_building: u8,
     building_costs: [u64; 9],
+    factory_unlocked: bool,
     settings_mute: bool,
     settings_music_volume: u32,
     settings_reduced_motion: bool,
@@ -337,6 +339,25 @@ struct HudPublishKey {
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
     map_menu_tile: u32,
+}
+
+fn factory_build_unlocked(app: &SowApp) -> bool {
+    if !app.sim.config.tutorial {
+        return true;
+    }
+    let owner = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
+    let city_level = app.sim.current_snapshot.as_ref().map(|snapshot| {
+        snapshot.buildings.iter()
+            .filter(|building| building.owner_id == owner
+                && building.kind == sow_core::game::BuildingKind::City)
+            .map(|building| building.active_level())
+            .max()
+            .unwrap_or_default()
+    }).unwrap_or_default();
+    sow_core::building::structure_kind_unlocked(
+        sow_core::game::BuildingKind::Factory,
+        city_level,
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -562,6 +583,31 @@ impl SowApp {
                             self.clear_placement();
                             self.cancel_hold_build();
                             self.close_map_context_menu();
+                        }
+                    }
+                }
+                WebMenuCommand::ActivateCampaignAssault {
+                    attacker_team,
+                    target_faction_id,
+                } => {
+                    if self.ui.tutorial_active && self.net.is_offline {
+                        let target_player_id = if target_faction_id == "player" {
+                            self.sim.my_player_id
+                        } else {
+                            self.sim.engine.as_ref().and_then(|engine| {
+                                engine.campaign_faction_ids.iter().find_map(|(player_id, id)| {
+                                    (id == &target_faction_id).then_some(*player_id)
+                                })
+                            })
+                        };
+                        if let (Some(target_player_id), Some(engine)) =
+                            (target_player_id, self.sim.engine.as_mut())
+                        {
+                            if engine.activate_campaign_assault(attacker_team, target_player_id) == 0 {
+                                log::warn!("[CAMPAIGN] assault had no valid scripted attackers or target");
+                            }
+                        } else {
+                            log::warn!("[CAMPAIGN] assault target not found: {target_faction_id}");
                         }
                     }
                 }
@@ -1108,43 +1154,6 @@ impl SowApp {
                             self.input.is_pointer_gesture_active();
                     }
                 }
-                WebMenuCommand::FocusTutorialTarget { player_id } => {
-                    if self.ui.tutorial_active
-                        && self.net.is_offline
-                        && let Some(snapshot) = self.sim.current_snapshot.as_ref()
-                        && let (Some(me), Some(target)) = (
-                            snapshot.players.iter().find(|player| {
-                                Some(player.id) == self.sim.my_player_id
-                                    && player.alive
-                                    && player.tile_count > 0
-                            }),
-                            snapshot.players.iter().find(|player| {
-                                player.id == player_id && player.alive && player.tile_count > 0
-                            }),
-                        )
-                    {
-                        let (player_x, player_y) = (me.centroid_x + 0.5, me.centroid_y + 0.5);
-                        let (target_x, target_y) =
-                            (target.centroid_x + 0.5, target.centroid_y + 0.5);
-                        let dx = (player_x - target_x).abs();
-                        let dy = (player_y - target_y).abs();
-                        let fit_zoom = (self.input.screen_w / (dx + 16.0))
-                            .min(self.input.screen_h / (dy + 16.0))
-                            .min(TUTORIAL_MAX_ZOOM);
-                        self.input.target_zoom = fit_zoom
-                            .max(crate::camera_zoom_lower_bound(
-                                self.input.screen_w,
-                                self.input.screen_h,
-                                self.sim.map_w,
-                                self.sim.map_h,
-                            ));
-                        self.input.camera_focus_target =
-                            Some(((player_x + target_x) * 0.5, (player_y + target_y) * 0.5));
-                        self.input.tutorial_camera_focus = true;
-                        self.input.camera_focus_waiting_for_input_release =
-                            self.input.is_pointer_gesture_active();
-                    }
-                }
             }
         }
     }
@@ -1227,6 +1236,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .map(|kind| kind as u8)
             .unwrap_or(u8::MAX),
         building_costs: std::array::from_fn(|index| hud.building_costs[index].to_bits()),
+        factory_unlocked: factory_build_unlocked(app),
         settings_mute: app.ui.app.settings_state.mute_all,
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
@@ -1523,6 +1533,38 @@ fn tutorial_target_action_tile(
         }
     }
     best.map(|(_, tile)| tile)
+}
+
+impl SowApp {
+    pub(crate) fn tutorial_roman_attack_tile(&self) -> Option<u32> {
+        if !self.ui.tutorial_waiting_for_first_attack
+            || self.ui.tutorial_campaign != CampaignId::Boudica
+        {
+            return None;
+        }
+        let engine = self.sim.engine.as_ref()?;
+        let renderer = self.gfx.map_renderer.as_ref()?;
+        let snapshot = self.sim.current_snapshot.as_ref()?;
+        let my_pid = self.sim.my_player_id?;
+        let target_owner = engine
+            .campaign_faction_ids
+            .iter()
+            .find_map(|(&id, faction)| (faction == "roman_outpost").then_some(id))?;
+        let me = snapshot.players.iter().find(|player| player.id == my_pid)?;
+        let border_tiles = &engine.state.player(my_pid)?.border_tiles;
+        let tile = tutorial_target_action_tile(
+            &renderer.owners,
+            &renderer.terrain,
+            self.sim.map_w,
+            self.sim.map_h,
+            border_tiles,
+            my_pid,
+            target_owner,
+            me,
+            &snapshot.players,
+        )?;
+        (renderer.owners.get(tile as usize).copied() == Some(target_owner)).then_some(tile)
+    }
 }
 
 fn tutorial_screen_point_visible(point: [f32; 2], width: f32, height: f32) -> bool {
@@ -2652,6 +2694,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                         "cost": item.cost,
                         "level": item.level,
                         "disabled": item.disabled,
+                        "reason_key": item.reason_key,
                     })
                 })
                 .collect::<Vec<_>>();
@@ -2809,6 +2852,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "factory": costs[2],
             "port": costs[3],
             "farm": costs[4],
+        },
+        "building_requirements": {
+            "factory_unlocked": factory_build_unlocked(app),
         },
         "pin_emoji": hud.pin_emoji,
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),

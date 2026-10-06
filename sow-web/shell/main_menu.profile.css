@@ -882,13 +882,6 @@
     border: 0;
 }
 
-#sow-menu[data-screen="profile"] .sow-profile .sow-menu__footer {
-    width: 100%;
-    padding: 2px 0 0;
-    border: 0;
-    background: transparent;
-}
-
 @media (max-width: 900px) {
     #sow-menu[data-screen="profile"] .sow-menu__shell.sow-profile {
         width: min(100% - 28px, 720px);
@@ -1105,9 +1098,6 @@
         grid-row: 1;
     }
 
-    #sow-menu[data-screen="profile"] .sow-profile .sow-menu__footer {
-        display: none;
-    }
 }
 
 @media (orientation: landscape) and (max-height: 560px) {

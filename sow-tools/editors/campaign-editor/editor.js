@@ -19,7 +19,7 @@
         { value: "resource_transfer", label: "Send resources" }, { value: "alliance", label: "Form an alliance" },
         { value: "support", label: "Receive allied support" }, { value: "fleet", label: "Launch a fleet" },
         { value: "nuke", label: "Launch a nuke" }, { value: "elapsed", label: "Wait for game time" },
-        { value: "contact", label: "Reach a faction" }, { value: "defeated", label: "Defeat a faction" },
+        { value: "contact", label: "Reach a faction" }, { value: "defeated", label: "Defeat a faction" }, { value: "eliminated", label: "Faction eliminated" },
         { value: "ui", label: "Use a control" },
         { value: "zoom_in", label: "Zoom in" }, { value: "zoom_out", label: "Zoom out" },
         { value: "camera_drag", label: "Pan camera by dragging" }, { value: "camera_key_pan", label: "Pan camera with keys" },
@@ -334,9 +334,12 @@
             if (step.trigger && (!keepsMechanics || (value === "guide" && step.trigger.type === "elapsed"))) discarded.push("mechanic condition");
             if (step.guide && (!keepsMechanics || (value === "guide" && step.trigger && step.trigger.type === "elapsed"))) discarded.push("hand guide");
             if (step.marker && !keepsMarker) discarded.push("map marker");
+            if (step.advance_delay_seconds != null && !keepsMechanics) discarded.push("completion delay");
+            if (step.campaign_assault_on_enter && value === "end") discarded.push("campaign assault action");
             if (step.routes && !keepsFlow) discarded.push("conditional routes");
             if (step.hint_key && !keepsMechanics) discarded.push("player hint");
             if (step.presentation && !["scene", "end"].includes(value)) discarded.push("presentation style");
+            if (step.video_src && value !== "scene") discarded.push("cinematic video path");
             if (step.next && !keepsFlow && value !== "choice") discarded.push("outgoing connection");
             if (divergentChoiceTargets && value !== "choice") discarded.push("branch destinations");
             if (discarded.length && !confirm("Changing this step to “" + value + "” removes its " + discarded.join(", ") + ". Continue?")) { renderInspector(); return; }
@@ -349,9 +352,12 @@
             if (bodyKey) replacement.body_key = bodyKey;
             if (step.speaker || firstLine && firstLine.speaker) replacement.speaker = step.speaker || firstLine.speaker;
             if (Number.isFinite(step.attack_ratio_on_enter)) replacement.attack_ratio_on_enter = step.attack_ratio_on_enter;
+            if (step.campaign_assault_on_enter && value !== "end") replacement.campaign_assault_on_enter = step.campaign_assault_on_enter;
+            if (keepsMechanics && Number.isFinite(step.advance_delay_seconds)) replacement.advance_delay_seconds = step.advance_delay_seconds;
             if (keepsMechanics && step.pause_game === true) replacement.pause_game = true;
-            if (["scene", "end"].includes(value)) replacement.presentation = step.presentation || "dialogue";
+            if (["scene", "end"].includes(value)) replacement.presentation = value === "end" && step.presentation === "cinematic" ? "chapter" : step.presentation || "dialogue";
             if (value === "scene") {
+                if (step.video_src) replacement.video_src = step.video_src;
                 if (Array.isArray(step.lines)) replacement.lines = step.lines;
                 if (next) replacement.next = next;
                 if (Array.isArray(step.routes)) replacement.routes = step.routes;
@@ -378,7 +384,16 @@
             notice(""); markDirty(); renderInspector();
         }));
         basics.appendChild(selectField("Speaker", step.speaker || "", speakerOptions(), function (value) { step.speaker = value || undefined; if (!value) delete step.speaker; markDirty(); }));
-        if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", ["dialogue", "chapter"], function (value) { step.presentation = value; markDirty(); }));
+        if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", step.type === "scene" ? ["dialogue", "chapter", "celebration", "cinematic"] : ["dialogue", "chapter", "celebration"], function (value) { step.presentation = value; markDirty(); }));
+        if (step.type === "scene") {
+            basics.appendChild(inputField("Local cinematic video", step.video_src || "", function (value) {
+                var source = value.trim();
+                if (source) { step.video_src = source; step.presentation = "cinematic"; }
+                else delete step.video_src;
+                markDirty();
+            }, { placeholder: "/assets/campaign/" + state.definition.episode_id + "/opening.webm" }));
+            basics.appendChild(el("small", { class: "translation-fallback" }, "Optional MP4/WebM; place the file in this episode's assets/campaign folder. The shared preview plays it without autoplay."));
+        }
         basics.appendChild(inputField("Set send percentage on entry (%)", step.attack_ratio_on_enter == null ? "" : Math.round(step.attack_ratio_on_enter * 100), function (value) {
             if (value.trim() === "") delete step.attack_ratio_on_enter;
             else step.attack_ratio_on_enter = Number(value) / 100;
@@ -418,6 +433,21 @@
             basics.appendChild(addConversation);
         }
         host.appendChild(basics);
+
+        if (step.type !== "end") {
+            var campaignActions = section("Campaign actions");
+            campaignActions.appendChild(checkboxField("Order a team to attack when this step begins", Boolean(step.campaign_assault_on_enter), function (enabled) {
+                if (enabled) step.campaign_assault_on_enter = step.campaign_assault_on_enter || { attacker_team: "Red", target: "player" };
+                else delete step.campaign_assault_on_enter;
+                markDirty(); renderInspector();
+            }));
+            if (step.campaign_assault_on_enter) {
+                var assault = step.campaign_assault_on_enter;
+                campaignActions.appendChild(selectField("Attacking team", assault.attacker_team || "Red", window.SOWCampaign.TEAMS, function (value) { assault.attacker_team = value; markDirty(); }));
+                campaignActions.appendChild(selectField("Target", assault.target || "player", [{ value: "player", label: "Player" }].concat(factionOptions()), function (value) { assault.target = value; markDirty(); }));
+            }
+            host.appendChild(campaignActions);
+        }
 
         if (step.type === "choice") {
             var answers = section("Player decisions");
@@ -472,6 +502,11 @@
         }
         if (step.type === "objective" || step.type === "guide") {
             var objective = section("Mechanic and guide");
+            objective.appendChild(inputField("Wait after completion (seconds)", step.advance_delay_seconds, function (value) {
+                if (value.trim() === "") delete step.advance_delay_seconds;
+                else step.advance_delay_seconds = Number(value);
+                markDirty();
+            }, { type: "number", min: 0.1, max: 10, step: 0.1, placeholder: "No wait" }));
             objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else { delete step.pause_game; delete step.camera_only; } markDirty(); renderInspector(); }));
             objective.appendChild(checkboxField("Allow camera controls only while paused", step.camera_only === true, function (value) { if (value) { step.pause_game = true; step.camera_only = true; } else delete step.camera_only; markDirty(); renderInspector(); }));
             step.trigger = step.trigger || { type: "territory", value: 1, scope: "step" };
@@ -481,7 +516,7 @@
                 : step.type === "guide" ? triggerTypes.filter(function (trigger) { return trigger.value !== "elapsed"; }) : triggerTypes;
             objective.appendChild(selectField("Complete when", step.trigger.type, availableTriggers, function (value) {
                 step.trigger = { type: value, scope: value === "troops" ? "total" : step.trigger.scope || "step" };
-                if (["contact", "defeated", "hover", "camera_target", "zoom_in_complete"].includes(value)) step.trigger.target = "";
+                if (["contact", "defeated", "eliminated", "hover", "camera_target", "zoom_in_complete"].includes(value)) step.trigger.target = "";
                 if (value === "camera_target") step.trigger.distance = 12;
                 if (value === "zoom_in_complete") step.trigger.distance = 12;
                 if (value === "zoom_out_complete") step.trigger.value = 0.55;
@@ -519,6 +554,7 @@
                     objective.appendChild(groupTargets);
                 }
             }
+            else if (step.trigger.type === "eliminated") objective.appendChild(selectField("Faction", step.trigger.target || "player", [{ value: "player", label: "Player" }].concat(factionOptions()), function (value) { step.trigger.target = value; markDirty(); }));
             else if (step.trigger.type === "attack") objective.appendChild(selectField("Attack target", step.trigger.target || "", [{ value: "", label: "Any faction" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); }));
             else if (step.trigger.type === "fleet") {
                 objective.appendChild(selectField("Ship type", step.trigger.unit || "", ["TransportShip", "TradeShip", "Warship"], function (value) { step.trigger.unit = value; if (value !== "TransportShip") delete step.trigger.target; markDirty(); renderInspector(); }));
@@ -1245,7 +1281,7 @@
         }
         try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
-        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
+        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
         var requiredMenu = /^map_(?:build|upgrade)_/.test(guideTarget) ? "build" : "";
         var menuHint = requiredMenu && $("#sow-hud").dataset.previewMapMenu !== requiredMenu ? " · open the " + requiredMenu + " submenu in the preview to reveal this guide" : "";
@@ -1254,7 +1290,8 @@
             if (!replayTarget || !replayTarget.getClientRects().length) menuHint = " · open Campaign in the preview to reveal Replay";
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
-        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + menuHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
+        var assaultHint = model.step.campaign_assault_on_enter ? " · on entry: " + model.step.campaign_assault_on_enter.attacker_team + " attacks " + (model.step.campaign_assault_on_enter.target === "player" ? "player" : factionName(model.step.campaign_assault_on_enter.target)) : "";
+        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
         if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
     }
@@ -1390,7 +1427,7 @@
         var host = $("#factControls"); host.replaceChildren();
         var trigger = model.step.trigger;
         var timedRoute = (model.step.routes || []).some(function (route) { return route.when && route.when.fact === "elapsed_seconds"; });
-        var canTick = Boolean((trigger && trigger.type === "elapsed") || timedRoute);
+        var canTick = Boolean((trigger && trigger.type === "elapsed") || timedRoute || Number(model.step.advance_delay_seconds) > 0);
         var simulateButton = $("#simulateBtn"), tickButton = $("#tickBtn");
         simulateButton.hidden = !trigger;
         simulateButton.disabled = !trigger;
@@ -1403,7 +1440,8 @@
             if (trigger.type === "fleet") description += " · " + (trigger.unit || "any ship") + (trigger.target ? " to " + factionName(trigger.target) : "");
             if (trigger.type === "resource_transfer") description += (trigger.recipient ? " · to " + factionName(trigger.recipient) : " · any recipient") + (trigger.resources ? " · " + trigger.resources.join(" + ") : " · any resources");
             host.appendChild(el("small", {}, "Waiting for " + description + " · " + progress.current + " / " + progress.target));
-            if (!["troops", "elapsed", "contact", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
+            if (Number(model.step.advance_delay_seconds) > 0) host.appendChild(el("small", {}, "Advance game time to test the pause before the next step."));
+            if (!["troops", "elapsed", "contact", "eliminated", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
                 var button = el("button", { type: "button" }, "+1 " + trigger.type);
                 button.addEventListener("click", function () { simulateObjective(1); });
                 host.appendChild(button);
@@ -1414,6 +1452,13 @@
                 contact.addEventListener("click", function () { simulateObjective(1, { factionId: factionId }); });
                 host.appendChild(contact);
             });
+            if (trigger.type === "eliminated") {
+                var eliminatedTarget = trigger.target || "player";
+                var eliminate = el("button", { type: "button" }, "Simulate elimination · " + (eliminatedTarget === "player" ? "Player" : factionName(eliminatedTarget)));
+                eliminate.disabled = (state.facts.eliminated_faction_ids || []).includes(eliminatedTarget);
+                eliminate.addEventListener("click", function () { simulateObjective(1); });
+                host.appendChild(eliminate);
+            }
             if (trigger.type === "alliance") factionOptions().forEach(function (option) {
                 var alliance = el("button", { type: "button" }, "Alliance · " + option.label);
                 alliance.disabled = (state.facts.alliance_faction_ids || []).includes(option.value);
@@ -1484,6 +1529,10 @@
             var defeated = state.facts.defeated_faction_ids || [];
             state.facts.defeated_faction_ids = Array.from(new Set(defeated.concat(targets.filter(function (factionId) { return factionId && !defeated.includes(factionId); }).slice(0, amount))));
         }
+        else if (trigger.type === "eliminated") {
+            var eliminatedTarget = trigger.target || "player";
+            state.facts.eliminated_faction_ids = Array.from(new Set((state.facts.eliminated_faction_ids || []).concat(eliminatedTarget)));
+        }
         else if (trigger.type === "ui") state.ui[trigger.action] = Number(state.ui[trigger.action] || 0) + amount;
         else if (trigger.type === "alliance") {
             state.facts.alliance_faction_ids = Array.from(new Set((state.facts.alliance_faction_ids || []).concat(sample.factionId || trigger.target || "simulated_ally")));
@@ -1531,7 +1580,7 @@
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
+    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], eliminated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;

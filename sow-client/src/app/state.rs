@@ -320,6 +320,14 @@ pub struct ClickMarker {
 }
 
 #[derive(Clone, Debug)]
+pub struct AttackLaunchNotice {
+    pub text: String,
+    pub world_x: f32,
+    pub world_y: f32,
+    pub start_time: web_time::Instant,
+}
+
+#[derive(Clone, Debug)]
 pub struct TransportTargetMarker {
     pub tile_idx: u32,
     pub eta_seconds: Option<u32>,
@@ -428,6 +436,7 @@ pub struct UiState {
     pub silo_cooldowns: std::collections::HashMap<u64, u64>,
     pub mover_scene: crate::render::world::movers::MoverScene,
     pub click_markers: Vec<ClickMarker>,
+    pub attack_launch_notices: Vec<AttackLaunchNotice>,
     pub transport_target_markers: std::collections::HashMap<u64, TransportTargetMarker>,
     pub transport_target_seen: std::collections::HashSet<u64>,
     pub transport_target_snapshot_tick: Option<u64>,

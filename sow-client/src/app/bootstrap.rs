@@ -274,6 +274,7 @@ impl SowApp {
                 silo_cooldowns: std::collections::HashMap::new(),
                 mover_scene: crate::render::world::movers::MoverScene::new(),
                 click_markers: Vec::new(),
+                attack_launch_notices: Vec::new(),
                 transport_target_markers: std::collections::HashMap::new(),
                 transport_target_seen: std::collections::HashSet::new(),
                 transport_target_snapshot_tick: None,

@@ -12,7 +12,7 @@
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
                 '<div class="sow-story__main"><div class="sow-story__portrait" hidden><img alt="" draggable="false"><span class="sow-story__portrait-line" aria-hidden="true"></span></div>' +
-                '<div class="sow-story__conversation"><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
+                '<div class="sow-story__conversation"><div class="sow-story__cinematic" hidden><video playsinline controls preload="metadata"></video><button class="sow-story__cinematic-play" type="button" data-story-play></button><button class="sow-story__cinematic-skip" type="button" data-story-skip></button></div><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
                 '<div class="sow-story__scroll"><h2 class="sow-story__title" id="' + uid + '-title"></h2><p class="sow-story__body" id="' + uid + '-body" aria-live="polite" aria-atomic="true"></p></div></div></div>' +
                 '<div class="sow-story__actions"><div class="sow-story__choices"></div><footer class="sow-story__footer"><span class="sow-story__lines" aria-hidden="true"></span>' +
                 '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
@@ -29,6 +29,8 @@
         const speaker = find(".sow-story__speaker"), title = find(".sow-story__title"), body = find(".sow-story__body");
         const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
+        const cinematic = find(".sow-story__cinematic"), cinematicVideo = cinematic.querySelector("video");
+        const cinematicPlay = find("[data-story-play]"), cinematicSkip = find("[data-story-skip]");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy");
@@ -36,6 +38,7 @@
         const spotlight = find(".sow-story__spotlight");
         const guideShade = find(".sow-story__guide-shade");
         const view = doc.defaultView;
+        let cinematicStepKey = "", cinematicStatus = "none";
         let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
         function clearNudge() {
             if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = 0; }
@@ -82,6 +85,54 @@
         find(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
         const dismissButtons = Array.from(root.querySelectorAll("[data-story-dismiss]"));
         const t = key => key ? options.translate(key) : "";
+        function stopCinematic() {
+            cinematicStepKey = ""; cinematicStatus = "none";
+            cinematicVideo.pause(); cinematicVideo.removeAttribute("src"); cinematicVideo.load();
+            cinematic.hidden = true; root.classList.remove("is-cinematic");
+        }
+        function syncCinematic(step) {
+            const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
+            const nextKey = source ? step.id + "\u0000" + source : "";
+            if (nextKey !== cinematicStepKey) {
+                cinematicStepKey = nextKey; cinematicStatus = source ? "ready" : "none";
+                cinematicVideo.pause(); cinematicVideo.removeAttribute("src");
+                if (source) { cinematicVideo.src = source; cinematicVideo.load(); }
+                else cinematicVideo.load();
+            }
+            const active = Boolean(source) && cinematicStatus !== "fallback";
+            cinematic.hidden = !active;
+            cinematicPlay.hidden = !active || cinematicStatus === "playing" || cinematicStatus === "ended";
+            cinematicSkip.hidden = !active || cinematicStatus === "ended";
+            cinematicPlay.textContent = t("play");
+            cinematicSkip.textContent = t("tutorial.skip_cinematic");
+            cinematicPlay.setAttribute("aria-label", t("play"));
+            cinematicSkip.setAttribute("aria-label", t("tutorial.skip_cinematic"));
+            root.classList.toggle("is-cinematic", active);
+            root.classList.toggle("is-chapter", step.presentation === "chapter" || step.presentation === "cinematic" && !active);
+            footer.hidden = step.type === "choice" || step.pause_game === true || active && cinematicStatus !== "ended";
+        }
+        function failCinematic() {
+            if (!cinematicStepKey || cinematicStatus === "fallback") return;
+            const focusVideo = doc.activeElement === cinematicVideo || doc.activeElement === cinematicPlay;
+            cinematicStatus = "fallback";
+            cinematicVideo.pause(); cinematicVideo.removeAttribute("src"); cinematicVideo.load();
+            if (model && model.step) { syncCinematic(model.step); if (focusVideo) continueButton.focus({ preventScroll: true }); }
+        }
+        cinematicVideo.addEventListener("playing", () => {
+            if (!cinematicStepKey || cinematicStatus === "fallback") return;
+            cinematicStatus = "playing"; syncCinematic(model.step);
+            if (doc.activeElement === cinematicPlay) cinematicVideo.focus({ preventScroll: true });
+        });
+        cinematicVideo.addEventListener("pause", () => {
+            if (!cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
+            cinematicStatus = "ready"; syncCinematic(model.step);
+        });
+        cinematicVideo.addEventListener("ended", () => {
+            if (!cinematicStepKey || cinematicStatus === "fallback") return;
+            cinematicStatus = "ended"; syncCinematic(model.step);
+            continueButton.focus({ preventScroll: true });
+        });
+        cinematicVideo.addEventListener("error", failCinematic);
         function placeGuideShade(target) {
             const valid = target
                 && Number.isFinite(target.x) && Number.isFinite(target.y)
@@ -159,7 +210,7 @@
             focusBefore = null;
         }
         function focusAction() {
-            const target = model.step.type === "choice" ? choices.querySelector("button") : model.step.pause_game ? dialog : continueButton;
+            const target = model.step.type === "choice" ? choices.querySelector("button") : cinematicStatus === "ready" ? cinematicPlay : model.step.pause_game ? dialog : continueButton;
             (target || dialog).focus({ preventScroll: true });
         }
         function render(next, context) {
@@ -167,7 +218,7 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { guideWasVisible = false; clearNudge(); clearGuideMetric(); objectiveStepId = null; if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { guideWasVisible = false; clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
             if (objectiveStepId !== step.id) { objectiveStepId = step.id; }
             footer.hidden = step.type === "choice" || step.pause_game === true;
@@ -180,9 +231,9 @@
             root.dataset.localeScript = context.localeScript || doc.documentElement.dataset.localeScript || "latin";
             const modal = ["scene", "choice", "end"].includes(step.type);
             root.classList.toggle("is-modal", modal);
-            root.classList.toggle("is-chapter", step.presentation === "chapter");
             root.classList.toggle("is-celebration", step.presentation === "celebration");
             root.classList.toggle("is-reduced", reducedMotion);
+            syncCinematic(step);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
             dialog.hidden = !modal; shade.hidden = !modal; objective.hidden = modal || context.hideObjective === true;
@@ -203,7 +254,7 @@
             }
             const speakerName = character.name_key ? t(character.name_key) : character.name || "";
             const copyTitle = t(line.title_key || step.title_key), copyBody = t(line.body_key || step.body_key) || (modal ? context.hintOverride || t(step.hint_key) : "");
-            const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key), c.gold_available, c.gold_insufficient])]);
+            const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, step.presentation, step.video_src, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key), c.gold_available, c.gold_insufficient])]);
             if (renderKey !== key) {
                 renderKey = key;
                 conversation.scrollTop = 0;
@@ -212,6 +263,7 @@
                 setText(speaker, speakerName); speaker.hidden = !speakerName;
                 setText(title, copyTitle); title.hidden = !copyTitle;
                 setText(body, copyBody); body.hidden = !copyBody;
+                cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
                 const avatar = character.avatar ? options.asset("gameplay/avatars/" + character.avatar + ".webp") : "";
                 portrait.hidden = !avatar;
                 if (avatar && image.getAttribute("src") !== avatar) image.src = avatar;
@@ -225,7 +277,6 @@
                     const copy = doc.createElement("span"); copy.className = "sow-story__choice-copy";
                     const label = doc.createElement("strong");
                     label.textContent = t(choice.label_key); copy.appendChild(label);
-                    if (choice.body_key) { const detail = doc.createElement("small"); detail.textContent = t(choice.body_key); copy.appendChild(detail); }
                     if (Number(choice.gold_cost || 0) > 0 && Number.isFinite(choice.gold_available)) {
                         const price = doc.createElement("span");
                         price.className = "sow-story__choice-price" + (choice.gold_insufficient ? " is-insufficient" : "");
@@ -337,6 +388,12 @@
             lastAction = event.timeStamp;
             if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
+            else if (button.hasAttribute("data-story-play")) {
+                const sourceKey = cinematicStepKey;
+                const playback = cinematicVideo.play();
+                if (playback && typeof playback.catch === "function") playback.catch(() => { if (cinematicStepKey === sourceKey) failCinematic(); });
+            }
+            else if (button.hasAttribute("data-story-skip")) options.onContinue();
             else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
             else if (button.hasAttribute("data-story-dismiss")) dismissDialog();
         }
@@ -384,6 +441,7 @@
                 releaseFocus();
                 clearNudge();
                 clearGuideMetric();
+                stopCinematic();
                 if (portraitObserver) portraitObserver.disconnect();
                 root.style.removeProperty("--story-portrait-size");
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);

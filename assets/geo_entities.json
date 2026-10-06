@@ -25427,6 +25427,38 @@
       "fallback_tribe_order": null
     },
     {
+      "id": "suetonius_paulinus",
+      "name": "Gaius Suetonius Paulinus",
+      "kind": "kingdom",
+      "era": "unspecified",
+      "region": "unassigned",
+      "lat": null,
+      "lon": null,
+      "flag": "",
+      "avatar": "roman_praetorian",
+      "maps": [
+        "pangaea"
+      ],
+      "fallback_nation_order": null,
+      "fallback_tribe_order": null
+    },
+    {
+      "id": "suetonius_auxilia",
+      "name": "Suetonius' Auxilia",
+      "kind": "kingdom",
+      "era": "unspecified",
+      "region": "unassigned",
+      "lat": null,
+      "lon": null,
+      "flag": "",
+      "avatar": "roman_legionary",
+      "maps": [
+        "pangaea"
+      ],
+      "fallback_nation_order": null,
+      "fallback_tribe_order": null
+    },
+    {
       "id": "legio_xx_valeria",
       "name": "Legio XX Valeria",
       "kind": "kingdom",

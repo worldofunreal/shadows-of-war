@@ -112,7 +112,14 @@ impl SowEngine {
             // `ai_tier(player_type, is_ai_controlled)` — the single source of
             // truth. IQ (assigned per-tier at spawn) drives cadence; RNG is
             // WyRand(seed, bot_id, interval) → lockstep-safe across clients.
-            let (is_under_attack, _attack_entries_examined) = self.ai_is_under_attack(bot_id);
+            let (is_under_attack, ghost_retaliation, _attack_entries_examined) =
+                if tier == profile::AiTier::Ghost {
+                    let (retaliation, examined) = self.ghost_retaliation_for(bot_id, tick);
+                    (retaliation.is_some(), retaliation, examined)
+                } else {
+                    let (under_attack, examined) = self.ai_is_under_attack(bot_id);
+                    (under_attack, None, examined)
+                };
             #[cfg(feature = "ai-metrics")]
             {
                 self.bot_work.attack_entries_scanned_last_update += _attack_entries_examined;
@@ -141,14 +148,17 @@ impl SowEngine {
             let offset = sched_rng.next_int(0, interval as i32) as u64;
 
             let phase = tick % interval;
-            let do_attack = phase == offset;
+            let scheduled_attack = phase == offset;
+            let retaliation_due = ghost_retaliation
+                .is_some_and(|retaliation| retaliation.is_ready_at(tick));
+            let do_attack = scheduled_attack || retaliation_due;
 
             let do_structures = if p.iq >= 100 {
                 let one_third = (offset + interval / 3) % interval;
                 let two_thirds = (offset + (interval * 2) / 3) % interval;
-                do_attack || phase == one_third || phase == two_thirds
+                scheduled_attack || phase == one_third || phase == two_thirds
             } else {
-                do_attack
+                scheduled_attack
             };
 
             #[cfg(feature = "ai-metrics")]
@@ -171,6 +181,7 @@ impl SowEngine {
                 do_attack,
                 do_structures,
                 is_under_attack,
+                ghost_retaliation,
                 profile,
             });
         }

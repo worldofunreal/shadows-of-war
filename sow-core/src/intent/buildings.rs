@@ -27,12 +27,15 @@ impl SowEngine {
         if !structure_kind_enabled(kind) {
             return;
         }
-        if kind == BuildingKind::Factory
-            && !self.buildings.iter().any(|building| {
-                building.owner_id == player_id
-                    && building.kind == BuildingKind::City
-                    && building.active_level() >= 3
-            })
+        let city_level = self
+            .buildings
+            .iter()
+            .filter(|building| building.owner_id == player_id && building.kind == BuildingKind::City)
+            .map(Building::active_level)
+            .max()
+            .unwrap_or_default();
+        if self.state.config.tutorial
+            && !crate::building::structure_kind_unlocked(kind, city_level)
         {
             return;
         }
@@ -204,11 +207,14 @@ impl SowEngine {
         target_level: u8,
     ) -> bool {
         if building.kind == BuildingKind::Factory && target_level == 2 {
-            return self.buildings.iter().any(|other| {
-                other.owner_id == player_id
-                    && other.kind == BuildingKind::City
-                    && other.active_level() >= 3
-            });
+            let city_level = self
+                .buildings
+                .iter()
+                .filter(|other| other.owner_id == player_id && other.kind == BuildingKind::City)
+                .map(Building::active_level)
+                .max()
+                .unwrap_or_default();
+            return crate::building::structure_kind_unlocked(BuildingKind::Factory, city_level);
         }
         true
     }
@@ -470,6 +476,18 @@ mod tests {
         game.apply_upgrade_structure_intent(1, 1);
         assert_eq!(game.buildings[0].level, 2);
         assert!(game.buildings[0].under_construction);
+    }
+
+    #[test]
+    fn factory_build_order_is_rejected_until_city_level_three() {
+        let mut game = engine(true);
+        game.buildings.push(building(1, BuildingKind::City, 2));
+        let gold = game.state.player(1).unwrap().gold;
+
+        game.apply_build_structure_intent(1, BuildingKind::Factory, 0);
+
+        assert_eq!(game.buildings.len(), 1);
+        assert_eq!(game.state.player(1).unwrap().gold, gold);
     }
 
     #[test]

@@ -353,6 +353,18 @@
       postAndroidBridgeMessage({ type: "open_source_licenses" });
   };
 
+  window.SOW_openAndroidExternalLink = function (url) {
+    if (!window.SOW_isAndroidPurchaseBridgeReady() ||
+        androidBridgeCapabilities.indexOf("open_external_link") === -1) return false;
+    try {
+      var parsed = new URL(String(url || ""));
+      if (parsed.protocol !== "https:" || ["shadowsofwar.io", "discord.gg", "t.me", "github.com"].indexOf(parsed.hostname) === -1) return false;
+      return postAndroidBridgeMessage({ type: "open_external_link", url: parsed.href });
+    } catch (e) {
+      return false;
+    }
+  };
+
   window.SOW_androidPurchaseSupports = function (productId) {
     return window.SOW_isAndroidPurchaseBridgeReady() &&
       Array.isArray(androidPurchaseProducts) && androidPurchaseProducts.indexOf(productId) !== -1;

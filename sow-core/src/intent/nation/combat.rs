@@ -5,7 +5,42 @@ use crate::protocol::{AttackIntent, GameplayIntent};
 use crate::rng::NextIntExt;
 use wyrand::WyRand;
 
-use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind};
+use super::profile::{AiSlot, AiTier, BotDecision, BotDecisionKind, GhostRetaliation};
+
+const GHOST_RETALIATION_DELAY_SALT: u64 = 0x4752_4459_0000_0001;
+const GHOST_RETALIATION_FORCE_SALT: u64 = 0x4752_4643_0000_0002;
+
+#[inline]
+fn ghost_attack_rng(seed: u64, ghost_id: u16, attack_id: u64, salt: u64) -> WyRand {
+    let ghost_key = u64::from(ghost_id).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let attack_key = attack_id.wrapping_mul(0xD6E8_FEB8_6659_FD93);
+    WyRand::new(seed ^ ghost_key ^ attack_key ^ salt)
+}
+
+pub(super) fn ghost_retaliation_delay_ticks(seed: u64, ghost_id: u16, attack_id: u64) -> u64 {
+    let mut rng = ghost_attack_rng(seed, ghost_id, attack_id, GHOST_RETALIATION_DELAY_SALT);
+    rng.next_int(3, 13) as u64
+}
+
+pub(super) fn ghost_retaliation_send_troops(
+    seed: u64,
+    ghost_id: u16,
+    retaliation: GhostRetaliation,
+    troops: f64,
+    max_troops: f64,
+    reserve_ratio: f64,
+) -> f64 {
+    let mut rng = ghost_attack_rng(
+        seed,
+        ghost_id,
+        retaliation.attack_id,
+        GHOST_RETALIATION_FORCE_SALT,
+    );
+    let force_ratio = rng.next_int(75, 126) as f64 / 100.0;
+    let defensive_reserve = (max_troops * reserve_ratio * 0.5).max(0.0);
+    let available = (troops - defensive_reserve).max(0.0);
+    (retaliation.incoming_troops.max(0.0) * force_ratio).min(available)
+}
 
 #[inline]
 fn is_real_human(player: &crate::player::Player) -> bool {
@@ -51,6 +86,151 @@ fn campaign_attacks_players(
 }
 
 impl SowEngine {
+    pub(super) fn ghost_retaliation_for(
+        &self,
+        ghost_id: u16,
+        tick: u64,
+    ) -> (Option<GhostRetaliation>, u64) {
+        let Some(defender) = self.state.player(ghost_id) else {
+            return (None, 0);
+        };
+        let Some(inbound_attacks) = self.ai_attack_index.get(ghost_id as usize) else {
+            return (None, 0);
+        };
+        let mut largest_ready: Option<GhostRetaliation> = None;
+        let mut largest_waiting: Option<GhostRetaliation> = None;
+        #[cfg(feature = "ai-metrics")]
+        let mut entries_examined = 0;
+
+        for &attack_index in inbound_attacks {
+            #[cfg(feature = "ai-metrics")]
+            {
+                entries_examined += 1;
+            }
+            let Some(attack) = self.attacks.get(attack_index) else {
+                continue;
+            };
+            if attack.target_owner != ghost_id || attack.owner_id == ghost_id || attack.retreating {
+                continue;
+            }
+            let Some(attacker) = self.state.player(attack.owner_id) else {
+                continue;
+            };
+            let is_friendly = defender.alliances.contains(&attack.owner_id)
+                || (defender.team.is_some() && defender.team == attacker.team);
+            if !attacker.alive || is_friendly {
+                continue;
+            }
+            let already_counterattacking = self
+                .ai_attack_index
+                .get(attack.owner_id as usize)
+                .is_some_and(|outgoing_attacks| {
+                    outgoing_attacks.iter().any(|&outgoing_index| {
+                        self.attacks.get(outgoing_index).is_some_and(|outgoing| {
+                            outgoing.owner_id == ghost_id
+                                && outgoing.target_owner == attack.owner_id
+                                && !outgoing.retreating
+                        })
+                    })
+                });
+            if already_counterattacking {
+                continue;
+            }
+
+            let retaliation = GhostRetaliation {
+                attack_id: attack.id,
+                attacker_id: attack.owner_id,
+                incoming_troops: attack.troops,
+                ready_tick: attack.created_tick.saturating_add(ghost_retaliation_delay_ticks(
+                    self.state.seed,
+                    ghost_id,
+                    attack.id,
+                )),
+            };
+            let chosen = if retaliation.is_ready_at(tick) {
+                &mut largest_ready
+            } else {
+                &mut largest_waiting
+            };
+            if chosen.is_none_or(|current| retaliation.incoming_troops > current.incoming_troops) {
+                *chosen = Some(retaliation);
+            }
+        }
+
+        let retaliation = largest_ready.or(largest_waiting);
+        #[cfg(feature = "ai-metrics")]
+        return (retaliation, entries_examined);
+        #[cfg(not(feature = "ai-metrics"))]
+        (retaliation, 0)
+    }
+
+    fn nation_launch_campaign_assault_fleet(
+        &mut self,
+        bot_id: u16,
+        target_id: u16,
+        troops: f64,
+        decisions: &mut Vec<BotDecision>,
+    ) -> bool {
+        #[cfg(not(feature = "ai-metrics"))]
+        use crate::warp_fleet::resolve_fleet_route;
+
+        if troops < self.state.config.attack_cost_neutral {
+            return false;
+        }
+        let routed_target = {
+            let Some(target) = self.state.player(target_id) else {
+                return false;
+            };
+            if !target.alive || target.border_tiles.is_empty() {
+                return false;
+            }
+            let start = self.state.tick.wrapping_add(bot_id as u64) as u32;
+            let Some(target_tile) = target.border_tiles.first_one_from(start) else {
+                return false;
+            };
+            let border_tiles = &self.state.player(bot_id).unwrap().border_tiles;
+            #[cfg(feature = "ai-metrics")]
+            {
+                self.bot_work.naval_routes_calculated += 1;
+            }
+            #[cfg(feature = "ai-metrics")]
+            let route = crate::warp_fleet::resolve_fleet_route_with_metrics(
+                &self.state.map,
+                &self.water,
+                &mut self.path_scratch,
+                bot_id,
+                (target_id, target_tile),
+                border_tiles,
+                Some(&target.border_tiles),
+                &mut self.bot_work.shoreline_candidates_examined,
+            );
+            #[cfg(not(feature = "ai-metrics"))]
+            let route = resolve_fleet_route(
+                &self.state.map,
+                &self.water,
+                &mut self.path_scratch,
+                bot_id,
+                (target_id, target_tile),
+                border_tiles,
+                Some(&target.border_tiles),
+            );
+            route.ok().map(|route| (target_tile, route))
+        };
+        let Some((target_tile, route)) = routed_target else {
+            return false;
+        };
+        self.cache_bot_route(bot_id, target_tile, route);
+        decisions.push(BotDecision {
+            bot_id,
+            kind: BotDecisionKind::Attack,
+            intent: GameplayIntent::LaunchFleet {
+                target_tile,
+                troops: Some(troops),
+            },
+        });
+        true
+    }
+
     pub(super) fn nation_run_combat_for_slot(
         &mut self,
         slot: &AiSlot,
@@ -67,6 +247,52 @@ impl SowEngine {
         let attacks_players = campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
         // ── Attack logic (both Bots and Nations) ────────────────────
         if slot.do_attack {
+            let campaign_target = self.campaign_assault_targets.get(&bot_id).copied();
+            let ready_retaliation = slot
+                .ghost_retaliation
+                .filter(|retaliation| retaliation.is_ready_at(self.state.tick));
+            if let Some(target_id) = campaign_target
+                && ready_retaliation.is_none()
+            {
+                let can_pursue = self.state.player(target_id).is_some_and(|target| {
+                    target.alive
+                        && !self.state.player(bot_id).is_some_and(|attacker| {
+                            attacker.alliances.contains(&target_id)
+                                || (attacker.team.is_some() && attacker.team == target.team)
+                        })
+                });
+                if can_pursue {
+                    if neighbor_players.contains(&target_id) {
+                        let available = self.state.player(bot_id).map_or(0.0, |player| player.troops);
+                        if available >= self.state.config.attack_cost_neutral {
+                            if let Some(attacker) = self.state.player_mut(bot_id) {
+                                attacker.iq_points = (attacker.iq_points - attack_cost).max(0.0);
+                            }
+                            decisions.push(BotDecision {
+                                bot_id,
+                                kind: BotDecisionKind::Attack,
+                                intent: GameplayIntent::Attack(AttackIntent {
+                                    target_owner: target_id,
+                                    troops: Some(available),
+                                }),
+                            });
+                        }
+                        return;
+                    }
+                    let available = self.state.player(bot_id).map_or(0.0, |player| player.troops);
+                    if self.nation_launch_campaign_assault_fleet(
+                        bot_id,
+                        target_id,
+                        available,
+                        decisions,
+                    ) {
+                        if let Some(attacker) = self.state.player_mut(bot_id) {
+                            attacker.iq_points = (attacker.iq_points - attack_cost).max(0.0);
+                        }
+                        return;
+                    }
+                }
+            }
             // War still spends iq_points (clamped at zero below); growth and
             // defense never freeze for lack of budget.
             {
@@ -163,7 +389,8 @@ impl SowEngine {
                 } else {
                     std::collections::HashSet::new()
                 };
-                if !has_neutral
+                if ready_retaliation.is_none()
+                    && !has_neutral
                     && defensive_player_attackers.is_empty()
                     && self.try_expansion_boat(bot_id, decisions)
                 {
@@ -185,10 +412,25 @@ impl SowEngine {
                 // `apply_attack_intent` would silently block it anyway.
                 // Neutral campaign factions target a human only to answer an
                 // attack already launched against them.
-                let targets: Vec<u16> = neighbor_players
+                let mut targets: Vec<u16> = neighbor_players
                     .iter()
                     .copied()
                     .filter(|&id| {
+                        if slot.tier == AiTier::Ghost
+                            && slot.ghost_retaliation.is_some_and(|retaliation| {
+                                id == retaliation.attacker_id
+                                    && !retaliation.is_ready_at(self.state.tick)
+                            })
+                        {
+                            return false;
+                        }
+                        if ready_retaliation.is_none_or(|retaliation| {
+                            id != retaliation.attacker_id
+                        }) && let Some(target_id) = campaign_target
+                            && (!neighbor_players.contains(&target_id) || id != target_id)
+                        {
+                            return false;
+                        }
                         if betray_then_attack == Some(id) {
                             return true;
                         }
@@ -213,6 +455,20 @@ impl SowEngine {
                     })
                     .collect();
 
+                if let Some(retaliation) = ready_retaliation
+                    && !targets.contains(&retaliation.attacker_id)
+                    && self.state.player(retaliation.attacker_id).is_some_and(|attacker| {
+                        attacker.alive
+                            && !self.state.player(bot_id).is_some_and(|defender| {
+                                defender.alliances.contains(&retaliation.attacker_id)
+                                    || (defender.team.is_some()
+                                        && defender.team == attacker.team)
+                            })
+                    })
+                {
+                    targets.push(retaliation.attacker_id);
+                }
+
                 // Every Nation shares the same mid-tier capability set. The
                 // action phase below remains seed/id-jittered, but the ID no
                 // longer decides which Nation gets fleet behavior. Ghosts
@@ -229,8 +485,12 @@ impl SowEngine {
                             .is_some_and(|p| p.player_type == crate::player::PlayerType::Bot)
                     });
 
-                let mut defender_target = None;
-                if bot_iq >= 100 || !defensive_player_attackers.is_empty() {
+                let mut defender_target = ready_retaliation
+                    .filter(|retaliation| targets.contains(&retaliation.attacker_id))
+                    .map(|retaliation| retaliation.attacker_id);
+                if slot.tier != AiTier::Ghost
+                    && (bot_iq >= 100 || !defensive_player_attackers.is_empty())
+                {
                     let mut largest_attack = 0.0;
                     let inbound_attacks = self
                         .ai_attack_index
@@ -261,6 +521,7 @@ impl SowEngine {
                 // exactly like an enclosed Ghost (islands = zero land actions).
                 // Vanilla tribes stay excluded (passive by design).
                 if can_fleet
+                    && ready_retaliation.is_none()
                     && (has_port || (enclosed && slot.tier != AiTier::Tribe))
                     && troops >= max_troops * 0.20
                     && (self.state.tick + bot_id as u64).is_multiple_of(24)
@@ -277,8 +538,19 @@ impl SowEngine {
                                 p_me.alliances.contains(&p.id)
                                     || (p_me.team.is_some() && p_me.team == p.team)
                             };
-                            let target_allowed = !is_mfo
-                                || nation_target_allowed(p.id, is_real_human(p), defender_target);
+                            let target_allowed = if slot.tier == AiTier::Ghost {
+                                slot.ghost_retaliation.is_none_or(|retaliation| {
+                                    retaliation.is_ready_at(self.state.tick)
+                                        || p.id != retaliation.attacker_id
+                                })
+                            } else {
+                                !is_mfo
+                                    || nation_target_allowed(
+                                        p.id,
+                                        is_real_human(p),
+                                        defender_target,
+                                    )
+                            };
                             if !is_friendly && target_allowed && !p.border_tiles.is_empty() {
                                 if p.troops < min_overall {
                                     min_overall = p.troops;
@@ -594,6 +866,16 @@ impl SowEngine {
                     };
                     if let Some(s) = odds_send {
                         p_send = s;
+                    }
+                    if let Some(retaliation) = ready_retaliation {
+                        p_send = ghost_retaliation_send_troops(
+                            self.state.seed,
+                            bot_id,
+                            retaliation,
+                            troops,
+                            max_troops,
+                            reserve_ratio,
+                        );
                     }
                     if p_send >= self.state.config.attack_cost_neutral {
                         // Neutral expansion is GROWTH, not war: it must stay

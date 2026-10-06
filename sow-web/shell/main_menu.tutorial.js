@@ -31,6 +31,7 @@
         cameraTargetFactionId: null,
         reactionHighlightPlayerId: null,
         completionSent: false,
+        observingAfterDefeat: false,
         lastActionStepId: null,
         resolvedReactions: new Set(),
         priorChoices: Object.create(null),
@@ -38,7 +39,8 @@
         bootEpisode: null,
         lastPhase: null,
         modalObserver: null,
-        menuGuide: false
+        menuGuide: false,
+        guidedControl: null
     };
 
     function asset(path) {
@@ -275,6 +277,7 @@
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
             runtime.cameraOnly = null;
+            runtime.observingAfterDefeat = false;
             runtime.hoverEvents = 0;
             runtime.cameraTargetFactionId = null;
             runtime.hoveredEntityId = null;
@@ -420,6 +423,18 @@
         return result;
     }
 
+    function syncTransferGuide(step) {
+        var target = step && step.guide && step.guide.kind === "ui"
+            && ["transfer_troops", "transfer_gold", "transfer_send"].includes(step.guide.target)
+            ? window.SOWCampaign.resolveUiTarget(step.guide.target, document, runtime.episodeId)
+            : null;
+        if (runtime.guidedControl !== target) {
+            if (runtime.guidedControl) runtime.guidedControl.classList.remove("sow-tutorial-guide-target");
+            runtime.guidedControl = target;
+        }
+        if (target) target.classList.add("sow-tutorial-guide-target");
+    }
+
     function markerTargetFor(step) {
         var facts = runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.facts || {};
         var eliminated = facts.eliminated_faction_ids || [];
@@ -482,6 +497,16 @@
             touch_controls: zoomMode() === "pinch" ? 1 : 0,
             selected_building_kind: selectedBuildingKind
         });
+        if (currentStep.trigger && currentStep.trigger.type === "ui"
+            && currentStep.trigger.action === "map_transfer" && currentStep.marker
+            && currentStep.marker.target && hud.transfer) {
+            var transferTarget = (hud.players || []).find(function (player) {
+                return player && player.campaign_faction_id === currentStep.marker.target;
+            });
+            if (transferTarget && Number(hud.transfer.target_id) === Number(transferTarget.id)) {
+                runtime.uiCounts.map_transfer = Math.max(1, Number(runtime.uiCounts.map_transfer) || 0);
+            }
+        }
         if (currentStep.trigger && (currentStep.trigger.type === "camera_target"
             || (currentStep.trigger.type === "zoom_in_complete" && currentStep.trigger.target))) {
             var targetDistance = cameraTargetDistance(currentStep, hud);
@@ -524,6 +549,17 @@
         if (machineView.step.id !== runtime.lastActionStepId) {
             runtime.lastActionStepId = machineView.step.id;
             if (Number.isFinite(machineView.step.attack_ratio_on_enter)) send("set_attack_ratio", { ratio: machineView.step.attack_ratio_on_enter });
+            if (machineView.step.campaign_assault_on_enter) {
+                var assault = machineView.step.campaign_assault_on_enter;
+                send("activate_campaign_assault", {
+                    attacker_team: assault.attacker_team,
+                    target_faction_id: assault.target
+                });
+            }
+        }
+        if (!runtime.observingAfterDefeat && (facts.eliminated_faction_ids || []).includes("player")) {
+            runtime.observingAfterDefeat = true;
+            send("continue_observing");
         }
         var targetStep = machineView.step;
         var targetFactionId = targetStep.guide && targetStep.guide.kind === "world"
@@ -535,8 +571,13 @@
             var targetPlayer = targetFactionId && (hud.players || []).find(function (player) {
                 return player && player.campaign_faction_id === targetFactionId;
             });
-            if (targetPlayer && targetPlayer.is_alive === true && Number.isInteger(Number(targetPlayer.id))) {
-                send("focus_tutorial_target", { player_id: Number(targetPlayer.id) });
+            if (targetPlayer && targetPlayer.is_alive === true
+                && Number.isFinite(Number(targetPlayer.centroid_x))
+                && Number.isFinite(Number(targetPlayer.centroid_y))) {
+                send("focus_world", {
+                    x: Number(targetPlayer.centroid_x) + 0.5,
+                    y: Number(targetPlayer.centroid_y) + 0.5
+                });
             }
         }
         var cameraOnly = machineView.step.camera_only === true;
@@ -557,6 +598,7 @@
             runtime.markerId = markerId;
             send("set_tutorial_marker", { player_id: markerId });
         }
+        syncTransferGuide(machineView.step);
         if (!runtime.modalOpen) runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud)));
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
@@ -620,6 +662,7 @@
         if (!runtime.menuGuide) { openLeaveMatch(); return; }
         runtime.menuGuide = false;
         runtime.machine = null;
+        syncTransferGuide(null);
         runtime.priorChoices = Object.create(null);
         pendingMenuGuide = null;
         if (runtime.view) runtime.view.render(null);
@@ -775,6 +818,7 @@
 
     function reset() {
         runtime.generation++;
+        syncTransferGuide(null);
         if (!pendingMenuGuide) runtime.priorChoices = Object.create(null);
         runtime.episodeId = null;
         runtime.roster = null;

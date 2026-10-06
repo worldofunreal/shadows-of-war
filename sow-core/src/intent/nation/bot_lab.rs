@@ -2480,14 +2480,12 @@ fn s16_checkpoint_decision_and_state_reference() {
         checkpoints.push((ticks, hash));
     }
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x2b2690367b8be3bb),
-        (500, 0x7b9ae9c13a356237),
-        (750, 0x31a70ca44f24b921),
-        (1000, 0xa8e392763d56b824),
-        (1250, 0x00280b91c73f7c24),
-        (1500, 0xf3afa58e731ca940),
-        (1750, 0x7dec40642511851a),
-        (1998, 0xffda6c8c22bd1205),
+        (250, 0x1778_3d15_66f5_8142),
+        (500, 0xe322_2230_ed90_3cdd),
+        (750, 0xf8a2_8657_5af0_a900),
+        (1000, 0xf23c_10c4_297a_f734),
+        (1250, 0xcd7b_bfd3_6145_d535),
+        (1404, 0x44fc_8d9b_6bd9_cee5),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

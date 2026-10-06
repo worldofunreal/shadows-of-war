@@ -470,6 +470,7 @@ mod tests {
             id: 1,
             owner_id: 1,
             target_owner: 2,
+            created_tick: 0,
             troops,
             to_conquer: BinaryHeap::from([PrioritizedTile {
                 priority: 0,

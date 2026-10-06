@@ -3428,6 +3428,9 @@ fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
     {
         return true;
     }
+    if path.starts_with(paths.root.join("sow-render/src/shaders")) {
+        return path.extension().and_then(|extension| extension.to_str()) == Some("wgsl");
+    }
     if path.starts_with(paths.root.join("sow-tools/assets/buildings")) {
         return path.extension().and_then(|extension| extension.to_str()) == Some("png");
     }
@@ -4266,6 +4269,7 @@ mod tests {
         let rust_path = paths.root.join("sow-client/src/lib.rs");
         let entities_path = paths.root.join("assets/geo_entities.json");
         let world_map_path = paths.root.join("assets/maps/world/map.bin.br");
+        let map_shader_path = paths.root.join("sow-render/src/shaders/map.wgsl");
         let css_path = paths.root.join("sow-web/shell/main_menu.base.css");
         let tutorial_js_path = paths.root.join("sow-web/shell/main_menu.tutorial.js");
         let html_path = paths.root.join("sow-web/site/index.html");
@@ -4285,6 +4289,11 @@ mod tests {
             },
             LocalFileStamp {
                 path: world_map_path,
+                len: 1,
+                modified_nanos: 1,
+            },
+            LocalFileStamp {
+                path: map_shader_path,
                 len: 1,
                 modified_nanos: 1,
             },
@@ -4323,7 +4332,7 @@ mod tests {
         current[0].len = 2;
         assert!(local_change_requires_wasm(&previous, &current, &paths));
 
-        for index in 1..3 {
+        for index in 1..4 {
             current = previous.clone();
             current[index].len = 2;
             assert!(
@@ -4333,7 +4342,7 @@ mod tests {
             );
         }
 
-        for index in 3..previous.len() {
+        for index in 4..previous.len() {
             current = previous.clone();
             current[index].len = 2;
             assert!(

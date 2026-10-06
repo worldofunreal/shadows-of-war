@@ -157,6 +157,17 @@
 .sow-story.is-chapter::after { bottom: 0; transform-origin: bottom; background: linear-gradient(0deg, #05090d, rgb(5 9 13 / 82%) 72%, transparent); animation: story-letterbox-in 360ms cubic-bezier(.2,.7,.2,1) both; }
 .sow-story.is-chapter .sow-story__dialog { z-index: 2; }
 .sow-story.is-chapter .sow-story__dialog::after { content: ""; position: absolute; inset: 8px; border: 1px solid rgb(233 187 100 / 9%); pointer-events: none; }
+.sow-story.is-cinematic .sow-story__dialog { inset-inline: 24px; bottom: 50%; width: min(100% - 48px, 1000px); transform: translateY(50%); }
+.sow-story.is-cinematic.has-portrait .sow-story__dialog { grid-template-columns: minmax(0, 1fr); }
+.sow-story.is-cinematic .sow-story__portrait { display: none; }
+.sow-story.is-cinematic .sow-story__conversation { padding-block: 20px 0; }
+.sow-story__cinematic { position: relative; width: 100%; aspect-ratio: 16 / 9; margin: 0 0 20px; overflow: hidden; border: 1px solid rgb(233 187 100 / 50%); border-radius: 4px; background: #030608; box-shadow: 0 14px 36px #0009, inset 0 0 30px #000; }
+.sow-story__cinematic video { display: block; width: 100%; height: 100%; object-fit: contain; background: #030608; }
+.sow-story__cinematic-play, .sow-story__cinematic-skip { position: absolute; z-index: 1; border: 1px solid rgb(233 187 100 / 80%); background: rgb(8 13 17 / 92%); color: var(--story-text); font-weight: 800 !important; letter-spacing: .08em; text-transform: uppercase; box-shadow: 0 6px 20px #0009; }
+.sow-story__cinematic-play { top: 50%; left: 50%; min-width: 128px; min-height: 48px; padding: 12px 20px; transform: translate(-50%, -50%); background: #e9bb64; color: #12191d; }
+.sow-story__cinematic-skip { top: 12px; right: 12px; min-height: 38px; padding: 9px 13px; border-color: #ffffff50; }
+.sow-story__cinematic-play:hover, .sow-story__cinematic-skip:hover { filter: brightness(1.15); }
+.sow-story.is-cinematic .sow-story__shade { background: radial-gradient(ellipse at 50% 35%, rgb(5 10 13 / 16%), rgb(5 10 13 / 88%)); }
 .sow-story__objective { --sow-tutorial-progress-height: 16px; --sow-tutorial-progress-label-size: 16px; position: absolute; z-index: 1; inset-inline: max(16px, var(--story-inset-left)) max(16px, var(--story-inset-right)); top: max(12px, var(--story-inset-top)); display: flex; align-items: flex-start; gap: 8px; width: min(280px, calc(100% - max(16px, var(--story-inset-left)) - max(16px, var(--story-inset-right)))); margin-inline: 0; padding: 12px; border: 1px solid var(--story-line); border-inline-start: 2px solid var(--story-accent); border-radius: 2px 2px 10px 2px; background: rgb(9 15 20 / 94%); box-shadow: 0 8px 28px #0005; pointer-events: none; transition: border-color 180ms; }
 #sow-story .sow-story__objective { inset-inline-start: max(16px, var(--story-inset-left)); inset-inline-end: auto; top: calc(max(12px, var(--story-inset-top)) + var(--sow-tutorial-player-panel-height) + var(--sow-tutorial-player-panel-gap)); }
 .sow-story__objective-copy { flex: 1; min-width: 0; }
@@ -253,6 +264,11 @@
         max-height: min(calc(100% - var(--story-safe-top) - var(--story-safe-bottom)), 60svh);
     }
     .sow-story.is-chapter .sow-story__dialog { bottom: var(--story-safe-bottom); transform: none; }
+    .sow-story.is-cinematic .sow-story__dialog { inset-inline: 12px; bottom: var(--story-safe-bottom); width: calc(100% - 24px); transform: none; }
+    .sow-story.is-cinematic .sow-story__conversation { padding: 0; }
+    .sow-story__cinematic { max-height: 34svh; margin-bottom: 12px; }
+    .sow-story__cinematic-skip { top: 8px; right: 8px; min-height: 34px; padding: 7px 10px; font-size: 10px !important; }
+    .sow-story__cinematic-play { min-height: 42px; }
     .sow-story__main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 12px; flex: 1 1 auto; min-height: 0; padding: 14px 16px 10px; }
     .sow-story.has-portrait .sow-story__main { grid-template-columns: var(--story-portrait-size, min(36cqw, 40svh)) minmax(0, 1fr); }
     .sow-story__portrait { width: var(--story-portrait-size, min(36cqw, 40svh)); height: var(--story-portrait-size, min(36cqw, 40svh)); aspect-ratio: 1; align-self: start; grid-row: auto; min-height: 0; }

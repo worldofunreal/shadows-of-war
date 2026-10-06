@@ -1228,6 +1228,7 @@ mod tests {
             count: 4,
             owner_id: 7,
             tile_idx: None,
+            detail: BuildingDetail::Cluster,
             status: None,
         };
         assert_eq!(building_badge_label(&building).as_deref(), Some("🔨 × 4"));

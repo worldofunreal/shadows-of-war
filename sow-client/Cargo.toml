@@ -13,6 +13,9 @@ path = "src/lib.rs"
 default = []
 dev = []
 
+[dev-dependencies]
+wasm-bindgen-test = "0.3.79"
+
 [dependencies]
 sow-audio = { workspace = true }
 sow-core = { workspace = true }

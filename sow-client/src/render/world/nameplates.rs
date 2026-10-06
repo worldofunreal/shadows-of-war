@@ -52,6 +52,7 @@ pub(crate) struct NameplateSystem {
     visuals: HashMap<u16, NameplateVisualState>,
     land_cache: NameplateLandCache,
     frame_plans: Vec<PreparedNameplate>,
+    tutorial_target_hit_bounds: Option<(u16, [f32; 4])>,
 }
 
 #[derive(Clone, Copy)]
@@ -61,6 +62,7 @@ struct PreparedNameplate {
     full: Option<FullNameplate>,
     dot: LodDot,
     presentation: NameplatePresentation,
+    tutorial_hit_bounds: Option<[f32; 4]>,
 }
 
 impl NameplateCapacityPlan for PreparedNameplate {
@@ -148,6 +150,19 @@ impl NameplateSystem {
     pub(crate) fn anchor_for(&self, player_id: u16) -> Option<[f32; 2]> {
         self.visuals.get(&player_id).map(|state| state.to_center.0)
     }
+
+    pub(crate) fn tutorial_target_contains(&self, player_id: u16, x: f64, y: f64) -> bool {
+        let Some((target_id, [left, top, right, bottom])) = self.tutorial_target_hit_bounds else {
+            return false;
+        };
+        target_id == player_id
+            && x.is_finite()
+            && y.is_finite()
+            && x >= f64::from(left)
+            && x <= f64::from(right)
+            && y >= f64::from(top)
+            && y <= f64::from(bottom)
+    }
 }
 
 pub(super) fn render_nameplates(
@@ -166,6 +181,7 @@ pub(super) fn render_nameplates(
     tutorial_target_player: Option<u16>,
 ) {
     let sf = if sf.is_finite() { sf.max(0.01) } else { 1.0 };
+    system.tutorial_target_hit_bounds = None;
     sample_nameplates(text, snapshot, sim, system, dev, sf, my_id, now);
 
     let my_player = snapshot.players.iter().find(|player| player.id == my_id);
@@ -244,6 +260,7 @@ pub(super) fn render_nameplates(
                 full: None,
                 dot,
                 presentation: NameplatePresentation::Hidden,
+                tutorial_hit_bounds: None,
             });
             continue;
         }
@@ -319,6 +336,7 @@ pub(super) fn render_nameplates(
                 full: None,
                 dot,
                 presentation: NameplatePresentation::Hidden,
+                tutorial_hit_bounds: None,
             });
             continue;
         }
@@ -339,18 +357,36 @@ pub(super) fn render_nameplates(
             campaign_avatar_slots,
             sf,
         );
+        let tutorial_hit_bounds = (tutorial_target_player == Some(player.id)).then(|| {
+            let [half_width, half_height] = layout_bounds.extents_about(center);
+            let half_width = half_width * fit_scale * sf;
+            let half_height = half_height * fit_scale * sf;
+            [
+                center.0[0] * sf - half_width,
+                center.0[1] * sf - half_height,
+                center.0[0] * sf + half_width,
+                center.0[1] * sf + half_height,
+            ]
+        });
         frame_plans.push(PreparedNameplate {
             player_index,
             is_human,
             full: Some(full),
             dot,
             presentation: NameplatePresentation::Hidden,
+            tutorial_hit_bounds,
         });
     }
 
     assign_nameplate_capacity(frame_plans, text.remaining_instance_capacity());
+    let mut tutorial_target_hit_bounds = None;
     for plan in frame_plans.iter() {
         let player = &snapshot.players[plan.player_index];
+        if plan.presentation == NameplatePresentation::Full
+            && tutorial_target_player == Some(player.id)
+        {
+            tutorial_target_hit_bounds = plan.tutorial_hit_bounds.map(|bounds| (player.id, bounds));
+        }
         match plan.presentation {
             NameplatePresentation::Full => {
                 let full = plan
@@ -367,6 +403,7 @@ pub(super) fn render_nameplates(
             NameplatePresentation::Hidden => {}
         }
     }
+    system.tutorial_target_hit_bounds = tutorial_target_hit_bounds;
 }
 
 fn sample_nameplates(

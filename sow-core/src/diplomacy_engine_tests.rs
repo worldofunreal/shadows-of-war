@@ -168,6 +168,7 @@ mod alliance_lifecycle_tests {
         assert!(engine.campaign_contact_resolved.contains(&2));
         assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Neutral));
 
+        engine.state.events.clear();
         engine.apply_stamped_intent(
             &StampedIntent {
                 player_id: 1,
@@ -176,6 +177,14 @@ mod alliance_lifecycle_tests {
             1,
         );
         assert!(engine.alliances_proposed.iter().any(|proposal| proposal.proposer == 1 && proposal.target == 2));
+        assert_eq!(
+            engine.state.events,
+            vec![crate::game::GameEvent::AllianceRequestLifecycle {
+                proposer_id: 1,
+                target_id: 2,
+                status: crate::game::AllianceRequestStatus::Submitted,
+            }]
+        );
 
         engine.apply_stamped_intent(
             &StampedIntent {
@@ -209,6 +218,27 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
+    fn permanent_campaign_alliance_rejects_renewal_request() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine
+            .campaign_relations
+            .insert(2, crate::protocol::CampaignRelation::Allied);
+        engine.state.player_mut(1).unwrap().alliances.push(2);
+        engine.state.player_mut(2).unwrap().alliances.push(1);
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::ProposeAlliance { target_player: 1 },
+            },
+            1,
+        );
+
+        assert!(engine.alliances_proposed.is_empty());
+        assert!(engine.state.events.is_empty());
+    }
+
+    #[test]
     fn campaign_alliance_break_marks_the_faction_as_an_enemy() {
         let mut engine = campaign_contact_engine(100.0, true);
         engine.campaign_relations.insert(2, crate::protocol::CampaignRelation::Allied);
@@ -225,14 +255,26 @@ mod alliance_lifecycle_tests {
 
     #[test]
     fn proposal_expires_and_sets_cooldown() {
-        let mut engine = minimal_engine();
+        let mut engine = campaign_contact_engine(250.0, true);
         engine.state.tick = 0;
         engine.push_alliance_proposal(1, 2);
+        engine.state.events.clear();
         engine.state.tick = ALLIANCE_REQUEST_TTL_TICKS as u64 + 1;
         engine.prune_alliance_diplomacy();
         assert!(engine.alliances_proposed.is_empty());
+        assert_eq!(
+            engine.state.events,
+            vec![crate::game::GameEvent::AllianceRequestLifecycle {
+                proposer_id: 1,
+                target_id: 2,
+                status: crate::game::AllianceRequestStatus::Expired,
+            }]
+        );
         assert!(engine.alliance_request_cooldown_until.contains_key(&(1, 2)));
         assert!(!engine.can_send_alliance_request(1, 2));
+        engine.state.events.clear();
+        engine.prune_alliance_diplomacy();
+        assert!(engine.state.events.is_empty());
         let until = *engine.alliance_request_cooldown_until.get(&(1, 2)).unwrap();
         engine.state.tick = until as u64 + 1;
         engine.prune_alliance_diplomacy();
@@ -241,14 +283,117 @@ mod alliance_lifecycle_tests {
 
     #[test]
     fn reject_marks_cooldown() {
-        let mut engine = minimal_engine();
+        let mut engine = campaign_contact_engine(250.0, true);
         engine.push_alliance_proposal(1, 2);
+        engine.state.events.clear();
         let stamped = StampedIntent {
             player_id: 2,
             intent: GameplayIntent::RejectAlliance { target_player: 1 },
         };
         engine.apply_stamped_intent(&stamped, 0);
         assert!(!engine.can_send_alliance_request(1, 2));
+        assert_eq!(
+            engine.state.events,
+            vec![crate::game::GameEvent::AllianceRequestLifecycle {
+                proposer_id: 1,
+                target_id: 2,
+                status: crate::game::AllianceRequestStatus::Rejected,
+            }]
+        );
+        engine.state.events.clear();
+        engine.apply_stamped_intent(&stamped, 1);
+        assert!(engine.state.events.is_empty());
+    }
+
+    #[test]
+    fn submitted_request_event_is_emitted_once_for_humans_only() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.push_alliance_proposal(1, 2);
+        engine.push_alliance_proposal(1, 2);
+        assert_eq!(
+            engine.state.events,
+            vec![crate::game::GameEvent::AllianceRequestLifecycle {
+                proposer_id: 1,
+                target_id: 2,
+                status: crate::game::AllianceRequestStatus::Submitted,
+            }]
+        );
+
+        engine.state.events.clear();
+        engine.push_alliance_proposal(2, 1);
+        assert!(engine.state.events.is_empty());
+    }
+
+    #[test]
+    fn ignored_or_duplicate_request_intents_emit_no_extra_submitted_event() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        let request = StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::ProposeAlliance { target_player: 2 },
+        };
+        engine.apply_stamped_intent(&request, 0);
+        engine.apply_stamped_intent(&request, 1);
+        assert_eq!(
+            engine
+                .state
+                .events
+                .iter()
+                .filter(|event| matches!(
+                    event,
+                    crate::game::GameEvent::AllianceRequestLifecycle {
+                        proposer_id: 1,
+                        target_id: 2,
+                        status: crate::game::AllianceRequestStatus::Submitted,
+                    }
+                ))
+                .count(),
+            1
+        );
+
+        engine.state.events.clear();
+        engine
+            .campaign_relations
+            .insert(2, crate::protocol::CampaignRelation::Enemy);
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ProposeAlliance { target_player: 2 },
+            },
+            2,
+        );
+        assert!(engine.state.events.is_empty());
+    }
+
+    #[test]
+    fn mutual_proposals_in_one_turn_form_alliance_without_a_false_success_notice() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+        engine.state.events.clear();
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ProposeAlliance { target_player: 2 },
+            },
+            1,
+        );
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::ProposeAlliance { target_player: 1 },
+            },
+            1,
+        );
+
+        assert!(engine.alliances_proposed.is_empty());
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert_eq!(
+            engine.state.events,
+            vec![crate::game::GameEvent::AllianceRequestLifecycle {
+                proposer_id: 1,
+                target_id: 2,
+                status: crate::game::AllianceRequestStatus::Submitted,
+            }]
+        );
     }
 
     #[test]
