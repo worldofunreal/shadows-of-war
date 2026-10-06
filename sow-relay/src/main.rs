@@ -33,6 +33,7 @@ use rustls::{Certificate, PrivateKey, ServerConfig};
 use sha2::{Digest, Sha256};
 use sow_core::game_config::{BotDifficulty, GameConfig};
 use sow_core::player::Leader;
+use sow_core::spawn_rate_limit::SpawnIntentRateLimit;
 use sow_core::protocol::{
     ClientMessage, GameplayIntent, LobbyInfo, LobbyKind, LobbyPlayerSyncState,
     ServerLobbiesBroadcastMessage, ServerLobbyClosedMessage, ServerMessage, ServerTurnMessage,
@@ -1831,6 +1832,7 @@ async fn handle_http(
 }
 
 async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState> {
+    let spawn_phase_end_tick = deployment_end_tick(body.config.as_ref(), body.tick_rate_ms);
     let roster_total = body.players.len();
     let internal_bot_count = body.players.iter().filter(|p| p.is_internal).count();
     let expected_external_connections = roster_total.saturating_sub(internal_bot_count);
@@ -1947,11 +1949,44 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState>
         body.tick_rate_ms as u64,
         body.tick_number,
         initial_empty_secs,
+        spawn_phase_end_tick,
     ));
     state
 }
 
 // ---- per-lobby tick loop -----------------------------------------------------
+
+fn deployment_end_tick(config: Option<&GameConfig>, fallback_tick_rate_ms: f32) -> Option<u64> {
+    if config.is_some_and(|config| config.random_spawn) {
+        return None;
+    }
+    let tick_rate_ms = config.map_or(fallback_tick_rate_ms, |config| config.tick_rate_ms);
+    let tick_rate_ms = if tick_rate_ms.is_finite() && tick_rate_ms > 0.0 {
+        tick_rate_ms
+    } else {
+        100.0
+    };
+    Some((15_000.0 / tick_rate_ms) as u64)
+}
+
+fn admit_gameplay_intent(
+    player_id: u16,
+    intent: &GameplayIntent,
+    tick_number: u64,
+    tick_rate_ms: f32,
+    spawn_phase_end_tick: Option<u64>,
+    spawn_rate_limits: &mut HashMap<u16, SpawnIntentRateLimit>,
+) -> bool {
+    if !matches!(intent, GameplayIntent::Spawn { .. })
+        || !spawn_phase_end_tick.is_some_and(|end_tick| tick_number < end_tick)
+    {
+        return true;
+    }
+    spawn_rate_limits
+        .entry(player_id)
+        .or_default()
+        .admit_at_tick(tick_number, tick_rate_ms)
+}
 
 async fn tick_task(
     state: Arc<LobbyState>,
@@ -1960,11 +1995,13 @@ async fn tick_task(
     tick_rate_ms: u64,
     mut tick_number: u64,
     mut active_empty_secs: f32,
+    spawn_phase_end_tick: Option<u64>,
 ) {
     let mut ticker = interval(Duration::from_millis(tick_rate_ms));
     let mut last_status = std::time::Instant::now();
     let mut generated_rematch_id: Option<u64> = None;
     let mut pending_intents = Vec::new();
+    let mut spawn_rate_limits = HashMap::<u16, SpawnIntentRateLimit>::new();
     let mut total_ticks: u64 = 0;
     let mut total_intents: u64 = 0;
     // Lifecycle: a lobby is removed from the registry and its live replay
@@ -2126,6 +2163,16 @@ async fn tick_task(
             Some(event) = ev_rx.recv() => {
                 match event {
                     RelayEvent::Gameplay { player_id, intent } => {
+                        if !admit_gameplay_intent(
+                            player_id,
+                            &intent,
+                            tick_number,
+                            tick_rate_ms as f32,
+                            spawn_phase_end_tick,
+                            &mut spawn_rate_limits,
+                        ) {
+                            continue;
+                        }
                         if matches!(intent, GameplayIntent::Resign) {
                             let (settlements, lobby_json) = {
                                 let mut tracker = state.tracker.lock().unwrap();
@@ -2959,8 +3006,11 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 #[cfg(test)]
 mod dispatcher_tests {
     use super::{
-        AdmissionState, IpAdmissionState, MatchTracker, RelayAdmissionPolicy, ticket_matches,
+        AdmissionState, IpAdmissionState, MatchTracker, RelayAdmissionPolicy, admit_gameplay_intent,
+        deployment_end_tick, ticket_matches,
     };
+    use sow_core::game_config::GameConfig;
+    use sow_core::protocol::GameplayIntent;
     use sha2::{Digest, Sha256};
     use std::collections::{HashMap, HashSet};
     use std::net::SocketAddr;
@@ -2998,6 +3048,62 @@ mod dispatcher_tests {
             "0123456789abcdef0123456789abcde0",
             &expected
         ));
+    }
+
+    #[test]
+    fn spawn_relocations_are_limited_per_player_only_during_deployment() {
+        let mut config = GameConfig::default();
+        let end_tick = deployment_end_tick(Some(&config), 100.0);
+        assert_eq!(end_tick, Some(150));
+
+        let spawn = GameplayIntent::Spawn { x: 1, y: 1 };
+        let mut limits = HashMap::new();
+        for _ in 0..10 {
+            assert!(admit_gameplay_intent(1, &spawn, 0, 100.0, end_tick, &mut limits));
+        }
+        assert!(!admit_gameplay_intent(
+            1,
+            &spawn,
+            1,
+            100.0,
+            end_tick,
+            &mut limits
+        ));
+        assert!(admit_gameplay_intent(
+            2,
+            &spawn,
+            1,
+            100.0,
+            end_tick,
+            &mut limits
+        ));
+        assert!(admit_gameplay_intent(
+            1,
+            &spawn,
+            30,
+            100.0,
+            end_tick,
+            &mut limits
+        ));
+        assert!(admit_gameplay_intent(
+            1,
+            &spawn,
+            end_tick.unwrap(),
+            100.0,
+            end_tick,
+            &mut limits
+        ));
+        assert!(admit_gameplay_intent(
+            1,
+            &GameplayIntent::Resign,
+            1,
+            100.0,
+            end_tick,
+            &mut limits
+        ));
+
+        config.random_spawn = true;
+        assert_eq!(deployment_end_tick(Some(&config), 100.0), None);
     }
 
     #[test]

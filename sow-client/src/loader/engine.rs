@@ -53,6 +53,8 @@ impl SowApp {
         self.sim.turn_queue.clear();
         self.time.turn_queue_peak = 0;
         self.sim.offline_intents.clear();
+        self.sim.latest_local_spawn = None;
+        self.input.spawn_intent_rate.reset();
         self.sim.last_synced_cost_tick = None;
         self.sim.my_lobby_id = None;
         self.sim.my_player_id = None;
@@ -219,6 +221,7 @@ impl SowApp {
                 self.sim.turn_queue.clear();
 
                 self.sim.current_snapshot = None;
+                self.sim.latest_local_spawn = None;
                 self.gfx.needs_first_upload = true;
             }
         }

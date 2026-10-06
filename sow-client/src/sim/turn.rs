@@ -16,6 +16,22 @@ fn take_alliance_request_lifecycle_events(events: &mut Vec<GameEvent>) -> Vec<Ga
     lifecycle_events
 }
 
+fn take_resource_transfer_events(events: &mut Vec<GameEvent>) -> Vec<GameEvent> {
+    let mut transfer_events = Vec::new();
+    events.retain(|event| {
+        if matches!(
+            event,
+            GameEvent::ResourceTransferred { .. } | GameEvent::ResourceTransferRejected { .. }
+        ) {
+            transfer_events.push(event.clone());
+            false
+        } else {
+            true
+        }
+    });
+    transfer_events
+}
+
 impl TutorialObservation {
     pub(crate) fn observe_sim(&mut self, engine: &SowEngine, my_id: u16) {
         if my_id == 0 {
@@ -334,11 +350,36 @@ impl SowApp {
     pub(crate) fn handle_sim_turn(&mut self, turn: Turn) {
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let observe_tutorial = self.net.is_offline && self.sim.config.tutorial && my_id != 0;
-        let (mut snap, events) = {
+        let (mut snap, events, local_spawn_target) = {
             let Some(e) = self.sim.engine.as_mut() else {
                 return;
             };
+            let local_spawn_targets = if matches!(e.state.phase, sow_core::game::GamePhase::Spawning { .. }) {
+                turn.intents
+                    .iter()
+                    .rev()
+                    .filter_map(|stamped| {
+                        if stamped.player_id != my_id {
+                            return None;
+                        }
+                        let sow_core::protocol::GameplayIntent::Spawn { x, y } = &stamped.intent else {
+                            return None;
+                        };
+                        let map = &e.state.map;
+                        (*x < map.width
+                            && *y < map.height
+                            && map.owner_id(*x, *y) == 0
+                            && map.terrain[map.ref_id(*x, *y)].is_land())
+                            .then_some((*x, *y))
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
             e.apply_intents(&turn.intents);
+            let local_spawn_target = local_spawn_targets
+                .into_iter()
+                .find(|(x, y)| e.state.map.owner_id(*x, *y) == my_id);
             if observe_tutorial {
                 // Capture accepted actions before tick() clears their events.
                 self.sim.tutorial_observation.observe_events(e, my_id);
@@ -346,16 +387,18 @@ impl SowApp {
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
             let mut lifecycle_events = take_alliance_request_lifecycle_events(&mut e.state.events);
+            let transfer_events = take_resource_transfer_events(&mut e.state.events);
             e.tick();
             self.sim.config.buildings_enabled = e.state.config.buildings_enabled;
             if observe_tutorial {
                 self.sim.tutorial_observation.observe_events(e, my_id);
                 self.sim.tutorial_observation.observe_sim(e, my_id);
             }
+            e.state.events.extend(transfer_events);
             let snap = e.build_snapshot();
             let mut events = std::mem::take(&mut e.state.events);
             events.append(&mut lifecycle_events);
-            (snap, events)
+            (snap, events, local_spawn_target)
         };
 
         let turn_defeats = self.process_tick_events(events, &snap, my_id);
@@ -397,6 +440,9 @@ impl SowApp {
             });
         }
 
+        if let Some((x, y)) = local_spawn_target {
+            self.sim.latest_local_spawn = Some((snap.tick, x, y));
+        }
         self.sim.current_snapshot = Some(snap);
 
         // Recompute Fog of War visibility
@@ -434,7 +480,7 @@ impl SowApp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{take_alliance_request_lifecycle_events, take_resource_transfer_events};
     use sow_core::building::{Building, CityModules};
     use sow_core::game::{BuildingKind, GamePhase, GameState, ProjectileKind, UnitType};
     use sow_core::game_config::GameConfig;
@@ -484,6 +530,55 @@ mod tests {
             vec![alliance_event]
         );
         assert_eq!(events, vec![unrelated_event]);
+    }
+
+    #[test]
+    fn resource_transfer_results_survive_the_tick_in_snapshots() {
+        let mut accepted = engine();
+        accepted.state.player_mut(1).unwrap().alliances.push(2);
+        accepted.state.player_mut(2).unwrap().alliances.push(1);
+        let sender_gold = accepted.state.player(1).unwrap().gold;
+        let receiver_gold = accepted.state.player(2).unwrap().gold;
+        let sender_troops = accepted.state.player(1).unwrap().troops;
+        let receiver_troops = accepted.state.player(2).unwrap().troops;
+        accepted.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::SendResources {
+                target_player: 2,
+                gold: 25.0,
+                troops: 10.0,
+            },
+        }]);
+        let transfer_events = take_resource_transfer_events(&mut accepted.state.events);
+        accepted.tick();
+        accepted.state.events.extend(transfer_events);
+        let snapshot = accepted.build_snapshot();
+
+        assert_eq!(accepted.state.player(1).unwrap().gold, sender_gold - 25.0);
+        assert_eq!(accepted.state.player(2).unwrap().gold, receiver_gold + 25.0);
+        assert_eq!(accepted.state.player(1).unwrap().troops, sender_troops - 10.0);
+        assert_eq!(accepted.state.player(2).unwrap().troops, receiver_troops + 10.0);
+        assert_eq!(snapshot.resource_transfers.len(), 1);
+        assert_eq!(snapshot.resource_transfers[0].sender_id, 1);
+        assert_eq!(snapshot.resource_transfers[0].receiver_id, 2);
+
+        let mut rejected = engine();
+        rejected.apply_intents(&[StampedIntent {
+            player_id: 1,
+            intent: GameplayIntent::SendResources {
+                target_player: 2,
+                gold: 0.0,
+                troops: 0.0,
+            },
+        }]);
+        let transfer_events = take_resource_transfer_events(&mut rejected.state.events);
+        rejected.tick();
+        rejected.state.events.extend(transfer_events);
+        let snapshot = rejected.build_snapshot();
+
+        assert_eq!(snapshot.resource_transfer_rejections.len(), 1);
+        assert_eq!(snapshot.resource_transfer_rejections[0].sender_id, 1);
+        assert_eq!(snapshot.resource_transfer_rejections[0].receiver_id, 2);
     }
 
     #[test]

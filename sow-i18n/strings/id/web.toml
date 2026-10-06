@@ -677,6 +677,7 @@ match_ended = "Pertandingan telah berakhir."
 
 action_unavailable = "Tidak ada tindakan yang tersedia di sini."
 spawn_too_close = "Tidak cukup ruang untuk ditempatkan di sini."
+spawn_rate_limited = "Tunggu sebentar sebelum menempatkan pasukan lagi."
 attack_out_of_range = "Target itu di luar jangkauan."
 fleet_teammate = "Kamu tidak bisa menargetkan rekan tim dengan armada."
 fleet_alliance = "Akhiri aliansi sebelum mengirim armada."

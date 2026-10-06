@@ -677,6 +677,7 @@ map_action_build_trade_ship = "建造商船"
 
 action_unavailable = "这里没有可用操作。"
 spawn_too_close = "这里没有足够的部署空间。"
+spawn_rate_limited = "请稍等片刻再部署。"
 attack_out_of_range = "目标超出攻击范围。"
 fleet_teammate = "不能派遣舰队攻击队友。"
 fleet_alliance = "派遣舰队前请先解除联盟。"

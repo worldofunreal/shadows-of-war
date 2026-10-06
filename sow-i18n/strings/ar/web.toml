@@ -677,6 +677,7 @@ match_ended = "انتهت المباراة."
 
 action_unavailable = "لا يوجد إجراء متاح هنا."
 spawn_too_close = "لا توجد مساحة كافية للانتشار هنا."
+spawn_rate_limited = "انتظر قليلًا قبل الانتشار مرة أخرى."
 attack_out_of_range = "الهدف خارج نطاق الهجوم."
 fleet_teammate = "لا يمكنك استهداف زميل بفريقك بأسطول."
 fleet_alliance = "أنه التحالف قبل إرسال الأسطول."

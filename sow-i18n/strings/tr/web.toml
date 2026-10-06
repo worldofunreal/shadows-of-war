@@ -677,6 +677,7 @@ map_action_build_trade_ship = "Ticaret gemisi inşa et"
 
 action_unavailable = "Burada kullanılabilir bir eylem yok."
 spawn_too_close = "Buraya yerleşmek için yeterli alan yok."
+spawn_rate_limited = "Tekrar konuşlanmadan önce biraz bekle."
 attack_out_of_range = "Bu hedef menzil dışında."
 fleet_teammate = "Bir takım arkadaşını filoyla hedefleyemezsin."
 fleet_alliance = "Filo göndermeden önce ittifakı bitir."

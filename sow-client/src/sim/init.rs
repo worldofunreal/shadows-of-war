@@ -45,6 +45,8 @@ impl SowApp {
         let snap = new_engine.build_snapshot();
         let phase = snap.phase.clone();
         self.sim.current_snapshot = Some(snap);
+        self.sim.latest_local_spawn = None;
+        self.input.spawn_intent_rate.reset();
         self.sim.engine = Some(new_engine);
         self.sim.tile_upgrades.clear();
         self.time

@@ -204,6 +204,7 @@ pub struct SimState {
     pub engine: Option<sow_core::engine::SowEngine>,
     pub current_snapshot: Option<sow_core::protocol::SimSnapshot>,
     pub turn_queue: std::collections::VecDeque<sow_core::protocol::Turn>,
+    pub latest_local_spawn: Option<(u64, u32, u32)>,
     pub my_player_id: Option<u16>,
     pub my_lobby_id: Option<u64>,
     /// Short-lived capability used only for the direct relay Ready frame.
@@ -249,6 +250,7 @@ pub struct InputState {
     pub hold_build_shift_override: bool,
     pub shift_pressed: bool,
     pub has_snapped_camera_to_spawn: bool,
+    pub spawn_intent_rate: sow_core::spawn_rate_limit::SpawnIntentRateLimit,
     pub selected_warships: Vec<u64>,
     pub key_pan_up: bool,
     pub key_pan_down: bool,

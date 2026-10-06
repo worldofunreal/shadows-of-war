@@ -677,6 +677,7 @@ map_action_build_trade_ship = "Đóng tàu buôn"
 
 action_unavailable = "Không có hành động nào ở đây."
 spawn_too_close = "Không đủ chỗ để triển khai tại đây."
+spawn_rate_limited = "Vui lòng chờ một chút trước khi triển khai tiếp."
 attack_out_of_range = "Mục tiêu nằm ngoài tầm tấn công."
 fleet_teammate = "Không thể dùng hạm đội nhắm vào đồng đội."
 fleet_alliance = "Hãy chấm dứt liên minh trước khi điều hạm đội."

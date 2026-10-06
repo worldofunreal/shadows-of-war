@@ -677,6 +677,7 @@ match_ended = "Natapos na ang laban."
 
 action_unavailable = "Walang aksyong magagawa rito."
 spawn_too_close = "Kulang ang espasyo para magtalaga rito."
+spawn_rate_limited = "Maghintay muna bago muling magtalaga."
 attack_out_of_range = "Hindi abot ng pag-atake ang puntiryang iyan."
 fleet_teammate = "Hindi puwedeng puntiryahin ng fleet ang kakampi."
 fleet_alliance = "Tapusin muna ang alyansa bago magpadala ng fleet."

@@ -21,16 +21,22 @@ const NAMEPLATE_MIN_FONT: f32 = 8.0;
 const NAMEPLATE_MAX_FONT: f32 = 32.0;
 const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
 const NAMEPLATE_MAX_CATCHUP_TICKS: u64 = NAMEPLATE_SAMPLE_TICKS * 2;
+const SPAWN_STICKY_HOLD: Duration = Duration::from_millis(120);
+const SPAWN_SETTLE_DURATION: Duration = Duration::from_millis(180);
 const LOD_DOT_RADIUS: f32 = 2.0;
 const CATEGORY_EMOJI_DIAMETER_SCALE: f32 = 0.70;
 pub(crate) const INLINE_EMOJI_SCALE: f32 = 1.4;
 
 #[derive(Clone, Debug)]
 pub(crate) struct NameplateVisualState {
+    from_center: MapPoint,
     to_center: MapPoint,
+    from_land_bounds: WorldRect,
     from_size: f32,
     to_size: f32,
     land_bounds: WorldRect,
+    center_changed_at: Option<Instant>,
+    slide_center: bool,
     source_name: String,
     player_type: PlayerType,
     display_name: String,
@@ -51,6 +57,7 @@ pub(crate) struct NameplateSystem {
     active_ids: HashSet<u16>,
     visuals: HashMap<u16, NameplateVisualState>,
     land_cache: NameplateLandCache,
+    local_spawn_tick: Option<u64>,
     frame_plans: Vec<PreparedNameplate>,
     tutorial_target_hit_bounds: Option<(u16, [f32; 4])>,
 }
@@ -206,7 +213,8 @@ pub(super) fn render_nameplates(
         let Some(state) = visuals.get(&player.id) else {
             continue;
         };
-        let center_world = state.to_center;
+        let (center_world, land_bounds, spawn_settle_scale) =
+            spawn_center_visual(state, now);
         let center = ScreenPoint(world_to_screen_values(
             center_world.0[0],
             center_world.0[1],
@@ -216,16 +224,16 @@ pub(super) fn render_nameplates(
             sf,
         ));
         let land_min = ScreenPoint(world_to_screen_values(
-            state.land_bounds.0[0],
-            state.land_bounds.0[1],
+            land_bounds.0[0],
+            land_bounds.0[1],
             input.camera_x,
             input.camera_y,
             input.camera_zoom,
             sf,
         ));
         let land_max = ScreenPoint(world_to_screen_values(
-            state.land_bounds.0[2],
-            state.land_bounds.0[3],
+            land_bounds.0[2],
+            land_bounds.0[3],
             input.camera_x,
             input.camera_y,
             input.camera_zoom,
@@ -248,7 +256,7 @@ pub(super) fn render_nameplates(
             scale: fit_size_to_land(
                 2.0 * (LOD_DOT_RADIUS + 1.0),
                 2.0 * (LOD_DOT_RADIUS + 1.0),
-                state.land_bounds,
+                land_bounds,
                 zoom_scaled,
             ),
         };
@@ -265,11 +273,11 @@ pub(super) fn render_nameplates(
             continue;
         }
 
-        let world_size = if state.from_size == state.to_size {
+        let world_size = (if state.from_size == state.to_size {
             state.to_size
         } else {
             lerp(state.from_size, state.to_size, inverse_alpha)
-        };
+        }) * spawn_settle_scale;
 
         let scaled_size = nameplate_font_px(world_size, zoom_scaled, is_human);
 
@@ -317,7 +325,7 @@ pub(super) fn render_nameplates(
             .max(shadow_padding)
             .max(layout.badge_effect_padding());
         let layout_bounds = layout.visual_bounds(center, text_padding);
-        let fit_scale = fit_bounds_to_land(layout_bounds, center, state.land_bounds, zoom_scaled);
+        let fit_scale = fit_bounds_to_land(layout_bounds, center, land_bounds, zoom_scaled);
         if fit_scale <= 0.0 || !fit_scale.is_finite() {
             continue;
         }
@@ -417,7 +425,12 @@ fn sample_nameplates(
     now: Instant,
 ) {
     let my_id_changed = system.order_my_id != Some(my_id);
-    if !nameplate_sample_due(system.sample_tick, snapshot.tick, my_id_changed) {
+    let local_spawn = sim
+        .latest_local_spawn
+        .filter(|(tick, _, _)| system.local_spawn_tick != Some(*tick));
+    if !nameplate_sample_due(system.sample_tick, snapshot.tick, my_id_changed)
+        && local_spawn.is_none()
+    {
         return;
     }
 
@@ -439,6 +452,16 @@ fn sample_nameplates(
         system.visuals.clear();
         return;
     }
+    let animate_local_spawn = if let Some((tick, x, y)) = local_spawn {
+        let updated = system
+            .land_cache
+            .update_spawn_anchor(&engine.state.map, my_id, x, y)
+            .is_some();
+        system.local_spawn_tick = Some(tick);
+        updated
+    } else {
+        false
+    };
 
     let tick_gap = system
         .sample_tick
@@ -511,6 +534,13 @@ fn sample_nameplates(
                 } else {
                     current_size
                 };
+            if animate_local_spawn && player.id == my_id && state.to_center != target_center {
+                let (visible_center, visible_bounds, _) = spawn_center_visual(state, now);
+                state.from_center = visible_center;
+                state.from_land_bounds = visible_bounds;
+                state.center_changed_at = Some(now);
+                state.slide_center = center_inside_land(visible_center, land_bounds);
+            }
             state.to_center = target_center;
             state.to_size = target_size;
             state.land_bounds = land_bounds;
@@ -535,10 +565,14 @@ fn new_nameplate_visual_state(
     land_bounds: WorldRect,
 ) -> NameplateVisualState {
     NameplateVisualState {
+        from_center: center,
         to_center: center,
+        from_land_bounds: land_bounds,
         from_size: size,
         to_size: size,
         land_bounds,
+        center_changed_at: None,
+        slide_center: false,
         source_name: String::new(),
         player_type: player.player_type,
         display_name: String::new(),
@@ -549,6 +583,39 @@ fn new_nameplate_visual_state(
         prepared_troops: sow_render::text::PreparedText::default(),
         text_style_key: None,
     }
+}
+
+fn spawn_center_visual(
+    state: &NameplateVisualState,
+    now: Instant,
+) -> (MapPoint, WorldRect, f32) {
+    let Some(changed_at) = state.center_changed_at else {
+        return (state.to_center, state.land_bounds, 1.0);
+    };
+    let elapsed = now.duration_since(changed_at);
+    if elapsed < SPAWN_STICKY_HOLD {
+        return (state.from_center, state.from_land_bounds, 1.0);
+    }
+    let t = ((elapsed - SPAWN_STICKY_HOLD).as_secs_f32()
+        / SPAWN_SETTLE_DURATION.as_secs_f32())
+    .clamp(0.0, 1.0);
+    let eased = t * t * (3.0 - 2.0 * t);
+    let center = if state.slide_center {
+        MapPoint([
+            lerp(state.from_center.0[0], state.to_center.0[0], eased),
+            lerp(state.from_center.0[1], state.to_center.0[1], eased),
+        ])
+    } else {
+        state.to_center
+    };
+    (center, state.land_bounds, 0.94 + 0.06 * eased)
+}
+
+fn center_inside_land(center: MapPoint, bounds: WorldRect) -> bool {
+    center.0[0] >= bounds.0[0]
+        && center.0[0] <= bounds.0[2]
+        && center.0[1] >= bounds.0[1]
+        && center.0[1] <= bounds.0[3]
 }
 
 fn refresh_nameplate_text_cache(
@@ -1049,4 +1116,72 @@ pub(crate) fn player_color(player: &PlayerSnapshot) -> [f32; 4] {
         rgb[2] + (1.0 - rgb[2]) * factor,
         1.0,
     ]
+}
+
+#[cfg(test)]
+mod spawn_center_tests {
+    use super::*;
+
+    fn state(slide_center: bool) -> NameplateVisualState {
+        NameplateVisualState {
+            from_center: MapPoint([4.0, 5.0]),
+            to_center: MapPoint([6.0, 5.0]),
+            from_land_bounds: WorldRect([3.0, 4.0, 5.0, 6.0]),
+            from_size: 10.0,
+            to_size: 10.0,
+            land_bounds: WorldRect([3.0, 4.0, 7.0, 6.0]),
+            center_changed_at: None,
+            slide_center,
+            source_name: String::new(),
+            player_type: PlayerType::Human,
+            display_name: String::new(),
+            troops_bits: u64::MAX,
+            troops_text: String::new(),
+            troops_scratch: String::new(),
+            prepared_name: sow_render::text::PreparedText::default(),
+            prepared_troops: sow_render::text::PreparedText::default(),
+            text_style_key: None,
+        }
+    }
+
+    #[test]
+    fn local_spawn_sticks_then_eases_inside_the_new_land_anchor() {
+        let now = Instant::now();
+        let mut visual = state(true);
+        visual.center_changed_at = Some(now);
+
+        let (held_center, held_bounds, _) =
+            spawn_center_visual(&visual, now + Duration::from_millis(119));
+        assert_eq!(held_center, visual.from_center);
+        assert_eq!(held_bounds, visual.from_land_bounds);
+
+        let (moving_center, moving_bounds, scale) =
+            spawn_center_visual(&visual, now + Duration::from_millis(210));
+        assert_eq!(moving_center, MapPoint([5.0, 5.0]));
+        assert_eq!(moving_bounds, visual.land_bounds);
+        assert!((scale - 0.97).abs() < 0.001);
+
+        let (arrived_center, _, _) = spawn_center_visual(&visual, now + Duration::from_millis(300));
+        assert_eq!(arrived_center, visual.to_center);
+    }
+
+    #[test]
+    fn local_spawn_snaps_after_sticky_hold_when_the_route_leaves_land() {
+        let now = Instant::now();
+        let mut visual = state(false);
+        visual.to_center = MapPoint([12.0, 5.0]);
+        visual.land_bounds = WorldRect([11.0, 4.0, 13.0, 6.0]);
+        visual.center_changed_at = Some(now);
+
+        let (held_center, held_bounds, _) =
+            spawn_center_visual(&visual, now + Duration::from_millis(119));
+        assert_eq!(held_center, visual.from_center);
+        assert_eq!(held_bounds, visual.from_land_bounds);
+
+        let (arrived_center, arrived_bounds, _) =
+            spawn_center_visual(&visual, now + Duration::from_millis(120));
+        assert_eq!(arrived_center, visual.to_center);
+        assert_eq!(arrived_bounds, visual.land_bounds);
+        assert!(!center_inside_land(visual.from_center, visual.land_bounds));
+    }
 }

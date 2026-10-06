@@ -2170,7 +2170,7 @@ test("all HUD message classes have one explicit presentation", () => {
         "fleet_own_target", "fleet_teammate", "fleet_alliance", "fleet_no_port",
         "fleet_no_water_access", "fleet_no_landing_shore", "fleet_no_water_path", "need_gold",
         "build_owned_land", "build_land", "build_spacing_city", "build_spacing_structure",
-        "build_no_space", "build_no_farm_plots", "building_in_progress", "spawn_too_close",
+        "build_no_space", "build_no_farm_plots", "building_in_progress", "spawn_too_close", "spawn_rate_limited",
         "alliance_request_pending", "alliance_renewal_pending", "resources_allies_only"
     ];
     const global = [
@@ -2186,12 +2186,13 @@ test("all HUD message classes have one explicit presentation", () => {
         "wilderness_expanded", "enemy_territory_captured", "resource_request_sent"
     ];
     const all = [...local, ...global, ...silent];
-    assert.equal(local.length, 23);
+    assert.equal(local.length, 24);
     assert.equal(global.length, 20);
     assert.equal(silent.length, 11);
-    assert.equal(new Set(all).size, 54);
+    assert.equal(new Set(all).size, 55);
     const emitters = [mapClick, simEventsSource, eliminationSource, snapshotFxSource, simUpdateSource].join("\n");
-    for (const key of local) assert.ok(mapClick.includes(`hud.${key}`), `missing local feedback: ${key}`);
+    const localEmitters = [mapClick, intentInput].join("\n");
+    for (const key of local) assert.ok(localEmitters.includes(`hud.${key}`), `missing local feedback: ${key}`);
     for (const key of global) assert.ok(emitters.includes(`hud.${key}`), `missing global message: ${key}`);
     for (const key of silent) assert.ok(!emitters.includes(`hud.${key}`), `silent message still emitted: ${key}`);
     const localeRoot = path.join(shell, "../../sow-i18n/strings");
@@ -2200,6 +2201,7 @@ test("all HUD message classes have one explicit presentation", () => {
     for (const locale of locales) {
         const catalog = fs.readFileSync(path.join(localeRoot, locale, "web.toml"), "utf8");
         assert.match(catalog, /^alliance_request_sent\s*=\s*"[^"]*\{name\}[^"]*"$/m, `${locale} is missing the named outgoing-alliance message`);
+        assert.match(catalog, /^spawn_rate_limited\s*=\s*"[^"]+"$/m, `${locale} is missing the deployment rate-limit message`);
     }
 });
 

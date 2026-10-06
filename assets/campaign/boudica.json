@@ -85,7 +85,7 @@
     {
       "id": "roman_outpost",
       "name": "Roman Outpost",
-      "x": 715,
+      "x": 716,
       "y": 79,
       "starting_troops": 1000,
       "relation": "neutral",

@@ -677,6 +677,7 @@ match_ended = "A partida terminou."
 
 action_unavailable = "Nenhuma ação disponível aqui."
 spawn_too_close = "Não há espaço suficiente para posicionar aqui."
+spawn_rate_limited = "Aguarde um instante antes de posicionar novamente."
 attack_out_of_range = "Esse alvo está fora de alcance."
 fleet_teammate = "Você não pode atacar um aliado de equipe com uma frota."
 fleet_alliance = "Encerre a aliança antes de enviar uma frota."

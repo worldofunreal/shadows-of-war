@@ -4,6 +4,8 @@ const BADGE_STACK_GAP: f32 = 2.0;
 // OpenFront recalculates player clusters every 20 ticks after land changes.
 const LAND_REFRESH_TICKS: u64 = 20;
 pub const NAMEPLATE_SAMPLE_TICKS: u64 = 4;
+const SPAWN_LOCAL_SIDE: usize = sow_core::config::SPAWN_RADIUS as usize * 2 + 1;
+const SPAWN_LOCAL_AREA: usize = SPAWN_LOCAL_SIDE * SPAWN_LOCAL_SIDE;
 const HUMAN_AVATAR_SCALE: f32 = 4.0;
 const BOT_AVATAR_SCALE: f32 = 3.0;
 const NATION_AVATAR_SCALE: f32 = 3.6;
@@ -289,6 +291,22 @@ impl NameplateLandCache {
             .is_some_and(|landmass| landmass.tile_count > 0)
     }
 
+    pub fn update_spawn_anchor(
+        &mut self,
+        map: &sow_core::map::GameMap,
+        player_id: u16,
+        spawn_x: u32,
+        spawn_y: u32,
+    ) -> Option<TileRect> {
+        let owner_id = player_id & sow_core::map::GameMap::PLAYER_ID_MASK;
+        let landmass = spawn_landmass(map, owner_id, spawn_x, spawn_y, &mut self.flood_stack)?;
+        let owner_index = usize::from(owner_id);
+        self.largest_by_owner
+            .resize_with(owner_index + 1, Default::default);
+        self.largest_by_owner[owner_index] = landmass;
+        landmass.name_rect
+    }
+
     pub fn needs_rebuild(&self, map: &sow_core::map::GameMap, tick: u64, force: bool) -> bool {
         self.map_width != map.width
             || self.map_height != map.height
@@ -478,6 +496,171 @@ impl NameplateLandCache {
         self.last_rebuild_tick = Some(tick);
         true
     }
+}
+
+fn spawn_landmass(
+    map: &sow_core::map::GameMap,
+    owner_id: u16,
+    spawn_x: u32,
+    spawn_y: u32,
+    flood_stack: &mut Vec<usize>,
+) -> Option<LargestLandmass> {
+    let tile_count = (map.width as usize).checked_mul(map.height as usize)?;
+    if owner_id == 0
+        || spawn_x >= map.width
+        || spawn_y >= map.height
+        || map.width == 0
+        || map.height == 0
+        || map.owner_states().len() != tile_count
+        || map.terrain.len() != tile_count
+    {
+        return None;
+    }
+
+    let radius = sow_core::config::SPAWN_RADIUS;
+    let x0 = spawn_x.saturating_sub(radius);
+    let y0 = spawn_y.saturating_sub(radius);
+    let x1 = spawn_x.saturating_add(radius).saturating_add(1).min(map.width);
+    let y1 = spawn_y.saturating_add(radius).saturating_add(1).min(map.height);
+    let local_width = (x1 - x0) as usize;
+    let local_height = (y1 - y0) as usize;
+    let mut components = [0u8; SPAWN_LOCAL_AREA];
+    let mut next_component = 0u8;
+    let mut largest = LargestLandmass::default();
+    let mut largest_component = 0u8;
+
+    for seed_y in 0..local_height {
+        for seed_x in 0..local_width {
+            let seed = seed_y * local_width + seed_x;
+            if components[seed] != 0
+                || !spawn_tile_owned_by(
+                    map,
+                    owner_id,
+                    spawn_x,
+                    spawn_y,
+                    x0 + seed_x as u32,
+                    y0 + seed_y as u32,
+                )
+            {
+                continue;
+            }
+
+            next_component += 1;
+            components[seed] = next_component;
+            flood_stack.clear();
+            flood_stack.push(seed);
+            let mut count = 0usize;
+            let mut min_x = x0 + seed_x as u32;
+            let mut max_x = min_x;
+            let mut min_y = y0 + seed_y as u32;
+            let mut max_y = min_y;
+
+            while let Some(index) = flood_stack.pop() {
+                let local_x = index % local_width;
+                let local_y = index / local_width;
+                let x = x0 + local_x as u32;
+                let y = y0 + local_y as u32;
+                count += 1;
+                min_x = min_x.min(x);
+                max_x = max_x.max(x);
+                min_y = min_y.min(y);
+                max_y = max_y.max(y);
+
+                for neighbor_y in
+                    local_y.saturating_sub(1)..=(local_y + 1).min(local_height - 1)
+                {
+                    for neighbor_x in
+                        local_x.saturating_sub(1)..=(local_x + 1).min(local_width - 1)
+                    {
+                        let neighbor = neighbor_y * local_width + neighbor_x;
+                        if components[neighbor] != 0
+                            || !spawn_tile_owned_by(
+                                map,
+                                owner_id,
+                                spawn_x,
+                                spawn_y,
+                                x0 + neighbor_x as u32,
+                                y0 + neighbor_y as u32,
+                            )
+                        {
+                            continue;
+                        }
+                        components[neighbor] = next_component;
+                        flood_stack.push(neighbor);
+                    }
+                }
+            }
+
+            if count > largest.tile_count {
+                largest_component = next_component;
+                largest = LargestLandmass {
+                    component_id: u32::from(next_component),
+                    tile_count: count,
+                    bounds: TileRect {
+                        x0: min_x,
+                        y0: min_y,
+                        x1: max_x + 1,
+                        y1: max_y + 1,
+                    },
+                    name_rect: None,
+                };
+            }
+        }
+    }
+
+    if largest_component == 0 {
+        return None;
+    }
+
+    let mut column_heights = [0u32; SPAWN_LOCAL_SIDE];
+    for local_y in 0..local_height {
+        for local_x in 0..local_width {
+            let index = local_y * local_width + local_x;
+            column_heights[local_x] = if components[index] == largest_component {
+                column_heights[local_x].saturating_add(1)
+            } else {
+                0
+            };
+        }
+        for left in 0..local_width {
+            let mut min_height = u32::MAX;
+            for right in left..local_width {
+                min_height = min_height.min(column_heights[right]);
+                if min_height == 0 {
+                    break;
+                }
+                let candidate = TileRect {
+                    x0: x0 + left as u32,
+                    y0: y0 + local_y as u32 + 1 - min_height,
+                    x1: x0 + right as u32 + 1,
+                    y1: y0 + local_y as u32 + 1,
+                };
+                if preferred_name_rect(candidate, largest.name_rect, largest.bounds) {
+                    largest.name_rect = Some(candidate);
+                }
+            }
+        }
+    }
+    largest.name_rect.map(|_| largest)
+}
+
+fn spawn_tile_owned_by(
+    map: &sow_core::map::GameMap,
+    owner_id: u16,
+    spawn_x: u32,
+    spawn_y: u32,
+    x: u32,
+    y: u32,
+) -> bool {
+    let radius = u64::from(sow_core::config::SPAWN_RADIUS);
+    let dx = u64::from(x.abs_diff(spawn_x));
+    let dy = u64::from(y.abs_diff(spawn_y));
+    if dx > radius || dy > radius || dx * dx + dy * dy > radius * radius {
+        return false;
+    }
+    let index = map.ref_id(x, y);
+    map.owner_states()[index] & sow_core::map::GameMap::PLAYER_ID_MASK == owner_id
+        && map.terrain[index].is_land()
 }
 
 fn preferred_name_rect(
@@ -1143,6 +1326,71 @@ mod tests {
         assert_eq!(second_anchor, MapPoint([10.0, 2.0]));
         assert_ne!(second_anchor, MapPoint([6.0, 2.0]));
         assert!(!map.terrain[map.ref_id(6, 2)].is_land());
+    }
+
+    #[test]
+    fn local_spawn_refresh_updates_only_that_players_anchor_without_global_rebuild() {
+        let mut map = test_map(30, 16);
+        for y in 1..3 {
+            for x in 1..3 {
+                own_tile(&mut map, x, y, 1);
+                own_tile(&mut map, x + 9, y, 2);
+            }
+        }
+        let mut cache = NameplateLandCache::default();
+        assert!(cache.rebuild(&map, 0));
+        let other_anchor = cache.rect_for(2).expect("other player's anchor");
+
+        for y in 1..3 {
+            for x in 1..3 {
+                map.set_owner_id(x, y, 0);
+            }
+        }
+        for y in 5..8 {
+            for x in 18..21 {
+                own_tile(&mut map, x, y, 1);
+            }
+        }
+        own_tile(&mut map, 23, 6, 1);
+
+        let rect = cache
+            .update_spawn_anchor(&map, 1, 19, 6)
+            .expect("new local spawn anchor");
+        assert_eq!(rect.center(), MapPoint([19.5, 6.5]));
+        assert_eq!(cache.rect_for(2), Some(other_anchor));
+        assert_eq!(cache.last_rebuild_tick, Some(0));
+        assert_ne!(cache.ownership_revision, map.ownership_revision());
+        assert!(!cache.needs_rebuild(&map, 1, false));
+        for y in rect.y0..rect.y1 {
+            for x in rect.x0..rect.x1 {
+                let index = map.ref_id(x, y);
+                assert!(map.terrain[index].is_land());
+                assert_eq!(map.owner_id(x, y), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn local_spawn_refresh_handles_map_edges() {
+        let mut map = test_map(8, 8);
+        for y in 0..3 {
+            for x in 0..3 {
+                own_tile(&mut map, x, y, 1);
+            }
+        }
+        let mut cache = NameplateLandCache::default();
+        let rect = cache
+            .update_spawn_anchor(&map, 1, 0, 0)
+            .expect("spawn at the map edge has a land anchor");
+
+        assert_eq!(rect, TileRect { x0: 0, y0: 0, x1: 3, y1: 3 });
+        for y in rect.y0..rect.y1 {
+            for x in rect.x0..rect.x1 {
+                let index = map.ref_id(x, y);
+                assert!(map.terrain[index].is_land());
+                assert_eq!(map.owner_id(x, y), 1);
+            }
+        }
     }
 
     #[test]

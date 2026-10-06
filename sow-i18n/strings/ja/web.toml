@@ -677,6 +677,7 @@ map_action_build_trade_ship = "商船を建造"
 
 action_unavailable = "ここでは実行できる操作がありません。"
 spawn_too_close = "ここに配置するスペースがありません。"
+spawn_rate_limited = "再配置する前に少しお待ちください。"
 attack_out_of_range = "その目標は攻撃範囲外です。"
 fleet_teammate = "味方を艦隊の目標にはできません。"
 fleet_alliance = "艦隊を送る前に同盟を解除してください。"

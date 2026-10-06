@@ -42,6 +42,20 @@ impl SowApp {
         {
             return false;
         }
+        if matches!(&intent, sow_core::protocol::GameplayIntent::Spawn { .. })
+            && let Some(snapshot) = self.sim.current_snapshot.as_ref()
+            && matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
+            && !self
+                .input
+                .spawn_intent_rate
+                .admit_at_tick(snapshot.tick, self.sim.config.tick_rate_ms)
+        {
+            self.ui.app.hud_state.push_map_feedback(
+                crate::ui::UiText::new("hud.spawn_rate_limited"),
+                [self.input.last_mouse_x as f32, self.input.last_mouse_y as f32],
+            );
+            return false;
+        }
         match &intent {
             sow_core::protocol::GameplayIntent::LaunchFleet { target_tile, .. }
             | sow_core::protocol::GameplayIntent::MoveWarships { target_tile, .. } => {

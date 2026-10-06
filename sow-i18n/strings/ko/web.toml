@@ -677,6 +677,7 @@ map_action_build_trade_ship = "무역선 건조"
 
 action_unavailable = "여기서는 사용할 수 있는 행동이 없습니다."
 spawn_too_close = "여기에 배치할 공간이 부족합니다."
+spawn_rate_limited = "다시 배치하기 전에 잠시 기다려 주세요."
 attack_out_of_range = "목표가 공격 범위 밖에 있습니다."
 fleet_teammate = "함대로 팀원을 공격할 수 없습니다."
 fleet_alliance = "함대를 보내기 전에 동맹을 종료하세요."

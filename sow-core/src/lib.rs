@@ -25,6 +25,7 @@ pub mod pathfinding;
 pub mod player;
 pub mod rng;
 pub mod sea_lane;
+pub mod spawn_rate_limit;
 pub mod warp_fleet;
 
 pub mod maps;
