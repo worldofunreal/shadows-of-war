@@ -29,10 +29,6 @@ pub(crate) enum MapMenuAction {
     BuildFarm,
     UpgradeStructure,
     Nuke,
-    UpgradeTile,
-    UpgradeArsenal,
-    UpgradePort,
-    UpgradeFoundry,
     BuildWarship,
     BuildTradeShip,
 }
@@ -52,10 +48,6 @@ impl MapMenuAction {
             Self::BuildFarm => "build_farm",
             Self::UpgradeStructure => "upgrade_structure",
             Self::Nuke => "nuke",
-            Self::UpgradeTile => "upgrade_tile",
-            Self::UpgradeArsenal => "upgrade_arsenal",
-            Self::UpgradePort => "upgrade_port",
-            Self::UpgradeFoundry => "upgrade_foundry",
             Self::BuildWarship => "build_warship",
             Self::BuildTradeShip => "build_trade_ship",
         }
@@ -199,6 +191,7 @@ impl SowApp {
             || self.ui.app.phase != crate::ClientPhase::Playing
             || self.ui.app.hud_state.selected_building_kind.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
+            || self.ui.app.hud_state.selected_warship_build
         {
             return false;
         }
@@ -255,6 +248,10 @@ impl SowApp {
             self.launch_nuke_at(kind, tile_idx);
             return;
         }
+        if self.ui.app.hud_state.selected_warship_build {
+            self.build_ship_at(tile_idx, sow_core::game::UnitType::Warship);
+            return;
+        }
         if let Some(kind) = self.ui.app.hud_state.selected_building_kind {
             if self.build_structure_at(kind, col, row) {
                 self.input.hold_build_action_succeeded = true;
@@ -287,6 +284,7 @@ impl SowApp {
             || self.ui.app.phase != crate::ClientPhase::Playing
             || self.ui.app.hud_state.selected_building_kind.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
+            || self.ui.app.hud_state.selected_warship_build
             || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
                 matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
             })
@@ -520,23 +518,6 @@ impl SowApp {
                     .find(|player| player.id == target.my_id)
             })
             .is_none_or(|player| player.boats_in_use < player.boat_capacity);
-        let city_level = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .map(|snapshot| {
-                snapshot
-                    .buildings
-                    .iter()
-                    .filter(|building| {
-                        building.owner_id == target.my_id
-                            && building.kind == sow_core::game::BuildingKind::City
-                    })
-                    .map(|building| building.active_level())
-                    .max()
-                    .unwrap_or_default()
-            })
-            .unwrap_or_default();
         let can_fleet = !spawning
             && has_boat_capacity
             && target.owner == 0
@@ -561,80 +542,30 @@ impl SowApp {
             .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx));
         match building {
             Some(building) if !building.under_construction => {
-                if building.level < building.kind.max_level()
-                    && self.structure_upgrade_requirement_met(building)
-                {
+                if building.level < building.kind.max_level() {
                     actions.push(MapMenuAction::UpgradeStructure);
-                }
-                if self.sim.config.tutorial && building.kind == sow_core::game::BuildingKind::City {
-                    actions.push(MapMenuAction::UpgradeFoundry);
-                }
-                if city_level >= 4 && has_boat_capacity {
-                    match building.kind {
-                        sow_core::game::BuildingKind::Port if building.level >= 3 => {
-                            actions.push(MapMenuAction::BuildTradeShip);
-                            if building.level >= 4 && city_level >= 5 {
-                                actions.push(MapMenuAction::BuildWarship);
-                            }
-                        }
-                        _ => {}
-                    }
                 }
             }
             Some(_) => {}
             None => {
-                actions.extend([
-                    MapMenuAction::BuildCity,
-                    MapMenuAction::BuildFactory,
-                    MapMenuAction::BuildPort,
-                    MapMenuAction::BuildBunker,
-                ]);
-                let farm_slots = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .map(|snapshot| {
-                        snapshot
-                            .buildings
-                            .iter()
-                            .filter(|building| {
-                                building.owner_id == target.my_id
-                                    && building.kind == sow_core::game::BuildingKind::City
-                            })
-                            .map(|building| {
-                                sow_core::building::farm_slots_for_city_level(
-                                    building.active_level(),
-                                )
-                            })
-                            .sum::<u32>()
-                    })
-                    .unwrap_or_default();
-                let farms = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .map(|snapshot| {
-                        snapshot
-                            .buildings
-                            .iter()
-                            .filter(|building| {
-                                building.owner_id == target.my_id
-                                    && building.kind == sow_core::game::BuildingKind::Farm
-                            })
-                            .count() as u32
-                    })
-                    .unwrap_or_default();
-                let lowland = self
-                    .gfx
-                    .map_renderer
-                    .as_ref()
-                    .and_then(|renderer| renderer.terrain.get(tile_idx as usize))
-                    .is_some_and(|terrain| terrain & 0x80 != 0 && terrain & 0x1f < 10);
-                if farms < farm_slots && lowland {
-                    actions.push(MapMenuAction::BuildFarm);
-                }
-                if self.sim.config.tutorial {
-                    actions.push(MapMenuAction::UpgradeTile);
+                if let Some((col, row)) = self.tile_coords(tile_idx) {
+                    for (action, kind) in [
+                        (MapMenuAction::BuildCity, sow_core::game::BuildingKind::City),
+                        (
+                            MapMenuAction::BuildFactory,
+                            sow_core::game::BuildingKind::Factory,
+                        ),
+                        (MapMenuAction::BuildPort, sow_core::game::BuildingKind::Port),
+                        (
+                            MapMenuAction::BuildBunker,
+                            sow_core::game::BuildingKind::Bunker,
+                        ),
+                        (MapMenuAction::BuildFarm, sow_core::game::BuildingKind::Farm),
+                    ] {
+                        if self.resolve_building_target(kind, col, row).is_ok() {
+                            actions.push(action);
+                        }
+                    }
                 }
             }
         }
@@ -643,43 +574,16 @@ impl SowApp {
 
     pub(crate) fn map_menu_items(&mut self, tile_idx: u32) -> Vec<MapMenuItem> {
         let gold = self.current_player_gold();
-        let owner_id = self.sim.my_player_id.unwrap_or(self.ui.app.hud_state.my_player_id);
-        let city_level = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .map(|snapshot| {
-                snapshot.buildings.iter()
-                    .filter(|building| building.owner_id == owner_id
-                        && building.kind == sow_core::game::BuildingKind::City)
-                    .map(|building| building.active_level())
-                    .max()
-                    .unwrap_or_default()
-            })
-            .unwrap_or_default();
         self.map_menu_actions(tile_idx)
             .into_iter()
             .map(|action| {
                 let (cost, level) = self.map_menu_cost(action, tile_idx);
-                let kind = match action {
-                    MapMenuAction::BuildCity => Some(sow_core::game::BuildingKind::City),
-                    MapMenuAction::BuildFactory => Some(sow_core::game::BuildingKind::Factory),
-                    MapMenuAction::BuildPort => Some(sow_core::game::BuildingKind::Port),
-                    MapMenuAction::BuildBunker => Some(sow_core::game::BuildingKind::Bunker),
-                    MapMenuAction::BuildFarm => Some(sow_core::game::BuildingKind::Farm),
-                    _ => None,
-                };
-                let reason_key = kind
-                    .filter(|kind| self.sim.config.tutorial
-                        && !sow_core::building::structure_kind_unlocked(*kind, city_level))
-                    .map(|_| "hud.building_requires_city_level");
                 MapMenuItem {
                     action,
                     cost,
                     level,
-                    disabled: reason_key.is_some()
-                        || cost.is_some_and(|value| !value.is_finite() || gold < value),
-                    reason_key,
+                    disabled: cost.is_some_and(|value| !value.is_finite() || gold < value),
+                    reason_key: None,
                 }
             })
             .collect()
@@ -710,22 +614,6 @@ impl SowApp {
             if !keep_building_card_open {
                 self.close_map_context_menu();
             }
-            return;
-        }
-        if action == MapMenuAction::BuildFactory
-            && self.sim.config.tutorial
-            && let Some(snapshot) = self.sim.current_snapshot.as_ref()
-            && !sow_core::building::structure_kind_unlocked(
-                sow_core::game::BuildingKind::Factory,
-                snapshot.buildings.iter()
-                    .filter(|building| building.owner_id == self.sim.my_player_id.unwrap_or(self.ui.app.hud_state.my_player_id)
-                        && building.kind == sow_core::game::BuildingKind::City)
-                    .map(|building| building.active_level())
-                    .max()
-                    .unwrap_or_default(),
-            )
-        {
-            self.add_action_feedback("Requires a level 3 City.");
             return;
         }
         if let Some(cost) = self.map_menu_cost(action, tile_idx).0
@@ -774,7 +662,9 @@ impl SowApp {
                     MapMenuAction::BuildFarm => sow_core::game::BuildingKind::Farm,
                     _ => unreachable!(),
                 };
-                self.select_building_kind(kind);
+                if let Some((col, row)) = self.tile_coords(tile_idx) {
+                    self.build_structure_at(kind, col, row);
+                }
             }
             MapMenuAction::UpgradeStructure => {
                 if let Some(building) =
@@ -789,20 +679,6 @@ impl SowApp {
             }
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
-            }
-            MapMenuAction::UpgradeTile => {
-                self.upgrade_tile_at(tile_idx);
-            }
-            MapMenuAction::UpgradeArsenal
-            | MapMenuAction::UpgradePort
-            | MapMenuAction::UpgradeFoundry => {
-                let module = match action {
-                    MapMenuAction::UpgradeArsenal => sow_core::building::ModuleKind::Arsenal,
-                    MapMenuAction::UpgradePort => sow_core::building::ModuleKind::Port,
-                    MapMenuAction::UpgradeFoundry => sow_core::building::ModuleKind::Foundry,
-                    _ => unreachable!(),
-                };
-                self.upgrade_city_module_at(tile_idx, module);
             }
             MapMenuAction::BuildWarship | MapMenuAction::BuildTradeShip => {
                 let kind = match action {
@@ -928,10 +804,6 @@ impl SowApp {
                 self.add_map_feedback(crate::ui::UiText::new("hud.building_max_level"));
                 return false;
             }
-            if !self.structure_upgrade_requirement_met(&building) {
-                self.add_map_feedback(crate::ui::UiText::new("hud.building_requires_city_level"));
-                return false;
-            }
             let cost = self
                 .map_menu_cost(MapMenuAction::UpgradeStructure, building.tile_idx)
                 .0
@@ -951,60 +823,7 @@ impl SowApp {
             });
             return true;
         }
-        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
-            return false;
-        };
-        if kind == sow_core::game::BuildingKind::Farm {
-            let slots = snapshot
-                .buildings
-                .iter()
-                .filter(|building| {
-                    building.owner_id == my_id
-                        && building.kind == sow_core::game::BuildingKind::City
-                })
-                .map(|building| {
-                    sow_core::building::farm_slots_for_city_level(building.active_level())
-                })
-                .sum::<u32>();
-            let farms = snapshot
-                .buildings
-                .iter()
-                .filter(|building| {
-                    building.owner_id == my_id
-                        && building.kind == sow_core::game::BuildingKind::Farm
-                })
-                .count() as u32;
-            if farms >= slots {
-                self.add_map_feedback(crate::ui::UiText::new("hud.build_no_farm_plots"));
-                return false;
-            }
-        }
-        let owners = self
-            .gfx
-            .map_renderer
-            .as_ref()
-            .map(|renderer| renderer.owners.as_slice())
-            .unwrap_or(&[]);
-        let terrain = self
-            .gfx
-            .map_renderer
-            .as_ref()
-            .map(|renderer| renderer.terrain.as_slice())
-            .unwrap_or(&[]);
-        let target_res = self.ui.building_placement_cache.resolve(
-            snapshot.tick,
-            &PlacementQuery {
-                kind,
-                click_x: col,
-                click_y: row,
-                map_w: self.sim.map_w,
-                map_h: self.sim.map_h,
-                owners,
-                terrain,
-                my_id,
-                buildings: &snapshot.buildings,
-            },
-        );
+        let target_res = self.resolve_building_target(kind, col, row);
         let cost_index = sow_core::game::BuildingKind::ALL
             .iter()
             .position(|candidate| *candidate == kind)
@@ -1028,29 +847,41 @@ impl SowApp {
         true
     }
 
-    fn city_module_is_available(
-        &self,
-        building: &sow_core::protocol::BuildingSnapshot,
-        module: sow_core::building::ModuleKind,
-        tile_idx: u32,
-    ) -> bool {
-        let current_level = building.modules.get_level(module);
-        let next_level = current_level.saturating_add(1);
-        if next_level > 5 || (module == sow_core::building::ModuleKind::Arsenal && next_level > 3) {
-            return false;
-        }
-        if module == sow_core::building::ModuleKind::Arsenal && building.level < 3 {
-            return false;
-        }
-        if module == sow_core::building::ModuleKind::Port {
-            return self
-                .gfx
-                .map_renderer
-                .as_ref()
-                .and_then(|renderer| renderer.terrain.get(tile_idx as usize))
-                .is_some_and(|terrain| terrain & 0xc0 == 0xc0);
-        }
-        true
+    fn resolve_building_target(
+        &mut self,
+        kind: sow_core::game::BuildingKind,
+        col: i32,
+        row: i32,
+    ) -> Result<u32, &'static str> {
+        let Some(snapshot) = self.sim.current_snapshot.as_ref() else {
+            return Err("Action unavailable here.");
+        };
+        let owners = self
+            .gfx
+            .map_renderer
+            .as_ref()
+            .map(|renderer| renderer.owners.as_slice())
+            .unwrap_or(&[]);
+        let terrain = self
+            .gfx
+            .map_renderer
+            .as_ref()
+            .map(|renderer| renderer.terrain.as_slice())
+            .unwrap_or(&[]);
+        self.ui.building_placement_cache.resolve(
+            snapshot.tick,
+            &PlacementQuery {
+                kind,
+                click_x: col,
+                click_y: row,
+                map_w: self.sim.map_w,
+                map_h: self.sim.map_h,
+                owners,
+                terrain,
+                my_id: self.sim.my_player_id.unwrap_or(0),
+                buildings: &snapshot.buildings,
+            },
+        )
     }
 
     pub(crate) fn map_menu_cost(
@@ -1059,40 +890,6 @@ impl SowApp {
         tile_idx: u32,
     ) -> (Option<f64>, Option<u8>) {
         match action {
-            MapMenuAction::UpgradeTile => {
-                let level = self.sim.tile_upgrades.get(&tile_idx).copied().unwrap_or(0) as i32;
-                let cost = (1000.0 * 1.5_f64.powi(level)) / sow_core::config::GOLD_SCALE.max(1.0);
-                (Some(cost), Some(level as u8))
-            }
-            MapMenuAction::UpgradeArsenal
-            | MapMenuAction::UpgradePort
-            | MapMenuAction::UpgradeFoundry => {
-                let module = match action {
-                    MapMenuAction::UpgradeArsenal => sow_core::building::ModuleKind::Arsenal,
-                    MapMenuAction::UpgradePort => sow_core::building::ModuleKind::Port,
-                    MapMenuAction::UpgradeFoundry => sow_core::building::ModuleKind::Foundry,
-                    _ => unreachable!(),
-                };
-                let level = self
-                    .sim
-                    .current_snapshot
-                    .as_ref()
-                    .and_then(|snapshot| {
-                        snapshot
-                            .buildings
-                            .iter()
-                            .find(|building| building.tile_idx == tile_idx)
-                    })
-                    .map(|building| building.modules.get_level(module))
-                    .unwrap_or(0);
-                (
-                    Some(sow_core::building::cost::module_upgrade_cost_gold(
-                        module,
-                        level.saturating_add(1),
-                    )),
-                    Some(level),
-                )
-            }
             MapMenuAction::BuildWarship => {
                 (Some(sow_core::game::UnitType::Warship.gold_cost()), None)
             }
@@ -1161,25 +958,10 @@ impl SowApp {
                                     .sum()
                             })
                             .unwrap_or_default();
-                        let factory_discount_levels = snapshot
-                            .map(|snapshot| {
-                                snapshot
-                                    .buildings
-                                    .iter()
-                                    .filter(|candidate| {
-                                        candidate.owner_id == building.owner_id
-                                            && candidate.kind
-                                                == sow_core::game::BuildingKind::Factory
-                                            && candidate.active_level() >= 3
-                                    })
-                                    .count() as u32
-                            })
-                            .unwrap_or_default();
                         sow_core::building::cost::structure_upgrade_cost_gold(
                             building.kind,
                             building.active_level().saturating_add(1),
                             owned_levels,
-                            factory_discount_levels,
                             &self.sim.config,
                         )
                     }),
@@ -1188,71 +970,6 @@ impl SowApp {
             }
             _ => (None, None),
         }
-    }
-
-    pub(crate) fn structure_upgrade_requirement_met(
-        &self,
-        building: &sow_core::protocol::BuildingSnapshot,
-    ) -> bool {
-        if building.kind != sow_core::game::BuildingKind::Factory
-            || building.active_level().saturating_add(1) != 2 {
-            return true;
-        }
-        self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
-            let city_level = snapshot.buildings.iter()
-                .filter(|city| city.owner_id == building.owner_id
-                    && city.kind == sow_core::game::BuildingKind::City)
-                .map(|city| city.active_level())
-                .max()
-                .unwrap_or_default();
-            sow_core::building::structure_kind_unlocked(
-                sow_core::game::BuildingKind::Factory,
-                city_level,
-            )
-        })
-    }
-
-    fn upgrade_tile_at(&mut self, tile_idx: u32) -> bool {
-        let Some(target) = self.map_target(tile_idx) else {
-            return false;
-        };
-        if !target.is_land || target.owner != target.my_id {
-            return false;
-        }
-        self.send_intent(sow_core::protocol::GameplayIntent::UpgradeTile { tile_idx });
-        true
-    }
-
-    fn upgrade_city_module_at(
-        &mut self,
-        tile_idx: u32,
-        module: sow_core::building::ModuleKind,
-    ) -> bool {
-        let Some(target) = self.map_target(tile_idx) else {
-            return false;
-        };
-        if target.owner != target.my_id || !target.is_land {
-            return false;
-        }
-        let Some(building) = self
-            .sim
-            .current_snapshot
-            .as_ref()
-            .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
-        else {
-            return false;
-        };
-        if building.kind != sow_core::game::BuildingKind::City
-            || building.under_construction
-            || !self.city_module_is_available(building, module, tile_idx)
-        {
-            return false;
-        }
-        self.send_intent(sow_core::protocol::GameplayIntent::UpgradeCityModule {
-            building_id: building.id,
-            module,
-        });
-        true
     }
 
     fn build_ship_at(&mut self, tile_idx: u32, kind: sow_core::game::UnitType) -> bool {
@@ -1269,17 +986,31 @@ impl SowApp {
             .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx))
             .is_some_and(|building| {
                 !building.under_construction
-                    && (building.kind == sow_core::game::BuildingKind::Port
-                        || (building.kind == sow_core::game::BuildingKind::City
-                            && building.modules.port > 0))
+                    && building.kind == sow_core::game::BuildingKind::Port
+                    && building.active_level() >= kind.required_port_level()
             });
         if !ready_port {
+            return false;
+        }
+        let Some(player) = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+            snapshot
+                .players
+                .iter()
+                .find(|player| player.id == target.my_id)
+        }) else {
+            return false;
+        };
+        if !kind.uses_military_capacity()
+            || player.boats_in_use >= player.boat_capacity
+            || player.gold < kind.gold_cost()
+        {
             return false;
         }
         self.send_intent(sow_core::protocol::GameplayIntent::BuildShip {
             port_tile: tile_idx,
             kind,
         });
+        self.ui.app.hud_state.selected_warship_build = false;
         true
     }
 
@@ -1566,6 +1297,7 @@ impl SowApp {
 
     pub(crate) fn clear_placement(&mut self) {
         self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.selected_warship_build = false;
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.cancel_hold_build();
         self.input.hold_build_action_succeeded = false;
@@ -1579,21 +1311,6 @@ impl SowApp {
                 matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
             })
         {
-            return;
-        }
-        let snapshot = self.sim.current_snapshot.as_ref();
-        let owner_id = self.sim.my_player_id.unwrap_or(self.ui.app.hud_state.my_player_id);
-        let city_level = snapshot.map(|snapshot| snapshot.buildings.iter()
-            .filter(|building| building.owner_id == owner_id
-                && building.kind == sow_core::game::BuildingKind::City)
-            .map(|building| building.active_level())
-            .max()
-            .unwrap_or_default()).unwrap_or_default();
-        if self.sim.config.tutorial
-            && self.ui.app.hud_state.selected_building_kind != Some(kind)
-            && !sow_core::building::structure_kind_unlocked(kind, city_level)
-        {
-            self.add_action_feedback("Requires a level 3 City.");
             return;
         }
         let cost_index = match kind {
@@ -1612,10 +1329,92 @@ impl SowApp {
         }
         let selected = &mut self.ui.app.hud_state.selected_building_kind;
         *selected = (*selected != Some(kind)).then_some(kind);
+        self.ui.app.hud_state.selected_warship_build = false;
         self.ui.app.hud_state.selected_nuke_kind = None;
         self.cancel_hold_build();
         self.input.hold_build_action_succeeded = false;
         self.input.hold_build_shift_override = false;
+    }
+
+    pub(crate) fn select_warship_build_mode(&mut self) {
+        if self.ui.observing
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+            })
+        {
+            return;
+        }
+        let owner_id = self
+            .sim
+            .my_player_id
+            .unwrap_or(self.ui.app.hud_state.my_player_id);
+        let Some(player) = self
+            .sim
+            .current_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == owner_id))
+        else {
+            return;
+        };
+        let has_port = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot.buildings.iter().any(|building| {
+                building.owner_id == owner_id
+                    && building.kind == sow_core::game::BuildingKind::Port
+                    && !building.under_construction
+                    && building.active_level()
+                        >= sow_core::game::UnitType::Warship.required_port_level()
+            })
+        });
+        if !has_port
+            || player.boats_in_use >= player.boat_capacity
+            || player.gold < sow_core::game::UnitType::Warship.gold_cost()
+        {
+            self.add_action_feedback("Warship unavailable here.".to_string());
+            return;
+        }
+        self.ui.app.hud_state.selected_warship_build =
+            !self.ui.app.hud_state.selected_warship_build;
+        self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.selected_nuke_kind = None;
+    }
+
+    pub(crate) fn select_nuke_kind(&mut self, kind: sow_core::game::NukeKind) {
+        if self.ui.observing
+            || self.ui.app.phase != crate::ClientPhase::Playing
+            || !self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
+            })
+        {
+            return;
+        }
+        let owner_id = self
+            .sim
+            .my_player_id
+            .unwrap_or(self.ui.app.hud_state.my_player_id);
+        let available = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .players
+                .iter()
+                .find(|player| player.id == owner_id)
+                .is_some_and(|player| {
+                    player.nuke_available && player.gold >= self.sim.config.nuke_cost
+                })
+                && snapshot.buildings.iter().any(|building| {
+                    building.owner_id == owner_id
+                        && building.kind == sow_core::game::BuildingKind::City
+                        && !building.under_construction
+                        && building.active_level() >= kind.required_city_level()
+                })
+        });
+        if !available {
+            self.add_action_feedback("Nuke unavailable here.".to_string());
+            return;
+        }
+        let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
+        *selected = (*selected != Some(kind)).then_some(kind);
+        self.ui.app.hud_state.selected_building_kind = None;
+        self.ui.app.hud_state.selected_warship_build = false;
     }
 }
 
@@ -1647,7 +1446,6 @@ fn action_notice(message: &str) -> crate::ui::UiText {
         };
     }
     match message {
-        "Requires a level 3 City." => UiText::new("hud.building_requires_city_level"),
         "No action is available here." | "Action unavailable here." => {
             UiText::new("hud.action_unavailable")
         }

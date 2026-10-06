@@ -77,6 +77,7 @@ const surfaceSource = fs.readFileSync(path.join(shell, "../../sow-client/src/inp
 const cameraFrameUiSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/ui.rs"), "utf8");
 const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
+const intentApplySource = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/apply.rs"), "utf8");
 const coreCost = fs.readFileSync(path.join(shell, "../../sow-core/src/building/cost.rs"), "utf8");
 const buildingsIntent = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/buildings.rs"), "utf8");
 const appStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/app/state.rs"), "utf8");
@@ -1371,7 +1372,13 @@ test("Boudica camera practice stays paused through desktop and touch routes", ()
     assert.match(hud, /zoom\.floor/);
     assert.match(hud, /zoom\.ceiling/);
     assert.match(webMenu, /camera_zoom_hundredths/);
-    assert.match(storyCss, /background: rgb\(5 10 13 \/ 74%\)/);
+    assert.match(webMenu, /tutorial_marker_player_id: if tutorial_active/);
+    assert.match(webMenu, /tutorial_target_contains\(\s*marker_player_id/);
+    assert.match(webMenu, /"tutorial_target_hovered": tutorial_target_hovered/);
+    assert.match(tutorial, /tutorial\.facts && tutorial\.facts\.tutorial_target_hovered/);
+    assert.match(tutorial, /var hoverDetected = tutorialTargetHovered/);
+    assert.doesNotMatch(campaignView + storyCss, /sow-story__guide-shade|guide-cutout|mask-image:\s*radial-gradient/);
+    assert.match(storyCss, /\.sow-story__spotlight\s*\{[^}]*border: 1px solid var\(--story-accent\)/);
     assert.match(campaignView, /if \(reducedMotion\)/);
     assert.match(tutorial, /direction: step\.guide\.gesture === "zoom_in" \? "min" : "max"/);
     assert.match(campaignView, /const anchor = context\.anchor;/);
@@ -1421,6 +1428,16 @@ test("Boudica camera practice stays paused through desktop and touch routes", ()
     assert.equal(adaptiveDrag.update({ ...zoomedOut, camera_target_distance: 80, camera_target_radius: 80 }, {}, 1).step.id, "boudica_camera_hover", "camera practice uses the visible, zoom-relative target radius");
     const hovered = { ...zoomedOut, camera_target_distance: 8, hover_events: 1 };
     assert.equal(desktop.update(hovered, {}, 4).step.id, "boudica_zoom_in");
+    const hoverAfterReturningToCloseView = campaign.create(definition, "boudica_camera_hover", { factions: [] });
+    const closeViewWithoutCameraDistance = {
+        ...zoomedOut,
+        camera_zoom: 2.0,
+        zoom_in_events: 1,
+        camera_target_distance: undefined,
+        hover_events: 0
+    };
+    hoverAfterReturningToCloseView.update(closeViewWithoutCameraDistance, {}, 4);
+    assert.equal(hoverAfterReturningToCloseView.update({ ...closeViewWithoutCameraDistance, hover_events: 1 }, {}, 4.25).step.id, "boudica_zoom_in", "hover does not require the zoom-out level or camera distance");
     assert.equal(desktop.update({ ...hovered, camera_zoom: zoomClose }, {}, 4.25).step.id, "boudica_zoom_in", "zoom level alone does not satisfy the final zoom lesson");
     assert.equal(desktop.update({ ...hovered, camera_zoom: zoomClose, zoom_in_events: 1, camera_target_distance: 9 }, {}, 4.5).step.id, "boudica_zoom_in", "zooming away from the commander does not satisfy the lesson");
     const adaptiveZoom = campaign.create(definition, "boudica_zoom_in", { factions: [] });
@@ -1433,14 +1450,22 @@ test("Boudica camera practice stays paused through desktop and touch routes", ()
     assert.equal(desktop.advance(null, "boudica_found_suetonius"), true);
     assert.equal(desktop.view().step.id, "boudica_camera_home");
     assert.equal(desktop.update(inspected, {}, 5).step.id, "boudica_camera_home");
-    assert.equal(desktop.update(inspected, { hud_center_camera: 1 }, 6).step.id, "boudica_first_contact");
-    assert.equal(desktop.update({ ...inspected, contact_faction_ids: ["stonea"] }, {}, 7).reaction, "contact_stonea");
-    assert.equal(desktop.advance(null, "reaction-contact_stonea@stonea"), true);
-    assert.equal(desktop.update({ ...inspected, contact_faction_ids: ["stonea"] }, {}, 8).step.id, "boudica_city_intro");
-    assert.equal(desktop.view().step.type, "scene");
-    assert.equal(desktop.advance(null, "boudica_city_intro"), true);
-    assert.equal(desktop.view().step.id, "boudica_choose_city");
-    assert.equal(desktop.view().paused, false);
+    assert.equal(desktop.update(inspected, { hud_center_camera: 1 }, 6).step.id, "boudica_city_intro");
+    assert.equal(desktop.view().waiting, true);
+    assert.equal(desktop.view().paused, true);
+    assert.match(tutorial, /machineView\.waiting[\s\S]*runtime\.view\.render\(null\)[\s\S]*window\.setTimeout/);
+    assert.equal(desktop.advance(null, "boudica_city_intro"), false);
+    let revealClock = 0;
+    const timedReturn = campaign.create(definition, "boudica_camera_home", { factions: [] }, () => revealClock);
+    timedReturn.update({}, {});
+    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
+    revealClock = 1999;
+    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
+    revealClock = 2000;
+    assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, false);
+    assert.equal(timedReturn.advance(null, "boudica_city_intro"), true);
+    assert.equal(timedReturn.view().step.id, "boudica_choose_city");
+    assert.equal(timedReturn.view().paused, false);
 
     const touch = campaign.create(definition, "boudica_camera_drag", { factions: [] });
     touch.update({ camera_target: 0, camera_target_distance: 30, touch_controls: 1 }, {}, 0);
@@ -1587,17 +1612,24 @@ test("Boudica completes Iceni diplomacy and Roman outposts before one-shot build
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const step = id => definition.steps.find(candidate => candidate.id === id);
     assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true, hasAvatar: () => true }).errors, []);
+    assert.equal(step("boudica_city_intro").start_delay_seconds, 2);
+    assert.match(campaignEditor, /Wait before showing \(seconds\)[\s\S]*start_delay_seconds/);
+    const invalidSceneDelay = JSON.parse(JSON.stringify(definition));
+    invalidSceneDelay.steps.find(candidate => candidate.id === "boudica_city_intro").start_delay_seconds = 11;
+    assert.ok(campaign.validate(invalidSceneDelay, roster, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "start_delay_seconds"));
     assert.ok(campaign.METRICS.structure_level);
     assert.match(campaignEditor, /value: "structure_level"/);
-    assert.match(campaignEditor, /structureLevelLimits = \{ City: 6, Farm: 3, Factory: 4, Bunker: 4, Port: 5 \}/);
+    assert.match(campaignEngine, /STRUCTURE_LEVEL_LIMITS = \{ City: 4, Farm: 4, Factory: 4, Bunker: 4, Port: 4 \}/);
     const invalidLevel = JSON.parse(JSON.stringify(definition));
     invalidLevel.steps.find(candidate => candidate.id === "boudica_city_upgrade_wait").trigger.value = 7;
     assert.ok(campaign.validate(invalidLevel, roster, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "trigger.value"));
     assert.deepEqual(step("boudica_first_contact").trigger, { type: "contact", target: "stonea", value: 1, scope: "total" });
-    assert.equal(step("boudica_first_contact").next, "boudica_city_intro");
+    assert.equal(step("boudica_camera_home").next, "boudica_city_intro");
+    assert.equal(step("boudica_first_contact").next, "boudica_second_contact");
+    assert.equal(step("boudica_city_ready").next, "boudica_first_contact");
     assert.equal(step("boudica_second_contact").trigger.target, "snettisham");
     assert.equal(step("boudica_third_contact").trigger.target, "thetford");
-    assert.equal(step("boudica_second_contact").next, "boudica_choose_farm");
+    assert.equal(step("boudica_second_contact").next, "boudica_third_contact");
     assert.equal(step("boudica_third_contact").next, "boudica_outpost_colonia_veterans");
     for (const [objective, scene, next] of [
         ["boudica_outpost_colonia_veterans", "boudica_outpost_colonia_veterans_scene", "boudica_outpost_tax_collectors"],
@@ -1613,29 +1645,28 @@ test("Boudica completes Iceni diplomacy and Roman outposts before one-shot build
     }
     assert.equal(step("boudica_share_sent").next, "boudica_choose_factory");
     assert.equal(step("boudica_aid_kept").next, "boudica_choose_factory");
-    assert.equal(step("boudica_farm_ready").next, "boudica_select_city_upgrade");
-    assert.equal(step("boudica_city_upgrade_ready").next, "boudica_select_city_level3");
-    assert.equal(step("boudica_city_level3_ready").next, "boudica_third_contact");
-    assert.equal(step("boudica_factory_upgrade_ready").next, "boudica_bunker_choice");
+    assert.equal(step("boudica_factory_ready").next, "boudica_select_city_upgrade");
+    assert.equal(step("boudica_city_upgrade_ready").next, "boudica_bunker_choice");
     assert.deepEqual(step("boudica_city_upgrade_wait").trigger, { type: "structure_level", kind: "City", value: 2, scope: "total" });
-    assert.deepEqual(step("boudica_city_level3_wait").trigger, { type: "structure_level", kind: "City", value: 3, scope: "total" });
-    assert.deepEqual(step("boudica_factory_upgrade_wait").trigger, { type: "structure_level", kind: "Factory", value: 2, scope: "total" });
     assert.deepEqual(step("boudica_bunker_upgrade_wait").trigger, { type: "structure_level", kind: "Bunker", value: 2, scope: "total" });
     assert.deepEqual(step("boudica_build_city").trigger, { type: "structure_level", kind: "City", value: 1, scope: "total" });
-    assert.deepEqual(step("boudica_build_farm").trigger, { type: "structure_level", kind: "Farm", value: 1, scope: "total" });
+    assert.equal(step("boudica_build_farm"), undefined);
     assert.deepEqual(step("boudica_build_factory").trigger, { type: "structure_level", kind: "Factory", value: 1, scope: "total" });
     assert.deepEqual(step("boudica_build_bunker").trigger, { type: "structure_level", kind: "Bunker", value: 1, scope: "total" });
-    assert.deepEqual(step("boudica_build_port").trigger, { type: "structure_level", kind: "Port", value: 1, scope: "total" });
-    assert.equal(step("boudica_port_ready").type, "scene");
-    assert.equal(step("boudica_port_upgrade_wait").next, "boudica_port_ready");
-    for (const id of ["boudica_build_city", "boudica_build_farm", "boudica_city_upgrade_wait", "boudica_city_level3_wait", "boudica_build_factory", "boudica_factory_upgrade_wait", "boudica_build_bunker", "boudica_bunker_upgrade_wait", "boudica_build_port", "boudica_port_upgrade_wait"]) {
-        assert.equal(step(id).advance_delay_seconds, 1, `${id} leaves a beat after completion`);
+    assert.deepEqual(
+        definition.steps
+            .filter(candidate => candidate.type === "objective" && candidate.trigger?.type === "structure_level")
+            .map(candidate => [candidate.trigger.kind, candidate.trigger.value]),
+        [["City", 1], ["City", 2], ["Factory", 1], ["Bunker", 1], ["Bunker", 2]],
+        "the building tutorial teaches only City, Factory, and one Bunker upgrade"
+    );
+    for (const id of ["boudica_build_city", "boudica_city_upgrade_wait", "boudica_build_factory", "boudica_build_bunker", "boudica_bunker_upgrade_wait"]) {
+        assert.equal(step(id).advance_delay_seconds, 3, `${id} leaves time to see the building finish`);
     }
     assert.equal(step("boudica_build_city").next, "boudica_city_ready");
-    assert.equal(step("boudica_build_farm").next, "boudica_farm_ready");
     assert.equal(step("boudica_build_factory").next, "boudica_factory_ready");
     assert.equal(step("boudica_build_bunker").next, "boudica_bunker_built");
-    assert.equal(step("boudica_build_port").next, "boudica_port_built");
+    assert.equal(definition.steps.some(candidate => /boudica_(?:port_choice|choose_port|build_port|port_built)$/.test(candidate.id)), false);
     assert.equal(definition.steps.some(candidate => /boudica_(?:build_mode_explainer|cancel_.*_build_mode)$/.test(candidate.id)), false);
     assert.match(tutorial, /event\.key !== "Escape" \|\| !selected[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopImmediatePropagation\(\);[\s\S]*?send\("select_building", \{ kind: selected \}\)[\s\S]*?uiCounts\.cancel_building_mode/);
     assert.match(tutorial, /building_mode_exit_" \+ \(context\.zoomMode === "pinch" \? "mobile" : "desktop"\) \+ "_hint/);
@@ -1651,17 +1682,10 @@ test("Boudica completes Iceni diplomacy and Roman outposts before one-shot build
         assert.match(menuSection, /^sticky_building_mode_hint = ".+"$/m, `${locale} is missing the sticky-building setting hint`);
         assert.match(tutorialSection, /^skip_cinematic = ".+"$/m, `${locale} is missing the cinematic skip label`);
         assert.doesNotMatch(catalog, /^campaign_boudica_boudica_build_mode_(?:title|body) = /m, `${locale} keeps obsolete build-mode tutorial copy`);
+        assert.doesNotMatch(catalog, /^(?:building_requires_city_level|campaign_boudica_boudica_(?:port_choice|choose_port|build_port|port_built|fleet_target|ship_choice|trade_ship|trade_ready)_[a-z_]+) = /m, `${locale} keeps removed building/tutorial copy`);
         for (const key of [
-            "campaign_boudica_boudica_city_level3_title",
-            "campaign_boudica_boudica_city_level3_hint",
-            "campaign_boudica_boudica_city_level3_ready_title",
-            "campaign_boudica_boudica_city_level3_ready_body",
             "campaign_boudica_boudica_bunker_built_title",
             "campaign_boudica_boudica_bunker_built_body",
-            "campaign_boudica_boudica_port_built_title",
-            "campaign_boudica_boudica_port_built_body",
-            "campaign_boudica_boudica_port_ready_title",
-            "campaign_boudica_boudica_port_ready_body"
         ]) assert.match(catalog, new RegExp(`^${key} = ".+"$`, "m"), `${locale} is missing ${key}`);
     }
     for (const surface of [shellSource, pokiSource, licenseJestSource, hud]) {
@@ -1673,20 +1697,25 @@ test("Boudica completes Iceni diplomacy and Roman outposts before one-shot build
     assert.match(webMenu, /"sticky_building_mode": app\.ui\.app\.settings_state\.sticky_building_mode/);
     assert.match(windowInput, /modifiers\.state\(\)\.shift_key\(\)/);
     assert.match(mapClick, /hold_build_action_succeeded = true[\s\S]*hold_build_shift_override \|= self\.input\.shift_pressed/);
-    for (const id of ["boudica_city_upgrade_wait", "boudica_city_level3_wait", "boudica_factory_upgrade_wait", "boudica_bunker_upgrade_wait", "boudica_port_upgrade_wait", "boudica_trade_city_wait", "boudica_trade_port_wait"]) {
+    for (const id of ["boudica_city_upgrade_wait", "boudica_bunker_upgrade_wait"]) {
         assert.equal(step(id).guide.target, "upgrade_building", `${id} keeps the hand on the building during its upgrade`);
         assert.notEqual(step(id).pause_game, true, `${id} lets the construction timer finish`);
     }
-    for (const id of ["boudica_select_city_upgrade", "boudica_structure_upgrade", "boudica_select_factory_upgrade", "boudica_factory_upgrade", "boudica_select_bunker_upgrade", "boudica_bunker_upgrade", "boudica_select_port_upgrade", "boudica_port_upgrade", "boudica_select_trade_city", "boudica_trade_city", "boudica_select_trade_port", "boudica_trade_port"]) {
+    for (const id of ["boudica_select_city_upgrade", "boudica_structure_upgrade", "boudica_select_bunker_upgrade", "boudica_bunker_upgrade"]) {
         assert.equal(step(id).pause_game, true, `${id} pauses play while the player follows the upgrade guidance`);
     }
     assert.match(webMenu, /nameplate_screen[\s\S]*tutorial_screen_point_visible\(screen, viewport_w, viewport_h\)[\s\S]*screen\[1\] - nameplate_screen\[1\]/,
         "the build target is chosen in screen space, away from the actual nameplate anchor");
+    assert.match(webMenu, /fn tutorial_build_site_candidate_better[\s\S]*candidate\s*\.0\s*\.cmp\(&best\.0\)[\s\S]*candidate\s*\.1\s*\.total_cmp\(&best\.1\)/,
+        "build guidance prefers a usable border tile, then the one farthest from the nameplate");
+    assert.match(webMenu, /border_tiles\.ones\(\)[\s\S]*consider_build_site\(idx, true\)[\s\S]*border_tiles\.is_some_and\(\|tiles\| tiles\.contains\(idx\)\)[\s\S]*consider_build_site\(idx, false\)/,
+        "interior build guidance is only a fallback when no usable border tile is visible");
     assert.match(webMenu, /fn tutorial_building_anchors[\s\S]*building\.under_construction == under_construction[\s\S]*"upgrading_buildings": upgrading_buildings/,
         "the tutorial publishes anchors for the building while its upgrade is running");
     assert.match(tutorial, /\["structure_level", "city_level", "port_level"\]\.includes\(trigger\.type\)[\s\S]*tutorial\.upgrading_buildings/);
 
-    const machine = campaign.create(definition, "boudica_first_contact", roster);
+    let clock = 0;
+    const machine = campaign.create(definition, "boudica_city_intro", roster, () => clock);
     const facts = extra => ({
         contact_faction_ids: [],
         alliance_faction_ids: [],
@@ -1699,39 +1728,35 @@ test("Boudica completes Iceni diplomacy and Roman outposts before one-shot build
         ...extra
     });
     const contact = ids => facts({ contact_faction_ids: ids });
-    const city = facts({ contact_faction_ids: ["stonea"], cities: 1, structure_levels: { city: 1 } });
-    const farm = facts({ contact_faction_ids: ["stonea", "snettisham"], cities: 1, farms: 1, structure_levels: { city: 1, farm: 1 } });
+    const city = facts({ cities: 1, structure_levels: { city: 1 } });
     const third = facts({ contact_faction_ids: ["stonea", "snettisham", "thetford"], cities: 1, structure_levels: { city: 1 } });
 
-    assert.equal(machine.update(contact(["stonea"]), {}).reaction, "contact_stonea");
-    assert.equal(machine.advance(null, "reaction-contact_stonea@stonea"), true);
-    assert.equal(machine.update(contact(["stonea"]), {}).step.id, "boudica_city_intro");
+    const stalledBuild = campaign.create(definition, "boudica_build_city", roster);
+    stalledBuild.update(facts({ contact_faction_ids: [] }), {});
+    assert.equal(stalledBuild.update(contact(["thetford"]), {}).reaction, "contact_thetford",
+        "Thetford responds even when the player is still on an earlier building objective");
+    assert.equal(stalledBuild.advance("respect", "reaction-contact_thetford@thetford"), true);
+    assert.equal(stalledBuild.update(contact(["thetford"]), {}).step.id, "boudica_build_city");
+
+    assert.equal(machine.update(facts({}), {}).waiting, true);
+    clock = 1999;
+    assert.equal(machine.update(facts({}), {}).waiting, true);
+    clock = 2000;
+    assert.equal(machine.update(facts({}), {}).waiting, false);
     assert.equal(machine.view().step.type, "scene");
     machine.advance(null, "boudica_city_intro");
-    assert.equal(machine.update(facts({ contact_faction_ids: ["stonea"] }), { dock_city: 1 }).step.id, "boudica_build_city");
-    assert.equal(machine.update(city, {}).step.id, "boudica_build_city", "placing a city does not count as completion");
-    assert.equal(machine.update({ ...city, elapsed_seconds: 1 }, {}).step.id, "boudica_city_ready");
+    assert.equal(machine.update(facts({}), { dock_city: 1 }).step.id, "boudica_build_city");
+    assert.equal(machine.update({ ...city, elapsed_seconds: 1 }, {}).step.id, "boudica_build_city");
+    assert.equal(machine.update({ ...city, elapsed_seconds: 4 }, {}).step.id, "boudica_city_ready");
     machine.advance(null, "boudica_city_ready");
 
-    assert.equal(machine.update(contact(["stonea", "snettisham"]), {}).reaction, "contact_snettisham");
-    assert.equal(machine.advance("refuse", "reaction-contact_snettisham@snettisham"), true);
     const iceniHome = facts({ contact_faction_ids: ["stonea", "snettisham"], cities: 1, structure_levels: { city: 1 } });
-    assert.equal(machine.update(iceniHome, {}).step.id, "boudica_choose_farm");
-    assert.equal(machine.update(iceniHome, { dock_farm: 1 }).step.id, "boudica_build_farm");
-    assert.equal(machine.update(farm, {}).step.id, "boudica_build_farm", "placing a farm does not count as completion");
-    assert.equal(machine.update({ ...farm, contact_faction_ids: ["stonea", "snettisham"], elapsed_seconds: 4 }, {}).step.id, "boudica_farm_ready");
-    machine.advance(null, "boudica_farm_ready");
-    assert.equal(machine.update(iceniHome, {}).step.id, "boudica_select_city_upgrade");
-    assert.equal(machine.update({ ...iceniHome, selected_building_kind: "City" }, {}).step.id, "boudica_structure_upgrade");
-    assert.equal(machine.update(iceniHome, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_wait");
-    assert.equal(machine.update({ ...iceniHome, structure_levels: { city: 2, farm: 1 } }, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_wait");
-    assert.equal(machine.update({ ...iceniHome, structure_levels: { city: 2, farm: 1 }, elapsed_seconds: 5 }, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_ready", "the first city upgrade completes at level 2 and does not unlock factories");
-    machine.advance(null, "boudica_city_upgrade_ready");
-    assert.equal(machine.update({ ...iceniHome, structure_levels: { city: 2, farm: 1 }, selected_building_kind: "City" }, {}).step.id, "boudica_city_level3_upgrade");
-    assert.equal(machine.update({ ...iceniHome, structure_levels: { city: 2, farm: 1 } }, { upgrade_structure: 1 }).step.id, "boudica_city_level3_wait");
-    assert.equal(machine.update({ ...iceniHome, structure_levels: { city: 3, farm: 1 } }, { upgrade_structure: 1 }).step.id, "boudica_city_level3_wait");
-    assert.equal(machine.update({ ...iceniHome, structure_levels: { city: 3, farm: 1 }, elapsed_seconds: 6 }, { upgrade_structure: 1 }).step.id, "boudica_city_level3_ready");
-    machine.advance(null, "boudica_city_level3_ready");
+    assert.equal(machine.view().step.id, "boudica_first_contact");
+    assert.equal(machine.update(contact(["stonea"]), {}).reaction, "contact_stonea");
+    assert.equal(machine.advance(null, "reaction-contact_stonea@stonea"), true);
+    assert.equal(machine.update(contact(["stonea"]), {}).step.id, "boudica_second_contact");
+    assert.equal(machine.update(iceniHome, {}).reaction, "contact_snettisham");
+    assert.equal(machine.advance("refuse", "reaction-contact_snettisham@snettisham"), true);
     assert.equal(machine.update(iceniHome, {}).step.id, "boudica_third_contact");
 
     assert.equal(machine.update(third, {}).reaction, "contact_thetford");
@@ -1761,28 +1786,56 @@ test("Boudica completes Iceni diplomacy and Roman outposts before one-shot build
     assert.equal(machine.update({ ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], ally_support_deliveries: 1 }, {}).step.id, "boudica_choose_factory");
 
     assert.equal(machine.update({ ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], ally_support_deliveries: 1 }, { dock_factory: 1 }).step.id, "boudica_build_factory");
-    const factory = { ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], factories: 1, structure_levels: { city: 3, farm: 1, factory: 1 } };
+    const factory = { ...third, contact_faction_ids: ["stonea", "snettisham", "thetford", "trinovantes"], alliance_faction_ids: ["trinovantes"], factories: 1, structure_levels: { city: 1, factory: 1 } };
     assert.equal(machine.update(factory, {}).step.id, "boudica_build_factory");
     assert.equal(machine.update({ ...factory, elapsed_seconds: 7 }, {}).step.id, "boudica_factory_ready");
     machine.advance(null, "boudica_factory_ready");
-    assert.equal(machine.update({ ...factory, selected_building_kind: "Factory" }, { dock_factory: 1 }).step.id, "boudica_factory_upgrade");
-    assert.equal(machine.update({ ...factory, selected_building_kind: "Factory" }, { dock_factory: 1, upgrade_structure: 1 }).step.id, "boudica_factory_upgrade_wait");
-    assert.equal(machine.update({ ...factory, structure_levels: { city: 3, farm: 1, factory: 2 }, elapsed_seconds: 8 }, { dock_factory: 1, upgrade_structure: 1 }).step.id, "boudica_factory_upgrade_wait");
-    assert.equal(machine.update({ ...factory, structure_levels: { city: 3, farm: 1, factory: 2 }, elapsed_seconds: 9 }, { dock_factory: 1, upgrade_structure: 1 }).step.id, "boudica_factory_upgrade_ready");
-    machine.advance(null, "boudica_factory_upgrade_ready");
+    assert.equal(machine.view().step.id, "boudica_select_city_upgrade");
+    assert.equal(machine.update({ ...factory, selected_building_kind: "City" }, {}).step.id, "boudica_structure_upgrade");
+    assert.equal(machine.update(factory, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_wait");
+    assert.equal(machine.update({ ...factory, structure_levels: { city: 2, factory: 1 }, elapsed_seconds: 20 }, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_wait");
+    assert.equal(machine.update({ ...factory, structure_levels: { city: 2, factory: 1 }, elapsed_seconds: 21 }, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_wait");
+    assert.equal(machine.update({ ...factory, structure_levels: { city: 2, factory: 1 }, elapsed_seconds: 23 }, { upgrade_structure: 1 }).step.id, "boudica_city_upgrade_ready");
+    machine.advance(null, "boudica_city_upgrade_ready");
 
     assert.equal(machine.view().step.id, "boudica_bunker_choice");
-    const outposts = { ...factory, defeated_faction_ids: ["colonia_veterans", "tax_collectors", "roman_supply_depot"] };
+    const outposts = { ...factory, defeated_faction_ids: ["colonia_veterans", "tax_collectors", "roman_supply_depot"], structure_levels: { city: 2, factory: 1 } };
     machine.advance(null, "boudica_bunker_choice");
-    assert.equal(machine.update({ ...outposts, bunkers: 0, structure_levels: { city: 3, farm: 1, factory: 2 } }, { dock_bunker: 1 }).step.id, "boudica_build_bunker");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 1 }, elapsed_seconds: 8 }, {}).step.id, "boudica_build_bunker");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 1 }, elapsed_seconds: 9 }, {}).step.id, "boudica_bunker_built");
+    assert.equal(machine.update({ ...outposts, bunkers: 0 }, { dock_bunker: 1 }).step.id, "boudica_build_bunker");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 1 }, elapsed_seconds: 8 }, {}).step.id, "boudica_build_bunker");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 1 }, elapsed_seconds: 9 }, {}).step.id, "boudica_build_bunker");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 1 }, elapsed_seconds: 11 }, {}).step.id, "boudica_bunker_built");
     machine.advance(null, "boudica_bunker_built");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 1 } }, {}).step.id, "boudica_select_bunker_upgrade");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 1 }, selected_building_kind: "Bunker" }, {}).step.id, "boudica_bunker_upgrade");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 1 } }, { dock_bunker: 1, upgrade_structure: 2 }).step.id, "boudica_bunker_upgrade_wait");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 2 } }, { dock_bunker: 1, upgrade_structure: 2 }).step.id, "boudica_bunker_upgrade_wait");
-    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 3, farm: 1, factory: 2, bunker: 2 }, elapsed_seconds: 10 }, { dock_bunker: 1, upgrade_structure: 2 }).step.id, "boudica_bunker_ready");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 1 } }, {}).step.id, "boudica_select_bunker_upgrade");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 1 }, selected_building_kind: "Bunker" }, {}).step.id, "boudica_bunker_upgrade");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 1 } }, { upgrade_structure: 2 }).step.id, "boudica_bunker_upgrade_wait");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 2 } }, { upgrade_structure: 2 }).step.id, "boudica_bunker_upgrade_wait");
+    assert.equal(machine.update({ ...outposts, bunkers: 1, structure_levels: { city: 2, factory: 1, bunker: 2 }, elapsed_seconds: 12 }, { upgrade_structure: 2 }).step.id, "boudica_bunker_ready");
+});
+
+test("contact responses wait behind an open campaign scene", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const machine = campaign.create({
+        version: 2, episode_id: "queued_contact", entry: "scene",
+        settings: { buildings_enabled: false, starting_troops: 1000 },
+        steps: [
+            { id: "scene", type: "scene", title_key: "scene", next: "objective" },
+            { id: "objective", type: "objective", title_key: "objective", trigger: { type: "territory", value: 10, scope: "total" }, next: "end" },
+            { id: "end", type: "end", title_key: "end" }
+        ],
+        reactions: [
+            { id: "contact", when: { type: "contact", target: "snettisham" }, title_key: "contact", body_key: "contact.body" }
+        ]
+    });
+    const facts = { contact_faction_ids: ["snettisham"], tiles_gained: 0 };
+    assert.equal(machine.update(facts, {}).step.id, "scene");
+    assert.equal(machine.view().reaction, undefined, "contact does not replace an open scene");
+    assert.equal(machine.advance(null, "scene"), true);
+    const response = machine.update(facts, {});
+    assert.equal(response.reaction, "contact");
+    assert.equal(machine.advance(null, "reaction-contact@snettisham"), true);
+    assert.equal(machine.update(facts, {}).step.id, "objective");
+    assert.equal(machine.view().reaction, undefined, "the contact response is shown only once");
 });
 test("gameplay chrome: vertical right panel with exit on top, fps in dock, desktop notices follow the active quest stack", () => {
     const statusRight = hud.slice(hud.indexOf("sow-hud__status-right"), hud.indexOf("</header>"));
@@ -1792,13 +1845,16 @@ test("gameplay chrome: vertical right panel with exit on top, fps in dock, deskt
         && exitAt < statusRight.indexOf("toggle_leaderboard"),
         "exit stays first in the vertical panel");
     assert.ok(!statusRight.includes("sow-hud-fps"), "fps meter leaves the topbar");
-    assert.match(hud, /sow-hud__res-gold[\s\S]{0,400}sow-hud-fps/);
+    const goldAt = hud.indexOf('class="sow-hud__res-gold"');
+    const fpsAt = hud.indexOf('class="sow-hud__fps"');
+    assert.ok(goldAt >= 0 && fpsAt > goldAt, "gold and FPS remain in the dock resource row");
     assert.match(hudCss, /\.sow-hud__status-right \{[^}]*flex-direction: column/);
     assert.match(hudCss, /\.sow-hud__status-left:not\(:has\(> :not\(\.hidden\)\)\)/);
     assert.match(hudCss, /@media \(min-width: 721px\) \{\s*\.sow-hud__notifications \{[^}]*top: var\(--sow-hud-notifications-top, var\(--sow-hud-top-edge\)\);[^}]*inset-inline-start: var\(--sow-hud-notifications-inline-start, max\(16px, var\(--sow-sal\)\)\);[^}]*transform: none;/);
     const desktopRules = [...hudCss.matchAll(/@media \(min-width: 721px\) \{([^}]*)\}/g)];
     assert.ok(desktopRules.some(([, rules]) => rules.includes("sow-hud__notifications")));
-    assert.match(hudCss, /\.sow-hud__notifications \{\s*top: auto;\s*bottom: calc\(max\(8px, var\(--sow-sab\)\) \+ var\(--sow-dock-reserve\)\)/);
+    assert.match(hudCss, /\.sow-hud__notifications\.is-positioned \{[^}]*inset-inline-start: var\(--sow-hud-notifications-inline-start\)/);
+    assert.doesNotMatch(hudCss, /\.sow-hud__notifications \{\s*top: auto;\s*bottom: calc\(max\(8px, var\(--sow-sab\)\) \+ var\(--sow-dock-reserve\)\)/);
     assert.match(hud, /new window\.ResizeObserver\(function \(\) \{\s*syncNotificationPlacement\(\);\s*\}\)/);
     assert.match(hud, /new window\.MutationObserver\(function \(\)/);
     assert.doesNotMatch(hud.slice(hud.indexOf("    function renderHud("), hud.indexOf("    function handleHudStateUpdate(")), /notificationLayout|scheduleNotificationPlacement|syncNotificationPlacement/);
@@ -1854,11 +1910,44 @@ test("desktop notification anchor follows the visible quest, then the tutorial p
     objective.hidden = false;
     assert.equal(notificationAnchor(story, objective, nameplate, 12).top, 252, "the quest reappearance restores the correct anchor");
 
-    assert.match(hudCss, /\.sow-hud__notifications \{\s*position: absolute;\s*top: 72px;\s*left: 50%;\s*display: grid;\s*gap: 6px;/);
+    assert.match(hudCss, /\.sow-hud__notifications \{\s*position: absolute;\s*top: var\(--sow-hud-notifications-top, 72px\);\s*left: 50%;\s*display: grid;\s*gap: 6px;/);
     const placementStart = hud.indexOf("    function syncNotificationPlacement(");
     const placementEnd = hud.indexOf("\n    function ensureHudDom", placementStart);
     assert.ok(placementStart >= 0 && placementEnd > placementStart);
-    assert.match(hud.slice(placementStart, placementEnd), /window\.innerWidth <= 720[\s\S]*removeProperty\("--sow-hud-notifications-top"\)[\s\S]*removeProperty\("--sow-hud-notifications-inline-start"\)[\s\S]*return;/);
+    assert.match(hud.slice(placementStart, placementEnd), /notificationAnchor\(story, objective, hudRefs\.nameplate, 12\)/);
+    assert.match(hud.slice(placementStart, placementEnd), /notifications\.style\.setProperty\("--sow-hud-notifications-top"/);
+    assert.match(hud.slice(placementStart, placementEnd), /notifications\.style\.setProperty\("--sow-hud-notifications-inline-start"/);
+    assert.doesNotMatch(hud.slice(placementStart, placementEnd), /if\s*\(\s*window\.innerWidth\s*<=\s*720\s*\)\s*\{[^}]*return;/);
+});
+
+test("combat operations reuse snapshots and intents across desktop and mobile HUD", () => {
+    assert.doesNotMatch(hudStateSource, /^\s*(attacks|fleets):\s*Vec</m, "the HUD state does not retain unused attack or fleet vectors");
+    assert.match(webMenu, /let operations = snapshot[\s\S]*build_combat_operations_payload\(/);
+    assert.match(webMenu, /"operations": operations/);
+    assert.match(webMenu, /unit_type == sow_core::game::UnitType::TransportShip/);
+    assert.match(webMenu, /WebMenuCommand::CounterAttack \{ target_player_id \}/);
+    assert.match(webMenu, /fn incoming_combat_troops\(/);
+    assert.match(webMenu, /available_troops\.max\(0\.0\) \* f64::from\(ratio\.clamp\(0\.05, 1\.0\)\)/);
+    assert.match(webMenu, /attack_ratio/);
+    assert.match(intentApplySource, /wf\.unit_type != crate::game::UnitType::TransportShip/);
+    assert.match(hud, /function renderCombatOperations\(operations\)/);
+    assert.match(hud, /var canCounter = incoming && !retreating/);
+    assert.match(hud, /pendingCounterAttacks\[playerId\]/);
+    assert.match(hud, /send\("counter_attack", \{ target_player_id: counterTarget \}\)/);
+    assert.match(hud, /send\("focus_world", \{ x: focusX, y: focusY \}\)/);
+    assert.match(hudCss, /\.sow-hud__operations \{[^}]*bottom: calc\(max\(14px, var\(--sow-sab\)\) \+ 116px\)/);
+    assert.match(hudCss, /\.sow-hud__operation-action \{[^}]*width: 44px; height: 44px/);
+    assert.match(hudCss, /@media \(max-width: 599px\) and \(orientation: portrait\)[\s\S]*?\.sow-hud__operations \{[^}]*width: min\(560px, calc\(100vw - 124px\)\)/);
+    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?\.sow-hud__operations \{[^}]*max-height: min\(25vh, 124px\)/);
+
+    for (const locale of fs.readdirSync(path.join(shell, "../../sow-i18n/strings"))) {
+        const catalog = path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`);
+        if (!fs.existsSync(catalog)) continue;
+        const source = fs.readFileSync(catalog, "utf8");
+        for (const key of ["combat_operations", "recall_transport", "retreat_cost"]) {
+            assert.match(source, new RegExp(`^${key}\\s*=`, "m"), `${locale} is missing hud.${key}`);
+        }
+    }
 });
 
 test("campaign support reactions queue by delivery order, wait for their gate and preserve objective progress", () => {
@@ -2053,7 +2142,7 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
     assert.equal(short.advanced, "refuse");
 });
 
-test("campaign objectives distinguish the intended contact, alliance, fleet, transfer and foundry action", () => {
+test("campaign objectives distinguish the intended contact, alliance, fleet and transfer action", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     function currentFor(trigger, before, after) {
         const machine = campaign.create({
@@ -2096,8 +2185,6 @@ test("campaign objectives distinguish the intended contact, alliance, fleet, tra
         const view = machine.update({ resource_transfers_by_recipient_faction_id: { stonea: sent } }, { transfer_gold: 1 });
         assert.equal(view.step.id, "done", "an accepted Stonea transfer on the guide transition tick must count");
     }
-    assert.equal(currentFor({ type: "foundry_level", value: 1, scope: "step" }, { city_levels: 0, foundry_level: 0 }, { city_levels: 3, foundry_level: 0 }), 0);
-    assert.equal(currentFor({ type: "foundry_level", value: 1, scope: "step" }, { city_levels: 0, foundry_level: 0 }, { city_levels: 0, foundry_level: 1 }), 1);
 });
 
 test("campaign validation rejects unsupported rules and duplicate event responses", () => {
@@ -2170,7 +2257,7 @@ test("all HUD message classes have one explicit presentation", () => {
         "fleet_own_target", "fleet_teammate", "fleet_alliance", "fleet_no_port",
         "fleet_no_water_access", "fleet_no_landing_shore", "fleet_no_water_path", "need_gold",
         "build_owned_land", "build_land", "build_spacing_city", "build_spacing_structure",
-        "build_no_space", "build_no_farm_plots", "building_in_progress", "spawn_too_close", "spawn_rate_limited",
+        "build_no_space", "building_in_progress", "spawn_too_close", "spawn_rate_limited",
         "alliance_request_pending", "alliance_renewal_pending", "resources_allies_only"
     ];
     const global = [
@@ -2182,14 +2269,14 @@ test("all HUD message classes have one explicit presentation", () => {
     ];
     const silent = [
         "attack_launched", "observer_feedback", "water_feedback", "transport_landed",
-        "structure_started", "structure_ready", "structure_upgraded", "tile_upgraded",
+        "structure_started", "structure_ready", "structure_upgraded",
         "wilderness_expanded", "enemy_territory_captured", "resource_request_sent"
     ];
     const all = [...local, ...global, ...silent];
-    assert.equal(local.length, 24);
+    assert.equal(local.length, 23);
     assert.equal(global.length, 20);
-    assert.equal(silent.length, 11);
-    assert.equal(new Set(all).size, 55);
+    assert.equal(silent.length, 10);
+    assert.equal(new Set(all).size, 53);
     const emitters = [mapClick, simEventsSource, eliminationSource, snapshotFxSource, simUpdateSource].join("\n");
     const localEmitters = [mapClick, intentInput].join("\n");
     for (const key of local) assert.ok(localEmitters.includes(`hud.${key}`), `missing local feedback: ${key}`);
@@ -3681,7 +3768,7 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.equal(definition.steps.find(step => step.id === "boudica_return_end").speaker, "boudica");
     assert.equal(definition.steps.find(step => step.id === "boudica_end").body_key, "tutorial.campaign_boudica_boudica_end_body");
     assert.equal(definition.steps.find(step => step.id === "boudica_complete").type, "end");
-    for (const type of ["farm", "factory", "port", "bunker", "structure_upgrade", "structure_level", "city_upgrade", "city_level", "foundry_level", "port_upgrade", "port_level", "tile_upgrade", "resource_transfer", "alliance", "fleet", "zoom_in", "zoom_out", "camera_drag", "camera_key_pan", "hover", "zoom_out_complete", "zoom_in_complete", "camera_target"]) {
+    for (const type of ["farm", "factory", "port", "bunker", "structure_upgrade", "structure_level", "city_upgrade", "city_level", "port_upgrade", "port_level", "resource_transfer", "alliance", "fleet", "zoom_in", "zoom_out", "camera_drag", "camera_key_pan", "hover", "zoom_out_complete", "zoom_in_complete", "camera_target"]) {
         assert.ok(campaign.METRICS[type], `missing campaign metric ${type}`);
         assert.match(campaignEditor, new RegExp(`value: "${type}"`), `Campaign Studio cannot select ${type}`);
     }
@@ -3726,8 +3813,9 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.equal(step("boudica_found_suetonius").marker.target, "suetonius_paulinus");
     assert.equal(step("boudica_found_suetonius").next, "boudica_camera_home");
     assert.equal(definition.steps.some(candidate => candidate.id === "boudica_return_home"), false);
-    assert.equal(step("boudica_camera_home").next, "boudica_first_contact");
-    assert.equal(step("boudica_first_contact").next, "boudica_city_intro");
+    assert.equal(step("boudica_camera_home").next, "boudica_city_intro");
+    assert.equal(step("boudica_city_intro").start_delay_seconds, 2);
+    assert.equal(step("boudica_first_contact").next, "boudica_second_contact");
     assert.equal(step("boudica_city_intro").next, "boudica_choose_city");
     assert.equal(step("boudica_found_suetonius").type, "scene");
     assert.equal(step("boudica_found_suetonius").speaker, "boudica");
@@ -3742,7 +3830,7 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.equal(step("boudica_build_bunker").next, "boudica_bunker_built");
     assert.equal(step("boudica_bunker_built").next, "boudica_select_bunker_upgrade");
     assert.deepEqual(step("boudica_first_contact").trigger, { type: "contact", target: "stonea", value: 1, scope: "total" });
-    assert.equal(step("boudica_first_contact").next, "boudica_city_intro");
+    assert.equal(step("boudica_first_contact").next, "boudica_second_contact");
     assert.equal(definition.steps.some(candidate => /boudica_contact_.*pledge/.test(candidate.id)), false);
     assert.equal(step("boudica_first_contact").guide.target, "target_action");
     assert.deepEqual(roster.factions.filter(faction => ["stonea", "snettisham", "thetford"].includes(faction.id)).map(faction => faction.name).sort(), ["Snettisham", "Stonea", "Thetford"]);
@@ -3753,10 +3841,18 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.deepEqual(tribute.choices.map(choice => [choice.id, choice.relation, choice.gold_cost]), [["accept", "allied", 200], ["refuse", "enemy", 0]]);
     const respect = definition.reactions.find(reaction => reaction.id === "contact_thetford");
     assert.deepEqual(respect.choices.map(choice => [choice.id, choice.relation, choice.gold_cost]), [["respect", "allied", 0], ["demand", "enemy", 0]]);
+    assert.equal(tribute.after, undefined, "Snettisham's terms are not gated by the quest order");
+    assert.equal(respect.after, undefined, "Thetford's terms are not gated by the quest order");
+    assert.equal(definition.reactions.find(reaction => reaction.id === "neutral_contact_terms").after, "boudica_outpost_roman_supply_depot");
     assert.equal(roster.factions.find(faction => faction.name === "Stonea").support_interval_seconds, 15);
     assert.equal(step("boudica_transfer_send").trigger.recipient, "stonea");
     assert.equal(step("boudica_transfer_send").trigger.scope, "episode");
     assert.equal(step("boudica_transfer_send").trigger.resources, undefined);
+    assert.equal(step("boudica_transfer_target").next, "boudica_transfer_send");
+    assert.equal(definition.steps.some(candidate => ["boudica_transfer_troops", "boudica_transfer_gold"].includes(candidate.id)), false);
+    assert.match(tutorial, /highlightAmounts[\s\S]*?resolveUiTarget\(key, document, runtime\.episodeId\)/);
+    assert.match(tutorial, /runtime\.guidedAmountControls\.forEach/);
+    assert.match(hudCss, /@media \(hover: none\), \(pointer: coarse\) \{[\s\S]*?#sow-hud-transfer input \{ font-size: 16px; \}/);
     assert.equal(step("boudica_share_sent").presentation, "celebration");
     assert.equal(roster.factions.some(faction => ["Iceni Coast", "Venta Icenorum"].includes(faction.name)), false);
     assert.equal(definition.reactions.find(reaction => reaction.id === "neutral_contact_terms").when.relation, "neutral");
@@ -3803,36 +3899,14 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.equal(step("boudica_outpost_roman_supply_depot").next, "boudica_outpost_roman_supply_depot_scene");
     assert.equal(step("boudica_outpost_roman_supply_depot_scene").next, "boudica_trinovantes_contact");
     assert.equal(step("boudica_trinovantes_alliance").next, "boudica_ally_support_wait");
-    assert.match(webCatalogEn, /campaign_boudica_boudica_city_upgrade_ready_body = "The city now draws more gold/);
-    assert.match(webCatalogEs, /campaign_boudica_boudica_city_upgrade_ready_body = "La ciudad ahora extrae más oro/);
+    assert.match(webCatalogEn, /campaign_boudica_boudica_city_upgrade_ready_body = "The city can now support more troops/);
+    assert.match(webCatalogEs, /campaign_boudica_boudica_city_upgrade_ready_body = "La ciudad ahora puede alojar más tropas/);
     assert.deepEqual(step("boudica_structure_upgrade").trigger, { type: "ui", action: "upgrade_structure", scope: "step" });
-    assert.deepEqual(step("boudica_factory_upgrade").trigger, { type: "ui", action: "upgrade_structure", scope: "step" });
-    assert.deepEqual(step("boudica_factory_upgrade_wait").trigger, { type: "structure_level", kind: "Factory", value: 2, scope: "total" });
-    assert.equal(step("boudica_factory_upgrade").guide.target, "upgrade_structure");
     assert.deepEqual(step("boudica_bunker_upgrade").trigger, { type: "ui", action: "upgrade_structure", scope: "step" });
     assert.deepEqual(step("boudica_bunker_upgrade_wait").trigger, { type: "structure_level", kind: "Bunker", value: 2, scope: "total" });
     assert.deepEqual(step("boudica_pact_offer").trigger, { type: "contact", target: "catuvellauni", value: 1, scope: "total" });
-    assert.equal(step("boudica_pact_offer").next, "boudica_port_choice");
-    assert.equal(step("boudica_port_upgrade").trigger.type, "ui");
-    assert.equal(step("boudica_port_upgrade_wait").trigger.type, "port_level");
-    assert.equal(step("boudica_port_upgrade_wait").trigger.value, 2);
-    assert.equal(step("boudica_port_upgrade_wait").advance_delay_seconds, 1);
-    assert.equal(step("boudica_port_ready").next, "boudica_fleet_target");
-    assert.equal(step("boudica_fleet_target").trigger.type, "fleet");
-    assert.deepEqual(step("boudica_fleet_target").trigger, { type: "fleet", unit: "TransportShip", target: "legio_xiv_gemina", value: 1, scope: "step" });
-    assert.equal(step("boudica_fleet_target").guide.target, "player");
-    assert.equal(step("boudica_fleet_target").next, "boudica_ship_choice");
-    assert.match(webCatalogEn, /campaign_boudica_boudica_ship_choice_body = "The sea is open/);
-    assert.match(webCatalogEs, /campaign_boudica_boudica_ship_choice_body = "El mar está abierto/);
-    assert.equal(step("boudica_ship_choice").choices.find(choice => choice.id === "march").next, "boudica_final_battle_intro");
-    assert.deepEqual(step("boudica_trade_city").trigger, { type: "ui", action: "upgrade_structure", scope: "step" });
-    assert.deepEqual(step("boudica_trade_city_wait").trigger, { type: "city_level", value: 4, scope: "total" });
-    assert.deepEqual(step("boudica_trade_port").trigger, { type: "ui", action: "upgrade_structure", scope: "step" });
-    assert.deepEqual(step("boudica_trade_port_wait").trigger, { type: "port_level", value: 3, scope: "total" });
-    assert.equal(step("boudica_trade_menu").trigger.action, "map_build");
-    assert.deepEqual(step("boudica_trade_ship").trigger, { type: "fleet", unit: "TradeShip", value: 1, scope: "step" });
-    assert.equal(step("boudica_trade_ship").guide.target, "map_build_trade_ship");
-    assert.equal(step("boudica_trade_ready").next, "boudica_final_battle_intro");
+    assert.equal(step("boudica_pact_offer").next, "boudica_final_battle_intro");
+    assert.equal(step("boudica_pact_choice").choices.find(choice => choice.id === "march").next, "boudica_final_battle_intro");
     assert.equal(step("boudica_final_battle_intro").next, "boudica_final_choice");
     assert.equal(step("boudica_final_battle_intro").presentation, "cinematic");
     assert.equal(step("boudica_final_choice").type, "choice");
@@ -3863,8 +3937,15 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
         ]
     }, roster, { hasText: () => true });
     assert.ok(redTarget.errors.some(issue => issue.field === "campaign_assault_on_enter.target"));
-    assert.match(mapClick, /BuildingKind::Port if building\.level >= 3\s*=>\s*\{\s*actions\.push\(MapMenuAction::BuildTradeShip\);/);
-    assert.match(campaignEngine, /map_build_trade_ship: '#sow-hud \[data-map-action="build_trade_ship"\]'/);
+    assert.doesNotMatch(mapClick, /actions\.push\(MapMenuAction::BuildTradeShip\)/);
+    assert.match(mapClick, /selected_warship_build/);
+    assert.match(campaignEngine, /dock_trade_ship: '#sow-hud \[data-fleet-kind="trade"\]'/);
+    assert.match(webMenu, /trade_required_port_level/);
+    assert.match(webMenu, /warship_required_port_level/);
+    assert.match(webMenu, /nuke_required_city_level/);
+    assert.match(hud, /tradeRequiredPortLevel/);
+    assert.match(hud, /warshipRequiredPortLevel/);
+    assert.match(hud, /nukeRequiredCityLevel/);
     assert.equal(step("boudica_camulodunum").next, "boudica_ninth_legion_intro");
     assert.equal(step("boudica_ninth_legion").next, "boudica_londinium_intro");
     assert.equal(step("boudica_londinium").next, "boudica_verulamium_intro");
@@ -3880,13 +3961,14 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     }
     assert.equal(roster.factions.find(faction => faction.name === "Catuvellauni").iq, 60);
     assert.match(campaignEditor, /world:player/);
+    assert.doesNotMatch(campaignEditor, /foundry_level|tile_upgrade/);
     assert.match(campaignEngine, /upgrade_structure: "#sow-hud-building-card-upgrade"/);
     assert.match(campaignEditorHtml, /id="sow-hud-building-card-upgrade"/);
     assert.match(tutorial, /if \(runtime\.definition\.menu_guide\) pendingMenuGuide = \{ episodeId: runtime\.episodeId \}/);
     const rewardGate = shellSource.indexOf("!rewardPresentationReady || rewardAnimationRunning) return;");
     const guideReadyEvent = shellSource.indexOf('dispatchEvent(new CustomEvent("sow:campaign-menu-guide-ready"))');
     assert.ok(rewardGate >= 0 && guideReadyEvent > rewardGate, "return guide must wait for reward presentation");
-    for (const suffix of ["menu_lobby_hint", "menu_campaign_hint", "menu_replay_hint", "menu_multiplayer_hint", "port_ready_hint", "trade_ship_hint"]) {
+    for (const suffix of ["menu_lobby_hint", "menu_campaign_hint", "menu_replay_hint", "menu_multiplayer_hint"]) {
         const key = "campaign_boudica_boudica_" + suffix;
         assert.ok(webCatalogEn.includes(key + " = "), "English campaign copy is missing " + key);
         assert.ok(webCatalogEs.includes(key + " = "), "existing Spanish campaign copy is missing " + key);
@@ -3898,6 +3980,18 @@ test("Boudica completion points the menu guide hand at an active lobby", () => {
     assert.equal(machine.view().step.id, "boudica_return_end");
     assert.equal(machine.view().step.type, "end");
     assert.equal(machine.view().done, false);
+});
+
+test("mobile overlays never hide the building dock and story dialogs remain above it", () => {
+    const overlayRules = hudCss.match(/#sow-hud\[data-overlay-open="true"\][^{]*\{[^}]*\}/g) || [];
+    assert.ok(overlayRules.length >= 2, "portrait and short-landscape overlay rules remain covered");
+    assert.ok(overlayRules.every(rule => !rule.includes(".sow-hud__dock")),
+        "transient menus and panels cannot hide the persistent building dock");
+    assert.match(hud, /hudRefs\.buildingsStrip\.style\.display = isDeploying \? "none" : "flex"/,
+        "the building strip still hides during deployment and returns afterward");
+    assert.match(hudCss, /\.sow-hud__dock\s*\{[^}]*z-index: 50/s);
+    assert.match(storyCss, /\.sow-story\s*\{[^}]*z-index: 210/s,
+        "blocking story dialogs can cover the dock");
 });
 
 // Owner decision: the return guide in the main menu is the hand only. The
@@ -3933,11 +4027,10 @@ test("tutorial locale and UI guides resolve per episode and point to actual HUD 
     assert.match(tutorial, /tutorial\[guide\.target\]/);
     assert.match(campaignView, /sow-story__gesture/);
     assert.match(campaignView, /sow-story__gesture-label/);
+    assert.match(campaignView, /sow-story__gesture-hint/);
     assert.match(campaignView, /sow-story__zoom-fingers/);
-    assert.match(campaignView, /sow-story__guide-shade/);
-    assert.match(campaignView, /placeGuideShade\(guideVisible && step\.guide\.kind === "ui" \? anchor\.cutout \|\| anchor : null\)/);
-    assert.match(campaignView, /guideShade\.style\.setProperty\("--guide-cutout-x", target\.x \+ "px"\)/);
-    assert.match(campaignView, /guideShade\.style\.setProperty\("--guide-cutout-y", target\.y \+ "px"\)/);
+    assert.doesNotMatch(campaignView + storyCss, /sow-story__guide-shade|guide-cutout|mask-image:\s*radial-gradient/);
+    assert.match(campaignView, /spotlight\.hidden = !guideVisible \|\| !anchor\.width/);
     assert.doesNotMatch(campaignView, /stopGuideShadeInput|guideShade\.addEventListener/);
     assert.match(campaignView, /const modal = \["scene", "choice", "end"\]\.includes\(step\.type\)/);
     assert.match(storyCss, /\.sow-story__gesture-label \{[^}]*text-transform: uppercase/);
@@ -3947,9 +4040,10 @@ test("tutorial locale and UI guides resolve per episode and point to actual HUD 
     assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-left-together/);
     assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-right-together/);
     assert.match(storyCss, /data-gesture="pan_keys"/);
-    assert.match(storyCss, /\.sow-story__guide-shade \{[^}]*pointer-events: none;[^}]*mask-image: radial-gradient/);
-    assert.doesNotMatch(storyCss, /\.sow-story__guide-shade > i/);
     assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : "wheel"/);
+    assert.match(tutorial, /context\.gestureHint = context\.hintOverride/);
+    assert.match(campaignView, /showGestureHint = gestureType === "hover"[\s\S]*context\.gestureHint \|\| context\.hintOverride/);
+    assert.match(storyCss, /\.sow-story__gesture-hint \{[^}]*text-transform: none/);
     assert.match(campaignEngine, /menu_campaign:/);
     assert.match(campaignEngine, /map_attack:/);
     assert.match(tutorial, /addEventListener\("resize", redrawCampaign/);
@@ -4057,7 +4151,7 @@ test("map menu sends the Rust-validated session, tile, and action", () => {
 
 test("building mode upgrades same-kind targets, marks them, and has a cancel control", () => {
     const buildStart = mapClick.indexOf("    fn build_structure_at(");
-    const buildEnd = mapClick.indexOf("    fn city_module_is_available", buildStart);
+    const buildEnd = mapClick.indexOf("    fn add_action_feedback", buildStart);
     const buildBody = mapClick.slice(buildStart, buildEnd);
     assert.ok(buildStart >= 0 && buildEnd > buildStart);
     assert.match(buildBody, /find_stack_target_tile\([\s\S]*?snapshot\.buildings/);
@@ -4065,8 +4159,8 @@ test("building mode upgrades same-kind targets, marks them, and has a cancel con
     assert.match(buildBody, /building\.under_construction[\s\S]*?add_action_feedback\("Building under construction\./);
     assert.match(mapClick, /"Building under construction\. 🏗️" => UiText::new\("hud\.building_in_progress"\)/);
     assert.match(buildBody, /building\.level >= kind\.max_level\(\)[\s\S]*?building_max_level/);
-    assert.match(buildBody, /!self\.structure_upgrade_requirement_met\(&building\)[\s\S]*?building_requires_city_level/);
-    assert.match(buildBody, /return true;\s*\}\s*let Some\(snapshot\)/);
+    assert.doesNotMatch(buildBody, /structure_upgrade_requirement_met/);
+    assert.match(buildBody, /return true;\s*\}\s*let target_res = self\.resolve_building_target/);
     assert.match(frameSource, /nobuild_slots\[slot\]\s*=\s*\[[\s\S]*?0\.0,[\s\S]*?2\.0/);
     assert.match(mapShader, /active_flag > 1\.0 && b_dist == 0[\s\S]*?is_upgrade_target = true/);
     assert.match(mapShader, /overlay_color = vec3<f32>\(1\.0, 0\.72, 0\.16\)/);
@@ -4085,6 +4179,20 @@ test("building mode upgrades same-kind targets, marks them, and has a cancel con
     assert.match(buildingOverlaySource, /!reduced_motion[\s\S]*?celebration_budget >= BUILDING_CELEBRATION_OFFSETS\.len\(\)/);
 });
 
+test("radial building actions use the selected tile and filter invalid placement", () => {
+    const actionsStart = mapClick.indexOf("pub(crate) fn map_menu_actions");
+    const actionsEnd = mapClick.indexOf("pub(crate) fn map_menu_items", actionsStart);
+    const actionsBody = mapClick.slice(actionsStart, actionsEnd);
+    assert.match(actionsBody, /resolve_building_target\(kind, col, row\)/);
+    assert.match(mapClick, /fn resolve_building_target[\s\S]*?building_placement_cache\.resolve/);
+
+    const actionStart = mapClick.indexOf("pub(crate) fn handle_map_menu_action");
+    const actionEnd = mapClick.indexOf("fn map_menu_cost", actionStart);
+    const actionBody = mapClick.slice(actionStart, actionEnd);
+    assert.match(actionBody, /if let Some\(\(col, row\)\) = self\.tile_coords\(tile_idx\) \{\s*self\.build_structure_at\(kind, col, row\);/);
+    assert.doesNotMatch(actionBody, /self\.select_building_kind\(kind\)/);
+});
+
 test("building upgrade uses snapshot gold and keeps the card open for the server result", () => {
     assert.match(simUpdateSource, /pub\(crate\) fn current_player_gold\(&self\)[\s\S]*?player\.gold[\s\S]*?unwrap_or\(self\.ui\.app\.hud_state\.gold\)/);
     assert.match(mapClick, /let gold = self\.current_player_gold\(\);[\s\S]*?if !cost\.is_finite\(\) \|\| gold < cost/);
@@ -4095,20 +4203,21 @@ test("building upgrade uses snapshot gold and keeps the card open for the server
     assert.ok(mapClick.includes("if !keep_building_card_open {"));
 });
 
-test("Factory remains visible with the City level 3 reason until the shared game rule unlocks it", () => {
-    assert.match(coreCost, /pub const fn structure_kind_unlocked\(kind: BuildingKind, city_level: u8\)[\s\S]*?BuildingKind::Factory\) \|\| city_level >= 3/);
-    assert.match(buildingsIntent, /structure_kind_unlocked\(kind, city_level\)/);
-    assert.match(mapClick, /reason_key = kind[\s\S]*?structure_kind_unlocked\(\*kind, city_level\)[\s\S]*?hud\.building_requires_city_level/);
-    assert.match(mapClick, /add_action_feedback\("Requires a level 3 City\."\)/);
+test("building actions use the shared enabled rule without a city-level factory gate", () => {
+    assert.match(coreCost, /pub fn structure_kind_enabled\(_kind: BuildingKind\)/);
+    assert.match(buildingsIntent, /structure_kind_enabled\(kind\)/);
+    assert.doesNotMatch(coreCost, /structure_kind_unlocked/);
+    assert.doesNotMatch(buildingsIntent, /structure_kind_unlocked/);
+    assert.doesNotMatch(mapClick, /structure_kind_unlocked/);
     assert.match(webMenu, /"reason_key": item\.reason_key/);
-    assert.match(webMenu, /"factory_unlocked": factory_build_unlocked\(app\)/);
+    assert.doesNotMatch(webMenu, /factory_unlocked/);
     assert.match(hud, /if \(item\.reason_key\) return SOW_t\(item\.reason_key\)/);
-    assert.match(hud, /var factoryLocked = kind === "Factory" && !buildingRequirements\.factory_unlocked/);
+    assert.doesNotMatch(hud, /factoryLocked/);
     assert.match(hud, /button\.setAttribute\("aria-disabled", String\(disabled\)\)/);
     assert.match(hud, /if \(mapButton\.disabled\) return/);
     assert.doesNotMatch(hud, /mapButton\.disabled \|\| mapButton\.getAttribute\("aria-disabled"\) === "true"/);
     assert.match(hudCss, /\.sow-hud__building-btn\[aria-disabled="true"\]/);
-    assert.match(buildingsIntent, /factory_build_order_is_rejected_until_city_level_three/);
+    assert.match(buildingsIntent, /factory_upgrades_without_a_city_level_requirement/);
 });
 
 test("building upgrade sends the selected card identity instead of the radial menu", () => {
@@ -4176,7 +4285,7 @@ test("building card anchors to the building and shows compact visual stats", () 
         {
             hudRefs,
             window: { innerWidth: 400, innerHeight: 300 },
-            SOW_t: key => key === "hud.building_requires_city_level" ? "Requires a level 3 City." : key,
+            SOW_t: key => key,
             hudIcon: (name) => "<svg data-icon=\"" + name + "\"></svg>",
             buildingIcon: (kind) => "<img data-building=\"" + kind + "\">"
         }
@@ -4253,12 +4362,11 @@ test("building card anchors to the building and shows compact visual stats", () 
         metrics: [{ icon: "gold", label: "Gold income", value: 10, prefix: "+", unit: "/s" }],
         next_level: 2,
         next_metrics: [{ icon: "gold", label: "Gold income", value: 20, prefix: "+", unit: "/s" }],
-        requirements: [{ key: "hud.building_requires_city_level", met: false }],
         cost: 50,
-        can_upgrade: false
+        can_upgrade: true
     }), 200);
-    assert.match(hudRefs.buildingCardNext.innerHTML, /title="Requires a level 3 City\."/);
-    assert.equal(hudRefs.buildingCardUpgrade.disabled, true);
+    assert.doesNotMatch(hudRefs.buildingCardNext.innerHTML, /Requires a level 3 City/);
+    assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
 
     renderBuildingCard(menu({ kind: "Bunker", level: 2 }, "radial"));
     assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
@@ -4352,7 +4460,7 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hud, /mapSector\(radial, fleet, 1, radialCount/);
     assert.match(hud, /mapSector\(radial, alliance, 2, radialCount/);
     assert.match(hud, /dataset\.mapGroup = group/);
-    assert.match(hud, /upgrade_arsenal/);
+    assert.match(hud, /upgrade_structure/);
     assert.match(hud, /build_warship/);
     assert.match(hud, /build_trade_ship/);
     assert.match(hudCss, /\.sow-hud__map-sector--build/);
@@ -4515,7 +4623,7 @@ test("building menus use generated pixel-art sprites with emoji fallback", () =>
     assert.match(windowInput, /fn rebase_single_touch_drag/);
     assert.match(windowInput, /\} else if is_touch \{[\s\S]*?camera_x \+=/);
     assert.doesNotMatch(windowInput, /self\.input\.dragging && !is_touch/);
-    assert.match(mapClick, /MapMenuAction::BuildCity[\s\S]*?self\.select_building_kind\(kind\)/);
+    assert.match(mapClick, /MapMenuAction::BuildCity[\s\S]*?self\.build_structure_at\(kind, col, row\)/);
     assert.doesNotMatch(hud, /cancel_placement/);
 });
 
@@ -4564,9 +4672,46 @@ test("tutorial hand follows the selected campaign target", () => {
     assert.doesNotMatch(hudCss, /sow-hud__tutorial-marker/);
 });
 
+test("Home reveals the city lesson before first Iceni contact", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const step = id => definition.steps.find(candidate => candidate.id === id);
+    assert.equal(step("boudica_camera_home").next, "boudica_city_intro");
+    assert.equal(step("boudica_city_intro").start_delay_seconds, 2);
+    assert.equal(step("boudica_city_ready").next, "boudica_first_contact");
+    assert.equal(step("boudica_first_contact").next, "boudica_second_contact");
+    assert.equal(step("boudica_first_contact").trigger.type, "contact");
+    assert.equal(step("boudica_first_contact").guide.kind, "world");
+    assert.equal(step("boudica_first_contact").guide.target, "target_action");
+
+    const anchorStart = webMenu.indexOf("pub(crate) fn publish_tutorial_camera_anchor_frame");
+    const stateStart = webMenu.indexOf("pub(crate) fn publish_state", anchorStart);
+    const anchorPublisher = webMenu.slice(anchorStart, stateStart);
+    assert.match(anchorPublisher, /nameplates\.anchor_for\(player_id\)/);
+    assert.match(anchorPublisher, /world_to_screen\(/);
+    assert.match(anchorPublisher, /tutorial_screen_anchor\(/);
+    assert.match(anchorPublisher, /SOW_tutorial_camera_anchor_update/);
+    assert.doesNotMatch(anchorPublisher, /LAST_HUD_KEY|LAST_PUBLISHED|publish_state/);
+    assert.match(cameraFrameUiSource, /publish_tutorial_camera_anchor_frame\(self\);\s*crate::web_menu::publish_state\(self\)/);
+
+    const hudKeyStart = webMenu.indexOf("fn hud_publish_key");
+    const hudKeyEnd = webMenu.indexOf("\n#[cfg", hudKeyStart);
+    assert.doesNotMatch(webMenu.slice(hudKeyStart, hudKeyEnd), /camera_[xy]/);
+    assert.match(webMenu, /LAST_HUD_KEY\.with\([\s\S]*?if \*last == Some\(hud_key\)/);
+    assert.match(tutorial, /var targetFactionId = targetStep\.guide[\s\S]*?targetStep\.trigger[\s\S]*?send\("focus_world"/);
+    const anchorFunction = tutorial.slice(tutorial.indexOf("function anchorFor"), tutorial.indexOf("function syncTransferGuide"));
+    assert.match(anchorFunction, /factionAction[\s\S]*?tutorial\.target_nameplate[\s\S]*?cameraTracked: true/);
+    const uiAnchorBranch = anchorFunction.slice(anchorFunction.indexOf("var source = window.SOWCampaign.resolveUiTarget"));
+    assert.doesNotMatch(uiAnchorBranch, /cameraTracked/);
+    assert.match(tutorial, /SOW_tutorial_camera_anchor_update = function \(x, y\)[\s\S]*?runtime\.view\.updateCameraAnchor/);
+    assert.match(campaignView, /cameraTracking = anchor\.cameraTracked === true/);
+    assert.match(campaignView, /function updateCameraAnchor\(x, y\)[\s\S]*?if \(!cameraTracking \|\| root\.hidden/);
+    assert.match(campaignView, /const guideVisible = !modal[\s\S]*?gesture\.hidden = !guideVisible/);
+    assert.match(storyCss, /\.sow-story__gesture\.is-camera-following \{ transition: none; \}/);
+});
+
 test("terms dialog smoothly focuses the requesting entity without changing zoom", () => {
     assert.match(actionsSource, /UiAction::CenterCamera[\s\S]*?camera_focus_target = Some\(\(world_cx, world_cy\)\);[\s\S]*?target_zoom = 10\.0/);
-    assert.match(webMenu, /WebMenuCommand::FocusWorld \{ x, y \}[\s\S]*?target_zoom = self\.input\.camera_zoom;\s*self\.input\.camera_focus_target = Some\(\(x, y\)\);\s*self\.input\.tutorial_camera_focus = true/);
+    assert.match(webMenu, /WebMenuCommand::FocusWorld \{ x, y \}[\s\S]*?let tutorial_focus = self\.ui\.tutorial_active && self\.net\.is_offline;[\s\S]*?target_zoom = self\.input\.camera_zoom;\s*self\.input\.camera_focus_target = Some\(\(x, y\)\);\s*self\.input\.tutorial_camera_focus = tutorial_focus/);
     assert.match(cameraFrameUiSource, /self\.input\.camera_x \+= \(target_x - self\.input\.camera_x\) \* lerp;[\s\S]*?self\.input\.camera_y \+= \(target_y - self\.input\.camera_y\) \* lerp/);
     assert.match(webMenu, /WebMenuCommand::SetDialogBorderHighlight \{ player_id \} => \{[\s\S]*?dialog_border_highlight = player_id/);
     assert.match(tutorial, /send\("set_dialog_border_highlight", \{ player_id: highlightId \}\)/);
@@ -4593,8 +4738,8 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
         getBoundingClientRect: () => rect(100, 50, 200, 100),
         querySelector: (selector) => selector === ".sow-hud__map-action-title" ? icon : null
     };
-    assert.deepEqual(campaign.resolveUiAnchor(radial), { x: 250, y: 75, width: 24, height: 28, cutout: { x: 200, y: 100, width: 200, height: 100 } });
-    assert.deepEqual(campaign.resolveUiAnchor({ getBoundingClientRect: () => rect(10, 20, 40, 60) }), { x: 30, y: 50, width: 40, height: 60, cutout: { x: 30, y: 50, width: 40, height: 60 } });
+    assert.deepEqual(campaign.resolveUiAnchor(radial), { x: 250, y: 75, width: 24, height: 28 });
+    assert.deepEqual(campaign.resolveUiAnchor({ getBoundingClientRect: () => rect(10, 20, 40, 60) }), { x: 30, y: 50, width: 40, height: 60 });
 });
 
 test("tutorial hand keeps bouncing over the Roman target and moving expansion edge", () => {

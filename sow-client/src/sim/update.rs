@@ -396,6 +396,27 @@ impl SowApp {
                         player.leader,
                         &self.sim.config,
                     ) * self.sim.config.global_speed_multiplier;
+                let trade_ships = e
+                    .fleets
+                    .iter()
+                    .filter(|fleet| {
+                        fleet.owner_id == my_pid
+                            && fleet.unit_type == sow_core::game::UnitType::TradeShip
+                    })
+                    .count() as u32;
+                self.ui.app.hud_state.gold_rate =
+                    sow_core::execution::income_rates::gold_net_income_per_second(
+                        player.troops,
+                        agg,
+                        trade_ships,
+                        e.state
+                            .player(my_pid)
+                            .is_some_and(|state_player| {
+                                state_player.player_type == sow_core::player::PlayerType::Human
+                                    && !state_player.is_ai_controlled
+                            }),
+                        &self.sim.config,
+                    ) * self.sim.config.global_speed_multiplier;
             }
         }
     }

@@ -218,13 +218,6 @@ impl SowApp {
                         &self.sim.fog_visible,
                         force_fog_upload,
                     );
-                    for dt in dirty {
-                        if dt.upgrade_level == 0 {
-                            self.sim.tile_upgrades.remove(&dt.index);
-                        } else {
-                            self.sim.tile_upgrades.insert(dt.index, dt.upgrade_level);
-                        }
-                    }
                     if let Some(snap) = &mut self.sim.current_snapshot {
                         snap.dirty_tiles.clear();
                     }

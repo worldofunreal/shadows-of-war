@@ -888,6 +888,8 @@ impl serde::Serialize for S16TraceConfig<'_> {
         S: serde::Serializer,
     {
         let config = self.0;
+        let zero_f64 = 0.0;
+        let zero_u32 = 0;
         // Keep the original S16 schema; later map/campaign options are absent
         // from this fixed lab setup.
         (
@@ -921,14 +923,14 @@ impl serde::Serialize for S16TraceConfig<'_> {
                 &config.troop_base_income,
                 &config.max_troops_base,
                 &config.max_troops_scale,
-                &config.territory_gold_amount,
-                &config.territory_gold_tiles,
+                &zero_f64,
+                &zero_u32,
                 &config.territory_troop_amount,
                 &config.territory_troop_tiles,
                 &config.city_max_troops,
             ),
             (
-                &config.city_gold_income,
+                &zero_f64,
                 &config.city_troop_income,
                 &config.farm_troop_income,
                 &config.bunker_range,
@@ -936,7 +938,7 @@ impl serde::Serialize for S16TraceConfig<'_> {
                 &config.bunker_strength,
                 &config.factory_gold_income,
                 &config.port_troop_income,
-                &config.port_gold_income,
+                &zero_f64,
                 &config.cost_city,
                 &config.cost_bunker,
                 &config.cost_factory,
@@ -972,19 +974,11 @@ impl serde::Serialize for S16TraceMap<'_> {
         use serde::ser::SerializeStruct;
 
         let map = self.0;
-        let mut tile_upgrades = vec![0; (map.width * map.height) as usize];
-        for (&tile, &level) in &map.tile_upgrades {
-            if let Some(slot) = tile_upgrades.get_mut(tile as usize) {
-                *slot = level;
-            }
-        }
-
-        let mut trace = serializer.serialize_struct("GameMap", 5)?;
+        let mut trace = serializer.serialize_struct("GameMap", 4)?;
         trace.serialize_field("width", &map.width)?;
         trace.serialize_field("height", &map.height)?;
         trace.serialize_field("terrain", &map.terrain)?;
         trace.serialize_field("state", &map.owner_states())?;
-        trace.serialize_field("tile_upgrades", &tile_upgrades)?;
         trace.end()
     }
 }
@@ -1129,13 +1123,35 @@ fn s16_engine_state_bytes(engine: &SowEngine) -> Vec<u8> {
         .collect();
     recent_nuke_counts.sort_unstable();
 
+    // Preserve the deterministic trace's historical bytes after removing the
+    // unused six-level CityModules field from Building.
+    let trace_buildings: Vec<_> = engine
+        .buildings
+        .iter()
+        .map(|building| (
+            building.id,
+            building.owner_id,
+            building.tile_idx,
+            building.kind,
+            building.level,
+            building.under_construction,
+            building.ticks_until_complete,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+        ))
+        .collect();
+
     bincode::serialize(&(
         S16TraceGameState(&state),
         alliance_timers,
         player_rngs,
         attacks,
         fleets,
-        &engine.buildings,
+        trace_buildings,
         &engine.projectiles,
         alliance_proposals,
         alliance_cooldowns,
@@ -2480,12 +2496,14 @@ fn s16_checkpoint_decision_and_state_reference() {
         checkpoints.push((ticks, hash));
     }
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x1778_3d15_66f5_8142),
-        (500, 0xe322_2230_ed90_3cdd),
-        (750, 0xf8a2_8657_5af0_a900),
-        (1000, 0xf23c_10c4_297a_f734),
-        (1250, 0xcd7b_bfd3_6145_d535),
-        (1404, 0x44fc_8d9b_6bd9_cee5),
+        (250, 0xae78_ae7a_f39d_8ccd),
+        (500, 0x4f7e_d295_77fd_b008),
+        (750, 0x971d_937c_78da_1c30),
+        (1000, 0x3bfe_6594_bd70_aa71),
+        (1250, 0x1af1_53e6_9ae7_7be7),
+        (1500, 0xa0d7_2d61_25b0_55a5),
+        (1750, 0xbe70_7de9_44c2_174b),
+        (1935, 0xaa4e_2e7f_a250_7cae),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

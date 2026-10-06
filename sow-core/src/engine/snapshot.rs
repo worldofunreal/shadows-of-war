@@ -10,11 +10,6 @@ impl SowEngine {
                 .map(|i| crate::protocol::DirtyTile {
                     index: i as u32,
                     new_owner: map.owner_states()[i],
-                    upgrade_level: map
-                        .tile_upgrades
-                        .get(&(i as u32))
-                        .copied()
-                        .unwrap_or_default(),
                 })
                 .collect()
         };
@@ -24,7 +19,7 @@ impl SowEngine {
         let proposed_resources = &self.resource_requests_proposed;
         let mut boats_in_use = std::collections::HashMap::<u16, u32>::new();
         for fleet in &self.fleets {
-            if fleet.troops > 0.0 {
+            if fleet.troops > 0.0 && fleet.unit_type.uses_military_capacity() {
                 *boats_in_use.entry(fleet.owner_id).or_default() += 1;
             }
         }
@@ -34,7 +29,11 @@ impl SowEngine {
             .filter(|building| building.kind == crate::game::BuildingKind::Port)
         {
             if let Some(queue) = self.port_queues.get(&building.id) {
-                *boats_in_use.entry(building.owner_id).or_default() += queue.len() as u32;
+                *boats_in_use.entry(building.owner_id).or_default() += queue
+                    .iter()
+                    .filter(|production| production.kind.uses_military_capacity())
+                    .count()
+                    as u32;
             }
         }
         let players = self
@@ -104,6 +103,27 @@ impl SowEngine {
                     assists: p.assists,
                     boats_in_use: boats_in_use.get(&p.id).copied().unwrap_or_default(),
                     boat_capacity: crate::building::player_fleet_capacity(&self.buildings, p.id),
+                    nuke_available: p.alive
+                        && p.gold >= self.state.config.nuke_cost
+                        && self.buildings.iter().any(|building| {
+                            building.owner_id == p.id
+                                && building.kind == crate::game::BuildingKind::City
+                                && building.active_level()
+                                    >= crate::game::NukeKind::AtomBomb.required_city_level()
+                                && self.silo_cooldowns.get(&building.id).copied().unwrap_or(0) == 0
+                        }),
+                    nuke_cooldown_ticks: self
+                        .buildings
+                        .iter()
+                        .filter(|building| {
+                            building.owner_id == p.id
+                                && building.kind == crate::game::BuildingKind::City
+                                && building.active_level()
+                                    >= crate::game::NukeKind::AtomBomb.required_city_level()
+                        })
+                        .map(|building| self.silo_cooldowns.get(&building.id).copied().unwrap_or(0))
+                        .min()
+                        .unwrap_or(0),
                 }
             })
             .collect();
@@ -178,7 +198,6 @@ impl SowEngine {
                 level: b.level,
                 under_construction: b.under_construction,
                 ticks_until_complete: b.ticks_until_complete,
-                modules: b.modules,
             })
             .collect();
 

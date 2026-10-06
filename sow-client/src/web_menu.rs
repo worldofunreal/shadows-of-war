@@ -7,7 +7,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use serde::Deserialize;
 use wasm_bindgen::JsCast;
@@ -160,6 +160,8 @@ enum WebMenuCommand {
     SelectBuilding {
         kind: sow_core::game::BuildingKind,
     },
+    SelectWarship,
+    SelectNuke,
     ToggleInbox,
     AcceptAlliance {
         target_player_id: u16,
@@ -194,6 +196,9 @@ enum WebMenuCommand {
     },
     RecallFleet {
         fleet_id: u64,
+    },
+    CounterAttack {
+        target_player_id: u16,
     },
     Surrender,
     ToggleLeaderboard,
@@ -275,6 +280,8 @@ thread_local! {
     /// Cheap fingerprint for the small, hot in-match HUD payload. Heavy cold panels are
     /// represented by the snapshot tick only while a panel that needs them is open.
     static LAST_HUD_KEY: RefCell<Option<HudPublishKey>> = const { RefCell::new(None) };
+    static LAST_TUTORIAL_CAMERA_ANCHOR: RefCell<Option<(u16, u32, u32)>> =
+        const { RefCell::new(None) };
     /// Player-derived hot values are cached by snapshot tick so the player list is not scanned
     /// on every publish attempt.
     static LAST_MY_PLAYER: RefCell<Option<(u64, u16, Option<MyPlayerSummary>)>> =
@@ -300,11 +307,13 @@ struct HudPublishKey {
     troops: u64,
     max_troops: u64,
     troop_rate: u64,
+    gold_rate: u64,
     attack_ratio: u32,
     spawn_timer_tenths: i32,
     selected_building: u8,
+    selected_warship_build: bool,
+    selected_nuke: u8,
     building_costs: [u64; 9],
-    factory_unlocked: bool,
     settings_mute: bool,
     settings_music_volume: u32,
     settings_reduced_motion: bool,
@@ -333,31 +342,13 @@ struct HudPublishKey {
     camera_zoom_ceiling_hundredths: i32,
     tutorial_camera_zoom_hundredths: i32,
     tutorial_target_zoom_hundredths: i32,
+    tutorial_marker_player_id: Option<u16>,
     tutorial_pointer: Option<(u64, u64)>,
     hovered_tile: u32,
     hovered_owner: u16,
     map_menu_view: Option<MapContextMenuView>,
     map_menu_session: u64,
     map_menu_tile: u32,
-}
-
-fn factory_build_unlocked(app: &SowApp) -> bool {
-    if !app.sim.config.tutorial {
-        return true;
-    }
-    let owner = app.sim.my_player_id.unwrap_or(app.ui.app.hud_state.my_player_id);
-    let city_level = app.sim.current_snapshot.as_ref().map(|snapshot| {
-        snapshot.buildings.iter()
-            .filter(|building| building.owner_id == owner
-                && building.kind == sow_core::game::BuildingKind::City)
-            .map(|building| building.active_level())
-            .max()
-            .unwrap_or_default()
-    }).unwrap_or_default();
-    sow_core::building::structure_kind_unlocked(
-        sow_core::game::BuildingKind::Factory,
-        city_level,
-    )
 }
 
 #[derive(Clone, Copy)]
@@ -373,6 +364,10 @@ struct MyPlayerSummary {
     deaths: u32,
     assists: u32,
     inbox_count: usize,
+    nuke_available: bool,
+    nuke_cooldown_ticks: u32,
+    boats_in_use: u32,
+    boat_capacity: u32,
 }
 
 fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<MyPlayerSummary> {
@@ -400,6 +395,10 @@ fn my_player_summary(app: &SowApp, snapshot_tick: u64, my_pid: u16) -> Option<My
                 deaths: player.deaths,
                 assists: player.assists,
                 inbox_count: player.alliance_requests.len() + player.resource_requests.len(),
+                nuke_available: player.nuke_available,
+                nuke_cooldown_ticks: player.nuke_cooldown_ticks,
+                boats_in_use: player.boats_in_use,
+                boat_capacity: player.boat_capacity,
             });
         *cache = Some((snapshot_tick, my_pid, summary));
         summary
@@ -857,6 +856,16 @@ impl SowApp {
                         self.select_building_kind(kind);
                     }
                 }
+                WebMenuCommand::SelectWarship => {
+                    if !self.ui.tutorial_camera_only {
+                        self.select_warship_build_mode();
+                    }
+                }
+                WebMenuCommand::SelectNuke => {
+                    if !self.ui.tutorial_camera_only {
+                        self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
+                    }
+                }
                 WebMenuCommand::ToggleInbox => {
                     self.ui.app.hud_state.show_alliance_inbox =
                         !self.ui.app.hud_state.show_alliance_inbox;
@@ -945,6 +954,53 @@ impl SowApp {
                 }
                 WebMenuCommand::RecallFleet { fleet_id } => {
                     self.send_intent(sow_core::protocol::GameplayIntent::RecallFleet { fleet_id });
+                }
+                WebMenuCommand::CounterAttack { target_player_id } => {
+                    let counter_attack = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                        let my_player_id = self.sim.my_player_id?;
+                        if target_player_id == 0 || target_player_id == my_player_id {
+                            return None;
+                        }
+                        let me = snapshot.players.iter().find(|player| player.id == my_player_id)?;
+                        let target = snapshot
+                            .players
+                            .iter()
+                            .find(|player| player.id == target_player_id)?;
+                        if me.team.is_some() && me.team == target.team {
+                            return None;
+                        }
+                        let incoming_troops = incoming_combat_troops(
+                            snapshot,
+                            self.sim.engine.as_ref(),
+                            target_player_id,
+                            my_player_id,
+                        );
+                        if !incoming_troops.is_finite() || incoming_troops <= 0.0 {
+                            return None;
+                        }
+                        let troops = selected_counterattack_troops(
+                            me.troops,
+                            self.ui.app.hud_state.attack_ratio,
+                            self.sim.config.attack_cost_neutral,
+                        )?;
+                        Some((
+                            sow_core::protocol::GameplayIntent::Attack(
+                                sow_core::protocol::AttackIntent {
+                                    target_owner: target_player_id,
+                                    troops: Some(troops),
+                                },
+                            ),
+                            me.alliances.contains(&target_player_id),
+                        ))
+                    });
+                    if let Some((intent, allied)) = counter_attack {
+                        if allied {
+                            self.ui.app.hud_state.show_betrayal_warning =
+                                Some((target_player_id, intent));
+                        } else {
+                            self.send_intent(intent);
+                        }
+                    }
                 }
                 WebMenuCommand::Surrender => {
                     self.send_intent(sow_core::protocol::GameplayIntent::Resign);
@@ -1141,17 +1197,20 @@ impl SowApp {
                     }
                 }
                 WebMenuCommand::FocusWorld { x, y } => {
-                    if self.ui.tutorial_active
-                        && self.net.is_offline
-                        && x.is_finite()
+                    if x.is_finite()
                         && y.is_finite()
+                        && x >= 0.0
+                        && y >= 0.0
+                        && x < self.sim.map_w as f32
+                        && y < self.sim.map_h as f32
                     {
+                        let tutorial_focus = self.ui.tutorial_active && self.net.is_offline;
                         self.input.has_snapped_camera_to_spawn = true;
                         self.input.target_zoom = self.input.camera_zoom;
                         self.input.camera_focus_target = Some((x, y));
-                        self.input.tutorial_camera_focus = true;
-                        self.input.camera_focus_waiting_for_input_release =
-                            self.input.is_pointer_gesture_active();
+                        self.input.tutorial_camera_focus = tutorial_focus;
+                        self.input.camera_focus_waiting_for_input_release = tutorial_focus
+                            && self.input.is_pointer_gesture_active();
                     }
                 }
             }
@@ -1226,6 +1285,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         troops: hud.troops.to_bits(),
         max_troops: hud.max_troops.to_bits(),
         troop_rate: hud.troop_rate.to_bits(),
+        gold_rate: hud.gold_rate.to_bits(),
         attack_ratio: hud.attack_ratio.to_bits(),
         spawn_timer_tenths: hud
             .spawn_timer_secs
@@ -1235,8 +1295,12 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .selected_building_kind
             .map(|kind| kind as u8)
             .unwrap_or(u8::MAX),
+        selected_warship_build: hud.selected_warship_build,
+        selected_nuke: hud
+            .selected_nuke_kind
+            .map(|kind| kind as u8)
+            .unwrap_or(u8::MAX),
         building_costs: std::array::from_fn(|index| hud.building_costs[index].to_bits()),
-        factory_unlocked: factory_build_unlocked(app),
         settings_mute: app.ui.app.settings_state.mute_all,
         settings_music_volume: app.ui.app.settings_state.music_volume.to_bits(),
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
@@ -1277,6 +1341,11 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             (app.input.target_zoom * 100.0).round() as i32
         } else {
             0
+        },
+        tutorial_marker_player_id: if tutorial_active {
+            app.ui.tutorial_marker_player_id
+        } else {
+            None
         },
         tutorial_pointer: if tutorial_active {
             Some((app.input.last_mouse_x.to_bits(), app.input.last_mouse_y.to_bits()))
@@ -1590,6 +1659,20 @@ fn tutorial_screen_anchor(point: [f32; 2], width: f32, height: f32) -> Option<([
     ))
 }
 
+fn tutorial_build_site_candidate_better(
+    candidate: (bool, f32, u32),
+    best: Option<(bool, f32, u32)>,
+) -> bool {
+    best.is_none_or(|best| {
+        candidate
+            .0
+            .cmp(&best.0)
+            .then_with(|| candidate.1.total_cmp(&best.1))
+            .then_with(|| best.2.cmp(&candidate.2))
+            == Ordering::Greater
+    })
+}
+
 fn tutorial_project_tile(
     tile: Option<u32>,
     map_w: u32,
@@ -1672,7 +1755,8 @@ fn tutorial_building_anchors(
 /// `expand` is neutral land touching the player's border (where to tap to grow);
 /// `assault` is attackable land touching the player's border;
 /// `target_action` is legal land toward a named faction: neutral land to approach allies,
-/// or neutral/enemy land to approach or attack an enemy.
+/// or neutral/enemy land to approach or attack an enemy; `build_site` prefers visible,
+/// buildable border land farthest from the player's nameplate.
 fn tutorial_guide_tiles(
     app: &mut SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
@@ -1801,9 +1885,9 @@ fn tutorial_guide_tiles(
         &app.input,
         sf,
     );
-    let mut build_site = None;
-    let mut build_site_distance = 0.0_f32;
+    let mut build_site_best = None;
     let radius = 48_i32.min(map_w.min(map_h) as i32);
+    let map_area = map_w.checked_mul(map_h).unwrap_or(0);
     let occupied_tiles = snapshot
         .buildings
         .iter()
@@ -1821,25 +1905,21 @@ fn tutorial_guide_tiles(
             })
         })
         .collect::<HashSet<_>>();
-    for dy in (-radius..=radius).step_by(3) {
-        for dx in (-radius..=radius).step_by(3) {
-            let (col, row) = (cx + dx, cy + dy);
-            if dx * dx + dy * dy > radius * radius
-                || col < 0
-                || row < 0
-                || col >= map_w as i32
-                || row >= map_h as i32
-            {
-                continue;
+    {
+        let mut consider_build_site = |idx: u32, is_border: bool| {
+            if idx >= map_area {
+                return;
             }
-            let idx = row as u32 * map_w + col as u32;
+            let (col, row) = ((idx % map_w) as i32, (idx / map_w) as i32);
+            let (dx, dy) = (col - cx, row - cy);
             let terrain_byte = terrain.get(idx as usize).copied().unwrap_or(0);
-            if owners.get(idx as usize).copied() != Some(my_pid)
+            if dx * dx + dy * dy > radius * radius
+                || owners.get(idx as usize).copied() != Some(my_pid)
                 || terrain_byte & 0x80 == 0
                 || terrain_byte & 0x1f >= 10
                 || occupied_tiles.contains(&idx)
             {
-                continue;
+                return;
             }
             let screen = crate::render::world::overlays::world_to_screen(
                 col as f32 + 0.5,
@@ -1848,16 +1928,42 @@ fn tutorial_guide_tiles(
                 sf,
             );
             if !tutorial_screen_point_visible(screen, viewport_w, viewport_h) {
-                continue;
+                return;
             }
             let distance = (screen[0] - nameplate_screen[0]).powi(2)
                 + (screen[1] - nameplate_screen[1]).powi(2);
-            if distance > build_site_distance {
-                build_site = Some(idx);
-                build_site_distance = distance;
+            let candidate = (is_border, distance, idx);
+            if distance.is_finite()
+                && tutorial_build_site_candidate_better(candidate, build_site_best)
+            {
+                build_site_best = Some(candidate);
+            }
+        };
+        if let Some(border_tiles) = border_tiles {
+            for idx in border_tiles.ones() {
+                consider_build_site(idx, true);
+            }
+        }
+        for dy in (-radius..=radius).step_by(3) {
+            for dx in (-radius..=radius).step_by(3) {
+                let (col, row) = (cx + dx, cy + dy);
+                if dx * dx + dy * dy > radius * radius
+                    || col < 0
+                    || row < 0
+                    || col >= map_w as i32
+                    || row >= map_h as i32
+                {
+                    continue;
+                }
+                let idx = row as u32 * map_w + col as u32;
+                if border_tiles.is_some_and(|tiles| tiles.contains(idx)) {
+                    continue;
+                }
+                consider_build_site(idx, false);
             }
         }
     }
+    let build_site = build_site_best.map(|(_, _, tile)| tile);
     observation.guide_build_site = build_site;
     (expand, assault, target_action, build_site)
 }
@@ -1912,6 +2018,21 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "y": app.input.last_mouse_y / f64::from(sf),
         })),
         _ => None,
+    };
+    let tutorial_target_hovered = match app.input.hover_pointer {
+        HoverPointer::Mouse => app.ui.nameplates.tutorial_target_contains(
+            marker_player_id,
+            app.input.last_mouse_x,
+            app.input.last_mouse_y,
+        ),
+        HoverPointer::Touch if app.input.active_touches.len() == 1 => {
+            app.ui.nameplates.tutorial_target_contains(
+                marker_player_id,
+                app.input.last_mouse_x,
+                app.input.last_mouse_y,
+            )
+        }
+        _ => false,
     };
     let camera_center = if app.input.camera_zoom > 0.0 {
         Some((
@@ -2068,6 +2189,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         },
         "pointer": hover_pointer,
         "facts": {
+            "tutorial_target_hovered": tutorial_target_hovered,
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
             "zoom_in_events": app.input.tutorial_zoom_in_events,
@@ -2105,10 +2227,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "structure_levels": observation.structure_levels,
             "city_upgrades": observation.city_upgrades,
             "city_levels": observation.city_levels,
-            "foundry_level": observation.foundry_level,
             "port_upgrades": observation.port_upgrades,
             "port_levels": observation.port_levels,
-            "tile_upgrades": observation.tile_upgrades,
             "resource_transfers": observation.resource_transfers,
             "resource_transfers_by_recipient_faction_id": resource_transfers_by_recipient_faction_id,
             "alliances_formed": observation.alliances_formed,
@@ -2367,45 +2487,16 @@ fn building_benefit_label(
 ) -> String {
     use sow_core::game::BuildingKind as Kind;
     match kind {
-        Kind::City => {
-            let slots = sow_core::building::farm_slots_for_city_level(level);
-            let milestone = match level {
-                3 => " Factories unlocked.",
-                4 => " Trade ships unlocked with a Harbor.",
-                5 => " Warships unlocked with a Port.",
-                6 => " Can launch nuclear bombs.",
-                _ => "",
-            };
-            format!(
-                "This site adds +{:.0} troop capacity, +{:.2} troops/s, +{:.2} gold/s, and holds {} farm plots.{}",
-                config.city_max_troops * f64::from(level),
-                config.city_troop_income * f64::from(level),
-                config.city_gold_income * f64::from(level),
-                slots,
-                milestone,
-            )
-        }
-        Kind::Port => format!(
-            "At level {level}, this Port adds {level} boat slots, +{level}% speed, +{troops:.2} troops/s, and +{gold:.2} gold/s. Total boat speed stops at 30%.",
-            troops = config.port_troop_income * f64::from(level),
-            gold = config.port_gold_income * f64::from(level),
+        Kind::City => format!(
+            "Adds +{:.0} troop capacity and +{:.2} troops/s{}.",
+            config.city_max_troops * f64::from(level),
+            config.city_troop_income * f64::from(level),
+            if level == Kind::City.max_level() { "; unlocks nuclear attacks" } else { "" },
         ),
-        Kind::Factory => {
-            let income = config.factory_gold_income * f64::from(level);
-            match level {
-                0 => "No Factory benefit until construction is complete.".to_string(),
-                1 => format!("Produces +{income:.2} gold/s."),
-                2 => format!(
-                    "Produces +{income:.2} gold/s. Each Manufactory shortens construction by 5% (25% max)."
-                ),
-                3 => format!(
-                    "Produces +{income:.2} gold/s. Manufactory speeds work; each Factory lowers other upgrade prices by 5% (25% max)."
-                ),
-                _ => format!(
-                    "Produces +{income:.2} gold/s. Also speeds work, lowers other upgrade prices, and adds 5% Trade Ship income (25% max)."
-                ),
-            }
-        }
+        Kind::Port => format!(
+            "Adds {level} boat slots and +{level}% boat speed.",
+        ),
+        Kind::Factory => format!("Produces +{:.2} gold/s.", config.factory_gold_income * f64::from(level)),
         Kind::Bunker => {
             let range = (config.bunker_range.round() as u32
                 + u32::from(level.saturating_sub(1)) * 2)
@@ -2448,7 +2539,7 @@ fn building_metrics(
         return Vec::new();
     }
     let level = f64::from(level);
-    let mut metrics = match kind {
+    let metrics = match kind {
         Kind::City => vec![
             building_metric(
                 "troops",
@@ -2464,70 +2555,18 @@ fn building_metrics(
                 "+",
                 "/s",
             ),
-            building_metric(
-                "gold",
-                "Gold income",
-                config.city_gold_income * level,
-                "+",
-                "/s",
-            ),
-            building_metric(
-                "farm",
-                "Farm plots",
-                f64::from(sow_core::building::farm_slots_for_city_level(level as u8)),
-                "",
-                "",
-            ),
         ],
         Kind::Port => vec![
             building_metric("port", "Boat slots", level, "+", ""),
             building_metric("speed", "Boat speed", level, "+", "%"),
-            building_metric(
-                "troops",
-                "Troop income",
-                config.port_troop_income * level,
-                "+",
-                "/s",
-            ),
-            building_metric(
-                "gold",
-                "Gold income",
-                config.port_gold_income * level,
-                "+",
-                "/s",
-            ),
         ],
-        Kind::Factory => {
-            let mut stats = vec![building_metric(
+        Kind::Factory => vec![building_metric(
                 "gold",
                 "Gold income",
                 config.factory_gold_income * level,
                 "+",
                 "/s",
-            )];
-            if level >= 2.0 {
-                stats.push(building_metric(
-                    "speed",
-                    "Construction speed",
-                    5.0,
-                    "+",
-                    "%",
-                ));
-            }
-            if level >= 3.0 {
-                stats.push(building_metric("discount", "Upgrade cost", 5.0, "−", "%"));
-            }
-            if level >= 4.0 {
-                stats.push(building_metric(
-                    "trade_ship",
-                    "Trade ship income",
-                    5.0,
-                    "+",
-                    "%",
-                ));
-            }
-            stats
-        }
+            )],
         Kind::Bunker => {
             let range = (config.bunker_range.round() as u32 + (level as u32 - 1) * 2).min(20);
             let mut stats = vec![
@@ -2551,18 +2590,6 @@ fn building_metrics(
             "/s",
         )],
     };
-    if kind == Kind::City {
-        let unlock = match level as u8 {
-            3 => Some(("factory", "Factories unlocked")),
-            4 => Some(("trade_ship", "Trade ships unlocked")),
-            5 => Some(("warship", "Warships unlocked")),
-            6 => Some(("nuke", "Nuclear bombs unlocked")),
-            _ => None,
-        };
-        if let Some((icon, label)) = unlock {
-            metrics.push(serde_json::json!({ "icon": icon, "label": label, "value": "✓" }));
-        }
-    }
     metrics
 }
 
@@ -2578,19 +2605,6 @@ fn building_detail_payload(
         .unwrap_or(app.ui.app.hud_state.my_player_id);
     let owns = building.owner_id == my_id;
     let snapshot = app.sim.current_snapshot.as_ref();
-    let factory_time_levels = snapshot
-        .map(|snapshot| {
-            snapshot
-                .buildings
-                .iter()
-                .filter(|candidate| {
-                    candidate.owner_id == my_id
-                        && candidate.kind == sow_core::game::BuildingKind::Factory
-                        && candidate.active_level() >= 2
-                })
-                .count() as u32
-        })
-        .unwrap_or_default();
     let cost = app
         .map_menu_cost(
             crate::input::map_click::MapMenuAction::UpgradeStructure,
@@ -2600,16 +2614,9 @@ fn building_detail_payload(
         .unwrap_or_default();
     let has_gold = app.current_player_gold() >= cost;
     let maxed = next_level > building.kind.max_level();
-    let factory_requirement = app.structure_upgrade_requirement_met(building);
-    let requirements = if building.kind == sow_core::game::BuildingKind::Factory {
-        serde_json::json!([{ "key": "hud.building_requires_city_level", "met": factory_requirement }])
-    } else {
-        serde_json::json!([])
-    };
     let duration_ticks = sow_core::building::structure_upgrade_duration_ticks(
         building.kind,
         next_level,
-        factory_time_levels,
     );
     let boat_slots = snapshot.and_then(|snapshot| {
         snapshot
@@ -2655,9 +2662,174 @@ fn building_detail_payload(
         "under_construction": building.under_construction,
         "boat_slots": (building.kind == sow_core::game::BuildingKind::Port).then_some(boat_slots).flatten(),
         "owns": owns,
-        "can_upgrade": owns && !building.under_construction && !maxed && factory_requirement && has_gold,
-        "requirements": requirements
+        "can_upgrade": owns && !building.under_construction && !maxed && has_gold
     })
+}
+
+fn selected_counterattack_troops(
+    available_troops: f64,
+    ratio: f32,
+    minimum_troops: f64,
+) -> Option<f64> {
+    if !ratio.is_finite() || !available_troops.is_finite() {
+        return None;
+    }
+    let troops = available_troops.max(0.0) * f64::from(ratio.clamp(0.05, 1.0));
+    (troops.is_finite() && troops >= minimum_troops).then_some(troops)
+}
+
+fn incoming_combat_troops(
+    snapshot: &sow_core::protocol::SimSnapshot,
+    engine: Option<&sow_core::engine::SowEngine>,
+    attacker_id: u16,
+    target_id: u16,
+) -> f64 {
+    let local_fleets: HashMap<_, _> = engine
+        .into_iter()
+        .flat_map(|engine| engine.fleets.iter())
+        .map(|fleet| (fleet.id, fleet))
+        .collect();
+    let attack_troops = snapshot
+        .attacks
+        .iter()
+        .filter(|attack| {
+            attack.owner_id == attacker_id
+                && attack.target_owner == target_id
+                && !attack.retreating
+        })
+        .map(|attack| attack.troops.max(0.0))
+        .sum::<f64>();
+    let transport_troops = snapshot
+        .fleets
+        .iter()
+        .filter(|fleet| {
+            fleet.owner_id == attacker_id
+                && fleet.unit_type == sow_core::game::UnitType::TransportShip
+                && !fleet.retreating
+                && local_fleets
+                    .get(&fleet.id)
+                    .is_some_and(|fleet| fleet.target_owner == target_id)
+        })
+        .map(|fleet| fleet.troops.max(0.0))
+        .sum::<f64>();
+    attack_troops + transport_troops
+}
+
+fn build_combat_operations_payload(
+    snapshot: &sow_core::protocol::SimSnapshot,
+    my_player_id: u16,
+    engine: Option<&sow_core::engine::SowEngine>,
+    map_width: u32,
+) -> Vec<serde_json::Value> {
+    let players: HashMap<_, _> = snapshot.players.iter().map(|player| (player.id, player)).collect();
+    let local_attacks: HashMap<_, _> = engine
+        .into_iter()
+        .flat_map(|engine| engine.attacks.iter())
+        .map(|attack| (attack.id, attack))
+        .collect();
+    let local_fleets: HashMap<_, _> = engine
+        .into_iter()
+        .flat_map(|engine| engine.fleets.iter())
+        .map(|fleet| (fleet.id, fleet))
+        .collect();
+    let player_identity = |player_id: u16| {
+        players.get(&player_id).map(|player| {
+            let avatar = match sow_core::player::avatar_identity_ref(player) {
+                sow_core::player::AvatarIdentityRef::Portrait { slug, .. } => Some(slug),
+                _ => None,
+            };
+            (player.name.as_str(), avatar)
+        })
+    };
+    let mut operations = Vec::new();
+
+    for incoming in [true, false] {
+        for attack in snapshot.attacks.iter().filter(|attack| {
+            let is_incoming = attack.owner_id != my_player_id
+                && attack.target_owner == my_player_id;
+            let is_outgoing = attack.owner_id == my_player_id;
+            if incoming { is_incoming } else { is_outgoing }
+        }) {
+            let neutral = !incoming && attack.target_owner == 0;
+            let subject_id = if incoming {
+                attack.owner_id
+            } else {
+                attack.target_owner
+            };
+            let (name, avatar) = player_identity(subject_id)
+                .map(|(name, avatar)| (Some(name), avatar))
+                .unwrap_or((None, None));
+            let focus = local_attacks
+                .get(&attack.id)
+                .filter(|attack| !attack.to_conquer.is_empty())
+                .map(|attack| attack.frontier_centroid())
+                .map(|(x, y)| (x + 0.5, y + 0.5))
+                .filter(|(x, y)| x.is_finite() && y.is_finite())
+                .or_else(|| {
+                    (attack.front_cx.is_finite()
+                        && attack.front_cy.is_finite()
+                        && (attack.front_cx != 0.0 || attack.front_cy != 0.0))
+                        .then_some((attack.front_cx + 0.5, attack.front_cy + 0.5))
+                });
+            operations.push(serde_json::json!({
+                "kind": "attack",
+                "id": attack.id,
+                "direction": if incoming { "incoming" } else { "outgoing" },
+                "player_id": subject_id,
+                "name": name,
+                "avatar": avatar,
+                "neutral": neutral,
+                "troops": attack.troops.max(0.0),
+                "retreating": attack.retreating,
+                "retreat_loss_percent": if neutral { 0 } else { 25 },
+                "focus_x": focus.map(|point| point.0),
+                "focus_y": focus.map(|point| point.1),
+            }));
+        }
+    }
+
+    for incoming in [true, false] {
+        for fleet in snapshot
+            .fleets
+            .iter()
+            .filter(|fleet| fleet.unit_type == sow_core::game::UnitType::TransportShip)
+        {
+            let target_owner = local_fleets.get(&fleet.id).map(|fleet| fleet.target_owner);
+            let is_incoming = fleet.owner_id != my_player_id && target_owner == Some(my_player_id);
+            let is_outgoing = fleet.owner_id == my_player_id;
+            if (if incoming { is_incoming } else { is_outgoing }) == false {
+                continue;
+            }
+            let neutral = !incoming && target_owner == Some(0);
+            let subject_id = if incoming {
+                fleet.owner_id
+            } else {
+                target_owner.unwrap_or(0)
+            };
+            let (name, avatar) = player_identity(subject_id)
+                .map(|(name, avatar)| (Some(name), avatar))
+                .unwrap_or((None, None));
+            let focus = (map_width > 0).then_some((
+                (fleet.current_tile % map_width) as f32 + 0.5,
+                (fleet.current_tile / map_width) as f32 + 0.5,
+            ));
+            operations.push(serde_json::json!({
+                "kind": "fleet",
+                "id": fleet.id,
+                "direction": if incoming { "incoming" } else { "outgoing" },
+                "player_id": subject_id,
+                "name": name,
+                "avatar": avatar,
+                "neutral": neutral,
+                "troops": fleet.troops.max(0.0),
+                "retreating": fleet.retreating,
+                "retreat_loss_percent": 25,
+                "focus_x": focus.map(|point| point.0),
+                "focus_y": focus.map(|point| point.1),
+            }));
+        }
+    }
+    operations
 }
 
 fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json::Value {
@@ -2735,6 +2907,16 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
     let snapshot = app.sim.current_snapshot.as_ref();
     let snapshot_tick = snapshot.map(|snapshot| snapshot.tick).unwrap_or(0);
     let me = my_player_summary(app, snapshot_tick, my_pid);
+    let operations = snapshot
+        .map(|snapshot| {
+            build_combat_operations_payload(
+                snapshot,
+                my_pid,
+                app.sim.engine.as_ref(),
+                app.sim.map_w,
+            )
+        })
+        .unwrap_or_default();
     let match_over = !app.ui.is_spectating
         && snapshot.is_some_and(|snapshot| {
             snapshot.winner.is_some()
@@ -2784,11 +2966,59 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         sow_core::game::BuildingKind::Port => "Port",
         sow_core::game::BuildingKind::Farm => "Farm",
     });
+    let selected_nuke = hud.selected_nuke_kind.map(|kind| match kind {
+        sow_core::game::NukeKind::AtomBomb => "AtomBomb",
+    });
     let costs = &hud.building_costs;
     let selected_building_detail = map_menu
         .get("building")
         .cloned()
         .unwrap_or(serde_json::Value::Null);
+    let (port_levels, city_level, trade_ships, warships) = snapshot
+        .map(|snapshot| {
+            let port_levels = snapshot
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_pid
+                        && building.kind == sow_core::game::BuildingKind::Port
+                })
+                .map(|building| u32::from(building.active_level()))
+                .sum::<u32>();
+            let city_level = snapshot
+                .buildings
+                .iter()
+                .filter(|building| {
+                    building.owner_id == my_pid
+                        && building.kind == sow_core::game::BuildingKind::City
+                })
+                .map(|building| building.active_level())
+                .max()
+                .unwrap_or(0);
+            let trade_ships = snapshot
+                .fleets
+                .iter()
+                .filter(|fleet| {
+                    fleet.owner_id == my_pid
+                        && fleet.troops > 0.0
+                        && fleet.unit_type == sow_core::game::UnitType::TradeShip
+                })
+                .count() as u32;
+            let warships = snapshot
+                .fleets
+                .iter()
+                .filter(|fleet| {
+                    fleet.owner_id == my_pid
+                        && fleet.troops > 0.0
+                        && fleet.unit_type == sow_core::game::UnitType::Warship
+                })
+                .count() as u32;
+            (port_levels, city_level, trade_ships, warships)
+        })
+        .unwrap_or_default();
+    let trade_ship = sow_core::game::UnitType::TradeShip;
+    let warship = sow_core::game::UnitType::Warship;
+    let nuke = sow_core::game::NukeKind::AtomBomb;
     let notifications = hud
         .hud_notifications
         .iter()
@@ -2842,9 +3072,29 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         "troops": me.map(|player| player.troops).unwrap_or(hud.troops),
         "max_troops": me.map(|player| player.max_troops).unwrap_or(hud.max_troops),
         "troop_rate": hud.troop_rate,
+        "gold_rate": hud.gold_rate,
         "attack_ratio": hud.attack_ratio,
+        "operations": operations,
         "spawn_timer_secs": hud.spawn_timer_secs,
         "selected_building": selected_building,
+        "selected_warship_build": hud.selected_warship_build,
+        "selected_nuke": selected_nuke,
+        "fleet_panel": {
+            "trade_ships": trade_ships,
+            "trade_capacity": port_levels,
+            "warships": warships,
+            "port_levels": port_levels,
+            "city_level": city_level,
+            "trade_required_port_level": trade_ship.required_port_level(),
+            "warship_required_port_level": warship.required_port_level(),
+            "nuke_required_city_level": nuke.required_city_level(),
+            "warship_cost": warship.gold_cost(),
+            "nuke_cost": app.sim.config.nuke_cost,
+            "nuke_available": me.map(|player| player.nuke_available).unwrap_or(false),
+            "nuke_cooldown_ticks": me.map(|player| player.nuke_cooldown_ticks).unwrap_or(0),
+            "military_used": me.map(|player| player.boats_in_use).unwrap_or(0),
+            "military_capacity": me.map(|player| player.boat_capacity).unwrap_or(0),
+        },
         "selected_building_detail": selected_building_detail,
         "building_costs": {
             "city": costs[0],
@@ -2852,9 +3102,6 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "factory": costs[2],
             "port": costs[3],
             "farm": costs[4],
-        },
-        "building_requirements": {
-            "factory_unlocked": factory_build_unlocked(app),
         },
         "pin_emoji": hud.pin_emoji,
         "fps": (app.time.current_fps > 0).then_some(app.time.current_fps),
@@ -2998,7 +3245,68 @@ fn campaign_payload(progress: &crate::player_progress::PlayerProgress) -> serde_
     })
 }
 
-/// Publish a browser-safe snapshot. It is intentionally separate from MainMenuState so the
+/// Keep the DOM hand aligned to its Rust-projected world anchor during camera interpolation.
+pub(crate) fn publish_tutorial_camera_anchor_frame(app: &SowApp) {
+    let Some(player_id) = app
+        .ui
+        .tutorial_active
+        .then(|| {
+            app.ui.tutorial_marker_player_id.unwrap_or_else(|| {
+                app.sim
+                    .my_player_id
+                    .unwrap_or(app.ui.app.hud_state.my_player_id)
+            })
+        })
+        .filter(|_| app.net.is_offline)
+    else {
+        LAST_TUTORIAL_CAMERA_ANCHOR.with(|last| *last.borrow_mut() = None);
+        return;
+    };
+    let Some([world_x, world_y]) = app.ui.nameplates.anchor_for(player_id) else {
+        LAST_TUTORIAL_CAMERA_ANCHOR.with(|last| *last.borrow_mut() = None);
+        return;
+    };
+    let scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let viewport_w = app.input.screen_w / scale;
+    let viewport_h = app.input.screen_h / scale;
+    let screen = crate::render::world::overlays::world_to_screen(
+        world_x,
+        world_y,
+        &app.input,
+        scale,
+    );
+    let Some(([x, y], _)) = tutorial_screen_anchor(screen, viewport_w, viewport_h) else {
+        LAST_TUTORIAL_CAMERA_ANCHOR.with(|last| *last.borrow_mut() = None);
+        return;
+    };
+    let key = (player_id, x.to_bits(), y.to_bits());
+    if LAST_TUTORIAL_CAMERA_ANCHOR.with(|last| *last.borrow() == Some(key)) {
+        return;
+    }
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Ok(value) = js_sys::Reflect::get(
+        window.as_ref(),
+        &JsValue::from_str("SOW_tutorial_camera_anchor_update"),
+    ) else {
+        return;
+    };
+    let Ok(update) = value.dyn_into::<js_sys::Function>() else {
+        return;
+    };
+    if update
+        .call2(
+            window.as_ref(),
+            &JsValue::from_f64(f64::from(x)),
+            &JsValue::from_f64(f64::from(y)),
+        )
+        .is_ok()
+    {
+        LAST_TUTORIAL_CAMERA_ANCHOR.with(|last| *last.borrow_mut() = Some(key));
+    }
+}
+
 /// DOM never receives transient textures, map bytes, or internal auth/session material.
 pub(crate) fn publish_state(app: &mut SowApp) {
     refresh_web_leaderboard_cache(app);
@@ -3312,7 +3620,25 @@ mod tests {
             assists: 0,
             boats_in_use: 0,
             boat_capacity: 1,
+            nuke_available: false,
+            nuke_cooldown_ticks: 0,
         }
+    }
+
+    #[test]
+    fn tutorial_build_site_prefers_border_then_distance_from_nameplate() {
+        let mut best = None;
+        for candidate in [
+            (false, 100.0, 1),
+            (true, 50.0, 5),
+            (true, 75.0, 9),
+            (true, 75.0, 3),
+        ] {
+            if tutorial_build_site_candidate_better(candidate, best) {
+                best = Some(candidate);
+            }
+        }
+        assert_eq!(best, Some((true, 75.0, 3)));
     }
 
     #[test]
@@ -3374,6 +3700,181 @@ mod tests {
             sea_lanes: Arc::new(Vec::new()),
             debug_mem_info: String::new(),
         }
+    }
+
+    #[test]
+    fn counterattack_uses_the_selected_troop_ratio_without_changing_attack_amount() {
+        assert_eq!(selected_counterattack_troops(100.0, 0.5, 1.0), Some(50.0));
+        assert_eq!(selected_counterattack_troops(100.0, 1.0, 1.0), Some(100.0));
+        assert_eq!(selected_counterattack_troops(1.0, 0.5, 1.0), None);
+        assert_eq!(selected_counterattack_troops(f64::NAN, 0.5, 1.0), None);
+    }
+
+    #[test]
+    fn counterattack_threat_includes_only_live_attacks_and_incoming_troop_transports() {
+        use sow_core::game::{GameState, UnitType};
+        use sow_core::game_config::GameConfig;
+        use sow_core::protocol::{AttackSnapshot, FleetSnapshot};
+        use sow_core::warp_fleet::WarpFleet;
+        use sow_core::water_components::WaterComponents;
+
+        let mut snapshot = test_snapshot(vec![test_player(1, 5, 100.0), test_player(2, 5, 100.0)]);
+        snapshot.attacks = vec![
+            AttackSnapshot {
+                id: 1,
+                owner_id: 2,
+                target_owner: 1,
+                troops: 25.0,
+                retreating: false,
+                front_cx: 1.0,
+                front_cy: 1.0,
+            },
+            AttackSnapshot {
+                id: 2,
+                owner_id: 2,
+                target_owner: 1,
+                troops: 35.0,
+                retreating: true,
+                front_cx: 1.0,
+                front_cy: 1.0,
+            },
+        ];
+        let make_snapshot = |id, unit_type| FleetSnapshot {
+            id,
+            owner_id: 2,
+            unit_type,
+            troops: 40.0,
+            current_tile: 4,
+            path: Arc::new(vec![4]),
+            path_cursor: 0,
+            movement_progress: 0.0,
+            eta_seconds: None,
+            retreating: false,
+        };
+        snapshot.fleets = vec![
+            make_snapshot(10, UnitType::TransportShip),
+            make_snapshot(11, UnitType::TransportShip),
+            make_snapshot(12, UnitType::Warship),
+        ];
+        let state = GameState::new(1, 4, 4, GameConfig::default());
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = sow_core::engine::SowEngine::new(state, water);
+        engine.add_fleet(WarpFleet::new(10, 2, 1, UnitType::TransportShip, 40.0, (0, 4), vec![4]));
+        engine.add_fleet(WarpFleet::new(11, 2, 0, UnitType::TransportShip, 40.0, (0, 4), vec![4]));
+        engine.add_fleet(WarpFleet::new(12, 2, 1, UnitType::Warship, 40.0, (0, 4), vec![4]));
+
+        assert_eq!(incoming_combat_troops(&snapshot, Some(&engine), 2, 1), 65.0);
+    }
+
+    #[test]
+    fn combat_operations_include_neutral_and_pvp_attacks_but_not_other_players() {
+        use sow_core::protocol::AttackSnapshot;
+
+        let mut snapshot = test_snapshot(vec![
+            test_player(1, 5, 100.0),
+            test_player(2, 5, 100.0),
+            test_player(3, 5, 100.0),
+        ]);
+        snapshot.attacks = vec![
+            AttackSnapshot {
+                id: 1,
+                owner_id: 1,
+                target_owner: 0,
+                troops: 25.0,
+                retreating: false,
+                front_cx: 4.0,
+                front_cy: 3.0,
+            },
+            AttackSnapshot {
+                id: 2,
+                owner_id: 1,
+                target_owner: 2,
+                troops: 50.0,
+                retreating: false,
+                front_cx: 7.0,
+                front_cy: 8.0,
+            },
+            AttackSnapshot {
+                id: 3,
+                owner_id: 2,
+                target_owner: 1,
+                troops: 75.0,
+                retreating: false,
+                front_cx: 10.0,
+                front_cy: 11.0,
+            },
+            AttackSnapshot {
+                id: 4,
+                owner_id: 2,
+                target_owner: 3,
+                troops: 90.0,
+                retreating: false,
+                front_cx: 12.0,
+                front_cy: 13.0,
+            },
+        ];
+
+        let operations = build_combat_operations_payload(&snapshot, 1, None, 20);
+        assert_eq!(operations.len(), 3);
+        let neutral = operations.iter().find(|row| row["id"] == 1).unwrap();
+        assert_eq!(neutral["direction"], "outgoing");
+        assert_eq!(neutral["neutral"], true);
+        assert_eq!(neutral["retreat_loss_percent"], 0);
+        let threat = operations.iter().find(|row| row["id"] == 3).unwrap();
+        assert_eq!(threat["direction"], "incoming");
+        assert_eq!(threat["player_id"], 2);
+        assert_eq!(threat["retreat_loss_percent"], 25);
+        assert!(operations.iter().any(|row| row["id"] == 2));
+        assert!(!operations.iter().any(|row| row["id"] == 4));
+    }
+
+    #[test]
+    fn combat_operations_join_only_troop_transports_to_local_targets() {
+        use sow_core::game::{GameState, UnitType};
+        use sow_core::game_config::GameConfig;
+        use sow_core::protocol::FleetSnapshot;
+        use sow_core::warp_fleet::WarpFleet;
+        use sow_core::water_components::WaterComponents;
+
+        let mut snapshot = test_snapshot(vec![
+            test_player(1, 5, 100.0),
+            test_player(2, 5, 100.0),
+        ]);
+        let make_snapshot = |id, owner_id, unit_type| FleetSnapshot {
+            id,
+            owner_id,
+            unit_type,
+            troops: 40.0,
+            current_tile: 6,
+            path: Arc::new(vec![6]),
+            path_cursor: 0,
+            movement_progress: 0.0,
+            eta_seconds: None,
+            retreating: false,
+        };
+        snapshot.fleets = vec![
+            make_snapshot(10, 1, UnitType::TransportShip),
+            make_snapshot(11, 2, UnitType::TransportShip),
+            make_snapshot(12, 1, UnitType::TradeShip),
+            make_snapshot(13, 1, UnitType::Warship),
+        ];
+
+        let state = GameState::new(1, 5, 5, GameConfig::default());
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = sow_core::engine::SowEngine::new(state, water);
+        engine.add_fleet(WarpFleet::new(10, 1, 0, UnitType::TransportShip, 40.0, (0, 6), vec![6]));
+        engine.add_fleet(WarpFleet::new(11, 2, 1, UnitType::TransportShip, 40.0, (0, 6), vec![6]));
+        engine.add_fleet(WarpFleet::new(12, 1, 2, UnitType::TradeShip, 40.0, (0, 6), vec![6]));
+        engine.add_fleet(WarpFleet::new(13, 1, 2, UnitType::Warship, 40.0, (0, 6), vec![6]));
+
+        let operations = build_combat_operations_payload(&snapshot, 1, Some(&engine), 5);
+        assert_eq!(operations.len(), 2);
+        assert_eq!(operations[0]["direction"], "incoming");
+        assert_eq!(operations[0]["kind"], "fleet");
+        assert_eq!(operations[0]["id"], 11);
+        assert_eq!(operations[1]["direction"], "outgoing");
+        assert_eq!(operations[1]["id"], 10);
+        assert_eq!(operations[1]["neutral"], true);
     }
 
     #[test]

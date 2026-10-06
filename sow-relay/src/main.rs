@@ -1961,12 +1961,7 @@ fn deployment_end_tick(config: Option<&GameConfig>, fallback_tick_rate_ms: f32) 
         return None;
     }
     let tick_rate_ms = config.map_or(fallback_tick_rate_ms, |config| config.tick_rate_ms);
-    let tick_rate_ms = if tick_rate_ms.is_finite() && tick_rate_ms > 0.0 {
-        tick_rate_ms
-    } else {
-        100.0
-    };
-    Some((15_000.0 / tick_rate_ms) as u64)
+    Some(sow_core::game::deployment_phase_end_tick(tick_rate_ms))
 }
 
 fn admit_gameplay_intent(

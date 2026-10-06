@@ -586,7 +586,6 @@ mod bot_iq_alliance_tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: crate::building::CityModules::default(),
             });
         }
         engine.refresh_building_grid();
@@ -630,10 +629,6 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
 
         // Give bot 1 a silo
-        let m1 = crate::building::CityModules {
-            arsenal: 1,
-            ..Default::default()
-        };
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
@@ -642,7 +637,6 @@ mod bot_iq_alliance_tests {
             level: BuildingKind::City.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
-            modules: m1,
         });
 
         // Give bot 2 a city
@@ -654,7 +648,6 @@ mod bot_iq_alliance_tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules::default(),
         });
 
         // Give bot 2 a SAM covering the city
@@ -666,7 +659,6 @@ mod bot_iq_alliance_tests {
             level: BuildingKind::Bunker.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
-            modules: Default::default(),
         });
 
         for _ in 0..30 {
@@ -702,10 +694,6 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Nation;
 
         // Give bot 1 a silo
-        let m1 = crate::building::CityModules {
-            arsenal: 1,
-            ..Default::default()
-        };
         engine.buildings.push(crate::building::Building {
             id: 100,
             owner_id: 1,
@@ -714,7 +702,6 @@ mod bot_iq_alliance_tests {
             level: BuildingKind::City.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
-            modules: m1,
         });
 
         // Give bot 2 a city
@@ -726,7 +713,6 @@ mod bot_iq_alliance_tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules::default(),
         });
 
         // Make sure bot 2 actually owns tile 1 so they are neighbors!
@@ -757,10 +743,6 @@ mod bot_iq_alliance_tests {
                 level: BuildingKind::City.max_level(),
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: crate::building::CityModules {
-                    arsenal: 1,
-                    ..Default::default()
-                },
             },
             crate::building::Building {
                 id: 101,
@@ -770,7 +752,6 @@ mod bot_iq_alliance_tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: Default::default(),
             },
             crate::building::Building {
                 id: 102,
@@ -780,7 +761,6 @@ mod bot_iq_alliance_tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: Default::default(),
             },
         ]);
 
@@ -809,10 +789,6 @@ mod bot_iq_alliance_tests {
             level: BuildingKind::City.max_level(),
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules {
-                arsenal: 1,
-                ..Default::default()
-            },
         });
         engine.buildings.push(crate::building::Building {
             id: 101,
@@ -822,7 +798,6 @@ mod bot_iq_alliance_tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: Default::default(),
         });
 
         engine.refresh_building_grid();
@@ -911,7 +886,6 @@ mod bot_iq_alliance_tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: crate::building::CityModules::default(),
             });
         }
         engine.refresh_building_grid();
@@ -1095,7 +1069,6 @@ mod bot_iq_alliance_tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules::default(),
         });
         engine.refresh_building_grid();
 
@@ -1135,7 +1108,6 @@ mod bot_iq_alliance_tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules::default(),
         });
         engine.building_aggregates_dirty = true;
         engine.execute_income();

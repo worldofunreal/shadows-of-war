@@ -5,7 +5,7 @@
     var query = new URLSearchParams(location.search);
     var episodeId = /^[a-z][a-z0-9_]{0,63}$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
     var rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
-    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, pickingFaction: false, flow: "episode", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
+    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, previewRevealTimer: null, pickingFaction: false, flow: "episode", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
     var types = ["scene", "choice", "objective", "guide", "end"];
     var triggerTypes = [
         { value: "territory", label: "Gain territory" }, { value: "kills", label: "Defeat troops" },
@@ -14,8 +14,8 @@
         { value: "farm", label: "Complete a farm" }, { value: "factory", label: "Complete a factory" },
         { value: "port", label: "Complete a port" }, { value: "bunker", label: "Complete a bunker" },
         { value: "structure_upgrade", label: "Upgrade a structure" }, { value: "structure_level", label: "Reach a building level" }, { value: "city_upgrade", label: "Upgrade a city" },
-        { value: "city_level", label: "Reach a city level" }, { value: "foundry_level", label: "Reach a foundry level" },
-        { value: "port_upgrade", label: "Upgrade a port" }, { value: "port_level", label: "Reach port level" }, { value: "tile_upgrade", label: "Upgrade territory" },
+        { value: "city_level", label: "Reach a city level" },
+        { value: "port_upgrade", label: "Upgrade a port" }, { value: "port_level", label: "Reach port level" },
         { value: "resource_transfer", label: "Send resources" }, { value: "alliance", label: "Form an alliance" },
         { value: "support", label: "Receive allied support" }, { value: "fleet", label: "Launch a fleet" },
         { value: "nuke", label: "Launch a nuke" }, { value: "elapsed", label: "Wait for game time" },
@@ -386,6 +386,11 @@
         basics.appendChild(selectField("Speaker", step.speaker || "", speakerOptions(), function (value) { step.speaker = value || undefined; if (!value) delete step.speaker; markDirty(); }));
         if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", step.type === "scene" ? ["dialogue", "chapter", "celebration", "cinematic"] : ["dialogue", "chapter", "celebration"], function (value) { step.presentation = value; markDirty(); }));
         if (step.type === "scene") {
+            basics.appendChild(inputField("Wait before showing (seconds)", step.start_delay_seconds, function (value) {
+                if (value.trim() === "") delete step.start_delay_seconds;
+                else step.start_delay_seconds = Number(value);
+                markDirty();
+            }, { type: "number", min: 0.1, max: 10, step: 0.1, placeholder: "No wait" }));
             basics.appendChild(inputField("Local cinematic video", step.video_src || "", function (value) {
                 var source = value.trim();
                 if (source) { step.video_src = source; step.presentation = "cinematic"; }
@@ -1245,6 +1250,8 @@
 
     function paintPreview(updateMachine) {
         if (!state.machine || state.validation.errors.length) return;
+        if (state.previewRevealTimer !== null) window.clearTimeout(state.previewRevealTimer);
+        state.previewRevealTimer = null;
         $("#previewFrame").dataset.device = $("#device").value;
         state.facts.touch_controls = $("#device").value === "mobile" ? 1 : 0;
         var model;
@@ -1279,9 +1286,9 @@
         } else if (model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
-        try { state.renderer.render(model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric }); }
+        try { state.renderer.render(model.waiting ? null : model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
-        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
+        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
         var requiredMenu = /^map_(?:build|upgrade)_/.test(guideTarget) ? "build" : "";
         var menuHint = requiredMenu && $("#sow-hud").dataset.previewMapMenu !== requiredMenu ? " · open the " + requiredMenu + " submenu in the preview to reveal this guide" : "";
@@ -1291,7 +1298,8 @@
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
         var assaultHint = model.step.campaign_assault_on_enter ? " · on entry: " + model.step.campaign_assault_on_enter.attacker_team + " attacks " + (model.step.campaign_assault_on_enter.target === "player" ? "player" : factionName(model.step.campaign_assault_on_enter.target)) : "";
-        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
+        $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.waiting ? " · appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + "s" : "") + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
+        if (model.waiting) state.previewRevealTimer = window.setTimeout(function () { state.previewRevealTimer = null; paintPreview(); }, Math.max(1, model.wait_remaining_ms));
         if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
     }
@@ -1323,7 +1331,6 @@
         var rect = target.getBoundingClientRect();
         var anchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(target) : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         anchor.x -= frameRect.left; anchor.y -= frameRect.top;
-        if (anchor.cutout) { anchor.cutout.x -= frameRect.left; anchor.cutout.y -= frameRect.top; }
         if (guide.gesture === "drag" && guide.to) {
             var end;
             if (guide.kind === "world") end = previewWorldMarker(frame, guide.to, step);
@@ -1425,6 +1432,7 @@
     }
     function renderFactControls(model) {
         var host = $("#factControls"); host.replaceChildren();
+        if (model.waiting) { host.appendChild(el("small", {}, "Scene appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + " seconds.")); return; }
         var trigger = model.step.trigger;
         var timedRoute = (model.step.routes || []).some(function (route) { return route.when && route.when.fact === "elapsed_seconds"; });
         var canTick = Boolean((trigger && trigger.type === "elapsed") || timedRoute || Number(model.step.advance_delay_seconds) > 0);

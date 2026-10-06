@@ -104,6 +104,25 @@ impl SowApp {
                             .trigger_viewport_alert(crate::app::ViewportAlertKind::ConquerPlayer);
                     }
                 }
+                sow_core::game::GameEvent::PlayerRebelled {
+                    player_id,
+                    rebel_id,
+                    ..
+                } if player_id == my_id && my_id != 0 => {
+                    let name = snap
+                        .players
+                        .iter()
+                        .find(|player| player.id == rebel_id)
+                        .map(|player| player.name.clone())
+                        .unwrap_or_else(|| "Rebels".to_string());
+                    self.ui.app.hud_state.push_notification_for_players(
+                        crate::ui::UiText::new("hud.debt_rebellion").with("name", name),
+                        [Some(my_id), Some(rebel_id)],
+                        3,
+                        Some(format!("debt-rebellion:{rebel_id}")),
+                        false,
+                    );
+                }
                 sow_core::game::GameEvent::TileCaptured {
                     x,
                     y,

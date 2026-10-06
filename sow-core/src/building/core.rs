@@ -13,73 +13,6 @@ pub fn upgrade_duration_ticks(kind: BuildingKind, target_level: u8) -> u32 {
     dur.max(1)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum ModuleKind {
-    Port,
-    Foundry,
-    Armory,
-    Intel,
-    Arsenal,
-    Shield,
-}
-
-impl ModuleKind {
-    pub const ALL: [ModuleKind; 6] = [
-        ModuleKind::Port,
-        ModuleKind::Foundry,
-        ModuleKind::Armory,
-        ModuleKind::Intel,
-        ModuleKind::Arsenal,
-        ModuleKind::Shield,
-    ];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            ModuleKind::Port => "Port",
-            ModuleKind::Foundry => "Foundry",
-            ModuleKind::Armory => "Armory",
-            ModuleKind::Intel => "Intel",
-            ModuleKind::Arsenal => "Arsenal",
-            ModuleKind::Shield => "Shield",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct CityModules {
-    pub port: u8,
-    pub foundry: u8,
-    pub armory: u8,
-    pub intel: u8,
-    pub arsenal: u8,
-    pub shield: u8,
-}
-
-impl CityModules {
-    pub fn get_level(&self, kind: ModuleKind) -> u8 {
-        match kind {
-            ModuleKind::Port => self.port,
-            ModuleKind::Foundry => self.foundry,
-            ModuleKind::Armory => self.armory,
-            ModuleKind::Intel => self.intel,
-            ModuleKind::Arsenal => self.arsenal,
-            ModuleKind::Shield => self.shield,
-        }
-    }
-
-    pub fn set_level(&mut self, kind: ModuleKind, level: u8) {
-        match kind {
-            ModuleKind::Port => self.port = level,
-            ModuleKind::Foundry => self.foundry = level,
-            ModuleKind::Armory => self.armory = level,
-            ModuleKind::Intel => self.intel = level,
-            ModuleKind::Arsenal => self.arsenal = level,
-            ModuleKind::Shield => self.shield = level,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Building {
     pub id: u64,
@@ -90,7 +23,6 @@ pub struct Building {
     pub level: u8,
     pub under_construction: bool,
     pub ticks_until_complete: u32,
-    pub modules: CityModules,
 }
 
 impl Building {
@@ -122,15 +54,6 @@ pub struct BuildingAggregate {
     pub factory_levels: u32,
     pub port_levels: u32,
     pub farm_levels: u32,
-    pub farm_slots: u32,
-    pub factory_time_levels: u32,
-    pub factory_upgrade_discount_levels: u32,
-    pub factory_trade_income_levels: u32,
-    pub foundry_levels: u32,
-    pub armory_levels: u32,
-    pub intel_levels: u32,
-    pub arsenal_levels: u32,
-    pub shield_levels: u32,
     pub has_completed_port: bool,
     /// Ready cities only (for bot `city_equivalent` base).
     pub ready_city_count: u32,
@@ -197,7 +120,6 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::City => {
                 a.city_levels += active_lvl as u32;
                 a.ready_city_count += 1;
-                a.farm_slots += crate::building::cost::farm_slots_for_city_level(active_lvl);
             }
             BuildingKind::Bunker => {
                 a.bunker_levels += active_lvl as u32;
@@ -205,9 +127,6 @@ pub fn aggregate_buildings_per_player(
             BuildingKind::Factory => {
                 a.factory_levels += active_lvl as u32;
                 a.ready_factory_count += 1;
-                a.factory_time_levels += u32::from(active_lvl >= 2);
-                a.factory_upgrade_discount_levels += u32::from(active_lvl >= 3);
-                a.factory_trade_income_levels += u32::from(active_lvl >= 4);
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
@@ -686,7 +605,6 @@ mod defense_influence_tests {
             level,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         }
     }
 

@@ -52,13 +52,6 @@ pub enum GameplayIntent {
     UpgradeStructure {
         building_id: u64,
     },
-    UpgradeCityModule {
-        building_id: u64,
-        module: crate::building::ModuleKind,
-    },
-    UpgradeTile {
-        tile_idx: u32,
-    },
     /// Informs the engine that the player has disconnected or resigned.
     Resign,
     MarkDisconnected {
@@ -498,6 +491,10 @@ pub struct PlayerSnapshot {
     pub boats_in_use: u32,
     #[serde(default)]
     pub boat_capacity: u32,
+    #[serde(default)]
+    pub nuke_available: bool,
+    #[serde(default)]
+    pub nuke_cooldown_ticks: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -512,7 +509,6 @@ pub struct ResourceRequest {
 pub struct DirtyTile {
     pub index: u32,
     pub new_owner: u16,
-    pub upgrade_level: u32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -524,7 +520,6 @@ pub struct BuildingSnapshot {
     pub level: u8,
     pub under_construction: bool,
     pub ticks_until_complete: u32,
-    pub modules: crate::building::CityModules,
 }
 
 impl BuildingSnapshot {

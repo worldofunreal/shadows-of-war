@@ -439,6 +439,8 @@ mod avatar_identity_tests {
             assists: 0,
             boats_in_use: 0,
             boat_capacity: 0,
+            nuke_available: false,
+            nuke_cooldown_ticks: 0,
         }
     }
 

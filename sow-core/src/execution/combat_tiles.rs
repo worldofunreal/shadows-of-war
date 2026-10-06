@@ -369,7 +369,7 @@ impl SowEngine {
 #[cfg(test)]
 mod tests {
     use super::{terrain_capture_speed, terrain_loss_multiplier};
-    use crate::building::{Building, CityModules};
+    use crate::building::Building;
     use crate::execution::{AttackExecution, PrioritizedTile};
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::{GameConfig, max_tiles_cap_for_troops};
@@ -428,7 +428,6 @@ mod tests {
             level: 2,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         });
         engine.refresh_defense_grid();
 

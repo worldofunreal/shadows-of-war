@@ -159,19 +159,6 @@ impl TutorialObservation {
                 .max()
                 .unwrap_or_default(),
         );
-        self.foundry_level = self.foundry_level.max(
-            engine
-                .buildings
-                .iter()
-                .filter(|building| {
-                    building.owner_id == my_id
-                        && building.kind == sow_core::game::BuildingKind::City
-                        && !building.under_construction
-                })
-                .map(|building| u64::from(building.modules.foundry))
-                .max()
-                .unwrap_or_default(),
-        );
         self.port_levels = self.port_levels.max(
             engine
                 .buildings
@@ -306,18 +293,6 @@ impl TutorialObservation {
                         self.port_upgrades = self.port_upgrades.saturating_add(1);
                     }
                     _ => {}
-                }
-            }
-            if let GameEvent::TileUpgraded { tile_idx, .. } = event {
-                let width = engine.state.map.width;
-                if width > 0
-                    && engine
-                        .state
-                        .map
-                        .owner_id(tile_idx % width, tile_idx / width)
-                        == my_id
-                {
-                    self.tile_upgrades = self.tile_upgrades.saturating_add(1);
                 }
             }
             if let GameEvent::PlayerEliminated {
@@ -481,7 +456,7 @@ impl SowApp {
 #[cfg(test)]
 mod tests {
     use super::{take_alliance_request_lifecycle_events, take_resource_transfer_events};
-    use sow_core::building::{Building, CityModules};
+    use sow_core::building::Building;
     use sow_core::game::{BuildingKind, GamePhase, GameState, ProjectileKind, UnitType};
     use sow_core::game_config::GameConfig;
     use sow_core::map::MapTile;
@@ -620,7 +595,6 @@ mod tests {
                     level: 1,
                     under_construction,
                     ticks_until_complete: u32::from(under_construction),
-                    modules: CityModules::default(),
                 });
             }
             engine.apply_launch_nuke_intent(owner_id, 9);
@@ -670,7 +644,6 @@ mod tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: CityModules::default(),
             });
         }
         observation.observe_sim(&engine, 1);
@@ -687,10 +660,6 @@ mod tests {
                 kind: BuildingKind::Port,
                 level: 2,
             },
-            GameEvent::TileUpgraded {
-                tile_idx: 9,
-                level: 1,
-            },
             GameEvent::ResourceTransferred {
                 sender_id: 1,
                 receiver_id: 2,
@@ -704,7 +673,6 @@ mod tests {
         assert_eq!(observation.structure_upgrades, 2);
         assert_eq!(observation.city_upgrades, 1);
         assert_eq!(observation.port_upgrades, 1);
-        assert_eq!(observation.tile_upgrades, 1);
         assert_eq!(observation.resource_transfers, 1);
     }
 
@@ -742,7 +710,6 @@ mod tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: CityModules::default(),
             });
         }
 
@@ -802,32 +769,6 @@ mod tests {
             Some(&1)
         );
         assert_eq!(observation.seen_transport_fleets_by_faction_id.len(), 1);
-    }
-
-    #[test]
-    fn campaign_foundry_fact_tracks_its_own_highest_completed_module_level() {
-        let mut engine = engine();
-        let mut observation = TutorialObservation::default();
-        for (id, level, under_construction) in [(50, 2, false), (51, 3, true)] {
-            let mut modules = CityModules::default();
-            modules.foundry = level;
-            engine.add_building(Building {
-                id,
-                owner_id: 1,
-                tile_idx: 9,
-                kind: BuildingKind::City,
-                level: 1,
-                under_construction,
-                ticks_until_complete: u32::from(under_construction),
-                modules,
-            });
-        }
-
-        observation.observe_sim(&engine, 1);
-        assert_eq!(observation.foundry_level, 2);
-        engine.buildings[0].modules.foundry = 1;
-        observation.observe_sim(&engine, 1);
-        assert_eq!(observation.foundry_level, 2);
     }
 
     #[test]
@@ -902,7 +843,6 @@ mod tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         });
         engine.apply_launch_nuke_intent(1, 9);
         observation.observe_sim(&engine, 1);

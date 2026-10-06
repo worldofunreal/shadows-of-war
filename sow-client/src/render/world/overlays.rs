@@ -171,7 +171,6 @@ struct RenderedBuilding {
     by: f32,
     kind: BuildingKind,
     level: u8,
-    modules: sow_core::building::CityModules,
     under_construction: bool,
     count: usize,
     owner_id: u16,
@@ -456,13 +455,6 @@ fn render_buildings(
                 }
                 celebration_budget -= BUILDING_CELEBRATION_OFFSETS.len();
             }
-        }
-
-        if building.detail == BuildingDetail::Full
-            && building.kind == BuildingKind::City
-            && building.count == 1
-        {
-            render_city_modules(text, center, marker_extent, building.modules, dev, sf);
         }
 
         if (building.detail == BuildingDetail::Full || building.count > 1)
@@ -1009,59 +1001,6 @@ fn render_building_gold_badge(
     );
 }
 
-fn render_city_modules(
-    text: &mut TextRenderer,
-    center: [f32; 2],
-    marker_size: f32,
-    modules: sow_core::building::CityModules,
-    dev: &DevConfig,
-    sf: f32,
-) {
-    let module_icons = [
-        (modules.port, "⚓"),
-        (modules.foundry, "🏭"),
-        (modules.armory, "⚔️"),
-        (modules.intel, "🧠"),
-        (modules.arsenal, "🚀"),
-        (modules.shield, "🛡️"),
-    ];
-    let offsets = [
-        (0.0, -0.82),
-        (0.78, -0.42),
-        (0.78, 0.42),
-        (0.0, 0.82),
-        (-0.78, 0.42),
-        (-0.78, -0.42),
-    ];
-    let diameter = (marker_size * 0.58).max(10.0);
-    let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.8]);
-    for ((level, icon), (offset_x, offset_y)) in module_icons.into_iter().zip(offsets) {
-        if level == 0 {
-            continue;
-        }
-        let module_center = [
-            (center[0] + marker_size * offset_x) * sf,
-            (center[1] + marker_size * offset_y) * sf,
-        ];
-        let _ = text.push_emoji(icon, module_center, diameter * sf * 0.5, [1.0; 4], outline);
-        if level > 1 {
-            let level_label = level.to_string();
-            let font_size = (diameter * 0.48).clamp(8.0, 14.0) * dev.font_size_scale.max(0.1) * sf;
-            text.push_string(
-                &level_label,
-                [
-                    module_center[0] + diameter * sf * 0.22,
-                    module_center[1] + font_size * 0.3,
-                ],
-                font_size,
-                [1.0; 4],
-                crate::render::dev_text_style(dev, sf, [0.0, 0.0, 0.0, 0.9]),
-                (0.5, dev.font_char_spacing.max(0.1), INLINE_EMOJI_SCALE),
-            );
-        }
-    }
-}
-
 fn cached_buildings<'a>(
     ui: &'a mut UiState,
     snapshot: &SimSnapshot,
@@ -1137,7 +1076,6 @@ fn collect_buildings(
             by: footprint.top as f32 + footprint.height as f32 * 0.5,
             kind: building.kind,
             level: active_level,
-            modules: building.modules,
             under_construction: building.under_construction,
             count: 1,
             owner_id: building.owner_id,
@@ -1159,7 +1097,6 @@ fn collect_buildings(
             by: sum_y / count as f32,
             kind: key.kind,
             level: key.level,
-            modules: sow_core::building::CityModules::default(),
             under_construction: false,
             count,
             owner_id: key.owner_id,
@@ -1223,7 +1160,6 @@ mod tests {
             by: 0.0,
             kind: BuildingKind::City,
             level: 0,
-            modules: sow_core::building::CityModules::default(),
             under_construction: false,
             count: 4,
             owner_id: 7,
@@ -1298,7 +1234,6 @@ mod tests {
             level,
             under_construction,
             ticks_until_complete,
-            modules: sow_core::building::CityModules::default(),
         }
     }
 

@@ -130,6 +130,9 @@ impl SowEngine {
                 // Transfer ownership
                 b.owner_id = new_owner;
                 self.building_aggregates_dirty = true;
+                if kind == crate::game::BuildingKind::Port {
+                    self.sea_lanes_dirty = true;
+                }
                 if kind == crate::game::BuildingKind::Bunker {
                     self.defense_grid_dirty = true;
                 }
@@ -150,6 +153,7 @@ impl SowEngine {
             }
         }
 
+        self.execute_trade_ships();
         self.execute_fleets();
         self.check_winner();
 

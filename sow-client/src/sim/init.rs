@@ -48,7 +48,6 @@ impl SowApp {
         self.sim.latest_local_spawn = None;
         self.input.spawn_intent_rate.reset();
         self.sim.engine = Some(new_engine);
-        self.sim.tile_upgrades.clear();
         self.time
             .interp
             .set_tick_dur_ms(self.sim.config.tick_rate_ms);

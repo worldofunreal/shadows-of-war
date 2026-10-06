@@ -364,7 +364,6 @@ fn resolve_placement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sow_core::building::CityModules;
     use sow_core::game::BuildingKind;
 
     #[test]
@@ -378,7 +377,6 @@ mod tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: CityModules::default(),
             })
             .collect();
         let owners = vec![1; 10_000];
@@ -454,7 +452,6 @@ mod tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         });
         let next = PlacementQuery {
             kind: BuildingKind::City,
@@ -481,7 +478,6 @@ mod tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         };
         let buildings = [
             building(1, 2, BuildingKind::City, 10, 10),
@@ -568,7 +564,6 @@ mod tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         }];
         let overlap_query = PlacementQuery {
             buildings: &overlapping,

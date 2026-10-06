@@ -7,7 +7,11 @@ impl SowEngine {
         let active = self
             .fleets
             .iter()
-            .filter(|fleet| fleet.owner_id == player_id && fleet.troops > 0.0)
+            .filter(|fleet| {
+                fleet.owner_id == player_id
+                    && fleet.troops > 0.0
+                    && fleet.unit_type.uses_military_capacity()
+            })
             .count() as u32;
         let queued = self
             .buildings
@@ -16,7 +20,12 @@ impl SowEngine {
                 building.owner_id == player_id && building.kind == crate::game::BuildingKind::Port
             })
             .filter_map(|building| self.port_queues.get(&building.id))
-            .map(|queue| queue.len() as u32)
+            .map(|queue| {
+                queue
+                    .iter()
+                    .filter(|production| production.kind.uses_military_capacity())
+                    .count() as u32
+            })
             .sum::<u32>();
         active.saturating_add(queued)
     }

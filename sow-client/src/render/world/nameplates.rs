@@ -213,8 +213,7 @@ pub(super) fn render_nameplates(
         let Some(state) = visuals.get(&player.id) else {
             continue;
         };
-        let (center_world, land_bounds, spawn_settle_scale) =
-            spawn_center_visual(state, now);
+        let (center_world, land_bounds, spawn_settle_scale) = spawn_center_visual(state, now);
         let center = ScreenPoint(world_to_screen_values(
             center_world.0[0],
             center_world.0[1],
@@ -585,10 +584,7 @@ fn new_nameplate_visual_state(
     }
 }
 
-fn spawn_center_visual(
-    state: &NameplateVisualState,
-    now: Instant,
-) -> (MapPoint, WorldRect, f32) {
+fn spawn_center_visual(state: &NameplateVisualState, now: Instant) -> (MapPoint, WorldRect, f32) {
     let Some(changed_at) = state.center_changed_at else {
         return (state.to_center, state.land_bounds, 1.0);
     };
@@ -596,9 +592,8 @@ fn spawn_center_visual(
     if elapsed < SPAWN_STICKY_HOLD {
         return (state.from_center, state.from_land_bounds, 1.0);
     }
-    let t = ((elapsed - SPAWN_STICKY_HOLD).as_secs_f32()
-        / SPAWN_SETTLE_DURATION.as_secs_f32())
-    .clamp(0.0, 1.0);
+    let t = ((elapsed - SPAWN_STICKY_HOLD).as_secs_f32() / SPAWN_SETTLE_DURATION.as_secs_f32())
+        .clamp(0.0, 1.0);
     let eased = t * t * (3.0 - 2.0 * t);
     let center = if state.slide_center {
         MapPoint([

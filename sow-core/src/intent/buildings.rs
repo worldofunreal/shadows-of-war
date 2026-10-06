@@ -1,6 +1,6 @@
 use crate::building::{
-    Building, CityModules, ModuleKind, resolve_structure_spawn_tile, structure_build_cost_gold,
-    structure_kind_enabled, structure_upgrade_cost_gold,
+    Building, resolve_structure_spawn_tile, structure_build_cost_gold, structure_kind_enabled,
+    structure_upgrade_cost_gold,
 };
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase};
@@ -27,18 +27,6 @@ impl SowEngine {
         if !structure_kind_enabled(kind) {
             return;
         }
-        let city_level = self
-            .buildings
-            .iter()
-            .filter(|building| building.owner_id == player_id && building.kind == BuildingKind::City)
-            .map(Building::active_level)
-            .max()
-            .unwrap_or_default();
-        if self.state.config.tutorial
-            && !crate::building::structure_kind_unlocked(kind, city_level)
-        {
-            return;
-        }
         let w = self.state.map.width;
         let area = w.saturating_mul(self.state.map.height);
         if area == 0 || target_tile >= area {
@@ -51,12 +39,6 @@ impl SowEngine {
             let x = target_tile % w;
             let y = target_tile / w;
             let footprint = crate::building::BuildingFootprint::at(kind, x, y);
-            let farm_count = self
-                .buildings
-                .iter()
-                .filter(|b| b.owner_id == player_id && b.kind == BuildingKind::Farm)
-                .count() as u32;
-            let farm_slots = crate::building::player_farm_slots(&self.buildings, player_id);
             if map.owner_id(x, y) != player_id
                 || map.terrain_type(x, y) != crate::map::TerrainType::Land
                 || !crate::building::footprint_fits(map, player_id, footprint)
@@ -70,7 +52,6 @@ impl SowEngine {
                             building.y,
                         ))
                     })
-                || farm_count >= farm_slots
             {
                 return;
             }
@@ -105,9 +86,7 @@ impl SowEngine {
         player_mut.gold = (player_mut.gold - cost).max(0.0);
         let id = self.state.next_building_id;
         self.state.next_building_id = self.state.next_building_id.wrapping_add(1).max(1);
-        let (factory_time_levels, _, _) =
-            crate::building::factory_perk_counts(&self.buildings, player_id);
-        let dur = crate::building::structure_build_duration_ticks(kind, factory_time_levels);
+        let dur = crate::building::structure_build_duration_ticks(kind);
         let under = dur > 0;
         let ticks = if under { dur } else { 0 };
         self.add_building(Building {
@@ -118,7 +97,6 @@ impl SowEngine {
             level: 1,
             under_construction: under,
             ticks_until_complete: ticks,
-            modules: CityModules::default(),
         });
         self.state.events.push(GameEvent::StructureSpawned {
             id,
@@ -152,20 +130,15 @@ impl SowEngine {
             return;
         }
         let target_level = building.level.saturating_add(1);
-        if target_level > building.kind.max_level()
-            || !self.structure_upgrade_requirements_met(player_id, &building, target_level)
-        {
+        if target_level > building.kind.max_level() {
             return;
         }
 
         let owned_levels = crate::building::count_kind(&self.buildings, player_id, building.kind);
-        let (_, factory_discount_levels, _) =
-            crate::building::factory_perk_counts(&self.buildings, player_id);
         let cost = structure_upgrade_cost_gold(
             building.kind,
             target_level,
             owned_levels,
-            factory_discount_levels,
             &self.state.config,
         );
         let Some(player_mut) = self.state.player_mut(player_id) else {
@@ -176,16 +149,11 @@ impl SowEngine {
         }
         player_mut.gold = (player_mut.gold - cost).max(0.0);
 
-        let (factory_time_levels, _, _) =
-            crate::building::factory_perk_counts(&self.buildings, player_id);
         let b = &mut self.buildings[idx];
         b.level = target_level;
         b.under_construction = true;
-        b.ticks_until_complete = crate::building::structure_upgrade_duration_ticks(
-            b.kind,
-            target_level,
-            factory_time_levels,
-        );
+        b.ticks_until_complete =
+            crate::building::structure_upgrade_duration_ticks(b.kind, target_level);
         if b.kind == BuildingKind::Bunker {
             self.defense_grid_dirty = true;
         }
@@ -199,135 +167,12 @@ impl SowEngine {
             level: b.level,
         });
     }
-
-    fn structure_upgrade_requirements_met(
-        &self,
-        player_id: u16,
-        building: &Building,
-        target_level: u8,
-    ) -> bool {
-        if building.kind == BuildingKind::Factory && target_level == 2 {
-            let city_level = self
-                .buildings
-                .iter()
-                .filter(|other| other.owner_id == player_id && other.kind == BuildingKind::City)
-                .map(Building::active_level)
-                .max()
-                .unwrap_or_default();
-            return crate::building::structure_kind_unlocked(BuildingKind::Factory, city_level);
-        }
-        true
-    }
-
-    pub(super) fn apply_upgrade_city_module_intent(
-        &mut self,
-        player_id: u16,
-        building_id: u64,
-        module: ModuleKind,
-    ) {
-        // The campaign teaches Foundry income; other legacy modules remain retired.
-        if !self.state.config.tutorial
-            || module != ModuleKind::Foundry
-            || self.state.phase != GamePhase::Playing
-        {
-            return;
-        }
-        let Some(player) = self.state.player(player_id) else {
-            return;
-        };
-        if !player.alive {
-            return;
-        }
-        let Ok(idx) = self.buildings.binary_search_by_key(&building_id, |b| b.id) else {
-            return;
-        };
-        let building = self.buildings[idx];
-        if building.owner_id != player_id
-            || building.kind != BuildingKind::City
-            || building.under_construction
-        {
-            return;
-        }
-        let current_level = building.modules.foundry;
-        let new_level = current_level.saturating_add(1);
-        if new_level > 5 {
-            return;
-        }
-        let cost = crate::building::module_upgrade_cost_gold(ModuleKind::Foundry, new_level);
-        let Some(player_mut) = self.state.player_mut(player_id) else {
-            return;
-        };
-        if player_mut.gold < cost || !cost.is_finite() {
-            return;
-        }
-        player_mut.gold = (player_mut.gold - cost).max(0.0);
-
-        let b = &mut self.buildings[idx];
-        b.modules.foundry = new_level;
-        self.building_aggregates_dirty = true;
-        self.state.events.push(GameEvent::StructureUpgraded {
-            id: building_id,
-            tile_idx: b.tile_idx,
-            kind: b.kind,
-            level: b.level,
-        });
-    }
-
-    pub(super) fn apply_upgrade_tile_intent(&mut self, player_id: u16, tile_idx: u32) {
-        if self.state.phase != GamePhase::Playing {
-            return;
-        }
-        let Some(player) = self.state.player(player_id) else {
-            return;
-        };
-        if !player.alive {
-            return;
-        }
-
-        let w = self.state.map.width;
-        let h = self.state.map.height;
-        if tile_idx >= w * h {
-            return;
-        }
-
-        if self.state.map.owner_id(tile_idx % w, tile_idx / w) != player_id {
-            return;
-        }
-
-        let current_level = self
-            .state
-            .map
-            .tile_upgrades
-            .get(&tile_idx)
-            .copied()
-            .unwrap_or_default();
-        let new_level = current_level.saturating_add(1);
-
-        let s = crate::config::GOLD_SCALE.max(1.0);
-        let cost = (1000.0 * 1.5f64.powi(current_level as i32)) / s;
-
-        let Some(player_mut) = self.state.player_mut(player_id) else {
-            return;
-        };
-        if player_mut.gold < cost || !cost.is_finite() {
-            return;
-        }
-        player_mut.gold = (player_mut.gold - cost).max(0.0);
-
-        self.state.map.tile_upgrades.insert(tile_idx, new_level);
-        self.state.map.dirty_tiles.push(tile_idx as usize);
-
-        self.state.events.push(GameEvent::TileUpgraded {
-            tile_idx,
-            level: new_level,
-        });
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::{GameEvent, GameState};
+    use crate::game::GameState;
     use crate::game_config::GameConfig;
     use crate::player::Player;
     use crate::water_components::WaterComponents;
@@ -344,17 +189,6 @@ mod tests {
         player.gold = 1_000_000.0;
         game.register_player(player);
         SowEngine::new(game, WaterComponents::default())
-    }
-
-    #[test]
-    fn tile_upgrade_stores_only_the_upgraded_tile() {
-        let mut engine = engine(false);
-        engine.state.map.set_owner_id(0, 0, 1);
-
-        engine.apply_upgrade_tile_intent(1, 0);
-
-        assert_eq!(engine.state.map.tile_upgrades.len(), 1);
-        assert_eq!(engine.state.map.tile_upgrades.get(&0), Some(&1));
     }
 
     fn pacing_match() -> SowEngine {
@@ -407,39 +241,7 @@ mod tests {
             level,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         }
-    }
-
-    #[test]
-    fn foundry_upgrade_is_campaign_only_and_emits_a_city_upgrade() {
-        let mut campaign = engine(true);
-        campaign.buildings.push(Building {
-            id: 1,
-            owner_id: 1,
-            tile_idx: 0,
-            kind: BuildingKind::City,
-            level: 1,
-            under_construction: false,
-            ticks_until_complete: 0,
-            modules: CityModules::default(),
-        });
-        campaign.apply_upgrade_city_module_intent(1, 1, ModuleKind::Foundry);
-        assert_eq!(campaign.buildings[0].modules.foundry, 1);
-        assert!(campaign.state.events.iter().any(|event| matches!(
-            event,
-            GameEvent::StructureUpgraded {
-                kind: BuildingKind::City,
-                ..
-            }
-        )));
-
-        let mut multiplayer = engine(false);
-        let mut city = campaign.buildings[0];
-        city.modules = CityModules::default();
-        multiplayer.buildings.push(city);
-        multiplayer.apply_upgrade_city_module_intent(1, 1, ModuleKind::Foundry);
-        assert_eq!(multiplayer.buildings[0].modules.foundry, 0);
     }
 
     #[test]
@@ -447,7 +249,7 @@ mod tests {
         let mut game = engine(false);
         game.buildings.push(building(1, BuildingKind::City, 1));
         let before = game.state.player(1).unwrap().gold;
-        let expected = structure_upgrade_cost_gold(BuildingKind::City, 2, 1, 0, &game.state.config);
+        let expected = structure_upgrade_cost_gold(BuildingKind::City, 2, 1, &game.state.config);
 
         game.apply_upgrade_structure_intent(1, 1);
 
@@ -463,35 +265,56 @@ mod tests {
     }
 
     #[test]
-    fn factory_manufactory_upgrade_requires_a_village() {
+    fn factory_upgrades_without_a_city_level_requirement() {
         let mut game = engine(false);
         game.buildings.push(building(1, BuildingKind::Factory, 1));
-        game.buildings.push(building(2, BuildingKind::City, 2));
 
-        game.apply_upgrade_structure_intent(1, 1);
-        assert_eq!(game.buildings[0].level, 1);
-        assert!(!game.buildings[0].under_construction);
-
-        game.buildings[1].level = 3;
         game.apply_upgrade_structure_intent(1, 1);
         assert_eq!(game.buildings[0].level, 2);
         assert!(game.buildings[0].under_construction);
     }
 
     #[test]
-    fn factory_build_order_is_rejected_until_city_level_three() {
+    fn factory_build_order_has_no_city_level_requirement() {
         let mut game = engine(true);
-        game.buildings.push(building(1, BuildingKind::City, 2));
+        game.state.map = crate::map::GameMap::new(32, 32);
+        for y in 0..32 {
+            for x in 0..32 {
+                game.state.map.set_owner_id(x, y, 1);
+            }
+        }
+        game.state.player_mut(1).unwrap().tile_count = 32 * 32;
         let gold = game.state.player(1).unwrap().gold;
 
-        game.apply_build_structure_intent(1, BuildingKind::Factory, 0);
+        game.apply_build_structure_intent(1, BuildingKind::Factory, 16 * 32 + 16);
 
         assert_eq!(game.buildings.len(), 1);
-        assert_eq!(game.state.player(1).unwrap().gold, gold);
+        assert!(game.state.player(1).unwrap().gold < gold);
     }
 
     #[test]
-    fn farms_require_owned_lowland_and_stop_at_city_plot_limit() {
+    fn negative_gold_cannot_build_or_upgrade() {
+        let mut game = engine(false);
+        game.state.map = crate::map::GameMap::new(32, 32);
+        for y in 0..32 {
+            for x in 0..32 {
+                game.state.map.set_owner_id(x, y, 1);
+            }
+        }
+        game.state.player_mut(1).unwrap().gold = -1.0;
+        game.buildings.push(building(1, BuildingKind::City, 1));
+
+        game.apply_build_structure_intent(1, BuildingKind::Factory, 16 * 32 + 16);
+        game.apply_upgrade_structure_intent(1, 1);
+
+        assert_eq!(game.buildings.len(), 1);
+        assert_eq!(game.buildings[0].level, 1);
+        assert!(!game.buildings[0].under_construction);
+        assert_eq!(game.state.player(1).unwrap().gold, -1.0);
+    }
+
+    #[test]
+    fn farms_require_owned_lowland_and_allow_multiple_owned_plots() {
         let mut game = engine(false);
         game.state.map = crate::map::GameMap::new(16, 16);
         game.state.next_building_id = 2;
@@ -529,13 +352,17 @@ mod tests {
             BuildingKind::Farm,
             game.state.map.ref_id(12, 12) as u32,
         );
-        assert_eq!(game.buildings.len(), 2);
+        assert_eq!(game.buildings.len(), 3);
     }
 
     #[test]
     fn nuclear_launches_require_a_finished_metropolis() {
         let mut game = engine(false);
-        game.buildings.push(building(1, BuildingKind::City, 5));
+        game.buildings.push(building(
+            1,
+            BuildingKind::City,
+            BuildingKind::City.max_level().saturating_sub(1),
+        ));
         let gold = game.state.player(1).unwrap().gold;
 
         game.apply_launch_nuke_intent(1, 4);
@@ -557,100 +384,171 @@ mod tests {
     }
 
     #[test]
-    fn building_economy_simulation_reports_2_6_and_10_minute_checkpoints() {
+    fn first_city_becomes_affordable_and_is_building_within_two_minutes() {
         let mut game = pacing_match();
         let config = game.state.config.clone();
-        let starting_player = game.state.player(1).unwrap();
-        assert_eq!(starting_player.gold, config.starting_gold);
-        assert_eq!(starting_player.troops, config.starting_troops);
-
-        let checkpoints = [(1_200u64, 2u8), (3_600, 6), (6_000, 10)];
-        let mut next_checkpoint = 0;
-        let city_tile = 2 * game.state.map.width + 2;
-        let farm_tile = 2 * game.state.map.width + 8;
-        for _ in 0..6_000 {
-            let city = game
-                .buildings
-                .iter()
-                .find(|building| building.owner_id == 1 && building.kind == BuildingKind::City)
-                .copied();
-            match city {
-                None => game.apply_build_structure_intent(1, BuildingKind::City, city_tile),
-                Some(city) if city.under_construction => {}
-                Some(city) => {
-                    let farms = game
-                        .buildings
-                        .iter()
-                        .filter(|building| {
-                            building.owner_id == 1 && building.kind == BuildingKind::Farm
-                        })
-                        .count();
-                    if city.active_level() == 1 && farms == 0 {
-                        game.apply_build_structure_intent(1, BuildingKind::Farm, farm_tile);
-                    } else if city.level < BuildingKind::City.max_level() {
-                        game.apply_upgrade_structure_intent(1, city.id);
-                    }
-                }
-            }
-
-            game.tick();
-            if next_checkpoint < checkpoints.len()
-                && game.state.tick == checkpoints[next_checkpoint].0
-            {
-                let (tick, minute) = checkpoints[next_checkpoint];
-                let player = game.state.player(1).unwrap();
-                let aggregate = crate::building::aggregate_buildings_per_player(
-                    game.buildings.iter().copied(),
-                    2,
-                )[1];
-                let gold_rate = crate::execution::income_rates::gold_income_per_second(
-                    player.tile_count,
-                    aggregate,
-                    player.leader,
-                    &config,
-                );
-                let troop_rate = crate::execution::income_rates::troop_income_per_second(
-                    player.tile_count,
-                    aggregate,
-                    player.leader,
-                    &config,
-                );
-                let city = game
-                    .buildings
-                    .iter()
-                    .find(|building| building.owner_id == 1 && building.kind == BuildingKind::City)
-                    .copied();
-                let farm_count = game
-                    .buildings
-                    .iter()
-                    .filter(|building| {
-                        building.owner_id == 1 && building.kind == BuildingKind::Farm
-                    })
-                    .count();
-                eprintln!(
-                    "building pace {minute}m: gold={:.1}, troops={:.1}/{:.1}, city={}, farms={}, income={:.2}g/s + {:.2}troops/s",
-                    player.gold,
-                    player.troops,
-                    player.max_troops,
-                    city.map_or(0, |building| building.active_level()),
-                    farm_count,
-                    gold_rate,
-                    troop_rate,
-                );
-                assert!(player.gold.is_finite() && player.gold >= 0.0);
-                assert!(player.troops.is_finite() && player.max_troops.is_finite());
-                assert!(gold_rate.is_finite() && troop_rate.is_finite());
-                if minute == 2 {
-                    assert_eq!(city.map(|building| building.active_level()), Some(1));
-                    assert_eq!(farm_count, 1);
-                }
-                if minute == 6 {
-                    assert!(city.is_some_and(|building| building.active_level() >= 2));
-                }
-                assert_eq!(game.state.tick, tick);
-                next_checkpoint += 1;
+        assert_eq!(game.state.player(1).unwrap().gold, config.starting_gold);
+        let city_tile = 2 * game.state.map.width + 8;
+        let mut city_ordered = false;
+        for _ in 0..1_200 {
+            game.execute_income();
+            game.state.tick += 1;
+            if !city_ordered && game.state.player(1).unwrap().gold >= config.cost_city {
+                game.apply_build_structure_intent(1, BuildingKind::City, city_tile);
+                city_ordered = true;
             }
         }
-        assert_eq!(next_checkpoint, checkpoints.len());
+        assert!(
+            city_ordered,
+            "starting gold and ordinary income should afford a City within two minutes"
+        );
+        assert!(game.buildings.iter().any(|building| {
+            building.owner_id == 1
+                && building.kind == BuildingKind::City
+                && building.under_construction
+        }));
+        let player = game.state.player(1).unwrap();
+        assert!(player.gold.is_finite() && player.gold >= 0.0);
+        assert!(player.troops.is_finite() && player.max_troops.is_finite());
+    }
+
+    #[test]
+    fn two_minute_budget_pays_for_one_upgrade_not_an_upgrade_and_new_building() {
+        let mut game = pacing_match();
+        game.add_building(building(1, BuildingKind::City, 1));
+        let config = game.state.config.clone();
+        for tick in 1..=1_200 {
+            game.state.tick = tick;
+            game.execute_income();
+            game.execute_construction();
+        }
+
+        let gold = game.state.player(1).unwrap().gold;
+        let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 1, &config);
+        assert!(gold >= upgrade_cost, "gold after two minutes: {gold}");
+        assert!(gold < upgrade_cost + config.cost_bunker);
+
+        game.apply_upgrade_structure_intent(1, 1);
+        assert!(game.buildings[0].under_construction);
+        let after_upgrade = game.state.player(1).unwrap().gold;
+        assert!((after_upgrade - (gold - upgrade_cost)).abs() < 1e-9);
+        game.apply_build_structure_intent(1, BuildingKind::Bunker, 2 * game.state.map.width + 8);
+        assert_eq!(game.buildings.len(), 1);
+        assert_eq!(game.state.player(1).unwrap().gold, after_upgrade);
+    }
+
+    #[test]
+    fn gold_pacing_covers_early_midgame_large_armies_and_trade_ships() {
+        fn trace(
+            troops: f64,
+            tiles: u32,
+            factory_level: u8,
+            trade_ships: u32,
+            include_assisted_defeat: bool,
+        ) -> [f64; 4] {
+            let mut game = pacing_match();
+            let player = game.state.player_mut(1).unwrap();
+            player.troops = troops;
+            player.tile_count = tiles;
+            if factory_level > 0 {
+                game.add_building(building(1, BuildingKind::Factory, factory_level));
+            }
+            if trade_ships > 0 {
+                game.add_building(building(2, BuildingKind::Port, 4));
+                for id in 1..=u64::from(trade_ships) {
+                    game.add_fleet(crate::warp_fleet::WarpFleet::new(
+                        id,
+                        1,
+                        0,
+                        crate::game::UnitType::TradeShip,
+                        0.0,
+                        (0, 1),
+                        vec![0, 1],
+                    ));
+                }
+            }
+            if include_assisted_defeat {
+                game.state.player_mut(2).unwrap().player_type = crate::player::PlayerType::Nation;
+                let config = game.state.config.clone();
+                let mut assistant = crate::player::Player::new_human(
+                    3,
+                    "Assistant".into(),
+                    [0.2, 0.7, 0.4],
+                    &config,
+                );
+                assistant.tile_count = 1;
+                assistant.gold = 0.0;
+                game.state.register_player(assistant);
+                game.state
+                    .player_mut(1)
+                    .unwrap()
+                    .tile_conquests
+                    .insert(2, 5);
+                game.state
+                    .player_mut(3)
+                    .unwrap()
+                    .tile_conquests
+                    .insert(2, 1);
+            }
+            let mut checkpoints = [0.0; 4];
+            for tick in 1..=6_000 {
+                game.state.tick = tick;
+                game.execute_income();
+                if include_assisted_defeat && tick == 1_200 {
+                    game.eliminate_player(2, 1, 0, 0, false);
+                    assert!(matches!(
+                        game.state.events.last(),
+                        Some(crate::game::GameEvent::PlayerEliminated {
+                            gold_bounty: 37,
+                            assists,
+                            ..
+                        }) if assists == &vec![(3, 38)]
+                    ));
+                }
+                if matches!(tick, 300 | 1_200 | 3_600 | 6_000) {
+                    let player = game.state.player(1).unwrap();
+                    eprintln!(
+                        "economy tick={tick} tiles={} troops={:.0} gold={:.2} base={:.1} upkeep={:.2} trade={trade_ships}",
+                        player.tile_count,
+                        player.troops,
+                        player.gold,
+                        game.state.config.gold_base_income,
+                        crate::execution::income_rates::troop_upkeep_per_second(
+                            player.troops,
+                            &game.state.config
+                        ),
+                    );
+                }
+                match tick {
+                    300 => checkpoints[0] = game.state.player(1).unwrap().gold,
+                    1_200 => checkpoints[1] = game.state.player(1).unwrap().gold,
+                    3_600 => checkpoints[2] = game.state.player(1).unwrap().gold,
+                    6_000 => checkpoints[3] = game.state.player(1).unwrap().gold,
+                    _ => {}
+                }
+            }
+            checkpoints
+        }
+
+        let early = trace(1_000.0, 32, 0, 0, false);
+        let growing_army = trace(25_000.0, 1_024, 0, 0, true);
+        let industrial_trade = trace(100_000.0, 10_000, 4, 3, false);
+        eprintln!(
+            "gold at 30s/2m/6m/10m: early={early:?}, growing_army={growing_army:?}, industrial_trade={industrial_trade:?}"
+        );
+
+        assert!(early.iter().all(|gold| gold.is_finite()));
+        assert!(growing_army.iter().all(|gold| gold.is_finite()));
+        assert!(industrial_trade.iter().all(|gold| gold.is_finite()));
+        assert!(early[0] >= 125.0 && early[0] < 200.0);
+        assert!(
+            early[1] >= 200.0 && early[1] < 325.0,
+            "at two minutes, City is affordable but City and Factory together are not"
+        );
+        assert!(growing_army[1] < 200.0);
+        assert!(growing_army[2] < growing_army[1]);
+        assert!(growing_army[3] < growing_army[2]);
+        assert!(industrial_trade[0] > 100.0);
+        assert!(industrial_trade[1] > industrial_trade[0]);
     }
 }

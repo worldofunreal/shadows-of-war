@@ -130,6 +130,7 @@ impl SowApp {
         if self.input.active_touches.len() == 1
             && self.ui.app.hud_state.selected_building_kind.is_none()
             && self.ui.app.hud_state.selected_nuke_kind.is_none()
+            && !self.ui.app.hud_state.selected_warship_build
         {
             if let Some((x, y)) = single_touch_position(&self.input.active_touches) {
                 self.input.last_mouse_x = x;
@@ -261,10 +262,7 @@ impl SowApp {
             self.select_building_kind(kind);
         }
         if code == winit::keyboard::KeyCode::Digit0 || code == winit::keyboard::KeyCode::Numpad0 {
-            let kind = sow_core::game::NukeKind::AtomBomb;
-            let selected = &mut self.ui.app.hud_state.selected_nuke_kind;
-            *selected = (*selected != Some(kind)).then_some(kind);
-            self.ui.app.hud_state.selected_building_kind = None;
+            self.select_nuke_kind(sow_core::game::NukeKind::AtomBomb);
         }
         if code == winit::keyboard::KeyCode::Escape || code == winit::keyboard::KeyCode::KeyQ {
             self.clear_placement();
@@ -330,6 +328,7 @@ impl SowApp {
         let in_game =
             self.ui.app.phase == ClientPhase::Playing && self.ui.app.hud_state.sync_state.is_none();
         let build_tool_selected = self.ui.app.hud_state.selected_building_kind.is_some();
+        let warship_tool_selected = self.ui.app.hud_state.selected_warship_build;
 
         if left {
             if pressed {
@@ -352,7 +351,9 @@ impl SowApp {
                     self.input.tutorial_camera_drag_recorded = false;
                 }
                 self.input.dragging = self.ui.tutorial_camera_only
-                    || (!build_tool_selected && self.ui.app.hud_state.selected_nuke_kind.is_none());
+                    || (!build_tool_selected
+                        && !warship_tool_selected
+                        && self.ui.app.hud_state.selected_nuke_kind.is_none());
                 if !is_touch {
                     let action_sent = !self.ui.tutorial_camera_only
                         && (build_tool_selected || self.try_attack_at(x, y));
@@ -425,6 +426,7 @@ impl SowApp {
         {
             if self.ui.app.hud_state.selected_building_kind.is_some()
                 || self.ui.app.hud_state.selected_nuke_kind.is_some()
+                || self.ui.app.hud_state.selected_warship_build
             {
                 self.clear_placement();
                 self.close_map_context_menu();
@@ -563,6 +565,7 @@ impl SowApp {
             || start.action_sent
             || self.ui.app.hud_state.selected_building_kind.is_some()
             || self.ui.app.hud_state.selected_nuke_kind.is_some()
+            || self.ui.app.hud_state.selected_warship_build
             || start.started_at.elapsed().as_millis() < TOUCH_HOLD_MS
         {
             return;

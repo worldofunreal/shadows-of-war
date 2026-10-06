@@ -18,8 +18,7 @@ impl SowEngine {
     }
 
     fn form_campaign_alliance(&mut self, proposer: u16, target: u16) {
-        if self.campaign_relations.get(&proposer)
-            == Some(&crate::protocol::CampaignRelation::Enemy)
+        if self.campaign_relations.get(&proposer) == Some(&crate::protocol::CampaignRelation::Enemy)
             || self.campaign_relations.get(&target)
                 == Some(&crate::protocol::CampaignRelation::Enemy)
         {
@@ -50,7 +49,9 @@ impl SowEngine {
                     if campaign_pair {
                         player.alliance_timers.remove(&target_id);
                     } else {
-                        player.alliance_timers.insert(target_id, ALLIANCE_DURATION_TICKS);
+                        player
+                            .alliance_timers
+                            .insert(target_id, ALLIANCE_DURATION_TICKS);
                     }
                 }
                 if let Some(player) = self.state.player_mut(target_id) {
@@ -60,25 +61,29 @@ impl SowEngine {
                     if campaign_pair {
                         player.alliance_timers.remove(&proposer_id);
                     } else {
-                        player.alliance_timers.insert(proposer_id, ALLIANCE_DURATION_TICKS);
+                        player
+                            .alliance_timers
+                            .insert(proposer_id, ALLIANCE_DURATION_TICKS);
                     }
                 }
                 if campaign_pair {
-                    if self.state.player(proposer_id).is_some_and(|player| player.is_human())
+                    if self
+                        .state
+                        .player(proposer_id)
+                        .is_some_and(|player| player.is_human())
                         && self.campaign_relations.contains_key(&target_id)
                     {
-                        self.campaign_relations.insert(
-                            target_id,
-                            crate::protocol::CampaignRelation::Allied,
-                        );
+                        self.campaign_relations
+                            .insert(target_id, crate::protocol::CampaignRelation::Allied);
                     }
-                    if self.state.player(target_id).is_some_and(|player| player.is_human())
+                    if self
+                        .state
+                        .player(target_id)
+                        .is_some_and(|player| player.is_human())
                         && self.campaign_relations.contains_key(&proposer_id)
                     {
-                        self.campaign_relations.insert(
-                            proposer_id,
-                            crate::protocol::CampaignRelation::Allied,
-                        );
+                        self.campaign_relations
+                            .insert(proposer_id, crate::protocol::CampaignRelation::Allied);
                     }
                 }
                 self.retreat_mutual_aggression(proposer_id, target_id);
@@ -156,7 +161,11 @@ impl SowEngine {
         if human.player_type != PlayerType::Human || !human.alive || human.gold < gold_cost {
             return;
         }
-        if !self.state.player(target_id).is_some_and(|target| target.alive) {
+        if !self
+            .state
+            .player(target_id)
+            .is_some_and(|target| target.alive)
+        {
             return;
         }
 
@@ -260,7 +269,10 @@ impl SowEngine {
                     if wf.id != *fleet_id {
                         continue;
                     }
-                    if wf.owner_id != pid {
+                    if wf.owner_id != pid
+                        || wf.unit_type != crate::game::UnitType::TransportShip
+                        || wf.retreating
+                    {
                         continue;
                     }
                     wf.retreating = true;
@@ -328,33 +340,13 @@ impl SowEngine {
             GameplayIntent::UpgradeStructure { building_id } => {
                 self.apply_upgrade_structure_intent(stamped.player_id, *building_id);
             }
-            GameplayIntent::UpgradeCityModule {
-                building_id,
-                module,
-            } => {
-                self.apply_upgrade_city_module_intent(stamped.player_id, *building_id, *module);
-            }
-            GameplayIntent::UpgradeTile { tile_idx } => {
-                self.apply_upgrade_tile_intent(stamped.player_id, *tile_idx);
-            }
             GameplayIntent::BuildShip { port_tile, kind } => {
                 let pid = stamped.player_id;
+                if *kind == crate::game::UnitType::TradeShip {
+                    return;
+                }
                 let cost = kind.gold_cost();
-                let required_city_level = match kind {
-                    crate::game::UnitType::TradeShip => 4,
-                    crate::game::UnitType::Warship => 5,
-                    crate::game::UnitType::TransportShip => 1,
-                };
-                let required_port_level = match kind {
-                    crate::game::UnitType::TradeShip => 3,
-                    crate::game::UnitType::Warship => 4,
-                    crate::game::UnitType::TransportShip => 1,
-                };
-                let has_city_requirement = self.buildings.iter().any(|b| {
-                    b.owner_id == pid
-                        && b.kind == crate::game::BuildingKind::City
-                        && b.active_level() >= required_city_level
-                });
+                let required_port_level = kind.required_port_level();
                 let port_id = self
                     .buildings
                     .iter()
@@ -368,8 +360,7 @@ impl SowEngine {
                     .map(|b| b.id);
 
                 let boat_capacity = crate::building::player_fleet_capacity(&self.buildings, pid);
-                if has_city_requirement
-                    && self.boat_slots_used(pid) < boat_capacity
+                if self.boat_slots_used(pid) < boat_capacity
                     && let Some(port_id) = port_id
                     && let Some(player) = self.state.player_mut(pid)
                     && player.gold >= cost
@@ -490,6 +481,8 @@ impl SowEngine {
                         });
                         self.buildings.retain(|b| b.owner_id != pid);
                         self.building_grid.mark_dirty();
+                        self.building_aggregates_dirty = true;
+                        self.sea_lanes_dirty = true;
                         if had_defense_post {
                             self.defense_grid_dirty = true;
                             self.render_defense_dirty = true;
@@ -656,8 +649,7 @@ impl SowEngine {
                 if human_id == Some(target) && self.campaign_relations.contains_key(&breaker) {
                     self.campaign_relations
                         .insert(breaker, crate::protocol::CampaignRelation::Enemy);
-                } else if human_id == Some(breaker)
-                    && self.campaign_relations.contains_key(&target)
+                } else if human_id == Some(breaker) && self.campaign_relations.contains_key(&target)
                 {
                     self.campaign_relations
                         .insert(target, crate::protocol::CampaignRelation::Enemy);
@@ -693,7 +685,11 @@ impl SowEngine {
                     let mut actual_g = 0.0;
                     let mut actual_t = 0.0;
                     if let Some(s_player) = self.state.player_mut(sender) {
-                        actual_g = if g > 0.0 { g.min(s_player.gold) } else { 0.0 };
+                        actual_g = if g > 0.0 {
+                            g.min(s_player.gold.max(0.0))
+                        } else {
+                            0.0
+                        };
                         let max_t_to_send = (s_player.troops - 1.0).max(0.0);
                         actual_t = if t > 0.0 {
                             t.min(max_t_to_send).min(target_troop_room)
@@ -716,21 +712,29 @@ impl SowEngine {
                                 gold: actual_g,
                                 troops: actual_t,
                             });
-                    } else if self.state.player(sender).is_some_and(|player| player.is_human()) {
-                        self.state.events.push(
-                            crate::game::GameEvent::ResourceTransferRejected {
+                    } else if self
+                        .state
+                        .player(sender)
+                        .is_some_and(|player| player.is_human())
+                    {
+                        self.state
+                            .events
+                            .push(crate::game::GameEvent::ResourceTransferRejected {
                                 sender_id: sender,
                                 receiver_id: target,
-                            },
-                        );
+                            });
                     }
-                } else if self.state.player(sender).is_some_and(|player| player.is_human()) {
-                    self.state.events.push(
-                        crate::game::GameEvent::ResourceTransferRejected {
+                } else if self
+                    .state
+                    .player(sender)
+                    .is_some_and(|player| player.is_human())
+                {
+                    self.state
+                        .events
+                        .push(crate::game::GameEvent::ResourceTransferRejected {
                             sender_id: sender,
                             receiver_id: target,
-                        },
-                    );
+                        });
                 }
             }
             GameplayIntent::RequestResources {
@@ -781,7 +785,7 @@ impl SowEngine {
                         && acc_player.alive
                     {
                         actual_g = if req.gold > 0.0 {
-                            req.gold.min(acc_player.gold)
+                            req.gold.min(acc_player.gold.max(0.0))
                         } else {
                             0.0
                         };
@@ -871,5 +875,119 @@ impl SowEngine {
         } else {
             self.apply_launch_fleet_intent(player_id, target_tile, troops);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::{GameState, UnitType};
+    use crate::game_config::GameConfig;
+    use crate::player::Player;
+    use crate::protocol::StampedIntent;
+    use crate::warp_fleet::WarpFleet;
+    use crate::water_components::WaterComponents;
+
+    #[test]
+    fn recall_fleet_only_retires_owned_troop_transports_once() {
+        let state = GameState::new(1, 4, 4, GameConfig::default());
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = crate::engine::SowEngine::new(state, water);
+        for (id, owner_id, unit_type) in [
+            (1, 7, UnitType::TransportShip),
+            (2, 7, UnitType::TradeShip),
+            (3, 7, UnitType::Warship),
+            (4, 8, UnitType::TransportShip),
+        ] {
+            engine.add_fleet(WarpFleet::new(
+                id,
+                owner_id,
+                9,
+                unit_type,
+                100.0,
+                (0, 0),
+                vec![],
+            ));
+        }
+        let recall = StampedIntent {
+            player_id: 7,
+            intent: GameplayIntent::RecallFleet { fleet_id: 1 },
+        };
+        engine.apply_stamped_intent(&recall, 0);
+        engine.apply_stamped_intent(&recall, 1);
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::RecallFleet { fleet_id: 2 },
+            },
+            2,
+        );
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::RecallFleet { fleet_id: 3 },
+            },
+            3,
+        );
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 7,
+                intent: GameplayIntent::RecallFleet { fleet_id: 4 },
+            },
+            4,
+        );
+
+        assert!(engine.fleets[0].retreating);
+        assert!(!engine.fleets[1].retreating);
+        assert!(!engine.fleets[2].retreating);
+        assert!(!engine.fleets[3].retreating);
+    }
+
+    #[test]
+    fn debt_cannot_send_or_accept_gold_that_does_not_exist() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        let mut debtor = Player::new_human(1, "Debtor".into(), [1.0; 3], &config);
+        debtor.gold = -25.0;
+        debtor.alliances.push(2);
+        let mut ally = Player::new_human(2, "Ally".into(), [0.5; 3], &config);
+        ally.gold = 80.0;
+        ally.alliances.push(1);
+        state.register_player(debtor);
+        state.register_player(ally);
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::SendResources {
+                    target_player: 2,
+                    gold: 50.0,
+                    troops: 0.0,
+                },
+            },
+            0,
+        );
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 2,
+                intent: GameplayIntent::RequestResources {
+                    target_player: 1,
+                    gold: 50.0,
+                    troops: 0.0,
+                },
+            },
+            1,
+        );
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::AcceptResourceRequest { target_player: 2 },
+            },
+            2,
+        );
+
+        assert_eq!(engine.state.player(1).unwrap().gold, -25.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 80.0);
     }
 }

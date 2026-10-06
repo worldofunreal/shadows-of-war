@@ -313,7 +313,7 @@ impl SowEngine {
 #[cfg(test)]
 mod tests {
     use super::{build_attack_frontier, spawn_or_merge_attack_for_fleet_arrival_pure};
-    use crate::building::{Building, CityModules, DefenseGrid, DEFENSE_GRID_CELL_SIZE};
+    use crate::building::{Building, DefenseGrid, DEFENSE_GRID_CELL_SIZE};
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::GameConfig;
     use crate::map::MapTile;
@@ -347,7 +347,6 @@ mod tests {
             level: 2,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         };
         let mut grid = DefenseGrid::default();
         grid.rebuild(&[tower], width, width, DEFENSE_GRID_CELL_SIZE, &game.config);
@@ -398,7 +397,6 @@ mod tests {
             level: 2,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: CityModules::default(),
         });
         let fleet_id = 9;
         spawn_or_merge_attack_for_fleet_arrival_pure(&mut engine, 1, 2, 10_000.0, fleet_id);

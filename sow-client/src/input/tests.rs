@@ -20,7 +20,6 @@ mod placement_tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: sow_core::building::CityModules::default(),
         }
     }
 

@@ -33,7 +33,7 @@ impl SowEngine {
                 b.kind == BuildingKind::City
                     && b.owner_id == player_id
                     && !b.under_construction
-                    && b.active_level() >= BuildingKind::City.max_level()
+                    && b.active_level() >= crate::game::NukeKind::AtomBomb.required_city_level()
                     && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
             })
             .min_by_key(|b| {

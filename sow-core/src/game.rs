@@ -3,6 +3,17 @@ use crate::map::GameMap;
 use crate::player::{Player, PlayerId};
 use serde::{Deserialize, Serialize};
 
+pub const DEPLOYMENT_PHASE_DURATION_MS: f32 = 15_000.0;
+
+pub fn deployment_phase_end_tick(tick_rate_ms: f32) -> u64 {
+    let tick_rate_ms = if tick_rate_ms.is_finite() && tick_rate_ms > 0.0 {
+        tick_rate_ms
+    } else {
+        100.0
+    };
+    (DEPLOYMENT_PHASE_DURATION_MS / tick_rate_ms) as u64
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum GamePhase {
     Lobby,
@@ -41,13 +52,7 @@ impl BuildingKind {
     }
 
     pub const fn max_level(self) -> u8 {
-        match self {
-            Self::City => 6,
-            Self::Port => 5,
-            Self::Factory => 4,
-            Self::Bunker => 4,
-            Self::Farm => 3,
-        }
+        4
     }
 
     pub const fn level_name(self, level: u8) -> &'static str {
@@ -56,13 +61,10 @@ impl BuildingKind {
             (Self::City, 2) => "Hamlet",
             (Self::City, 3) => "Village",
             (Self::City, 4) => "Town",
-            (Self::City, 5) => "City",
-            (Self::City, 6) => "Metropolis",
             (Self::Port, 1) => "Dock",
             (Self::Port, 2) => "Wharf",
             (Self::Port, 3) => "Harbor",
             (Self::Port, 4) => "Port",
-            (Self::Port, 5) => "Megaport",
             (Self::Factory, 1) => "Workshop",
             (Self::Factory, 2) => "Manufactory",
             (Self::Factory, 3) => "Factory",
@@ -74,6 +76,7 @@ impl BuildingKind {
             (Self::Farm, 1) => "Cultivated Plot",
             (Self::Farm, 2) => "Farm",
             (Self::Farm, 3) => "Irrigated Fields",
+            (Self::Farm, 4) => "Plantation",
             _ => "Unknown",
         }
     }
@@ -81,27 +84,20 @@ impl BuildingKind {
     pub const fn level_benefit(self, level: u8) -> &'static str {
         match (self, level) {
             (Self::City, 1) => "troop_capacity",
-            (Self::City, 2) => "territory_gold",
-            (Self::City, 3) => "unlocks_workshop",
-            (Self::City, 4) => "unlocks_trade_ships",
-            (Self::City, 5) => "unlocks_warships",
-            (Self::City, 6) => "unlocks_nukes",
-            (Self::Port, 1) => "unlocks_transports",
-            (Self::Port, 2) => "departure_speed",
-            (Self::Port, 3) => "unlocks_trade_ships",
-            (Self::Port, 4) => "unlocks_warships",
-            (Self::Port, 5) => "departure_speed_plus",
-            (Self::Factory, 1) => "gold_income",
-            (Self::Factory, 2) => "build_time_reduction",
-            (Self::Factory, 3) => "upgrade_cost_reduction",
-            (Self::Factory, 4) => "trade_ship_income",
+            (Self::City, 2..=3) => "troop_capacity",
+            (Self::City, 4) => "unlocks_nukes",
+            (Self::Port, 1) => "unlocks_trade_ships_and_transports",
+            (Self::Port, 2) => "unlocks_warships",
+            (Self::Port, 3) => "boat_capacity",
+            (Self::Port, 4) => "departure_speed",
+            (Self::Factory, 1..=4) => "gold_income",
             (Self::Bunker, 1) => "attack_cost_aura",
             (Self::Bunker, 2) => "defense_range",
             (Self::Bunker, 3) => "defender_strength",
             (Self::Bunker, 4) => "nuke_interception",
             (Self::Farm, 1) => "farm_troop_income",
             (Self::Farm, 2) => "farm_troop_income_plus",
-            (Self::Farm, 3) => "farm_troop_income_max",
+            (Self::Farm, 3..=4) => "farm_troop_income_max",
             _ => "none",
         }
     }
@@ -131,6 +127,12 @@ pub enum NukeKind {
 }
 
 impl NukeKind {
+    pub const fn required_city_level(self) -> u8 {
+        match self {
+            NukeKind::AtomBomb => BuildingKind::City.max_level(),
+        }
+    }
+
     pub fn gold_cost(self, _prev_launches: u32) -> f64 {
         0.0
     }
@@ -167,11 +169,23 @@ pub struct Projectile {
 }
 
 impl UnitType {
+    pub const fn required_port_level(self) -> u8 {
+        match self {
+            UnitType::TransportShip => 1,
+            UnitType::TradeShip => 1,
+            UnitType::Warship => 2,
+        }
+    }
+
+    pub const fn uses_military_capacity(self) -> bool {
+        !matches!(self, UnitType::TradeShip)
+    }
+
     pub fn gold_cost(self) -> f64 {
         match self {
             UnitType::TransportShip => 0.0, // Free, converted from land troops
-            UnitType::TradeShip => 10_000.0,
-            UnitType::Warship => 100_000.0,
+            UnitType::TradeShip => 250.0,
+            UnitType::Warship => 2_000.0,
         }
     }
 
@@ -232,6 +246,11 @@ pub enum GameEvent {
         #[serde(default)]
         by_nuke: bool,
     },
+    PlayerRebelled {
+        player_id: u16,
+        rebel_id: u16,
+        building_id: u64,
+    },
     GameOver {
         winner_id: u16,
         winning_team: Option<crate::protocol::Team>,
@@ -265,10 +284,6 @@ pub enum GameEvent {
         inner_radius: u32,
         outer_radius: u32,
         owner_id: u16,
-    },
-    TileUpgraded {
-        tile_idx: u32,
-        level: u32,
     },
     ResourceTransferred {
         sender_id: u16,
@@ -335,7 +350,7 @@ fn default_one() -> u64 {
 impl GameState {
     pub fn new(seed: u64, width: u32, height: u32, config: crate::game_config::GameConfig) -> Self {
         let phase = if !config.random_spawn {
-            let ticks = (15.0 * 1000.0 / config.tick_rate_ms) as u64;
+            let ticks = deployment_phase_end_tick(config.tick_rate_ms);
             GamePhase::Spawning { end_tick: ticks }
         } else {
             GamePhase::Playing
@@ -577,5 +592,24 @@ impl GameState {
                 self.set_tile_owner_inner(cx, cy, new_owner, eliminated.as_deref_mut());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod naval_requirement_tests {
+    use super::{BuildingKind, NukeKind, UnitType};
+
+    #[test]
+    fn naval_and_nuclear_unlocks_share_the_canonical_levels() {
+        assert_eq!(UnitType::TradeShip.required_port_level(), 1);
+        assert_eq!(UnitType::Warship.required_port_level(), 2);
+        assert_eq!(NukeKind::AtomBomb.required_city_level(), BuildingKind::City.max_level());
+    }
+
+    #[test]
+    fn trade_ships_do_not_use_military_capacity() {
+        assert!(!UnitType::TradeShip.uses_military_capacity());
+        assert!(UnitType::Warship.uses_military_capacity());
+        assert!(UnitType::TransportShip.uses_military_capacity());
     }
 }

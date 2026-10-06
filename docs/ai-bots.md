@@ -57,8 +57,8 @@ Source of truth is code. Update this table when behavior changes.
   No spawn band reaches the 100–129 tier, so nations always send for 5.
 
 - Neutral expansion is free; war costs `attack_cost`, clamped at zero.
-- `max_troops = 10 + tiles^0.625 × 350 + 5000×city_levels + 500×armory_levels`; tribes divide it by 1.5.
-- Troop income is `250 + 25×cities + tiles/16 + 80×armory_levels + 50×ports` per second (`sow-core/src/execution/income.rs`, `income_rates.rs`); tribes receive 0.75× that value; leader perks multiply on top.
+- `max_troops = 10 + tiles^0.625 × 350 + 5000×city_levels`; tribes divide it by 1.5.
+- Troop income is `250 + 25×cities + tiles/16 + 50×ports` per second (`sow-core/src/execution/income.rs`, `income_rates.rs`); tribes receive 0.75× that value; leader perks multiply on top.
 - Human-safe nations: `refuse_human_chance` (Nation 20, Vanilla Tribe 100 in
   `sow-core/src/intent/nation/profile.rs`) means nations and tribes never
   target real humans at their roll chance — 0b65c0f1 / 1810d640 behavior.

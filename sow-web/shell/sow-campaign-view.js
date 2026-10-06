@@ -7,7 +7,7 @@
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
         let objectiveStepId = null;
-        let guideWasVisible = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
+        let guideWasVisible = false, cameraTracking = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
@@ -20,9 +20,8 @@
             '<aside class="sow-story__objective" hidden>' +
                 '<div class="sow-story__objective-copy"><h3></h3><p></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
                 '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
-            '<div class="sow-story__guide-shade" aria-hidden="true" hidden></div>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
-                '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
+            '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
         const portrait = find(".sow-story__portrait"), image = portrait.querySelector("img");
@@ -33,10 +32,9 @@
         const cinematicPlay = find("[data-story-play]"), cinematicSkip = find("[data-story-skip]");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
-        const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy");
+        const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy"), gestureHint = find(".sow-story__gesture-hint");
         const gestureMetric = find(".sow-story__gesture-metric"), guideCurrent = find(".sow-story__zoom-current"), guideTarget = find(".sow-story__zoom-target");
         const spotlight = find(".sow-story__spotlight");
-        const guideShade = find(".sow-story__guide-shade");
         const view = doc.defaultView;
         let cinematicStepKey = "", cinematicStatus = "none";
         let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
@@ -133,18 +131,6 @@
             continueButton.focus({ preventScroll: true });
         });
         cinematicVideo.addEventListener("error", failCinematic);
-        function placeGuideShade(target) {
-            const valid = target
-                && Number.isFinite(target.x) && Number.isFinite(target.y)
-                && Number.isFinite(target.width) && Number.isFinite(target.height)
-                && target.width > 0 && target.height > 0;
-            guideShade.hidden = !valid;
-            if (!valid) return;
-            guideShade.style.setProperty("--guide-cutout-x", target.x + "px");
-            guideShade.style.setProperty("--guide-cutout-y", target.y + "px");
-            guideShade.style.setProperty("--guide-cutout-rx", (target.width / 2 + 12) + "px");
-            guideShade.style.setProperty("--guide-cutout-ry", (target.height / 2 + 12) + "px");
-        }
         function dismissDialog() {
             if (!model) return;
             if (model.step.type === "choice" || model.choices.length) { triggerNudge(); return; }
@@ -218,7 +204,7 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { guideWasVisible = false; clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { guideWasVisible = false; cameraTracking = false; gesture.classList.remove("is-following", "is-camera-following"); clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
             if (objectiveStepId !== step.id) { objectiveStepId = step.id; }
             footer.hidden = step.type === "choice" || step.pause_game === true;
@@ -338,11 +324,15 @@
             const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")
                 : zoomButtonGuide ? (step.guide.target === "hud_zoom_in" ? "hud.zoom_in" : "hud.zoom_out") : step.title_key;
             if (labeledGesture) setText(gestureCopy, zoomGuide || zoomButtonGuide ? t(gestureTitleKey) : context.gestureLabel || t(gestureTitleKey));
+            const showGestureHint = gestureType === "hover" && Boolean(context.gestureHint || context.hintOverride);
+            gestureHint.hidden = !showGestureHint;
+            if (showGestureHint) setText(gestureHint, context.gestureHint || context.hintOverride);
             renderGuideMetric(context.guideMetric, reducedMotion, step.id);
             const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
-            placeGuideShade(guideVisible && step.guide.kind === "ui" ? anchor.cutout || anchor : null);
             gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
             if (guideVisible) {
+                cameraTracking = anchor.cameraTracked === true;
+                gesture.classList.toggle("is-camera-following", cameraTracking);
                 gesture.dataset.gesture = step.guide.gesture;
                 gesture.dataset.zoomMode = context.zoomMode || "pinch";
                 gesture.dataset.guidePath = anchor.toX != null && anchor.toY != null ? "true" : "false";
@@ -375,8 +365,16 @@
                 }
             } else {
                 gesture.classList.remove("is-following");
+                gesture.classList.remove("is-camera-following");
+                cameraTracking = false;
                 guideWasVisible = false;
             }
+        }
+        function updateCameraAnchor(x, y) {
+            if (!cameraTracking || root.hidden || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+            if (x !== guideX || y !== guideY) gesture.style.transform = "translate3d(" + x + "px, " + y + "px, 0)";
+            guideX = x; guideY = y;
+            return true;
         }
         function click(event) {
             event.stopPropagation();
@@ -437,6 +435,7 @@
         root.addEventListener("keydown", keys);
         return {
             render,
+            updateCameraAnchor,
             destroy() {
                 releaseFocus();
                 clearNudge();

@@ -203,7 +203,6 @@ mod tests {
                 level: 1 + (i % 4) as u8,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: CityModules::default(),
             });
             owner_tiles[owner_id as usize].push((x, y));
         }
@@ -397,7 +396,6 @@ mod tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: Default::default(),
             },
             Building {
                 id: 2,
@@ -407,7 +405,6 @@ mod tests {
                 level: 1,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: Default::default(),
             },
         ];
         let mut grid = BuildingGrid::default();
@@ -458,7 +455,6 @@ mod tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules::default(),
         };
         let b2 = Building {
             id: 2,
@@ -468,7 +464,6 @@ mod tests {
             level: 1,
             under_construction: false,
             ticks_until_complete: 0,
-            modules: crate::building::CityModules::default(),
         };
         let map = GameMap::new(w, 20);
         let click = xy_idx(5, 5, w);
@@ -509,7 +504,6 @@ mod tests {
             level: 1,
             under_construction: true,
             ticks_until_complete: 1,
-            modules: crate::building::CityModules::default(),
         });
         engine.execute_construction();
         assert!(
@@ -532,7 +526,6 @@ mod tests {
                 level: 1,
                 under_construction: true,
                 ticks_until_complete: 3,
-                modules: crate::building::CityModules::default(),
             },
             Building {
                 id: 2,
@@ -542,7 +535,6 @@ mod tests {
                 level: 2,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: crate::building::CityModules::default(),
             },
         ];
         let aggs = aggregate_buildings_per_player(b.into_iter(), 2);
@@ -574,7 +566,6 @@ mod tests {
                 level: 4,
                 under_construction: false,
                 ticks_until_complete: 0,
-                modules: CityModules::default(),
             })
             .collect();
         let mut grid = DefenseGrid::default();

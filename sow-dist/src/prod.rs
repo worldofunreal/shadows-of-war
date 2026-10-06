@@ -598,11 +598,29 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     )
     .context("web interaction regression tests failed")?;
     run(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "sow-core",
+            "--",
+            "--test-threads=1",
+        ],
+        Some(&paths.root),
+    )
+    .context("core economy and simulation regression tests failed")?;
+    run(
         "rustfmt",
         &[
             "--edition",
             "2024",
             "--check",
+            "sow-core/src/engine/mod.rs",
+            "sow-core/src/intent/apply.rs",
+            "sow-core/src/intent/buildings.rs",
+            "sow-core/src/execution/income.rs",
+            "sow-client/src/input/map_click.rs",
             "sow-core/src/map.rs",
             "sow-core/src/player/mod.rs",
             "sow-render/src/text/renderer.rs",

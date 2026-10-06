@@ -1,6 +1,5 @@
 use bitfield::bitfield;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 bitfield! {
     #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +70,6 @@ pub struct GameMap {
     pub height: u32,
     pub terrain: Vec<MapTile>,
     state: Vec<u16>,
-    pub tile_upgrades: BTreeMap<u32, u32>,
     #[serde(skip)]
     pub dirty_tiles: Vec<usize>,
     #[serde(skip)]
@@ -84,7 +82,6 @@ impl PartialEq for GameMap {
             && self.height == other.height
             && self.terrain == other.terrain
             && self.state == other.state
-            && self.tile_upgrades == other.tile_upgrades
             && self.dirty_tiles == other.dirty_tiles
     }
 }
@@ -106,7 +103,6 @@ impl GameMap {
             height,
             terrain: vec![MapTile::from_byte(0b10000000); size],
             state: vec![0; size],
-            tile_upgrades: BTreeMap::new(),
             dirty_tiles: Vec::new(),
             ownership_revision: 0,
         }
@@ -269,7 +265,6 @@ mod ownership_revision_tests {
         assert_eq!(map.ownership_revision(), 1);
         map.set_owner_id(0, 0, 7);
         assert_eq!(map.ownership_revision(), 1);
-        map.tile_upgrades.insert(0, 1);
         assert_eq!(map.ownership_revision(), 1);
         map.set_owner_id(0, 0, 9);
         assert_eq!(map.ownership_revision(), 2);

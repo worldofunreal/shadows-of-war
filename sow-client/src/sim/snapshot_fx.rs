@@ -426,6 +426,8 @@ mod nuke_alert_tests {
             assists: 0,
             boats_in_use: 0,
             boat_capacity: 1,
+            nuke_available: false,
+            nuke_cooldown_ticks: 0,
         }
     }
 

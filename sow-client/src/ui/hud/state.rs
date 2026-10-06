@@ -1,5 +1,4 @@
 use crate::ui::UiText;
-use sow_core::protocol::{AttackSnapshot, FleetSnapshot};
 use std::collections::VecDeque;
 use web_time::Instant;
 
@@ -36,13 +35,12 @@ pub struct HudState {
     pub troops: f64,
     pub max_troops: f64,
     pub troop_rate: f64,
+    pub gold_rate: f64,
     pub attack_ratio: f32,
     pub spawn_timer_secs: Option<f32>,
     pub sync_state: Option<sow_core::protocol::ServerSyncStateMessage>,
     pub my_player_id: u16,
     pub map_w: u32,
-    pub attacks: Vec<AttackSnapshot>,
-    pub fleets: Vec<FleetSnapshot>,
     pub safe_area_top: f32,
     pub safe_area_bottom: f32,
     pub selected_tile: Option<SelectedTileInfo>,
@@ -54,6 +52,7 @@ pub struct HudState {
     pub show_betrayal_warning: Option<(u16, sow_core::protocol::GameplayIntent)>,
     pub betrayal_warning_cached: Option<(u16, sow_core::protocol::GameplayIntent)>,
     pub selected_building_kind: Option<sow_core::game::BuildingKind>,
+    pub selected_warship_build: bool,
     pub building_costs: [f64; 9],
     pub selected_nuke_kind: Option<sow_core::game::NukeKind>,
     pub hud_notifications: VecDeque<HudNotification>,
@@ -73,13 +72,12 @@ impl Default for HudState {
             troops: 0.0,
             max_troops: 0.0,
             troop_rate: 0.0,
+            gold_rate: 0.0,
             attack_ratio: 0.5,
             spawn_timer_secs: None,
             sync_state: None,
             my_player_id: 0,
             map_w: 0,
-            attacks: Vec::new(),
-            fleets: Vec::new(),
             safe_area_top: 0.0,
             safe_area_bottom: 0.0,
             selected_tile: None,
@@ -91,6 +89,7 @@ impl Default for HudState {
             show_betrayal_warning: None,
             betrayal_warning_cached: None,
             selected_building_kind: None,
+            selected_warship_build: false,
             building_costs: [0.0; 9],
             selected_nuke_kind: None,
             hud_notifications: VecDeque::with_capacity(32),

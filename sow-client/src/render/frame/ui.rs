@@ -141,6 +141,7 @@ impl SowApp {
                 self.ui.app.asset_loader.campaign_avatar_slots = campaign_avatar_slots;
             }
         }
+        crate::web_menu::publish_tutorial_camera_anchor_frame(self);
         crate::web_menu::publish_state(self);
 
         let Some(mut render_ctx) = self.gfx.render_ctx.take() else {

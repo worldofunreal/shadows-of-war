@@ -409,7 +409,7 @@ pub fn best_shore_spawn_for_transport(
 }
 
 /// Baseline transport speed at 1x game speed.
-pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 3.0;
+pub const TRANSPORT_BASE_SPEED_TILES_PER_SECOND: f64 = 4.5;
 
 /// Moving fleet over water.
 #[derive(Debug, Clone)]
@@ -589,7 +589,7 @@ mod movement_tests {
     }
 
     #[test]
-    fn transport_ten_tiles_eta_matches_three_tiles_per_second_at_one_x() {
+    fn transport_ten_tiles_eta_matches_four_and_a_half_tiles_per_second_at_one_x() {
         let mut config = GameConfig::default();
         config.global_speed_multiplier = 1.0;
         let mut fleet = transport();
@@ -599,7 +599,7 @@ mod movement_tests {
         );
         let eta = fleet.remaining_eta_seconds().expect("moving transport has an ETA");
 
-        assert!((eta - (10.0 / 3.0)).abs() < 1e-5);
+        assert!((eta - (10.0 / 4.5)).abs() < 1e-5);
     }
 
     #[test]

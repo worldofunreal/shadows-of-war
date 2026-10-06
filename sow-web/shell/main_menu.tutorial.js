@@ -30,6 +30,8 @@
         hoverStepRecorded: false,
         cameraTargetFactionId: null,
         reactionHighlightPlayerId: null,
+        stepRevealTimer: null,
+        stepRevealStepId: null,
         completionSent: false,
         observingAfterDefeat: false,
         lastActionStepId: null,
@@ -40,8 +42,15 @@
         lastPhase: null,
         modalObserver: null,
         menuGuide: false,
-        guidedControl: null
+        guidedControl: null,
+        guidedAmountControls: []
     };
+
+    function clearStepRevealTimer() {
+        if (runtime.stepRevealTimer !== null && typeof window.clearTimeout === "function") window.clearTimeout(runtime.stepRevealTimer);
+        runtime.stepRevealTimer = null;
+        runtime.stepRevealStepId = null;
+    }
 
     function asset(path) {
         var base = String(window.SOW_ASSETS_URL || "/assets").replace(/\/$/, "");
@@ -158,11 +167,16 @@
                 }
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
                 context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
+            } else if (step.id === "boudica_camera_home") {
+                context.gestureLabel = tr(step.hint_key);
             } else if (step.guide.gesture === "tap" && (step.id === "boudica_first_expansion"
                 || step.trigger && step.trigger.type === "attack")) {
                 context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
             }
-            if (hintKey && tr(hintKey) !== hintKey) context.hintOverride = tr(hintKey);
+            if (hintKey && tr(hintKey) !== hintKey) {
+                context.hintOverride = tr(hintKey);
+                if (step.guide.gesture === "hover") context.gestureHint = context.hintOverride;
+            }
         }
         return context;
     }
@@ -352,7 +366,7 @@
             && ["target_action", "nameplate", "player"].includes(guide.target)) {
             var factionNameplate = tutorial.target_nameplate;
             if (factionNameplate && Number.isFinite(Number(factionNameplate.x)) && Number.isFinite(Number(factionNameplate.y))) {
-                return { x: Number(factionNameplate.x), y: Number(factionNameplate.y), offscreen: Boolean(factionNameplate.offscreen) };
+                return { x: Number(factionNameplate.x), y: Number(factionNameplate.y), offscreen: Boolean(factionNameplate.offscreen), cameraTracked: true };
             }
             return null;
         }
@@ -378,17 +392,20 @@
                         && Math.hypot(Number(pointer.x) - Number(nameplate.x), Number(pointer.y) - Number(nameplate.y)) <= HOVER_TARGET_RADIUS) {
                         return { x: Number(pointer.x), y: Number(pointer.y) };
                     }
-                    return { x: Number(nameplate.x), y: Number(nameplate.y) };
+                    return { x: Number(nameplate.x), y: Number(nameplate.y), cameraTracked: true };
                 }
             }
             var cameraTarget = cameraTargetAnchor(step, hud);
-            if (cameraTarget) return cameraTarget;
+            if (cameraTarget) {
+                cameraTarget.cameraTracked = true;
+                return cameraTarget;
+            }
         }
         if (guide.kind === "world" && guide.target === "target_action"
             && step.trigger && step.trigger.type === "defeated") {
             var targetNameplate = tutorial.target_nameplate;
             if (targetNameplate && Number.isFinite(Number(targetNameplate.x)) && Number.isFinite(Number(targetNameplate.y))) {
-                return { x: Number(targetNameplate.x), y: Number(targetNameplate.y), offscreen: Boolean(targetNameplate.offscreen) };
+                return { x: Number(targetNameplate.x), y: Number(targetNameplate.y), offscreen: Boolean(targetNameplate.offscreen), cameraTracked: true };
             }
         }
         var result;
@@ -424,10 +441,23 @@
     }
 
     function syncTransferGuide(step) {
-        var target = step && step.guide && step.guide.kind === "ui"
-            && ["transfer_troops", "transfer_gold", "transfer_send"].includes(step.guide.target)
-            ? window.SOWCampaign.resolveUiTarget(step.guide.target, document, runtime.episodeId)
+        var highlightAmounts = Boolean(step && step.guide && step.guide.kind === "ui" && step.guide.target === "transfer_send");
+        var guideTarget = step && step.guide && step.guide.kind === "ui" ? step.guide.target : null;
+        var target = ["transfer_troops", "transfer_gold", "transfer_send"].includes(guideTarget)
+            && window.SOWCampaign && typeof window.SOWCampaign.resolveUiTarget === "function"
+            ? window.SOWCampaign.resolveUiTarget(guideTarget, document, runtime.episodeId)
             : null;
+        var amountControls = [];
+        if (highlightAmounts && window.SOWCampaign && typeof window.SOWCampaign.resolveUiTarget === "function") {
+            amountControls = ["transfer_troops", "transfer_gold"].map(function (key) {
+                return window.SOWCampaign.resolveUiTarget(key, document, runtime.episodeId);
+            }).filter(Boolean);
+        }
+        runtime.guidedAmountControls.forEach(function (input) {
+            if (!amountControls.includes(input)) input.classList.remove("sow-tutorial-guide-target");
+        });
+        amountControls.forEach(function (input) { input.classList.add("sow-tutorial-guide-target"); });
+        runtime.guidedAmountControls = amountControls;
         if (runtime.guidedControl !== target) {
             if (runtime.guidedControl) runtime.guidedControl.classList.remove("sow-tutorial-guide-target");
             runtime.guidedControl = target;
@@ -470,6 +500,7 @@
         var hoveredEntityId = hud.hovered && !hud.hovered.is_me && Number.isInteger(Number(hud.hovered.id))
             ? Number(hud.hovered.id) : null;
         var hoverTarget = currentStep.trigger && currentStep.trigger.type === "hover" && currentStep.trigger.target;
+        var tutorialTargetHovered = Boolean(tutorial.facts && tutorial.facts.tutorial_target_hovered);
         var nameplate = tutorial.nameplate;
         var hoverAnchor = hoverTarget && nameplate && Number.isFinite(Number(nameplate.x)) && Number.isFinite(Number(nameplate.y))
             ? { x: Number(nameplate.x), y: Number(nameplate.y) }
@@ -478,12 +509,13 @@
         var pointerNearTarget = Boolean(hoverAnchor && !hoverAnchor.offscreen && pointer
             && Number.isFinite(Number(pointer.x)) && Number.isFinite(Number(pointer.y))
             && Math.hypot(Number(pointer.x) - hoverAnchor.x, Number(pointer.y) - hoverAnchor.y) <= HOVER_TARGET_RADIUS);
-        var hoverMatchesTarget = !hoverTarget || (hud.players || []).some(function (player) {
+        var hoverMatchesTarget = tutorialTargetHovered || !hoverTarget || (hud.players || []).some(function (player) {
             return player && Number(player.id) === hoveredEntityId && (hoverTarget === "player" ? player.is_me : player.campaign_faction_id === hoverTarget);
         }) || pointerNearTarget;
+        var hoverDetected = tutorialTargetHovered || (hoveredEntityId !== null && hoverMatchesTarget) || pointerNearTarget;
         if (currentStep.trigger && currentStep.trigger.type === "hover" && !runtime.hoverStepRecorded
-            && (hoveredEntityId !== null && hoverMatchesTarget || pointerNearTarget)
-            && (stepChanged || hoveredEntityId !== runtime.hoveredEntityId || pointerNearTarget)) {
+            && hoverDetected
+            && (stepChanged || hoveredEntityId !== runtime.hoveredEntityId || pointerNearTarget || tutorialTargetHovered)) {
             runtime.hoverStepRecorded = true;
             runtime.hoverEvents++;
         }
@@ -599,7 +631,25 @@
             send("set_tutorial_marker", { player_id: markerId });
         }
         syncTransferGuide(machineView.step);
-        if (!runtime.modalOpen) runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud)));
+        if (!runtime.modalOpen) {
+            if (machineView.waiting) {
+                runtime.view.render(null);
+                if (runtime.stepRevealStepId !== machineView.step.id) clearStepRevealTimer();
+                if (runtime.stepRevealTimer === null && typeof window.setTimeout === "function") {
+                    var waitingMachine = runtime.machine, waitingStepId = machineView.step.id;
+                    runtime.stepRevealStepId = waitingStepId;
+                    runtime.stepRevealTimer = window.setTimeout(function () {
+                        runtime.stepRevealTimer = null;
+                        runtime.stepRevealStepId = null;
+                        if (runtime.machine === waitingMachine && runtime.latestHud && !runtime.modalOpen
+                            && waitingMachine.view().step.id === waitingStepId) update(runtime.latestHud);
+                    }, Math.max(1, machineView.wait_remaining_ms));
+                }
+            } else {
+                clearStepRevealTimer();
+                runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud)));
+            }
+        }
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
             if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
@@ -609,7 +659,7 @@
 
     function updateMenuGuide() {
         if (!runtime.menuGuide || !runtime.machine || !runtime.definition || !runtime.latestHud && runtime.lastPhase !== "MainMenu") return;
-        var machineView = runtime.machine.update({}, runtime.uiCounts, performance.now());
+        var machineView = runtime.machine.update({}, runtime.uiCounts);
         // Owner decision: in the main menu the guide is the hand only. The
         // objective card ("Open Campaigns to continue the story.") had no close
         // button and only vanished when the player obeyed it, and the closing
@@ -735,8 +785,11 @@
             root.hidden = true;
         } else if (runtime.machine) {
             if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false, camera_only: runtime.cameraOnly });
-            var model = runtime.machine.view();
-            runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
+            if (runtime.latestHud) update(runtime.latestHud);
+            else {
+                var model = runtime.machine.view();
+                runtime.view.render(model, renderContext(model.step, null, null));
+            }
         }
     }
 
@@ -745,7 +798,8 @@
         if (runtime.menuGuide) { updateMenuGuide(); return; }
         if (!runtime.latestHud) return;
         var model = runtime.machine.view();
-        runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
+        if (model.waiting) runtime.view.render(null);
+        else runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
     }
     window.addEventListener("resize", redrawCampaign, { passive: true });
 
@@ -796,6 +850,9 @@
         runtime.lastPhase = phase;
         if (state && state.boot_campaign && runtime.bootEpisode !== state.boot_campaign) startEpisode(state.boot_campaign, true);
     };
+    window.SOW_tutorial_camera_anchor_update = function (x, y) {
+        if (runtime.view) runtime.view.updateCameraAnchor(Number(x), Number(y));
+    };
     window.SOW_tutorial_state_update = function (state) {
         if (runtime.menuGuide && state && state.phase === "MainMenu") { updateMenuGuide(); return; }
         var hud = state && state.phase === "Playing" ? state.hud : null;
@@ -818,6 +875,7 @@
 
     function reset() {
         runtime.generation++;
+        clearStepRevealTimer();
         syncTransferGuide(null);
         if (!pendingMenuGuide) runtime.priorChoices = Object.create(null);
         runtime.episodeId = null;

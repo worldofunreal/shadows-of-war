@@ -301,8 +301,10 @@ impl NameplateLandCache {
         let owner_id = player_id & sow_core::map::GameMap::PLAYER_ID_MASK;
         let landmass = spawn_landmass(map, owner_id, spawn_x, spawn_y, &mut self.flood_stack)?;
         let owner_index = usize::from(owner_id);
-        self.largest_by_owner
-            .resize_with(owner_index + 1, Default::default);
+        if self.largest_by_owner.len() <= owner_index {
+            self.largest_by_owner
+                .resize_with(owner_index + 1, Default::default);
+        }
         self.largest_by_owner[owner_index] = landmass;
         landmass.name_rect
     }
@@ -520,8 +522,14 @@ fn spawn_landmass(
     let radius = sow_core::config::SPAWN_RADIUS;
     let x0 = spawn_x.saturating_sub(radius);
     let y0 = spawn_y.saturating_sub(radius);
-    let x1 = spawn_x.saturating_add(radius).saturating_add(1).min(map.width);
-    let y1 = spawn_y.saturating_add(radius).saturating_add(1).min(map.height);
+    let x1 = spawn_x
+        .saturating_add(radius)
+        .saturating_add(1)
+        .min(map.width);
+    let y1 = spawn_y
+        .saturating_add(radius)
+        .saturating_add(1)
+        .min(map.height);
     let local_width = (x1 - x0) as usize;
     let local_height = (y1 - y0) as usize;
     let mut components = [0u8; SPAWN_LOCAL_AREA];
@@ -566,11 +574,8 @@ fn spawn_landmass(
                 min_y = min_y.min(y);
                 max_y = max_y.max(y);
 
-                for neighbor_y in
-                    local_y.saturating_sub(1)..=(local_y + 1).min(local_height - 1)
-                {
-                    for neighbor_x in
-                        local_x.saturating_sub(1)..=(local_x + 1).min(local_width - 1)
+                for neighbor_y in local_y.saturating_sub(1)..=(local_y + 1).min(local_height - 1) {
+                    for neighbor_x in local_x.saturating_sub(1)..=(local_x + 1).min(local_width - 1)
                     {
                         let neighbor = neighbor_y * local_width + neighbor_x;
                         if components[neighbor] != 0
@@ -1309,8 +1314,6 @@ mod tests {
         assert!(cache.rebuild(&map, 0));
         let first_anchor = cache.rect_for(1).expect("first island").center();
         assert_eq!(first_anchor, MapPoint([2.0, 2.0]));
-        let upgraded_tile = map.ref_id(1, 1) as u32;
-        map.tile_upgrades.insert(upgraded_tile, 1);
         assert!(!cache.needs_rebuild(&map, LAND_REFRESH_TICKS - 1, false));
 
         for y in 1..3 {
@@ -1383,7 +1386,15 @@ mod tests {
             .update_spawn_anchor(&map, 1, 0, 0)
             .expect("spawn at the map edge has a land anchor");
 
-        assert_eq!(rect, TileRect { x0: 0, y0: 0, x1: 3, y1: 3 });
+        assert_eq!(
+            rect,
+            TileRect {
+                x0: 0,
+                y0: 0,
+                x1: 3,
+                y1: 3
+            }
+        );
         for y in rect.y0..rect.y1 {
             for x in rect.x0..rect.x1 {
                 let index = map.ref_id(x, y);

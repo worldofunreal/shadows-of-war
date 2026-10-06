@@ -196,6 +196,8 @@ pub struct SowEngine {
     pub campaign_contact_resolved: std::collections::HashSet<PlayerId>,
     /// Next campaign-support send tick for each eligible ally.
     pub campaign_support_next_tick: std::collections::HashMap<PlayerId, u64>,
+    /// Player id -> (first debt tick, rebellion already started this debt episode).
+    pub(crate) debt_episodes: std::collections::HashMap<PlayerId, (u64, bool)>,
     pub port_queues:
         std::collections::HashMap<u64, std::collections::VecDeque<crate::game::ShipProduction>>,
     pub projectiles: Vec<crate::game::Projectile>,
@@ -264,6 +266,7 @@ impl SowEngine {
             campaign_can_request_alliance: std::collections::HashMap::new(),
             campaign_contact_resolved: std::collections::HashSet::new(),
             campaign_support_next_tick: std::collections::HashMap::new(),
+            debt_episodes: std::collections::HashMap::new(),
             port_queues: std::collections::HashMap::new(),
             projectiles: Vec::new(),
             silo_cooldowns: std::collections::HashMap::new(),
@@ -438,14 +441,14 @@ impl SowEngine {
         ey: u32,
         by_nuke: bool,
     ) {
-        let mut base_reward = 0.0;
+        let mut base_reward: u32 = 0;
         let mut is_alive = false;
         if let Some(target_player) = self.state.player(victim_id) {
             is_alive = target_player.alive;
             base_reward = match target_player.player_type {
-                crate::player::PlayerType::Bot => 500.0,
-                crate::player::PlayerType::Nation => 1250.0,
-                crate::player::PlayerType::Human => 2500.0,
+                crate::player::PlayerType::Bot => 25,
+                crate::player::PlayerType::Nation => 75,
+                crate::player::PlayerType::Human => 150,
             };
         }
 
@@ -453,18 +456,15 @@ impl SowEngine {
             return;
         }
 
-        let survived_ticks = self.state.tick;
-        let bonus_percent = survived_ticks as f64 * 0.0001; // 0.01% per tick
         let total_reward = if let Some(gold) = self.campaign_gold_loot_override.get(&victim_id) {
-            f64::from(*gold)
+            *gold
         } else {
-            base_reward * (1.0 + bonus_percent)
-                + f64::from(
-                    self.campaign_gold_loot_bonus
-                        .get(&victim_id)
-                        .copied()
-                        .unwrap_or(0),
-                )
+            base_reward.saturating_add(
+                self.campaign_gold_loot_bonus
+                    .get(&victim_id)
+                    .copied()
+                    .unwrap_or(0),
+            )
         };
 
         // Gather tile conquest contributions (deterministic by player id)
@@ -473,6 +473,9 @@ impl SowEngine {
             .players
             .iter()
             .filter_map(|p| {
+                if !p.alive {
+                    return None;
+                }
                 p.tile_conquests
                     .get(&victim_id)
                     .copied()
@@ -484,21 +487,36 @@ impl SowEngine {
 
         let others: Vec<(u16, u32)> = contributors
             .iter()
-            .filter(|(id, _)| *id != conqueror_id)
+            .filter(|(id, _)| *id != conqueror_id && *id != victim_id)
             .copied()
             .collect();
-        let assist_tiles: u32 = others.iter().map(|(_, c)| c).sum();
+        let assist_tiles: u64 = others.iter().map(|(_, count)| u64::from(*count)).sum();
 
-        let (killer_gold, mut assist_rewards) = if assist_tiles == 0 {
+        let (killer_gold, assist_rewards) = if assist_tiles == 0 {
             (total_reward, Vec::new())
         } else {
-            let killer_share = total_reward * 0.5;
-            let assist_pool = total_reward * 0.5;
-            let mut rewards = Vec::new();
+            let killer_share = total_reward / 2;
+            let assist_pool = total_reward - killer_share;
+            let mut rewards: Vec<(u16, u32, u64)> = Vec::with_capacity(others.len());
+            let mut distributed = 0u32;
             for (id, count) in &others {
-                let share = assist_pool * (*count as f64 / assist_tiles as f64);
-                rewards.push((*id, share));
+                let numerator = u64::from(assist_pool) * u64::from(*count);
+                let share = (numerator / assist_tiles) as u32;
+                distributed += share;
+                rewards.push((*id, share, numerator % assist_tiles));
             }
+            rewards.sort_by_key(|(id, _, remainder)| (std::cmp::Reverse(*remainder), *id));
+            for (_, share, _) in rewards
+                .iter_mut()
+                .take((assist_pool - distributed) as usize)
+            {
+                *share += 1;
+            }
+            rewards.sort_by_key(|(id, _, _)| *id);
+            let rewards = rewards
+                .into_iter()
+                .map(|(id, share, _)| (id, share))
+                .collect();
             (killer_share, rewards)
         };
 
@@ -510,23 +528,18 @@ impl SowEngine {
         }
 
         // 2. Transfer gold and award kill/assists
-        let mut killer_final_gold = killer_gold;
+        let killer_final_gold = killer_gold;
         if let Some(attacker) = self.state.player_mut(conqueror_id) {
-            let mut bounty_mult = 1.0;
-            if attacker.leader == crate::player::Leader::GenghisKhan {
-                bounty_mult = 1.5;
-            }
-            killer_final_gold *= bounty_mult;
-            attacker.gold += killer_final_gold;
+            attacker.gold += f64::from(killer_final_gold);
             attacker.kills += 1;
         }
 
         let mut assist_event_rewards = Vec::new();
-        for (assist_id, share) in &mut assist_rewards {
+        for (assist_id, share) in &assist_rewards {
             if let Some(p) = self.state.player_mut(*assist_id) {
-                p.gold += *share;
+                p.gold += f64::from(*share);
                 p.assists += 1;
-                assist_event_rewards.push((*assist_id, *share as u32));
+                assist_event_rewards.push((*assist_id, *share));
             }
         }
 
@@ -541,7 +554,7 @@ impl SowEngine {
             .push(crate::game::GameEvent::PlayerEliminated {
                 player_id: victim_id,
                 conqueror_id,
-                gold_bounty: killer_final_gold as u32,
+                gold_bounty: killer_final_gold,
                 elimination_x: ex,
                 elimination_y: ey,
                 assists: assist_event_rewards,
@@ -608,7 +621,9 @@ impl SowEngine {
         });
         if let Some(target) = self.state.player_mut(target_id) {
             target.alliances.retain(|id| !attackers.contains(id));
-            target.alliance_timers.retain(|id, _| !attackers.contains(id));
+            target
+                .alliance_timers
+                .retain(|id, _| !attackers.contains(id));
         }
         for attacker_id in &attackers {
             if let Some(attacker) = self.state.player_mut(*attacker_id) {
@@ -673,16 +688,16 @@ mod tests {
     use crate::water_components::WaterComponents;
 
     #[test]
-    fn campaign_gold_loot_adds_to_the_unchanged_time_scaled_elimination_bounty() {
-        let reward = |loot_bonus: Option<u32>| {
+    fn elimination_bounty_is_fixed_by_victim_type_and_keeps_campaign_bonus() {
+        let reward = |victim_type: PlayerType, tick: u64, loot_bonus: Option<u32>| {
             let config = GameConfig::default();
             let mut state = GameState::new(1, 4, 4, config.clone());
-            state.tick = 100;
+            state.tick = tick;
             let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
             human.gold = 100.0;
             state.register_player(human);
             let mut victim = Player::new_human(2, "Outpost".into(), [0.5; 3], &config);
-            victim.player_type = PlayerType::Bot;
+            victim.player_type = victim_type;
             state.register_player(victim);
             let mut engine = SowEngine::new(state, WaterComponents::default());
             if let Some(bonus) = loot_bonus {
@@ -701,8 +716,56 @@ mod tests {
             (engine.state.player(1).unwrap().gold, bounty)
         };
 
-        assert_eq!(reward(None), (605.0, 505));
-        assert_eq!(reward(Some(125)), (730.0, 630));
+        assert_eq!(reward(PlayerType::Bot, 100, None), (125.0, 25));
+        assert_eq!(reward(PlayerType::Bot, 10_000, None), (125.0, 25));
+        assert_eq!(reward(PlayerType::Nation, 1_000, None), (175.0, 75));
+        assert_eq!(reward(PlayerType::Human, 10_000, None), (250.0, 150));
+        assert_eq!(reward(PlayerType::Bot, 100, Some(125)), (250.0, 150));
+    }
+
+    #[test]
+    fn elimination_assist_payments_are_integer_exact_and_conserve_the_bounty() {
+        let config = GameConfig::default();
+        let mut state = GameState::new(1, 4, 4, config.clone());
+        for id in 1..=5 {
+            let mut player = Player::new_human(id, format!("Player {id}"), [1.0; 3], &config);
+            player.gold = 0.0;
+            state.register_player(player);
+        }
+        state.player_mut(1).unwrap().tile_conquests.insert(4, 5);
+        state.player_mut(2).unwrap().tile_conquests.insert(4, 1);
+        state.player_mut(3).unwrap().tile_conquests.insert(4, 1);
+        state.player_mut(4).unwrap().tile_conquests.insert(4, 100);
+        state.player_mut(4).unwrap().player_type = PlayerType::Bot;
+        state.player_mut(5).unwrap().alive = false;
+        state
+            .player_mut(5)
+            .unwrap()
+            .tile_conquests
+            .insert(4, 10_000);
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+
+        engine.eliminate_player(4, 1, 0, 0, false);
+
+        assert_eq!(engine.state.player(1).unwrap().gold, 12.0);
+        assert_eq!(engine.state.player(2).unwrap().gold, 7.0);
+        assert_eq!(engine.state.player(3).unwrap().gold, 6.0);
+        assert_eq!(engine.state.player(4).unwrap().gold, 0.0);
+        assert_eq!(engine.state.player(5).unwrap().gold, 0.0);
+        assert!(matches!(
+            engine.state.events.last(),
+            Some(GameEvent::PlayerEliminated {
+                gold_bounty: 12,
+                assists,
+                ..
+            }) if assists == &vec![(2, 7), (3, 6)]
+        ));
+        assert_eq!(
+            engine.state.player(1).unwrap().gold
+                + engine.state.player(2).unwrap().gold
+                + engine.state.player(3).unwrap().gold,
+            25.0
+        );
     }
 
     #[test]

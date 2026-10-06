@@ -20,6 +20,9 @@
     var hudRefs = null;
     var leaderboardRows = Object.create(null);
     var leaderboardRenderKey = "";
+    var combatOperationRows = Object.create(null);
+    var combatOperationsOrderKey = "";
+    var pendingCounterAttacks = Object.create(null);
     var lastLeaderboardPlayers = [];
     var inboxRenderKey = "";
     var notificationCursor = 0;
@@ -285,20 +288,16 @@
     function syncNotificationPlacement() {
         if (!hudRefs || !hudRefs.notifications) return;
         var notifications = hudRefs.notifications;
-        if (window.innerWidth <= 720) {
-            notifications.style.removeProperty("--sow-hud-notifications-top");
-            notifications.style.removeProperty("--sow-hud-notifications-inline-start");
-            notifications.classList.remove("is-reanchoring");
-            notificationLayoutState = "mobile";
-            return;
-        }
         var story = document.getElementById("sow-story");
         var objective = story && story.querySelector(".sow-story__objective");
         var anchor = notificationAnchor(story, objective, hudRefs.nameplate, 12);
         var inlineStart = null;
         if (anchor.source !== "safe") {
             var direction = window.getComputedStyle ? window.getComputedStyle(hudRoot).direction : document.documentElement.dir;
-            inlineStart = direction === "rtl" ? Math.max(0, window.innerWidth - anchor.right) : Math.max(0, anchor.left);
+            inlineStart = direction === "rtl" ? window.innerWidth - anchor.right : anchor.left;
+            var fallbackWidth = Math.min(window.innerWidth <= 720 ? 300 : 360, Math.max(0, window.innerWidth - 32));
+            var notificationWidth = notifications.offsetWidth || fallbackWidth;
+            inlineStart = Math.max(8, Math.min(inlineStart, window.innerWidth - notificationWidth - 8));
         }
         var topValue = anchor.source === "safe" ? null : Math.round(Math.max(0, anchor.top));
         var inlineStartValue = inlineStart == null ? null : Math.round(inlineStart);
@@ -309,6 +308,7 @@
         else notifications.style.setProperty("--sow-hud-notifications-top", topValue + "px");
         if (inlineStartValue == null) notifications.style.removeProperty("--sow-hud-notifications-inline-start");
         else notifications.style.setProperty("--sow-hud-notifications-inline-start", inlineStartValue + "px");
+        notifications.classList.toggle("is-positioned", inlineStartValue != null);
         var hasVisibleNotification = notificationCards.some(function (parts) { return parts && parts.card && !parts.card.hidden; });
         if (hasVisibleNotification && !hudRoot.classList.contains("is-reduced-motion")) {
             notifications.classList.remove("is-reanchoring");
@@ -438,6 +438,11 @@
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Bunker" aria-label="' + SOW_t("hud.map_action_bunker") + '">' + buildingIcon("Bunker") + '</button>'
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="Farm">' + buildingIcon("Farm") + '</button>'
             + '      </div>'
+            + '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">'
+            + '        <button type="button" class="sow-hud__fleet-btn" data-fleet-kind="trade" disabled aria-label="' + SOW_t("hud.map_action_build_trade_ship") + '">' + hudIcon("trade_ship", "sow-hud__fleet-icon") + '<span><b data-role="trade-ships">0 / 0</b><small>' + SOW_t("hud.map_action_build_trade_ship") + '</small></span></button>'
+            + '        <button type="button" class="sow-hud__fleet-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' + SOW_t("hud.map_action_build_warship") + '">' + hudIcon("warship", "sow-hud__fleet-icon") + '<span><b data-role="warships">0</b><small>' + SOW_t("hud.map_action_build_warship") + '</small></span></button>'
+            + '        <button type="button" class="sow-hud__fleet-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' + SOW_t("hud.map_action_nuke") + '">' + hudIcon("nuke", "sow-hud__fleet-icon") + '<span><b data-role="nuke-status">' + SOW_t("lobbies.locked") + '</b><small>' + SOW_t("hud.map_action_nuke") + '</small></span></button>'
+            + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
             + '      <div class="sow-hud__res-rate" id="sow-hud-res-rate" title="' + SOW_t("hud.troop_production_rate") + '">'
@@ -447,13 +452,18 @@
             + '        <div class="sow-hud__res-bar-fill" id="sow-hud-troop-fill" style="width: 0%;"></div>'
             + '        <span class="sow-hud__res-bar-text" data-role="troops">0 / 0 ' + hudIcon("troops", "sow-hud__inline-icon") + '</span>'
             + '      </div>'
-            + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="' + SOW_t("hud.gold_treasury") + '">'
+            + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="' + SOW_t("hud.gold_net_rate") + '">'
             + '        <span class="sow-hud__gold-text"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b data-role="gold">0</b></span>'
+            + '        <small class="sow-hud__gold-rate" data-role="gold-rate">+0/s</small>'
             + '      </div>'
             + '      <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
             + '    </div>'
             + '  </div>'
             + '</footer>'
+            + '<aside class="sow-hud__operations" id="sow-hud-operations" hidden aria-label="' + SOW_t("hud.combat_operations") + '">'
+            + '  <div class="sow-hud__operations-header">' + hudIcon("attack", "sow-hud__inline-icon") + '<span>' + SOW_t("hud.combat_operations") + '</span></div>'
+            + '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>'
+            + '</aside>'
             + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
             + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
             + '  <div class="sow-hud__panel-header">'
@@ -550,6 +560,8 @@
 
         hudRefs = {
             gold: hudRoot.querySelector('[data-role="gold"]'),
+            goldRate: hudRoot.querySelector('[data-role="gold-rate"]'),
+            goldWrap: document.getElementById("sow-hud-res-gold"),
             troops: hudRoot.querySelector('[data-role="troops"]'),
             prod: hudRoot.querySelector('[data-role="prod"]'),
             fps: document.getElementById("sow-hud-fps"),
@@ -580,6 +592,13 @@
             deployTimer: document.getElementById("sow-hud-deploy-timer"),
             buildingsStrip: document.getElementById("sow-hud-buildings-strip"),
             buildingButtons: Array.prototype.slice.call(hudRoot.querySelectorAll("[data-command='select_building']")),
+            fleetStrip: document.getElementById("sow-hud-fleet-strip"),
+            fleetTrade: hudRoot.querySelector("[data-fleet-kind='trade']"),
+            fleetWarship: hudRoot.querySelector("[data-fleet-kind='warship']"),
+            fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
+            fleetTradeCount: hudRoot.querySelector("[data-role='trade-ships']"),
+            fleetWarshipCount: hudRoot.querySelector("[data-role='warships']"),
+            fleetNukeStatus: hudRoot.querySelector("[data-role='nuke-status']"),
             buildingCancel: hudRoot.querySelector("[data-command='cancel_building_mode']"),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_'], .sow-hud__right-rail [data-command='toggle_emoji']")),
             troopFill: document.getElementById("sow-hud-troop-fill"),
@@ -617,6 +636,8 @@
             endgameStoreAction: document.getElementById("sow-hud-endgame-store-action"),
             endgameObserve: document.getElementById("sow-hud-endgame-observe"),
             mapMenu: document.getElementById("sow-hud-map-menu"),
+            operations: document.getElementById("sow-hud-operations"),
+            operationRows: document.getElementById("sow-hud-operations-list"),
             buildingCard: document.getElementById("sow-hud-building-card"),
             buildingCardIcon: document.getElementById("sow-hud-building-card-icon"),
             buildingCardKind: document.getElementById("sow-hud-building-card-kind"),
@@ -724,10 +745,6 @@
         build_farm: { text: "Farm" },
         upgrade_structure: { icon: "upgrade", text: "Upgrade" },
         nuke: { icon: "nuke", emoji: "🚀", key: "hud.map_action_nuke" },
-        upgrade_tile: { icon: "upgrade", key: "hud.map_action_upgrade_tile" },
-        upgrade_arsenal: { icon: "nuke", key: "hud.map_action_upgrade_arsenal" },
-        upgrade_port: { icon: "anchor", key: "hud.map_action_upgrade_port" },
-        upgrade_foundry: { icon: "factory", key: "hud.map_action_upgrade_foundry" },
         build_warship: { icon: "warship", key: "hud.map_action_build_warship" },
         build_trade_ship: { icon: "trade_ship", key: "hud.map_action_build_trade_ship" }
     };
@@ -747,10 +764,6 @@
         build_bunker: true,
         build_farm: true,
         upgrade_structure: true,
-        upgrade_tile: true,
-        upgrade_arsenal: true,
-        upgrade_port: true,
-        upgrade_foundry: true,
         build_warship: true,
         build_trade_ship: true
     };
@@ -1667,6 +1680,169 @@
         }
     }
 
+    function createCombatOperationRow() {
+        var element = document.createElement("article");
+        var portrait = document.createElement("img");
+        var glyph = document.createElement("span");
+        var avatar = document.createElement("span");
+        var copy = document.createElement("span");
+        var name = document.createElement("b");
+        var details = document.createElement("small");
+        var troops = document.createElement("b");
+        var penalty = document.createElement("small");
+        var actions = document.createElement("span");
+        element.className = "sow-hud__operation";
+        avatar.className = "sow-hud__operation-avatar";
+        portrait.className = "sow-hud__operation-portrait";
+        portrait.alt = "";
+        portrait.draggable = false;
+        portrait.loading = "lazy";
+        portrait.onerror = function () {
+            this.hidden = true;
+            this.removeAttribute("src");
+        };
+        glyph.className = "sow-hud__operation-glyph";
+        copy.className = "sow-hud__operation-copy";
+        name.className = "sow-hud__operation-name";
+        details.className = "sow-hud__operation-details";
+        troops.className = "sow-hud__operation-troops";
+        penalty.className = "sow-hud__operation-penalty";
+        penalty.hidden = true;
+        actions.className = "sow-hud__operation-actions";
+        avatar.append(portrait, glyph);
+        copy.append(name, details);
+        element.append(avatar, copy, troops, penalty, actions);
+        return { element: element, portrait: portrait, glyph: glyph, name: name, details: details, troops: troops, penalty: penalty, actions: actions, avatarSrc: "", actionKey: "" };
+    }
+
+    function operationAction(command, glyph, label, operation) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "sow-hud__operation-action";
+        button.dataset.command = command;
+        button.setAttribute("aria-label", label);
+        button.title = label;
+        button.innerHTML = hudIcon(glyph, "sow-hud__operation-action-icon");
+        if (command === "focus_world") {
+            button.dataset.focusX = String(operation.focus_x);
+            button.dataset.focusY = String(operation.focus_y);
+        } else if (command === "counter_attack") {
+            button.dataset.playerId = String(operation.player_id);
+            button.dataset.incomingTroops = String(operation.incoming_troops || operation.troops || 0);
+        } else if (command === "cancel_attack") {
+            button.dataset.attackId = String(operation.id);
+        } else if (command === "recall_fleet") {
+            button.dataset.fleetId = String(operation.id);
+        }
+        return button;
+    }
+
+    function renderCombatOperations(operations) {
+        if (!hudRefs || !hudRefs.operations || !hudRefs.operationRows) return;
+        operations = Array.isArray(operations) ? operations : [];
+        var incomingTotals = Object.create(null);
+        operations.forEach(function (operation) {
+            if (operation.direction === "incoming" && !operation.retreating) {
+                var playerId = String(operation.player_id);
+                incomingTotals[playerId] = (incomingTotals[playerId] || 0) + Math.max(0, Number(operation.troops) || 0);
+            }
+        });
+        Object.keys(pendingCounterAttacks).forEach(function (playerId) {
+            if ((incomingTotals[playerId] || 0) < pendingCounterAttacks[playerId] - 0.5) {
+                delete pendingCounterAttacks[playerId];
+            }
+        });
+
+        var nextRows = Object.create(null);
+        var nextKeys = [];
+        operations.forEach(function (operation) {
+            if (!operation || (operation.kind !== "attack" && operation.kind !== "fleet")) return;
+            var key = operation.kind + ":" + operation.id;
+            nextKeys.push(key);
+            var row = combatOperationRows[key] || createCombatOperationRow();
+            var incoming = operation.direction === "incoming";
+            var outgoing = operation.direction === "outgoing";
+            var neutral = Boolean(operation.neutral);
+            var retreating = Boolean(operation.retreating);
+            var playerId = String(operation.player_id);
+            var name = neutral ? SOW_t("hud.land") : (operation.name || SOW_t("hud.player_name"));
+            var troops = Math.max(0, Number(operation.troops) || 0);
+            var details = operation.kind === "attack" && incoming
+                ? SOW_t("hud.attack_incoming", { count: formatNameplateTroops(troops) })
+                : SOW_t(operation.kind === "fleet" ? "hud.map_action_fleet" : "hud.map_action_attack");
+            var avatarSlug = typeof operation.avatar === "string" && /^[a-z0-9_-]+$/i.test(operation.avatar)
+                ? operation.avatar
+                : "";
+            var avatarSrc = avatarSlug ? asset("gameplay/avatars/" + avatarSlug + ".webp") : "";
+            row.element.classList.toggle("is-incoming", incoming);
+            row.element.classList.toggle("is-outgoing", outgoing);
+            row.element.classList.toggle("is-retreating", retreating);
+            row.element.classList.toggle("is-neutral", neutral);
+            if (row.avatarSrc !== avatarSrc) {
+                row.avatarSrc = avatarSrc;
+                row.portrait.hidden = !avatarSrc;
+                if (avatarSrc) row.portrait.src = avatarSrc;
+                else row.portrait.removeAttribute("src");
+            }
+            if (row.name.textContent !== name) row.name.textContent = name;
+            if (row.details.textContent !== details) row.details.textContent = details;
+            var troopText = formatNameplateTroops(troops);
+            if (row.troops.textContent !== troopText) row.troops.textContent = troopText;
+            var canFocus = operation.focus_x != null && operation.focus_y != null
+                && Number.isFinite(Number(operation.focus_x)) && Number.isFinite(Number(operation.focus_y));
+            var canCancel = outgoing && !retreating;
+            var canCounter = incoming && !retreating;
+            var canRecall = outgoing && operation.kind === "fleet" && !retreating;
+            var pending = canCounter && pendingCounterAttacks[playerId] != null;
+            var actionKey = [canFocus, canCancel, canCounter, canRecall, pending].join(":");
+            if (row.actionKey !== actionKey) {
+                row.actions.replaceChildren();
+                if (canFocus) row.actions.appendChild(operationAction("focus_world", "camera", SOW_t("hud.center_camera"), operation));
+                if (canCounter) {
+                    var counterOperation = Object.assign({}, operation, {
+                        incoming_troops: incomingTotals[playerId]
+                    });
+                    var counterButton = operationAction("counter_attack", "attack", SOW_t("hud.map_action_attack"), counterOperation);
+                    counterButton.disabled = pending;
+                    row.actions.appendChild(counterButton);
+                }
+                if (canCancel) {
+                    var cancelLabel = SOW_t("endgame.cancel");
+                    row.actions.appendChild(operationAction("cancel_attack", "minus", cancelLabel, operation));
+                }
+                if (canRecall) {
+                    row.actions.appendChild(operationAction("recall_fleet", "transfer", SOW_t("hud.recall_transport"), operation));
+                }
+                row.actionKey = actionKey;
+            }
+            row.actions.querySelectorAll('[data-command="focus_world"]').forEach(function (button) {
+                button.dataset.focusX = String(operation.focus_x);
+                button.dataset.focusY = String(operation.focus_y);
+            });
+            row.actions.querySelectorAll('[data-command="counter_attack"]').forEach(function (button) {
+                button.dataset.incomingTroops = String(incomingTotals[playerId] || 0);
+            });
+            row.penalty.hidden = !(outgoing && !retreating);
+            if (!row.penalty.hidden) {
+                var penaltyText = SOW_t("hud.retreat_cost", {
+                    percent: Math.max(0, Number(operation.retreat_loss_percent) || 0)
+                });
+                if (row.penalty.textContent !== penaltyText) row.penalty.textContent = penaltyText;
+            }
+            nextRows[key] = row;
+        });
+
+        var orderKey = nextKeys.join("\u001e");
+        if (orderKey !== combatOperationsOrderKey) {
+            var fragment = document.createDocumentFragment();
+            nextKeys.forEach(function (key) { fragment.appendChild(nextRows[key].element); });
+            hudRefs.operationRows.replaceChildren(fragment);
+            combatOperationsOrderKey = orderKey;
+        }
+        combatOperationRows = nextRows;
+        hudRefs.operations.hidden = nextKeys.length === 0;
+    }
+
     function renderHud(forceNotifications) {
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
@@ -1687,6 +1863,9 @@
             if (notificationTimer) window.clearTimeout(notificationTimer);
             notificationTimer = null;
             activeNotifications = [];
+            combatOperationRows = Object.create(null);
+            combatOperationsOrderKey = "";
+            pendingCounterAttacks = Object.create(null);
             notificationCards.forEach(clearNotificationCard);
             notificationCursor = 0;
             mapFeedbackCursor = 0;
@@ -1715,6 +1894,7 @@
             });
         }
         var gold = Math.floor(hud.gold || 0);
+        var goldRate = Number(hud.gold_rate) || 0;
         var troops = Math.floor(hud.troops || 0);
         var maxTroops = Math.floor(hud.max_troops || 0);
         var prod = Math.floor(hud.troop_rate || 0);
@@ -1726,6 +1906,12 @@
             hudRefs.gold.textContent = gold.toLocaleString();
             hudRefs.gold.dataset.val = String(gold);
         }
+        if (hudRefs.goldRate) {
+            var goldRateText = (goldRate > 0 ? "+" : "") + goldRate.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "/s";
+            if (hudRefs.goldRate.textContent !== goldRateText) hudRefs.goldRate.textContent = goldRateText;
+            hudRefs.goldRate.classList.toggle("is-negative", goldRate < 0);
+        }
+        if (hudRefs.goldWrap) hudRefs.goldWrap.classList.toggle("is-in-debt", gold < 0);
 
         if (hudRefs.troops) {
             var troopText = maxTroops > 0 ? troops.toLocaleString() + ' / ' + maxTroops.toLocaleString() + ' ' + hudIcon("troops", "sow-hud__inline-icon") : troops.toLocaleString() + ' ' + hudIcon("troops", "sow-hud__inline-icon");
@@ -1828,31 +2014,90 @@
             hudRefs.buildingsStrip.style.display = isDeploying ? "none" : "flex";
             var selectedBuilding = hud.selected_building;
             var buildingCosts = hud.building_costs || {};
-            var buildingRequirements = hud.building_requirements || {};
             hudRefs.buildingButtons.forEach(function (button) {
                 var kind = button.dataset.kind || "";
                 var cost = Number(buildingCosts[kind.toLowerCase()]);
                 var hasCost = Number.isFinite(cost) && cost > 0;
                 var affordable = !hasCost || gold >= cost;
-                var factoryLocked = kind === "Factory" && !buildingRequirements.factory_unlocked;
                 var selected = selectedBuilding === kind;
                 button.disabled = false;
-                var disabled = (!affordable || factoryLocked) && !selected;
+                var disabled = !affordable && !selected;
                 button.setAttribute("aria-disabled", String(disabled));
                 button.classList.toggle("active", selected);
                 button.setAttribute("aria-pressed", String(selected));
                 var costText = hasCost ? Math.floor(cost).toLocaleString() + "g" : "";
                 var label = button.dataset.label || button.getAttribute("aria-label") || kind;
                 button.dataset.label = label;
-                var reason = factoryLocked
-                    ? SOW_t("hud.building_requires_city_level")
-                    : mapActionReason({ disabled: !affordable, cost: cost }, gold);
+                var reason = mapActionReason({ disabled: !affordable, cost: cost }, gold);
                 var accessibleLabel = reason
                     ? label + ". " + reason
                     : (costText ? label + " " + costText : label);
                 button.setAttribute("aria-label", accessibleLabel);
                 if (button.title !== accessibleLabel) button.title = accessibleLabel;
             });
+        }
+        if (hudRefs.fleetStrip) {
+            hudRefs.fleetStrip.style.display = isDeploying ? "none" : "flex";
+            var fleetPanel = hud.fleet_panel || {};
+            var portLevels = Math.max(0, Number(fleetPanel.port_levels) || 0);
+            var cityLevel = Math.max(0, Number(fleetPanel.city_level) || 0);
+            var tradeRequiredPortLevel = Math.max(1, Number(fleetPanel.trade_required_port_level) || 1);
+            var warshipRequiredPortLevel = Math.max(1, Number(fleetPanel.warship_required_port_level) || 1);
+            var nukeRequiredCityLevel = Math.max(1, Number(fleetPanel.nuke_required_city_level) || 1);
+            var tradeUnlocked = portLevels >= tradeRequiredPortLevel;
+            var warshipUnlocked = portLevels >= warshipRequiredPortLevel;
+            var nukeUnlocked = cityLevel >= nukeRequiredCityLevel;
+            var militaryFull = Number(fleetPanel.military_used) >= Number(fleetPanel.military_capacity);
+            var warshipSelected = Boolean(hud.selected_warship_build);
+            if (hudRefs.fleetTrade) {
+                hudRefs.fleetTrade.disabled = !tradeUnlocked;
+                hudRefs.fleetTrade.setAttribute("aria-disabled", String(!tradeUnlocked));
+                hudRefs.fleetTrade.title = tradeUnlocked
+                    ? SOW_t("hud.map_action_build_trade_ship")
+                    : SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel;
+                hudRefs.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
+            }
+            if (hudRefs.fleetTradeCount) {
+                hudRefs.fleetTradeCount.textContent = Math.floor(Number(fleetPanel.trade_ships) || 0).toLocaleString()
+                    + " / " + Math.floor(Number(fleetPanel.trade_capacity) || 0).toLocaleString();
+            }
+            if (hudRefs.fleetWarship) {
+                var warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
+                var warshipDisabled = !warshipUnlocked || militaryFull || gold < warshipCost;
+                hudRefs.fleetWarship.disabled = warshipDisabled && !warshipSelected;
+                hudRefs.fleetWarship.setAttribute("aria-disabled", String(warshipDisabled));
+                hudRefs.fleetWarship.classList.toggle("active", warshipSelected);
+                hudRefs.fleetWarship.classList.toggle("is-locked", warshipDisabled && !warshipSelected);
+                hudRefs.fleetWarship.title = !warshipUnlocked
+                    ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_port") + " " + warshipRequiredPortLevel
+                    : militaryFull
+                        ? SOW_t("hud.map_action_build_warship") + " · " + Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0)
+                        : SOW_t("hud.map_action_build_warship") + " · " + Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0);
+            }
+            if (hudRefs.fleetWarshipCount) {
+                hudRefs.fleetWarshipCount.textContent = Math.floor(Number(fleetPanel.warships) || 0).toLocaleString();
+            }
+            if (hudRefs.fleetNuke) {
+                var cooldownTicks = Math.max(0, Number(fleetPanel.nuke_cooldown_ticks) || 0);
+                var nukeReady = Boolean(fleetPanel.nuke_available) && cooldownTicks === 0;
+                var nukeDisabled = !nukeUnlocked || !nukeReady;
+                hudRefs.fleetNuke.disabled = nukeDisabled;
+                hudRefs.fleetNuke.setAttribute("aria-disabled", String(nukeDisabled));
+                hudRefs.fleetNuke.classList.toggle("is-locked", nukeDisabled);
+                hudRefs.fleetNuke.classList.toggle("active", hud.selected_nuke === "AtomBomb");
+                hudRefs.fleetNuke.title = !nukeUnlocked
+                    ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_city") + " " + nukeRequiredCityLevel
+                    : cooldownTicks > 0
+                        ? SOW_t("lobbies.locked") + " · " + Math.ceil(cooldownTicks / 10) + "s"
+                        : SOW_t("hud.map_action_nuke");
+                if (hudRefs.fleetNukeStatus) {
+                    hudRefs.fleetNukeStatus.textContent = !nukeUnlocked
+                        ? SOW_t("lobbies.locked")
+                        : cooldownTicks > 0
+                            ? Math.ceil(cooldownTicks / 10) + "s"
+                            : SOW_t("hud.ready");
+                }
+            }
         }
 
         // Emoji Popout
@@ -1920,6 +2165,7 @@
         }
 
         renderNotifications(hud.notifications, forceNotifications);
+        renderCombatOperations(hud.operations);
         renderMapFeedback(hud.map_feedback);
 
         // Leaderboard
@@ -2129,6 +2375,7 @@
                 if (requesterId > 0) send(cmd, { target_player_id: requesterId });
             } else if (cmd === "cancel_betrayal") {
                 betrayalOpen = false;
+                pendingCounterAttacks = Object.create(null);
                 send("cancel_betrayal");
                 renderHud();
             } else if (cmd === "confirm_betrayal") {
@@ -2137,7 +2384,30 @@
                 renderHud();
             } else if (cmd === "cancel_attack" || cmd === "recall_fleet") {
                 var id = Number(cmd === "cancel_attack" ? btn.dataset.attackId : btn.dataset.fleetId);
-                if (id > 0) send(cmd, cmd === "cancel_attack" ? { attack_id: id } : { fleet_id: id });
+                if (id > 0) btn.disabled = send(cmd, cmd === "cancel_attack" ? { attack_id: id } : { fleet_id: id });
+            } else if (cmd === "counter_attack") {
+                var counterTarget = Number(btn.dataset.playerId);
+                var incomingTotal = Number(btn.dataset.incomingTroops);
+                if (counterTarget > 0 && incomingTotal > 0 && pendingCounterAttacks[counterTarget] == null) {
+                    pendingCounterAttacks[counterTarget] = incomingTotal;
+                    if (hudRefs && hudRefs.operationRows) {
+                        hudRefs.operationRows.querySelectorAll('[data-command="counter_attack"]').forEach(function (button) {
+                            if (Number(button.dataset.playerId) === counterTarget) button.disabled = true;
+                        });
+                    }
+                    if (!send("counter_attack", { target_player_id: counterTarget })) {
+                        delete pendingCounterAttacks[counterTarget];
+                        if (hudRefs && hudRefs.operationRows) {
+                            hudRefs.operationRows.querySelectorAll('[data-command="counter_attack"]').forEach(function (button) {
+                                if (Number(button.dataset.playerId) === counterTarget) button.disabled = false;
+                            });
+                        }
+                    }
+                }
+            } else if (cmd === "focus_world") {
+                var focusX = Number(btn.dataset.focusX);
+                var focusY = Number(btn.dataset.focusY);
+                if (Number.isFinite(focusX) && Number.isFinite(focusY)) send("focus_world", { x: focusX, y: focusY });
             } else if (cmd === "prompt_surrender") {
                 surrenderModalOpen = true;
                 surrenderMessage = null;
@@ -2175,6 +2445,10 @@
                 send("spawn_troops");
             } else if (cmd === "select_building") {
                 send("select_building", { kind: btn.dataset.kind });
+            } else if (cmd === "select_warship") {
+                send("select_warship");
+            } else if (cmd === "select_nuke") {
+                send("select_nuke");
             } else if (cmd === "cancel_building_mode") {
                 var selectedBuilding = hudState && hudState.hud && hudState.hud.selected_building;
                 if (selectedBuilding) send("select_building", { kind: selectedBuilding });

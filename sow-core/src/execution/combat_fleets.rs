@@ -206,20 +206,10 @@ impl SowEngine {
             fleet.update_eta_after_tick(transport_base_steps_per_tick, tick_rate_ms);
 
             if fleet.unit_type == crate::game::UnitType::TradeShip {
-                let trade_levels = self
-                    .building_aggregates
-                    .get(fleet.owner_id as usize)
-                    .map(|aggregate| aggregate.factory_trade_income_levels)
-                    .unwrap_or_default();
-                let bonus = (trade_levels.min(5) as f64 * 0.05).min(0.25);
-                if let Some(p) = self.state.player_mut(fleet.owner_id) {
-                    p.gold += 15.0 * (1.0 + bonus);
-                }
                 if fleet.path_cursor >= fleet.path.len() && !fleet.path.is_empty() {
-                    // Loop back
-                    let mut p = (*fleet.path).clone();
-                    p.reverse();
-                    fleet.replace_path(p);
+                    // Let the passive trade scheduler choose the next destination
+                    // on the following tick instead of reversing the same lane.
+                    fleet.path = std::sync::Arc::new(Vec::new());
                 }
                 continue;
             }

@@ -74,9 +74,6 @@ impl SowEngine {
                         let level_count = agg.levels_of_kind(kind);
                         let mut target_count =
                             bot_structure_target_count(kind, city_equivalent, bot_iq);
-                        if kind == BuildingKind::Farm {
-                            target_count = target_count.min(agg.farm_slots);
-                        }
                         if kind == BuildingKind::Bunker && bot_iq >= 110 {
                             let under_attack = self
                                 .ai_attack_index
@@ -96,8 +93,7 @@ impl SowEngine {
                         let is_density_high = bot_iq >= 110 && density > 1.0 / 600.0;
                         let structure_floor = player_tile_count / 800;
                         let under_structure_floor = total_owned < structure_floor;
-                        let wants_new = (owned < target_count || under_structure_floor)
-                            && (kind != BuildingKind::Farm || owned < agg.farm_slots);
+                        let wants_new = owned < target_count || under_structure_floor;
                         let cost = structure_build_cost_gold(kind, level_count, &self.state.config);
 
                         if !wants_new || is_density_high {
