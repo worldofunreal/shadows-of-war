@@ -36,6 +36,7 @@
   let panel = null;
   let busy = false;
   let controller = null;
+  let flushTimer = null;
   let landingRecorded = false;
 
   function text(key, fallback) {
@@ -62,6 +63,16 @@
     } catch (_) { return null; }
   }
 
+  function startFlushTimer() {
+    if (flushTimer === null) flushTimer = window.setInterval(() => { void flush(); }, 10_000);
+  }
+
+  function stopFlushTimer() {
+    if (flushTimer === null) return;
+    window.clearInterval(flushTimer);
+    flushTimer = null;
+  }
+
   function saveChoice(choice) {
     consent = choice;
     try { localStorage.setItem(CONSENT_KEY, JSON.stringify({ choice, policy: POLICY })); } catch (_) {}
@@ -69,12 +80,14 @@
       if (canSend()) {
         ensureSession();
         restoreQueue();
+        startFlushTimer();
       } else {
         queue = [];
       }
       if (isLandingPage()) recordLanding();
       flush();
     } else {
+      stopFlushTimer();
       sessionId = null;
       queue = [];
       if (controller) controller.abort();
@@ -285,7 +298,7 @@
       restoreQueue();
     }
     if (isLandingPage()) recordLanding();
-    window.setInterval(() => { void flush(); }, 10_000);
+    startFlushTimer();
   } else if (consent === "rejected") {
     try { sessionStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(QUEUE_KEY); } catch (_) {}
   }

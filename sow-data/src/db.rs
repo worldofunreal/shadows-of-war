@@ -644,9 +644,9 @@ impl PlayerDb {
     pub async fn record_analytics_batch(
         &self,
         events: &[crate::events::AnalyticsEvent],
-    ) -> Result<usize, redis::RedisError> {
+    ) -> Result<Vec<bool>, redis::RedisError> {
         if events.is_empty() {
-            return Ok(0);
+            return Ok(Vec::new());
         }
         let date = utc_date_string();
         let day_number = crate::events::utc_day_number();
@@ -690,7 +690,17 @@ impl PlayerDb {
                 .arg(&event.name);
         }
         let outcomes: Vec<i64> = pipe.query_async(&mut con).await?;
-        Ok(outcomes.into_iter().filter(|outcome| *outcome == 1).count())
+        outcomes
+            .into_iter()
+            .map(|outcome| match outcome {
+                0 => Ok(false),
+                1 => Ok(true),
+                _ => Err(redis::RedisError::from((
+                    redis::ErrorKind::TypeError,
+                    "unexpected analytics event result",
+                ))),
+            })
+            .collect()
     }
 
     /// Remove pseudonymous analytics memberships derived from a deleted

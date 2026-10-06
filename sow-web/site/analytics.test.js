@@ -36,12 +36,13 @@ function element(tag) {
   };
 }
 
-function start() {
+function start(fetchImpl = async () => ({ ok: true })) {
   const local = storage();
   const session = storage();
   const fetchCalls = [];
   const domListeners = new Map();
   const windowListeners = new Map();
+  let intervalCallback = null;
   const head = element("head");
   const body = element("body");
   const document = {
@@ -58,7 +59,8 @@ function start() {
   const window = {
     location: { hostname: "shadowsofwar.io", pathname: "/", search: "" },
     addEventListener(name, handler) { windowListeners.set(name, handler); },
-    setInterval() {},
+    setInterval(callback) { intervalCallback = callback; return 1; },
+    clearInterval() { intervalCallback = null; },
     SOW_t(key) {
       return ({
         "site.analytics_title": "Analítica opcional",
@@ -78,7 +80,7 @@ function start() {
     URLSearchParams,
     fetch(url, options) {
       fetchCalls.push({ url, options });
-      return Promise.resolve({ ok: true });
+      return fetchImpl(url, options);
     }
   };
 
@@ -86,7 +88,7 @@ function start() {
   domListeners.get("DOMContentLoaded")();
   const card = body.children.find((node) => node.className.includes("sow-analytics-consent"));
   assert.ok(card, "consent choice is presented");
-  return { card, head, local, session, fetchCalls };
+  return { card, head, local, session, fetchCalls, flushAgain: () => intervalCallback() };
 }
 
 test("consent panel loads and rejecting sends nothing or creates an analytics session", () => {
@@ -95,12 +97,35 @@ test("consent panel loads and rejecting sends nothing or creates an analytics se
   assert.equal(runtime.card.children[0].textContent, "Analítica opcional");
   const [accept, reject] = runtime.card.children[3].children;
   assert.notEqual(accept.textContent, reject.textContent);
+  assert.equal(runtime.local.values.size, 0);
   assert.deepEqual(runtime.fetchCalls, []);
 
   reject.click();
   assert.equal(JSON.parse(runtime.local.getItem("sow_analytics_consent_v2")).choice, "rejected");
   assert.equal(runtime.session.values.size, 0);
   assert.deepEqual(runtime.fetchCalls, []);
+});
+
+test("network retries reuse the same event IDs and clear the queue only after success", async () => {
+  let attempts = 0;
+  const runtime = start(async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("offline");
+    return { ok: true };
+  });
+  runtime.card.children[3].children[0].click();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  assert.equal(runtime.fetchCalls.length, 1);
+  assert.ok(queued.length > 0);
+
+  runtime.flushAgain();
+  await new Promise((resolve) => setImmediate(resolve));
+  const firstBatch = JSON.parse(runtime.fetchCalls[0].options.body);
+  const retryBatch = JSON.parse(runtime.fetchCalls[1].options.body);
+  assert.deepEqual(retryBatch.events.map((event) => event.event_id), firstBatch.events.map((event) => event.event_id));
+  assert.equal(runtime.session.getItem("sow_analytics_queue_v2"), "[]");
 });
 
 test("accepting sends consented events only to the first-party endpoint", () => {

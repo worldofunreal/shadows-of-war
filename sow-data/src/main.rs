@@ -2676,6 +2676,41 @@ mod analytics_origin_tests {
     }
 }
 
+fn newly_recorded_analytics_lines(lines: &[String], recorded: &[bool]) -> Option<Vec<String>> {
+    if lines.len() != recorded.len() {
+        return None;
+    }
+    Some(
+        lines
+            .iter()
+            .zip(recorded)
+            .filter_map(|(line, &is_new)| is_new.then(|| line.clone()))
+            .collect(),
+    )
+}
+
+#[cfg(test)]
+mod analytics_archive_tests {
+    use super::newly_recorded_analytics_lines;
+
+    #[test]
+    fn archive_includes_only_events_newly_counted_by_redis() {
+        let lines = vec!["first".to_string(), "retry".to_string(), "next".to_string()];
+        assert_eq!(
+            newly_recorded_analytics_lines(&lines, &[true, false, true]),
+            Some(vec!["first".to_string(), "next".to_string()])
+        );
+    }
+
+    #[test]
+    fn archive_rejects_unmatched_event_outcomes() {
+        assert_eq!(
+            newly_recorded_analytics_lines(&["event".to_string()], &[]),
+            None
+        );
+    }
+}
+
 /// Liveness probe for the pipeline and service supervisor. It deliberately
 /// performs no profile lookup and emits no authentication warning.
 async fn handle_healthz() -> impl IntoResponse {
@@ -2782,33 +2817,29 @@ async fn handle_event(
                 .into_response();
         }
     };
-    match state.legacy_events.lock() {
-        Ok(mut events) => {
-            if let Err(error) = events.append_batch(&lines) {
-                error!("analytics event batch write failed: {error}");
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
-                )
-                    .into_response();
-            }
-        }
-        Err(error) => {
-            error!("analytics event sink lock failed: {error}");
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
-            )
-                .into_response();
-        }
-    }
-
     match state.db.record_analytics_batch(&accepted_events).await {
-        Ok(accepted) => (
-            StatusCode::OK,
-            Json(serde_json::json!({ "accepted": accepted })),
-        )
-            .into_response(),
+        Ok(recorded) => {
+            let accepted = recorded.iter().filter(|&&is_new| is_new).count();
+            match newly_recorded_analytics_lines(&lines, &recorded) {
+                Some(lines) if !lines.is_empty() => match state.legacy_events.lock() {
+                    Ok(mut events) => {
+                        if let Err(error) = events.append_batch(&lines) {
+                            error!("analytics event archive write failed after counters committed: {error}");
+                        }
+                    }
+                    Err(error) => {
+                        error!("analytics event archive lock failed after counters committed: {error}");
+                    }
+                },
+                Some(_) => {}
+                None => error!("analytics event archive skipped: outcome count mismatch after counters committed"),
+            }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({ "accepted": accepted })),
+            )
+                .into_response()
+        }
         Err(error) => {
             error!("analytics batch aggregation failed: {error}");
             (
