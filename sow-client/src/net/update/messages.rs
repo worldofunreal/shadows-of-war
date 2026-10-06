@@ -352,6 +352,10 @@ impl SowApp {
                     }
                     ServerMessage::JoinAck(ack) => {
                         crate::store_portals::measure("lobby", "join", "complete");
+                        if self.join_matchmaking {
+                            crate::store_portals::track_product_event("matchmaking_joined");
+                        }
+                        crate::store_portals::track_product_event("lobby_joined");
                         log::info!(
                             "[LOBBY] Joined lobby {} as player {} (map: {})",
                             ack.lobby_id,

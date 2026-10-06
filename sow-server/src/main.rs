@@ -1238,6 +1238,8 @@ async fn main() {
             )
             .route("/profile", axum::routing::get(identity::handle_profile))
             .route("/admin/api/status", axum::routing::get(admin_status))
+            .route("/admin/api/analytics", axum::routing::get(admin_analytics))
+            .route("/admin/analytics", axum::routing::get(admin_analytics_page))
             .with_state(state);
 
         let app = catalog_route
@@ -1943,12 +1945,7 @@ async fn admin_status(
     // The status payload discloses player IPs and account ids — it is
     // localhost tooling only and requires the deployment bearer secret.
     let secret = std::env::var("SOW_DB_SECRET").unwrap_or_default();
-    let presented = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(str::trim);
-    if secret.is_empty() || presented != Some(secret.as_str()) {
+    if !admin_request_authorized(&headers, &secret) {
         log::warn!("[ADMIN] unauthorized /admin/api/status request");
         return axum::response::IntoResponse::into_response((
             axum::http::StatusCode::UNAUTHORIZED,
@@ -2058,6 +2055,79 @@ async fn admin_status(
         "valkey": valkey_info,
         "database": db_stats,
     })))
+}
+
+fn admin_request_authorized(headers: &axum::http::HeaderMap, secret: &str) -> bool {
+    let presented = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::trim);
+    !secret.is_empty() && presented == Some(secret)
+}
+
+async fn admin_analytics_page() -> axum::response::Response {
+    axum::response::Response::builder()
+        .status(axum::http::StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(axum::http::header::CACHE_CONTROL, "no-store")
+        .body(axum::body::Body::from(include_str!("../assets/admin_analytics.html")))
+        .expect("valid analytics dashboard response")
+}
+
+async fn admin_analytics(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> axum::response::Response {
+    if !admin_request_authorized(&headers, &state.db_secret) {
+        return axum::response::IntoResponse::into_response((
+            axum::http::StatusCode::UNAUTHORIZED,
+            axum::Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+    let days = query
+        .get("days")
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(30)
+        .clamp(1, 90);
+    let url = format!(
+        "{}/internal/analytics?days={days}",
+        state.db_url.trim_end_matches('/')
+    );
+    let response = match state
+        .replay_http
+        .get(url)
+        .bearer_auth(&state.db_secret)
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => response,
+        Ok(response) => {
+            log::warn!("[ADMIN] analytics source returned HTTP {}", response.status());
+            return axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),
+            ));
+        }
+        Err(error) => {
+            log::error!("[ADMIN] analytics source request failed: {error}");
+            return axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),
+            ));
+        }
+    };
+    match response.json::<serde_json::Value>().await {
+        Ok(summary) => axum::response::IntoResponse::into_response(axum::Json(summary)),
+        Err(error) => {
+            log::error!("[ADMIN] analytics response was invalid JSON: {error}");
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::BAD_GATEWAY,
+                axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),
+            ))
+        }
+    }
 }
 
 async fn lobbies_json_handler(

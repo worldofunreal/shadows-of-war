@@ -8,6 +8,7 @@
 
   var sdkInitPromise = null;
   var loadingFinished = false;
+  var firstMilestoneSent = false;
   var progressKey = "sow_player_progress";
 
   // D1-D7 re-engagement sequence (launch checklist: at least one per day
@@ -183,6 +184,16 @@
     if (sdk && typeof sdk.markGameLoaded === "function") {
       try { sdk.markGameLoaded(); } catch (e) {}
     }
+  };
+
+  window.SOW_portalFirstMilestone = function () {
+    if (firstMilestoneSent) return;
+    var sdk = jestSdk();
+    if (!sdk || typeof sdk.markFirstMilestone !== "function") return;
+    try {
+      sdk.markFirstMilestone();
+      firstMilestoneSent = true;
+    } catch (e) {}
   };
 
   // The Rust client calls these on match boundaries; Jest has no ad-gated

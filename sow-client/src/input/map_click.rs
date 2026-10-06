@@ -944,26 +944,36 @@ impl SowApp {
                 };
                 (
                     Some({
-                        let snapshot = self.sim.current_snapshot.as_ref();
-                        let owned_levels = snapshot
-                            .map(|snapshot| {
-                                snapshot
-                                    .buildings
-                                    .iter()
-                                    .filter(|candidate| {
-                                        candidate.owner_id == building.owner_id
-                                            && candidate.kind == building.kind
-                                    })
-                                    .map(|candidate| candidate.level as u32)
-                                    .sum()
-                            })
-                            .unwrap_or_default();
-                        sow_core::building::cost::structure_upgrade_cost_gold(
-                            building.kind,
-                            building.active_level().saturating_add(1),
-                            owned_levels,
-                            &self.sim.config,
-                        )
+                        let free_tutorial_upgrade = self.sim.engine.as_ref().is_some_and(|engine| {
+                            engine.tutorial_city_upgrade_is_free(
+                                self.sim.my_player_id.unwrap_or_default(),
+                                building.id,
+                            )
+                        });
+                        if free_tutorial_upgrade {
+                            0.0
+                        } else {
+                            let snapshot = self.sim.current_snapshot.as_ref();
+                            let owned_levels = snapshot
+                                .map(|snapshot| {
+                                    snapshot
+                                        .buildings
+                                        .iter()
+                                        .filter(|candidate| {
+                                            candidate.owner_id == building.owner_id
+                                                && candidate.kind == building.kind
+                                        })
+                                        .map(|candidate| candidate.level as u32)
+                                        .sum()
+                                })
+                                .unwrap_or_default();
+                            sow_core::building::cost::structure_upgrade_cost_gold(
+                                building.kind,
+                                building.active_level().saturating_add(1),
+                                owned_levels,
+                                &self.sim.config,
+                            )
+                        }
                     }),
                     Some(building.level),
                 )

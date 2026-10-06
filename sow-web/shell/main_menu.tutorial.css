@@ -181,6 +181,7 @@
 .sow-story__meter output { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; padding-inline: 8px; color: #fff; font-size: var(--sow-tutorial-progress-label-size); line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 5px rgb(0 0 0 / 75%); pointer-events: none; }
 .sow-story__locate { flex-shrink: 0; width: 40px; height: 40px; margin: -8px; border: 0; background: transparent; color: var(--story-accent); font-size: 25px !important; pointer-events: auto; }
 .sow-story__spotlight { position: absolute; z-index: 2; border: 1px solid var(--story-accent); border-radius: 6px; box-shadow: 0 0 0 3px #e9bb6415, 0 0 24px #e9bb6420; pointer-events: none; }
+.sow-story__spotlight.is-dimmed { box-shadow: 0 0 0 9999px rgb(5 10 13 / 68%), 0 0 0 3px #e9bb6415, 0 0 24px #e9bb6420; }
 .sow-story__gesture { position: absolute; z-index: 3; left: 0; top: 0; width: 0; height: 0; transform: translate3d(0, 0, 0); pointer-events: none; }
 .sow-story__gesture.is-following:not(.is-camera-following) { transition: transform 120ms linear; }
 .sow-story__gesture.is-camera-following { transition: none; }

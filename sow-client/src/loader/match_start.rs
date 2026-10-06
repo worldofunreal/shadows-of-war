@@ -22,10 +22,18 @@ impl SowApp {
         if !self.progress.is_first_game() {
             log::info!("Portal boot: returning player -> main menu");
             crate::store_portals::gameplay_stop();
+            crate::store_portals::track_product_event_with(
+                "boot_route_decision",
+                &serde_json::json!({ "route": "menu" }),
+            );
             self.ui.app.splash_state.done = true;
             self.ui.app.phase = ClientPhase::MainMenu;
         } else {
             log::info!("Portal boot: new player -> JavaScript campaign bootstrap");
+            crate::store_portals::track_product_event_with(
+                "boot_route_decision",
+                &serde_json::json!({ "route": "intro" }),
+            );
             self.ui.app.main_menu_state.host_private_pending = false;
             let campaign = crate::campaign::CampaignId::Boudica;
             self.boot_campaign_pending = Some(campaign.episode_id().to_string());
@@ -212,6 +220,7 @@ impl SowApp {
                 self.ui.tutorial_campaign.episode_id(),
                 config.map_name
             );
+            crate::store_portals::track_product_event("tutorial_start");
         }
 
         let map_id = crate::ui::asset_loader::AssetLoader::map_key(&config.map_name);

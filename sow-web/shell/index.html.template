@@ -341,6 +341,7 @@
             }, 600000);
         })();
     </script>
+    <!-- __SOW_ANALYTICS_SCRIPT_SLOT__ -->
     <script src="./sdk/store_portals.js?v=__BUILD_TS__"></script>
     <script>
         window.SOW_LOCALE_BASE = "__SOW_LOCALE_BASE__";

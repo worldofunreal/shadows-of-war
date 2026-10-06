@@ -926,6 +926,14 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         )
         .replace(&store_portals_template, &store_portals_src)
         .replace(
+            "<!-- __SOW_ANALYTICS_SCRIPT_SLOT__ -->",
+            &if matches!(target, WebTarget::Local) {
+                format!("<script src=\"../analytics.js?v={ts}\"></script>")
+            } else {
+                String::new()
+            },
+        )
+        .replace(
             "<!-- __SOW_SERVICE_WORKER_SLOT__ -->",
             match target {
                 WebTarget::Local => {
@@ -1206,7 +1214,7 @@ fn inline_webp(path: &Path) -> Result<String> {
     ))
 }
 
-fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
+fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
     let fav = paths.shell.join("favicon_io");
     if fav.is_dir() {
         for e in fs::read_dir(&fav)? {
@@ -1236,6 +1244,12 @@ fn copy_shell(paths: &Paths, out: &Path) -> Result<()> {
         )?;
     }
     fs::copy(paths.shell.join("loader.js"), out.join("loader.js"))?;
+    if matches!(target, WebTarget::Local) {
+        fs::copy(
+            paths.root.join("sow-web/site/analytics.js"),
+            out.join("analytics.js"),
+        )?;
+    }
     fs::copy(paths.shell.join("sow-i18n.js"), out.join("sow-i18n.js"))?;
     fs::copy(
         paths.shell.join("sow-dropdown.js"),
@@ -2256,12 +2270,15 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         }
     }
     // The bundle is a whitelist; these must never ride along again.
-    for forbidden in ["maps", "assets", "admin", "play"] {
+    for forbidden in ["maps", "assets", "admin", "play", "analytics.js"] {
         if dir.join(forbidden).exists() {
             bail!("crazygames bundle must not contain {forbidden}/");
         }
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
+    if html.contains("analytics.js") || html.contains("/api/event") {
+        bail!("crazygames bundle must not include first-party analytics");
+    }
     let notice = fs::read_to_string(dir.join("NOTICE"))?;
     if !notice.contains("https://shadowsofwar.io/fonts/OFL.txt") {
         bail!("crazygames notice is missing the hosted font license link");
@@ -2329,6 +2346,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "assets/gameplay/store",
         "assets/gameplay/skins",
         "assets/shell/mobile-nav/store.webp",
+        "analytics.js",
     ] {
         if dir.join(forbidden).exists() {
             bail!("poki bundle must not contain {forbidden}");
@@ -2336,6 +2354,9 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
     let loader = fs::read_to_string(dir.join("loader.js"))?;
+    if html.contains("analytics.js") || html.contains("/api/event") {
+        bail!("poki bundle must not include first-party analytics");
+    }
     let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
     let manifest = fs::read_to_string(dir.join("manifest.webmanifest"))?;
     for needle in [
@@ -2518,7 +2539,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     } else {
         run_bindgen(&paths.wasm_input, out, &format!("sow_client_{ts}"))?;
     }
-    copy_shell(paths, out)?;
+    copy_shell(paths, out, WebTarget::Local)?;
     build_index(
         paths,
         out,
@@ -2553,6 +2574,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     let site = paths.root.join("sow-web/site");
     for name in [
         "index.html",
+        "analytics.js",
         "app.js",
         "site-chrome.js",
         "styles.css",
@@ -2589,6 +2611,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     // Fingerprint shared public assets in every page that references them.
     for name in [
         "styles.css",
+        "analytics.js",
         "app.js",
         "site-chrome.js",
         "sow-i18n.js",
@@ -2728,7 +2751,7 @@ fn package_native_web(
         copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
         copy_dir(&paths.assets_maps, &out.join("maps"))?;
         refresh_map_thumbnails(&out.join("maps"), &paths.map_sources)?;
-        copy_shell(paths, out)?;
+        copy_shell(paths, out, WebTarget::Native)?;
 
         let site = paths.root.join("sow-web/site");
         copy_dir(&site.join("fonts"), &out.join("fonts"))?;
@@ -2828,7 +2851,7 @@ fn package_cg(
         play_dir.join(format!("sow_client_{wh}_bg.wasm")),
         out.join("sow_client_bg.wasm"),
     )?;
-    copy_shell(paths, out)?;
+    copy_shell(paths, out, WebTarget::CrazyGames)?;
     let stale_bridge = out.join("sdk/jest_portals.js");
     if stale_bridge.is_file() {
         fs::remove_file(stale_bridge)?;
@@ -2927,7 +2950,7 @@ fn package_poki(
     copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
     copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
     copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
-    copy_shell(paths, out)?;
+    copy_shell(paths, out, WebTarget::Poki)?;
     let stale_bridge = out.join("sdk/jest_portals.js");
     if stale_bridge.is_file() {
         fs::remove_file(stale_bridge)?;
@@ -3071,6 +3094,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "assets/shell/mobile-nav/store.webp",
         "sdk/poki_portals.js",
         "sdk/jest_portals.js",
+        "analytics.js",
     ] {
         if dir.join(forbidden).exists() {
             bail!("jest bundle must not contain {forbidden}");
@@ -3078,6 +3102,9 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
     let loader = fs::read_to_string(dir.join("loader.js"))?;
+    if html.contains("analytics.js") || html.contains("/api/event") {
+        bail!("jest bundle must not include first-party analytics");
+    }
     let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
     for needle in [
         "https://cdn.jest.com/sdk/latest/jestsdk.js",
@@ -3211,7 +3238,7 @@ fn package_jest(
     copy_poki_assets(&play_dir.join("assets"), &out.join("assets"))?;
     copy_poki_maps(&play_dir.join("maps"), &out.join("maps"))?;
     copy_dir(&paths.root.join("sow-web/site/fonts"), &out.join("fonts"))?;
-    copy_shell(paths, out)?;
+    copy_shell(paths, out, WebTarget::Jest)?;
     fs::write(
         out.join("manifest.webmanifest"),
         r##"{
@@ -4079,6 +4106,7 @@ mod tests {
         let site = root.join("sow-web/site");
         for required in [
             "index.html",
+            "analytics.js",
             "app.js",
             "site-chrome.js",
             "site-header.html",
@@ -4185,6 +4213,7 @@ mod tests {
         assert!(html.contains("SOW_menu_command"));
         assert!(html.contains("SOW_onStateUpdate"));
         assert!(html.contains("sow-hud__dock"));
+        assert!(html.contains("../analytics.js?v=test"));
         Ok(())
     }
 
@@ -4205,6 +4234,7 @@ mod tests {
             },
         )?;
         let html = fs::read_to_string(out.path().join("index.html"))?;
+        assert!(!html.contains("analytics.js"));
         assert!(html.contains("href=\"fonts/fonts.css\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.poki.js"));
@@ -4241,6 +4271,7 @@ mod tests {
             },
         )?;
         let html = fs::read_to_string(out.path().join("index.html"))?;
+        assert!(!html.contains("analytics.js"));
         assert!(html.contains("href=\"fonts/fonts.css\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.jest.js"));

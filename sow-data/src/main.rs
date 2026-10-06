@@ -14,15 +14,28 @@ use log::{error, info, warn};
 use rand::RngCore;
 use redb::ReadableTableMetadata;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tower_http::cors::{Any, CorsLayer};
 
 const MAX_REPLAY_BYTES: usize = 16 * 1024 * 1024;
 const MAX_REPLAY_REQUEST_BYTES: usize = 32 * 1024 * 1024;
+const MAX_ANALYTICS_REQUEST_BYTES: usize = 256 * 1024;
+const MAX_ANALYTICS_BATCH_EVENTS: usize = 100;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AnalyticsBatch {
+    events: Vec<sow_data::events::AnalyticsEvent>,
+}
+
+#[derive(Deserialize)]
+struct AnalyticsQuery {
+    days: Option<u32>,
+}
 
 struct AppState {
     db: PlayerDb,
@@ -1529,12 +1542,30 @@ struct SelfDeleteResponse {
     keys_removed: u64,
 }
 
+fn analytics_subject_id(secret: &str, portal: &str, account_id: &str) -> String {
+    let mut mac = <hmac::Hmac<sha2::Sha256> as hmac::Mac>::new_from_slice(secret.as_bytes())
+        .expect("HMAC accepts every key length");
+    mac.update(b"sow-product-analytics-v1\0");
+    mac.update(portal.as_bytes());
+    mac.update(b"\0");
+    mac.update(account_id.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+fn analytics_subject_ids(state: &AppState, account_id: &str) -> Vec<String> {
+    ["site", "poki", "crazygames", "jest", "android"]
+        .into_iter()
+        .map(|portal| analytics_subject_id(&state.secret_token, portal, account_id))
+        .collect()
+}
+
 fn erase_legacy_events(state: &AppState, account_id: &str) -> std::io::Result<u64> {
+    let subject_ids = analytics_subject_ids(state, account_id);
     let mut events = state
         .legacy_events
         .lock()
         .map_err(|_| std::io::Error::other("legacy event retention lock poisoned"))?;
-    events.erase_account_id(account_id)
+    events.erase_account_and_subjects(account_id, &subject_ids)
 }
 
 async fn handle_self_delete(
@@ -1554,6 +1585,20 @@ async fn handle_self_delete(
     }
     if let Err(error) = erase_legacy_events(&state, account_id) {
         error!("[privacy] self-delete legacy event scrub failed: {error}");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "account deletion unavailable".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    if let Err(error) = state
+        .db
+        .erase_analytics_subjects(&analytics_subject_ids(&state, account_id))
+        .await
+    {
+        error!("[privacy] self-delete analytics membership scrub failed: {error}");
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ErrorResponse {
@@ -1807,6 +1852,20 @@ async fn handle_internal_profile_delete(
     let account_id = payload.account_id.trim().to_string();
     if let Err(error) = erase_legacy_events(&state, &account_id) {
         error!("[privacy] account-delete legacy event scrub failed: {error}");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "account deletion unavailable".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    if let Err(error) = state
+        .db
+        .erase_analytics_subjects(&analytics_subject_ids(&state, &account_id))
+        .await
+    {
+        error!("[privacy] account-delete analytics membership scrub failed: {error}");
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(ErrorResponse {
@@ -2174,7 +2233,11 @@ async fn main() {
     // Define router
     let app = Router::new()
         .route("/healthz", get(handle_healthz))
-        .route("/event", post(handle_event_gone))
+        .route(
+            "/event",
+            post(handle_event).layer(DefaultBodyLimit::max(MAX_ANALYTICS_REQUEST_BYTES)),
+        )
+        .route("/internal/analytics", get(handle_internal_analytics))
         .route("/profile", get(handle_get_profile))
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
         .route("/auth/playgames/consume", post(handle_playgames_consume))
@@ -2584,15 +2647,207 @@ mod leaderboard_pagination_tests {
     }
 }
 
+fn is_first_party_analytics_origin(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|origin| {
+            matches!(origin, "https://shadowsofwar.io" | "https://www.shadowsofwar.io")
+        })
+}
+
+#[cfg(test)]
+mod analytics_origin_tests {
+    use super::{HeaderMap, header, is_first_party_analytics_origin};
+
+    #[test]
+    fn accepts_only_the_two_first_party_web_origins() {
+        for origin in ["https://shadowsofwar.io", "https://www.shadowsofwar.io"] {
+            let mut headers = HeaderMap::new();
+            headers.insert(header::ORIGIN, origin.parse().unwrap());
+            assert!(is_first_party_analytics_origin(&headers));
+        }
+        for origin in ["https://attacker.example", "http://shadowsofwar.io", "null"] {
+            let mut headers = HeaderMap::new();
+            headers.insert(header::ORIGIN, origin.parse().unwrap());
+            assert!(!is_first_party_analytics_origin(&headers));
+        }
+        assert!(!is_first_party_analytics_origin(&HeaderMap::new()));
+    }
+}
+
 /// Liveness probe for the pipeline and service supervisor. It deliberately
 /// performs no profile lookup and emits no authentication warning.
 async fn handle_healthz() -> impl IntoResponse {
     (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
 }
 
-/// Retired public analytics endpoint. Old clients receive no stored response.
-async fn handle_event_gone() -> StatusCode {
-    StatusCode::GONE
+/// Public, consent-gated product funnel. It stores only closed events and
+/// portal-scoped account hashes; it never influences game state or rewards.
+async fn handle_event(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(batch): Json<AnalyticsBatch>,
+) -> impl IntoResponse {
+    if !is_first_party_analytics_origin(&headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "first-party origin required" })),
+        )
+            .into_response();
+    }
+    if batch.events.is_empty() || batch.events.len() > MAX_ANALYTICS_BATCH_EVENTS {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "invalid analytics batch size" })),
+        )
+            .into_response();
+    }
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    for event in &batch.events {
+        if let Err(reason) = event.validate(now_ms) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": reason })),
+            )
+                .into_response();
+        }
+    }
+
+    let account_ids: HashSet<String> = batch
+        .events
+        .iter()
+        .filter_map(|event| event.account_id.clone())
+        .collect();
+    let mut bot_accounts = HashSet::new();
+    for account_id in account_ids {
+        match state.db.is_bot_account_checked(&account_id).await {
+            Ok(true) => {
+                bot_accounts.insert(account_id);
+            }
+            Ok(false) => {}
+            Err(error) => {
+                error!("analytics bot-filter lookup failed: {error}");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    let mut accepted_events = Vec::with_capacity(batch.events.len());
+    for mut event in batch.events {
+        if event
+            .account_id
+            .as_ref()
+            .is_some_and(|account_id| bot_accounts.contains(account_id))
+        {
+            continue;
+        }
+        if let Some(account_id) = event.account_id.take() {
+            let portal = event.portal.as_deref().unwrap_or("site");
+            event.subject_id = Some(analytics_subject_id(
+                &state.secret_token,
+                portal,
+                &account_id,
+            ));
+        }
+        accepted_events.push(event);
+    }
+    if accepted_events.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({ "accepted": 0 })),
+        )
+            .into_response();
+    }
+
+    let lines = match accepted_events
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(lines) => lines,
+        Err(error) => {
+            error!("analytics event serialization failed: {error}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "analytics unavailable" })),
+            )
+                .into_response();
+        }
+    };
+    match state.legacy_events.lock() {
+        Ok(mut events) => {
+            if let Err(error) = events.append_batch(&lines) {
+                error!("analytics event batch write failed: {error}");
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
+                )
+                    .into_response();
+            }
+        }
+        Err(error) => {
+            error!("analytics event sink lock failed: {error}");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
+            )
+                .into_response();
+        }
+    }
+
+    match state.db.record_analytics_batch(&accepted_events).await {
+        Ok(accepted) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "accepted": accepted })),
+        )
+            .into_response(),
+        Err(error) => {
+            error!("analytics batch aggregation failed: {error}");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({ "error": "analytics temporarily unavailable" })),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// GET /internal/analytics — operator-only funnel and retention snapshot.
+async fn handle_internal_analytics(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<AnalyticsQuery>,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Unauthorized".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    match state.db.analytics_summary(query.days.unwrap_or(30)).await {
+        Ok(summary) => (StatusCode::OK, Json(summary)).into_response(),
+        Err(error) => {
+            error!("analytics summary failed: {error}");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "analytics unavailable".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// POST /profile/anonymous — load the canonical anonymous account and issue

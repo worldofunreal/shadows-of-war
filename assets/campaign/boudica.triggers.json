@@ -568,10 +568,33 @@
         "target": "dock_city",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_build_city"
     },
     {
       "id": "boudica_build_city",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_build_city_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_build_city_hint",
+      "speaker": "boudica",
+      "trigger": {
+        "type": "city",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "next": "boudica_city_construction_wait"
+    },
+    {
+      "id": "boudica_city_construction_wait",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_build_city_title",
       "hint_key": "tutorial.campaign_boudica_boudica_build_city_hint",
@@ -584,11 +607,6 @@
       },
       "marker": {
         "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "build_site",
-        "gesture": "tap"
       },
       "advance_delay_seconds": 3,
       "next": "boudica_city_ready"
@@ -714,7 +732,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_city_upgrade_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_bunker_choice"
+      "next": "boudica_ninth_legion_intro"
     },
     {
       "id": "boudica_trinovantes_contact",
@@ -754,10 +772,33 @@
         "target": "dock_factory",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_build_factory"
     },
     {
       "id": "boudica_build_factory",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_build_factory_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_build_factory_hint",
+      "speaker": "council",
+      "trigger": {
+        "type": "factory",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "next": "boudica_factory_construction_wait"
+    },
+    {
+      "id": "boudica_factory_construction_wait",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_build_factory_title",
       "hint_key": "tutorial.campaign_boudica_boudica_build_factory_hint",
@@ -771,11 +812,6 @@
       "marker": {
         "target": "player"
       },
-      "guide": {
-        "kind": "world",
-        "target": "build_site",
-        "gesture": "tap"
-      },
       "advance_delay_seconds": 3,
       "next": "boudica_factory_ready"
     },
@@ -786,7 +822,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_factory_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_select_city_upgrade"
+      "next": "boudica_bunker_choice"
     },
     {
       "id": "boudica_bunker_choice",
@@ -813,10 +849,33 @@
         "target": "dock_bunker",
         "gesture": "tap"
       },
+      "pause_game": true,
       "next": "boudica_build_bunker"
     },
     {
       "id": "boudica_build_bunker",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_build_bunker_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_build_bunker_hint",
+      "speaker": "council",
+      "trigger": {
+        "type": "bunker",
+        "value": 1,
+        "scope": "total"
+      },
+      "marker": {
+        "target": "player"
+      },
+      "guide": {
+        "kind": "world",
+        "target": "build_site",
+        "gesture": "tap"
+      },
+      "pause_game": true,
+      "next": "boudica_bunker_construction_wait"
+    },
+    {
+      "id": "boudica_bunker_construction_wait",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_build_bunker_title",
       "hint_key": "tutorial.campaign_boudica_boudica_build_bunker_hint",
@@ -829,11 +888,6 @@
       },
       "marker": {
         "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "build_site",
-        "gesture": "tap"
       },
       "advance_delay_seconds": 3,
       "next": "boudica_bunker_built"
@@ -1038,7 +1092,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_ninth_legion_intro"
+      "next": "boudica_select_city_upgrade"
     },
     {
       "id": "boudica_londinium_intro",
@@ -1377,9 +1431,25 @@
       "x": 70,
       "y": 1210
     },
+    "boudica_city_construction_wait": {
+      "x": 350,
+      "y": 1210
+    },
     "boudica_structure_upgrade": {
-      "x": 630,
-      "y": 1590
+      "x": 1190,
+      "y": 2350
+    },
+    "boudica_select_city_upgrade": {
+      "x": 910,
+      "y": 2350
+    },
+    "boudica_city_upgrade_wait": {
+      "x": 1470,
+      "y": 2350
+    },
+    "boudica_city_upgrade_ready": {
+      "x": 1750,
+      "y": 2350
     },
     "boudica_choose_factory": {
       "x": 630,
@@ -1388,6 +1458,10 @@
     "boudica_build_factory": {
       "x": 70,
       "y": 2160
+    },
+    "boudica_factory_construction_wait": {
+      "x": 350,
+      "y": 1970
     },
     "boudica_bunker_choice": {
       "x": 350,
@@ -1400,6 +1474,10 @@
     "boudica_build_bunker": {
       "x": 70,
       "y": 2350
+    },
+    "boudica_bunker_construction_wait": {
+      "x": 350,
+      "y": 2540
     },
     "boudica_camulodunum_intro": {
       "x": 350,

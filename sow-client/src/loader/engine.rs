@@ -404,6 +404,7 @@ impl SowApp {
                             self.ui.app.splash_state.target_phase =
                                 Some(crate::ClientPhase::Playing);
                             crate::store_portals::gameplay_start();
+                            crate::store_portals::track_product_event("match_started_client");
                         }
 
                         // Clear pending init data to completely finish EnterGame phase

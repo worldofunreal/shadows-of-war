@@ -593,7 +593,11 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
     }
     run(
         "node",
-        &["--test", "sow-web/shell/main_menu.interaction.test.js"],
+        &[
+            "--test",
+            "sow-web/shell/main_menu.interaction.test.js",
+            "sow-web/site/analytics.test.js",
+        ],
         Some(&paths.root),
     )
     .context("web interaction regression tests failed")?;

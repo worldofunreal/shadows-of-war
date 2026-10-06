@@ -26,7 +26,7 @@
       <div class="container">
         <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.privacy_eyebrow">Legal &amp; Telemetry</span></p>
         <h1><span data-i18n="site.privacy_heading">Privacy</span><br><em data-i18n="site.privacy_heading_em">policy.</em></h1>
-        <p class="guide-lede" data-i18n="site.privacy_updated">Last updated: September 2026 · Controller: World of Unreal · Contact: hello@shadowsofwar.io</p>
+        <p class="guide-lede" data-i18n="site.privacy_updated_v2">Last updated: October 6, 2026 · Controller: World of Unreal · Contact: hello@shadowsofwar.io</p>
       </div>
     </section>
 
@@ -58,7 +58,7 @@
                 <li><strong data-i18n="site.privacy_gameplay_label">Gameplay:</strong> <span data-i18n="site.privacy_gameplay_body">display name, clan tag, leader/civilization choices, match inputs, history, ranks, owned items.</span></li>
                 <li><strong data-i18n="site.privacy_account_label">Account:</strong> <span data-i18n="site.privacy_account_body">random account ID, linked platform identities, one-way hash of your ownership secret (never the plaintext).</span></li>
                 <li><strong data-i18n="site.privacy_technical_label">Technical:</strong> <span data-i18n="site.privacy_technical_body">build version, platform/locale, connection metadata, relay tickets, server logs for security and anti-abuse.</span></li>
-                <li><strong data-i18n="site.privacy_analytics_label">Product analytics (first-party only):</strong> <span data-i18n="site.privacy_analytics_body">closed-taxonomy events (visits, boot stages, tutorial, matchmaking, match start/end) tied to a random session ID and account ID. No ad identifiers, no third-party vendor.</span></li>
+                <li><strong data-i18n="site.privacy_analytics_label">Product analytics (first-party only):</strong> <span data-i18n="site.privacy_analytics_body_v2">Optional analytics on our own website and browser game starts only after you accept. It records a closed set of visit, loading, menu, tutorial, lobby, match-start and match-exit events with build, language and a broad viewport class (mobile, tablet or desktop), not a full device fingerprint. If an account ID is present, our server replaces it with a channel-specific keyed pseudonym before storage. No names, messages, passwords, ad IDs or map clicks.</span></li>
                 <li><strong data-i18n="site.privacy_purchases_label">Purchases:</strong> <span data-i18n="site.privacy_purchases_body">product ID, transaction reference, entitlement status via RevenueCat/the store. Full payment details stay with the store.</span></li>
                 <li><strong data-i18n="site.privacy_public_label">Public by design:</strong> <span data-i18n="site.privacy_public_body">names, handles, rankings, and match records are visible to other players.</span></li>
               </ul>
@@ -91,7 +91,7 @@
             <span>06</span>
             <div>
               <h3 data-i18n="site.privacy_cookies_title">Cookies &amp; local storage</h3>
-              <p><span data-i18n="site.privacy_cookies_body">Strictly-necessary storage only: session IDs, our own first-party event endpoint. No advertising, social, or cross-site cookies. Fonts are self-hosted — zero cross-origin requests. Details and controls in our</span> <a class="inline-link" href="/cookies/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.cookies">Cookie Notice</a>.</p>
+              <p><span data-i18n="site.privacy_cookies_body_v2">We store your analytics choice in local storage. Only after acceptance do we create a temporary analytics session ID and retry queue in session storage. Rejecting analytics does not affect the game. Game settings, account continuity and cached assets use separate storage needed for those features. Details and controls in our</span> <a class="inline-link" href="/cookies/" style="color: var(--orange); text-decoration: underline;" data-i18n="site.cookies">Cookie Notice</a>.</p>
             </div>
           </article>
 
@@ -99,7 +99,7 @@
             <span>07</span>
             <div>
               <h3 data-i18n="site.privacy_retention_title">Retention</h3>
-              <p data-i18n="site.privacy_retention_body">Event files auto-prune past 90 days; analytics counters and memberships expire by key TTL within 90 days. Deploys never wipe live state. Accounts and history persist until you request deletion or termination under the Terms.</p>
+              <p data-i18n="site.privacy_retention_body_v2">Event files, analytics counters and memberships expire within 90 days. Verified account deletion removes linked event rows and account memberships; non-identifying daily totals remain only until their 90-day expiry. Accounts and match history persist until you request deletion or termination under the Terms.</p>
             </div>
           </article>
 
@@ -152,5 +152,6 @@
   <script src="../sow-i18n.js"></script>
   <script src="../sow-dropdown.js"></script>
   <script src="../site-chrome.js"></script>
+  <script src="../analytics.js"></script>
 </body>
 </html>

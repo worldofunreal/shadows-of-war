@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Shadows of War · Analytics</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0a1015;--panel:#111b21;--line:#28383d;--text:#edf2eb;--muted:#9eadaa;--gold:#e9b85f;--green:#8dc5ae}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -30%,#233338,var(--bg) 65%);color:var(--text);font:15px/1.5 system-ui,sans-serif}
+    main{width:min(1120px,calc(100% - 32px));margin:40px auto 72px}header{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:24px}
+    h1{margin:0;font-size:clamp(28px,4vw,42px);letter-spacing:-.04em}h1 span{color:var(--gold)}p{color:var(--muted)}
+    .card{border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(22,34,40,.96),rgba(13,21,26,.98));box-shadow:0 14px 40px #0004;padding:20px;margin:16px 0}
+    .controls{display:flex;flex-wrap:wrap;align-items:end;gap:12px}.controls label{display:grid;gap:6px;color:var(--muted);font-size:13px;flex:1 1 240px}
+    input,select,button{min-height:44px;border:1px solid #405158;border-radius:9px;background:#0b1419;color:var(--text);font:inherit;padding:9px 12px}
+    button{background:#d9a84f;border-color:#e8bd70;color:#172024;font-weight:750;cursor:pointer;padding-inline:18px}button:hover{filter:brightness(1.08)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}.metric{padding:16px;border:1px solid var(--line);border-radius:12px;background:#0b1419}.metric small{display:block;color:var(--muted)}.metric strong{display:block;font-size:28px;color:var(--gold);margin-top:4px}
+    h2{font-size:16px;margin:0 0 14px}table{width:100%;border-collapse:collapse}th,td{text-align:left;border-bottom:1px solid var(--line);padding:10px 8px}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+    .status{color:var(--green)}.pending{color:var(--gold)}.scroll{overflow:auto}.notice{min-height:24px;color:var(--muted)}.error{color:#ff9b89}
+    @media(max-width:600px){main{margin-top:24px}.card{padding:15px}header{display:block}th,td{padding:9px 6px}}
+  </style>
+</head>
+<body>
+  <main>
+    <header><div><p>PRIVATE OPERATOR VIEW</p><h1>Player <span>analytics</span></h1></div><p id="generated">No report loaded</p></header>
+    <section class="card">
+      <form class="controls" id="controls">
+        <label>Admin access key<input id="token" type="password" autocomplete="off" required></label>
+        <label>Reporting window<select id="days"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+        <button type="submit">Load report</button>
+      </form>
+      <div class="notice" id="notice" role="status" aria-live="polite"></div>
+    </section>
+    <section class="grid" id="metrics" aria-label="Summary metrics"></section>
+    <section class="card"><h2>Data sources</h2><div class="scroll"><table><thead><tr><th>Channel</th><th>Status</th><th>Source</th></tr></thead><tbody id="sources"></tbody></table></div></section>
+    <section class="card"><h2>Funnel · selected period</h2><div class="scroll"><table><thead><tr><th>Event</th><th>Event count</th><th>Distinct sessions per UTC day</th></tr></thead><tbody id="funnel"></tbody></table></div><p>These are observed steps, not a causal path. Explicit exits are counted; closing a tab does not reveal why a player left.</p></section>
+    <section class="card"><h2>Events by build</h2><div class="scroll"><table><thead><tr><th>Build</th><th>Events</th><th>Matchmaking joins</th><th>Match starts</th><th>Match ends</th><th>Explicit exits</th></tr></thead><tbody id="by-build"></tbody></table></div><p>At most 16 distinct build labels per UTC day are retained; additional labels are grouped as “other”.</p></section>
+    <section class="card"><h2>Events by device / viewport class</h2><div class="scroll"><table><thead><tr><th>Class</th><th>Events</th><th>Matchmaking joins</th><th>Match starts</th><th>Match ends</th><th>Explicit exits</th></tr></thead><tbody id="by-device"></tbody></table></div><p>The class comes only from broad viewport width (mobile, tablet or desktop), not the full browser or device identifier.</p></section>
+    <section class="card"><h2>Retention · consenting website accounts</h2><div class="scroll"><table><thead><tr><th>Return window</th><th>Eligible accounts</th><th>Returned</th><th>Rate</th></tr></thead><tbody id="retention"></tbody></table></div><p>Only accounts that chose optional analytics are included. This does not represent users on channels whose data is not imported.</p></section>
+  </main>
+  <script>
+    (()=>{
+      const $=id=>document.getElementById(id), esc=value=>String(value??'');
+      const rows=(target,values,render)=>{target.replaceChildren(...values.map(value=>{const row=document.createElement('tr');render(row,value);return row;}));};
+      const cell=(row,value,className)=>{const td=document.createElement('td');td.textContent=esc(value);if(className)td.className=className;row.append(td);};
+      $('controls').addEventListener('submit',async event=>{
+        event.preventDefault();const token=$('token').value.trim();const days=$('days').value;$('notice').className='notice';$('notice').textContent='Loading…';
+        try{
+          const response=await fetch('/admin/api/analytics?days='+encodeURIComponent(days),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+          if(!response.ok)throw new Error(response.status===401?'Access key was not accepted.':'Analytics service is unavailable.');
+          const report=await response.json();const today=report.daily?.[0]||{};const funnel=report.funnel||{};const funnelSessions=report.funnel_sessions||{};
+          $('generated').textContent='Updated '+esc(report.generated_at)+' · UTC';
+          $('metrics').replaceChildren(...[
+            ['Active sessions today',today.active_sessions||0],['Consenting accounts today',today.active_accounts||0],
+            ['Site visits',funnel.landing_visit||0],['Game shells loaded',funnel.shell_loaded||0],
+            ['Matchmaking joins',funnel.matchmaking_joined||0],['Match starts',funnel.match_started_client||0],
+            ['Match ends',funnel.match_ended_client||0],['Explicit early exits',funnel.match_exit||0]
+          ].map(([label,value])=>{const box=document.createElement('div');box.className='metric';const small=document.createElement('small');small.textContent=label;const strong=document.createElement('strong');strong.textContent=Number(value).toLocaleString();box.append(small,strong);return box;}));
+          rows($('sources'),Object.entries(report.sources||{}), (row,[name,source])=>{cell(row,name);cell(row,source.status,source.status==='connected'?'status':'pending');cell(row,source.source);});
+          rows($('funnel'),Object.entries(funnel).sort((a,b)=>b[1]-a[1]),(row,[name,count])=>{cell(row,name.replaceAll('_',' '));cell(row,Number(count).toLocaleString());cell(row,Number(funnelSessions[name]||0).toLocaleString());});
+          const renderDimensions=(id,dimensions)=>rows($(id),Object.entries(dimensions||{}).sort((a,b)=>Object.values(b[1]).reduce((x,y)=>x+y,0)-Object.values(a[1]).reduce((x,y)=>x+y,0)),(row,[label,events])=>{
+            cell(row,label);cell(row,Object.values(events).reduce((sum,value)=>sum+Number(value||0),0).toLocaleString());
+            for(const name of ['matchmaking_joined','match_started_client','match_ended_client','match_exit'])cell(row,Number(events[name]||0).toLocaleString());
+          });
+          renderDimensions('by-build',report.dimensions?.build);
+          renderDimensions('by-device',report.dimensions?.device_class);
+          rows($('retention'),Object.entries(report.retention?.site||{}),(row,[window,data])=>{cell(row,window.toUpperCase());cell(row,Number(data.eligible_accounts||0).toLocaleString());cell(row,Number(data.returned_accounts||0).toLocaleString());cell(row,(100*(data.rate||0)).toFixed(1)+'%');});
+          $('notice').textContent='Report loaded. Other channels are shown as separate platform sources, not as zero.';
+        }catch(error){$('notice').className='notice error';$('notice').textContent=error.message;}
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -6,6 +6,29 @@ use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase};
 
 impl SowEngine {
+    /// The first City level-2 upgrade is a one-time Boudica tutorial allowance.
+    pub fn tutorial_city_upgrade_is_free(&self, player_id: u16, building_id: u64) -> bool {
+        if !self.state.config.tutorial
+            || !self.state.config.buildings_enabled
+            || self.state.config.player_leader != crate::player::Leader::Boudica
+        {
+            return false;
+        }
+        let Some(building) = self.buildings.iter().find(|building| {
+            building.id == building_id && building.owner_id == player_id
+        }) else {
+            return false;
+        };
+        building.kind == BuildingKind::City
+            && building.level == 1
+            && !building.under_construction
+            && !self.buildings.iter().any(|candidate| {
+                candidate.owner_id == player_id
+                    && candidate.kind == BuildingKind::City
+                    && candidate.level >= 2
+            })
+    }
+
     pub(super) fn apply_build_structure_intent(
         &mut self,
         player_id: u16,
@@ -135,12 +158,16 @@ impl SowEngine {
         }
 
         let owned_levels = crate::building::count_kind(&self.buildings, player_id, building.kind);
-        let cost = structure_upgrade_cost_gold(
-            building.kind,
-            target_level,
-            owned_levels,
-            &self.state.config,
-        );
+        let cost = if self.tutorial_city_upgrade_is_free(player_id, building_id) {
+            0.0
+        } else {
+            structure_upgrade_cost_gold(
+                building.kind,
+                target_level,
+                owned_levels,
+                &self.state.config,
+            )
+        };
         let Some(player_mut) = self.state.player_mut(player_id) else {
             return;
         };
@@ -181,6 +208,11 @@ mod tests {
         let config = GameConfig {
             tutorial,
             buildings_enabled: true,
+            player_leader: if tutorial {
+                crate::player::Leader::Boudica
+            } else {
+                crate::player::Leader::Caesar
+            },
             ..GameConfig::default()
         };
         let mut game = GameState::new(1, 5, 5, config.clone());
@@ -262,6 +294,34 @@ mod tests {
             game.execute_construction();
         }
         assert_eq!(game.buildings[0].active_level(), 2);
+    }
+
+    #[test]
+    fn first_boudica_tutorial_city_upgrade_is_free_once() {
+        let mut game = engine(true);
+        game.buildings.push(building(1, BuildingKind::City, 1));
+        game.state.player_mut(1).unwrap().gold = 0.0;
+
+        assert!(game.tutorial_city_upgrade_is_free(1, 1));
+        game.apply_upgrade_structure_intent(1, 1);
+
+        assert_eq!(game.buildings[0].level, 2);
+        assert_eq!(game.state.player(1).unwrap().gold, 0.0);
+        assert!(!game.tutorial_city_upgrade_is_free(1, 1));
+
+        game.buildings.push(building(2, BuildingKind::City, 1));
+        assert!(!game.tutorial_city_upgrade_is_free(1, 2));
+        game.state.player_mut(1).unwrap().gold = 1_000_000.0;
+        let cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 3, &game.state.config);
+        game.apply_upgrade_structure_intent(1, 2);
+        assert!((game.state.player(1).unwrap().gold - (1_000_000.0 - cost)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn first_city_upgrade_is_not_free_outside_boudica_tutorial() {
+        let mut game = engine(false);
+        game.buildings.push(building(1, BuildingKind::City, 1));
+        assert!(!game.tutorial_city_upgrade_is_free(1, 1));
     }
 
     #[test]

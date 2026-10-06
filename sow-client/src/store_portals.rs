@@ -65,13 +65,24 @@ fn take_window_bool(name: &str) -> bool {
 }
 
 pub fn gameplay_start() {
+    track_product_event("gameplay_start");
     measure("gameplay", "match", "ready");
     call_window_hook("SOW_portalGameplayStart");
 }
 
 pub fn gameplay_stop() {
+    track_product_event("gameplay_stop");
     measure("gameplay", "match", "stop");
     call_window_hook("SOW_portalGameplayStop");
+}
+
+pub fn track_product_event(name: &str) {
+    track_product_event_with(name, &serde_json::Value::Null);
+}
+
+pub fn track_product_event_with(name: &str, props: &serde_json::Value) {
+    let payload = serde_json::json!({ "name": name, "props": props }).to_string();
+    call_window_hook_str("SOW_trackExperienceEvent", &payload);
 }
 
 /// Send one stable game event to Poki when the bridge is present. Other

@@ -36,6 +36,7 @@ impl SowApp {
 
         // ── UI State ────────────────────────────────────────────────────────────
         let asset_config = crate::AssetConfig::resolve();
+        crate::store_portals::track_product_event("boot_start");
         let mut app = ClientApp::new();
         crate::map_cache::hydrate_asset_maps(&mut app.asset_loader.maps);
         #[cfg(target_arch = "wasm32")]

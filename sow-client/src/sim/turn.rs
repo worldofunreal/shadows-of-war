@@ -322,6 +322,35 @@ impl TutorialObservation {
 }
 
 impl SowApp {
+    pub(crate) fn apply_paused_tutorial_build_intent(
+        &mut self,
+        intent: sow_core::protocol::GameplayIntent,
+    ) {
+        let my_id = self.sim.my_player_id.unwrap_or(0);
+        let observe_tutorial = self.net.is_offline && self.sim.config.tutorial && my_id != 0;
+        let (mut snap, events) = {
+            let Some(engine) = self.sim.engine.as_mut() else {
+                return;
+            };
+            engine.apply_intents(&[sow_core::protocol::StampedIntent {
+                player_id: my_id,
+                intent,
+            }]);
+            if observe_tutorial {
+                self.sim.tutorial_observation.observe_events(engine, my_id);
+                self.sim.tutorial_observation.observe_sim(engine, my_id);
+            }
+            let snap = engine.build_snapshot();
+            let events = std::mem::take(&mut engine.state.events);
+            (snap, events)
+        };
+        self.process_tick_events(events, &snap, my_id);
+        self.apply_snapshot_fx(&mut snap, my_id);
+        self.sim.current_snapshot = Some(snap);
+        self.sync_hud_player_state();
+        self.sync_building_costs();
+    }
+
     pub(crate) fn handle_sim_turn(&mut self, turn: Turn) {
         let my_id = self.sim.my_player_id.unwrap_or(0);
         let observe_tutorial = self.net.is_offline && self.sim.config.tutorial && my_id != 0;

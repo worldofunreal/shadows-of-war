@@ -76,7 +76,7 @@ official packaging and deployment path includes them.
 | Simulation | `sow-core/src/game_config.rs`, `sow-core/src/engine/` | Default mode is FFA; map-control threshold is 60%; elimination is also an end condition. |
 | Distribution | `sow-dist/src/main.rs` | The package includes the landing, media, `/play/`, and permanent redirects for retired guide URLs. |
 | External listings | `sow-web/site/index.html` | Other platform listings are explicitly not claimed as live. |
-| Browser measurement | repository search across `sow-web/` | Updated: funnel instrumentation now exists — landing page posts `/api/event` entry + Play-now CTA events (`sow-web/site/app.js`, since c1a8b6e0), and the game shell carries first-party analytics (`SOW_FIRST_PARTY_ANALYTICS`, `sow-web/shell/loader.js`). Server logs complement but are not the funnel. |
+| Browser measurement | `sow-web/site/analytics.js`, `sow-data/src/events.rs`, `sow-data/src/db.rs`, `sow-server/assets/admin_analytics.html` | First-party browser analytics requires opt-in, posts bounded event batches through `/api/event` to IONOS (not the relay), and reports a closed funnel, build/viewport breakdown and D1/D3/D7 retention at the private `/admin/analytics` view. Poki/CrazyGames/Jest remain on their own platform signals; Android collection remains off pending its store disclosure. |
 
 ## Verification snapshot — 2026-08-22
 
@@ -165,18 +165,15 @@ Steam, Epic, Poki, and another CrazyGames submission are follow-up branches;
 they should consume a tested build and a better evidence package, not become
 the next distraction.
 
-### P2 — add one measurement seam
+### P2 — use the first-party measurement MVP
 
-Before buying ads or redesigning the site, measure this minimum funnel:
-
-```text
-landing visit → Play now click → game shell loaded → matchmaking joined
-→ match started → match ended → returned within 7 days
-```
-
-If analytics are not added yet, use server-side counts and a small manual
-launch log. The first useful question is not “how many visitors?” but “where
-does a curious visitor stop?”
+The source now records consented website steps and displays their counts,
+build/viewport breakdown, explicit exits, and D1/D3/D7 return rates in the
+private operator report. A closed tab has no inferred exit reason. Poki,
+CrazyGames and Jest remain separate platform sources until their rules and
+approvals allow any player-level import; Android remains disabled until its
+store disclosure is updated. The first useful question remains: where does a
+curious visitor stop?
 
 ### P3 — improve only observed friction
 

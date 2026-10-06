@@ -41,31 +41,27 @@ ssh ionos 'curl -s -X POST http://127.0.0.1:25585/internal/profile/delete \
   -d "{\"account_id\": \"<account_id>\"}"'
 ```
 
-Expected response:
+The internal endpoint returns the account deletion report; self-service returns
+`{"deleted":true,"keys_removed":N}`. Analytics cleanup runs before the account
+record is removed:
 
-```json
-{"account_id":"…","found":true,"keys_removed":2,"redb_rows_removed":2,"analytics_sets_scrubbed":14}
-```
-
-What it does (`PlayerDb::delete_account` in `sow-data/src/db.rs`):
-
-- `DEL sow:player:account:{id}` plus every
+- The handler derives a different keyed pseudonym for each analytics channel.
+- Matching JSONL event rows are removed, including older rows that still held
+  a raw account ID.
+- The pseudonymous account's first-seen and dated event, cohort, active-account
+  and retention memberships are removed from Valkey.
+- `PlayerDb::delete_account` removes `sow:player:account:{id}` plus every
   `sow:player:identity:{provider}:{external_id}` mapping from the account's
   linked identities.
 - Removes the `PLAYERS_TABLE` row and the `PUBLIC_PROFILES_TABLE` index row
   from the redb mirror.
-- `SREM`s the id from every dated analytics set
-  (`sow:analytics:event_users:*`, `activated`, `cohort`, `active`, `sow:active:*`).
 
-Deliberately retained (and disclosed in the Privacy Policy):
+Non-identifying daily event totals remain only until their 90-day expiry. They
+do not contain a player ID and cannot be subtracted per account after
+aggregation. Other players' event rows continue to age out at 90 days.
 
-- Aggregate match-history rows (competitive record, no longer linkable).
-- JSONL event lines under `/var/db/sow/analytics/events-*.jsonl` — pseudonymous
-  `session_id` + `account_id` pairs that age out via the automatic 90-day file
-  rotation. Scope them with `grep -l "<account_id>" events-*.jsonl`, but do not
-  hand-edit files; rotation deletes them within 90 days of the request.
-- The `sow:analytics:unique_users` HyperLogLog (probabilistic, no per-member
-  removal; bounded by its own 90-day key TTL).
+- Aggregate match-history rows remain only where required for the competitive
+  record and are no longer linked to the deleted account.
 
 ## 3. Verify and reply
 

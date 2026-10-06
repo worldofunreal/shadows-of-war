@@ -116,6 +116,19 @@ impl SowApp {
             _ => {}
         }
 
+        if self.net.client.is_none()
+            && self.sim.paused
+            && self.sim.config.tutorial
+            && matches!(
+                &intent,
+                sow_core::protocol::GameplayIntent::BuildStructure { .. }
+                    | sow_core::protocol::GameplayIntent::UpgradeStructure { .. }
+            )
+        {
+            self.apply_paused_tutorial_build_intent(intent);
+            return true;
+        }
+
         if let Some(c) = self.net.client.as_ref() {
             let msg = sow_core::protocol::ClientMessage::Gameplay {
                 intent: intent.clone(),

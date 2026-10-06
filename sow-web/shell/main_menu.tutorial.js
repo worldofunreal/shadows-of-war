@@ -33,6 +33,7 @@
         stepRevealTimer: null,
         stepRevealStepId: null,
         completionSent: false,
+        analyticsStepId: null,
         observingAfterDefeat: false,
         lastActionStepId: null,
         resolvedReactions: new Set(),
@@ -61,6 +62,12 @@
         if (typeof window.SOW_menu_command !== "function") return false;
         window.SOW_menu_command(JSON.stringify(Object.assign({ type: type }, fields || {})));
         return true;
+    }
+
+    function trackExperience(name, props) {
+        if (typeof window.SOW_trackExperienceEvent === "function") {
+            window.SOW_trackExperienceEvent(JSON.stringify({ name: name, props: props || null }));
+        }
     }
 
     function availableGold(hud) {
@@ -168,7 +175,7 @@
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
                 context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
             } else if (step.id === "boudica_camera_home") {
-                context.gestureLabel = tr(step.hint_key);
+                context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
             } else if (step.guide.gesture === "tap" && (step.id === "boudica_first_expansion"
                 || step.trigger && step.trigger.type === "attack")) {
                 context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
@@ -299,6 +306,7 @@
             runtime.hoverStepRecorded = false;
             runtime.markerId = undefined;
             runtime.completionSent = false;
+            runtime.analyticsStepId = null;
             runtime.lastActionStepId = null;
             runtime.resolvedReactions = new Set();
             if (!send("start_campaign_episode", { episode_id: episodeId, roster: data.roster, match: data.definition.settings })) {
@@ -346,6 +354,7 @@
             runtime.hoverStepRecorded = false;
             runtime.markerId = undefined;
             runtime.completionSent = false;
+            runtime.analyticsStepId = null;
             runtime.lastActionStepId = null;
             runtime.resolvedReactions = new Set();
             makeView();
@@ -419,9 +428,9 @@
             result = window.SOWCampaign.resolveUiAnchor(source);
             if (step.id === "boudica_camera_home") {
                 result.toX = result.x; result.toY = result.y;
+                result.spotlightX = result.x; result.spotlightY = result.y; result.dimOutside = true;
                 result.x = (root.clientWidth || window.innerWidth) * 0.5;
                 result.y = (root.clientHeight || window.innerHeight) * 0.5;
-                delete result.width; delete result.height;
             }
         }
         if (guide.gesture === "drag" && guide.to) {
@@ -545,6 +554,21 @@
             if (Number.isFinite(targetDistance)) facts.camera_target_distance = targetDistance;
         }
         var machineView = runtime.machine.update(facts, runtime.uiCounts);
+        if (!runtime.menuGuide && machineView.step) {
+            if (runtime.analyticsStepId && runtime.analyticsStepId !== machineView.step.id
+                && currentStep.type === "objective") {
+                trackExperience("tutorial_objective_complete");
+            }
+            if (runtime.analyticsStepId !== machineView.step.id) {
+                runtime.analyticsStepId = machineView.step.id;
+                var stepIndex = runtime.definition.steps.findIndex(function (step) {
+                    return step.id === machineView.step.id;
+                });
+                if (stepIndex >= 0 && stepIndex <= 100) {
+                    trackExperience("tutorial_step", { step_index: stepIndex });
+                }
+            }
+        }
         if (machineView.reactionData && machineView.reactionData.outcome) {
             resolveReaction(machineView.reactionData, machineView.reactionTarget, null, hud);
         }
@@ -728,6 +752,7 @@
         if (!runtime.machine) return;
         var model = runtime.machine.view();
         var step = model.step;
+        var isDialogChoice = Boolean(model.reactionData || (step && step.type === "choice"));
         if (model.reactionData) {
             var answer = (model.reactionData.choices || []).find(function (choice) { return choice.id === choiceId; });
             if (!answer) return;
@@ -740,7 +765,10 @@
             }
             if (!resolveReaction(model.reactionData, model.reactionTarget, answer, runtime.latestHud)) return;
         }
-        if (runtime.machine.advance(choiceId, step.id)) runtime.menuGuide ? updateMenuGuide() : update(runtime.latestHud);
+        if (runtime.machine.advance(choiceId, step.id)) {
+            if (isDialogChoice && !runtime.menuGuide) trackExperience("tutorial_dialog_choice");
+            runtime.menuGuide ? updateMenuGuide() : update(runtime.latestHud);
+        }
     }
 
     function resolveReaction(reaction, targetName, choice, hud) {

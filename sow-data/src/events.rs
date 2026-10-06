@@ -1,15 +1,15 @@
 //! Product analytics event schema, closed taxonomy, and durable JSONL sink.
 //!
-//! Events arrive as a public batch POST, are validated against the closed
-//! taxonomy, filtered for bot accounts by the caller, and appended to one
-//! daily `events-YYYY-MM-DD.jsonl` file. Files older than [`RETENTION_DAYS`]
-//! are pruned on day rotation. No external storage vendor is involved.
+//! Consented first-party events are validated against a closed taxonomy and
+//! appended to one daily file. Account IDs are replaced by channel-scoped
+//! server hashes before reaching this sink.
 
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-pub const SCHEMA_VERSION: u8 = 1;
+pub const SCHEMA_VERSION: u8 = 2;
+pub const CONSENT_POLICY_VERSION: &str = "2026-10-06";
 pub const RETENTION_DAYS: u64 = 90;
 pub const MAX_PROPS_BYTES: usize = 2048;
 const MAX_STRING_FIELD: usize = 64;
@@ -29,13 +29,12 @@ pub const EVENT_NAMES: &[&str] = &[
     "menu_code_join_attempt",
     "menu_custom_create",
     "menu_single_player_start",
+    "menu_campaign_start",
     "matchmaking_joined",
+    "lobby_joined",
+    "match_exit",
     "match_started_client",
-    "match_started",
     "match_ended_client",
-    "match_ended",
-    "gameplay_start",
-    "gameplay_stop",
     "tutorial_start",
     "tutorial_step",
     "tutorial_objective_complete",
@@ -44,19 +43,27 @@ pub const EVENT_NAMES: &[&str] = &[
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct AnalyticsEvent {
     #[serde(default)]
     pub v: u8,
+    pub event_id: String,
+    pub consented: bool,
+    pub consent_version: String,
     pub name: String,
     pub ts_ms: u64,
     #[serde(default)]
     pub session_id: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_id: Option<String>,
     #[serde(default)]
     pub portal: Option<String>,
     #[serde(default)]
     pub platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_class: Option<String>,
     #[serde(default)]
     pub build: Option<String>,
     #[serde(default)]
@@ -71,6 +78,18 @@ impl AnalyticsEvent {
         if self.v != SCHEMA_VERSION {
             return Err("unsupported schema version");
         }
+        if !is_uuid(&self.event_id) {
+            return Err("invalid event_id");
+        }
+        if !self.consented || self.consent_version != CONSENT_POLICY_VERSION {
+            return Err("analytics consent is missing or outdated");
+        }
+        if self.subject_id.is_some() {
+            return Err("subject_id is server-owned");
+        }
+        if self.portal.as_deref() != Some("site") || self.platform.as_deref() != Some("web") {
+            return Err("unsupported analytics channel");
+        }
         if !EVENT_NAMES.contains(&self.name.as_str()) {
             return Err("unknown event name");
         }
@@ -78,13 +97,29 @@ impl AnalyticsEvent {
         if self.ts_ms < 1_600_000_000_000 || self.ts_ms > now_ms.saturating_add(5 * minute_ms) {
             return Err("timestamp out of range");
         }
-        if self.session_id.len() > MAX_STRING_FIELD || !is_simple_string(&self.session_id) {
+        if self.session_id.is_empty()
+            || self.session_id.len() > MAX_STRING_FIELD
+            || !is_simple_string(&self.session_id)
+        {
             return Err("invalid session_id");
         }
         if let Some(id) = &self.account_id
-            && (id.is_empty() || id.len() > MAX_STRING_FIELD || !is_simple_string(id))
+            && (id.len() != 32 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()))
         {
             return Err("invalid account_id");
+        }
+        if self.build.as_deref().is_some_and(|value| {
+            !value.is_empty()
+                && !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+        }) {
+            return Err("invalid build");
+        }
+        if let Some(id) = &self.subject_id
+            && (id.len() != 64 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        {
+            return Err("invalid subject_id");
         }
         for field in [&self.portal, &self.platform, &self.build, &self.locale] {
             if let Some(value) = field
@@ -93,15 +128,54 @@ impl AnalyticsEvent {
                 return Err("invalid string field");
             }
         }
+        if self.device_class.as_deref().is_some_and(|value| {
+            !matches!(value, "mobile" | "tablet" | "desktop" | "unknown")
+        }) {
+            return Err("invalid device_class");
+        }
         if let Some(props) = &self.props {
-            if !props.is_object() {
-                return Err("props must be an object");
-            }
             if serde_json::to_vec(props).map_or(true, |bytes| bytes.len() > MAX_PROPS_BYTES) {
                 return Err("props too large");
             }
+            if !valid_props(&self.name, props) {
+                return Err("unsupported event properties");
+            }
         }
         Ok(())
+    }
+}
+
+fn is_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
+}
+
+fn valid_props(name: &str, props: &serde_json::Value) -> bool {
+    let Some(props) = props.as_object() else {
+        return false;
+    };
+    if props.len() != 1 {
+        return false;
+    }
+    let (key, value) = props.iter().next().expect("one property checked");
+    if name == "tutorial_step" {
+        return key == "step_index" && value.as_u64().is_some_and(|index| index <= 100);
+    }
+    match (name, key.as_str(), value.as_str()) {
+        ("load_stage", "stage", Some(value)) => matches!(
+            value,
+            "relay_connect_start"
+                | "relay_connect_complete"
+                | "engine_init_complete"
+                | "gpu_upload_complete"
+                | "snapshot_available"
+                | "ready_sent"
+        ),
+        ("boot_route_decision", "route", Some("menu" | "intro")) => true,
+        _ => false,
     }
 }
 
@@ -112,6 +186,11 @@ fn is_simple_string(value: &str) -> bool {
 pub fn utc_date_string() -> String {
     let dt = crate::time_util::now_utc();
     format!("{:04}-{:02}-{:02}", dt.year, dt.month, dt.day)
+}
+
+pub fn utc_day_number() -> i64 {
+    let dt = crate::time_util::now_utc();
+    days_from_civil(dt.year, dt.month, dt.day)
 }
 
 /// Shift an ISO UTC date by a number of calendar days.
@@ -150,17 +229,25 @@ impl EventSink {
     }
 
     pub fn append_line(&mut self, line: &str) -> std::io::Result<()> {
+        self.append_batch(&[line.to_string()])
+    }
+
+    /// Append an accepted batch with one flush and durability sync.
+    pub fn append_batch(&mut self, lines: &[String]) -> std::io::Result<()> {
+        if lines.is_empty() {
+            return Ok(());
+        }
         let today = utc_date_string();
         if today != self.day || self.file.is_none() {
             self.rotate(today)?;
         }
-        self.file
-            .as_mut()
-            .expect("rotated file must be open")
-            .write_all(line.as_bytes())
-            .and_then(|_| self.file.as_mut().unwrap().write_all(b"\n"))
-            .and_then(|_| self.file.as_mut().unwrap().flush())
-            .and_then(|_| self.file.as_mut().unwrap().sync_data())
+        let file = self.file.as_mut().expect("rotated file must be open");
+        for line in lines {
+            file.write_all(line.as_bytes())?;
+            file.write_all(b"\n")?;
+        }
+        file.flush()?;
+        file.sync_data()
     }
 
     fn rotate(&mut self, today: String) -> std::io::Result<()> {
@@ -200,12 +287,44 @@ impl EventSink {
     /// Remove account-linked legacy event rows before completing an account
     /// erasure. Session-only rows remain under the existing 90-day retention.
     pub fn erase_account_id(&mut self, account_id: &str) -> std::io::Result<u64> {
+        self.erase_account_and_subjects(account_id, &[])
+    }
+
+    pub fn erase_account_and_subjects(
+        &mut self,
+        account_id: &str,
+        subject_ids: &[String],
+    ) -> std::io::Result<u64> {
         if account_id.len() != 32 || !account_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "invalid account_id",
             ));
         }
+        self.erase_matching(|event| {
+            event.get("account_id").and_then(serde_json::Value::as_str) == Some(account_id)
+                || event
+                    .get("subject_id")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|subject| subject_ids.iter().any(|id| id == subject))
+        })
+    }
+
+    /// Remove rows linked to channel-scoped pseudonymous subjects during
+    /// verified account deletion.
+    pub fn erase_subject_ids(&mut self, subject_ids: &[String]) -> std::io::Result<u64> {
+        self.erase_matching(|event| {
+            event
+                .get("subject_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|subject| subject_ids.iter().any(|id| id == subject))
+        })
+    }
+
+    fn erase_matching(
+        &mut self,
+        matches: impl Fn(&serde_json::Value) -> bool,
+    ) -> std::io::Result<u64> {
         self.file = None;
         let entries = std::fs::read_dir(&self.dir)?;
         let files = entries
@@ -219,7 +338,7 @@ impl EventSink {
             if !name.starts_with("events-") || !name.ends_with(".jsonl") {
                 continue;
             }
-            removed = removed.saturating_add(scrub_event_file(&path, account_id)?);
+            removed = removed.saturating_add(scrub_event_file(&path, &matches)?);
         }
         self.rotate(utc_date_string())?;
         Ok(removed)
@@ -235,7 +354,10 @@ impl EventSink {
     }
 }
 
-fn scrub_event_file(path: &Path, account_id: &str) -> std::io::Result<u64> {
+fn scrub_event_file(
+    path: &Path,
+    matches: &impl Fn(&serde_json::Value) -> bool,
+) -> std::io::Result<u64> {
     let metadata = std::fs::metadata(path)?;
     let temp_path = path.with_extension("jsonl.tmp");
     let result = (|| {
@@ -251,7 +373,7 @@ fn scrub_event_file(path: &Path, account_id: &str) -> std::io::Result<u64> {
             let line = line?;
             let event: serde_json::Value = serde_json::from_str(&line)
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
-            if event.get("account_id").and_then(serde_json::Value::as_str) == Some(account_id) {
+            if matches(&event) {
                 removed = removed.saturating_add(1);
             } else {
                 writeln!(output, "{line}")?;
@@ -313,8 +435,10 @@ mod tests {
 
     fn sample(name: &str) -> AnalyticsEvent {
         serde_json::from_value(serde_json::json!({
-            "v": 1, "name": name, "ts_ms": NOW_MS,
-            "session_id": "abc123", "portal": "crazygames"
+            "v": SCHEMA_VERSION, "event_id": "123e4567-e89b-12d3-a456-426614174000",
+            "consented": true, "consent_version": CONSENT_POLICY_VERSION,
+            "name": name, "ts_ms": NOW_MS, "session_id": "abc123",
+            "portal": "site", "platform": "web"
         }))
         .unwrap()
     }
@@ -325,10 +449,14 @@ mod tests {
     }
 
     #[test]
-    fn accepts_empty_optional_string_fields() {
+    fn event_taxonomy_has_no_duplicates() {
+        let unique: std::collections::HashSet<_> = EVENT_NAMES.iter().copied().collect();
+        assert_eq!(unique.len(), EVENT_NAMES.len());
+    }
+
+    #[test]
+    fn accepts_optional_context_fields() {
         let mut event = sample("boot_start");
-        event.portal = Some(String::new());
-        event.platform = Some(String::new());
         event.build = Some(String::new());
         event.locale = Some(String::new());
         assert!(event.validate(NOW_MS).is_ok());
@@ -349,13 +477,44 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_object_and_oversized_props() {
+    fn rejects_unapproved_and_oversized_props() {
         let mut ev = sample("boot_start");
         ev.props = Some(serde_json::json!(["nope"]));
-        assert_eq!(ev.validate(NOW_MS), Err("props must be an object"));
+        assert_eq!(ev.validate(NOW_MS), Err("unsupported event properties"));
         let mut big = sample("boot_start");
         big.props = Some(serde_json::json!({"blob": "x".repeat(MAX_PROPS_BYTES + 1)}));
         assert_eq!(big.validate(NOW_MS), Err("props too large"));
+    }
+
+    #[test]
+    fn consent_and_channel_are_mandatory() {
+        let mut event = sample("boot_start");
+        event.consented = false;
+        assert_eq!(
+            event.validate(NOW_MS),
+            Err("analytics consent is missing or outdated")
+        );
+        let mut event = sample("boot_start");
+        event.portal = Some("poki".to_string());
+        assert_eq!(event.validate(NOW_MS), Err("unsupported analytics channel"));
+    }
+
+    #[test]
+    fn only_closed_funnel_properties_are_accepted() {
+        let mut event = sample("load_stage");
+        event.props = Some(serde_json::json!({"stage": "snapshot_available"}));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.props = Some(serde_json::json!({"stage": "account_name"}));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+    }
+
+    #[test]
+    fn device_class_is_a_coarse_closed_value() {
+        let mut event = sample("boot_start");
+        event.device_class = Some("mobile".to_string());
+        assert!(event.validate(NOW_MS).is_ok());
+        event.device_class = Some("iphone-17-pro".to_string());
+        assert_eq!(event.validate(NOW_MS), Err("invalid device_class"));
     }
 
     #[test]

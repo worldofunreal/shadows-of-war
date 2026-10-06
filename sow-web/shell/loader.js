@@ -500,14 +500,56 @@
         }
     }
 
+    const POKI_EVENT_MAP = {
+        tutorial_start: ['tutorial', 'intro', 'start'],
+        tutorial_step: ['tutorial', 'step', 'progress'],
+        tutorial_objective_complete: ['tutorial', 'objective', 'complete'],
+        tutorial_dialog_choice: ['tutorial', 'dialog', 'choice'],
+        tutorial_exit_early: ['tutorial', 'intro', 'exit'],
+        lobby_joined: ['lobby', 'join', 'complete'],
+        match_started_client: ['match', 'round', 'start'],
+        match_ended_client: ['match', 'round', 'complete']
+    };
+
+    window.SOW_trackExperienceEvent = function (payload) {
+        let event;
+        try { event = typeof payload === 'string' ? JSON.parse(payload) : payload; } catch (_) { return; }
+        if (!event || typeof event.name !== 'string') return;
+        if (typeof window.SOW_isAndroidTwa === 'function' && window.SOW_isAndroidTwa()) return;
+        if (window.SOW_PORTAL === 'poki') {
+            if (event.name === 'tutorial_objective_complete'
+                && typeof window.SOW_portalFirstMilestone === 'function') {
+                window.SOW_portalFirstMilestone();
+            }
+            const mapped = POKI_EVENT_MAP[event.name];
+            if (mapped && typeof window.SOW_pokiMeasure === 'function') {
+                window.SOW_pokiMeasure(mapped[0], mapped[1], mapped[2]);
+            }
+            return;
+        }
+        if (window.SOW_PORTAL === 'jest') {
+            if (event.name === 'tutorial_objective_complete'
+                && typeof window.SOW_portalFirstMilestone === 'function') {
+                window.SOW_portalFirstMilestone();
+            }
+            return;
+        }
+        if (window.SOW_PORTAL === 'crazygames') return;
+        if (typeof window.SOW_analyticsTrack === 'function') {
+            window.SOW_analyticsTrack(event.name, event.props || null);
+        }
+    };
+
     function sowTrack(name) {
         if (window.SOW_PORTAL === 'poki') {
             if (typeof window.SOW_pokiMeasure === 'function') {
                 window.SOW_pokiMeasure('loading', name, 'complete');
             }
+            if (name === 'shell_loaded') window.SOW_trackExperienceEvent({ name: name });
             return;
         }
         if (window.SOW_PORTAL === 'jest') return;
+        if (name === 'shell_loaded') window.SOW_trackExperienceEvent({ name: name });
     }
 
     function finish(cycleId) {

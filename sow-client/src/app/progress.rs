@@ -83,6 +83,7 @@ impl SowApp {
         } else {
             winner_id == my_id
         };
+        crate::store_portals::track_product_event("match_ended_client");
         let defeats = self.progress_session_defeats;
         let (kills, deaths, assists) = (me.kills, me.deaths, me.assists);
         let server_owned_tutorial = self.progress_account_id.is_some()

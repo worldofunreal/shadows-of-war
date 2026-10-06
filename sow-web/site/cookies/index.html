@@ -6,12 +6,12 @@
   <link rel="stylesheet" href="../fonts/fonts.css">
   <meta name="theme-color" content="#0a1015">
   <title data-i18n="site.cookies_title">Cookie Notice — Shadows of War</title>
-  <meta name="description" content="How Shadows of War uses strictly-necessary storage only: session identifiers and first-party product events. No advertising cookies." data-i18n="site.cookies_description" data-i18n-attr="content">
+  <meta name="description" content="Optional product analytics stays off until you accept. See what Shadows of War stores and how to change your choice." data-i18n="site.cookies_description_v2" data-i18n-attr="content">
   <link rel="canonical" href="https://shadowsofwar.io/cookies/">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Shadows of War">
   <meta property="og:title" content="Cookie Notice — Shadows of War" data-i18n="site.cookies_title" data-i18n-attr="content">
-  <meta property="og:description" content="Strictly-necessary storage only. No advertising, social, or cross-site-tracking cookies." data-i18n="site.cookies_og_description" data-i18n-attr="content">
+  <meta property="og:description" content="Optional product analytics stays off until you accept. Change your choice at any time." data-i18n="site.cookies_og_description_v2" data-i18n-attr="content">
   <meta property="og:url" content="https://shadowsofwar.io/cookies/">
   <meta property="og:image" content="https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp">
   <link rel="icon" type="image/svg+xml" href="../sow.svg">
@@ -26,7 +26,7 @@
       <div class="container">
         <p class="eyebrow"><span class="eyebrow-dot"></span> <span data-i18n="site.cookies_eyebrow">Legal &amp; Storage</span></p>
         <h1><span data-i18n="site.cookies_heading">Cookie</span><br><em data-i18n="site.cookies_heading_em">notice.</em></h1>
-        <p class="guide-lede" data-i18n="site.cookies_updated">Last updated: September 2026 · World of Unreal</p>
+        <p class="guide-lede" data-i18n="site.cookies_updated_v2">Last updated: October 6, 2026 · World of Unreal</p>
       </div>
     </section>
 
@@ -36,12 +36,11 @@
           <article class="guide-step">
             <span>01</span>
             <div>
-              <h3 data-i18n="site.cookies_use_title">What we use</h3>
-              <p data-i18n="site.cookies_use_body">Shadows of War uses strictly-necessary client storage only — the kind that needs no consent banner because the site and game cannot function without it:</p>
+              <h3 data-i18n="site.cookies_analytics_title">Optional analytics on our website</h3>
+              <p data-i18n="site.cookies_analytics_intro">Optional first-party analytics is off unless you choose “Allow optional analytics”. Rejecting it does not limit the site or game.</p>
               <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
-                <li><strong data-i18n="site.cookies_session_label">Analytics session identifiers</strong> (<code>sow_site_session_id</code>, <code>sow_analytics_session</code>, sessionStorage): <span data-i18n="site.cookies_session_body">random IDs that group first-party product events within one visit. They vanish when the tab closes.</span></li>
-                <li><strong data-i18n="site.cookies_events_label">First-party product events:</strong> <span data-i18n="site.cookies_events_body">anonymous funnel events sent to our own servers</span> (<code>/api/event</code>). <span data-i18n="site.cookies_events_after">Not a cookie, not shared with any vendor.</span></li>
-                <li><strong data-i18n="site.cookies_game_label">Game settings &amp; cached map assets</strong> (browser local storage): <span data-i18n="site.cookies_game_body">client preferences and downloaded game data.</span></li>
+                <li data-i18n="site.cookies_analytics_events">It counts visits, loading stages, menu actions, tutorial step progress, lobby joins, match starts and explicit exits, plus a broad screen class (mobile, tablet or desktop). It does not record names, chat, passwords, lobby IDs, purchases, map clicks or the full user-agent string.</li>
+                <li data-i18n="site.cookies_analytics_server">Accepted events go directly to our first-party endpoint at <code>/api/event</code>. They do not pass through the game relay. Account IDs, when present, are changed on our server to a keyed, website-only pseudonym before storage.</li>
               </ul>
             </div>
           </article>
@@ -49,21 +48,16 @@
           <article class="guide-step">
             <span>02</span>
             <div>
-              <h3 data-i18n="site.cookies_third_party_title">Third parties</h3>
-              <p data-i18n="site.cookies_third_party_body">Fonts are self-hosted on our own domain. No third-party code runs storage or tracking on our pages: no advertising networks, no social widgets, no session-replay scripts, no cross-site identifiers. Our pages make zero cross-origin requests.</p>
+              <h3 data-i18n="site.cookies_storage_title">Browser storage and retention</h3>
+              <p data-i18n="site.cookies_storage_body">We remember your accept/reject choice in local storage. Only after acceptance, a temporary session ID and a small retry queue use session storage. Analytics also includes the build, language and a broad screen class (mobile, tablet or desktop), not a full user-agent string. Event files and memberships expire within 90 days. Verified account deletion removes linked event rows and account memberships; non-identifying daily totals expire within the same 90 days. Game settings, account continuity, crash recovery and cached assets use separate storage needed for those features.</p>
             </div>
           </article>
 
           <article class="guide-step">
             <span>03</span>
             <div>
-              <h3 data-i18n="site.cookies_dont_title">What we don't do</h3>
-              <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
-                <li data-i18n="site.cookies_dont_ads">No advertising cookies and no interest-based advertising.</li>
-                <li data-i18n="site.cookies_dont_sell">No sale or sharing of personal data for advertising.</li>
-                <li data-i18n="site.cookies_dont_tracking">No cross-site or cross-app tracking.</li>
-              </ul>
-              <p data-i18n="site.cookies_dont_body">Because there is no behavioral tracking, Global Privacy Control and Do Not Track signals have nothing to switch off — and we honor GPC as a sale/sharing opt-out regardless.</p>
+              <h3 data-i18n="site.cookies_platforms_title">Other game platforms</h3>
+              <p data-i18n="site.cookies_platforms_body">Poki, CrazyGames and Jest may measure use through their own SDKs under their platform terms. We do not copy those player-level events to our server. Android first-party analytics is disabled until its store disclosure is updated.</p>
             </div>
           </article>
 
@@ -71,19 +65,8 @@
             <span>04</span>
             <div>
               <h3 data-i18n="site.cookies_controls_title">Your controls</h3>
-              <ul style="margin: 8px 0 0; padding-inline-start: 20px; color: var(--muted); font-size: 14px; line-height: 1.8;">
-                <li data-i18n="site.cookies_controls_clear">Clear site data anytime in your browser settings — this removes session IDs and cached assets. The game keeps working and starts a fresh session.</li>
-                <li data-i18n="site.cookies_controls_block">Blocking all storage may force re-downloads of game assets and reset preferences each visit.</li>
-                <li><span data-i18n="site.cookies_controls_rights">For personal-data rights (access, deletion, portability), see the Privacy Policy — email</span> <a class="inline-link" href="mailto:hello@shadowsofwar.io" style="color: var(--orange); text-decoration: underline;">hello@shadowsofwar.io</a>.</li>
-              </ul>
-            </div>
-          </article>
-
-          <article class="guide-step">
-            <span>05</span>
-            <div>
-              <h3 data-i18n="site.cookies_changes_title">Changes</h3>
-              <p data-i18n="site.cookies_changes_body">If we ever add non-essential storage (analytics vendors, embeds, advertising), this notice will list each item with its purpose and controls before it ships — and the Privacy Policy will be updated alongside. Last updated: September 2026.</p>
+              <p data-i18n="site.cookies_controls_v2">You can accept or reject optional analytics with equal ease. Change your choice in the game’s Settings or here; rejecting does not affect gameplay. Clearing site data also removes the choice, and analytics stays off until you explicitly accept again. We do not sell or share analytics for advertising.</p>
+              <button class="button button-small button-orange" type="button" data-sow-cookie-settings data-i18n="site.analytics_manage">Cookie settings</button>
             </div>
           </article>
         </div>
@@ -94,6 +77,7 @@
             <li><a href="/privacy/" style="color: var(--orange);" data-i18n="site.privacy">Privacy Policy</a></li>
             <li><a href="/terms/" style="color: var(--orange);" data-i18n="site.terms">Terms of Service</a></li>
             <li><a href="/support/" style="color: var(--orange);" data-i18n="site.support">Support &amp; Help Center</a></li>
+            <li><button class="button button-small button-orange" type="button" data-sow-cookie-settings data-i18n="site.analytics_manage">Cookie settings</button></li>
           </ul>
         </aside>
       </div>
@@ -111,5 +95,6 @@
   <script src="../sow-i18n.js"></script>
   <script src="../sow-dropdown.js"></script>
   <script src="../site-chrome.js"></script>
+  <script src="../analytics.js"></script>
 </body>
 </html>

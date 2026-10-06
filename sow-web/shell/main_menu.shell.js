@@ -135,11 +135,15 @@
             window.SOW_androidOssLicensesAvailable()
             ? "<button class='sow-menu__settings-link' type='button' data-command='open_android_oss_licenses'>" + esc(SOW_t("menu.third_party_licenses")) + "</button>"
             : "";
+        var cookieSettings = typeof window.SOW_analyticsManage === "function"
+            ? "<button class='sow-menu__settings-link' type='button' data-sow-cookie-settings>" + esc(SOW_t("menu.cookie_settings")) + "</button>"
+            : "";
         return renderSettingsLink("https://shadowsofwar.io/#faq", "site.faq") +
             renderSettingsLink("https://shadowsofwar.io/support/", "menu.support") +
             renderSettingsLink("https://shadowsofwar.io/terms/", "menu.terms") +
             renderSettingsLink("https://shadowsofwar.io/privacy/", "menu.privacy") +
             renderSettingsLink("https://shadowsofwar.io/cookies/", "menu.cookies") +
+            cookieSettings +
             renderSettingsLink("https://discord.gg/d6ZDeChSE", "menu.discord") +
             renderSettingsLink("https://t.me/shadowsofwario", "menu.telegram") +
             renderSettingsLink(sourceUrl, "menu.source_code", "sow-menu__source-link") +

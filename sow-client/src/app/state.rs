@@ -159,6 +159,10 @@ impl LoadTelemetry {
         let now = web_time::Instant::now();
         *target = Some(now);
         Self::log_phase(phase, self.started_at, now);
+        crate::store_portals::track_product_event_with(
+            "load_stage",
+            &serde_json::json!({ "stage": phase }),
+        );
     }
 
     fn log_phase(

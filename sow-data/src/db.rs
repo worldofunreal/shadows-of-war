@@ -26,6 +26,46 @@ const BOT_POOL_KEY: &str = "sow:bot:pool";
 
 const ACCOUNT_ID_HEX_LEN: usize = 32;
 pub const DISPLAY_NAME_MAX_CHARS: usize = crate::name_policy::MAX_CHARS;
+const ANALYTICS_TTL_SECONDS: i64 = 90 * 24 * 60 * 60;
+
+const RECORD_ANALYTICS_EVENT: &str = r#"
+if not redis.call('SET', KEYS[1], '1', 'NX', 'EX', ARGV[1]) then return 0 end
+redis.call('INCR', KEYS[2]); redis.call('EXPIRE', KEYS[2], ARGV[1])
+redis.call('SADD', KEYS[3], ARGV[3]); redis.call('EXPIRE', KEYS[3], ARGV[1])
+redis.call('SADD', KEYS[14], ARGV[3]); redis.call('EXPIRE', KEYS[14], ARGV[1])
+local build = ARGV[5]
+if build == '' then build = 'unknown' end
+if not redis.call('SISMEMBER', KEYS[11], build) then
+  if redis.call('SCARD', KEYS[11]) < 16 then
+    redis.call('SADD', KEYS[11], build)
+  else
+    build = 'other'
+  end
+end
+local event_name = ARGV[7]
+redis.call('HINCRBY', KEYS[12], build .. '|' .. event_name, 1)
+redis.call('EXPIRE', KEYS[12], ARGV[1])
+local device = ARGV[6]
+if device == '' then device = 'unknown' end
+redis.call('HINCRBY', KEYS[13], device .. '|' .. event_name, 1)
+redis.call('EXPIRE', KEYS[13], ARGV[1])
+local subject = ARGV[4]
+if subject ~= '' then
+  redis.call('SADD', KEYS[4], subject); redis.call('EXPIRE', KEYS[4], ARGV[1])
+  redis.call('SADD', KEYS[5], subject); redis.call('EXPIRE', KEYS[5], ARGV[1])
+  local first_day = redis.call('GET', KEYS[6])
+  if not first_day then
+    first_day = ARGV[2]
+    redis.call('SET', KEYS[6], first_day, 'EX', ARGV[1])
+    redis.call('SADD', KEYS[7], subject); redis.call('EXPIRE', KEYS[7], ARGV[1])
+  end
+  local delta = tonumber(ARGV[2]) - tonumber(first_day)
+  if delta == 1 then redis.call('SADD', KEYS[8], subject); redis.call('EXPIRE', KEYS[8], ARGV[1]) end
+  if delta == 3 then redis.call('SADD', KEYS[9], subject); redis.call('EXPIRE', KEYS[9], ARGV[1]) end
+  if delta == 7 then redis.call('SADD', KEYS[10], subject); redis.call('EXPIRE', KEYS[10], ARGV[1]) end
+end
+return 1
+"#;
 
 /// Generate the initial presentation name only when the client did not send one.
 /// The account ID remains the sole stable identity key.
@@ -597,6 +637,296 @@ impl PlayerDb {
     /// line rather than surfacing as a user-facing timeout.
     pub async fn warm_connection(&self) -> Result<(), redis::RedisError> {
         self.get_connection().await.map(|_| ())
+    }
+
+    /// Record an already validated batch in one Redis round trip. The Lua
+    /// script makes deduplication and every counter/membership update atomic.
+    pub async fn record_analytics_batch(
+        &self,
+        events: &[crate::events::AnalyticsEvent],
+    ) -> Result<usize, redis::RedisError> {
+        if events.is_empty() {
+            return Ok(0);
+        }
+        let date = utc_date_string();
+        let day_number = crate::events::utc_day_number();
+        let mut con = self.get_connection().await?;
+        let mut pipe = redis::pipe();
+        for event in events {
+            let portal = event.portal.as_deref().unwrap_or("site");
+            let subject = event.subject_id.as_deref().unwrap_or_default();
+            let date_prefix = format!("{portal}:{date}");
+            let first_key = format!("sow:analytics:first_seen:{portal}:{subject}");
+            let cohort_key = format!("sow:analytics:cohort:{portal}:{day_number}");
+            pipe.cmd("EVAL")
+                .arg(RECORD_ANALYTICS_EVENT)
+                .arg(14)
+                .arg(format!("sow:analytics:event_id:{portal}:{}", event.event_id))
+                .arg(format!(
+                    "sow:analytics:event:{date_prefix}:{}",
+                    event.name
+                ))
+                .arg(format!("sow:analytics:sessions:{date_prefix}"))
+                .arg(format!("sow:analytics:active_accounts:{date_prefix}"))
+                .arg(format!(
+                    "sow:analytics:event_users:{date_prefix}:{}",
+                    event.name
+                ))
+                .arg(first_key)
+                .arg(cohort_key)
+                .arg(format!("sow:analytics:retention:site:d1:{day_number}"))
+                .arg(format!("sow:analytics:retention:site:d3:{day_number}"))
+                .arg(format!("sow:analytics:retention:site:d7:{day_number}"))
+                .arg(format!("sow:analytics:builds:{portal}:{date}"))
+                .arg(format!("sow:analytics:by_build:{portal}:{date}"))
+                .arg(format!("sow:analytics:by_device:{portal}:{date}"))
+                .arg(format!("sow:analytics:event_sessions:{date_prefix}:{}", event.name))
+                .arg(ANALYTICS_TTL_SECONDS)
+                .arg(day_number)
+                .arg(&event.session_id)
+                .arg(subject)
+                .arg(event.build.as_deref().unwrap_or("unknown"))
+                .arg(event.device_class.as_deref().unwrap_or("unknown"))
+                .arg(&event.name);
+        }
+        let outcomes: Vec<i64> = pipe.query_async(&mut con).await?;
+        Ok(outcomes.into_iter().filter(|outcome| *outcome == 1).count())
+    }
+
+    /// Remove pseudonymous analytics memberships derived from a deleted
+    /// account. The IDs are portal-scoped HMACs created by the ingest owner.
+    pub async fn erase_analytics_subjects(
+        &self,
+        subject_ids: &[String],
+    ) -> Result<u64, redis::RedisError> {
+        if subject_ids.is_empty() {
+            return Ok(0);
+        }
+        let mut con = self.get_connection().await?;
+        let mut removed = 0_u64;
+        for portal in ["site", "poki", "crazygames", "jest", "android"] {
+            for subject_id in subject_ids {
+                let key = format!("sow:analytics:first_seen:{portal}:{subject_id}");
+                let deleted: u64 = con.del(key).await?;
+                removed = removed.saturating_add(deleted);
+            }
+        }
+        let mut cursor = 0_u64;
+        loop {
+            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg("sow:analytics:*:*")
+                .arg("COUNT")
+                .arg(256)
+                .query_async(&mut con)
+                .await?;
+            for key in keys {
+                if [
+                    "sow:analytics:active_accounts:",
+                    "sow:analytics:event_users:",
+                    "sow:analytics:cohort:",
+                    "sow:analytics:retention:",
+                ]
+                .iter()
+                .any(|prefix| key.starts_with(prefix))
+                {
+                    let count: u64 = con.srem(&key, subject_ids).await?;
+                    removed = removed.saturating_add(count);
+                }
+            }
+            cursor = next;
+            if cursor == 0 {
+                break;
+            }
+        }
+        Ok(removed)
+    }
+
+    /// Private operator snapshot; only the owned website has first-party
+    /// ingestion enabled. Other sources are explicitly marked unavailable.
+    pub async fn analytics_summary(
+        &self,
+        requested_days: u32,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let days = requested_days.clamp(1, 90) as i64;
+        let today = utc_date_string();
+        let portal = "site";
+        let mut con = self.get_connection().await?;
+        let mut pipe = redis::pipe();
+        let mut daily = Vec::new();
+        let mut value_index = 0;
+        for offset in 0..days {
+            let date = crate::events::shift_date(&today, -offset).ok_or("invalid UTC date")?;
+            let prefix = format!("{portal}:{date}");
+            let start = value_index;
+            pipe.cmd("SCARD")
+                .arg(format!("sow:analytics:sessions:{prefix}"))
+                .cmd("SCARD")
+                .arg(format!("sow:analytics:active_accounts:{prefix}"));
+            value_index += 2;
+            for name in crate::events::EVENT_NAMES {
+                pipe.cmd("GET")
+                    .arg(format!("sow:analytics:event:{prefix}:{name}"));
+                pipe.cmd("SCARD")
+                    .arg(format!("sow:analytics:event_sessions:{prefix}:{name}"));
+                value_index += 2;
+            }
+            daily.push((date, start));
+        }
+        let values: Vec<Option<u64>> = pipe.query_async(&mut con).await?;
+        let mut daily_rows = Vec::with_capacity(days as usize);
+        let mut funnel = serde_json::Map::new();
+        let mut funnel_sessions = serde_json::Map::new();
+        let mut dimensions_pipe = redis::pipe();
+        for (date, _) in &daily {
+            dimensions_pipe
+                .cmd("HGETALL")
+                .arg(format!("sow:analytics:by_build:{portal}:{date}"))
+                .cmd("HGETALL")
+                .arg(format!("sow:analytics:by_device:{portal}:{date}"));
+        }
+        let dimensions: Vec<std::collections::HashMap<String, u64>> =
+            dimensions_pipe.query_async(&mut con).await?;
+        let mut by_build = std::collections::HashMap::<
+            String,
+            std::collections::HashMap<String, u64>,
+        >::new();
+        let mut by_device = std::collections::HashMap::<
+            String,
+            std::collections::HashMap<String, u64>,
+        >::new();
+        for (index, dimension_rows) in dimensions.iter().enumerate() {
+            for (field, count) in dimension_rows {
+                let Some((dimension, event)) = field.split_once('|') else {
+                    continue;
+                };
+                let target = if index % 2 == 0 {
+                    &mut by_build
+                } else {
+                    &mut by_device
+                };
+                let total = target
+                    .entry(dimension.to_string())
+                    .or_default()
+                    .entry(event.to_string())
+                    .or_default();
+                *total = total.saturating_add(*count);
+            }
+        }
+        for (date, start) in daily {
+            let mut events = serde_json::Map::new();
+            let mut event_sessions = serde_json::Map::new();
+            for (index, name) in crate::events::EVENT_NAMES.iter().enumerate() {
+                let count = values
+                    .get(start + 2 + index * 2)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(0);
+                let sessions = values
+                    .get(start + 3 + index * 2)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(0);
+                events.insert((*name).to_string(), serde_json::json!(count));
+                event_sessions.insert((*name).to_string(), serde_json::json!(sessions));
+                let total = funnel
+                    .entry((*name).to_string())
+                    .or_insert_with(|| serde_json::json!(0_u64));
+                *total = serde_json::json!(total.as_u64().unwrap_or(0).saturating_add(count));
+                let session_total = funnel_sessions
+                    .entry((*name).to_string())
+                    .or_insert_with(|| serde_json::json!(0_u64));
+                *session_total = serde_json::json!(
+                    session_total.as_u64().unwrap_or(0).saturating_add(sessions)
+                );
+            }
+            daily_rows.push(serde_json::json!({
+                "date": date,
+                "active_sessions": values.get(start).copied().flatten().unwrap_or(0),
+                "active_accounts": values.get(start + 1).copied().flatten().unwrap_or(0),
+                "events": events,
+                "event_sessions": event_sessions,
+            }));
+        }
+
+        let mut retention_pipe = redis::pipe();
+        let mut cohort_offsets = Vec::new();
+        let mut retention_index = 0;
+        for offset in 1..days {
+            let cohort_day = crate::events::utc_day_number() - offset;
+            let base = retention_index;
+            retention_pipe
+                .cmd("SCARD")
+                .arg(format!("sow:analytics:cohort:{portal}:{cohort_day}"));
+            retention_index += 1;
+            for window in [1, 3, 7] {
+                if offset >= window {
+                    retention_pipe
+                        .cmd("SCARD")
+                        .arg(format!("sow:analytics:retention:{portal}:d{window}:{cohort_day}"));
+                    retention_index += 1;
+                }
+            }
+            cohort_offsets.push((offset, base));
+        }
+        let retention_values: Vec<Option<u64>> = retention_pipe.query_async(&mut con).await?;
+        let mut retention_totals = [(0_u64, 0_u64); 3];
+        for (offset, base) in cohort_offsets {
+            let eligible = retention_values
+                .get(base)
+                .copied()
+                .flatten()
+                .unwrap_or(0);
+            let mut index = base + 1;
+            for (slot, window) in [1_i64, 3, 7].into_iter().enumerate() {
+                if offset >= window {
+                    let returned = retention_values
+                        .get(index)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(0);
+                    retention_totals[slot].0 += eligible;
+                    retention_totals[slot].1 += returned;
+                    index += 1;
+                }
+            }
+        }
+        let retention = [1, 3, 7]
+            .into_iter()
+            .enumerate()
+            .map(|(index, window)| {
+                let (eligible, returned) = retention_totals[index];
+                (
+                    format!("d{window}"),
+                    serde_json::json!({
+                        "eligible_accounts": eligible,
+                        "returned_accounts": returned,
+                        "rate": if eligible == 0 { 0.0 } else { returned as f64 / eligible as f64 },
+                    }),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>();
+
+        Ok(serde_json::json!({
+            "generated_at": today,
+            "days": days,
+            "sources": {
+                "site": { "status": "connected", "source": "first-party endpoint" },
+                "poki": { "status": "platform-only", "source": "Poki developer dashboard" },
+                "crazygames": { "status": "platform-only", "source": "CrazyGames dashboard" },
+                "jest": { "status": "platform-only", "source": "Jest dashboard" },
+                "android": { "status": "disabled-pending-disclosure", "source": "Google Play Console" },
+            },
+            "funnel": funnel,
+            "funnel_sessions": funnel_sessions,
+            "dimensions": {
+                "build": by_build,
+                "device_class": by_device,
+            },
+            "daily": daily_rows,
+            "retention": { "site": retention },
+        }))
     }
 
     /// Crate-internal connection accessor for sibling server modules

@@ -187,11 +187,21 @@ impl SowApp {
         let use_loader = should_use_exit_game_loader(phase);
         let was_playing = phase == crate::ClientPhase::Playing;
         let was_offline = self.net.is_offline;
+        if was_playing
+            && was_offline
+            && self.ui.tutorial_active
+            && !self.ui.tutorial_campaign.is_completed(&self.progress)
+        {
+            crate::store_portals::track_product_event("tutorial_exit_early");
+        }
         let reward_match_id = (was_playing && !self.net.is_offline)
             .then(|| self.sim.my_lobby_id)
             .flatten();
         let exit_leader = self.ui.app.splash_state.loader_leader;
         if was_playing {
+            if !self.progress_match_recorded {
+                crate::store_portals::track_product_event("match_exit");
+            }
             if !self.progress_match_recorded {
                 crate::store_portals::measure("match", "round", "abandon");
             }
