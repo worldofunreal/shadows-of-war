@@ -226,7 +226,7 @@ impl SowApp {
         }
     }
 
-    fn sync_building_costs(&mut self) {
+    pub(in crate::sim) fn sync_building_costs(&mut self) {
         let snap_tick = self.sim.current_snapshot.as_ref().map(|s| s.tick);
         if snap_tick.is_some() && snap_tick == self.sim.last_synced_cost_tick {
             return;

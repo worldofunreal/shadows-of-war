@@ -14,9 +14,11 @@ impl SowEngine {
         {
             return false;
         }
-        let Some(building) = self.buildings.iter().find(|building| {
-            building.id == building_id && building.owner_id == player_id
-        }) else {
+        let Some(building) = self
+            .buildings
+            .iter()
+            .find(|building| building.id == building_id && building.owner_id == player_id)
+        else {
             return false;
         };
         building.kind == BuildingKind::City

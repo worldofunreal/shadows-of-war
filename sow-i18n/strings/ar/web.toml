@@ -693,7 +693,6 @@ fleet_no_port = "أنشئ ميناءً وأكمل بناءه قبل إطلاق �
 attack_incoming = "أنت تتعرض للهجوم! القوات القادمة: {count}."
 combat_operations = "العمليات القتالية"
 recall_transport = "استدعاء سفينة النقل"
-retreat_cost = "خسارة {percent}% من القوات عند الانسحاب"
 alliance_formed = "تم التحالف مع {name}."
 alliance_renewed = "تم تجديد التحالف مع {name}."
 betrayal = "خان {name} التحالف."

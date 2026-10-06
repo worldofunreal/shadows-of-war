@@ -1959,6 +1959,8 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
     assert.match(webMenu, /attack_ratio/);
     assert.match(intentApplySource, /wf\.unit_type != crate::game::UnitType::TransportShip/);
     assert.match(hud, /function renderCombatOperations\(operations\)/);
+    assert.match(hud, /aria-label="' \+ SOW_t\("hud\.combat_operations"\)/);
+    assert.doesNotMatch(hud, /sow-hud__operations-header|retreat_cost|operation-penalty/);
     assert.match(hud, /var canCounter = incoming && !retreating/);
     assert.match(hud, /pendingCounterAttacks\[playerId\]/);
     assert.match(hud, /send\("counter_attack", \{ target_player_id: counterTarget \}\)/);
@@ -1972,7 +1974,7 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
         const catalog = path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`);
         if (!fs.existsSync(catalog)) continue;
         const source = fs.readFileSync(catalog, "utf8");
-        for (const key of ["combat_operations", "recall_transport", "retreat_cost"]) {
+        for (const key of ["combat_operations", "recall_transport"]) {
             assert.match(source, new RegExp(`^${key}\\s*=`, "m"), `${locale} is missing hud.${key}`);
         }
     }

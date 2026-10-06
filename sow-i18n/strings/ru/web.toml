@@ -693,7 +693,6 @@ fleet_no_port = "Постройте и завершите порт, чтобы �
 attack_incoming = "На вас напали! Приближаются силы: {count}."
 combat_operations = "БОЕВЫЕ ОПЕРАЦИИ"
 recall_transport = "ОТОЗВАТЬ ТРАНСПОРТ"
-retreat_cost = "Потеря войск при отступлении: {percent}%"
 alliance_formed = "Заключен союз с игроком {name}."
 alliance_renewed = "Союз с игроком {name} продлен."
 betrayal = "Игрок {name} предал союз."

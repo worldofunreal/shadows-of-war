@@ -461,7 +461,6 @@
             + '  </div>'
             + '</footer>'
             + '<aside class="sow-hud__operations" id="sow-hud-operations" hidden aria-label="' + SOW_t("hud.combat_operations") + '">'
-            + '  <div class="sow-hud__operations-header">' + hudIcon("attack", "sow-hud__inline-icon") + '<span>' + SOW_t("hud.combat_operations") + '</span></div>'
             + '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>'
             + '</aside>'
             + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
@@ -1689,7 +1688,6 @@
         var name = document.createElement("b");
         var details = document.createElement("small");
         var troops = document.createElement("b");
-        var penalty = document.createElement("small");
         var actions = document.createElement("span");
         element.className = "sow-hud__operation";
         avatar.className = "sow-hud__operation-avatar";
@@ -1706,13 +1704,11 @@
         name.className = "sow-hud__operation-name";
         details.className = "sow-hud__operation-details";
         troops.className = "sow-hud__operation-troops";
-        penalty.className = "sow-hud__operation-penalty";
-        penalty.hidden = true;
         actions.className = "sow-hud__operation-actions";
         avatar.append(portrait, glyph);
         copy.append(name, details);
-        element.append(avatar, copy, troops, penalty, actions);
-        return { element: element, portrait: portrait, glyph: glyph, name: name, details: details, troops: troops, penalty: penalty, actions: actions, avatarSrc: "", actionKey: "" };
+        element.append(avatar, copy, troops, actions);
+        return { element: element, portrait: portrait, glyph: glyph, name: name, details: details, troops: troops, actions: actions, avatarSrc: "", actionKey: "" };
     }
 
     function operationAction(command, glyph, label, operation) {
@@ -1822,13 +1818,6 @@
             row.actions.querySelectorAll('[data-command="counter_attack"]').forEach(function (button) {
                 button.dataset.incomingTroops = String(incomingTotals[playerId] || 0);
             });
-            row.penalty.hidden = !(outgoing && !retreating);
-            if (!row.penalty.hidden) {
-                var penaltyText = SOW_t("hud.retreat_cost", {
-                    percent: Math.max(0, Number(operation.retreat_loss_percent) || 0)
-                });
-                if (row.penalty.textContent !== penaltyText) row.penalty.textContent = penaltyText;
-            }
             nextRows[key] = row;
         });
 

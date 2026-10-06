@@ -1386,6 +1386,7 @@ fn validate_web_node(
                 } else {
                     format!("{path}.{key}")
                 };
+                let catalog_key = child_path.splitn(2, '.').nth(1).unwrap_or(&child_path);
                 let actual_value = match actual.get(key) {
                     Some(value) => value,
                     None if path.ends_with(".tutorial")
@@ -1394,6 +1395,20 @@ fn validate_web_node(
                             code.eq_ignore_ascii_case(path.split('.').next().unwrap_or(""))
                                 && !code.eq_ignore_ascii_case("en")
                         }) => continue,
+                    None if path.ends_with(".site")
+                        && web_key_is_intentionally_english(catalog_key)
+                        && !path
+                            .split('.')
+                            .next()
+                            .unwrap_or("en")
+                            .eq_ignore_ascii_case("en") => continue,
+                    None if path.ends_with(".menu")
+                        && web_key_is_intentionally_english(catalog_key)
+                        && !path
+                            .split('.')
+                            .next()
+                            .unwrap_or("en")
+                            .eq_ignore_ascii_case("en") => continue,
                     None => bail!("web catalog missing key {child_path}"),
                 };
                 validate_web_node(&child_path, expected_value, actual_value)?;
@@ -1473,6 +1488,7 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "lobbies.terminator"
                 | "menu.brand"
                 | "menu.cookies"
+                | "menu.cookie_settings"
                 | "menu.discord"
                 | "menu.github"
                 | "menu.google_play_games"
@@ -1488,11 +1504,33 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "profile.spam"
                 | "site.copyright"
                 | "site.cookies"
+                | "site.analytics_accept"
+                | "site.analytics_body"
+                | "site.analytics_manage"
+                | "site.analytics_policy"
+                | "site.analytics_reject"
+                | "site.analytics_title"
+                | "site.cookies_analytics_events"
+                | "site.cookies_analytics_intro"
+                | "site.cookies_analytics_server"
+                | "site.cookies_analytics_title"
+                | "site.cookies_controls_v2"
+                | "site.cookies_description_v2"
+                | "site.cookies_og_description_v2"
+                | "site.cookies_platforms_body"
+                | "site.cookies_platforms_title"
+                | "site.cookies_storage_body"
+                | "site.cookies_storage_title"
+                | "site.cookies_updated_v2"
                 | "site.discord"
                 | "site.faq"
                 | "site.github"
                 | "site.leader_napoleon_ability"
+                | "site.privacy_analytics_body_v2"
+                | "site.privacy_cookies_body_v2"
                 | "site.privacy_hosting_body"
+                | "site.privacy_retention_body_v2"
+                | "site.privacy_updated_v2"
                 | "site.terms_general_title"
                 | "site.terms_maps_license"
                 | "site.telegram"
@@ -4423,6 +4461,28 @@ mod tests {
         assert!(validate_web_node("test", &expected, &matching).is_ok());
         assert!(validate_web_node("test", &expected, &missing_duplicate).is_err());
         assert!(validate_web_node("test", &expected, &malformed).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn web_catalog_validation_allows_english_fallback_for_new_policy_copy() -> Result<()> {
+        let expected = serde_json::json!({
+            "site": {
+                "analytics_accept": "Allow optional analytics",
+                "cookies_controls_v2": "Rejecting analytics does not affect gameplay."
+            }
+        });
+        let localized = serde_json::json!({"site": {}});
+        let english = serde_json::json!({
+            "site": {
+                "analytics_accept": "Allow optional analytics",
+                "cookies_controls_v2": "Rejecting analytics does not affect gameplay."
+            }
+        });
+
+        assert!(validate_web_node("fr", &expected, &localized).is_ok());
+        assert!(validate_web_node("fr", &expected, &english).is_ok());
+        assert!(validate_web_node("en", &expected, &localized).is_err());
         Ok(())
     }
 

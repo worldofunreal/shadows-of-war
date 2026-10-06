@@ -693,7 +693,6 @@ fleet_no_port = "艦隊を出すには港を建設して完成させてくださ
 attack_incoming = "攻撃されています！接近中の敵：{count}。"
 combat_operations = "戦闘作戦"
 recall_transport = "輸送船を呼び戻す"
-retreat_cost = "撤退時の兵力損失: {percent}%"
 alliance_formed = "{name}と同盟を結びました。"
 alliance_renewed = "{name}との同盟を更新しました。"
 betrayal = "{name}が同盟を裏切りました。"

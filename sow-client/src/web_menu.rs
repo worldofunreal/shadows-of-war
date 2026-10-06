@@ -2792,7 +2792,6 @@ fn build_combat_operations_payload(
                 "neutral": neutral,
                 "troops": attack.troops.max(0.0),
                 "retreating": attack.retreating,
-                "retreat_loss_percent": if neutral { 0 } else { 25 },
                 "focus_x": focus.map(|point| point.0),
                 "focus_y": focus.map(|point| point.1),
             }));
@@ -2834,7 +2833,6 @@ fn build_combat_operations_payload(
                 "neutral": neutral,
                 "troops": fleet.troops.max(0.0),
                 "retreating": fleet.retreating,
-                "retreat_loss_percent": 25,
                 "focus_x": focus.map(|point| point.0),
                 "focus_y": focus.map(|point| point.1),
             }));
@@ -3830,11 +3828,9 @@ mod tests {
         let neutral = operations.iter().find(|row| row["id"] == 1).unwrap();
         assert_eq!(neutral["direction"], "outgoing");
         assert_eq!(neutral["neutral"], true);
-        assert_eq!(neutral["retreat_loss_percent"], 0);
         let threat = operations.iter().find(|row| row["id"] == 3).unwrap();
         assert_eq!(threat["direction"], "incoming");
         assert_eq!(threat["player_id"], 2);
-        assert_eq!(threat["retreat_loss_percent"], 25);
         assert!(operations.iter().any(|row| row["id"] == 2));
         assert!(!operations.iter().any(|row| row["id"] == 4));
     }

@@ -693,7 +693,6 @@ fleet_no_port = "Baue einen Hafen und stelle ihn fertig, bevor du eine Flotte lo
 attack_incoming = "Du wirst angegriffen! Anrückende Truppen: {count}."
 combat_operations = "KAMPFEINSÄTZE"
 recall_transport = "TRANSPORT ZURÜCKRUFEN"
-retreat_cost = "Truppenverlust beim Rückzug: {percent}%"
 alliance_formed = "Bündnis mit {name} geschlossen."
 alliance_renewed = "Bündnis mit {name} erneuert."
 betrayal = "{name} hat das Bündnis verraten."

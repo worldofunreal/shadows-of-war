@@ -944,12 +944,13 @@ impl SowApp {
                 };
                 (
                     Some({
-                        let free_tutorial_upgrade = self.sim.engine.as_ref().is_some_and(|engine| {
-                            engine.tutorial_city_upgrade_is_free(
-                                self.sim.my_player_id.unwrap_or_default(),
-                                building.id,
-                            )
-                        });
+                        let free_tutorial_upgrade =
+                            self.sim.engine.as_ref().is_some_and(|engine| {
+                                engine.tutorial_city_upgrade_is_free(
+                                    self.sim.my_player_id.unwrap_or_default(),
+                                    building.id,
+                                )
+                            });
                         if free_tutorial_upgrade {
                             0.0
                         } else {
