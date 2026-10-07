@@ -139,7 +139,7 @@
                 add(step.trigger.target); add(step.trigger.recipient);
                 (Array.isArray(step.trigger.targets) ? step.trigger.targets : []).forEach(add);
             }
-            if (object(step.campaign_assault_on_enter)) add(step.campaign_assault_on_enter.target);
+            if (object(step.campaign_assault_on_enter) && step.campaign_assault_on_enter.target !== "player_and_allies") add(step.campaign_assault_on_enter.target);
             if (object(step.marker)) add(step.marker.target);
         });
         (Array.isArray(definition.reactions) ? definition.reactions : []).forEach(reaction => {
@@ -216,7 +216,7 @@
                     issue(null, "roster", "Faction IDs and names must be valid, unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group"], null, "roster.factions");
+                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group", "assault_force"], null, "roster.factions");
                 factions.add(faction.id); factionNames.add(faction.name);
                 rosterFactions.add(faction.id);
                 if (!Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000 || typeof faction.civ !== "string" || !faction.civ || typeof faction.leader !== "string" || !faction.leader || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid starting troops, civilization, leader or spawn: " + faction.name);
@@ -224,6 +224,7 @@
                 if (!["neutral", "allied", "enemy"].includes(faction.relation)) issue(null, "roster.factions.relation", "Choose neutral, allied or enemy for " + faction.name + ".");
                 if (faction.team != null && !TEAMS.includes(faction.team)) issue(null, "roster.factions.team", "Choose Red, Blue or no team for " + faction.name + ".");
                 if (faction.can_request_alliance != null && typeof faction.can_request_alliance !== "boolean") issue(null, "roster.factions.can_request_alliance", "Choose whether this faction can send alliance offers.");
+                if (faction.assault_force != null && typeof faction.assault_force !== "boolean") issue(null, "roster.factions.assault_force", "Choose whether this faction can join a configured campaign assault.");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
                 if (faction.gold_loot_bonus != null && (!Number.isInteger(faction.gold_loot_bonus) || faction.gold_loot_bonus < 0 || faction.gold_loot_bonus > 1_000_000)) issue(null, "roster.factions.gold_loot_bonus", "Bonus gold loot must be an integer from 0 to 1,000,000.");
@@ -311,9 +312,19 @@
             if (own(step, "start_delay_seconds") && (!Number.isFinite(step.start_delay_seconds) || step.start_delay_seconds < 0.1 || step.start_delay_seconds > 10 || step.type !== "scene")) issue(step, "start_delay_seconds", "Scene reveal delay must be between 0.1 and 10 seconds and only applies to scenes.");
             if (own(step, "campaign_assault_on_enter")) {
                 const assault = step.campaign_assault_on_enter;
-                knownFields(assault, ["attacker_team", "target"], step, "campaign_assault_on_enter");
+                knownFields(assault, ["attacker_team", "target", "preserve_relation", "reinforcement", "hold_last_tile"], step, "campaign_assault_on_enter");
                 if (!object(assault) || !TEAMS.includes(assault.attacker_team)) issue(step, "campaign_assault_on_enter.attacker_team", "Choose the Red or Blue campaign team.");
-                if (!object(assault) || typeof assault.target !== "string" || !assault.target || (assault.target !== "player" && roster && !rosterFactions.has(assault.target) && !allowMissingFactionReferences)) issue(step, "campaign_assault_on_enter.target", "Choose the player or an existing campaign faction.");
+                if (!object(assault) || typeof assault.target !== "string" || !assault.target || (assault.target !== "player" && assault.target !== "player_and_allies" && roster && !rosterFactions.has(assault.target) && !allowMissingFactionReferences)) issue(step, "campaign_assault_on_enter.target", "Choose the player, the player and current allies, or an existing campaign faction.");
+                if (object(assault) && own(assault, "preserve_relation") && typeof assault.preserve_relation !== "boolean") issue(step, "campaign_assault_on_enter.preserve_relation", "Choose whether attackers keep their current campaign relationship.");
+                if (object(assault) && own(assault, "hold_last_tile") && typeof assault.hold_last_tile !== "boolean") issue(step, "campaign_assault_on_enter.hold_last_tile", "Choose whether the assault pauses before taking the target's final territory.");
+                if (object(assault) && own(assault, "reinforcement")) {
+                    const reinforcement = assault.reinforcement;
+                    knownFields(reinforcement, ["capacity_ratio", "interval_seconds"], step, "campaign_assault_on_enter.reinforcement");
+                    if (!object(reinforcement) || !Number.isFinite(reinforcement.capacity_ratio) || reinforcement.capacity_ratio < 1 || reinforcement.capacity_ratio > 10) issue(step, "campaign_assault_on_enter.reinforcement.capacity_ratio", "Strength ratio must be between 1 and 10.");
+                    if (!object(reinforcement) || !Number.isInteger(reinforcement.interval_seconds) || reinforcement.interval_seconds < 1 || reinforcement.interval_seconds > 600) issue(step, "campaign_assault_on_enter.reinforcement.interval_seconds", "Reinforcement interval must be 1–600 seconds.");
+                }
+                if (object(assault) && assault.target === "player_and_allies" && !own(assault, "reinforcement")) issue(step, "campaign_assault_on_enter.reinforcement", "An assault on current allies needs a strength ratio and reinforcement interval.");
+                if (object(assault) && assault.hold_last_tile === true && (!own(assault, "reinforcement") || !["player", "player_and_allies"].includes(assault.target))) issue(step, "campaign_assault_on_enter.hold_last_tile", "Holding the final territory requires a reinforced assault against the player.");
                 const targetFaction = object(assault) && roster && Array.isArray(roster.factions) && roster.factions.find(faction => faction.id === assault.target);
                 if (targetFaction && targetFaction.team === assault.attacker_team) issue(step, "campaign_assault_on_enter.target", "The target cannot belong to the attacking team.");
             }
@@ -400,8 +411,9 @@
                 const trigger = step.trigger;
                 if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "eliminated", "ui", "building_selected"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
-                    knownFields(trigger, ["type", "scope", "value", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
+                    knownFields(trigger, ["type", "scope", "value", "comparison", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
+                    if (own(trigger, "comparison") && (trigger.type !== "territory" || trigger.scope !== "total" || trigger.comparison !== "lte")) issue(step, "trigger.comparison", "Only total territory objectives can use an at-most comparison.");
                     if (trigger.targets != null && !["contact", "defeated"].includes(trigger.type)) issue(step, "trigger.targets", "Only contact and defeat objectives can list multiple factions.");
                     if (trigger.type === "contact") {
                         if (trigger.targets != null) {
@@ -678,6 +690,9 @@
                 let field = METRICS[trigger.type];
                 if (trigger.type === "territory" && trigger.scope === "total") field = "tiles";
                 current = Number(facts[field] || 0) - Number(reference[field] || 0);
+            }
+            if (trigger.type === "territory" && trigger.scope === "total" && trigger.comparison === "lte") {
+                return { current: current <= target ? target : 0, target };
             }
             return { current: Math.min(target, Math.max(0, current)), target };
         }

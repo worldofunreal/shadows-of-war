@@ -88,24 +88,9 @@
         "target": "trinovantes"
       },
       "speaker": "trinovantes",
+      "outcome": "allied",
       "title_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_title",
-      "body_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_body",
-      "choices": [
-        {
-          "id": "accept",
-          "label_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_accept",
-          "body_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_accept_detail",
-          "relation": "allied",
-          "gold_cost": 0
-        },
-        {
-          "id": "later",
-          "label_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_later",
-          "body_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_later_detail",
-          "relation": "neutral",
-          "gold_cost": 0
-        }
-      ]
+      "body_key": "tutorial.campaign_boudica_boudica_trinovantes_offer_body"
     },
     {
       "id": "neutral_contact_terms",
@@ -441,28 +426,6 @@
       "next": "boudica_choose_city"
     },
     {
-      "id": "boudica_trinovantes_alliance",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_trinovantes_alliance_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_trinovantes_alliance_hint",
-      "speaker": "boudica",
-      "trigger": {
-        "type": "alliance",
-        "target": "trinovantes",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "trinovantes"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "target_action",
-        "gesture": "tap"
-      },
-      "next": "boudica_ally_support_wait"
-    },
-    {
       "id": "boudica_ally_support_wait",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_support_title",
@@ -473,6 +436,7 @@
         "value": 1,
         "scope": "total"
       },
+      "advance_delay_seconds": 2,
       "next": "boudica_aid_choice"
     },
     {
@@ -506,7 +470,7 @@
         "scope": "step"
       },
       "marker": {
-        "target": "stonea"
+        "target": "trinovantes"
       },
       "guide": {
         "kind": "world",
@@ -523,7 +487,7 @@
       "speaker": "boudica",
       "trigger": {
         "type": "resource_transfer",
-        "recipient": "stonea",
+        "recipient": "trinovantes",
         "value": 1,
         "scope": "episode"
       },
@@ -541,6 +505,10 @@
       "body_key": "tutorial.campaign_boudica_boudica_share_sent_body",
       "speaker": "boudica",
       "presentation": "celebration",
+      "campaign_assault_on_enter": {
+        "attacker_team": "Blue",
+        "target": "camulodunum"
+      },
       "next": "boudica_choose_factory"
     },
     {
@@ -662,7 +630,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_outpost_colonia_veterans"
+      "next": "boudica_outpost_tax_collectors"
     },
     {
       "id": "boudica_select_city_upgrade",
@@ -754,7 +722,7 @@
         "target": "target_action",
         "gesture": "tap"
       },
-      "next": "boudica_trinovantes_alliance"
+      "next": "boudica_ally_support_wait"
     },
     {
       "id": "boudica_choose_factory",
@@ -899,77 +867,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_bunker_built_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_select_bunker_upgrade"
-    },
-    {
-      "id": "boudica_select_bunker_upgrade",
-      "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_bunker_upgrade_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_bunker_upgrade_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "building_selected",
-        "kind": "Bunker",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_building",
-        "gesture": "tap"
-      },
-      "pause_game": true,
-      "next": "boudica_bunker_upgrade"
-    },
-    {
-      "id": "boudica_bunker_upgrade",
-      "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_bunker_upgrade_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_bunker_upgrade_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "ui",
-        "action": "upgrade_structure",
-        "scope": "step"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "upgrade_structure",
-        "gesture": "tap"
-      },
-      "pause_game": true,
-      "next": "boudica_bunker_upgrade_wait"
-    },
-    {
-      "id": "boudica_bunker_upgrade_wait",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_bunker_upgrade_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_bunker_upgrade_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "Bunker",
-        "value": 2,
-        "scope": "total"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "upgrade_building",
-        "gesture": "tap"
-      },
-      "advance_delay_seconds": 3,
-      "next": "boudica_bunker_ready"
-    },
-    {
-      "id": "boudica_bunker_ready",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_bunker_ready_title",
-      "body_key": "tutorial.campaign_boudica_boudica_bunker_ready_body",
-      "speaker": "council",
-      "presentation": "dialogue",
-      "next": "boudica_camulodunum_intro"
+      "next": "boudica_outpost_colonia_veterans"
     },
     {
       "id": "boudica_outpost_colonia_veterans",
@@ -1000,7 +898,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_scene_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_outpost_tax_collectors"
+      "next": "boudica_camulodunum_intro"
     },
     {
       "id": "boudica_outpost_tax_collectors",
@@ -1101,6 +999,10 @@
       "body_key": "tutorial.campaign_boudica_boudica_londinium_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "campaign_assault_on_enter": {
+        "attacker_team": "Blue",
+        "target": "londinium"
+      },
       "next": "boudica_londinium"
     },
     {
@@ -1131,6 +1033,10 @@
       "body_key": "tutorial.campaign_boudica_boudica_verulamium_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "campaign_assault_on_enter": {
+        "attacker_team": "Blue",
+        "target": "verulamium"
+      },
       "next": "boudica_verulamium"
     },
     {
@@ -1232,7 +1138,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_final_body",
       "speaker": "boudica",
       "presentation": "cinematic",
-      "next": "boudica_final_choice"
+      "next": "boudica_last_stand_intro"
     },
     {
       "id": "boudica_final_choice",
@@ -1249,7 +1155,7 @@
         {
           "id": "fight",
           "label_key": "tutorial.campaign_boudica_boudica_final_choice_fight",
-          "next": "boudica_last_stand_intro"
+          "next": "boudica_last_stand_resist"
         }
       ]
     },
@@ -1280,7 +1186,36 @@
       "speaker": "boudica",
       "campaign_assault_on_enter": {
         "attacker_team": "Red",
-        "target": "player"
+        "target": "player_and_allies",
+        "hold_last_tile": true,
+        "reinforcement": {
+          "capacity_ratio": 2,
+          "interval_seconds": 10
+        }
+      },
+      "trigger": {
+        "type": "territory",
+        "comparison": "lte",
+        "scope": "total",
+        "value": 1
+      },
+      "next": "boudica_final_choice"
+    },
+    {
+      "id": "boudica_last_stand_resist",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_last_stand_resist_title",
+      "body_key": "tutorial.campaign_boudica_boudica_last_stand_resist_body",
+      "hint_key": "tutorial.campaign_boudica_boudica_last_stand_resist_hint",
+      "speaker": "boudica",
+      "campaign_assault_on_enter": {
+        "attacker_team": "Red",
+        "target": "player_and_allies",
+        "hold_last_tile": false,
+        "reinforcement": {
+          "capacity_ratio": 2,
+          "interval_seconds": 10
+        }
       },
       "trigger": {
         "type": "eliminated",
@@ -1395,10 +1330,6 @@
       "x": 2310,
       "y": 450
     },
-    "boudica_trinovantes_alliance": {
-      "x": 2590,
-      "y": 450
-    },
     "boudica_ally_support_wait": {
       "x": 70,
       "y": 640
@@ -1479,13 +1410,25 @@
       "x": 350,
       "y": 2540
     },
+    "boudica_bunker_built": {
+      "x": 630,
+      "y": 2540
+    },
+    "boudica_outpost_colonia_veterans": {
+      "x": 910,
+      "y": 2540
+    },
+    "boudica_outpost_colonia_veterans_scene": {
+      "x": 1190,
+      "y": 2540
+    },
     "boudica_camulodunum_intro": {
-      "x": 350,
-      "y": 2350
+      "x": 1470,
+      "y": 2540
     },
     "boudica_camulodunum": {
-      "x": 630,
-      "y": 2350
+      "x": 1750,
+      "y": 2540
     },
     "boudica_londinium_intro": {
       "x": 70,
@@ -1524,32 +1467,32 @@
       "y": 3680
     },
     "boudica_final_choice": {
-      "x": 910,
+      "x": 1470,
       "y": 3680
     },
     "boudica_poison_end": {
-      "x": 1190,
+      "x": 1750,
       "y": 3480
     },
     "boudica_last_stand_intro": {
-      "x": 1190,
-      "y": 3880
+      "x": 910,
+      "y": 3680
     },
     "boudica_last_stand": {
-      "x": 1470,
+      "x": 1190,
+      "y": 3680
+    },
+    "boudica_last_stand_resist": {
+      "x": 1750,
       "y": 3880
     },
     "boudica_end": {
-      "x": 1750,
-      "y": 3680
-    },
-    "boudica_complete": {
       "x": 2030,
       "y": 3680
     },
-    "boudica_outpost_colonia_veterans": {
-      "x": 70,
-      "y": 1590
+    "boudica_complete": {
+      "x": 2310,
+      "y": 3680
     },
     "boudica_outpost_tax_collectors": {
       "x": 70,

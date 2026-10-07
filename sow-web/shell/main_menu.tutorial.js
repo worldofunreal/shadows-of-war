@@ -43,6 +43,7 @@
         lastPhase: null,
         modalObserver: null,
         menuGuide: false,
+        guidedScrollStepId: null,
         guidedControl: null,
         guidedAmountControls: []
     };
@@ -449,6 +450,22 @@
         return result;
     }
 
+    function revealGuidedUiTarget(step) {
+        if (!step || !step.guide || step.guide.kind !== "ui" || runtime.guidedScrollStepId === step.id
+            || !window.SOWCampaign || typeof window.SOWCampaign.resolveUiTarget !== "function") return;
+        var target = window.SOWCampaign.resolveUiTarget(step.guide.target, document, runtime.episodeId);
+        var strip = target && target.closest(".sow-hud__dock-actions");
+        if (!target || target.disabled || !strip || strip.scrollWidth <= strip.clientWidth + 1) return;
+        var stripRect = strip.getBoundingClientRect();
+        var targetRect = target.getBoundingClientRect();
+        if (targetRect.left >= stripRect.left && targetRect.right <= stripRect.right) {
+            runtime.guidedScrollStepId = step.id;
+            return;
+        }
+        target.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+        runtime.guidedScrollStepId = step.id;
+    }
+
     function syncTransferGuide(step) {
         var highlightAmounts = Boolean(step && step.guide && step.guide.kind === "ui" && step.guide.target === "transfer_send");
         var guideTarget = step && step.guide && step.guide.kind === "ui" ? step.guide.target : null;
@@ -609,7 +626,10 @@
                 var assault = machineView.step.campaign_assault_on_enter;
                 send("activate_campaign_assault", {
                     attacker_team: assault.attacker_team,
-                    target_faction_id: assault.target
+                    target_faction_id: assault.target,
+                    preserve_relation: assault.preserve_relation === true,
+                    reinforcement: assault.reinforcement || null,
+                    hold_last_tile: assault.hold_last_tile === true
                 });
             }
         }
@@ -655,6 +675,7 @@
             send("set_tutorial_marker", { player_id: markerId });
         }
         syncTransferGuide(machineView.step);
+        revealGuidedUiTarget(machineView.step);
         if (!runtime.modalOpen) {
             if (machineView.waiting) {
                 runtime.view.render(null);
@@ -690,6 +711,7 @@
         // "You're ready" panel was the same nuisance. Both stay hidden here; the
         // in-match objective card is unaffected.
         if (machineView.done || machineView.step.type === "end") { dismissMenuGuide(); return; }
+        revealGuidedUiTarget(machineView.step);
         var context = renderContext(machineView.step, null, anchorFor(machineView.step, { tutorial: {} }));
         context.reducedMotion = Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
         context.hideObjective = true;
@@ -715,6 +737,7 @@
             runtime.uiCounts = Object.create(null);
             runtime.active = false;
             runtime.menuGuide = true;
+            runtime.guidedScrollStepId = null;
             runtime.completionSent = true;
             runtime.machine = window.SOWCampaign.create(data.definition, data.definition.menu_guide.entry, data.roster);
             runtime.machine.jump(data.definition.menu_guide.entry, null, runtime.priorChoices);
@@ -735,6 +758,7 @@
     function dismissMenuGuide() {
         if (!runtime.menuGuide) { openLeaveMatch(); return; }
         runtime.menuGuide = false;
+        runtime.guidedScrollStepId = null;
         runtime.machine = null;
         syncTransferGuide(null);
         runtime.priorChoices = Object.create(null);
@@ -829,7 +853,10 @@
         if (model.waiting) runtime.view.render(null);
         else runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
     }
-    window.addEventListener("resize", redrawCampaign, { passive: true });
+    window.addEventListener("resize", function () {
+        runtime.guidedScrollStepId = null;
+        redrawCampaign();
+    }, { passive: true });
 
     if (hudRoot && typeof MutationObserver !== "undefined") {
         runtime.modalObserver = new MutationObserver(modalChanged);

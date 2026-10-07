@@ -247,7 +247,13 @@ impl SowEngine {
         let attacks_players = campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
         // ── Attack logic (both Bots and Nations) ────────────────────
         if slot.do_attack {
-            let campaign_target = self.campaign_assault_targets.get(&bot_id).copied();
+            let campaign_target = self.campaign_assault_targets.get(&bot_id).and_then(|targets| {
+                (!targets.is_empty()).then(|| {
+                    let index = (self.state.tick.wrapping_add(u64::from(bot_id))
+                        % targets.len() as u64) as usize;
+                    targets[index]
+                })
+            });
             let ready_retaliation = slot
                 .ghost_retaliation
                 .filter(|retaliation| retaliation.is_ready_at(self.state.tick));

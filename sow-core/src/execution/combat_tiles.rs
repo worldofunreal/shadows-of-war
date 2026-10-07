@@ -37,6 +37,11 @@ impl SowEngine {
         let map_h = self.state.map.height;
 
         let tick_now = self.state.tick;
+        let held_target = self
+            .campaign_assault
+            .as_ref()
+            .filter(|assault| assault.hold_last_tile)
+            .map(|assault| assault.root_target);
 
         // Rebuild only when buildings changed; each tile then queries nearby cells.
         if !self.attacks.is_empty() {
@@ -126,6 +131,18 @@ impl SowEngine {
             let max_stale_pops = 256;
 
             loop {
+                if held_target == Some(execution.target_owner)
+                    && self.state.player(execution.target_owner).is_some_and(|target| target.tile_count <= 1)
+                {
+                    let refund = execution.troops.max(0.0);
+                    if refund.is_finite()
+                        && let Some(player) = self.state.player_mut(execution.owner_id)
+                    {
+                        player.troops = (player.troops + refund).min(player.max_troops);
+                    }
+                    to_remove.push(i);
+                    break;
+                }
                 if budget <= 0.0 || stale_pops > max_stale_pops {
                     break;
                 }
@@ -503,5 +520,85 @@ mod tests {
             next_tile.priority,
             base_priority + next_influence.priority_bonus as i64
         );
+    }
+
+    #[test]
+    fn campaign_assault_holds_one_tile_until_resistance_is_chosen() {
+        let width = 8;
+        let mut config = GameConfig::default();
+        config.global_speed_multiplier = 10.0;
+        let mut state = GameState::new(88, width, width, config);
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x80));
+        for id in [1, 2] {
+            state.register_player(Player::new_human(
+                id,
+                format!("P{id}"),
+                [0.5; 3],
+                &state.config,
+            ));
+        }
+        for (x, y, owner) in [(2, 3, 1), (3, 3, 2), (4, 3, 2)] {
+            state.set_tile_owner(x, y, owner);
+        }
+        state.player_mut(1).unwrap().troops = 100_000.0;
+        state.player_mut(1).unwrap().max_troops = 200_000.0;
+        state.player_mut(2).unwrap().troops = 100.0;
+
+        let mut engine = crate::engine::SowEngine::new(state, WaterComponents::default());
+        engine.campaign_assault = Some(crate::engine::CampaignAssaultState {
+            root_target: 2,
+            team: crate::protocol::Team::Red,
+            include_allies: true,
+            preserve_relation: false,
+            hold_last_tile: true,
+            capacity_ratio: 2.0,
+            interval_ticks: 100,
+            next_tick: 100,
+            attacker_ids: vec![1],
+            target_ids: vec![2],
+            reserve_spawned: false,
+        });
+        engine.add_attack(AttackExecution {
+            id: 1,
+            owner_id: 1,
+            target_owner: 2,
+            created_tick: 0,
+            troops: 100_000.0,
+            to_conquer: BinaryHeap::from([
+                PrioritizedTile { priority: 0, insert_seq: 0, x: 3, y: 3 },
+                PrioritizedTile { priority: 0, insert_seq: 1, x: 4, y: 3 },
+            ]),
+            insert_seq_counter: 2,
+            rng: WyRand::new(88),
+            retreating: false,
+        });
+        engine.execute_combat();
+        assert_eq!(engine.state.player(2).unwrap().tile_count, 1);
+        assert!(engine.state.player(2).unwrap().alive);
+
+        engine.campaign_assault.as_mut().unwrap().hold_last_tile = false;
+        let last_tile = [(3, 3), (4, 3)]
+            .into_iter()
+            .find(|(x, y)| engine.state.map.owner_id(*x, *y) == 2)
+            .unwrap();
+        engine.add_attack(AttackExecution {
+            id: 2,
+            owner_id: 1,
+            target_owner: 2,
+            created_tick: engine.state.tick,
+            troops: 100_000.0,
+            to_conquer: BinaryHeap::from([PrioritizedTile {
+                priority: 0,
+                insert_seq: 0,
+                x: last_tile.0,
+                y: last_tile.1,
+            }]),
+            insert_seq_counter: 1,
+            rng: WyRand::new(89),
+            retreating: false,
+        });
+        engine.execute_combat();
+        assert!(!engine.state.player(2).unwrap().alive);
     }
 }

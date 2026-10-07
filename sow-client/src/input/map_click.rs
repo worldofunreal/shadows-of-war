@@ -326,6 +326,15 @@ impl SowApp {
         if target.my_id == 0 || !target.is_land || target.owner != target.my_id {
             return false;
         }
+        if self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+            snapshot
+                .buildings
+                .iter()
+                .any(|building| building.tile_idx == tile_idx && building.under_construction)
+        }) {
+            self.close_map_context_menu();
+            return true;
+        }
         self.set_map_context_menu(x, y, tile_idx, MapContextMenuView::BuildingDetails);
         true
     }
@@ -689,9 +698,7 @@ impl SowApp {
                 self.build_ship_at(tile_idx, kind);
             }
         }
-        if !keep_building_card_open {
-            self.close_map_context_menu();
-        }
+        self.close_map_context_menu();
     }
 
     pub(crate) fn move_selected_warships(&mut self, x: f64, y: f64) -> bool {

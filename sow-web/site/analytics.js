@@ -216,28 +216,26 @@
   }
 
   function buildPanel() {
-    if (!document.getElementById("sow-analytics-consent-style")) {
-      const style = document.createElement("style");
-      style.id = "sow-analytics-consent-style";
-      style.textContent = `
-        .sow-analytics-consent{position:fixed;z-index:2147483000;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:min(520px,calc(100vw - 32px));padding:18px;border:1px solid #536268;border-radius:14px;background:linear-gradient(145deg,#18252b,#0b1318);color:#edf2eb;box-shadow:0 16px 48px #0009;font:14px/1.5 system-ui,sans-serif}.sow-analytics-consent[hidden]{display:none}.sow-analytics-consent h2{margin:0 0 6px;font-size:17px}.sow-analytics-consent p{margin:0 0 12px;color:#c2ccca}.sow-analytics-consent a{color:#f1c477;text-decoration:underline}.sow-analytics-consent__actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sow-analytics-consent button{min-height:44px;border:1px solid #e7bd72;border-radius:8px;background:#d5a44c;color:#172024;font:700 14px system-ui,sans-serif;cursor:pointer;padding:9px 12px}.sow-analytics-consent button:focus-visible,.sow-analytics-consent a:focus-visible{outline:3px solid #f1c477;outline-offset:2px}.sow-analytics-consent--game{top:max(16px,env(safe-area-inset-top));bottom:auto;left:50%;right:auto;transform:translateX(-50%)}.sow-cookie-settings-link{border:0;background:none;color:#f1c477;font:inherit;text-decoration:underline;cursor:pointer;padding:0}
-      `;
-      document.head.append(style);
-    }
     const card = document.createElement("section");
     card.className = `sow-analytics-consent${isGameShell ? " sow-analytics-consent--game" : ""}`;
     card.setAttribute("aria-labelledby", "sow-analytics-title");
-    card.setAttribute("aria-live", "polite");
+    card.setAttribute("aria-describedby", "sow-analytics-copy");
     const title = document.createElement("h2");
     title.id = "sow-analytics-title";
+    title.className = "sow-analytics-consent__title";
     const body = document.createElement("p");
+    body.id = "sow-analytics-copy";
+    body.className = "sow-analytics-consent__copy";
     const policyLink = document.createElement("a");
+    policyLink.className = "sow-analytics-consent__policy";
     policyLink.href = "/cookies/";
     const actions = document.createElement("div");
     actions.className = "sow-analytics-consent__actions";
     const accept = document.createElement("button");
     const reject = document.createElement("button");
     accept.type = reject.type = "button";
+    accept.className = "sow-analytics-consent__button sow-analytics-consent__button--accept";
+    reject.className = "sow-analytics-consent__button sow-analytics-consent__button--reject";
     accept.addEventListener("click", () => saveChoice("accepted"));
     reject.addEventListener("click", () => saveChoice("rejected"));
     card.append(title, body, policyLink, actions);
@@ -270,7 +268,6 @@
       button.type = "button";
       button.dataset.sowCookieSettings = "";
       button.className = "sow-cookie-settings-link";
-      button.style.cssText = "border:0;background:none;color:#f1c477;font:inherit;text-decoration:underline;cursor:pointer;padding:0";
       button.addEventListener("click", openSettings);
       footer.append(button);
     }
@@ -305,8 +302,11 @@
 
   const start = () => {
     addManageControl();
-    if (consent === null) openSettings();
-    else if (queue.length) void flush();
+    if (consent === null) {
+      if (!isGameShell) openSettings();
+      return;
+    }
+    if (queue.length) void flush();
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();

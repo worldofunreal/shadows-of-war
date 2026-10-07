@@ -474,9 +474,10 @@ button { color: inherit; font: inherit; }
 @media (max-width: 700px) {
   .site-nav { padding-top: max(10px, var(--site-sat)); backdrop-filter: none; }
   .nav-inner {
-    height: 64px;
+    height: auto;
     min-height: 64px;
     gap: 10px;
+    padding-block: 8px;
     padding-inline: max(8px, var(--site-sal)) max(8px, var(--site-sar));
   }
   .site-nav .brand-wordmark { display: block; width: auto; height: 30px; max-width: 48px; }

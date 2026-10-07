@@ -407,6 +407,7 @@ impl SowApp {
                 self.ui.app.hud_state.gold_rate =
                     sow_core::execution::income_rates::gold_net_income_per_second(
                         player.troops,
+                        player.tile_count,
                         agg,
                         trade_ships,
                         e.state

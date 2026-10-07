@@ -449,7 +449,17 @@
             if (step.campaign_assault_on_enter) {
                 var assault = step.campaign_assault_on_enter;
                 campaignActions.appendChild(selectField("Attacking team", assault.attacker_team || "Red", window.SOWCampaign.TEAMS, function (value) { assault.attacker_team = value; markDirty(); }));
-                campaignActions.appendChild(selectField("Target", assault.target || "player", [{ value: "player", label: "Player" }].concat(factionOptions()), function (value) { assault.target = value; markDirty(); }));
+                campaignActions.appendChild(selectField("Target", assault.target || "player", [{ value: "player", label: "Player" }, { value: "player_and_allies", label: "Boudica and current allies" }].concat(factionOptions()), function (value) {
+                    assault.target = value;
+                    if (value === "player_and_allies" && !assault.reinforcement) assault.reinforcement = { capacity_ratio: 2, interval_seconds: 10 };
+                    markDirty(); renderInspector();
+                }));
+                if (assault.reinforcement) {
+                    campaignActions.appendChild(inputField("Strength vs allied capacity (×)", assault.reinforcement.capacity_ratio, function (value) { assault.reinforcement.capacity_ratio = Number(value); markDirty(); }, { type: "number", min: 1, max: 10, step: 0.25 }));
+                    campaignActions.appendChild(inputField("Reinforcement interval (seconds)", assault.reinforcement.interval_seconds, function (value) { assault.reinforcement.interval_seconds = Number(value); markDirty(); }, { type: "number", min: 1, max: 600, step: 1 }));
+                }
+                campaignActions.appendChild(checkboxField("Hold the player's final territory until the next decision", assault.hold_last_tile === true, function (enabled) { assault.hold_last_tile = enabled; markDirty(); }));
+                campaignActions.appendChild(checkboxField("Preserve the attackers' current campaign relationship", assault.preserve_relation === true, function (enabled) { assault.preserve_relation = enabled; markDirty(); }));
             }
             host.appendChild(campaignActions);
         }
@@ -593,8 +603,9 @@
             }
             else if (step.trigger.type === "hover") objective.appendChild(selectField("Target to locate", step.trigger.target || "", [{ value: "", label: "Choose a target" }, { value: "player", label: "Player" }].concat(factionOptions()), function (value) { if (value) step.trigger.target = value; else delete step.trigger.target; markDirty(); renderInspector(); }));
             else if (step.trigger.type === "ui") objective.appendChild(selectField("Control action", step.trigger.action, inGameUiTargets(), function (value) { step.trigger.action = value; markDirty(); }));
-            else objective.appendChild(inputField(step.trigger.type === "troops" ? "Minimum troops" : step.trigger.type === "elapsed" ? "Wait (seconds)" : "Required amount", step.trigger.value, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
-            if (step.trigger.type !== "troops") objective.appendChild(selectField("Count from", step.trigger.scope || "step", ["step", "episode", "total"], function (value) { step.trigger.scope = value; markDirty(); }));
+            else objective.appendChild(inputField(step.trigger.type === "troops" ? "Minimum troops" : step.trigger.type === "elapsed" ? "Wait (seconds)" : step.trigger.type === "territory" && step.trigger.scope === "total" ? "Territory threshold" : "Required amount", step.trigger.value, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
+            if (step.trigger.type !== "troops") objective.appendChild(selectField("Count from", step.trigger.scope || "step", ["step", "episode", "total"], function (value) { step.trigger.scope = value; if (value !== "total") delete step.trigger.comparison; markDirty(); renderInspector(); }));
+            if (step.trigger.type === "territory" && step.trigger.scope === "total") objective.appendChild(selectField("Territory comparison", step.trigger.comparison || "gte", [{ value: "gte", label: "At least" }, { value: "lte", label: "At most" }], function (value) { if (value === "lte") step.trigger.comparison = value; else delete step.trigger.comparison; markDirty(); renderInspector(); }));
             if (step.guide) {
                 objective.appendChild(selectField("Hand points at", step.guide.kind + ":" + step.guide.target, [
                     { value: "world:expand", label: "Map · expansion" }, { value: "world:assault", label: "Map · attack" }, { value: "world:target_action", label: "Map · target action" }, { value: "world:player", label: "Map · player base" }, { value: "world:nameplate", label: "Map · faction nameplate" }
@@ -990,7 +1001,7 @@
         if (trigger.type === "fleet" && trigger.unit) parts[0] += " · " + trigger.unit + (trigger.target ? " to " + trigger.target : "");
         if (trigger.type === "resource_transfer") parts[0] += (trigger.recipient ? " · to " + trigger.recipient : "") + (trigger.resources && trigger.resources.length ? " · " + trigger.resources.join(" + ") : "");
         else if (trigger.type === "ui" && typeof trigger.action === "string") parts[0] += " · " + trigger.action.replace(/_/g, " ");
-        if (Number.isFinite(trigger.value)) parts.push((trigger.type === "elapsed" ? trigger.value + "s" : "≥ " + trigger.value.toLocaleString()));
+        if (Number.isFinite(trigger.value)) parts.push((trigger.type === "elapsed" ? trigger.value + "s" : (trigger.comparison === "lte" ? "≤ " : "≥ ") + trigger.value.toLocaleString()));
         if (trigger.scope && trigger.type !== "troops") parts.push({ step: "this step", episode: "this episode", total: "all time" }[trigger.scope] || trigger.scope);
         if (step.guide && typeof step.guide.gesture === "string" && typeof step.guide.target === "string") parts.push("hand: " + step.guide.gesture + " " + step.guide.target.replace(/_/g, " "));
         if (storyText) parts.push(storyText);
@@ -1297,7 +1308,7 @@
             if (!replayTarget || !replayTarget.getClientRects().length) menuHint = " · open Campaign in the preview to reveal Replay";
         }
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
-        var assaultHint = model.step.campaign_assault_on_enter ? " · on entry: " + model.step.campaign_assault_on_enter.attacker_team + " attacks " + (model.step.campaign_assault_on_enter.target === "player" ? "player" : factionName(model.step.campaign_assault_on_enter.target)) : "";
+        var assaultHint = model.step.campaign_assault_on_enter ? " · on entry: " + model.step.campaign_assault_on_enter.attacker_team + " attacks " + (model.step.campaign_assault_on_enter.target === "player" ? "player" : model.step.campaign_assault_on_enter.target === "player_and_allies" ? "player and current allies" : factionName(model.step.campaign_assault_on_enter.target)) + (model.step.campaign_assault_on_enter.hold_last_tile ? " · hold at one tile" : "") : "";
         $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.waiting ? " · appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + "s" : "") + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
         if (model.waiting) state.previewRevealTimer = window.setTimeout(function () { state.previewRevealTimer = null; paintPreview(); }, Math.max(1, model.wait_remaining_ms));
         if (previousStep !== model.step.id) renderGraph();
@@ -1420,6 +1431,11 @@
         state.previewActionStep = null; state.previewActionRatio = null;
         state.facts = state.facts || {};
         var context = previewContext(start);
+        var startTrigger = steps.find(function (item) { return item.id === start; })?.trigger;
+        if (startTrigger && startTrigger.type === "territory" && startTrigger.scope === "total" && startTrigger.comparison === "lte" && Number(context.facts.tiles || 0) <= Number(startTrigger.value || 1)) {
+            context.facts.tiles = Number(startTrigger.value || 1) + 1;
+            state.facts.tiles = context.facts.tiles;
+        }
         state.machine.jump(start, context.facts, context.choices);
         if (!state.renderer) state.renderer = window.SOWCampaignView.mount($("#previewRoot"), {
             translate: function (key) { return translated(key, state.previewLanguage); }, asset: asset,
@@ -1449,11 +1465,13 @@
             if (trigger.type === "resource_transfer") description += (trigger.recipient ? " · to " + factionName(trigger.recipient) : " · any recipient") + (trigger.resources ? " · " + trigger.resources.join(" + ") : " · any resources");
             host.appendChild(el("small", {}, "Waiting for " + description + " · " + progress.current + " / " + progress.target));
             if (Number(model.step.advance_delay_seconds) > 0) host.appendChild(el("small", {}, "Advance game time to test the pause before the next step."));
-            if (!["troops", "elapsed", "contact", "eliminated", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
+            var territoryMaximum = trigger.type === "territory" && trigger.scope === "total" && trigger.comparison === "lte";
+            if (!territoryMaximum && !["troops", "elapsed", "contact", "eliminated", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
                 var button = el("button", { type: "button" }, "+1 " + trigger.type);
                 button.addEventListener("click", function () { simulateObjective(1); });
                 host.appendChild(button);
             }
+            if (territoryMaximum) host.appendChild(inputField("Current territories", Math.max(0, Number(state.facts.tiles || 0)), function (value) { state.facts.tiles = Math.max(0, Math.floor(Number(value) || 0)); paintPreview(); }, { type: "number", min: 0, step: 1 }));
             if (trigger.type === "contact") (trigger.targets || [trigger.target]).filter(Boolean).forEach(function (factionId) {
                 var contact = el("button", { type: "button" }, "Contact · " + factionName(factionId));
                 contact.disabled = (state.facts.contact_faction_ids || []).includes(factionId);

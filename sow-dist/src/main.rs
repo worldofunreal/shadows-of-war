@@ -1504,34 +1504,10 @@ fn web_key_is_intentionally_english(key: &str) -> bool {
                 | "profile.spam"
                 | "site.copyright"
                 | "site.cookies"
-                | "site.analytics_accept"
-                | "site.analytics_body"
-                | "site.analytics_manage"
-                | "site.analytics_policy"
-                | "site.analytics_reject"
-                | "site.analytics_title"
-                | "site.cookies_analytics_events"
-                | "site.cookies_analytics_intro"
-                | "site.cookies_analytics_server"
-                | "site.cookies_analytics_title"
-                | "site.cookies_controls_v2"
-                | "site.cookies_description_v2"
-                | "site.cookies_og_description_v2"
-                | "site.cookies_platforms_body"
-                | "site.cookies_platforms_title"
-                | "site.cookies_storage_body"
-                | "site.cookies_storage_title"
-                | "site.cookies_updated_v2"
                 | "site.discord"
                 | "site.faq"
                 | "site.github"
                 | "site.leader_napoleon_ability"
-                | "site.privacy_analytics_body_v2"
-                | "site.privacy_cookies_body_v2"
-                | "site.privacy_hosting_body"
-                | "site.privacy_retention_body_v2"
-                | "site.privacy_updated_v2"
-                | "site.terms_general_title"
                 | "site.terms_maps_license"
                 | "site.telegram"
         )
@@ -4465,24 +4441,21 @@ mod tests {
     }
 
     #[test]
-    fn web_catalog_validation_allows_english_fallback_for_new_policy_copy() -> Result<()> {
+    fn web_catalog_validation_requires_translated_consent_copy() -> Result<()> {
         let expected = serde_json::json!({
             "site": {
-                "analytics_accept": "Allow optional analytics",
-                "cookies_controls_v2": "Rejecting analytics does not affect gameplay."
+                "analytics_body": "Starting the game does not enable optional analytics.",
             }
         });
-        let localized = serde_json::json!({"site": {}});
-        let english = serde_json::json!({
+        let localized = serde_json::json!({
             "site": {
-                "analytics_accept": "Allow optional analytics",
-                "cookies_controls_v2": "Rejecting analytics does not affect gameplay."
+                "analytics_body": "La analítica opcional no se activa al entrar al juego.",
             }
         });
+        let missing = serde_json::json!({ "site": { "analytics_body": "La analítica queda apagada." } });
 
-        assert!(validate_web_node("fr", &expected, &localized).is_ok());
-        assert!(validate_web_node("fr", &expected, &english).is_ok());
-        assert!(validate_web_node("en", &expected, &localized).is_err());
+        assert!(validate_web_node("es", &expected, &localized).is_ok());
+        assert!(validate_web_node("fr", &expected, &missing).is_err());
         Ok(())
     }
 

@@ -607,7 +607,7 @@ mod tests {
             early[1] >= 200.0 && early[1] < 325.0,
             "at two minutes, City is affordable but City and Factory together are not"
         );
-        assert!(growing_army[1] < 200.0);
+        assert!(growing_army[1] > growing_army[0]);
         assert!(growing_army[2] < growing_army[1]);
         assert!(growing_army[3] < growing_army[2]);
         assert!(industrial_trade[0] > 100.0);

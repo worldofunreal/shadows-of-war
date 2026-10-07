@@ -258,6 +258,7 @@
         }
         if (!notificationResizeObserver && typeof window.ResizeObserver === "function") {
             notificationResizeObserver = new window.ResizeObserver(function () {
+                syncCompactHudBounds();
                 syncNotificationPlacement();
             });
         }
@@ -276,10 +277,21 @@
                 notificationMutationObserver.observe(notificationLayoutNameplate, { attributes: true, attributeFilter: ["hidden"] });
             }
         }
+        [hudRefs.topbar, hudRefs.nameplate, hudRefs.dock, hudRefs.dockStack, hudRefs.buildingCancel].forEach(function (element) {
+            if (element && notificationResizeObserver) notificationResizeObserver.observe(element);
+        });
         observeNotificationObjective();
+        syncCompactHudBounds();
         if (!notificationLayoutStarted) {
             notificationLayoutStarted = true;
-            window.addEventListener("resize", scheduleNotificationPlacement, { passive: true });
+            window.addEventListener("resize", function () {
+                syncCompactHudBounds();
+                scheduleNotificationPlacement();
+            }, { passive: true });
+            if (window.visualViewport) window.visualViewport.addEventListener("resize", function () {
+                syncCompactHudBounds();
+                scheduleNotificationPlacement();
+            }, { passive: true });
             window.addEventListener("sow:locale-change", scheduleNotificationPlacement);
         }
         scheduleNotificationPlacement();
@@ -424,6 +436,7 @@
             + '  <label class="sow-hud__setting-row sow-hud__setting-row--hint" title="' + SOW_t("menu.sticky_building_mode_hint") + '"><span><b>' + SOW_t("menu.sticky_building_mode") + '</b><small>' + SOW_t("menu.sticky_building_mode_hint") + '</small></span><input type="checkbox" data-hud-setting="sticky_building_mode"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
             + '</aside>'
+            + '<div class="sow-hud__dock-stack" id="sow-hud-dock-stack">'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
             + '  <div class="sow-hud__dock-inner" id="sow-hud-dock-inner">'
             + '    <div class="sow-hud__dock-actions">'
@@ -460,10 +473,11 @@
             + '    </div>'
             + '  </div>'
             + '</footer>'
+            + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
             + '<aside class="sow-hud__operations" id="sow-hud-operations" hidden aria-label="' + SOW_t("hud.combat_operations") + '">'
             + '  <div class="sow-hud__operations-list" id="sow-hud-operations-list"></div>'
             + '</aside>'
-            + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
+            + '</div>'
             + '<aside class="sow-hud__panel sow-hud__leaderboard hidden" id="sow-hud-leaderboard">'
             + '  <div class="sow-hud__panel-header">'
             + '    <h3>' + hudIcon("rankings", "sow-hud__inline-icon") + ' ' + SOW_t("hud.rankings_title") + '</h3>'
@@ -647,6 +661,9 @@
             buildingCardUpgrade: document.getElementById("sow-hud-building-card-upgrade"),
             buildingCardUpgradeLevel: document.getElementById("sow-hud-building-card-upgrade-level"),
             notifications: document.createElement("div"),
+            topbar: hudRoot.querySelector(".sow-hud__topbar"),
+            dock: document.getElementById("sow-hud-dock"),
+            dockStack: document.getElementById("sow-hud-dock-stack"),
             mapFeedback: document.createElement("div")
         };
 
@@ -1022,7 +1039,7 @@
             menu.dataset.renderKey = "building_details";
             mapMenuStateKey = "";
             mapMenuView = "root";
-            return true;
+            return !(mapMenu.building && mapMenu.building.under_construction);
         }
         if (!showRadial) return false;
         var items = mapItems(mapMenu);
@@ -1184,22 +1201,14 @@
     function renderBuildingCard(mapMenu, playerGold) {
         if (!hudRefs || !hudRefs.buildingCard) return;
         var detail = mapMenu && mapMenu.building;
-        var open = Boolean(mapMenu && mapMenu.open && mapMenu.view === "building_details" && detail);
+        var open = Boolean(mapMenu && mapMenu.open && mapMenu.view === "building_details" && detail && !detail.under_construction);
         hudRefs.buildingCard.classList.toggle("hidden", !open);
         if (!open) return;
         hudRefs.buildingCard.dataset.session = String(mapMenu.session);
         hudRefs.buildingCard.dataset.tileIdx = String(mapMenu.tile_idx);
         hudRefs.buildingCardIcon.innerHTML = buildingIcon(detail.kind, detail.level);
         hudRefs.buildingCardKind.textContent = detail.name || detail.kind || "Building";
-        var underConstruction = Boolean(detail.under_construction);
-        hudRefs.buildingCardLevel.innerHTML = underConstruction
-            ? buildingMetricMarkup([{
-                icon: "construction",
-                label: "Under construction",
-                value: Math.max(0, Number(detail.remaining_seconds) || 0),
-                unit: "s"
-            }])
-            : '<span class="sow-hud__building-level">Lv ' + escapeHudText(detail.level || 1) + '</span>';
+        hudRefs.buildingCardLevel.innerHTML = '<span class="sow-hud__building-level">Lv ' + escapeHudText(detail.level || 1) + '</span>';
         var activeMetrics = Array.isArray(detail.metrics) ? detail.metrics.slice() : [];
         if (detail.boat_slots) {
             activeMetrics.push({
@@ -1217,17 +1226,8 @@
         }
         hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
         hudRefs.buildingCardBenefit.setAttribute("aria-label", detail.benefit_label || "Building effects");
-        hudRefs.buildingCardBenefit.hidden = underConstruction || !activeMetrics.length;
+        hudRefs.buildingCardBenefit.hidden = !activeMetrics.length;
         var unmet = Array.isArray(detail.requirements) ? detail.requirements.filter(function (item) { return !item.met; }) : [];
-        if (underConstruction) {
-            hudRefs.buildingCardNext.innerHTML = "";
-            hudRefs.buildingCardNext.hidden = true;
-            hudRefs.buildingCardGold.hidden = true;
-            hudRefs.buildingCardUpgrade.disabled = true;
-            hudRefs.buildingCardUpgrade.hidden = true;
-            positionBuildingCard(mapMenu);
-            return;
-        }
         if (detail.next_level) {
             var nextMetrics = Array.isArray(detail.next_metrics) ? detail.next_metrics : [];
             var deltaMarkup = buildingMetricDeltaMarkup(activeMetrics, nextMetrics);
@@ -1500,6 +1500,37 @@
         hudRefs.mapFeedback.style.top = top + "px";
     }
 
+    function syncCompactHudBounds() {
+        if (!hudRoot || !hudRefs || !window.matchMedia) return;
+        if (!window.matchMedia("(orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse)").matches) {
+            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge", "--sow-dock-reserve"].forEach(function (property) {
+                hudRoot.style.removeProperty(property);
+            });
+            return;
+        }
+        var top = 0;
+        [hudRefs.topbar, hudRefs.nameplate, document.querySelector("#sow-story .sow-story__objective")].forEach(function (element) {
+            if (!element || element.hidden || !element.getClientRects().length) return;
+            top = Math.max(top, element.getBoundingClientRect().bottom);
+        });
+        hudRoot.style.setProperty("--sow-hud-layout-top-reserve", Math.ceil(top + 8) + "px");
+        var actionTop = hudRefs.topbar && hudRefs.topbar.getClientRects().length
+            ? Math.ceil(hudRefs.topbar.getBoundingClientRect().bottom + 8)
+            : 56;
+        hudRoot.style.setProperty("--sow-hud-layout-action-top", actionTop + "px");
+        var dockHeight = hudRefs.dock ? Math.ceil(hudRefs.dock.getBoundingClientRect().height) : 0;
+        if (hudRefs.buildingCancel && !hudRefs.buildingCancel.hidden) {
+            dockHeight += Math.ceil(hudRefs.buildingCancel.getBoundingClientRect().height) + 6;
+        }
+        var stackHeight = hudRefs.dockStack ? Math.ceil(hudRefs.dockStack.getBoundingClientRect().height) : dockHeight;
+        var safeBottom = Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-sab")) || 0;
+        hudRoot.style.setProperty("--sow-hud-layout-dock-height", dockHeight + "px");
+        hudRoot.style.setProperty("--sow-dock-reserve", (stackHeight + Math.max(8, safeBottom) + 8) + "px");
+        var stackTop = hudRefs.dockStack ? hudRefs.dockStack.getBoundingClientRect().top : window.innerHeight;
+        hudRoot.style.setProperty("--sow-hud-layout-bottom-edge", Math.floor(stackTop - 8) + "px");
+        if (activeMapFeedback && hudRefs.mapFeedback && !hudRefs.mapFeedback.hidden) positionMapFeedback(activeMapFeedback.entry);
+    }
+
     function clearMapFeedback() {
         if (mapFeedbackTimer) window.clearTimeout(mapFeedbackTimer);
         mapFeedbackTimer = null;
@@ -1587,6 +1618,7 @@
         var unexpired = activeNotifications.filter(function (item) { return item.expiresAt > now; });
         if (unexpired.length !== activeNotifications.length) changed = true;
         activeNotifications = unexpired;
+        if (hudRoot) hudRoot.dataset.notificationsVisible = String(activeNotifications.length > 0);
         entries.forEach(function (entry) {
             var id = Number(entry && entry.id);
             if (!Number.isSafeInteger(id) || id <= notificationCursor) return;
@@ -1843,6 +1875,7 @@
             devSidebarOpen = false;
 
             hudRoot.dataset.overlayOpen = "false";
+            hudRoot.dataset.notificationsVisible = "false";
             if (hudRefs && hudRefs.mapMenu) hudRefs.mapMenu.classList.add("hidden");
             leaderboardRows = Object.create(null);
             leaderboardRenderKey = "";

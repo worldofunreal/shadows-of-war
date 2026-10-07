@@ -114,6 +114,7 @@ impl SowEngine {
         self.execute_sam();
         self.execute_combat();
         self.apply_campaign_unlocks_and_support();
+        self.update_campaign_assault();
 
         // Sync building ownership with tile ownership
         for b in &mut self.buildings {

@@ -36,8 +36,10 @@ pub fn troop_income_per_second(
 }
 
 /// Per-second gold income before upkeep, NPC handicap and `per_tick()` scaling.
-pub fn gold_income_per_second(agg: BuildingAggregate, cfg: &GameConfig) -> f64 {
-    cfg.gold_base_income + cfg.factory_gold_income * agg.factory_levels as f64
+pub fn gold_income_per_second(tiles: u32, agg: BuildingAggregate, cfg: &GameConfig) -> f64 {
+    cfg.gold_base_income
+        + cfg.factory_gold_income * agg.factory_levels as f64
+        + territory_rate(tiles, cfg.territory_gold_amount, cfg.territory_gold_tiles)
 }
 
 #[inline]
@@ -52,12 +54,13 @@ pub fn troop_upkeep_per_second(troops: f64, cfg: &GameConfig) -> f64 {
 
 pub fn gold_net_income_per_second(
     troops: f64,
+    tiles: u32,
     agg: BuildingAggregate,
     trade_ships: u32,
     charge_upkeep: bool,
     cfg: &GameConfig,
 ) -> f64 {
-    gold_income_per_second(agg, cfg) + trade_income_per_second(trade_ships, cfg)
+    gold_income_per_second(tiles, agg, cfg) + trade_income_per_second(trade_ships, cfg)
         - if charge_upkeep {
             troop_upkeep_per_second(troops, cfg)
         } else {
@@ -83,19 +86,21 @@ mod tests {
             cfg.troop_base_income
         );
         assert_eq!(
-            gold_income_per_second(agg, &cfg),
+            gold_income_per_second(0, agg, &cfg),
             cfg.gold_base_income
         );
     }
 
     #[test]
-    fn territory_never_generates_gold() {
+    fn territory_generates_one_gold_per_second_per_1024_tiles() {
         let cfg = default_cfg();
         let agg = BuildingAggregate::default();
         assert_eq!(
-            gold_income_per_second(agg, &cfg),
-            cfg.gold_base_income
+            gold_income_per_second(128, agg, &cfg),
+            cfg.gold_base_income + 0.125
         );
+        assert_eq!(gold_income_per_second(1_024, agg, &cfg), cfg.gold_base_income + 1.0);
+        assert_eq!(gold_income_per_second(10_240, agg, &cfg), cfg.gold_base_income + 10.0);
         assert_eq!(
             troop_income_per_second(400, agg, Leader::Caesar, &cfg),
             cfg.troop_base_income + 25.0
@@ -108,11 +113,11 @@ mod tests {
         assert_eq!(trade_income_per_second(2, &cfg), 10.0);
         assert_eq!(troop_upkeep_per_second(100_000.0, &cfg), 20.0);
         assert_eq!(
-            gold_net_income_per_second(100_000.0, BuildingAggregate::default(), 2, true, &cfg),
+            gold_net_income_per_second(100_000.0, 0, BuildingAggregate::default(), 2, true, &cfg),
             cfg.gold_base_income + 10.0 - 20.0
         );
         assert_eq!(
-            gold_net_income_per_second(100_000.0, BuildingAggregate::default(), 2, false, &cfg),
+            gold_net_income_per_second(100_000.0, 0, BuildingAggregate::default(), 2, false, &cfg),
             cfg.gold_base_income + 10.0
         );
     }

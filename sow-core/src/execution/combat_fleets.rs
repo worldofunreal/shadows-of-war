@@ -39,6 +39,11 @@ impl SowEngine {
 
         // Simple Naval Combat: Warships damage enemy fleets on the same tile or adjacent tiles
         let mut damages = Vec::new();
+        let held_target = self
+            .campaign_assault
+            .as_ref()
+            .filter(|assault| assault.hold_last_tile)
+            .map(|assault| assault.root_target);
         let w = self.state.map.width;
         for i in 0..self.fleets.len() {
             if self.fleets[i].unit_type == crate::game::UnitType::Warship
@@ -259,6 +264,14 @@ impl SowEngine {
                 if let Some(p) = self.state.player_mut(fleet.owner_id) {
                     p.troops = (p.troops + survivors).min(p.max_troops);
                 }
+                to_remove.push(i);
+                continue;
+            }
+
+            if held_target == Some(owner_here)
+                && self.state.player(owner_here).is_some_and(|target| target.tile_count <= 1)
+            {
+                refund_fleet_troops_to_player(&mut self.state, fleet.owner_id, fleet.troops);
                 to_remove.push(i);
                 continue;
             }

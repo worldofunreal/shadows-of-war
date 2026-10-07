@@ -169,6 +169,8 @@
 .sow-story__cinematic-play:hover, .sow-story__cinematic-skip:hover { filter: brightness(1.15); }
 .sow-story.is-cinematic .sow-story__shade { background: radial-gradient(ellipse at 50% 35%, rgb(5 10 13 / 16%), rgb(5 10 13 / 88%)); }
 .sow-story__objective { --sow-tutorial-progress-height: 16px; --sow-tutorial-progress-label-size: 16px; position: absolute; z-index: 1; inset-inline: max(16px, var(--story-inset-left)) max(16px, var(--story-inset-right)); top: max(12px, var(--story-inset-top)); display: flex; align-items: flex-start; gap: 8px; width: min(280px, calc(100% - max(16px, var(--story-inset-left)) - max(16px, var(--story-inset-right)))); margin-inline: 0; padding: 12px; border: 1px solid var(--story-line); border-inline-start: 2px solid var(--story-accent); border-radius: 2px 2px 10px 2px; background: rgb(9 15 20 / 94%); box-shadow: 0 8px 28px #0005; pointer-events: none; transition: border-color 180ms; }
+.sow-story__details-toggle { display: none; }
+.sow-story__details-toggle[hidden] { display: none !important; }
 #sow-story .sow-story__objective { inset-inline-start: max(16px, var(--story-inset-left)); inset-inline-end: auto; top: calc(max(12px, var(--story-inset-top)) + var(--sow-tutorial-player-panel-height) + var(--sow-tutorial-player-panel-gap)); }
 .sow-story__objective-copy { flex: 1; min-width: 0; }
 .sow-story__objective h3 { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.35; }
@@ -307,9 +309,16 @@
     .sow-story__body { font-size: 13px; }
 }
 @media (orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse) {
-    .sow-story__objective { --sow-tutorial-progress-height: 12px; --sow-tutorial-progress-label-size: 12px; width: min(272px, calc(100% - 16px)); padding: 8px; gap: 6px; }
+    .sow-story__objective { --sow-tutorial-progress-height: 12px; --sow-tutorial-progress-label-size: 12px; align-items: flex-start; width: min(272px, calc(100% - 16px)); max-height: calc(100dvh - var(--story-safe-top) - var(--sow-tutorial-player-panel-height) - var(--sow-tutorial-player-panel-gap) - 9rem); padding: 8px; gap: 6px; overflow: auto; pointer-events: none; }
+    .sow-story__objective-copy { min-width: 0; }
     .sow-story__objective h3 { font-size: 14px; }
     .sow-story__objective p { font-size: 11px; }
+    .sow-story__objective[data-details-expanded="false"] .sow-story__objective-copy > p { display: none; }
+    .sow-story__objective[data-details-expanded="true"] .sow-story__objective-copy > p { max-height: 88px; margin-block: 4px; overflow: auto; pointer-events: auto; }
+    .sow-story__details-toggle,
+    .sow-story__locate { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; pointer-events: auto; }
+    .sow-story__details-toggle { border: 1px solid var(--story-line); border-radius: 4px; background: rgb(255 255 255 / 5%); color: var(--story-text); font-size: 22px; }
+    .sow-story__details-toggle[aria-expanded="true"] span { transform: rotate(180deg); }
     .sow-story__dialog {
         display: flex;
         flex-direction: column;

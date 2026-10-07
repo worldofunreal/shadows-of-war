@@ -134,6 +134,7 @@ async function validatePair(episodeId, roster, definition) {
     if (!faction || typeof faction.id !== "string" || !entityId.test(faction.id) || ids.has(faction.id)
       || typeof faction.name !== "string" || !faction.name.trim() || names.has(faction.name)
       || !Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000
+      || faction.assault_force != null && typeof faction.assault_force !== "boolean"
       || !Number.isFinite(faction.x) || !Number.isFinite(faction.y)) throw new Error("Invalid or repeated faction in map.");
     ids.add(faction.id); names.add(faction.name);
   }

@@ -330,6 +330,7 @@ function renderSide() {
       <label>Initial relationship to the player</label><select id="frelation">${relationOpts}</select>
       <label>Fixed combat team</label><select id="fteam">${teamOpts}</select>
       <div class="hint">Factions on the same team won't attack each other. Diplomacy stays separate.</div>
+      <label><input id="fassaultforce" type="checkbox" style="width:auto" ${f.assault_force===true?"checked":""}> Eligible for configured campaign assaults</label>
       <label><input id="fcanrequest" type="checkbox" style="width:auto" ${f.can_request_alliance!==false?"checked":""}> Allow AI requests and generic neutral terms</label>
       <label>Neutral faction color</label><input id="fcolor" type="color" value="${escapeHtml(f.color || FACTION_COLORS[0])}">
       <label>Nameplate and dialogue portrait</label><div class="faction-avatar-picker"><img id="fportrait" width="256" height="256" alt=""><select id="fa">${avatarHtml}</select></div>
@@ -372,6 +373,7 @@ function renderSide() {
     };
     document.getElementById("frelation").onchange = e => { f.relation=e.target.value; markRosterDirty(); updateFactionHint(); renderList(); draw(); };
     document.getElementById("fteam").onchange = e => { if(e.target.value) f.team=e.target.value; else delete f.team; markRosterDirty(); };
+    document.getElementById("fassaultforce").onchange = e => { if(e.target.checked) f.assault_force=true; else delete f.assault_force; markRosterDirty(); };
     document.getElementById("fcanrequest").onchange = e => { f.can_request_alliance=e.target.checked; markRosterDirty(); };
     document.getElementById("ftroops").oninput = e => { f.starting_troops=Number(e.target.value); markRosterDirty(); renderList(); };
     document.getElementById("fcolor").oninput = e => { f.color=e.target.value; markRosterDirty(); draw(); };
@@ -512,7 +514,7 @@ function serialize() {
     map: roster.map || "eastanglia",
     player_spawn: roster.player_spawn.map(n=>Math.round(n)),
     player_color: roster.player_color || PLAYER_COLOR,
-    factions: roster.factions.map(f=>({ id:f.id, name:f.name, x:Math.round(f.x), y:Math.round(f.y), starting_troops:Number(f.starting_troops), relation:f.relation, ...(f.team?{team:f.team}:{}), can_request_alliance:f.can_request_alliance!==false, color:f.color, iq:f.iq??100, civ:f.civ, leader:f.leader, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.gold_loot_override!=null?{gold_loot_override:Number(f.gold_loot_override)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
+    factions: roster.factions.map(f=>({ id:f.id, name:f.name, x:Math.round(f.x), y:Math.round(f.y), starting_troops:Number(f.starting_troops), relation:f.relation, ...(f.team?{team:f.team}:{}), can_request_alliance:f.can_request_alliance!==false, color:f.color, iq:f.iq??100, civ:f.civ, leader:f.leader, ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.gold_loot_override!=null?{gold_loot_override:Number(f.gold_loot_override)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.assault_force?{assault_force:true}:{}), ...(f.avatar?{avatar:f.avatar}:{}) })),
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
@@ -569,13 +571,14 @@ document.getElementById("fileIn").onchange = e => {
 function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.opacity=1; clearTimeout(t._t); t._t=setTimeout(()=>t.style.opacity=0,2200); }
 
 function normalize(j){
-  const factionFields = new Set(["id","name","x","y","starting_troops","relation","team","can_request_alliance","color","iq","civ","leader","avatar","support_interval_seconds","gold_loot_bonus","gold_loot_override","alliance_group"]);
+  const factionFields = new Set(["id","name","x","y","starting_troops","relation","team","can_request_alliance","color","iq","civ","leader","avatar","support_interval_seconds","gold_loot_bonus","gold_loot_override","alliance_group","assault_force"]);
   const factions = (j.factions||[]).map((f,index)=>{
     if(!f || Object.keys(f).some(key=>!factionFields.has(key))) throw new Error("unsupported faction field");
     if(typeof f.id!=="string" || typeof f.name!=="string" || !Number.isInteger(f.x) || !Number.isInteger(f.y) || !Number.isInteger(f.starting_troops) || typeof f.civ!=="string" || typeof f.leader!=="string") throw new Error("faction needs stable ID, name, position, troops, civilization and leader");
     if(f.can_request_alliance!=null && typeof f.can_request_alliance!=="boolean") throw new Error("alliance offer setting must be true or false");
+    if(f.assault_force!=null && typeof f.assault_force!=="boolean") throw new Error("assault force setting must be true or false");
     return { id:f.id, name:f.name, x:f.x, y:f.y, starting_troops:f.starting_troops, relation:f.relation, ...(f.team?{team:f.team}:{}), can_request_alliance:f.can_request_alliance!==false, color:f.color||FACTION_COLORS[index%FACTION_COLORS.length], iq:f.iq==null?100:f.iq, civ:f.civ, leader:f.leader,
-      ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.gold_loot_override!=null?{gold_loot_override:Number(f.gold_loot_override)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.avatar?{avatar:f.avatar}:{}) };
+      ...(f.support_interval_seconds!=null?{support_interval_seconds:Number(f.support_interval_seconds)}:{}), ...(f.gold_loot_bonus!=null?{gold_loot_bonus:Number(f.gold_loot_bonus)}:{}), ...(f.gold_loot_override!=null?{gold_loot_override:Number(f.gold_loot_override)}:{}), ...(f.alliance_group?{alliance_group:f.alliance_group}:{}), ...(f.assault_force===true?{assault_force:true}:{}), ...(f.avatar?{avatar:f.avatar}:{}) };
   });
   const result = { _comment:j._comment, map:j.map||"eastanglia", player_spawn:j.player_spawn||[696,45], player_color:j.player_color||PLAYER_COLOR, factions };
   validateRoster(result);
@@ -586,7 +589,7 @@ function validateRoster(value){
   const names = new Set(), ids = new Set();
   if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
   for(const f of value.factions){
-    if(!/^[a-z][a-z0-9_]{0,95}$/.test(f.id) || ids.has(f.id) || !f.name.trim() || names.has(f.name) || !Number.isInteger(f.starting_troops) || f.starting_troops<0 || f.starting_troops>1000000 || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || (f.team!=null && !SOWCampaign.TEAMS.includes(f.team)) || typeof f.can_request_alliance!=="boolean" || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isInteger(f.x) || !Number.isInteger(f.y) || !f.civ || !f.leader || (f.iq!=null && (!Number.isInteger(f.iq) || f.iq<0 || f.iq>180)) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.gold_loot_override!=null && (!Number.isInteger(f.gold_loot_override) || f.gold_loot_override<0 || f.gold_loot_override>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate identity/name, or missing portrait asset");
+    if(!/^[a-z][a-z0-9_]{0,95}$/.test(f.id) || ids.has(f.id) || !f.name.trim() || names.has(f.name) || !Number.isInteger(f.starting_troops) || f.starting_troops<0 || f.starting_troops>1000000 || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || (f.team!=null && !SOWCampaign.TEAMS.includes(f.team)) || typeof f.can_request_alliance!=="boolean" || (f.assault_force!=null && typeof f.assault_force!=="boolean") || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isInteger(f.x) || !Number.isInteger(f.y) || !f.civ || !f.leader || (f.iq!=null && (!Number.isInteger(f.iq) || f.iq<0 || f.iq>180)) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.gold_loot_override!=null && (!Number.isInteger(f.gold_loot_override) || f.gold_loot_override<0 || f.gold_loot_override>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate identity/name, or missing portrait asset");
     ids.add(f.id); names.add(f.name);
   }
 }

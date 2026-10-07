@@ -23,6 +23,10 @@
     --sow-muted: #9da9ad;
     --sow-surface-shadow: 0 14px 36px rgb(0 0 0 / 38%), inset 0 1px rgb(255 255 255 / 5%);
     --sow-dock-reserve: 128px;
+    --sow-hud-layout-top-reserve: 72px;
+    --sow-hud-layout-action-top: 56px;
+    --sow-hud-layout-dock-height: 84px;
+    --sow-hud-layout-bottom-edge: calc(100dvh - 92px);
     --sow-button-radius: 4px;
     --sow-button-primary-bg: #e9bb64;
     --sow-button-primary-border: rgb(233 187 100 / 68%);
@@ -544,6 +548,8 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     width: min(560px, calc(100vw - 210px));
     max-width: 560px;
 }
+
+.sow-hud__dock-stack { display: contents; }
 
 .sow-hud__dock-inner {
     display: flex;
@@ -2876,6 +2882,7 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
     }
+    .sow-hud__emoji-grid { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
     .sow-hud__modal-card {
         width: 100%;
         max-width: none;
@@ -2932,7 +2939,164 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     .sow-hud__range-vertical { width: 76px; }
 }
 
-@media (orientation: landscape) and (max-height: 560px) {
+@media (orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse) {
+    #sow-hud {
+        --sow-hud-top-edge: max(5px, var(--sow-sat));
+        --sow-hud-right-edge: max(8px, var(--sow-sar));
+    }
+    .sow-hud__topbar { top: var(--sow-hud-top-edge); inset-inline: max(8px, var(--sow-sal)) var(--sow-hud-right-edge); }
+    .sow-hud__status-right { flex-direction: row; gap: 6px; padding: 3px; }
+    .sow-hud__icon-pill { width: 44px; height: 44px; }
+    .sow-hud__fps { display: none; }
+    .sow-hud__nameplate {
+        width: min(272px, calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 64px));
+        padding: 5px 7px;
+        grid-template-columns: 46px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 4px 8px;
+    }
+    .sow-hud__nameplate-avatar { width: 46px; height: 100%; }
+    .sow-hud__nameplate-copy strong { font-size: 16px; }
+    .sow-hud__nameplate-bar { height: 18px; }
+    .sow-hud__left-rail,
+    .sow-hud__right-rail { bottom: max(6px, var(--sow-sab)); }
+    .sow-hud__left-rail { inset-inline-start: max(8px, var(--sow-sal)); }
+    .sow-hud__rail-card { padding: 6px 5px; gap: 4px; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .sow-hud__slider-vertical-wrap { height: 62px; }
+    .sow-hud__range-vertical { width: 58px; }
+    .sow-hud__army-allocation { min-height: 22px; }
+    .sow-hud__right-rail {
+        inset-inline-end: max(8px, var(--sow-sar));
+        display: grid;
+        grid-template-columns: repeat(2, 44px);
+        gap: 6px;
+    }
+    .sow-hud__icon-btn { width: 44px; height: 44px; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .sow-hud__dock-stack {
+        position: absolute;
+        bottom: max(6px, var(--sow-sab));
+        inset-inline: max(8px, var(--sow-sal)) max(8px, var(--sow-sar));
+        left: auto;
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: stretch;
+        gap: 6px;
+        width: auto;
+        transform: none;
+        pointer-events: none;
+        z-index: 49;
+    }
+    .sow-hud__dock {
+        position: relative;
+        align-self: center;
+        inset: auto;
+        width: min(520px, calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 204px));
+        max-width: none;
+        transform: none;
+    }
+    .sow-hud__dock-inner { gap: 3px; padding: 4px 6px; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .sow-hud__resource-row { gap: 4px; }
+    .sow-hud__dock-actions {
+        justify-content: flex-start;
+        gap: 6px;
+        min-width: 0;
+        padding: 0 0 4px;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        scrollbar-color: rgb(233 187 100 / 45%) transparent;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sow-hud__buildings-strip,
+    .sow-hud__fleet-strip { flex: 0 0 auto; width: auto; gap: 4px; }
+    .sow-hud__building-btn { flex: 0 0 44px; min-height: 44px; }
+    .sow-hud__fleet-btn { flex: 0 0 86px; min-height: 44px; padding: 3px 5px; }
+    .sow-hud__fleet-btn small { font-size: 9px; }
+    .sow-hud__deploy-panel { min-height: 38px; padding: 2px 8px; }
+    .sow-hud__deploy-title { font-size: 11px; }
+    .sow-hud__deploy-timer { font-size: 13px; }
+    .sow-hud__res-rate,
+    .sow-hud__res-gold { height: 24px; padding: 1px 5px; font-size: 10px; }
+    .sow-hud__res-bar-wrap { min-width: 0; height: 24px; }
+    .sow-hud__res-bar-text { font-size: 10px; }
+    .sow-hud__operations {
+        position: relative;
+        align-self: flex-end;
+        inset: auto;
+        left: auto;
+        bottom: auto;
+        width: min(320px, calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar))));
+        max-height: max(0px, calc(100dvh - var(--sow-hud-layout-action-top, 56px) - var(--sow-hud-layout-dock-height, 84px) - max(6px, var(--sow-sab)) - 6px));
+        min-height: 0;
+        padding: 4px;
+        transform: none;
+        overflow: hidden;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    .sow-hud__operations-list { overflow-y: auto; }
+    .sow-hud__operation { min-height: 46px; }
+    .sow-hud__building-cancel { position: relative; align-self: center; inset: auto; left: auto; bottom: auto; width: min(260px, 100%); min-height: 44px; margin: 0; transform: none; }
+    .sow-hud__allocation-detail { max-width: min(240px, calc(100vw - 94px)); }
+    .sow-hud__hover-card,
+    .sow-hud__notifications {
+        top: var(--sow-hud-layout-top-reserve, 72px);
+        left: auto;
+        right: auto;
+        inset-inline-start: auto;
+        inset-inline-end: max(8px, var(--sow-sar));
+        bottom: auto;
+        width: min(320px, calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar))));
+        max-height: max(0px, calc(var(--sow-hud-layout-bottom-edge, calc(100dvh - 92px)) - var(--sow-hud-layout-top-reserve, 72px)));
+        overflow: auto;
+        transform: none;
+    }
+    .sow-hud__hover-card { flex-wrap: wrap; align-content: flex-start; gap: 5px 8px; padding: 6px 8px; }
+    .sow-hud__hover-card.hidden { transform: none; }
+    .sow-hud__hover-stats { flex-wrap: wrap; gap: 4px 8px; font-size: 10px; }
+    .sow-hud__notifications { display: grid; gap: 6px; pointer-events: auto; }
+    .sow-hud__notifications.is-positioned { left: auto; right: auto; inset-inline-start: auto; inset-inline-end: max(8px, var(--sow-sar)); }
+    #sow-hud[data-notifications-visible="true"] .sow-hud__hover-card { display: none; }
+    #sow-hud[data-overlay-open="true"] .sow-hud__notifications { z-index: 69; }
+    .sow-hud__emoji-popout {
+        top: calc(var(--sow-hud-top-edge) + 50px);
+        bottom: max(6px, var(--sow-sab));
+        inset-inline: auto max(8px, var(--sow-sar));
+        width: min(360px, calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar))));
+        max-height: none;
+        overflow: auto;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    .sow-hud__panel {
+        top: calc(var(--sow-hud-top-edge) + 50px);
+        bottom: max(6px, var(--sow-sab));
+        left: auto;
+        right: auto;
+        inset-inline-start: auto;
+        inset-inline-end: max(8px, var(--sow-sar));
+        width: min(360px, calc(100vw - max(8px, var(--sow-sal)) - 280px - max(8px, var(--sow-sar))));
+        max-height: none;
+        padding: 8px;
+        overflow: auto;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    #sow-hud-transfer { display: flex; flex-direction: column; }
+    #sow-hud-transfer.hidden { display: none; }
+    .sow-hud__transfer-header { flex: 0 0 auto; min-height: 44px; padding: 5px 8px; }
+    .sow-hud__transfer-target { flex: 0 0 auto; min-height: 32px; margin: 6px 8px 4px !important; padding: 5px 7px; }
+    .sow-hud__transfer-fields { flex: 1 1 auto; min-height: 0; padding: 4px 8px 8px; overflow: auto; }
+    .sow-hud__transfer-actions { flex: 0 0 auto; position: sticky; bottom: 0; padding: 6px 8px 8px; }
+    .sow-hud__transfer-actions button { min-height: 44px; }
+    #sow-hud[data-overlay-open="true"] .sow-hud__left-rail,
+    #sow-hud[data-overlay-open="true"] .sow-hud__right-rail,
+    #sow-hud[data-overlay-open="true"] .sow-hud__hover-card { display: none; }
+    .sow-hud__building-card { max-height: calc(100dvh - var(--sow-hud-layout-top-reserve, 72px) - 8px); overflow: auto; }
+}
+
+/* Short desktop windows keep their current controls and placements. */
+@media (orientation: landscape) and (max-height: 560px) and (hover: hover) and (pointer: fine) {
     #sow-hud {
         --sow-hud-top-edge: max(5px, var(--sow-sat));
         --sow-hud-right-edge: max(8px, var(--sow-sar));
@@ -2963,26 +3127,12 @@ html[dir="rtl"] #sow-hud .sow-hud__range-vertical::-webkit-slider-runnable-track
     #sow-hud[data-overlay-open="true"] .sow-hud__hover-card { display: none; }
 }
 
-@media (max-width: 720px) and (orientation: landscape) and (max-height: 560px) {
-    .sow-hud__panel { top: 50px; bottom: max(6px, var(--sow-sab)); max-height: none; }
-}
-
 @media (orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse) {
     :root {
         --sow-tutorial-player-panel-height: 56px;
         --sow-tutorial-progress-height: 24px;
         --sow-tutorial-progress-label-size: 14px;
     }
-    .sow-hud__nameplate {
-        width: min(272px, calc(100vw - max(8px, var(--sow-sal)) - max(8px, var(--sow-sar)) - 64px));
-        padding: 5px 7px;
-        grid-template-columns: 46px minmax(0, 1fr);
-        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 4px 8px;
-    }
-    .sow-hud__nameplate-avatar { width: 46px; height: 100%; }
-    .sow-hud__nameplate-copy strong { font-size: 16px; }
-    .sow-hud__nameplate-bar { height: 18px; }
 }
 
 @media (hover: none), (pointer: coarse) {

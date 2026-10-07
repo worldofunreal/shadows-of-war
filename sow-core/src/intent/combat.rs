@@ -163,6 +163,25 @@ impl SowEngine {
         attack: &AttackIntent,
         intent_index: u32,
     ) {
+        self.apply_attack_intent_inner(player_id, attack, intent_index, false);
+    }
+
+    pub(crate) fn apply_campaign_assault_attack(
+        &mut self,
+        player_id: u16,
+        attack: &AttackIntent,
+        intent_index: u32,
+    ) {
+        self.apply_attack_intent_inner(player_id, attack, intent_index, true);
+    }
+
+    fn apply_attack_intent_inner(
+        &mut self,
+        player_id: u16,
+        attack: &AttackIntent,
+        intent_index: u32,
+        allow_same_team: bool,
+    ) {
         let target_owner = attack.target_owner;
 
         let Some(player) = self.state.player(player_id) else {
@@ -178,7 +197,8 @@ impl SowEngine {
             return;
         }
 
-        if target_owner != 0
+        if !allow_same_team
+            && target_owner != 0
             && let Some(target) = self.state.player(target_owner)
             && player.team.is_some()
             && player.team == target.team

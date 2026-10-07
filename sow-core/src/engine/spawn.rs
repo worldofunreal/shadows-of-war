@@ -729,6 +729,9 @@ impl SowEngine {
                 self.campaign_can_request_alliance
                     .insert(bot_id, can_request);
             }
+            if s.campaign_assault_force {
+                self.campaign_assault_force_ids.insert(bot_id);
+            }
             if let Some(relation) = s.campaign_relation {
                 self.campaign_relations.insert(bot_id, relation);
                 if relation == crate::protocol::CampaignRelation::Allied
@@ -875,7 +878,7 @@ impl SowEngine {
         Some(((sum.0 / sum.2) as u32, (sum.1 / sum.2) as u32))
     }
 
-    fn nearest_free_land(&self, tx: u32, ty: u32) -> Option<(u32, u32)> {
+    pub(crate) fn nearest_free_land(&self, tx: u32, ty: u32) -> Option<(u32, u32)> {
         let map = &self.state.map;
         let free = |x: i32, y: i32| -> bool {
             map.is_valid_coord(x, y)

@@ -136,6 +136,7 @@ pub struct Faction {
     pub gold_loot_bonus: Option<u32>,
     pub gold_loot_override: Option<u32>,
     pub alliance_group: Option<String>,
+    pub assault_force: bool,
 }
 
 // Rosters are authored only as JSON (assets/campaign/*.json) and parsed through this module.
@@ -208,6 +209,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_relation: Some(f.relation),
             campaign_faction_id: Some(f.id.clone()),
             campaign_can_request_alliance: Some(f.can_request_alliance),
+            campaign_assault_force: f.assault_force,
         })
         .collect()
 }
@@ -244,6 +246,8 @@ struct RosterEntry {
     gold_loot_override: Option<u32>,
     #[serde(default)]
     alliance_group: Option<String>,
+    #[serde(default)]
+    assault_force: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -364,6 +368,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             gold_loot_bonus: e.gold_loot_bonus,
             gold_loot_override: e.gold_loot_override,
             alliance_group: e.alliance_group.clone(),
+            assault_force: e.assault_force,
         });
     }
     if factions.is_empty() {

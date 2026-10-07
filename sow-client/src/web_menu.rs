@@ -32,6 +32,12 @@ const TUTORIAL_ATTACK_NEIGHBORS: [(i32, i32); 8] = [
 ];
 
 #[derive(Debug, Deserialize)]
+struct CampaignAssaultReinforcement {
+    capacity_ratio: f64,
+    interval_seconds: u32,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WebMenuCommand {
     QuickMatch,
@@ -57,6 +63,12 @@ enum WebMenuCommand {
     ActivateCampaignAssault {
         attacker_team: sow_core::protocol::Team,
         target_faction_id: String,
+        #[serde(default)]
+        preserve_relation: bool,
+        #[serde(default)]
+        reinforcement: Option<CampaignAssaultReinforcement>,
+        #[serde(default)]
+        hold_last_tile: bool,
     },
     SetTutorialPaused {
         paused: bool,
@@ -599,9 +611,13 @@ impl SowApp {
                 WebMenuCommand::ActivateCampaignAssault {
                     attacker_team,
                     target_faction_id,
+                    preserve_relation,
+                    reinforcement,
+                    hold_last_tile,
                 } => {
                     if self.ui.tutorial_active && self.net.is_offline {
-                        let target_player_id = if target_faction_id == "player" {
+                        let target_allies = target_faction_id == "player_and_allies";
+                        let target_player_id = if target_faction_id == "player" || target_allies {
                             self.sim.my_player_id
                         } else {
                             self.sim.engine.as_ref().and_then(|engine| {
@@ -613,7 +629,11 @@ impl SowApp {
                         if let (Some(target_player_id), Some(engine)) =
                             (target_player_id, self.sim.engine.as_mut())
                         {
-                            if engine.activate_campaign_assault(attacker_team, target_player_id) == 0 {
+                            let reinforcement = reinforcement.map(|settings| (settings.capacity_ratio, settings.interval_seconds));
+                            if engine
+                                .activate_campaign_assault(attacker_team, target_player_id, preserve_relation, target_allies, reinforcement, hold_last_tile)
+                                == 0
+                            {
                                 log::warn!("[CAMPAIGN] assault had no valid scripted attackers or target");
                             }
                         } else {
@@ -2669,7 +2689,6 @@ fn building_detail_payload(
             .then(|| building_metrics(building.kind, next_level, &app.sim.config)),
         "cost": cost,
         "duration_seconds": (!building.under_construction && !maxed).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
-        "remaining_seconds": building.under_construction.then_some(building.ticks_until_complete as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
         "under_construction": building.under_construction,
         "boat_slots": (building.kind == sow_core::game::BuildingKind::Port).then_some(boat_slots).flatten(),
         "owns": owns,

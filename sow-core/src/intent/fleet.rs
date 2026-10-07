@@ -36,7 +36,7 @@ impl SowEngine {
         target_tile: u32,
         troops: Option<f64>,
     ) {
-        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, None);
+        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, None, false, false);
     }
 
     pub(crate) fn apply_launch_fleet_intent_with_route(
@@ -46,7 +46,17 @@ impl SowEngine {
         troops: Option<f64>,
         route: crate::warp_fleet::FleetRoute,
     ) {
-        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, Some(route));
+        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, Some(route), false, false);
+    }
+
+    pub(crate) fn apply_campaign_assault_fleet_with_route(
+        &mut self,
+        player_id: u16,
+        target_tile: u32,
+        troops: Option<f64>,
+        route: crate::warp_fleet::FleetRoute,
+    ) {
+        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, Some(route), true, true);
     }
 
     fn apply_launch_fleet_intent_inner(
@@ -55,6 +65,8 @@ impl SowEngine {
         target_tile: u32,
         troops: Option<f64>,
         validated_route: Option<crate::warp_fleet::FleetRoute>,
+        allow_same_team: bool,
+        ignore_fleet_capacity: bool,
     ) {
         let Some(player) = self.state.player(player_id) else {
             log::debug!("apply_launch_fleet_intent: player {} not found", player_id);
@@ -64,7 +76,7 @@ impl SowEngine {
             return;
         }
         let capacity = crate::building::player_fleet_capacity(&self.buildings, player_id);
-        if self.boat_slots_used(player_id) >= capacity {
+        if !ignore_fleet_capacity && self.boat_slots_used(player_id) >= capacity {
             return;
         }
         let map_area = self.state.map.width.saturating_mul(self.state.map.height);
@@ -86,7 +98,8 @@ impl SowEngine {
             return;
         }
 
-        if target_owner != 0
+        if !allow_same_team
+            && target_owner != 0
             && let Some(target) = self.state.player(target_owner)
             && player.team.is_some()
             && player.team == target.team

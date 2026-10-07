@@ -18,7 +18,8 @@
                 '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
             '</article>' +
             '<aside class="sow-story__objective" hidden>' +
-                '<div class="sow-story__objective-copy"><h3></h3><p></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
+                '<div class="sow-story__objective-copy"><h3></h3><p id="' + uid + '-hint"></p><div class="sow-story__meter"><progress></progress><output></output></div></div>' +
+                '<button class="sow-story__details-toggle" type="button" data-story-objective-toggle aria-controls="' + uid + '-hint"><span aria-hidden="true">⌄</span></button>' +
                 '<button class="sow-story__locate" type="button" data-story-focus>⌖</button></aside>' +
             '<div class="sow-story__spotlight" aria-hidden="true" hidden></div>' +
             '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
@@ -31,6 +32,7 @@
         const cinematic = find(".sow-story__cinematic"), cinematicVideo = cinematic.querySelector("video");
         const cinematicPlay = find("[data-story-play]"), cinematicSkip = find("[data-story-skip]");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
+        const objectiveToggle = find("[data-story-objective-toggle]");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy"), gestureHint = find(".sow-story__gesture-hint");
         const gestureMetric = find(".sow-story__gesture-metric"), guideCurrent = find(".sow-story__zoom-current"), guideTarget = find(".sow-story__zoom-target");
@@ -206,7 +208,10 @@
             root.hidden = !model || model.done;
             if (root.hidden) { guideWasVisible = false; cameraTracking = false; gesture.classList.remove("is-following", "is-camera-following"); clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
             const step = model.step, line = model.line || step;
-            if (objectiveStepId !== step.id) { objectiveStepId = step.id; }
+            if (objectiveStepId !== step.id) {
+                objectiveStepId = step.id;
+                objective.dataset.detailsExpanded = "false";
+            }
             footer.hidden = step.type === "choice" || step.pause_game === true;
             const beatKey = JSON.stringify([step.id, model.state && model.state.line]);
             const beatChanged = Boolean(lastBeatKey && beatKey !== lastBeatKey);
@@ -301,6 +306,9 @@
             });
             setText(objectiveTitle, t(step.title_key));
             setText(hint, context.hintOverride || t(step.hint_key || step.body_key)); hint.hidden = !hint.textContent;
+            objectiveToggle.setAttribute("aria-label", t("objective_details"));
+            objectiveToggle.setAttribute("aria-expanded", String(objective.dataset.detailsExpanded === "true"));
+            objectiveToggle.hidden = hint.hidden;
             const progress = model.progress;
             objective.querySelector(".sow-story__meter").hidden = progress.target <= 1;
             meter.max = Math.max(1, progress.target); meter.value = progress.current;
@@ -388,6 +396,10 @@
             if (event.timeStamp - lastAction < 220) return;
             lastAction = event.timeStamp;
             if (button.hasAttribute("data-story-choice")) options.onChoice(button.dataset.storyChoice);
+            else if (button.hasAttribute("data-story-objective-toggle")) {
+                objective.dataset.detailsExpanded = String(objective.dataset.detailsExpanded !== "true");
+                button.setAttribute("aria-expanded", objective.dataset.detailsExpanded);
+            }
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
             else if (button.hasAttribute("data-story-play")) {
                 const sourceKey = cinematicStepKey;

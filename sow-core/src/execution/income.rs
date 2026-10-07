@@ -74,6 +74,9 @@ impl SowEngine {
             if let Some(cap) = self.state.players[idx].max_troops_cap {
                 max_tr = max_tr.min(cap);
             }
+            if let Some(cap) = self.campaign_assault_troop_caps.get(&player_id) {
+                max_tr = cap.max(0.0);
+            }
             self.state.players[idx].max_troops = max_tr;
 
             let troop_ps = troop_income_per_second(tiles_owned, agg, leader, &config);
@@ -84,7 +87,7 @@ impl SowEngine {
             }
             self.state.players[idx].troops = (safe_troops + troop_income).min(max_tr);
 
-            let gold_ps = gold_income_per_second(agg, &config);
+            let gold_ps = gold_income_per_second(tiles_owned, agg, &config);
             let mut gold_income = config.per_tick(gold_ps);
 
             if is_standard_bot {
@@ -293,6 +296,7 @@ mod economy_speed_tests {
             gold_base_income: 4.0,
             troop_base_income: 0.0,
             territory_troop_amount: 0.0,
+            territory_gold_amount: 0.0,
             troop_upkeep_per_1000: 0.0,
             ..GameConfig::default()
         };

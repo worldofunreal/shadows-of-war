@@ -31,12 +31,19 @@ fn default_troop_upkeep_per_1000() -> f64 {
 fn default_trade_ship_gold_income() -> f64 {
     5.0
 }
+fn default_territory_gold_amount() -> f64 {
+    1.0
+}
 fn default_territory_troop_amount() -> f64 {
     1.0
 }
 
 fn default_territory_troop_tiles() -> u32 {
     8
+}
+
+fn default_territory_gold_tiles() -> u32 {
+    1_024
 }
 
 fn default_city_troop_income() -> f64 {
@@ -101,6 +108,9 @@ pub struct ScriptedSpawn {
     /// Whether campaign AI may send outgoing alliance offers. Missing keeps ordinary behavior.
     #[serde(default)]
     pub campaign_can_request_alliance: Option<bool>,
+    /// Eligible to join a campaign's configured final assault.
+    #[serde(default)]
+    pub campaign_assault_force: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -197,6 +207,12 @@ pub struct GameConfig {
     pub starting_gold: f64,
     /// Gold earned per second at 1x speed (before city bonuses). Scaled by `per_tick()`.
     pub gold_base_income: f64,
+    /// Gold per second produced per `territory_gold_tiles` owned, before `per_tick()` scaling.
+    #[serde(default = "default_territory_gold_amount")]
+    pub territory_gold_amount: f64,
+    /// Tiles per territory gold interval (e.g. 128 → 1 gold/s per 128 tiles).
+    #[serde(default = "default_territory_gold_tiles")]
+    pub territory_gold_tiles: u32,
     /// Troops regenerated per second at 1x speed (before factory bonuses). Scaled by `per_tick()`.
     #[serde(default = "default_troop_base_income")]
     pub troop_base_income: f64,
@@ -340,6 +356,8 @@ impl Default for GameConfig {
             starting_troops: 5000.0,
             starting_gold: 100.0,
             gold_base_income: 4.0,
+            territory_gold_amount: default_territory_gold_amount(),
+            territory_gold_tiles: default_territory_gold_tiles(),
             troop_base_income: 250.0,
             max_troops_base: 10.0,
             max_troops_scale: 350.0,
