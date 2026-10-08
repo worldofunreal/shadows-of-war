@@ -70,9 +70,10 @@ function start({ fetchImpl = async () => ({ ok: true }), pathname = "/", gameShe
     SOW_t(key) {
       return ({
         "site.analytics_title": "Analítica opcional",
-        "site.analytics_body": "La analítica queda apagada hasta que la permitas; entrar a jugar no la activa.",
-        "site.analytics_accept": "Permitir analítica opcional",
-        "site.analytics_reject": "Rechazar analítica opcional"
+        "site.analytics_body": "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.",
+        "site.analytics_policy": "Detalles de cookies",
+        "site.analytics_accept": "Permitir",
+        "site.analytics_reject": "Rechazar"
       })[key] || key;
     }
   };
@@ -103,6 +104,10 @@ test("consent panel loads and rejecting sends nothing or creates an analytics se
   assert.equal(runtime.head.children.some((node) => node.id === "sow-analytics-consent-style"), false);
   assert.ok(runtime.card, "website presents the consent choice");
   assert.equal(runtime.card.children[0].textContent, "Analítica opcional");
+  assert.equal(runtime.card.children[1].textContent, "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.");
+  assert.equal(runtime.card.children[2].textContent, "Detalles de cookies");
+  assert.equal(runtime.card.children[3].children[0].textContent, "Permitir");
+  assert.equal(runtime.card.children[3].children[1].textContent, "Rechazar");
   assert.equal(runtime.card.attributes["aria-describedby"], "sow-analytics-copy");
   const [accept, reject] = runtime.card.children[3].children;
   assert.notEqual(accept.textContent, reject.textContent);
@@ -176,4 +181,42 @@ test("previously accepted website consent works in game without another prompt",
   runtime.flushAgain();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(runtime.fetchCalls.length, 1);
+});
+
+test("tutorial step analytics keeps only the bounded shared episode and action fields", () => {
+  const runtime = start({ pathname: "/play/", gameShell: true, choice: "accepted" });
+  runtime.window.SOW_analyticsTrack("tutorial_step", {
+    episode_id: "boudica", step_id: "claim-wilderness", step_index: 2, action: "complete"
+  });
+  const queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  assert.equal(queued.at(-1).name, "tutorial_step");
+  assert.deepEqual(queued.at(-1).props, {
+    episode_id: "boudica", step_id: "claim-wilderness", step_index: 2, action: "complete"
+  });
+
+  runtime.window.SOW_analyticsTrack("tutorial_step", {
+    episode_id: "boudica", step_id: "claim-wilderness", step_index: 2, action: "skip", player_name: "ignored"
+  });
+  const afterUnsafeEvent = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  assert.equal(afterUnsafeEvent.length, queued.length + 1);
+  assert.equal(afterUnsafeEvent.at(-1).props, undefined);
+});
+
+test("tutorial exit analytics keeps a bounded failed-step identity and accepts queued legacy events", () => {
+  const runtime = start({ pathname: "/play/", gameShell: true, choice: "accepted" });
+  runtime.window.SOW_analyticsTrack("tutorial_exit_early", {
+    episode_id: "boudica", step_id: "claim-wilderness", step_index: 2, action: "fail"
+  });
+  let queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  assert.deepEqual(queued.at(-1).props, {
+    episode_id: "boudica", step_id: "claim-wilderness", step_index: 2, action: "fail"
+  });
+
+  runtime.window.SOW_analyticsTrack("tutorial_exit_early", {
+    episode_id: "boudica", step_id: "claim-wilderness", step_index: 2, action: "fail", player_name: "ignored"
+  });
+  runtime.window.SOW_analyticsTrack("tutorial_exit_early", { episode_id: "boudica" });
+  queued = JSON.parse(runtime.session.getItem("sow_analytics_queue_v2"));
+  assert.equal(queued.at(-2).props, undefined);
+  assert.deepEqual(queued.at(-1).props, { episode_id: "boudica" });
 });

@@ -95,7 +95,18 @@ pub struct TutorialObservation {
     pub guide_expand: Option<u32>,
     pub guide_assault: Option<u32>,
     pub guide_target_action: Option<u32>,
-    pub guide_build_site: Option<u32>,
+    /// Legal building tiles ranked interior-first, cached for the current tutorial tick.
+    pub guide_build_site_candidates: Vec<(bool, i32, u32)>,
+    pub guide_build_site_kind: Option<sow_core::game::BuildingKind>,
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TutorialPausedAction {
+    ExpandOnceThenResume,
+    SendResourcesStayPaused,
+    BuildUntilStarted,
+    UpgradeUntilStarted,
 }
 
 #[derive(Default)]
@@ -410,6 +421,7 @@ pub struct UiState {
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
     pub tutorial_camera_only: bool,
+    pub tutorial_paused_action: Option<TutorialPausedAction>,
     /// Boudica remains frozen until the player starts the first Roman attack.
     pub tutorial_waiting_for_first_attack: bool,
     /// Which scripted campaign the running tutorial match belongs to.

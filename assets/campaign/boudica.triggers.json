@@ -191,7 +191,7 @@
         "value": 1,
         "scope": "step"
       },
-      "attack_ratio_on_enter": 1.0,
+      "attack_ratio_on_enter": 0.25,
       "marker": {
         "target": "roman_outpost"
       },
@@ -252,6 +252,8 @@
         "target": "expand",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "expand_once_then_resume",
       "next": "boudica_camera_intro"
     },
     {
@@ -399,6 +401,7 @@
       "title_key": "tutorial.campaign_boudica_boudica_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_contact_hint",
       "speaker": "boudica",
+      "attack_ratio_on_enter": 1.0,
       "trigger": {
         "type": "contact",
         "target": "stonea",
@@ -410,9 +413,11 @@
       },
       "guide": {
         "kind": "world",
-        "target": "target_action",
+        "target": "expand",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "expand_once_then_resume",
       "next": "boudica_second_contact"
     },
     {
@@ -464,6 +469,7 @@
       "title_key": "tutorial.campaign_boudica_boudica_transfer_target_title",
       "hint_key": "tutorial.campaign_boudica_boudica_transfer_target_hint",
       "speaker": "boudica",
+      "pause_game": true,
       "trigger": {
         "type": "ui",
         "action": "map_transfer",
@@ -485,6 +491,8 @@
       "title_key": "tutorial.campaign_boudica_boudica_transfer_send_title",
       "hint_key": "tutorial.campaign_boudica_boudica_transfer_send_hint",
       "speaker": "boudica",
+      "pause_game": true,
+      "paused_action": "send_resources_stay_paused",
       "trigger": {
         "type": "resource_transfer",
         "recipient": "trinovantes",
@@ -559,6 +567,7 @@
         "gesture": "tap"
       },
       "pause_game": true,
+      "paused_action": "build_until_started",
       "next": "boudica_city_construction_wait"
     },
     {
@@ -594,6 +603,7 @@
       "title_key": "tutorial.campaign_boudica_boudica_second_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_second_contact_hint",
       "speaker": "boudica",
+      "attack_ratio_on_enter": 1.0,
       "trigger": {
         "type": "contact",
         "target": "snettisham",
@@ -605,9 +615,11 @@
       },
       "guide": {
         "kind": "world",
-        "target": "target_action",
+        "target": "expand",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "expand_once_then_resume",
       "next": "boudica_third_contact"
     },
     {
@@ -616,6 +628,7 @@
       "title_key": "tutorial.campaign_boudica_boudica_third_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_third_contact_hint",
       "speaker": "boudica",
+      "attack_ratio_on_enter": 1.0,
       "trigger": {
         "type": "contact",
         "target": "thetford",
@@ -627,9 +640,11 @@
       },
       "guide": {
         "kind": "world",
-        "target": "target_action",
+        "target": "expand",
         "gesture": "tap"
       },
+      "pause_game": true,
+      "paused_action": "expand_once_then_resume",
       "next": "boudica_outpost_tax_collectors"
     },
     {
@@ -658,8 +673,8 @@
       "hint_key": "tutorial.campaign_boudica_boudica_structure_upgrade_hint",
       "speaker": "boudica",
       "trigger": {
-        "type": "ui",
-        "action": "upgrade_structure",
+        "type": "structure_upgrade",
+        "value": 1,
         "scope": "step"
       },
       "marker": {
@@ -671,6 +686,7 @@
         "gesture": "tap"
       },
       "pause_game": true,
+      "paused_action": "upgrade_until_started",
       "next": "boudica_city_upgrade_wait"
     },
     {
@@ -763,6 +779,7 @@
         "gesture": "tap"
       },
       "pause_game": true,
+      "paused_action": "build_until_started",
       "next": "boudica_factory_construction_wait"
     },
     {
@@ -840,6 +857,7 @@
         "gesture": "tap"
       },
       "pause_game": true,
+      "paused_action": "build_until_started",
       "next": "boudica_bunker_construction_wait"
     },
     {

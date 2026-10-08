@@ -3,6 +3,50 @@ use crate::app::SowApp;
 use crate::input::surface::clamp_camera_offset;
 use web_time::{Duration, Instant};
 
+fn focus_camera_step(
+    camera: (f32, f32),
+    camera_zoom: f32,
+    target_zoom: f32,
+    focus: (f32, f32),
+    screen: (f32, f32),
+    map: (u32, u32),
+    amount: f32,
+) -> ((f32, f32), f32, (f32, f32)) {
+    let zoom = camera_zoom + (target_zoom - camera_zoom) * amount;
+    let target = (
+        clamp_camera_offset(
+            screen.0,
+            map.0 as f32 * zoom,
+            screen.0 * 0.5 - focus.0 * zoom,
+        ),
+        clamp_camera_offset(
+            screen.1,
+            map.1 as f32 * zoom,
+            screen.1 * 0.5 - focus.1 * zoom,
+        ),
+    );
+    let current_center = (
+        (screen.0 * 0.5 - camera.0) / camera_zoom,
+        (screen.1 * 0.5 - camera.1) / camera_zoom,
+    );
+    let target_center = (
+        (screen.0 * 0.5 - target.0) / zoom,
+        (screen.1 * 0.5 - target.1) / zoom,
+    );
+    let center = (
+        current_center.0 + (target_center.0 - current_center.0) * amount,
+        current_center.1 + (target_center.1 - current_center.1) * amount,
+    );
+    (
+        (
+            screen.0 * 0.5 - center.0 * zoom,
+            screen.1 * 0.5 - center.1 * zoom,
+        ),
+        zoom,
+        target,
+    )
+}
+
 impl SowApp {
     pub(super) fn render_frame_ui_and_present(&mut self, sf: f32, frame: blade_graphics::Frame) {
         self.ui.app.splash_state.frames_drawn =
@@ -39,21 +83,21 @@ impl SowApp {
                 12.0
             };
             let lerp = (1.0 - f32::exp(-rate * dt)).clamp(0.0, 1.0);
-            self.input.camera_zoom += (self.input.target_zoom - self.input.camera_zoom) * lerp;
-            self.clamp_camera_to_map();
-            let target_x = clamp_camera_offset(
-                self.input.screen_w,
-                self.sim.map_w as f32 * self.input.camera_zoom,
-                self.input.screen_w * 0.5 - world_x * self.input.camera_zoom,
+            let (camera, zoom, target) = focus_camera_step(
+                (self.input.camera_x, self.input.camera_y),
+                self.input.camera_zoom,
+                self.input.target_zoom,
+                (world_x, world_y),
+                (self.input.screen_w, self.input.screen_h),
+                (self.sim.map_w, self.sim.map_h),
+                lerp,
             );
-            let target_y = clamp_camera_offset(
-                self.input.screen_h,
-                self.sim.map_h as f32 * self.input.camera_zoom,
-                self.input.screen_h * 0.5 - world_y * self.input.camera_zoom,
-            );
-            self.input.camera_x += (target_x - self.input.camera_x) * lerp;
-            self.input.camera_y += (target_y - self.input.camera_y) * lerp;
+            self.input.camera_x = camera.0;
+            self.input.camera_y = camera.1;
+            self.input.camera_zoom = zoom;
             self.clamp_camera_to_map();
+            let target_x = target.0;
+            let target_y = target.1;
             if (target_x - self.input.camera_x).abs() < 0.5
                 && (target_y - self.input.camera_y).abs() < 0.5
                 && (self.input.target_zoom - self.input.camera_zoom).abs() < 0.001
@@ -167,6 +211,50 @@ impl SowApp {
             self.time.current_fps = self.time.frame_count;
             self.time.frame_count = 0;
             self.time.last_fps_time = metrics_now;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::focus_camera_step;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn tutorial_camera_focus_stays_straight_when_zoom_changes() {
+        for screen in [(1440.0, 900.0), (390.0, 844.0)] {
+            let focus = (715.0, 200.0);
+            let mut zoom = 10.0;
+            let mut center = (700.0, 80.0);
+            let mut camera = (
+                screen.0 * 0.5 - center.0 * zoom,
+                screen.1 * 0.5 - center.1 * zoom,
+            );
+            for frame in 0..240 {
+                let target_zoom = if frame < 30 { 16.0 } else { 8.0 };
+                let amount = 1.0 - f32::exp(-2.0 / 60.0);
+                let (next_camera, next_zoom, _) = focus_camera_step(
+                    camera,
+                    zoom,
+                    target_zoom,
+                    focus,
+                    screen,
+                    (2000, 1000),
+                    amount,
+                );
+                let next_center = (
+                    (screen.0 * 0.5 - next_camera.0) / next_zoom,
+                    (screen.1 * 0.5 - next_camera.1) / next_zoom,
+                );
+                assert!(next_center.0 >= center.0, "camera reversed on the x axis");
+                assert!(next_center.1 >= center.1, "camera reversed on the y axis");
+                center = next_center;
+                camera = next_camera;
+                zoom = next_zoom;
+            }
+            assert!((center.0 - focus.0).abs() * zoom < 0.5);
+            assert!((center.1 - focus.1).abs() * zoom < 0.5);
+            assert!((zoom - 8.0).abs() < 0.01);
         }
     }
 }

@@ -343,6 +343,7 @@
     </script>
     <!-- __SOW_ANALYTICS_SCRIPT_SLOT__ -->
     <script src="./sdk/store_portals.js?v=__BUILD_TS__"></script>
+    <script>/* __INLINE_EXPERIENCE_EVENTS_JS__ */</script>
     <script>
         window.SOW_LOCALE_BASE = "__SOW_LOCALE_BASE__";
         window.SOW_LOCALE_DEFAULT = "en";

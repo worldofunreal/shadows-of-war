@@ -24,7 +24,7 @@ La versión Poki será anónima y gratuita:
 | Compras y cuentas | Hecho en código | El menú Poki es anónimo y no incluye tienda, Stripe, Google, Discord, X, Meta, OTP ni WOU-ID. |
 | Chat y nombres | Hecho en código | Chat desactivado; el servidor limita nombres a 16 caracteres y rechaza lenguaje bloqueado, controles e invisibles Unicode antes de guardar o difundirlo. Política versionada: v1. |
 | Recursos locales | Hecho en código | Mapas y recursos usados por el juego se copian al paquete. Los mapas se publican comprimidos y sin los archivos fuente. |
-| Eventos | Hecho en código | La medición usa `PokiSDK.measure()` para cola, lobby, carga, tutorial, pausas, finalización y abandono; los anuncios no se duplican con `measure()`. |
+| Eventos | Hecho en código | Los eventos comunes de SOW llegan a `PokiSDK.measure()` por el puente compartido; el ciclo de juego y las pausas usan sus métodos de ciclo de vida. El catálogo y los límites por plataforma están en `docs/product-analytics.md`. |
 | Analytics propio | Aislado del paquete | Poki no incluye `analytics.js`, no persiste la cola de consentimiento del sitio y no copia eventos individuales a IONOS. La medición propia de Poki sigue usando `PokiSDK.measure()`; cualquier envío adicional requiere aprobación de Poki y una divulgación correspondiente. |
 | Google Analytics | Verificado ausente | No hay scripts, IDs ni llamadas de Google Analytics en el código fuente ni en `dist/poki`; el mensaje observado proviene del contenedor/SDK de Poki. |
 | Contenido | Pendiente de moderación | La terminología visible de ataque se presenta como `Attack` (catálogo i18n `web.toml`); Poki aún debe revisar violencia, efectos, texto y arte. |

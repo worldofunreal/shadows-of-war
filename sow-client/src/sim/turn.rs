@@ -322,12 +322,15 @@ impl TutorialObservation {
 }
 
 impl SowApp {
-    pub(crate) fn apply_paused_tutorial_build_intent(
+    pub(crate) fn apply_paused_tutorial_intent(
         &mut self,
         intent: sow_core::protocol::GameplayIntent,
     ) {
         let my_id = self.sim.my_player_id.unwrap_or(0);
-        let observe_tutorial = self.net.is_offline && self.sim.config.tutorial && my_id != 0;
+        let observe_tutorial = self.net.is_offline
+            && self.ui.tutorial_active
+            && self.sim.config.tutorial
+            && my_id != 0;
         let (mut snap, events) = {
             let Some(engine) = self.sim.engine.as_mut() else {
                 return;
@@ -484,9 +487,12 @@ impl SowApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{take_alliance_request_lifecycle_events, take_resource_transfer_events};
+    use super::{
+        SowEngine, TutorialObservation, take_alliance_request_lifecycle_events,
+        take_resource_transfer_events,
+    };
     use sow_core::building::Building;
-    use sow_core::game::{BuildingKind, GamePhase, GameState, ProjectileKind, UnitType};
+    use sow_core::game::{BuildingKind, GameEvent, GamePhase, GameState, ProjectileKind, UnitType};
     use sow_core::game_config::GameConfig;
     use sow_core::map::MapTile;
     use sow_core::player::Player;

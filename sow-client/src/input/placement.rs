@@ -82,6 +82,19 @@ impl BuildingPlacementCache {
         result
     }
 
+    pub fn is_legal_site(&mut self, tick: u64, query: &PlacementQuery, tile_idx: u32) -> bool {
+        self.rebuild_index(tick, query);
+        let Some(map_area) = query.map_w.checked_mul(query.map_h) else {
+            return false;
+        };
+        if tile_idx >= map_area || query.map_w == 0 {
+            return false;
+        }
+        let x = tile_idx % query.map_w;
+        let y = tile_idx / query.map_w;
+        placement_site_status(query, Some(self), x, y).is_legal()
+    }
+
     fn rebuild_index(&mut self, tick: u64, query: &PlacementQuery) {
         if self.tick == Some(tick) && self.map_w == query.map_w && self.map_h == query.map_h {
             return;
@@ -148,6 +161,63 @@ impl BuildingPlacementCache {
             }
         }
         false
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+struct PlacementSiteStatus {
+    owned: bool,
+    land: bool,
+    enough_space: bool,
+    kind_specific: bool,
+}
+
+impl PlacementSiteStatus {
+    fn is_legal(self) -> bool {
+        self.owned && self.land && self.enough_space && self.kind_specific
+    }
+}
+
+fn placement_site_status(
+    query: &PlacementQuery,
+    index: Option<&BuildingPlacementCache>,
+    x: u32,
+    y: u32,
+) -> PlacementSiteStatus {
+    if query.map_w == 0 || x >= query.map_w || y >= query.map_h {
+        return PlacementSiteStatus::default();
+    }
+    let tile_idx = y * query.map_w + x;
+    let owned = query.owners.get(tile_idx as usize).copied() == Some(query.my_id);
+    if !owned {
+        return PlacementSiteStatus::default();
+    }
+    let terrain_byte = query.terrain.get(tile_idx as usize).copied().unwrap_or(0);
+    let land = terrain_byte & 0x80 != 0;
+    if !land {
+        return PlacementSiteStatus {
+            owned,
+            ..PlacementSiteStatus::default()
+        };
+    }
+    let footprint = sow_core::building::BuildingFootprint::at(query.kind, x, y);
+    let (range, enforce_spacing) = if query.kind == sow_core::game::BuildingKind::Farm {
+        (3, false)
+    } else {
+        (6, true)
+    };
+    let enough_space = footprint_fits(query, footprint)
+        && !blocked_by_building(query, index, x, y, footprint, range, enforce_spacing);
+    let kind_specific = match query.kind {
+        sow_core::game::BuildingKind::Farm => terrain_byte & 0x1f < 10,
+        sow_core::game::BuildingKind::Port => footprint_touches_water(query, footprint),
+        _ => true,
+    };
+    PlacementSiteStatus {
+        owned,
+        land,
+        enough_space,
+        kind_specific,
     }
 }
 
@@ -262,26 +332,7 @@ fn resolve_placement(
             return Err("Tap a lowland tile you own.");
         }
         let tile_idx = click_y as u32 * map_w + click_x as u32;
-        let Some(&terrain_byte) = terrain.get(tile_idx as usize) else {
-            return Err("Tap a lowland tile you own.");
-        };
-        let lowland = terrain_byte & 0x80 != 0 && terrain_byte & 0x1f < 10;
-        let footprint =
-            sow_core::building::BuildingFootprint::at(kind, click_x as u32, click_y as u32);
-        let blocked = blocked_by_building(
-            query,
-            index,
-            click_x as u32,
-            click_y as u32,
-            footprint,
-            3,
-            false,
-        );
-        if owners.get(tile_idx as usize).copied() != Some(my_id)
-            || !lowland
-            || !footprint_fits(query, footprint)
-            || blocked
-        {
+        if !placement_site_status(query, index, click_x as u32, click_y as u32).is_legal() {
             return Err("Tap an empty lowland tile you own.");
         }
         return Ok(tile_idx);
@@ -319,17 +370,12 @@ fn resolve_placement(
             }
             found_any_land = true;
 
-            let footprint = sow_core::building::BuildingFootprint::at(kind, tx as u32, ty as u32);
-            if !footprint_fits(query, footprint)
-                || blocked_by_building(query, index, tx as u32, ty as u32, footprint, 6, true)
-            {
+            let status = placement_site_status(query, index, tx as u32, ty as u32);
+            if !status.enough_space {
                 continue;
             }
             found_any_far_enough = true;
-
-            if kind == sow_core::game::BuildingKind::Port
-                && !footprint_touches_water(query, footprint)
-            {
+            if !status.kind_specific {
                 continue;
             }
             let distance_sq = dx * dx + dy * dy;
@@ -400,6 +446,58 @@ mod tests {
             false
         }));
         assert!(checked < buildings.len() / 10);
+    }
+
+    #[test]
+    fn tutorial_sites_require_owned_land_and_clear_placement_space() {
+        let (map_w, map_h, my_id) = (64, 64, 1);
+        let owners = vec![my_id; (map_w * map_h) as usize];
+        let terrain = vec![0x80; (map_w * map_h) as usize];
+        let buildings = [sow_core::protocol::BuildingSnapshot {
+            id: 1,
+            owner_id: my_id,
+            tile_idx: 10 * map_w + 10,
+            kind: BuildingKind::City,
+            level: 1,
+            under_construction: false,
+            ticks_until_complete: 0,
+        }];
+        let query = PlacementQuery {
+            kind: BuildingKind::City,
+            click_x: 40,
+            click_y: 40,
+            map_w,
+            map_h,
+            owners: &owners,
+            terrain: &terrain,
+            my_id,
+            buildings: &buildings,
+        };
+        let legal_site = 40 * map_w + 40;
+        let too_close_site = 14 * map_w + 10;
+        let occupied_site = buildings[0].tile_idx;
+        let mut cache = BuildingPlacementCache::default();
+
+        assert!(cache.is_legal_site(1, &query, legal_site));
+        assert_eq!(cache.resolve(1, &query), Ok(legal_site));
+        assert!(!cache.is_legal_site(1, &query, occupied_site));
+        assert!(!cache.is_legal_site(1, &query, too_close_site));
+
+        let mut foreign_owners = owners.clone();
+        foreign_owners[legal_site as usize] = 2;
+        let foreign_site = PlacementQuery {
+            owners: &foreign_owners,
+            ..query
+        };
+        assert!(!cache.is_legal_site(1, &foreign_site, legal_site));
+
+        let mut water_terrain = terrain.clone();
+        water_terrain[legal_site as usize] = 0;
+        let water_site = PlacementQuery {
+            terrain: &water_terrain,
+            ..query
+        };
+        assert!(!cache.is_legal_site(1, &water_site, legal_site));
     }
 
     #[test]

@@ -1,4 +1,6 @@
 use crate::app::SowApp;
+use crate::app::{TutorialObservation, TutorialPausedAction};
+use sow_core::protocol::GameplayIntent;
 
 fn is_waiting_for_campaign_attack(
     waiting: bool,
@@ -8,6 +10,64 @@ fn is_waiting_for_campaign_attack(
     waiting
         && campaign == crate::campaign::CampaignId::Boudica
         && matches!(intent, sow_core::protocol::GameplayIntent::Attack(_))
+}
+
+fn paused_tutorial_intent_allowed(
+    action: Option<TutorialPausedAction>,
+    intent: &GameplayIntent,
+) -> bool {
+    matches!(intent, GameplayIntent::Resign)
+        || match action {
+            Some(TutorialPausedAction::ExpandOnceThenResume) => {
+                matches!(intent, GameplayIntent::Spawn { .. })
+            }
+            Some(TutorialPausedAction::SendResourcesStayPaused) => {
+                matches!(intent, GameplayIntent::SendResources { .. })
+            }
+            Some(TutorialPausedAction::BuildUntilStarted) => match intent {
+                GameplayIntent::BuildStructure { kind, .. } => matches!(
+                    *kind,
+                    sow_core::game::BuildingKind::City
+                        | sow_core::game::BuildingKind::Factory
+                        | sow_core::game::BuildingKind::Bunker
+                ),
+                _ => false,
+            },
+            Some(TutorialPausedAction::UpgradeUntilStarted) => {
+                matches!(intent, GameplayIntent::UpgradeStructure { .. })
+            }
+            None => false,
+        }
+}
+
+fn paused_tutorial_progress(
+    observation: &TutorialObservation,
+    intent: &GameplayIntent,
+) -> Option<u64> {
+    match intent {
+        GameplayIntent::Spawn { .. } => Some(observation.tiles_gained),
+        GameplayIntent::SendResources { .. } => Some(observation.resource_transfers),
+        GameplayIntent::BuildStructure { kind, .. } => {
+            let key = match *kind {
+                sow_core::game::BuildingKind::City => "cities",
+                sow_core::game::BuildingKind::Factory => "factories",
+                sow_core::game::BuildingKind::Bunker => "bunkers",
+                _ => return None,
+            };
+            Some(
+                observation
+                    .seen_buildings_by_kind
+                    .get(key)
+                    .map_or(0, |buildings| buildings.len() as u64),
+            )
+        }
+        GameplayIntent::UpgradeStructure { .. } => Some(observation.structure_upgrades),
+        _ => None,
+    }
+}
+
+fn paused_tutorial_action_accepted(before: Option<u64>, after: Option<u64>) -> bool {
+    matches!((before, after), (Some(before), Some(after)) if after > before)
 }
 
 impl SowApp {
@@ -30,7 +90,14 @@ impl SowApp {
         {
             return false;
         }
+        let paused_tutorial = self.ui.tutorial_active && self.net.is_offline && self.sim.paused;
+        if paused_tutorial
+            && !paused_tutorial_intent_allowed(self.ui.tutorial_paused_action, &intent)
+        {
+            return false;
+        }
         if matches!(&intent, sow_core::protocol::GameplayIntent::Spawn { .. })
+            && !paused_tutorial
             && let Some(snapshot) = self.sim.current_snapshot.as_ref()
             && matches!(snapshot.phase, sow_core::game::GamePhase::Spawning { .. })
             && !self
@@ -104,17 +171,19 @@ impl SowApp {
             _ => {}
         }
 
-        if self.net.client.is_none()
-            && self.sim.paused
-            && self.sim.config.tutorial
-            && matches!(
-                &intent,
-                sow_core::protocol::GameplayIntent::BuildStructure { .. }
-                    | sow_core::protocol::GameplayIntent::UpgradeStructure { .. }
-            )
-        {
-            self.apply_paused_tutorial_build_intent(intent);
-            return true;
+        if paused_tutorial {
+            if matches!(&intent, GameplayIntent::Resign) {
+                self.apply_paused_tutorial_intent(intent);
+                return true;
+            }
+            let before = paused_tutorial_progress(&self.sim.tutorial_observation, &intent);
+            self.apply_paused_tutorial_intent(intent.clone());
+            let after = paused_tutorial_progress(&self.sim.tutorial_observation, &intent);
+            let accepted = paused_tutorial_action_accepted(before, after);
+            if accepted {
+                self.ui.tutorial_paused_action = None;
+            }
+            return accepted;
         }
 
         if let Some(c) = self.net.client.as_ref() {
@@ -168,7 +237,11 @@ fn record_attack_launch_notice(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_waiting_for_campaign_attack, record_attack_launch_notice};
+    use super::{
+        is_waiting_for_campaign_attack, paused_tutorial_intent_allowed,
+        paused_tutorial_action_accepted, record_attack_launch_notice,
+    };
+    use crate::app::TutorialPausedAction;
     use crate::campaign::CampaignId;
     use sow_core::protocol::{AttackIntent, GameplayIntent};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -187,6 +260,61 @@ mod tests {
             CampaignId::Boudica,
             &GameplayIntent::Resign
         ));
+    }
+
+    #[test]
+    fn paused_tutorial_actions_are_limited_to_the_current_step() {
+        let spawn = GameplayIntent::Spawn { x: 4, y: 5 };
+        let send = GameplayIntent::SendResources {
+            target_player: 2,
+            gold: 1.0,
+            troops: 0.0,
+        };
+        let build = GameplayIntent::BuildStructure {
+            kind: sow_core::game::BuildingKind::City,
+            target_tile: 20,
+        };
+        let upgrade = GameplayIntent::UpgradeStructure { building_id: 1 };
+
+        assert!(paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::ExpandOnceThenResume),
+            &spawn
+        ));
+        assert!(!paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::ExpandOnceThenResume),
+            &send
+        ));
+        assert!(paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::SendResourcesStayPaused),
+            &send
+        ));
+        assert!(!paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::SendResourcesStayPaused),
+            &spawn
+        ));
+        assert!(paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::BuildUntilStarted),
+            &build
+        ));
+        assert!(paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::UpgradeUntilStarted),
+            &upgrade
+        ));
+        assert!(!paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::BuildUntilStarted),
+            &upgrade
+        ));
+        assert!(!paused_tutorial_intent_allowed(None, &spawn));
+        assert!(paused_tutorial_intent_allowed(None, &GameplayIntent::Resign));
+    }
+
+    #[test]
+    fn paused_tutorial_only_advances_after_observed_progress() {
+        assert!(!paused_tutorial_action_accepted(Some(12), Some(12)));
+        assert!(!paused_tutorial_action_accepted(Some(12), Some(11)));
+        assert!(!paused_tutorial_action_accepted(Some(12), None));
+        assert!(!paused_tutorial_action_accepted(None, Some(13)));
+        assert!(paused_tutorial_action_accepted(Some(12), Some(13)));
     }
 
     #[wasm_bindgen_test]

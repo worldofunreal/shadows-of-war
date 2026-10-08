@@ -24,6 +24,7 @@
         uiCounts: Object.create(null),
         uiPaused: false,
         cameraOnly: false,
+        pausedAction: null,
         hoverEvents: 0,
         hoveredEntityId: null,
         hoverStepId: null,
@@ -34,6 +35,8 @@
         stepRevealStepId: null,
         completionSent: false,
         analyticsStepId: null,
+        analyticsStartedStepIds: new Set(),
+        analyticsCompletedStepIds: new Set(),
         observingAfterDefeat: false,
         lastActionStepId: null,
         resolvedReactions: new Set(),
@@ -69,6 +72,31 @@
         if (typeof window.SOW_trackExperienceEvent === "function") {
             window.SOW_trackExperienceEvent(JSON.stringify({ name: name, props: props || null }));
         }
+    }
+
+    function trackTutorialStep(action, stepId) {
+        var steps = runtime.definition && runtime.definition.steps || [];
+        var index = steps.findIndex(function (step) { return step.id === stepId; });
+        if (index < 0 || index >= 512 || !runtime.episodeId) return;
+        trackExperience("tutorial_step", {
+            episode_id: runtime.episodeId,
+            step_id: stepId,
+            step_index: index,
+            action: action
+        });
+    }
+
+    function tutorialExitContext(episodeId) {
+        if (!runtime.active || runtime.episodeId !== episodeId) return null;
+        if (runtime.completionSent || (runtime.machine && runtime.machine.view().done)) return false;
+        var stepId = runtime.analyticsStepId;
+        if (!stepId || !runtime.analyticsStartedStepIds.has(stepId)
+            || runtime.analyticsCompletedStepIds.has(stepId)) return {};
+        var steps = runtime.definition && runtime.definition.steps || [];
+        var stepIndex = steps.findIndex(function (step) { return step.id === stepId; });
+        var completed = runtime.machine && runtime.machine.state && runtime.machine.state.completed || [];
+        if (stepIndex < 0 || stepIndex >= 512 || completed.includes(stepId)) return {};
+        return { step_id: stepId, step_index: stepIndex, action: "fail" };
     }
 
     function availableGold(hud) {
@@ -227,7 +255,8 @@
         console.error("[SOW CAMPAIGN]", error);
         if (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.active) {
             runtime.uiPaused = true;
-            send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly });
+            runtime.pausedAction = null;
+            send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly, paused_action: null });
         }
         var previous = document.getElementById("sow-campaign-error");
         if (previous) previous.remove();
@@ -299,6 +328,7 @@
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
             runtime.cameraOnly = null;
+            runtime.pausedAction = null;
             runtime.observingAfterDefeat = false;
             runtime.hoverEvents = 0;
             runtime.cameraTargetFactionId = null;
@@ -308,6 +338,8 @@
             runtime.markerId = undefined;
             runtime.completionSent = false;
             runtime.analyticsStepId = null;
+            runtime.analyticsStartedStepIds = new Set();
+            runtime.analyticsCompletedStepIds = new Set();
             runtime.lastActionStepId = null;
             runtime.resolvedReactions = new Set();
             if (!send("start_campaign_episode", { episode_id: episodeId, roster: data.roster, match: data.definition.settings })) {
@@ -346,6 +378,7 @@
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
             runtime.cameraOnly = null;
+            runtime.pausedAction = null;
             runtime.hoverEvents = 0;
             runtime.cameraTargetFactionId = null;
             var hovered = runtime.latestHud.hovered;
@@ -356,6 +389,8 @@
             runtime.markerId = undefined;
             runtime.completionSent = false;
             runtime.analyticsStepId = null;
+            runtime.analyticsStartedStepIds = new Set();
+            runtime.analyticsCompletedStepIds = new Set();
             runtime.lastActionStepId = null;
             runtime.resolvedReactions = new Set();
             makeView();
@@ -426,7 +461,10 @@
         } else {
             var source = window.SOWCampaign.resolveUiTarget(guide.target, document, runtime.episodeId);
             if (!source || source.disabled || source.getClientRects().length === 0) return null;
-            result = window.SOWCampaign.resolveUiAnchor(source);
+            var spotlightPanel = step.id === "boudica_transfer_send" && source.closest
+                ? source.closest("#sow-hud-transfer") : null;
+            if (step.id === "boudica_transfer_send" && (!spotlightPanel || spotlightPanel.getClientRects().length === 0)) return null;
+            result = window.SOWCampaign.resolveUiAnchor(source, spotlightPanel);
             if (guide.kind === "ui" && step.trigger && step.trigger.type === "ui" && guide.target === "hud_center_camera") {
                 result.toX = result.x; result.toY = result.y;
                 result.spotlightX = result.x; result.spotlightY = result.y; result.dimOutside = true;
@@ -572,18 +610,29 @@
         }
         var machineView = runtime.machine.update(facts, runtime.uiCounts);
         if (!runtime.menuGuide && machineView.step) {
-            if (runtime.analyticsStepId && runtime.analyticsStepId !== machineView.step.id
-                && currentStep.type === "objective") {
-                trackExperience("tutorial_objective_complete");
-            }
-            if (runtime.analyticsStepId !== machineView.step.id) {
-                runtime.analyticsStepId = machineView.step.id;
-                var stepIndex = runtime.definition.steps.findIndex(function (step) {
-                    return step.id === machineView.step.id;
-                });
-                if (stepIndex >= 0 && stepIndex <= 100) {
-                    trackExperience("tutorial_step", { step_index: stepIndex });
+            var visibleStep = runtime.definition.steps.find(function (step) {
+                return step.id === machineView.step.id;
+            });
+            if (visibleStep && runtime.analyticsStepId !== visibleStep.id) {
+                var previousStepId = runtime.analyticsStepId;
+                if (!previousStepId) {
+                    trackExperience("tutorial_start", { episode_id: runtime.episodeId });
                 }
+                if (previousStepId && runtime.machine.state.completed.includes(previousStepId)
+                    && !runtime.analyticsCompletedStepIds.has(previousStepId)) {
+                    runtime.analyticsCompletedStepIds.add(previousStepId);
+                    trackTutorialStep("complete", previousStepId);
+                }
+                runtime.analyticsStepId = visibleStep.id;
+                if (!runtime.analyticsStartedStepIds.has(visibleStep.id)) {
+                    runtime.analyticsStartedStepIds.add(visibleStep.id);
+                    trackTutorialStep("start", visibleStep.id);
+                }
+            }
+            if (machineView.done && visibleStep && runtime.machine.state.completed.includes(visibleStep.id)
+                && !runtime.analyticsCompletedStepIds.has(visibleStep.id)) {
+                runtime.analyticsCompletedStepIds.add(visibleStep.id);
+                trackTutorialStep("complete", visibleStep.id);
             }
         }
         if (machineView.reactionData && machineView.reactionData.outcome) {
@@ -656,12 +705,7 @@
                 });
             }
         }
-        var cameraOnly = machineView.step.camera_only === true;
-        if (machineView.paused !== runtime.uiPaused || cameraOnly !== runtime.cameraOnly) {
-            runtime.uiPaused = machineView.paused;
-            runtime.cameraOnly = cameraOnly;
-            send("set_tutorial_paused", { paused: machineView.paused, camera_only: cameraOnly });
-        }
+        syncTutorialPause(machineView);
         var markerId = null;
         var markerTarget = markerTargetFor(machineView.step);
         if (markerTarget) {
@@ -697,6 +741,7 @@
         }
         if (machineView.done && !runtime.completionSent) {
             runtime.completionSent = true;
+            trackExperience("campaign_episode_complete", { episode_id: runtime.episodeId });
             if (runtime.definition.menu_guide) pendingMenuGuide = { episodeId: runtime.episodeId };
             send("complete_campaign_episode", { episode_id: runtime.episodeId });
         }
@@ -825,6 +870,18 @@
         if (button) button.click();
     }
 
+    function syncTutorialPause(machineView) {
+        var paused = Boolean(machineView && machineView.paused);
+        var cameraOnly = paused && machineView.step.camera_only === true;
+        var pausedAction = paused ? machineView.paused_action || null : null;
+        if (paused !== runtime.uiPaused || cameraOnly !== runtime.cameraOnly || pausedAction !== runtime.pausedAction) {
+            runtime.uiPaused = paused;
+            runtime.cameraOnly = cameraOnly;
+            runtime.pausedAction = pausedAction;
+            send("set_tutorial_paused", { paused: paused, camera_only: cameraOnly, paused_action: pausedAction });
+        }
+    }
+
     function modalChanged() {
         var modal = document.getElementById("sow-hud-surrender-modal");
         var open = Boolean(modal && !modal.classList.contains("hidden"));
@@ -832,14 +889,15 @@
         runtime.modalOpen = open;
         if (runtime.machine) runtime.machine.setPaused(open);
         if (open) {
-            runtime.resumeAfterModal = runtime.machine ? runtime.machine.view().paused : false;
-            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly });
+            runtime.uiPaused = true;
+            runtime.pausedAction = null;
+            send("set_tutorial_paused", { paused: true, camera_only: runtime.cameraOnly, paused_action: null });
             root.hidden = true;
         } else if (runtime.machine) {
-            if (!runtime.resumeAfterModal) send("set_tutorial_paused", { paused: false, camera_only: runtime.cameraOnly });
             if (runtime.latestHud) update(runtime.latestHud);
             else {
                 var model = runtime.machine.view();
+                syncTutorialPause(model);
                 runtime.view.render(model, renderContext(model.step, null, null));
             }
         }
@@ -874,9 +932,13 @@
                 runtime.uiCounts[key] = (runtime.uiCounts[key] || 0) + 1; changed = true;
             }
         });
-        if (changed && runtime.menuGuide) {
-            updateMenuGuide();
-            window.setTimeout(updateMenuGuide, 650);
+        if (changed) {
+            if (runtime.menuGuide) {
+                updateMenuGuide();
+                window.setTimeout(updateMenuGuide, 650);
+            } else if (runtime.active && runtime.latestHud) {
+                update(runtime.latestHud);
+            }
         }
     }
     document.addEventListener("keydown", function (event) {
@@ -893,6 +955,7 @@
     ["click", "input", "change"].forEach(function (type) { document.addEventListener(type, recordUiAction, true); });
 
     window.SOW_startCampaignEpisode = function (episodeId) { startEpisode(episodeId, false); };
+    window.SOW_tutorial_exit_context = tutorialExitContext;
     window.SOW_tutorial_menu_state_update = function (state) {
         var phase = state && state.phase;
         if (phase !== "MainMenu" && runtime.menuGuide) dismissMenuGuide();
@@ -950,13 +1013,13 @@
         runtime.menuGuide = false;
         runtime.uiPaused = false;
         runtime.cameraOnly = false;
+        runtime.pausedAction = null;
         runtime.cameraTargetFactionId = null;
         runtime.hoverEvents = 0;
         runtime.hoveredEntityId = null;
         runtime.hoverStepId = null;
         runtime.hoverStepRecorded = false;
         runtime.modalOpen = false;
-        runtime.resumeAfterModal = false;
         runtime.completionSent = false;
         runtime.resolvedReactions = new Set();
         runtime.lastActionStepId = null;

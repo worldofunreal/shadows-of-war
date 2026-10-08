@@ -335,6 +335,7 @@
             if (step.guide && (!keepsMechanics || (value === "guide" && step.trigger && step.trigger.type === "elapsed"))) discarded.push("hand guide");
             if (step.marker && !keepsMarker) discarded.push("map marker");
             if (step.advance_delay_seconds != null && !keepsMechanics) discarded.push("completion delay");
+            if (step.paused_action && !keepsMechanics) discarded.push("paused action permission");
             if (step.campaign_assault_on_enter && value === "end") discarded.push("campaign assault action");
             if (step.routes && !keepsFlow) discarded.push("conditional routes");
             if (step.hint_key && !keepsMechanics) discarded.push("player hint");
@@ -355,6 +356,7 @@
             if (step.campaign_assault_on_enter && value !== "end") replacement.campaign_assault_on_enter = step.campaign_assault_on_enter;
             if (keepsMechanics && Number.isFinite(step.advance_delay_seconds)) replacement.advance_delay_seconds = step.advance_delay_seconds;
             if (keepsMechanics && step.pause_game === true) replacement.pause_game = true;
+            if (keepsMechanics && step.paused_action) replacement.paused_action = step.paused_action;
             if (["scene", "end"].includes(value)) replacement.presentation = value === "end" && step.presentation === "cinematic" ? "chapter" : step.presentation || "dialogue";
             if (value === "scene") {
                 if (step.video_src) replacement.video_src = step.video_src;
@@ -399,7 +401,7 @@
             }, { placeholder: "/assets/campaign/" + state.definition.episode_id + "/opening.webm" }));
             basics.appendChild(el("small", { class: "translation-fallback" }, "Optional MP4/WebM; place the file in this episode's assets/campaign folder. The shared preview plays it without autoplay."));
         }
-        basics.appendChild(inputField("Set send percentage on entry (%)", step.attack_ratio_on_enter == null ? "" : Math.round(step.attack_ratio_on_enter * 100), function (value) {
+        basics.appendChild(inputField(step.type === "objective" || step.type === "guide" ? "Strike troop percentage on entry (%)" : "Set send percentage on entry (%)", step.attack_ratio_on_enter == null ? "" : Math.round(step.attack_ratio_on_enter * 100), function (value) {
             if (value.trim() === "") delete step.attack_ratio_on_enter;
             else step.attack_ratio_on_enter = Number(value) / 100;
             markDirty();
@@ -522,8 +524,19 @@
                 else step.advance_delay_seconds = Number(value);
                 markDirty();
             }, { type: "number", min: 0.1, max: 10, step: 0.1, placeholder: "No wait" }));
-            objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else { delete step.pause_game; delete step.camera_only; } markDirty(); renderInspector(); }));
-            objective.appendChild(checkboxField("Allow camera controls only while paused", step.camera_only === true, function (value) { if (value) { step.pause_game = true; step.camera_only = true; } else delete step.camera_only; markDirty(); renderInspector(); }));
+            objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else { delete step.pause_game; delete step.camera_only; delete step.paused_action; } markDirty(); renderInspector(); }));
+            objective.appendChild(checkboxField("Allow camera controls only while paused", step.camera_only === true, function (value) { if (value) { step.pause_game = true; step.camera_only = true; delete step.paused_action; } else delete step.camera_only; markDirty(); renderInspector(); }));
+            objective.appendChild(selectField("Action allowed while paused", step.paused_action || "", [
+                { value: "", label: "No gameplay action" },
+                { value: "expand_once_then_resume", label: "Expand once, then resume" },
+                { value: "send_resources_stay_paused", label: "Send resources; stay paused" },
+                { value: "build_until_started", label: "Build until accepted" },
+                { value: "upgrade_until_started", label: "Upgrade until accepted" }
+            ], function (value) {
+                if (value) { step.pause_game = true; step.paused_action = value; }
+                else delete step.paused_action;
+                markDirty(); renderInspector();
+            }));
             step.trigger = step.trigger || { type: "territory", value: 1, scope: "step" };
             if (step.type === "guide" && !step.guide) step.guide = { kind: "world", target: "expand", gesture: "tap" };
             var availableTriggers = state.flow === "menu"
@@ -1270,6 +1283,9 @@
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         state.playingStep = model.step.id;
+        var transferPanel = $("#sow-hud-transfer");
+        if (transferPanel && model.step.id === "boudica_transfer_send") transferPanel.hidden = false;
+        else if (transferPanel && previousStep === "boudica_transfer_send") transferPanel.hidden = true;
         var cancelBuildMode = $("#sow-hud [data-command='cancel_building_mode']");
         if (cancelBuildMode) cancelBuildMode.hidden = !model.step.trigger || model.step.trigger.action !== "cancel_building_mode";
         var actionRatio = Number.isFinite(model.step.attack_ratio_on_enter) ? model.step.attack_ratio_on_enter : null;
@@ -1340,8 +1356,13 @@
         if (!target || target.getClientRects().length === 0) return null;
         if (guide.kind === "world") target.classList.add("is-guide-target");
         var rect = target.getBoundingClientRect();
-        var anchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(target) : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-        anchor.x -= frameRect.left; anchor.y -= frameRect.top;
+        var spotlightPanel = step.id === "boudica_transfer_send" ? target.closest("#sow-hud-transfer") : null;
+        if (step.id === "boudica_transfer_send" && (!spotlightPanel || spotlightPanel.getClientRects().length === 0)) return null;
+        var anchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(target, spotlightPanel) : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        var anchorRect = guide.kind === "ui" ? $("#previewRoot").getBoundingClientRect() : frameRect;
+        anchor.x -= anchorRect.left; anchor.y -= anchorRect.top;
+        if (Number.isFinite(anchor.spotlightX)) anchor.spotlightX -= anchorRect.left;
+        if (Number.isFinite(anchor.spotlightY)) anchor.spotlightY -= anchorRect.top;
         if (guide.gesture === "drag" && guide.to) {
             var end;
             if (guide.kind === "world") end = previewWorldMarker(frame, guide.to, step);
@@ -1351,8 +1372,8 @@
             }
             if (!end || end.disabled || !end.getClientRects().length) return null;
             var endAnchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(end) : end.getBoundingClientRect();
-            anchor.toX = (guide.kind === "ui" ? endAnchor.x : endAnchor.left + endAnchor.width / 2) - frameRect.left;
-            anchor.toY = (guide.kind === "ui" ? endAnchor.y : endAnchor.top + endAnchor.height / 2) - frameRect.top;
+            anchor.toX = (guide.kind === "ui" ? endAnchor.x : endAnchor.left + endAnchor.width / 2) - anchorRect.left;
+            anchor.toY = (guide.kind === "ui" ? endAnchor.y : endAnchor.top + endAnchor.height / 2) - anchorRect.top;
         }
         return anchor;
     }

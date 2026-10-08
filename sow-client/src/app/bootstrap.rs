@@ -255,6 +255,7 @@ impl SowApp {
                 app,
                 tutorial_active: false,
                 tutorial_camera_only: false,
+                tutorial_paused_action: None,
                 tutorial_waiting_for_first_attack: false,
                 tutorial_campaign: crate::campaign::CampaignId::Boudica,
                 tutorial_marker_player_id: None,

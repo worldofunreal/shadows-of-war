@@ -57,15 +57,123 @@ if subject ~= '' then
   if not first_day then
     first_day = ARGV[2]
     redis.call('SET', KEYS[6], first_day, 'EX', ARGV[1])
-    redis.call('SADD', KEYS[7], subject); redis.call('EXPIRE', KEYS[7], ARGV[1])
+    local cohort_key = KEYS[7] .. first_day
+    redis.call('SADD', cohort_key, subject); redis.call('EXPIRE', cohort_key, ARGV[1])
   end
   local delta = tonumber(ARGV[2]) - tonumber(first_day)
-  if delta == 1 then redis.call('SADD', KEYS[8], subject); redis.call('EXPIRE', KEYS[8], ARGV[1]) end
-  if delta == 3 then redis.call('SADD', KEYS[9], subject); redis.call('EXPIRE', KEYS[9], ARGV[1]) end
-  if delta == 7 then redis.call('SADD', KEYS[10], subject); redis.call('EXPIRE', KEYS[10], ARGV[1]) end
+  if delta == 1 then
+    local retention_key = KEYS[8] .. first_day
+    redis.call('SADD', retention_key, subject); redis.call('EXPIRE', retention_key, ARGV[1])
+  end
+  if delta == 3 then
+    local retention_key = KEYS[9] .. first_day
+    redis.call('SADD', retention_key, subject); redis.call('EXPIRE', retention_key, ARGV[1])
+  end
+  if delta == 7 then
+    local retention_key = KEYS[10] .. first_day
+    redis.call('SADD', retention_key, subject); redis.call('EXPIRE', retention_key, ARGV[1])
+  end
+end
+if (event_name == 'tutorial_step' or event_name == 'tutorial_exit_early') and ARGV[8] ~= '' then
+  redis.call('HINCRBY', KEYS[15], ARGV[8], 1)
+  redis.call('EXPIRE', KEYS[15], ARGV[1])
 end
 return 1
 "#;
+
+#[derive(Clone, Copy, Debug)]
+struct RetentionCohort {
+    offset: i64,
+    eligible: u64,
+    returned: [u64; 3],
+}
+
+fn summarize_retention(today: &str, cohorts: &[RetentionCohort]) -> serde_json::Value {
+    [1_i64, 3, 7]
+        .into_iter()
+        .enumerate()
+        .map(|(slot, window)| {
+            let matured = cohorts.iter().filter(|cohort| cohort.offset > window);
+            let mut matured_cohorts = 0_u64;
+            let mut eligible = 0_u64;
+            let mut returned = 0_u64;
+            for cohort in matured {
+                matured_cohorts = matured_cohorts.saturating_add(1);
+                eligible = eligible.saturating_add(cohort.eligible);
+                returned = returned.saturating_add(cohort.returned[slot]);
+            }
+            let status = if matured_cohorts == 0 {
+                "not_matured"
+            } else if eligible == 0 {
+                "no_eligible_accounts"
+            } else {
+                "ready"
+            };
+            let cutoff = crate::events::shift_date(today, -(window + 1));
+            (
+                format!("d{window}"),
+                serde_json::json!({
+                    "status": status,
+                    "cohort_cutoff_date": cutoff,
+                    "matured_cohorts": matured_cohorts,
+                    "eligible_accounts": eligible,
+                    "returned_accounts": returned,
+                    "rate": if eligible == 0 { serde_json::Value::Null } else { serde_json::json!(returned as f64 / eligible as f64) },
+                }),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into()
+}
+
+fn aggregate_tutorial_steps(
+    rows: &[std::collections::HashMap<String, u64>],
+) -> Vec<serde_json::Value> {
+    let mut totals = std::collections::BTreeMap::<(String, u64, String), [u64; 3]>::new();
+    for row in rows {
+        for (field, count) in row {
+            let mut parts = field.split('|');
+            let (Some(episode), Some(step), Some(index), Some(action), None) = (
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+                parts.next(),
+            ) else {
+                continue;
+            };
+            let Ok(index) = index.parse::<u64>() else {
+                continue;
+            };
+            let Some(slot) = (match action {
+                "start" => Some(0),
+                "complete" => Some(1),
+                "fail" => Some(2),
+                _ => None,
+            }) else {
+                continue;
+            };
+            let value = totals
+                .entry((episode.to_string(), index, step.to_string()))
+                .or_default();
+            value[slot] = value[slot].saturating_add(*count);
+        }
+    }
+    totals
+        .into_iter()
+        .map(|((episode_id, step_index, step_id), counts)| {
+            serde_json::json!({
+                "episode_id": episode_id,
+                "step_id": step_id,
+                "step_index": step_index,
+                "started": counts[0],
+                "completed": counts[1],
+                "exited": counts[2],
+                "completion_rate": if counts[0] == 0 { serde_json::Value::Null } else { serde_json::json!(counts[1] as f64 / counts[0] as f64) },
+            })
+        })
+        .collect()
+}
 
 /// Generate the initial presentation name only when the client did not send one.
 /// The account ID remains the sole stable identity key.
@@ -600,10 +708,6 @@ pub struct PlayerDb {
     pub metadata_db: Option<std::sync::Arc<redb::Database>>,
 }
 
-fn utc_date_string() -> String {
-    crate::events::utc_date_string()
-}
-
 impl PlayerDb {
     pub fn new(
         redis_url: &str,
@@ -648,19 +752,35 @@ impl PlayerDb {
         if events.is_empty() {
             return Ok(Vec::new());
         }
-        let date = utc_date_string();
         let day_number = crate::events::utc_day_number();
+        let date = crate::events::shift_date("1970-01-01", day_number)
+            .ok_or_else(|| redis::RedisError::from((redis::ErrorKind::TypeError, "invalid UTC day")))?;
         let mut con = self.get_connection().await?;
         let mut pipe = redis::pipe();
         for event in events {
             let portal = event.portal.as_deref().unwrap_or("site");
             let subject = event.subject_id.as_deref().unwrap_or_default();
             let date_prefix = format!("{portal}:{date}");
-            let first_key = format!("sow:analytics:first_seen:{portal}:{subject}");
-            let cohort_key = format!("sow:analytics:cohort:{portal}:{day_number}");
+            let first_key = format!("sow:analytics:first_seen:v2:{portal}:{subject}");
+            let cohort_prefix = format!("sow:analytics:cohort:v2:{portal}:");
+            let tutorial_step = event
+                .props
+                .as_ref()
+                .filter(|_| matches!(event.name.as_str(), "tutorial_step" | "tutorial_exit_early"))
+                .and_then(serde_json::Value::as_object)
+                .and_then(|props| {
+                    Some(format!(
+                        "{}|{}|{}|{}",
+                        props.get("episode_id")?.as_str()?,
+                        props.get("step_id")?.as_str()?,
+                        props.get("step_index")?.as_u64()?,
+                        props.get("action")?.as_str()?
+                    ))
+                })
+                .unwrap_or_default();
             pipe.cmd("EVAL")
                 .arg(RECORD_ANALYTICS_EVENT)
-                .arg(14)
+                .arg(15)
                 .arg(format!("sow:analytics:event_id:{portal}:{}", event.event_id))
                 .arg(format!(
                     "sow:analytics:event:{date_prefix}:{}",
@@ -673,21 +793,23 @@ impl PlayerDb {
                     event.name
                 ))
                 .arg(first_key)
-                .arg(cohort_key)
-                .arg(format!("sow:analytics:retention:site:d1:{day_number}"))
-                .arg(format!("sow:analytics:retention:site:d3:{day_number}"))
-                .arg(format!("sow:analytics:retention:site:d7:{day_number}"))
+                .arg(cohort_prefix)
+                .arg(format!("sow:analytics:retention:v2:{portal}:d1:"))
+                .arg(format!("sow:analytics:retention:v2:{portal}:d3:"))
+                .arg(format!("sow:analytics:retention:v2:{portal}:d7:"))
                 .arg(format!("sow:analytics:builds:{portal}:{date}"))
                 .arg(format!("sow:analytics:by_build:{portal}:{date}"))
                 .arg(format!("sow:analytics:by_device:{portal}:{date}"))
                 .arg(format!("sow:analytics:event_sessions:{date_prefix}:{}", event.name))
+                .arg(format!("sow:analytics:tutorial_steps:{portal}:{date}"))
                 .arg(ANALYTICS_TTL_SECONDS)
                 .arg(day_number)
                 .arg(&event.session_id)
                 .arg(subject)
                 .arg(event.build.as_deref().unwrap_or("unknown"))
                 .arg(event.device_class.as_deref().unwrap_or("unknown"))
-                .arg(&event.name);
+                .arg(&event.name)
+                .arg(tutorial_step);
         }
         let outcomes: Vec<i64> = pipe.query_async(&mut con).await?;
         outcomes
@@ -716,9 +838,13 @@ impl PlayerDb {
         let mut removed = 0_u64;
         for portal in ["site", "poki", "crazygames", "jest", "android"] {
             for subject_id in subject_ids {
-                let key = format!("sow:analytics:first_seen:{portal}:{subject_id}");
-                let deleted: u64 = con.del(key).await?;
-                removed = removed.saturating_add(deleted);
+                for key in [
+                    format!("sow:analytics:first_seen:{portal}:{subject_id}"),
+                    format!("sow:analytics:first_seen:v2:{portal}:{subject_id}"),
+                ] {
+                    let deleted: u64 = con.del(key).await?;
+                    removed = removed.saturating_add(deleted);
+                }
             }
         }
         let mut cursor = 0_u64;
@@ -760,7 +886,8 @@ impl PlayerDb {
         requested_days: u32,
     ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let days = requested_days.clamp(1, 90) as i64;
-        let today = utc_date_string();
+        let today_day = crate::events::utc_day_number();
+        let today = crate::events::shift_date("1970-01-01", today_day).ok_or("invalid UTC date")?;
         let portal = "site";
         let mut con = self.get_connection().await?;
         let mut pipe = redis::pipe();
@@ -786,6 +913,7 @@ impl PlayerDb {
         }
         let values: Vec<Option<u64>> = pipe.query_async(&mut con).await?;
         let mut daily_rows = Vec::with_capacity(days as usize);
+        let tutorial_dates = daily.iter().map(|(date, _)| date.clone()).collect::<Vec<_>>();
         let mut funnel = serde_json::Map::new();
         let mut funnel_sessions = serde_json::Map::new();
         let mut dimensions_pipe = redis::pipe();
@@ -864,24 +992,24 @@ impl PlayerDb {
         let mut cohort_offsets = Vec::new();
         let mut retention_index = 0;
         for offset in 1..days {
-            let cohort_day = crate::events::utc_day_number() - offset;
+            let cohort_day = today_day - offset;
             let base = retention_index;
             retention_pipe
                 .cmd("SCARD")
-                .arg(format!("sow:analytics:cohort:{portal}:{cohort_day}"));
+                .arg(format!("sow:analytics:cohort:v2:{portal}:{cohort_day}"));
             retention_index += 1;
             for window in [1, 3, 7] {
-                if offset >= window {
+                if offset > window {
                     retention_pipe
                         .cmd("SCARD")
-                        .arg(format!("sow:analytics:retention:{portal}:d{window}:{cohort_day}"));
+                        .arg(format!("sow:analytics:retention:v2:{portal}:d{window}:{cohort_day}"));
                     retention_index += 1;
                 }
             }
             cohort_offsets.push((offset, base));
         }
         let retention_values: Vec<Option<u64>> = retention_pipe.query_async(&mut con).await?;
-        let mut retention_totals = [(0_u64, 0_u64); 3];
+        let mut retention_cohorts = Vec::with_capacity(cohort_offsets.len());
         for (offset, base) in cohort_offsets {
             let eligible = retention_values
                 .get(base)
@@ -889,34 +1017,34 @@ impl PlayerDb {
                 .flatten()
                 .unwrap_or(0);
             let mut index = base + 1;
+            let mut returned = [0_u64; 3];
             for (slot, window) in [1_i64, 3, 7].into_iter().enumerate() {
-                if offset >= window {
-                    let returned = retention_values
+                if offset > window {
+                    returned[slot] = retention_values
                         .get(index)
                         .copied()
                         .flatten()
                         .unwrap_or(0);
-                    retention_totals[slot].0 += eligible;
-                    retention_totals[slot].1 += returned;
                     index += 1;
                 }
             }
+            retention_cohorts.push(RetentionCohort {
+                offset,
+                eligible,
+                returned,
+            });
         }
-        let retention = [1, 3, 7]
-            .into_iter()
-            .enumerate()
-            .map(|(index, window)| {
-                let (eligible, returned) = retention_totals[index];
-                (
-                    format!("d{window}"),
-                    serde_json::json!({
-                        "eligible_accounts": eligible,
-                        "returned_accounts": returned,
-                        "rate": if eligible == 0 { 0.0 } else { returned as f64 / eligible as f64 },
-                    }),
-                )
-            })
-            .collect::<serde_json::Map<_, _>>();
+        let retention = summarize_retention(&today, &retention_cohorts);
+
+        let mut tutorial_steps_pipe = redis::pipe();
+        for date in &tutorial_dates {
+            tutorial_steps_pipe
+                .cmd("HGETALL")
+                .arg(format!("sow:analytics:tutorial_steps:{portal}:{date}"));
+        }
+        let tutorial_step_rows: Vec<std::collections::HashMap<String, u64>> =
+            tutorial_steps_pipe.query_async(&mut con).await?;
+        let tutorial_steps = aggregate_tutorial_steps(&tutorial_step_rows);
 
         Ok(serde_json::json!({
             "generated_at": today,
@@ -936,6 +1064,7 @@ impl PlayerDb {
             },
             "daily": daily_rows,
             "retention": { "site": retention },
+            "tutorial_steps": tutorial_steps,
         }))
     }
 
@@ -5067,5 +5196,59 @@ mod tests {
         let account: super::PlayerAccount = serde_json::from_str(json).unwrap();
         let public = serde_json::to_value(account.without_auth_secret()).unwrap();
         assert!(public.get("auth_secret_hash").is_none());
+    }
+
+    #[test]
+    fn retention_uses_only_fully_elapsed_return_days() {
+        let report = super::summarize_retention(
+            "2026-10-08",
+            &[
+                super::RetentionCohort { offset: 1, eligible: 5, returned: [5, 5, 5] },
+                super::RetentionCohort { offset: 2, eligible: 10, returned: [4, 0, 0] },
+                super::RetentionCohort { offset: 4, eligible: 20, returned: [10, 8, 0] },
+                super::RetentionCohort { offset: 8, eligible: 30, returned: [20, 15, 10] },
+            ],
+        );
+        assert_eq!(report["d1"]["eligible_accounts"], 60);
+        assert_eq!(report["d1"]["returned_accounts"], 34);
+        assert_eq!(report["d1"]["cohort_cutoff_date"], "2026-10-06");
+        assert_eq!(report["d1"]["status"], "ready");
+        assert_eq!(report["d3"]["eligible_accounts"], 50);
+        assert_eq!(report["d3"]["returned_accounts"], 23);
+        assert_eq!(report["d7"]["eligible_accounts"], 30);
+        assert_eq!(report["d7"]["returned_accounts"], 10);
+    }
+
+    #[test]
+    fn immature_retention_is_not_reported_as_zero_percent() {
+        let report = super::summarize_retention(
+            "2026-10-08",
+            &[super::RetentionCohort { offset: 1, eligible: 5, returned: [0; 3] }],
+        );
+        assert_eq!(report["d1"]["status"], "not_matured");
+        assert!(report["d1"]["rate"].is_null());
+    }
+
+    #[test]
+    fn tutorial_step_counts_include_explicit_exit_without_inflating_completion() {
+        let rows = vec![
+            std::collections::HashMap::from([
+                ("boudica|claim_wilderness|2|start".to_string(), 8),
+                ("boudica|claim_wilderness|2|complete".to_string(), 5),
+                ("boudica|claim_wilderness|2|fail".to_string(), 2),
+            ]),
+            std::collections::HashMap::from([
+                ("boudica|claim_wilderness|2|start".to_string(), 2),
+                ("boudica|claim_wilderness|2|complete".to_string(), 1),
+                ("boudica|claim_wilderness|2|fail".to_string(), 1),
+                ("invalid|field".to_string(), 100),
+            ]),
+        ];
+        let rows = super::aggregate_tutorial_steps(&rows);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["started"], 10);
+        assert_eq!(rows[0]["completed"], 6);
+        assert_eq!(rows[0]["exited"], 3);
+        assert_eq!(rows[0]["completion_rate"], 0.6);
     }
 }

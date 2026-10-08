@@ -10,10 +10,11 @@
   const KNOWN_EVENTS = new Set([
     "landing_visit", "shell_loaded", "play_now_click", "boot_start", "boot_route_decision", "load_stage",
     "menu_quick_match", "menu_join_attempt", "menu_password_join_attempt", "menu_code_join_attempt",
-    "menu_custom_create", "menu_single_player_start", "menu_campaign_start", "matchmaking_joined",
-    "lobby_joined", "match_exit", "match_started_client", "match_ended_client",
+    "menu_custom_create", "menu_single_player_start", "menu_campaign_start", "menu_campaign_open",
+    "menu_lobby_browser_open", "menu_custom_create_open", "menu_leader_confirm", "matchmaking_joined",
+    "lobby_joined", "lobby_join_failed", "match_exit", "match_loading_start", "match_started_client", "match_ended_client",
     "tutorial_start", "tutorial_step",
-    "tutorial_objective_complete", "tutorial_dialog_choice", "tutorial_exit_early"
+    "tutorial_objective_complete", "tutorial_dialog_choice", "tutorial_exit_early", "campaign_episode_complete"
   ]);
   const isGameShell = Boolean(document.getElementById("blade"));
   const isAndroidTwa = () => {
@@ -131,8 +132,39 @@
       return { stage: props.stage };
     }
     if (name === "boot_route_decision" && ["menu", "intro"].includes(props.route)) return { route: props.route };
-    if (name === "tutorial_step" && Number.isInteger(props.step_index) && props.step_index >= 0 && props.step_index <= 100) {
-      return { step_index: props.step_index };
+    if (name === "tutorial_step") {
+      if (Object.keys(props).length === 1 && Number.isInteger(props.step_index) && props.step_index >= 0 && props.step_index < 512) {
+        return { step_index: props.step_index };
+      }
+      if (Object.keys(props).length === 4
+        && typeof props.episode_id === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(props.episode_id)
+        && typeof props.step_id === "string" && /^[a-z][a-z0-9_-]{0,95}$/.test(props.step_id)
+        && Number.isInteger(props.step_index) && props.step_index >= 0 && props.step_index < 512
+        && ["start", "complete"].includes(props.action)) {
+        return {
+          episode_id: props.episode_id,
+          step_id: props.step_id,
+          step_index: props.step_index,
+          action: props.action
+        };
+      }
+    }
+    if (name === "tutorial_exit_early" && Object.keys(props).length === 4
+      && typeof props.episode_id === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(props.episode_id)
+      && typeof props.step_id === "string" && /^[a-z][a-z0-9_-]{0,95}$/.test(props.step_id)
+      && Number.isInteger(props.step_index) && props.step_index >= 0 && props.step_index < 512
+      && props.action === "fail") {
+      return {
+        episode_id: props.episode_id,
+        step_id: props.step_id,
+        step_index: props.step_index,
+        action: props.action
+      };
+    }
+    if (["tutorial_start", "tutorial_exit_early", "campaign_episode_complete"].includes(name)
+      && Object.keys(props).length === 1 && typeof props.episode_id === "string"
+      && /^[a-z][a-z0-9_]{0,63}$/.test(props.episode_id)) {
+      return { episode_id: props.episode_id };
     }
     return null;
   }
@@ -244,10 +276,10 @@
     panel = card;
     card._refreshCopy = () => {
       title.textContent = text("site.analytics_title", "Optional analytics");
-      body.textContent = text("site.analytics_body", "Optional analytics helps us see where players leave. It stays off unless you allow it, and the game works if you reject it.");
-      policyLink.textContent = text("site.analytics_policy", "Read the cookie notice");
-      accept.textContent = text("site.analytics_accept", "Allow optional analytics");
-      reject.textContent = text("site.analytics_reject", "Reject optional analytics");
+      body.textContent = text("site.analytics_body", "We use site and game activity to improve Shadows of War. It stays off unless you allow it.");
+      policyLink.textContent = text("site.analytics_policy", "Cookie details");
+      accept.textContent = text("site.analytics_accept", "Allow");
+      reject.textContent = text("site.analytics_reject", "Reject");
     };
     card._refreshCopy();
     card.hidden = true;

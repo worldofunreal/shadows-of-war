@@ -30,9 +30,15 @@ pub const EVENT_NAMES: &[&str] = &[
     "menu_custom_create",
     "menu_single_player_start",
     "menu_campaign_start",
+    "menu_campaign_open",
+    "menu_lobby_browser_open",
+    "menu_custom_create_open",
+    "menu_leader_confirm",
     "matchmaking_joined",
     "lobby_joined",
+    "lobby_join_failed",
     "match_exit",
+    "match_loading_start",
     "match_started_client",
     "match_ended_client",
     "tutorial_start",
@@ -40,6 +46,7 @@ pub const EVENT_NAMES: &[&str] = &[
     "tutorial_objective_complete",
     "tutorial_dialog_choice",
     "tutorial_exit_early",
+    "campaign_episode_complete",
 ];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -157,13 +164,65 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
     let Some(props) = props.as_object() else {
         return false;
     };
-    if props.len() != 1 {
-        return false;
-    }
-    let (key, value) = props.iter().next().expect("one property checked");
     if name == "tutorial_step" {
-        return key == "step_index" && value.as_u64().is_some_and(|index| index <= 100);
+        if props.len() == 1 {
+            return props
+                .get("step_index")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|index| index < 512);
+        }
+        return props.len() == 4
+            && props
+                .get("episode_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(is_episode_id)
+            && props
+                .get("step_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(is_step_id)
+            && props
+                .get("step_index")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|index| index < 512)
+            && props
+                .get("action")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|action| matches!(action, "start" | "complete"));
     }
+    if name == "tutorial_exit_early" {
+        if props.len() == 1 {
+            return props
+                .get("episode_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(is_episode_id);
+        }
+        return props.len() == 4
+            && props
+                .get("episode_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(is_episode_id)
+            && props
+                .get("step_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(is_step_id)
+            && props
+                .get("step_index")
+                .and_then(serde_json::Value::as_u64)
+                .is_some_and(|index| index < 512)
+            && props
+                .get("action")
+                .and_then(serde_json::Value::as_str)
+                == Some("fail");
+    }
+    if matches!(name, "tutorial_start" | "campaign_episode_complete") {
+        return props.len() == 1
+            && props
+                .get("episode_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(is_episode_id);
+    }
+    if props.len() != 1 { return false; }
+    let (key, value) = props.iter().next().expect("one property checked");
     match (name, key.as_str(), value.as_str()) {
         ("load_stage", "stage", Some(value)) => matches!(
             value,
@@ -177,6 +236,25 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
         ("boot_route_decision", "route", Some("menu" | "intro")) => true,
         _ => false,
     }
+}
+
+fn is_episode_id(value: &str) -> bool {
+    value.len() <= 64
+        && value
+            .bytes()
+            .enumerate()
+            .all(|(index, byte)| byte.is_ascii_lowercase() || byte.is_ascii_digit() && index > 0 || byte == b'_' && index > 0)
+        && value.as_bytes().first().is_some_and(|byte| byte.is_ascii_lowercase())
+}
+
+fn is_step_id(value: &str) -> bool {
+    value.len() <= 96
+        && value
+            .bytes()
+            .enumerate()
+            .all(|(index, byte)| byte.is_ascii_lowercase() || byte.is_ascii_digit() && index > 0 || matches!(byte, b'_' | b'-') && index > 0)
+        && value.as_bytes().first().is_some_and(|byte| byte.is_ascii_lowercase())
+        && !matches!(value, "constructor" | "prototype" | "__proto__")
 }
 
 fn is_simple_string(value: &str) -> bool {
@@ -505,6 +583,91 @@ mod tests {
         event.props = Some(serde_json::json!({"stage": "snapshot_available"}));
         assert!(event.validate(NOW_MS).is_ok());
         event.props = Some(serde_json::json!({"stage": "account_name"}));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+    }
+
+    #[test]
+    fn tutorial_funnel_accepts_bounded_step_identity_and_actions() {
+        let mut event = sample("tutorial_step");
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "claim-wilderness",
+            "step_index": 3,
+            "action": "complete"
+        }));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "last-step",
+            "step_index": 511,
+            "action": "start"
+        }));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "past-end",
+            "step_index": 512,
+            "action": "start"
+        }));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "claim-wilderness",
+            "step_index": 3,
+            "action": "skipped"
+        }));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "claim-wilderness",
+            "step_index": 3,
+            "action": "start",
+            "player_name": "not-allowed"
+        }));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+    }
+
+    #[test]
+    fn accepts_episode_events_and_new_shared_outcomes() {
+        let mut event = sample("tutorial_start");
+        event.props = Some(serde_json::json!({"episode_id": "boudica"}));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.name = "lobby_join_failed".into();
+        event.props = None;
+        assert!(event.validate(NOW_MS).is_ok());
+        event.name = "match_loading_start".into();
+        assert!(event.validate(NOW_MS).is_ok());
+        event.name = "campaign_episode_complete".into();
+        event.props = Some(serde_json::json!({"episode_id": "boudica"}));
+        assert!(event.validate(NOW_MS).is_ok());
+    }
+
+    #[test]
+    fn tutorial_exit_accepts_legacy_episode_and_bounded_failed_step() {
+        let mut event = sample("tutorial_exit_early");
+        event.props = Some(serde_json::json!({"episode_id": "boudica"}));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "claim-wilderness",
+            "step_index": 3,
+            "action": "fail"
+        }));
+        assert!(event.validate(NOW_MS).is_ok());
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "claim-wilderness",
+            "step_index": 3,
+            "action": "complete"
+        }));
+        assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
+        event.props = Some(serde_json::json!({
+            "episode_id": "boudica",
+            "step_id": "claim-wilderness",
+            "step_index": 3,
+            "action": "fail",
+            "player_name": "not-allowed"
+        }));
         assert_eq!(event.validate(NOW_MS), Err("unsupported event properties"));
     }
 

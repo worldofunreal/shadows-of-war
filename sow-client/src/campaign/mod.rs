@@ -25,7 +25,7 @@ impl CampaignId {
         CampaignId::SixSkyEp3,
     ];
 
-    /// Stable id for progress tracking + Poki `measure()` events.
+    /// Stable id for campaign progress and analytics events.
     pub fn episode_id(self) -> &'static str {
         match self {
             CampaignId::Boudica => "boudica",
@@ -273,19 +273,16 @@ pub(crate) fn tutorial_camera_frame(
     let target = config
         .scripted_spawns
         .iter()
-        .find(|spawn| {
-            spawn.campaign_relation == Some(sow_core::protocol::CampaignRelation::Enemy)
-        })
-        .or_else(|| config.scripted_spawns.first())?;
+        .find(|spawn| spawn.campaign_faction_id.as_deref() == Some("roman_outpost"))?;
     let dx = player_x.abs_diff(target.x) as f32;
     let dy = player_y.abs_diff(target.y) as f32;
     let center = (
         (player_x as f32 + target.x as f32 + 1.0) * 0.5,
         (player_y as f32 + target.y as f32 + 1.0) * 0.5,
     );
-    let fit_zoom = (screen_w.max(1.0) / (dx + 8.0))
-        .min(screen_h.max(1.0) / (dy + 8.0))
-        .min(28.0);
+    let fit_zoom = (screen_w.max(1.0) / (dx + 7.0))
+        .min(screen_h.max(1.0) / (dy + 7.0))
+        .min(30.0);
     let min_zoom =
         crate::camera_zoom_lower_bound(screen_w, screen_h, config.map_width, config.map_height);
     Some((center, fit_zoom.max(min_zoom)))
@@ -417,8 +414,29 @@ fn valid_campaign_group_id(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{Civilization, parse_roster, to_scripted};
+    use super::{CampaignId, parse_roster, to_scripted, tutorial_camera_frame};
+    use sow_core::game_config::GameConfig;
     use sow_core::protocol::{CampaignRelation, Team};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn boudica_tutorial_camera_frame_stays_on_the_first_target_on_desktop_and_mobile() {
+        let (factions, player_spawn, _) =
+            parse_roster(include_str!("../../../assets/campaign/boudica.json")).unwrap();
+        let config = GameConfig {
+            tutorial: true,
+            player_spawn: Some(player_spawn),
+            scripted_spawns: to_scripted(&factions),
+            ..GameConfig::default()
+        };
+
+        for (screen, expected_zoom) in [((1440.0, 900.0), 30.0), ((390.0, 844.0), 390.0 / 14.0)] {
+            let (center, zoom) =
+                tutorial_camera_frame(CampaignId::Boudica, &config, screen.0, screen.1).unwrap();
+            assert_eq!(center, (719.0, 79.5));
+            assert_eq!(zoom, expected_zoom);
+        }
+    }
 
     #[test]
     fn gold_loot_bonus_survives_roster_parse_and_scripted_spawn_conversion() {
@@ -474,7 +492,10 @@ mod tests {
         let legacy = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","civ":"Roman Empire","leader":"Caesar"}]}"##;
         let (legacy, _, _) = parse_roster(legacy).unwrap();
         assert!(legacy[0].can_request_alliance);
-        assert_eq!(to_scripted(&legacy)[0].campaign_relation, Some(CampaignRelation::Enemy));
+        assert_eq!(
+            to_scripted(&legacy)[0].campaign_relation,
+            Some(CampaignRelation::Enemy)
+        );
         let removed_behavior = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"aggressive","civ":"Roman Empire","leader":"Caesar"}]}"##;
         assert!(parse_roster(removed_behavior).is_none());
     }
@@ -488,10 +509,16 @@ mod tests {
         assert_eq!(spawn.team, Some(Team::Red));
         assert_eq!(spawn.campaign_relation, Some(CampaignRelation::Enemy));
         let blue_roster = roster.replace("Red", "Blue");
-        assert_eq!(to_scripted(&parse_roster(&blue_roster).unwrap().0)[0].team, Some(Team::Blue));
+        assert_eq!(
+            to_scripted(&parse_roster(&blue_roster).unwrap().0)[0].team,
+            Some(Team::Blue)
+        );
 
         let without_team = r##"{"factions":[{"id":"clan","name":"Clan","x":2,"y":1,"starting_troops":500,"relation":"neutral","civ":"Iceni Kingdom","leader":"Boudica"}]}"##;
-        assert_eq!(to_scripted(&parse_roster(without_team).unwrap().0)[0].team, None);
+        assert_eq!(
+            to_scripted(&parse_roster(without_team).unwrap().0)[0].team,
+            None
+        );
         let invalid_team = roster.replace("Red", "Romans");
         assert!(parse_roster(&invalid_team).is_none());
     }

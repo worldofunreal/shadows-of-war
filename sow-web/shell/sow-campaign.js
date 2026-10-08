@@ -69,7 +69,6 @@
         map_build_port: '#sow-hud [data-map-action="build_port"]',
         map_build_bunker: '#sow-hud [data-map-action="build_bunker"]',
         map_build_warship: '#sow-hud [data-map-action="build_warship"]',
-        map_build_trade_ship: '#sow-hud [data-map-action="build_trade_ship"]',
         map_nuke_launch: '#sow-hud [data-map-action="nuke"]',
         map_back: '#sow-hud [data-map-back]',
         rankings: '#sow-hud [data-command="toggle_leaderboard"]',
@@ -242,18 +241,26 @@
         return typeof root.querySelector === "function" ? root.querySelector(selector) : null;
     }
 
-    function resolveUiAnchor(element) {
+    function resolveUiAnchor(element, spotlightElement) {
         const rect = element.getBoundingClientRect();
         const x = Number.parseFloat(element.dataset && element.dataset.tutorialAnchorX);
         const y = Number.parseFloat(element.dataset && element.dataset.tutorialAnchorY);
         const focus = Number.isFinite(x) && Number.isFinite(y) && element.querySelector && element.querySelector(".sow-hud__map-action-title");
         const focusRect = focus && focus.getClientRects().length ? focus.getBoundingClientRect() : rect;
-        return {
+        const anchor = {
             x: focus ? rect.left + rect.width * x / 100 : rect.left + rect.width / 2,
             y: focus ? rect.top + rect.height * y / 100 : rect.top + rect.height / 2,
             width: focusRect.width,
             height: focusRect.height
         };
+        if (spotlightElement) {
+            const spotlight = spotlightElement.getBoundingClientRect();
+            anchor.spotlightX = spotlight.left + spotlight.width / 2;
+            anchor.spotlightY = spotlight.top + spotlight.height / 2;
+            anchor.spotlightWidth = spotlight.width;
+            anchor.spotlightHeight = spotlight.height;
+        }
+        return anchor;
     }
 
     function validate(definition, roster, options) {
@@ -382,8 +389,8 @@
         const stepFields = {
             scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "start_delay_seconds"],
             choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
             end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game"]
         };
         steps.filter(object).forEach(step => {
@@ -412,6 +419,23 @@
             }
             if (own(step, "pause_game") && typeof step.pause_game !== "boolean") issue(step, "pause_game", "Pause game must be true or false.");
             if (own(step, "camera_only") && (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))) issue(step, "camera_only", "Camera-only input requires a paused objective.");
+            if (own(step, "paused_action")) {
+                const triggerType = step.trigger && step.trigger.type;
+                let compatible = false;
+                if (step.paused_action === "expand_once_then_resume") {
+                    compatible = ["territory", "contact"].includes(triggerType)
+                        && step.guide && step.guide.kind === "world" && step.guide.target === "expand";
+                } else if (step.paused_action === "send_resources_stay_paused") {
+                    compatible = triggerType === "resource_transfer";
+                } else if (step.paused_action === "build_until_started") {
+                    compatible = ["city", "factory", "bunker"].includes(triggerType);
+                } else if (step.paused_action === "upgrade_until_started") {
+                    compatible = triggerType === "structure_upgrade";
+                }
+                if (!compatible || step.pause_game !== true || step.camera_only === true || !["objective", "guide"].includes(step.type)) {
+                    issue(step, "paused_action", "Paused actions require a paused mechanics step and a compatible objective.");
+                }
+            }
             ["title_key", "body_key", "hint_key"].forEach(field => text(step, field, step[field], false));
             const textNamespace = typeof definition.text_namespace === "string" ? definition.text_namespace : "tutorial.";
             const dynamicText = suffix => {
@@ -548,7 +572,11 @@
                     const targetableFactions = targetedFactions.filter(target => typeof target === "string" && target !== "player");
                     if (["attack", "contact", "alliance", "defeated", "fleet", "camera_target", "hover", "zoom_in_complete"].includes(trigger.type) && targetableFactions.length) {
                         if (!step.marker || !targetableFactions.includes(step.marker.target)) issue(step, "marker", "Faction objectives need a marker on one of their targets.");
+                        const expandsToContact = trigger.type === "contact"
+                            && step.paused_action === "expand_once_then_resume"
+                            && step.guide && step.guide.kind === "world" && step.guide.target === "expand";
                         if (["attack", "contact", "alliance", "defeated", "fleet"].includes(trigger.type)
+                            && !expandsToContact
                             && (!step.guide || step.guide.kind !== "world" || !["target_action", "nameplate", "player"].includes(step.guide.target))) {
                             issue(step, "guide", "Faction objectives need a hand guide that points to their target.");
                         }
@@ -856,12 +884,15 @@
                     id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker,
                     title_key: reaction.title_key, body_key: reaction.body_key, presentation: "dialogue"
                 };
-                return { definition, step: response, line: response, progress: progress(), paused: true, done: false, choices: reaction.choices || [], state, reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
+                return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
             const line = step.lines ? step.lines[state.line] : step;
             const startDelayMs = step.type === "scene" ? Number(step.start_delay_seconds || 0) * 1000 : 0;
             const waitRemainingMs = startDelayMs > 0 ? Math.max(0, startDelayMs - (currentTimeMs - stepEnteredAtMs)) : 0;
-            return { definition, step, line, progress: progress(), paused: ["scene", "choice", "end"].includes(step.type) || step.pause_game === true, done: state.done, choices: step.choices || [], state, waiting: waitRemainingMs > 0, wait_remaining_ms: waitRemainingMs };
+            const expansionStarted = step.paused_action === "expand_once_then_resume"
+                && Number(facts.tiles_gained || 0) > Number(baseline.tiles_gained || 0);
+            const paused = ["scene", "choice", "end"].includes(step.type) || (step.pause_game === true && !expansionStarted);
+            return { definition, step, line, progress: progress(), paused, paused_action: paused ? step.paused_action || null : null, done: state.done, choices: step.choices || [], state, waiting: waitRemainingMs > 0, wait_remaining_ms: waitRemainingMs };
         }
         function setPaused(paused) { externallyPaused = Boolean(paused); }
         function advance(choiceId, expectedStepId, allowUnavailable) {

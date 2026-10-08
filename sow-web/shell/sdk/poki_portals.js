@@ -212,7 +212,6 @@
     if (gameplayReady) return;
     gameplayReady = true;
     installFirstInputListener();
-    measure("gameplay", "session", "ready");
   };
 
   window.SOW_portalGameplayStop = function () {

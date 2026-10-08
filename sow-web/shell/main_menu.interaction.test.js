@@ -131,6 +131,13 @@ test("public landing keeps the video hero, interactive leader roster, community 
     assert.match(siteCss, /\.faq-list \{ display: grid; grid-template-columns: 1fr;/);
 });
 
+test("landing featured leader stays horizontal on mobile while gallery cards keep mobile art", () => {
+    assert.match(landingHtml, /<div class="detail-image"><picture>\s*<img data-detail-image src="\/assets\/shell\/leaders\/caesar_desktop\.webp"/);
+    assert.doesNotMatch(landingHtml, /data-detail-mobile/);
+    assert.match(siteApp, /detailImage\.src = asset\(leader\)/);
+    assert.match(landingHtml, /<picture><source media="\(max-width: 700px\)" srcset="\/assets\/shell\/leaders\/caesar_mobile\.webp">/);
+});
+
 test("CrazyGames menu links open the matching pages on the public site", () => {
     const helper = shellSource.match(/function renderSiteLink\(path, key, className\) \{[\s\S]*?\n    \}/)?.[0];
     assert.ok(helper, "main menu has no shared site-link renderer");
@@ -157,6 +164,13 @@ test("CrazyGames menu links open the matching pages on the public site", () => {
         assert.ok(shellSource.includes(`renderSettingsLink("https://shadowsofwar.io${path}", "${key}")`), `${path} is not routed through the shared settings link renderer`);
     }
     assert.ok(shellSource.includes('renderSiteLink("/terms/", "auth.terms", "sow-auth__terms")'));
+});
+
+test("menu analytics use the shared event dispatcher instead of a Poki-only click listener", () => {
+    assert.match(shellSource, /open_campaign: "menu_campaign_open"[\s\S]*open_browser: "menu_lobby_browser_open"[\s\S]*open_create: "menu_custom_create_open"[\s\S]*confirm_leader: "menu_leader_confirm"/);
+    assert.match(shellSource, /window\.SOW_trackExperienceEvent\(\{ name: experienceEvent \}\)/);
+    assert.doesNotMatch(pokiSource, /SOW_pokiMeasure/);
+    assert.match(indexTemplate, /__INLINE_EXPERIENCE_EVENTS_JS__/);
 });
 
 test("CrazyGames font stylesheet and server keep the same cross-origin path", () => {
@@ -1288,9 +1302,9 @@ test("campaign runtime shares the JSON interpreter and cinematic view", () => {
     assert.match(tutorial, /start_campaign_episode/);
     assert.match(tutorial, /set_tutorial_paused/);
     assert.match(tutorial, /complete_campaign_episode/);
-    assert.match(webMenu, /WebMenuCommand::SetTutorialPaused \{\s*paused,\s*camera_only,\s*\} => \{[\s\S]*?self\.sim\.paused = paused/);
+    assert.match(webMenu, /WebMenuCommand::SetTutorialPaused \{\s*paused,\s*camera_only,\s*paused_action,\s*\} => \{[\s\S]*?self\.sim\.paused = paused[\s\S]*?tutorial_paused_action/);
     assert.match(simUpdateSource, /if self\.sim\.paused \{\s*self\.sim\.offline_tick_timer = 0\.0;/);
-    assert.match(campaignEngine, /paused: \["scene", "choice", "end"\]/);
+    assert.match(campaignEngine, /const paused = \["scene", "choice", "end"\]\.includes\(step\.type\) \|\| \(step\.pause_game === true && !expansionStarted\)/);
     assert.match(campaignView, /data-story-choice/);
     assert.match(storyCss, /\.sow-story__choices/);
     assert.doesNotMatch(hudCss, /\.sow-hud__tutorial-overlay/);
@@ -1323,6 +1337,9 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".json"), "utf8"));
         const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".triggers.json"), "utf8"));
         assert.equal(definition.episode_id, episodeId);
+        if (episodeId === "boudica") {
+            assert.equal(definition.steps.find(step => step.id === "boudica_attack_roman_outpost").attack_ratio_on_enter, 0.25);
+        }
         assert.equal(roster.map, expected[episodeId][0], episodeId + " card map");
         assert.ok(Object.values(definition.speakers || {}).some(speaker => speaker.avatar === expected[episodeId][1]), episodeId + " card leader portrait");
         for (const faction of roster.factions) {
@@ -1348,6 +1365,72 @@ test("authored campaign files validate through the shared runtime schema", () =>
         const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".triggers.json"), "utf8"));
         const report = campaign.validate(definition, roster, { hasText: () => true, hasAvatar: () => true });
         assert.deepEqual(report.errors, [], episodeId + ": " + report.errors.map(issue => issue.message).join("; "));
+    }
+});
+
+test("Boudica pauses for action steps and resumes only after valid expansion or construction", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const step = id => definition.steps.find(candidate => candidate.id === id);
+
+    const expansion = campaign.create(definition, "boudica_first_expansion", roster);
+    assert.equal(expansion.update({ tiles_gained: 0 }, {}).paused, true);
+    assert.equal(expansion.view().paused_action, "expand_once_then_resume");
+    assert.equal(expansion.update({ tiles_gained: 0 }, {}).paused, true, "an invalid click leaves the game paused");
+    assert.equal(expansion.update({ tiles_gained: 1 }, {}).paused, false);
+    assert.equal(expansion.update({ tiles_gained: 250 }, {}).step.id, "boudica_camera_intro");
+    assert.equal(expansion.view().paused, true);
+
+    for (const id of ["boudica_first_contact", "boudica_second_contact", "boudica_third_contact"]) {
+        assert.equal(step(id).attack_ratio_on_enter, 1);
+        assert.equal(step(id).pause_game, true);
+        assert.equal(step(id).paused_action, "expand_once_then_resume");
+        assert.equal(step(id).guide.target, "expand");
+    }
+    const contact = campaign.create(definition, "boudica_first_contact", roster);
+    const contactFacts = { tiles_gained: 250, contact_faction_ids: [] };
+    assert.equal(contact.update(contactFacts, {}).paused, true);
+    assert.equal(contact.update({ ...contactFacts, tiles_gained: 251 }, {}).paused, false);
+    assert.equal(contact.update({ ...contactFacts, tiles_gained: 251, contact_faction_ids: ["stonea"] }, {}).paused, true);
+
+    assert.equal(step("boudica_transfer_target").pause_game, true);
+    assert.equal(step("boudica_transfer_send").pause_game, true);
+    const transfer = campaign.create(definition, "boudica_transfer_send", roster);
+    assert.equal(transfer.update({ resource_transfers_by_recipient_faction_id: { trinovantes: { total: 0 } } }, {}).paused, true);
+    assert.equal(transfer.view().paused_action, "send_resources_stay_paused");
+    const sent = transfer.update({ resource_transfers_by_recipient_faction_id: { trinovantes: { total: 1 } } }, {});
+    assert.equal(sent.step.id, "boudica_share_sent");
+    assert.equal(sent.paused, true);
+
+    for (const [id, metric, waitId] of [
+        ["boudica_build_city", "cities", "boudica_city_construction_wait"],
+        ["boudica_build_factory", "factories", "boudica_factory_construction_wait"],
+        ["boudica_build_bunker", "bunkers", "boudica_bunker_construction_wait"]
+    ]) {
+        assert.equal(step(id).pause_game, true);
+        assert.equal(step(id).paused_action, "build_until_started");
+        const machine = campaign.create(definition, id, roster);
+        assert.equal(machine.update({ [metric]: 0 }, {}).paused, true);
+        const started = machine.update({ [metric]: 1 }, {});
+        assert.equal(started.step.id, waitId);
+        assert.equal(started.paused, false);
+        assert.equal(step(waitId).pause_game, undefined);
+    }
+
+    assert.equal(step("boudica_structure_upgrade").trigger.type, "structure_upgrade");
+    assert.equal(step("boudica_structure_upgrade").paused_action, "upgrade_until_started");
+    const upgradeButton = campaign.create(definition, "boudica_structure_upgrade", roster);
+    assert.equal(upgradeButton.update({ structure_upgrades: 0 }, {}).paused, true);
+    const upgrading = upgradeButton.update({ structure_upgrades: 1 }, {});
+    assert.equal(upgrading.step.id, "boudica_city_upgrade_wait");
+    assert.equal(upgrading.paused, false, "the upgrade's construction wait runs after upgrade acceptance");
+    assert.equal(step("boudica_city_upgrade_wait").pause_game, undefined);
+    assert.equal(step("boudica_attack_roman_outpost").pause_game, true);
+    assert.equal(step("boudica_attack_roman_outpost").attack_ratio_on_enter, 0.25);
+    for (const id of ["boudica_outpost_colonia_veterans", "boudica_outpost_tax_collectors", "boudica_outpost_roman_supply_depot", "boudica_camulodunum", "boudica_londinium", "boudica_verulamium", "boudica_ninth_legion"]) {
+        assert.equal(step(id).pause_game, undefined, `${id} stays available for border expansion`);
     }
 });
 
@@ -1672,10 +1755,39 @@ test("gameplay chrome: vertical right panel with exit on top, fps in dock, deskt
     assert.match(hudCss, /--sow-hud-toolbar-side-offset: 66px; \/\* 54px toolbar \+ 12px gap \*\//);
     assert.match(hudCss, /\.sow-hud__panel \{[^}]*top: var\(--sow-hud-top-edge\);[^}]*inset-inline-end: calc\(var\(--sow-hud-right-edge\) \+ var\(--sow-hud-toolbar-side-offset\)\)/);
     assert.match(hudCss, /@media \(max-width: 720px\)[^]*?\.sow-hud__panel \{[^}]*top: calc\(max\(8px, var\(--sow-sat\)\) \+ 186px\)/);
-    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\) \{[^]*?\.sow-hud__panel \{[^}]*top: calc\(var\(--sow-hud-top-edge\) \+ 50px\)[^}]*bottom: max\(6px, var\(--sow-sab\)\)[^}]*max-height: none/);
+    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__panel \{[^}]*top: calc\(var\(--sow-hud-top-edge\) \+ 50px\)[^}]*bottom: max\(6px, var\(--sow-sab\)\)[^}]*max-height: none/);
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard,\s*\.sow-hud__panel,\s*\.sow-hud__emoji-popout \{ top: 50px/);
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard \{ top: calc\(max\(12px, var\(--sow-sat\)\) \+ 272px\)/);
     assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
+});
+
+test("compact HUD density follows the available horizontal frame and restores full size", () => {
+    const start = hud.indexOf("    function compactHudDensity(");
+    const end = hud.indexOf("\n    function writeHudDensity", start);
+    assert.ok(start >= 0 && end > start);
+    const compactHudDensity = vm.runInNewContext(hud.slice(start, end) + "\ncompactHudDensity;");
+    for (const [width, height, expected] of [
+        [568, 320, 0.65],
+        [844, 390, 0.65],
+        [960, 540, 0.75],
+        [1024, 600, 600 / 720],
+        [1366, 768, 1],
+        [1920, 1080, 1],
+        [390, 844, 1]
+    ]) {
+        assert.ok(Math.abs(compactHudDensity(width, height) - expected) < 0.0001, `${width}x${height}`);
+    }
+    assert.equal(compactHudDensity(0, 0), 1);
+    assert.match(hud, /isEditingHudField && compactHudDensityValue !== null/);
+    assert.match(hud, /document\.addEventListener\("focusout"/);
+    assert.match(hud, /writeHudDensity\(document\.getElementById\("sow-story"\), density, true\)/);
+    assert.doesNotMatch(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\)/);
+    assert.match(hudCss, /min-block-size: 44px/);
+    assert.match(hudCss, /min-block-size: 32px/);
+    assert.match(hudCss, /font-size: var\(--sow-hud-text-primary-size\)/);
+    assert.match(hudCss, /font-size: var\(--sow-hud-text-secondary-size\)/);
+    assert.match(hudCss, /--sow-hud-layout-operations-max-height/);
+    assert.match(storyCss, /zoom: var\(--sow-hud-hit-target-zoom\)/);
 });
 
 test("desktop notification anchor follows the visible quest, then the tutorial plate, then the safe corner", () => {
@@ -1684,14 +1796,16 @@ test("desktop notification anchor follows the visible quest, then the tutorial p
     assert.ok(start >= 0 && end > start);
     const notificationAnchor = vm.runInNewContext(hud.slice(start, end) + "\nnotificationAnchor;");
     const story = { hidden: false, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
-    const objective = { hidden: false, offsetWidth: 280, offsetHeight: 90, offsetLeft: 16, offsetTop: 100, offsetParent: story };
+    const objectiveRect = { left: 16, right: 296, top: 100, bottom: 190, width: 280, height: 90 };
+    const objective = { hidden: false, getBoundingClientRect: () => objectiveRect };
     const nameplate = { hidden: false, getBoundingClientRect: () => ({ left: 16, right: 296, top: 12, bottom: 84, width: 280, height: 72 }) };
     const serialize = value => JSON.parse(JSON.stringify(value));
 
     assert.deepEqual(serialize(notificationAnchor(story, objective, nameplate, 12)), {
         source: "objective", left: 16, right: 296, top: 202
     });
-    objective.offsetHeight = 140;
+    objectiveRect.height = 140;
+    objectiveRect.bottom = 240;
     assert.equal(notificationAnchor(story, objective, nameplate, 12).top, 252, "a resized quest moves the stack below its new bottom");
     assert.deepEqual(
         serialize(notificationAnchor(story, objective, nameplate, 12)),
@@ -1744,7 +1858,7 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
     assert.match(hudCss, /\.sow-hud__operation-action \{[^}]*width: 44px; height: 44px/);
     assert.match(hudCss, /@media \(max-width: 599px\) and \(orientation: portrait\)[\s\S]*?\.sow-hud__operations \{[^}]*width: min\(560px, calc\(100vw - 124px\)\)/);
     assert.match(hudCss, /\.sow-hud__dock-stack \{[^}]*flex-direction: column-reverse/);
-    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\) \{[^]*?\.sow-hud__operations \{[^}]*max-height: max\(0px, calc\(100dvh - var\(--sow-hud-layout-action-top, 56px\) - var\(--sow-hud-layout-dock-height, 84px\) - max\(6px, var\(--sow-sab\)\) - 6px\)\)/);
+    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__operations \{[^}]*max-height: var\(--sow-hud-layout-operations-max-height, 20dvh\)/);
 
     for (const locale of fs.readdirSync(path.join(shell, "../../sow-i18n/strings"))) {
         const catalog = path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`);
@@ -2487,10 +2601,15 @@ test("campaign saves use the current validator and call Save by its real action"
     assert.match(campaignEditorServer, /key\.replace\(\/\^tutorial\\\./);
     assert.match(campaignEditorServer, /sow-i18n\/strings\/en\/web\.toml/);
     assert.match(campaignEditor, /Allow camera controls only while paused/);
+    assert.match(campaignEditor, /Action allowed while paused/);
+    assert.match(campaignEditor, /if \(keepsMechanics && step\.paused_action\) replacement\.paused_action = step\.paused_action;/);
     assert.match(campaignEditor, /state\.facts\.touch_controls = \$\("#device"\)\.value === "mobile" \? 1 : 0/);
     const unpausedCameraOnly = JSON.parse(JSON.stringify(definition));
     unpausedCameraOnly.steps.find(step => step.id === zoomOut.id).pause_game = false;
     assert.ok(campaign.validate(unpausedCameraOnly, roster, { allowMissingFactionReferences: true, hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.step === zoomOut.id && issue.field === "camera_only"));
+    const invalidPausedAction = JSON.parse(JSON.stringify(definition));
+    Object.assign(invalidPausedAction.steps[0], { pause_game: true, paused_action: "send_resources_stay_paused" });
+    assert.ok(campaign.validate(invalidPausedAction, roster, { allowMissingFactionReferences: true, hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.step === zoomOut.id && issue.field === "paused_action"));
 
     const pausedScene = JSON.parse(JSON.stringify(definition));
     pausedScene.steps.find(step => step.id === zoomOut.id).type = "scene";
@@ -2582,7 +2701,7 @@ test("an active campaign keeps its loaded definition when the editor draft chang
 test("campaign episode JSON is cached only while paired files are loading", () => {
     assert.match(tutorial, /var request = Promise\.all\(\[/);
     assert.match(tutorial, /runtime\.loading\[episodeId\] = request;\s*function releaseRequest\(\) \{\s*if \(runtime\.loading\[episodeId\] === request\) delete runtime\.loading\[episodeId\];\s*}\s*request\.then\(releaseRequest, releaseRequest\)/);
-    assert.match(tutorial, /runtime\.modalOpen = false;\s*runtime\.resumeAfterModal = false;/);
+    assert.match(tutorial, /if \(open\) \{\s*runtime\.uiPaused = true;\s*runtime\.pausedAction = null;/);
 });
 
 test("campaign start keeps its loaded script and replay clicks belong to that episode", async () => {
@@ -2591,7 +2710,7 @@ test("campaign start keeps its loaded script and replay clicks belong to that ep
         version: 2, episode_id: "boudica",
         settings: { buildings_enabled: false, starting_troops: 1000 }, speakers: {},
         entry: "opening",
-        steps: [{ id: "opening", type: "scene", title_key: "tutorial.open", next: "ending" }, { id: "ending", type: "end", title_key: "tutorial.end" }]
+        steps: [{ id: "opening", type: "scene", title_key: "tutorial.open", attack_ratio_on_enter: 0.25, next: "ending" }, { id: "ending", type: "end", title_key: "tutorial.end" }]
     };
     const roster = { map: "eastanglia", player_spawn: [1, 1], factions: [{ id: "enemy", name: "Enemy", x: 2, y: 2, starting_troops: 500, relation: "enemy", civ: "Roman Empire", leader: "Caesar" }] };
     const clone = value => JSON.parse(JSON.stringify(value));
@@ -2608,8 +2727,9 @@ test("campaign start keeps its loaded script and replay clicks belong to that ep
         addEventListener(type, callback) { listeners[type] = callback; }
     };
     let fetches = 0, activeRun, lastUi;
+    const commands = [];
     const window = {
-        addEventListener() {}, SOW_menu_command() {},
+        addEventListener() {}, SOW_menu_command(message) { commands.push(JSON.parse(message)); },
         SOW_t: key => ({ "tutorial.open": "Original", "tutorial.end": "End" })[key] || "[" + key + "]",
         SOWCampaign: { ...campaign, create(data) {
             activeRun = campaign.create(data);
@@ -2630,12 +2750,73 @@ test("campaign start keeps its loaded script and replay clicks belong to that ep
     await new Promise(setImmediate);
     assert.equal(fetches, 2);
     assert.equal(activeRun.definition.steps[0].title_key, "tutorial.open");
+    assert.equal(commands.find(command => command.type === "set_attack_ratio").ratio, 0.25);
     listeners.click({ type: "click", target: buttons[1] });
     window.SOW_tutorial_state_update(state);
     assert.equal(lastUi.campaign_replay, undefined);
     listeners.click({ type: "click", target: buttons[0] });
     window.SOW_tutorial_state_update(state);
     assert.equal(lastUi.campaign_replay, 1);
+});
+
+test("campaign funnel records each step once and completes only after the ending", async () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = {
+        version: 2, episode_id: "step_funnel_test", default_locale: "en",
+        settings: { buildings_enabled: false, starting_troops: 1000 }, strings: {}, speakers: {},
+        entry: "opening", steps: [
+            { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending" },
+            { id: "ending", type: "end", title_key: "tutorial.ending" }
+        ]
+    };
+    const roster = { map: "test_map", player_spawn: [1, 1], factions: [] };
+    const root = { hidden: true, isConnected: false };
+    const events = [];
+    let viewOptions;
+    const document = {
+        body: { appendChild(node) { node.isConnected = true; } }, documentElement: { dir: "ltr" },
+        getElementById: () => null, createElement: () => root,
+        addEventListener() {}, querySelector: () => null
+    };
+    const window = {
+        addEventListener() {},
+        SOW_menu_command() {},
+        SOW_trackExperienceEvent(payload) { events.push(JSON.parse(payload)); },
+        SOW_t: key => ({ "tutorial.opening": "Opening", "tutorial.ending": "Ending" })[key] || "[" + key + "]",
+        SOWCampaign: campaign,
+        SOWCampaignView: { mount: (_root, options) => {
+            viewOptions = options;
+            return { render() {}, destroy() {} };
+        } }
+    };
+    vm.runInNewContext(tutorial, { window, document, performance: { now: () => 0 }, console,
+        fetch(url) {
+            return Promise.resolve({ ok: true, json: () => Promise.resolve(url.endsWith(".triggers.json") ? definition : roster) });
+        }
+    });
+    window.SOW_startCampaignEpisode("step_funnel_test");
+    await new Promise(setImmediate);
+    const state = { phase: "Playing", hud: {
+        tutorial: { active: true, episode_id: "step_funnel_test", facts: {} }, players: [], settings: {}
+    } };
+    window.SOW_tutorial_state_update(state);
+    await new Promise(setImmediate);
+    window.SOW_tutorial_state_update(state);
+    assert.deepEqual(JSON.parse(JSON.stringify(window.SOW_tutorial_exit_context("step_funnel_test"))), {
+        step_id: "opening", step_index: 0, action: "fail"
+    });
+    viewOptions.onContinue();
+    viewOptions.onContinue();
+    window.SOW_tutorial_state_update(state);
+    assert.equal(window.SOW_tutorial_exit_context("step_funnel_test"), false);
+    assert.deepEqual(events, [
+        { name: "tutorial_start", props: { episode_id: "step_funnel_test" } },
+        { name: "tutorial_step", props: { episode_id: "step_funnel_test", step_id: "opening", step_index: 0, action: "start" } },
+        { name: "tutorial_step", props: { episode_id: "step_funnel_test", step_id: "opening", step_index: 0, action: "complete" } },
+        { name: "tutorial_step", props: { episode_id: "step_funnel_test", step_id: "ending", step_index: 1, action: "start" } },
+        { name: "tutorial_step", props: { episode_id: "step_funnel_test", step_id: "ending", step_index: 1, action: "complete" } },
+        { name: "campaign_episode_complete", props: { episode_id: "step_funnel_test" } }
+    ]);
 });
 
 test("campaign decisions keep their selected branch and guard stale callbacks", () => {
@@ -3114,14 +3295,13 @@ test("outside tap on a pending choice ignites the golden button nudge", () => {
 test("campaign dialogue keeps a compact speaker portrait on narrow screens", () => {
     const mobileStart = storyCss.indexOf("@container (max-width: 640px)");
     const mobileEnd = storyCss.indexOf("@container (max-width: 380px)", mobileStart);
-    const landscapeStart = storyCss.indexOf("@media (orientation: landscape) and (max-height: 560px)");
-    const landscapeEnd = storyCss.indexOf("/* Decision nudge", landscapeStart);
     const mobileStory = storyCss.slice(mobileStart, mobileEnd);
-    const landscapeStory = storyCss.slice(landscapeStart, landscapeEnd);
+    const compactPortrait = storyCss.match(/#sow-story\[data-compact="true"\] \.sow-story\.has-portrait \.sow-story__main \{[^}]*\}/);
     assert.match(mobileStory, /\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\); \}/);
     assert.match(storyCss, /\.sow-story__portrait \{ width: var\(--story-portrait-size,[^}]*height: var\(--story-portrait-size,[^}]*aspect-ratio: 1;[^}]*align-self: start/);
-    assert.match(landscapeStory, /\.sow-story\.has-portrait \.sow-story__main \{ grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\); \}/);
-    assert.doesNotMatch(mobileStory + landscapeStory, /(?:144px|64px)/);
+    assert.ok(compactPortrait);
+    assert.match(compactPortrait[0], /grid-template-columns: var\(--story-portrait-size, min\(36cqw, 40svh\)\) minmax\(0, 1fr\)/);
+    assert.doesNotMatch(mobileStory + compactPortrait[0], /(?:144px|64px)/);
     assert.match(campaignView, /function syncMobilePortrait\(\)[\s\S]*?heading\.getBoundingClientRect\(\)\.height \+ headingGap \+ scrollContent\.scrollHeight[\s\S]*?Math\.min\(root\.clientWidth \* 0\.36, root\.clientHeight \* 0\.4\)[\s\S]*?const size = Math\.min\(contentHeight, maxSize\)[\s\S]*?new ResizeObserverCtor\(\(\) => \{[\s\S]*?view\.requestAnimationFrame\([\s\S]*?syncMobilePortrait\(\)/);
     assert.doesNotMatch(campaignView, /const contentHeight = conversation\.getBoundingClientRect\(\)\.height/);
     assert.match(campaignView, /portraitObserver\.observe\(conversation\)/);
@@ -3151,8 +3331,10 @@ test("mobile chapter dialogue hugs its copy while docked at the bottom", () => {
 });
 
 test("mobile story dialogs scroll long text and choices while keeping speaker controls reachable", () => {
+    const mobileStory = storyCss.slice(storyCss.indexOf("@container (max-width: 640px)"), storyCss.indexOf("@container (max-width: 380px)"));
+    assert.match(mobileStory, /\.sow-story__main \{[^}]*flex: 0 1 auto/);
     assert.match(storyCss, /@container \(max-width: 640px\) \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 60svh\)/);
-    assert.match(storyCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__dialog \{[\s\S]*?max-height: min\(calc\(100% - var\(--story-safe-top\) - var\(--story-safe-bottom\)\), 72svh\)/);
     assert.match(storyCss, /\.sow-story__portrait img \{[^}]*width: 100%; height: 100%;[^}]*object-fit: cover/);
     assert.match(storyCss, /\.sow-story__scroll\s*\{[^}]*flex: 1 1 auto; min-height: 0; overflow-y: auto/);
     assert.match(storyCss, /\.sow-story__actions \{[^}]*overflow-y: auto/);
@@ -3192,7 +3374,7 @@ test("tutorial player panel stays above quests on the left on desktop and mobile
     assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate \{[^}]*grid-template-columns: 50px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
     assert.match(hudCss, /@media \(max-width: 720px\) \{\s*:root \{[^}]*--sow-tutorial-progress-height: 28px;[^}]*--sow-tutorial-progress-label-size: 15px/);
     assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate-copy strong \{ font-size: 18px; \}[^]*?\.sow-hud__nameplate-bar \{ height: 20px; \}/);
-    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\) \{\s*:root \{[^}]*--sow-tutorial-player-panel-height: 56px;[^}]*--sow-tutorial-progress-height: 24px;[^}]*--sow-tutorial-progress-label-size: 14px/);
+    assert.match(hud, /"--sow-tutorial-player-panel-height": \(storyRoot \? 56 \* density : 56\)\.toFixed\(2\) \+ "px"[\s\S]*?"--sow-tutorial-progress-height": "24px"[\s\S]*?"--sow-tutorial-progress-label-size": \(14 \/ density\)\.toFixed\(2\) \+ "px"/);
     assert.match(hudCss, /grid-template-columns: 46px minmax\(0, 1fr\)/);
     assert.match(storyCss, /\.sow-story__meter progress \{[^}]*height: var\(--sow-tutorial-progress-height\)/);
     assert.match(storyCss, /\.sow-story__meter output \{[^}]*inset: 0;[^}]*display: grid;[^}]*place-items: center;[^}]*font-size: var\(--sow-tutorial-progress-label-size\)/);
@@ -3230,11 +3412,13 @@ test("short landscape compaction stays on mobile and the editor reuses the share
     assert.match(storyCss, /\.sow-story__main \{ display: contents; \}/);
     assert.match(storyCss, /\.sow-story\.has-portrait \.sow-story__dialog \{ grid-template-columns: clamp\(130px, 22cqw, 220px\) minmax\(0, 1fr\); \}/);
     assert.match(storyCss, /\.sow-story\.has-portrait \.sow-story__actions \{ grid-column: 2; \}/);
-    assert.match(storyCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\)/);
-    assert.match(hudCss, /\.sow-hud__status-right \{ flex-direction: row; gap: 6px; padding: 3px; \}/);
-    assert.match(hudCss, /\.sow-hud__right-rail \{[^}]*grid-template-columns: repeat\(2, 44px\)/);
-    assert.match(hudCss, /\.sow-hud__dock-actions \{[^}]*overflow-x: auto;[^}]*overscroll-behavior-inline: contain/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__objective/);
+    assert.match(hudCss, /@media \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?#sow-hud\[data-compact="true"\] \.sow-hud__status-right \{ flex-direction: row/);
+    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__right-rail \{[^}]*grid-template-columns: repeat\(2, 44px\)/);
+    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__dock-actions \{[^}]*overflow-x: auto;[^}]*overscroll-behavior-inline: contain/);
     assert.match(hud, /function syncCompactHudBounds\(\)/);
+    assert.match(hud, /function compactHudDensity\(width, height\)/);
+    assert.match(hud, /width \/ 960, height \/ 720/);
     assert.match(hud, /--sow-hud-layout-top-reserve/);
     assert.match(hud, /--sow-hud-layout-action-top/);
     assert.match(hud, /--sow-hud-layout-bottom-edge/);
@@ -3242,7 +3426,7 @@ test("short landscape compaction stays on mobile and the editor reuses the share
     assert.match(campaignView, /objective\.dataset\.detailsExpanded = String\(objective\.dataset\.detailsExpanded !== "true"\)/);
     assert.match(storyCss, /\.sow-story__objective\[data-details-expanded="false"\] \.sow-story__objective-copy > p \{ display: none; \}/);
     assert.match(storyCss, /\.sow-story__objective \{[^}]*pointer-events: none/);
-    assert.match(storyCss, /\.sow-story__details-toggle,\s*\.sow-story__locate \{ display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; pointer-events: auto; \}/);
+    assert.match(storyCss, /#sow-story\[data-compact="true"\] \.sow-story__details-toggle,[\s\S]*?#sow-story\[data-compact="true"\] \.sow-story__locate \{ display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; pointer-events: auto; \}/);
     assert.match(storyCss, /\.sow-story\.is-chapter \.sow-story__dialog \{ bottom: 50%; transform: translateY\(50%\)/);
     assert.match(campaignEditorHtml, /href="\/shell\/main_menu\.tutorial\.css"/);
     assert.match(campaignEditorHtml, /src="\/shell\/sow-campaign-view\.js"/);
@@ -3250,7 +3434,7 @@ test("short landscape compaction stays on mobile and the editor reuses the share
 });
 
 test("short landscape HUD geometry fits the requested phone widths and heights", () => {
-    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: none\) and \(pointer: coarse\)/);
+    assert.match(hudCss, /@media \(hover: none\) and \(pointer: coarse\) \{[\s\S]*?#sow-hud\[data-compact="true"\]/);
     assert.match(hudCss, /\.sow-hud__dock \{[^}]*width: min\(520px, calc\(100vw - max\(8px, var\(--sow-sal\)\) - max\(8px, var\(--sow-sar\)\) - 204px\)\)/);
     assert.match(hudCss, /\.sow-hud__operations \{[^}]*width: min\(320px, calc\(100vw - max\(8px, var\(--sow-sal\)\) - 280px - max\(8px, var\(--sow-sar\)\)\)/);
     assert.match(hudCss, /\.sow-hud__building-btn \{ flex: 0 0 44px; min-height: 44px; \}/);
@@ -3261,14 +3445,14 @@ test("short landscape HUD geometry fits the requested phone widths and heights",
         const operationWidth = Math.min(320, width - leftInset - 280 - rightInset);
         const dockLeft = (width - dockWidth) / 2;
         const operationsRight = width - rightInset;
-        const operationsHeight = height - 56 - 84 - 6 - 6;
+        const operationsHeight = Math.min(height * 0.2, Math.max(0, height - 56 - 84 - 6 - 6));
         assert.ok(dockWidth >= 280, `${width}x${height}: dock has room for its resource row`);
         assert.ok(operationWidth >= 220, `${width}x${height}: operations keep a usable width`);
         assert.ok(dockLeft >= leftInset && dockLeft + dockWidth <= width - rightInset, `${width}x${height}: dock stays inside safe edges`);
         assert.ok(operationsRight <= width - rightInset && operationsRight - operationWidth >= leftInset, `${width}x${height}: operations stay inside safe edges`);
-        assert.ok(operationsHeight > 0, `${width}x${height}: operations retain scrollable vertical room`);
+        assert.ok(operationsHeight > 0 && operationsHeight <= height * 0.2, `${width}x${height}: operations remain scrollable within 20% of the frame`);
     }
-    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\) and \(hover: hover\) and \(pointer: fine\)/);
+    assert.match(hudCss, /@media \(hover: hover\) and \(pointer: fine\) \{[\s\S]*?#sow-hud\[data-compact="true"\]/);
     assert.match(hudCss, /@media \(max-width: 599px\) and \(orientation: portrait\)/);
 });
 
@@ -3869,7 +4053,7 @@ test("building mode upgrades same-kind targets, marks them, and has a cancel con
     assert.match(hud, /if \(selectedBuilding\) send\("select_building", \{ kind: selectedBuilding \}\)/);
     assert.match(hud, /buildingCancel\.hidden = !hud\.selected_building/);
     assert.match(hudCss, /\.sow-hud__building-cancel[\s\S]*?min-width: 124px;[\s\S]*?min-height: 54px;[\s\S]*?background: linear-gradient/);
-    assert.match(hudCss, /@media \(orientation: landscape\) and \(max-height: 560px\)[\s\S]*?\.sow-hud__building-cancel/);
+    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__building-cancel/);
     const dockStart = hud.indexOf('<footer class="sow-hud__dock"');
     const dockEnd = hud.indexOf('</footer>', dockStart);
     assert.ok(dockStart >= 0 && dockEnd > dockStart);
@@ -4162,7 +4346,7 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hud, /dataset\.mapGroup = group/);
     assert.match(hud, /upgrade_structure/);
     assert.match(hud, /build_warship/);
-    assert.match(hud, /build_trade_ship/);
+    assert.doesNotMatch(hud, /build_trade_ship/);
     assert.match(hudCss, /\.sow-hud__map-sector--build/);
     assert.match(hudCss, /\.sow-hud__map-sector--nuke/);
     assert.match(hudCss, /isolation: isolate/);
@@ -4179,6 +4363,39 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.doesNotMatch(hud, /mapClose|data-map-close|close_map_menu|STRATEGIC STRIKE|CONSTRUCT/);
     assert.match(hudCss, /\.sow-hud__map-sector-caption/);
     assert.doesNotMatch(hudCss, /sow-hud__map-close/);
+});
+
+test("fleet dock uses building buttons for real actions and an automatic-trade status icon", () => {
+    const stripStart = hud.indexOf('<div class="sow-hud__fleet-strip"');
+    const stripEnd = hud.indexOf("</div>", stripStart);
+    const strip = hud.slice(stripStart, stripEnd);
+    assert.match(strip, /<span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img"/);
+    assert.match(strip, /emojiIcon\("⛵", "sow-hud__building-icon"\)/);
+    assert.match(strip, /class="sow-hud__building-btn" data-command="select_warship"[\s\S]*?emojiIcon\("🚢", "sow-hud__building-icon"\)/);
+    assert.match(strip, /class="sow-hud__building-btn" data-command="select_nuke"[\s\S]*?emojiIcon\("🚀", "sow-hud__building-icon"\)/);
+    assert.doesNotMatch(strip, /data-command="[^"]+" data-fleet-kind="trade"|<b(?:\s|>)|<small(?:\s|>)/);
+    assert.match(hud, /var tradeStatus = SOW_t\("hud\.map_action_fleet"\) \+ " · " \+ tradeCount \+ "\/" \+ tradeCapacity/);
+    assert.match(hud, /fleetWarship\.disabled = false;[\s\S]*fleetWarship\.setAttribute\("aria-disabled"[\s\S]*fleetWarship\.setAttribute\("aria-pressed"/);
+    assert.match(hud, /fleetNuke\.disabled = false;[\s\S]*fleetNuke\.setAttribute\("aria-disabled"[\s\S]*fleetNuke\.setAttribute\("aria-pressed"/);
+    assert.match(hud, /warshipDisabled = !warshipUnlocked \|\| militaryFull \|\| gold < warshipCost/);
+    assert.match(hud, /nukeDisabled = !nukeUnlocked \|\| !nukeReady/);
+    assert.match(hud, /tradeCount = Math\.floor\(Number\(fleetPanel\.trade_ships\)/);
+    assert.match(hud, /tradeCapacity = Math\.floor\(Number\(fleetPanel\.trade_capacity\)/);
+    assert.doesNotMatch(hudCss, /sow-hud__fleet-btn/);
+    assert.match(hudCss, /\.sow-hud__fleet-status \{ cursor: default; \}/);
+    assert.match(hud, /else if \(cmd === "select_warship"\) \{\s*send\("select_warship"\)/);
+    assert.match(hud, /else if \(cmd === "select_nuke"\) \{\s*send\("select_nuke"\)/);
+    assert.match(webMenu, /WebMenuCommand::SelectWarship => \{[\s\S]*?self\.select_warship_build_mode\(\)/);
+    assert.match(webMenu, /WebMenuCommand::SelectNuke => \{[\s\S]*?self\.select_nuke_kind/);
+    assert.match(mapClick, /self\.build_ship_at\(tile_idx, sow_core::game::UnitType::Warship\)/);
+    assert.match(mapClick, /self\.launch_nuke_at\(kind, tile_idx\)/);
+    assert.doesNotMatch(mapClick, /BuildTradeShip|build_trade_ship/);
+    assert.match(webMenu, /"warship_required_port_level": warship\.required_port_level\(\)/);
+    assert.match(webMenu, /"nuke_required_city_level": nuke\.required_city_level\(\)/);
+    assert.match(campaignEngine, /dock_trade_ship: '#sow-hud \[data-fleet-kind="trade"\]'/);
+    assert.doesNotMatch(campaignEngine, /map_build_trade_ship/);
+    assert.doesNotMatch(campaignEditorHtml, /data-map-action="build_trade_ship"/);
+    assert.match(fs.readFileSync(path.join(shell, "../../sow-core/src/building/construction.rs"), "utf8"), /fn passive_trade_ships_spawn_without_manual_purchase_and_choose_another_route/);
 });
 
 test("radial actions restore emoji, visible translated labels, and all alliance states", () => {
@@ -4372,7 +4589,7 @@ test("tutorial hand follows the selected campaign target", () => {
     assert.doesNotMatch(hudCss, /sow-hud__tutorial-marker/);
 });
 
-test("tutorial camera anchors publish the current map coordinates", () => {
+test("tutorial camera anchors and paused build guides publish current map coordinates", () => {
     const anchorStart = webMenu.indexOf("pub(crate) fn publish_tutorial_camera_anchor_frame");
     const stateStart = webMenu.indexOf("pub(crate) fn publish_state", anchorStart);
     const anchorPublisher = webMenu.slice(anchorStart, stateStart);
@@ -4385,8 +4602,13 @@ test("tutorial camera anchors publish the current map coordinates", () => {
 
     const hudKeyStart = webMenu.indexOf("fn hud_publish_key");
     const hudKeyEnd = webMenu.indexOf("\n#[cfg", hudKeyStart);
-    assert.doesNotMatch(webMenu.slice(hudKeyStart, hudKeyEnd), /camera_[xy]/);
+    const hudKey = webMenu.slice(hudKeyStart, hudKeyEnd);
+    assert.match(hudKey, /tutorial_camera_viewport: tutorial_active\.then_some\(\([\s\S]*?camera_x\.to_bits\(\)[\s\S]*?camera_y\.to_bits\(\)/);
     assert.match(webMenu, /LAST_HUD_KEY\.with\([\s\S]*?if \*last == Some\(hud_key\)/);
+    const guideStart = webMenu.indexOf("fn tutorial_guide_tiles(");
+    const guideEnd = webMenu.indexOf("\nfn tutorial_payload(", guideStart);
+    const guide = webMenu.slice(guideStart, guideEnd);
+    assert.match(guide, /guide_build_site_candidates[\s\S]*tutorial_visible_build_site_candidate\([\s\S]*tutorial_project_tile\([\s\S]*&app\.input[\s\S]*tutorial_screen_point_visible/);
     assert.match(tutorial, /var targetFactionId = targetStep\.guide[\s\S]*?targetStep\.trigger[\s\S]*?send\("focus_world"/);
     const anchorFunction = tutorial.slice(tutorial.indexOf("function anchorFor"), tutorial.indexOf("function syncTransferGuide"));
     assert.match(anchorFunction, /factionAction[\s\S]*?tutorial\.target_nameplate[\s\S]*?cameraTracked: true/);
@@ -4439,19 +4661,45 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     const anchorEnd = tutorial.indexOf("\n    function syncTransferGuide(", anchorStart);
     const anchorSource = tutorial.slice(anchorStart, anchorEnd);
     assert.match(anchorSource, /resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
+    assert.match(anchorSource, /step\.id === "boudica_transfer_send"[\s\S]*resolveUiAnchor\(source, spotlightPanel\)/);
     assert.match(anchorSource, /guide\.kind === "ui" && step\.trigger && step\.trigger\.type === "ui" && guide\.target === "hud_center_camera"[\s\S]*result\.toX = result\.x; result\.toY = result\.y[\s\S]*root\.clientWidth[\s\S]*root\.clientHeight/);
     assert.match(anchorSource, /result\.spotlightX = result\.x; result\.spotlightY = result\.y; result\.dimOutside = true/);
     assert.doesNotMatch(anchorSource, /delete result\.(?:width|height)/);
-    assert.match(campaignView, /spotlight\.classList\.toggle\("is-dimmed", Boolean\(guideVisible && anchor\.dimOutside\)\)/);
+    assert.match(campaignView, /spotlight\.classList\.toggle\("is-dimmed", Boolean\(guideVisible && \(anchor\.dimOutside \|\| step\.guide\.kind === "ui"\)\)\)/);
+    assert.match(campaignView, /Number\.isFinite\(anchor\.spotlightWidth\) \? anchor\.spotlightWidth : anchor\.width/);
     assert.match(campaignView, /Number\.isFinite\(anchor\.spotlightX\) \? anchor\.spotlightX : anchor\.x/);
     assert.match(storyCss, /\.sow-story__spotlight\.is-dimmed \{[^}]*9999px/);
     assert.match(storyCss, /\.sow-story__spotlight \{[^}]*pointer-events:\s*none/);
 });
 
+test("Boudica UI guides spotlight only the six requested controls and keep the full transfer panel visible", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const requested = [
+        "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade",
+        "boudica_choose_factory", "boudica_choose_bunker", "boudica_return_lobby"
+    ];
+    const uiSteps = definition.steps.filter(step => step.guide && step.guide.kind === "ui").map(step => step.id).sort();
+    assert.deepEqual(uiSteps, ["boudica_camera_home", ...requested].sort(), "no other campaign steps gain a UI guide");
+    for (const id of requested) assert.equal(definition.steps.find(step => step.id === id).guide.gesture, "tap");
+    assert.match(campaignView, /anchor\.dimOutside \|\| step\.guide\.kind === "ui"/);
+    assert.match(campaignView, /spotlightWidth = Number\.isFinite\(anchor\.spotlightWidth\) \? anchor\.spotlightWidth : anchor\.width/);
+    assert.match(tutorial, /step\.id === "boudica_transfer_send"[\s\S]*source\.closest\("#sow-hud-transfer"\)/);
+    assert.match(campaignEditor, /step\.id === "boudica_transfer_send"[\s\S]*target\.closest\("#sow-hud-transfer"\)/);
+    assert.match(campaignEditor, /model\.step\.id === "boudica_transfer_send"\) transferPanel\.hidden = false[\s\S]*previousStep === "boudica_transfer_send"\) transferPanel\.hidden = true/);
+    assert.match(campaignEditor, /anchorRect = guide\.kind === "ui" \? \$\("#previewRoot"\)\.getBoundingClientRect\(\) : frameRect/);
+    assert.match(campaignEditor, /if \(Number\.isFinite\(anchor\.spotlightX\)\) anchor\.spotlightX -= anchorRect\.left/);
+    assert.match(campaignEditor, /if \(Number\.isFinite\(anchor\.spotlightY\)\) anchor\.spotlightY -= anchorRect\.top/);
+});
+
 test("terms dialog smoothly focuses the requesting entity without changing zoom", () => {
     assert.match(actionsSource, /UiAction::CenterCamera[\s\S]*?camera_focus_target = Some\(\(world_cx, world_cy\)\);[\s\S]*?target_zoom = 10\.0/);
     assert.match(webMenu, /WebMenuCommand::FocusWorld \{ x, y \}[\s\S]*?let tutorial_focus = self\.ui\.tutorial_active && self\.net\.is_offline;[\s\S]*?target_zoom = self\.input\.camera_zoom;\s*self\.input\.camera_focus_target = Some\(\(x, y\)\);\s*self\.input\.tutorial_camera_focus = tutorial_focus/);
-    assert.match(cameraFrameUiSource, /self\.input\.camera_x \+= \(target_x - self\.input\.camera_x\) \* lerp;[\s\S]*?self\.input\.camera_y \+= \(target_y - self\.input\.camera_y\) \* lerp/);
+    assert.match(cameraFrameUiSource, /let \(camera, zoom, target\) = focus_camera_step\([\s\S]*?self\.input\.camera_x = camera\.0;[\s\S]*?self\.input\.camera_zoom = zoom/);
+    const focusStepStart = cameraFrameUiSource.indexOf("fn focus_camera_step(");
+    const focusStepEnd = cameraFrameUiSource.indexOf("\nimpl SowApp", focusStepStart);
+    const focusStep = cameraFrameUiSource.slice(focusStepStart, focusStepEnd);
+    assert.match(focusStep, /let current_center = \([\s\S]*?camera\.0\) \/ camera_zoom[\s\S]*?camera\.1\) \/ camera_zoom/);
+    assert.match(focusStep, /screen\.0 \* 0\.5 - center\.0 \* zoom[\s\S]*?screen\.1 \* 0\.5 - center\.1 \* zoom/);
     assert.match(webMenu, /WebMenuCommand::SetDialogBorderHighlight \{ player_id \} => \{[\s\S]*?dialog_border_highlight = player_id/);
     assert.match(tutorial, /send\("set_dialog_border_highlight", \{ player_id: highlightId \}\)/);
     assert.match(tutorial, /send\("set_dialog_border_highlight", \{ player_id: null \}\)/);
@@ -4465,10 +4713,11 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     assert.match(hud, /button\.dataset\.tutorialAnchorX = String\(anchorX\)/);
     assert.match(hud, /button\.dataset\.tutorialAnchorY = String\(anchorY\)/);
-    assert.match(tutorial, /SOWCampaign\.resolveUiAnchor\(source\)/);
+    assert.match(tutorial, /SOWCampaign\.resolveUiAnchor\(source, spotlightPanel\)/);
     assert.match(tutorial, /SOWCampaign\.resolveUiAnchor\(destination\)/);
-    assert.match(campaignEditor, /SOWCampaign\.resolveUiAnchor\(target\)/);
+    assert.match(campaignEditor, /SOWCampaign\.resolveUiAnchor\(target, spotlightPanel\)/);
     assert.match(campaignEditor, /SOWCampaign\.resolveUiAnchor\(end\)/);
+    assert.match(campaignEditor, /Number\.isFinite\(anchor\.spotlightX\)\) anchor\.spotlightX -= anchorRect\.left/);
     assert.match(campaignEditor, /window\.addEventListener\("resize", function \(\) \{ drawWires\(\); if \(state\.machine\) paintPreview\(false\); \}/);
     const rect = (left, top, width, height) => ({ left, top, width, height });
     const icon = { getClientRects: () => [{}], getBoundingClientRect: () => rect(265, 75, 24, 28) };
@@ -4479,6 +4728,12 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
     };
     assert.deepEqual(campaign.resolveUiAnchor(radial), { x: 250, y: 75, width: 24, height: 28 });
     assert.deepEqual(campaign.resolveUiAnchor({ getBoundingClientRect: () => rect(10, 20, 40, 60) }), { x: 30, y: 50, width: 40, height: 60 });
+    const send = { getBoundingClientRect: () => rect(100, 100, 60, 30) };
+    const panel = { getBoundingClientRect: () => rect(20, 40, 300, 200) };
+    assert.deepEqual(campaign.resolveUiAnchor(send, panel), {
+        x: 130, y: 115, width: 60, height: 30,
+        spotlightX: 170, spotlightY: 140, spotlightWidth: 300, spotlightHeight: 200
+    });
 });
 
 test("tutorial hand keeps bouncing over the Roman target and moving expansion edge", () => {

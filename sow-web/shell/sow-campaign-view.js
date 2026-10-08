@@ -338,7 +338,7 @@
             renderGuideMetric(context.guideMetric, reducedMotion, step.id);
             const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
             gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
-            spotlight.classList.toggle("is-dimmed", Boolean(guideVisible && anchor.dimOutside));
+            spotlight.classList.toggle("is-dimmed", Boolean(guideVisible && (anchor.dimOutside || step.guide.kind === "ui")));
             if (guideVisible) {
                 cameraTracking = anchor.cameraTracked === true;
                 gesture.classList.toggle("is-camera-following", cameraTracking);
@@ -369,10 +369,12 @@
                 if (anchor.width) {
                     const spotlightX = Number.isFinite(anchor.spotlightX) ? anchor.spotlightX : anchor.x;
                     const spotlightY = Number.isFinite(anchor.spotlightY) ? anchor.spotlightY : anchor.y;
-                    spotlight.style.width = (anchor.width + 12) + "px";
-                    spotlight.style.height = (anchor.height + 12) + "px";
-                    spotlight.style.left = (spotlightX - anchor.width / 2 - 6) + "px";
-                    spotlight.style.top = (spotlightY - anchor.height / 2 - 6) + "px";
+                    const spotlightWidth = Number.isFinite(anchor.spotlightWidth) ? anchor.spotlightWidth : anchor.width;
+                    const spotlightHeight = Number.isFinite(anchor.spotlightHeight) ? anchor.spotlightHeight : anchor.height;
+                    spotlight.style.width = (spotlightWidth + 12) + "px";
+                    spotlight.style.height = (spotlightHeight + 12) + "px";
+                    spotlight.style.left = (spotlightX - spotlightWidth / 2 - 6) + "px";
+                    spotlight.style.top = (spotlightY - spotlightHeight / 2 - 6) + "px";
                 }
             } else {
                 gesture.classList.remove("is-following");

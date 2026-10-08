@@ -1136,6 +1136,15 @@
         var target = event.target.closest("[data-command]");
         if (!target || !root.contains(target)) return;
         var command = target.dataset.command;
+        var experienceEvent = {
+            open_campaign: "menu_campaign_open",
+            open_browser: "menu_lobby_browser_open",
+            open_create: "menu_custom_create_open",
+            confirm_leader: "menu_leader_confirm"
+        }[command];
+        if (experienceEvent && typeof window.SOW_trackExperienceEvent === "function") {
+            window.SOW_trackExperienceEvent({ name: experienceEvent });
+        }
         if (command === "open_campaign") {
             profileOpen = false;
             profileAccountId = null;

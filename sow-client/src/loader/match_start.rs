@@ -205,6 +205,7 @@ impl SowApp {
         self.ui.tutorial_waiting_for_first_attack = tutorial
             && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
             && !config.scripted_spawns.is_empty();
+        self.ui.tutorial_paused_action = None;
         self.sim.paused = self.ui.tutorial_waiting_for_first_attack;
         self.sim.tutorial_observation.reset();
         self.net.client = None;
@@ -221,7 +222,10 @@ impl SowApp {
                 self.ui.tutorial_campaign.episode_id(),
                 config.map_name
             );
-            crate::store_portals::track_product_event("tutorial_start");
+            crate::store_portals::track_product_event_with(
+                "tutorial_start",
+                &serde_json::json!({ "episode_id": self.ui.tutorial_campaign.episode_id() }),
+            );
         }
 
         let map_id = crate::ui::asset_loader::AssetLoader::map_key(&config.map_name);

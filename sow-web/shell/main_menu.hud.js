@@ -196,18 +196,16 @@
     }
 
     function notificationAnchor(storyRoot, objective, nameplate, gap) {
-        if (storyRoot && !storyRoot.hidden && objective && !objective.hidden
-            && objective.offsetWidth > 0 && objective.offsetHeight > 0) {
-            var offsetParent = objective.offsetParent || storyRoot;
-            var parentRect = offsetParent.getBoundingClientRect();
-            var left = parentRect.left + objective.offsetLeft;
-            var top = parentRect.top + objective.offsetTop;
-            return {
-                source: "objective",
-                left: left,
-                right: left + objective.offsetWidth,
-                top: top + objective.offsetHeight + gap
-            };
+        if (storyRoot && !storyRoot.hidden && objective && !objective.hidden) {
+            var objectiveRect = objective.getBoundingClientRect();
+            if (objectiveRect.width > 0 && objectiveRect.height > 0) {
+                return {
+                    source: "objective",
+                    left: objectiveRect.left,
+                    right: objectiveRect.right,
+                    top: objectiveRect.bottom + gap
+                };
+            }
         }
         if (nameplate && !nameplate.hidden) {
             var rect = nameplate.getBoundingClientRect();
@@ -273,6 +271,7 @@
         if (!notificationMutationObserver && typeof window.MutationObserver === "function") {
             notificationMutationObserver = new window.MutationObserver(function () {
                 observeNotificationAnchors();
+                syncCompactHudDensity();
                 scheduleNotificationPlacement();
             });
         }
@@ -290,6 +289,10 @@
             if (window.visualViewport) window.visualViewport.addEventListener("resize", function () {
                 syncCompactHudBounds();
                 scheduleNotificationPlacement();
+            }, { passive: true });
+            document.addEventListener("focusout", function () {
+                if (window.requestAnimationFrame) window.requestAnimationFrame(syncCompactHudBounds);
+                else syncCompactHudBounds();
             }, { passive: true });
             window.addEventListener("sow:locale-change", scheduleNotificationPlacement);
         }
@@ -451,9 +454,9 @@
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_building" data-kind="Farm" aria-label="Farm">' + buildingIcon("Farm") + '</button>'
             + '      </div>'
             + '      <div class="sow-hud__fleet-strip" id="sow-hud-fleet-strip">'
-            + '        <button type="button" class="sow-hud__fleet-btn" data-fleet-kind="trade" disabled aria-label="' + SOW_t("hud.map_action_build_trade_ship") + '">' + hudIcon("trade_ship", "sow-hud__fleet-icon") + '<span><b data-role="trade-ships">0 / 0</b><small>' + SOW_t("hud.map_action_build_trade_ship") + '</small></span></button>'
-            + '        <button type="button" class="sow-hud__fleet-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' + SOW_t("hud.map_action_build_warship") + '">' + hudIcon("warship", "sow-hud__fleet-icon") + '<span><b data-role="warships">0</b><small>' + SOW_t("hud.map_action_build_warship") + '</small></span></button>'
-            + '        <button type="button" class="sow-hud__fleet-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' + SOW_t("hud.map_action_nuke") + '">' + hudIcon("nuke", "sow-hud__fleet-icon") + '<span><b data-role="nuke-status">' + SOW_t("lobbies.locked") + '</b><small>' + SOW_t("hud.map_action_nuke") + '</small></span></button>'
+            + '        <span class="sow-hud__building-btn sow-hud__fleet-status" data-fleet-kind="trade" role="img" aria-label="' + SOW_t("hud.map_action_fleet") + '">' + emojiIcon("⛵", "sow-hud__building-icon") + '</span>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_warship" data-fleet-kind="warship" aria-label="' + SOW_t("hud.map_action_build_warship") + '" title="' + SOW_t("hud.map_action_build_warship") + '">' + emojiIcon("🚢", "sow-hud__building-icon") + '</button>'
+            + '        <button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' + SOW_t("hud.map_action_nuke") + '" title="' + SOW_t("hud.map_action_nuke") + '">' + emojiIcon("🚀", "sow-hud__building-icon") + '</button>'
             + '      </div>'
             + '    </div>'
             + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
@@ -608,9 +611,6 @@
             fleetTrade: hudRoot.querySelector("[data-fleet-kind='trade']"),
             fleetWarship: hudRoot.querySelector("[data-fleet-kind='warship']"),
             fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
-            fleetTradeCount: hudRoot.querySelector("[data-role='trade-ships']"),
-            fleetWarshipCount: hudRoot.querySelector("[data-role='warships']"),
-            fleetNukeStatus: hudRoot.querySelector("[data-role='nuke-status']"),
             buildingCancel: hudRoot.querySelector("[data-command='cancel_building_mode']"),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_'], .sow-hud__right-rail [data-command='toggle_emoji']")),
             troopFill: document.getElementById("sow-hud-troop-fill"),
@@ -760,8 +760,7 @@
         build_farm: { text: "Farm" },
         upgrade_structure: { icon: "upgrade", text: "Upgrade" },
         nuke: { icon: "nuke", emoji: "🚀", key: "hud.map_action_nuke" },
-        build_warship: { icon: "warship", key: "hud.map_action_build_warship" },
-        build_trade_ship: { icon: "trade_ship", key: "hud.map_action_build_trade_ship" }
+        build_warship: { icon: "warship", key: "hud.map_action_build_warship" }
     };
 
     var allianceActionLabels = {
@@ -780,7 +779,6 @@
         build_farm: true,
         upgrade_structure: true,
         build_warship: true,
-        build_trade_ship: true
     };
 
     function mapLabel(action) {
@@ -1499,9 +1497,77 @@
         hudRefs.mapFeedback.style.top = top + "px";
     }
 
+    function compactHudDensity(width, height) {
+        width = Number(width);
+        height = Number(height);
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= height || width <= 0 || height <= 0) return 1;
+        return Math.max(0.65, Math.min(1, width / 960, height / 720));
+    }
+
+    function writeHudDensity(target, density, storyRoot) {
+        if (!target) return;
+        if (density < 1) {
+            if (target.dataset.compact !== "true") target.dataset.compact = "true";
+            var values = {
+                "--sow-hud-density": density.toFixed(4),
+                "--sow-hud-hit-target-zoom": (1 / density).toFixed(4),
+                "--sow-hud-text-primary-size": (12 / density).toFixed(2) + "px",
+                "--sow-hud-text-secondary-size": (11 / density).toFixed(2) + "px",
+                "--sow-tutorial-player-panel-height": (storyRoot ? 56 * density : 56).toFixed(2) + "px",
+                "--sow-tutorial-progress-height": "24px",
+                "--sow-tutorial-progress-label-size": (14 / density).toFixed(2) + "px"
+            };
+            Object.keys(values).forEach(function (property) {
+                if (target.style.getPropertyValue(property) !== values[property]) target.style.setProperty(property, values[property]);
+            });
+        } else {
+            if (target.dataset.compact) delete target.dataset.compact;
+            ["--sow-hud-density", "--sow-hud-hit-target-zoom", "--sow-hud-text-primary-size", "--sow-hud-text-secondary-size", "--sow-tutorial-player-panel-height", "--sow-tutorial-progress-height", "--sow-tutorial-progress-label-size"].forEach(function (property) {
+                if (target.style.getPropertyValue(property)) target.style.removeProperty(property);
+            });
+        }
+    }
+
+    var compactHudDensityValue = null;
+
+    function syncCompactHudDensity() {
+        if (!hudRoot) return 1;
+        var active = document.activeElement;
+        var isEditingHudField = active && hudRoot.contains(active)
+            && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName || "");
+        var width = hudRoot.clientWidth || window.innerWidth || 0;
+        var height = hudRoot.clientHeight || window.innerHeight || 0;
+        var density = isEditingHudField && compactHudDensityValue !== null
+            ? compactHudDensityValue
+            : compactHudDensity(width, height);
+        compactHudDensityValue = density;
+        writeHudDensity(hudRoot, density, false);
+        writeHudDensity(document.getElementById("sow-story"), density, true);
+        if (density < 1) {
+            var operationCap = Math.max(0, height * 0.2 / density).toFixed(1) + "px";
+            if (hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height") !== operationCap) {
+                hudRoot.style.setProperty("--sow-hud-layout-operations-max-height", operationCap);
+            }
+        } else if (hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height")) {
+            hudRoot.style.removeProperty("--sow-hud-layout-operations-max-height");
+        }
+        return density;
+    }
+
+    function clearCompactHudDensity() {
+        compactHudDensityValue = null;
+        writeHudDensity(hudRoot, 1, false);
+        writeHudDensity(document.getElementById("sow-story"), 1, true);
+        if (hudRoot && hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height")) {
+            hudRoot.style.removeProperty("--sow-hud-layout-operations-max-height");
+        }
+    }
+
     function syncCompactHudBounds() {
-        if (!hudRoot || !hudRefs || !window.matchMedia) return;
-        if (!window.matchMedia("(orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse)").matches) {
+        if (!hudRoot || !hudRefs) return;
+        var density = syncCompactHudDensity();
+        if (density >= 1 || !window.matchMedia
+            || !window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
             ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge", "--sow-dock-reserve"].forEach(function (property) {
                 hudRoot.style.removeProperty(property);
             });
@@ -1517,16 +1583,32 @@
             ? Math.ceil(hudRefs.topbar.getBoundingClientRect().bottom + 8)
             : 56;
         hudRoot.style.setProperty("--sow-hud-layout-action-top", actionTop + "px");
-        var dockHeight = hudRefs.dock ? Math.ceil(hudRefs.dock.getBoundingClientRect().height) : 0;
+        var dockInner = hudRefs.dock && hudRefs.dock.querySelector(".sow-hud__dock-inner");
+        var dockHeight = dockInner
+            ? Math.ceil(dockInner.getBoundingClientRect().height)
+            : (hudRefs.dock ? Math.ceil(hudRefs.dock.getBoundingClientRect().height) : 0);
         if (hudRefs.buildingCancel && !hudRefs.buildingCancel.hidden) {
             dockHeight += Math.ceil(hudRefs.buildingCancel.getBoundingClientRect().height) + 6;
         }
-        var stackHeight = hudRefs.dockStack ? Math.ceil(hudRefs.dockStack.getBoundingClientRect().height) : dockHeight;
         var safeBottom = Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-sab")) || 0;
         hudRoot.style.setProperty("--sow-hud-layout-dock-height", dockHeight + "px");
+        var stackTop = window.innerHeight;
+        var stackBottom = 0;
+        [dockInner, hudRefs.buildingCancel, hudRefs.operations].forEach(function (element) {
+            if (!element || element.hidden || !element.getClientRects().length) return;
+            var rect = element.getBoundingClientRect();
+            stackTop = Math.min(stackTop, rect.top);
+            stackBottom = Math.max(stackBottom, rect.bottom);
+        });
+        if (stackBottom === 0) stackBottom = window.innerHeight;
+        var stackHeight = Math.max(0, Math.ceil(stackBottom - stackTop));
         hudRoot.style.setProperty("--sow-dock-reserve", (stackHeight + Math.max(8, safeBottom) + 8) + "px");
-        var stackTop = hudRefs.dockStack ? hudRefs.dockStack.getBoundingClientRect().top : window.innerHeight;
         hudRoot.style.setProperty("--sow-hud-layout-bottom-edge", Math.floor(stackTop - 8) + "px");
+        var freeOperationsHeight = Math.max(0, stackTop - actionTop - safeBottom - 6);
+        var operationCap = Math.max(0, Math.min(window.innerHeight * 0.2, freeOperationsHeight) / density).toFixed(1) + "px";
+        if (hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height") !== operationCap) {
+            hudRoot.style.setProperty("--sow-hud-layout-operations-max-height", operationCap);
+        }
         if (activeMapFeedback && hudRefs.mapFeedback && !hudRefs.mapFeedback.hidden) positionMapFeedback(activeMapFeedback.entry);
     }
 
@@ -1867,6 +1949,7 @@
         if (!hudRoot) return;
         if (!hudState || hudState.phase !== "Playing" || !hudState.hud) {
             hudRoot.hidden = true;
+            clearCompactHudDensity();
             activeHudPanel = null;
             transferOpen = false;
             betrayalOpen = false;
@@ -1895,6 +1978,7 @@
         }
         ensureHudDom();
         hudRoot.hidden = false;
+        syncCompactHudDensity();
 
         var hud = hudState.hud;
         var settingsOpen = activeHudPanel === "settings";
@@ -2071,53 +2155,51 @@
             var militaryFull = Number(fleetPanel.military_used) >= Number(fleetPanel.military_capacity);
             var warshipSelected = Boolean(hud.selected_warship_build);
             if (hudRefs.fleetTrade) {
-                hudRefs.fleetTrade.disabled = !tradeUnlocked;
-                hudRefs.fleetTrade.setAttribute("aria-disabled", String(!tradeUnlocked));
-                hudRefs.fleetTrade.title = tradeUnlocked
-                    ? SOW_t("hud.map_action_build_trade_ship")
-                    : SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel;
+                var tradeCount = Math.floor(Number(fleetPanel.trade_ships) || 0);
+                var tradeCapacity = Math.floor(Number(fleetPanel.trade_capacity) || 0);
+                var tradeStatus = SOW_t("hud.map_action_fleet") + " · " + tradeCount + "/" + tradeCapacity;
+                hudRefs.fleetTrade.setAttribute("aria-label", tradeStatus);
+                hudRefs.fleetTrade.title = tradeStatus;
                 hudRefs.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
-            }
-            if (hudRefs.fleetTradeCount) {
-                hudRefs.fleetTradeCount.textContent = Math.floor(Number(fleetPanel.trade_ships) || 0).toLocaleString()
-                    + " / " + Math.floor(Number(fleetPanel.trade_capacity) || 0).toLocaleString();
             }
             if (hudRefs.fleetWarship) {
                 var warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
                 var warshipDisabled = !warshipUnlocked || militaryFull || gold < warshipCost;
-                hudRefs.fleetWarship.disabled = warshipDisabled && !warshipSelected;
+                hudRefs.fleetWarship.disabled = false;
                 hudRefs.fleetWarship.setAttribute("aria-disabled", String(warshipDisabled));
+                hudRefs.fleetWarship.setAttribute("aria-pressed", String(warshipSelected));
                 hudRefs.fleetWarship.classList.toggle("active", warshipSelected);
                 hudRefs.fleetWarship.classList.toggle("is-locked", warshipDisabled && !warshipSelected);
-                hudRefs.fleetWarship.title = !warshipUnlocked
+                var warshipReason = !warshipUnlocked
                     ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_port") + " " + warshipRequiredPortLevel
                     : militaryFull
-                        ? SOW_t("hud.map_action_build_warship") + " · " + Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0)
-                        : SOW_t("hud.map_action_build_warship") + " · " + Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0);
-            }
-            if (hudRefs.fleetWarshipCount) {
-                hudRefs.fleetWarshipCount.textContent = Math.floor(Number(fleetPanel.warships) || 0).toLocaleString();
+                        ? Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0)
+                        : gold < warshipCost
+                            ? Math.floor(warshipCost).toLocaleString() + "g"
+                            : SOW_t("hud.map_action_port") + " " + warshipRequiredPortLevel + " · " + Math.floor(warshipCost).toLocaleString() + "g";
+                var warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipReason;
+                hudRefs.fleetWarship.setAttribute("aria-label", warshipLabel);
+                hudRefs.fleetWarship.title = warshipLabel;
             }
             if (hudRefs.fleetNuke) {
                 var cooldownTicks = Math.max(0, Number(fleetPanel.nuke_cooldown_ticks) || 0);
                 var nukeReady = Boolean(fleetPanel.nuke_available) && cooldownTicks === 0;
                 var nukeDisabled = !nukeUnlocked || !nukeReady;
-                hudRefs.fleetNuke.disabled = nukeDisabled;
+                hudRefs.fleetNuke.disabled = false;
                 hudRefs.fleetNuke.setAttribute("aria-disabled", String(nukeDisabled));
+                hudRefs.fleetNuke.setAttribute("aria-pressed", String(hud.selected_nuke === "AtomBomb"));
                 hudRefs.fleetNuke.classList.toggle("is-locked", nukeDisabled);
                 hudRefs.fleetNuke.classList.toggle("active", hud.selected_nuke === "AtomBomb");
-                hudRefs.fleetNuke.title = !nukeUnlocked
+                var nukeReason = !nukeUnlocked
                     ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_city") + " " + nukeRequiredCityLevel
                     : cooldownTicks > 0
                         ? SOW_t("lobbies.locked") + " · " + Math.ceil(cooldownTicks / 10) + "s"
-                        : SOW_t("hud.map_action_nuke");
-                if (hudRefs.fleetNukeStatus) {
-                    hudRefs.fleetNukeStatus.textContent = !nukeUnlocked
-                        ? SOW_t("lobbies.locked")
-                        : cooldownTicks > 0
-                            ? Math.ceil(cooldownTicks / 10) + "s"
-                            : SOW_t("hud.ready");
-                }
+                        : !nukeReady
+                            ? SOW_t("lobbies.locked") + " · " + Math.floor(Number(fleetPanel.nuke_cost) || 0).toLocaleString() + "g"
+                            : SOW_t("hud.map_action_nuke") + " · " + Math.floor(Number(fleetPanel.nuke_cost) || 0).toLocaleString() + "g";
+                var nukeLabel = SOW_t("hud.map_action_nuke") + " · " + nukeReason;
+                hudRefs.fleetNuke.setAttribute("aria-label", nukeLabel);
+                hudRefs.fleetNuke.title = nukeLabel;
             }
         }
 

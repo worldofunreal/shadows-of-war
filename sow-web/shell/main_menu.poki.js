@@ -109,11 +109,4 @@ document.addEventListener("click", function (event) {
         }
         return;
     }
-    var commandTarget = event.target && event.target.closest ? event.target.closest("[data-command]") : null;
-    if (commandTarget && typeof window.SOW_pokiMeasure === "function") {
-        var command = String(commandTarget.dataset.command || "");
-        if (command === "quick_match" || command === "open_campaign" || command === "open_browser" || command === "open_create" || command === "join_lobby" || command === "confirm_leader") {
-            window.SOW_pokiMeasure("menu", command, "interact");
-        }
-    }
 });

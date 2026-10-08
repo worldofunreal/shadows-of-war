@@ -314,13 +314,6 @@ impl SowApp {
         self.ui.app.main_menu_state.error_message = None;
         self.ui.app.main_menu_state.notice = None;
         let matchmaking_join = lobby_id.is_none() && !is_private && config.is_none();
-        if matchmaking_join {
-            crate::store_portals::measure("matchmaking", "queue", "interact");
-        } else if lobby_id.is_some() {
-            crate::store_portals::measure("lobby", "join", "interact");
-        } else {
-            crate::store_portals::measure("lobby", "create", "interact");
-        }
         self.join_matchmaking = matchmaking_join;
         if let Some(cfg) = config {
             self.ui.app.main_menu_state.custom_game_config = cfg;

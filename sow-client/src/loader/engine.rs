@@ -90,6 +90,7 @@ impl SowApp {
         self.ui.last_resource_notice_tick = None;
         self.ui.tutorial_active = false;
         self.ui.tutorial_camera_only = false;
+        self.ui.tutorial_paused_action = None;
         self.ui.tutorial_waiting_for_first_attack = false;
 
         self.dispatch_sim_command(SimCommand::Shutdown);
@@ -338,6 +339,7 @@ impl SowApp {
                         // after startup; the render gate additionally requires `is_offline`.
                         self.ui.tutorial_active = start_msg.config.tutorial;
                         self.ui.tutorial_camera_only = false;
+                        self.ui.tutorial_paused_action = None;
                         self.input.tutorial_camera_drag_recorded = false;
 
                         for turn in &start_msg.missed_turns {

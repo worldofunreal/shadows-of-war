@@ -596,6 +596,7 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         &[
             "--test",
             "sow-web/shell/main_menu.interaction.test.js",
+            "sow-web/shell/experience_events.test.js",
             "sow-web/site/analytics.test.js",
         ],
         Some(&paths.root),
@@ -624,7 +625,9 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-core/src/intent/apply.rs",
             "sow-core/src/intent/buildings.rs",
             "sow-core/src/execution/income.rs",
+            "sow-client/src/campaign/mod.rs",
             "sow-client/src/input/map_click.rs",
+            "sow-client/src/render/frame/ui.rs",
             "sow-core/src/map.rs",
             "sow-core/src/player/mod.rs",
             "sow-render/src/text/renderer.rs",
@@ -645,6 +648,23 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         Some(&paths.root),
     )
     .context("nameplate renderer regression tests failed")?;
+    run(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "sow-client",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--config",
+            "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
+            "--lib",
+            "tutorial_camera",
+        ],
+        Some(&paths.root),
+    )
+    .context("tutorial camera regression tests failed")?;
     if !Command::new("rustc")
         .args([
             "--print",

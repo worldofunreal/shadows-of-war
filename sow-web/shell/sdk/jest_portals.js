@@ -8,7 +8,6 @@
 
   var sdkInitPromise = null;
   var loadingFinished = false;
-  var firstMilestoneSent = false;
   var progressKey = "sow_player_progress";
 
   // D1-D7 re-engagement sequence (launch checklist: at least one per day
@@ -186,14 +185,14 @@
     }
   };
 
-  window.SOW_portalFirstMilestone = function () {
-    if (firstMilestoneSent) return;
+  window.SOW_portalCaptureExperienceEvent = function (event) {
     var sdk = jestSdk();
-    if (!sdk || typeof sdk.markFirstMilestone !== "function") return;
+    if (!sdk || typeof sdk.captureEvent !== "function" || !event || typeof event.name !== "string") return;
     try {
-      sdk.markFirstMilestone();
-      firstMilestoneSent = true;
-    } catch (e) {}
+      sdk.captureEvent(event.name, event.props || undefined);
+    } catch (error) {
+      console.warn("Jest analytics event could not be captured:", error);
+    }
   };
 
   // The Rust client calls these on match boundaries; Jest has no ad-gated

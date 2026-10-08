@@ -83,6 +83,10 @@ run_dist() {
   set +e
   (
     cargo build -p sow-dist || exit $?
+    if [[ "${log_prefix}" == production ]]; then
+      command -v flock >/dev/null || { echo "flock is required to prevent overlapping production builds" >&2; exit 127; }
+      exec flock -n "${ROOT}/dist/.production.lock" "${bin}" "$@"
+    fi
     exec "${bin}" "$@"
   ) 2>&1 | tee "${log_file}"
   local status=${PIPESTATUS[0]}

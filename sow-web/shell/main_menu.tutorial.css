@@ -273,7 +273,7 @@
     .sow-story__cinematic { max-height: 34svh; margin-bottom: 12px; }
     .sow-story__cinematic-skip { top: 8px; right: 8px; min-height: 34px; padding: 7px 10px; font-size: 10px !important; }
     .sow-story__cinematic-play { min-height: 42px; }
-    .sow-story__main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 12px; flex: 1 1 auto; min-height: 0; padding: 14px 16px 10px; }
+    .sow-story__main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 12px; flex: 0 1 auto; min-height: 0; padding: 14px 16px 10px; }
     .sow-story.has-portrait .sow-story__main { grid-template-columns: var(--story-portrait-size, min(36cqw, 40svh)) minmax(0, 1fr); }
     .sow-story__portrait { width: var(--story-portrait-size, min(36cqw, 40svh)); height: var(--story-portrait-size, min(36cqw, 40svh)); aspect-ratio: 1; align-self: start; grid-row: auto; min-height: 0; }
     .sow-story__portrait img { object-position: 48% 20%; }
@@ -308,40 +308,67 @@
     .sow-story__title { font-size: 19px; }
     .sow-story__body { font-size: 13px; }
 }
-@media (orientation: landscape) and (max-height: 560px) and (hover: none) and (pointer: coarse) {
-    .sow-story__objective { --sow-tutorial-progress-height: 12px; --sow-tutorial-progress-label-size: 12px; align-items: flex-start; width: min(272px, calc(100% - 16px)); max-height: calc(100dvh - var(--story-safe-top) - var(--sow-tutorial-player-panel-height) - var(--sow-tutorial-player-panel-gap) - 9rem); padding: 8px; gap: 6px; overflow: auto; pointer-events: none; }
-    .sow-story__objective-copy { min-width: 0; }
-    .sow-story__objective h3 { font-size: 14px; }
-    .sow-story__objective p { font-size: 11px; }
-    .sow-story__objective[data-details-expanded="false"] .sow-story__objective-copy > p { display: none; }
-    .sow-story__objective[data-details-expanded="true"] .sow-story__objective-copy > p { max-height: 88px; margin-block: 4px; overflow: auto; pointer-events: auto; }
-    .sow-story__details-toggle,
-    .sow-story__locate { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; pointer-events: auto; }
-    .sow-story__details-toggle { border: 1px solid var(--story-line); border-radius: 4px; background: rgb(255 255 255 / 5%); color: var(--story-text); font-size: 22px; }
-    .sow-story__details-toggle[aria-expanded="true"] span { transform: rotate(180deg); }
-    .sow-story__dialog {
+#sow-story[data-compact="true"] .sow-story__objective { --sow-tutorial-progress-height: 12px; --sow-tutorial-progress-label-size: 12px; align-items: flex-start; width: min(272px, calc(100% - 16px)); max-height: calc(100dvh - var(--story-safe-top) - var(--sow-tutorial-player-panel-height) - var(--sow-tutorial-player-panel-gap) - 9rem); padding: 8px; gap: 6px; overflow: auto; pointer-events: none; }
+    #sow-story[data-compact="true"] .sow-story__objective-copy { min-width: 0; }
+    #sow-story[data-compact="true"] .sow-story__objective h3 { font-size: 14px; }
+    #sow-story[data-compact="true"] .sow-story__objective p { font-size: 11px; }
+    #sow-story[data-compact="true"] .sow-story__objective[data-details-expanded="false"] .sow-story__objective-copy > p { display: none; }
+    #sow-story[data-compact="true"] .sow-story__objective[data-details-expanded="true"] .sow-story__objective-copy > p { max-height: 88px; margin-block: 4px; overflow: auto; pointer-events: auto; }
+    #sow-story[data-compact="true"] .sow-story__details-toggle,
+    #sow-story[data-compact="true"] .sow-story__locate { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; margin: 0; pointer-events: auto; }
+    #sow-story[data-compact="true"] .sow-story__details-toggle { border: 1px solid var(--story-line); border-radius: 4px; background: rgb(255 255 255 / 5%); color: var(--story-text); font-size: 22px; }
+    #sow-story[data-compact="true"] .sow-story__details-toggle[aria-expanded="true"] span { transform: rotate(180deg); }
+    #sow-story[data-compact="true"] .sow-story__dialog {
         display: flex;
         flex-direction: column;
         max-height: min(calc(100% - var(--story-safe-top) - var(--story-safe-bottom)), 72svh);
     }
-    .sow-story__main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 8px; flex: 1 1 auto; min-height: 0; padding: 10px 12px 6px; }
-    .sow-story.has-portrait .sow-story__main { grid-template-columns: var(--story-portrait-size, min(36cqw, 40svh)) minmax(0, 1fr); }
-    .sow-story__portrait { width: var(--story-portrait-size, min(36cqw, 40svh)); height: var(--story-portrait-size, min(36cqw, 40svh)); aspect-ratio: 1; align-self: start; grid-row: auto; min-height: 0; }
-    .sow-story__conversation {
+    #sow-story[data-compact="true"] .sow-story__main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 8px; flex: 1 1 auto; min-height: 0; padding: 10px 12px 6px; }
+    #sow-story[data-compact="true"] .sow-story.has-portrait .sow-story__main { grid-template-columns: var(--story-portrait-size, min(36cqw, 40svh)) minmax(0, 1fr); }
+    #sow-story[data-compact="true"] .sow-story__portrait { width: var(--story-portrait-size, min(36cqw, 40svh)); height: var(--story-portrait-size, min(36cqw, 40svh)); aspect-ratio: 1; align-self: start; grid-row: auto; min-height: 0; }
+    #sow-story[data-compact="true"] .sow-story__conversation {
         display: flex;
         flex-direction: column;
         min-height: 0;
         overflow: hidden;
         padding: 0;
     }
-    .sow-story__heading { flex: 0 0 auto; margin-bottom: 6px; }
-    .sow-story__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-    .sow-story__actions { flex: 0 1 auto; min-height: 0; max-height: 48svh; overflow-y: auto; padding: 8px 12px 10px; border-top: 1px solid var(--story-line); }
-    .sow-story__choices { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); margin-top: 0; }
-    .sow-story__footer { flex: 0 0 auto; margin-top: 0; padding-top: 8px; border-top: 0; }
-    .sow-story.is-chapter .sow-story__main { flex: 0 1 auto; padding-block: 8px; }
-    .sow-story.is-chapter .sow-story__conversation { padding-block: 0; }
+    #sow-story[data-compact="true"] .sow-story__heading { flex: 0 0 auto; margin-bottom: 6px; }
+    #sow-story[data-compact="true"] .sow-story__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    #sow-story[data-compact="true"] .sow-story__actions { flex: 0 1 auto; min-height: 0; max-height: 48svh; overflow-y: auto; padding: 8px 12px 10px; border-top: 1px solid var(--story-line); }
+    #sow-story[data-compact="true"] .sow-story__choices { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); margin-top: 0; }
+    #sow-story[data-compact="true"] .sow-story__footer { flex: 0 0 auto; margin-top: 0; padding-top: 8px; border-top: 0; }
+#sow-story[data-compact="true"] .sow-story.is-chapter .sow-story__main { flex: 0 1 auto; padding-block: 8px; }
+#sow-story[data-compact="true"] .sow-story.is-chapter .sow-story__conversation { padding-block: 0; }
+#sow-story[data-compact="true"] .sow-story__objective,
+#sow-story[data-compact="true"] .sow-story__dialog { scale: var(--sow-hud-density); }
+#sow-story[data-compact="true"] .sow-story__objective { transform-origin: left top; --sow-tutorial-progress-label-size: var(--sow-hud-text-primary-size); }
+#sow-story[data-compact="true"] .sow-story__dialog { transform-origin: center center; }
+html[dir="rtl"] #sow-story[data-compact="true"] .sow-story__objective { transform-origin: right top; }
+#sow-story[data-compact="true"] .sow-story__objective h3,
+#sow-story[data-compact="true"] .sow-story__dialog .sow-story__title { font-size: var(--sow-hud-text-primary-size); }
+#sow-story[data-compact="true"] .sow-story__objective p,
+#sow-story[data-compact="true"] .sow-story__dialog .sow-story__body,
+#sow-story[data-compact="true"] .sow-story__dialog .sow-story__speaker { font-size: var(--sow-hud-text-secondary-size); }
+#sow-story[data-compact="true"] .sow-story__dialog .sow-story__choice strong,
+#sow-story[data-compact="true"] .sow-story__dialog .sow-story__continue { font-size: 12px; }
+
+@media (pointer: coarse) {
+    #sow-story[data-compact="true"] :is(.sow-story__details-toggle, .sow-story__locate, .sow-story__choice, .sow-story__continue, .sow-story__cinematic-skip, .sow-story__cinematic-play) {
+        zoom: var(--sow-hud-hit-target-zoom);
+        min-inline-size: 44px;
+        min-block-size: 44px;
+    }
 }
+
+@media (pointer: fine) {
+    #sow-story[data-compact="true"] :is(.sow-story__details-toggle, .sow-story__locate, .sow-story__choice, .sow-story__continue, .sow-story__cinematic-skip, .sow-story__cinematic-play) {
+        zoom: var(--sow-hud-hit-target-zoom);
+        min-inline-size: 32px;
+        min-block-size: 32px;
+    }
+}
+
 /* Decision nudge: golden ember pulse when an outside tap lands while a choice pends. */
 .sow-story__dialog.is-nudged .sow-story__choice, .sow-story__dialog.is-waiting .sow-story__choice { position: relative; overflow: hidden; border-color: rgb(233 187 100 / 65%); }
 .sow-story__dialog.is-nudged .sow-story__choice { animation: story-nudge-breathe 1.6s ease-in-out infinite; }

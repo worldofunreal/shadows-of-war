@@ -64,8 +64,6 @@
 
     const detailImage = $('[data-detail-image]');
     if (detailImage) {
-      const detailMobileImage = $('[data-detail-mobile]');
-      if (detailMobileImage) detailMobileImage.srcset = asset(leader, true);
       detailImage.src = asset(leader);
       detailImage.alt = siteText('site.leader_artwork', `${name} artwork`, { name });
     }

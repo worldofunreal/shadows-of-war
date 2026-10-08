@@ -30,7 +30,6 @@ pub(crate) enum MapMenuAction {
     UpgradeStructure,
     Nuke,
     BuildWarship,
-    BuildTradeShip,
 }
 
 impl MapMenuAction {
@@ -49,7 +48,6 @@ impl MapMenuAction {
             Self::UpgradeStructure => "upgrade_structure",
             Self::Nuke => "nuke",
             Self::BuildWarship => "build_warship",
-            Self::BuildTradeShip => "build_trade_ship",
         }
     }
 }
@@ -689,13 +687,8 @@ impl SowApp {
             MapMenuAction::Nuke => {
                 self.launch_nuke_at(sow_core::game::NukeKind::AtomBomb, tile_idx);
             }
-            MapMenuAction::BuildWarship | MapMenuAction::BuildTradeShip => {
-                let kind = match action {
-                    MapMenuAction::BuildWarship => sow_core::game::UnitType::Warship,
-                    MapMenuAction::BuildTradeShip => sow_core::game::UnitType::TradeShip,
-                    _ => unreachable!(),
-                };
-                self.build_ship_at(tile_idx, kind);
+            MapMenuAction::BuildWarship => {
+                self.build_ship_at(tile_idx, sow_core::game::UnitType::Warship);
             }
         }
         self.close_map_context_menu();
@@ -899,9 +892,6 @@ impl SowApp {
         match action {
             MapMenuAction::BuildWarship => {
                 (Some(sow_core::game::UnitType::Warship.gold_cost()), None)
-            }
-            MapMenuAction::BuildTradeShip => {
-                (Some(sow_core::game::UnitType::TradeShip.gold_cost()), None)
             }
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory

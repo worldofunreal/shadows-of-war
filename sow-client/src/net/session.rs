@@ -179,6 +179,7 @@ impl SowApp {
     /// Tear down the current match and use ExitGame only for an active game.
     pub(crate) fn begin_exit_to_main_menu(&mut self) {
         self.ui.tutorial_camera_only = false;
+        self.ui.tutorial_paused_action = None;
         self.ui.dialog_border_highlight = None;
         self.input.tutorial_camera_drag_recorded = false;
         let phase = self.ui.app.phase;
@@ -192,7 +193,10 @@ impl SowApp {
             && self.ui.tutorial_active
             && !self.ui.tutorial_campaign.is_completed(&self.progress)
         {
-            crate::store_portals::track_product_event("tutorial_exit_early");
+            crate::store_portals::track_product_event_with(
+                "tutorial_exit_early",
+                &serde_json::json!({ "episode_id": self.ui.tutorial_campaign.episode_id() }),
+            );
         }
         let reward_match_id = (was_playing && !self.net.is_offline)
             .then(|| self.sim.my_lobby_id)
@@ -201,9 +205,6 @@ impl SowApp {
         if was_playing {
             if !self.progress_match_recorded {
                 crate::store_portals::track_product_event("match_exit");
-            }
-            if !self.progress_match_recorded {
-                crate::store_portals::measure("match", "round", "abandon");
             }
             crate::store_portals::gameplay_stop();
             if !was_offline && let Some(match_id) = reward_match_id {

@@ -832,6 +832,12 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
     let jest = target == WebTarget::Jest;
     let portal = cg || poki || jest;
     let tpl = fs::read_to_string(paths.shell.join("index.html.template"))?;
+    let experience_events = fs::read_to_string(paths.shell.join("experience_events.js"))?
+        .replace("</script>", "<\\/script>");
+    let experience_events_slot = "/* __INLINE_EXPERIENCE_EVENTS_JS__ */";
+    if tpl.matches(experience_events_slot).count() != 1 {
+        bail!("game HTML template must contain one experience-events slot");
+    }
     let source_slot = "<!-- __SOW_SOURCE_IDENTITY_SLOT__ -->";
     if tpl.matches(source_slot).count() != 1 {
         bail!("game HTML template must contain one source identity slot");
@@ -925,6 +931,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             },
         )
         .replace(&store_portals_template, &store_portals_src)
+        .replace(experience_events_slot, &experience_events)
         .replace(
             "<!-- __SOW_ANALYTICS_SCRIPT_SLOT__ -->",
             &if matches!(target, WebTarget::Local) {
@@ -2300,6 +2307,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
     verify_cg_local_resources(dir, &html)?;
     for needle in [
         "sdk.crazygames.com/crazygames-sdk-v3.js",
+        "SOW_trackExperienceEvent",
         "SOW_MAPS_URL = \"https://shadowsofwar.io/maps\"",
         "SOW_ASSETS_URL = \"https://shadowsofwar.io/assets\"",
         "https://shadowsofwar.io/fonts/fonts.css",
@@ -2375,6 +2383,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     let manifest = fs::read_to_string(dir.join("manifest.webmanifest"))?;
     for needle in [
         "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+        "SOW_trackExperienceEvent",
         "window.SOW_PORTAL = \"poki\"",
         "window.SOW_MAPS_URL = \"./maps\"",
         "window.SOW_ASSETS_URL = \"./assets\"",
@@ -3122,6 +3131,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
     let sdk = fs::read_to_string(dir.join("sdk/store_portals.js"))?;
     for needle in [
         "https://cdn.jest.com/sdk/latest/jestsdk.js",
+        "SOW_trackExperienceEvent",
         "window.SOW_PORTAL = \"jest\"",
         "window.SOW_MAPS_URL = \"./maps\"",
         "window.SOW_ASSETS_URL = \"./assets\"",
@@ -4444,12 +4454,12 @@ mod tests {
     fn web_catalog_validation_requires_translated_consent_copy() -> Result<()> {
         let expected = serde_json::json!({
             "site": {
-                "analytics_body": "Starting the game does not enable optional analytics.",
+                "analytics_body": "We use site and game activity to improve Shadows of War. It stays off unless you allow it.",
             }
         });
         let localized = serde_json::json!({
             "site": {
-                "analytics_body": "La analítica opcional no se activa al entrar al juego.",
+                "analytics_body": "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.",
             }
         });
         let missing = serde_json::json!({ "site": { "analytics_body": "La analítica queda apagada." } });

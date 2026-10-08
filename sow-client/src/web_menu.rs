@@ -74,6 +74,8 @@ enum WebMenuCommand {
         paused: bool,
         #[serde(default)]
         camera_only: bool,
+        #[serde(default)]
+        paused_action: Option<crate::app::TutorialPausedAction>,
     },
     SetTutorialMarker {
         #[serde(default)]
@@ -356,6 +358,7 @@ struct HudPublishKey {
     tutorial_target_zoom_hundredths: i32,
     tutorial_marker_player_id: Option<u16>,
     tutorial_pointer: Option<(u64, u64)>,
+    tutorial_camera_viewport: Option<(u32, u32, u32, u32)>,
     hovered_tile: u32,
     hovered_owner: u16,
     map_menu_view: Option<MapContextMenuView>,
@@ -595,13 +598,18 @@ impl SowApp {
                 WebMenuCommand::SetTutorialPaused {
                     paused,
                     camera_only,
+                    paused_action,
                 } => {
                     if self.ui.tutorial_active && self.net.is_offline {
                         self.sim.paused = paused;
                         self.ui.tutorial_camera_only = paused && camera_only;
+                        self.ui.tutorial_paused_action =
+                            if paused && !camera_only { paused_action } else { None };
                         self.input.tutorial_camera_drag_recorded = false;
-                        if self.ui.tutorial_camera_only {
+                        if paused {
                             self.sim.offline_intents.clear();
+                        }
+                        if self.ui.tutorial_camera_only {
                             self.clear_placement();
                             self.cancel_hold_build();
                             self.close_map_context_menu();
@@ -727,11 +735,6 @@ impl SowApp {
                         .complete_episode(campaign.episode_id(), campaign.advisor())
                     {
                         self.save_local_progress();
-                        crate::store_portals::measure(
-                            "campaign",
-                            campaign.episode_id(),
-                            "complete",
-                        );
                     }
                     self.begin_exit_to_main_menu();
                 }
@@ -926,13 +929,15 @@ impl SowApp {
                     gold,
                     troops,
                 } => {
-                    self.send_intent(sow_core::protocol::GameplayIntent::SendResources {
+                    let accepted = self.send_intent(sow_core::protocol::GameplayIntent::SendResources {
                         target_player: target_player_id,
                         gold: gold.max(0.0),
                         troops: troops.max(0.0),
                     });
-                    self.ui.app.hud_state.show_ask_panel = None;
-                    self.ui.app.hud_state.transfer_confirm_pending = false;
+                    if accepted {
+                        self.ui.app.hud_state.show_ask_panel = None;
+                        self.ui.app.hud_state.transfer_confirm_pending = false;
+                    }
                 }
                 WebMenuCommand::RequestResources {
                     target_player_id,
@@ -1383,6 +1388,12 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         } else {
             None
         },
+        tutorial_camera_viewport: tutorial_active.then_some((
+            app.input.camera_x.to_bits(),
+            app.input.camera_y.to_bits(),
+            app.input.screen_w.to_bits(),
+            app.input.screen_h.to_bits(),
+        )),
         dev_sidebar_open,
         dev_config: dev_config_key,
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
@@ -1696,18 +1707,13 @@ fn tutorial_screen_anchor(point: [f32; 2], width: f32, height: f32) -> Option<([
     ))
 }
 
-fn tutorial_build_site_candidate_better(
-    candidate: (bool, f32, u32),
-    best: Option<(bool, f32, u32)>,
-) -> bool {
-    best.is_none_or(|best| {
-        candidate
-            .0
-            .cmp(&best.0)
-            .then_with(|| candidate.1.total_cmp(&best.1))
-            .then_with(|| best.2.cmp(&candidate.2))
-            == Ordering::Greater
-    })
+fn tutorial_visible_build_site_candidate(
+    candidates: &[(bool, i32, u32)],
+    mut is_visible: impl FnMut(u32) -> bool,
+) -> Option<u32> {
+    candidates
+        .iter()
+        .find_map(|&(_, _, tile)| is_visible(tile).then_some(tile))
 }
 
 fn tutorial_project_tile(
@@ -1793,156 +1799,130 @@ fn tutorial_building_anchors(
 /// `assault` is attackable land touching the player's border;
 /// `target_action` is legal land toward a named faction: neutral land to approach allies,
 /// or neutral/enemy land to approach or attack an enemy; `build_site` prefers visible,
-/// buildable border land farthest from the player's nameplate.
+/// buildable interior land nearest the player's centroid, with border land as fallback.
 fn tutorial_guide_tiles(
     app: &mut SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
     my_pid: u16,
     target_owner: u16,
 ) -> (Option<u32>, Option<u32>, Option<u32>, Option<u32>) {
-    let observation = &mut app.sim.tutorial_observation;
-    if observation.guide_tick == snapshot.tick && observation.guide_target_owner == target_owner {
-        return (
-            observation.guide_expand,
-            observation.guide_assault,
-            observation.guide_target_action,
-            observation.guide_build_site,
-        );
-    }
-    observation.guide_tick = snapshot.tick;
-    observation.guide_target_owner = target_owner;
-    observation.guide_expand = None;
-    observation.guide_assault = None;
-    observation.guide_target_action = None;
-    observation.guide_build_site = None;
     let (map_w, map_h) = (app.sim.map_w, app.sim.map_h);
     if map_w == 0 || map_h == 0 {
         return (None, None, None, None);
     }
-    let Some(renderer) = app.gfx.map_renderer.as_ref() else {
-        return (None, None, None, None);
-    };
-    let (owners, terrain) = (&renderer.owners, &renderer.terrain);
-    let Some(me) = snapshot
-        .players
-        .iter()
-        .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
-    else {
-        return (None, None, None, None);
-    };
-    let (cx, cy) = (me.centroid_x as i32, me.centroid_y as i32);
-    let nameplate_anchor = app
+    let build_kind = app
         .ui
-        .nameplates
-        .anchor_for(my_pid)
-        .unwrap_or([me.centroid_x, me.centroid_y]);
-    const RADIUS: i32 = 48;
-    let mut expand = None;
-    'scan: for ring in 0..=RADIUS {
-        for dy in -ring..=ring {
-            for dx in -ring..=ring {
-                if dx.abs().max(dy.abs()) != ring {
-                    continue;
-                }
-                let (col, row) = (cx + dx, cy + dy);
-                if col < 0 || row < 0 || col >= map_w as i32 || row >= map_h as i32 {
-                    continue;
-                }
-                let idx = (row as u32 * map_w + col as u32) as usize;
-                if owners.get(idx).copied().unwrap_or(0) != my_pid {
-                    continue;
-                }
-                let odd = (row & 1) != 0;
-                let deltas = if odd {
-                    [(1, 0), (-1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
-                } else {
-                    [(1, 0), (-1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
-                };
-                for (ndx, ndy) in deltas {
-                    let (ncol, nrow) = (col + ndx, row + ndy);
-                    if ncol < 0 || nrow < 0 || ncol >= map_w as i32 || nrow >= map_h as i32 {
+        .app
+        .hud_state
+        .selected_building_kind
+        .unwrap_or(sow_core::game::BuildingKind::City);
+    let cache_hit = {
+        let observation = &app.sim.tutorial_observation;
+        observation.guide_tick == snapshot.tick
+            && observation.guide_target_owner == target_owner
+            && observation.guide_build_site_kind == Some(build_kind)
+    };
+    if !cache_hit {
+        {
+            let observation = &mut app.sim.tutorial_observation;
+            observation.guide_tick = snapshot.tick;
+            observation.guide_target_owner = target_owner;
+            observation.guide_build_site_kind = Some(build_kind);
+            observation.guide_expand = None;
+            observation.guide_assault = None;
+            observation.guide_target_action = None;
+            observation.guide_build_site_candidates.clear();
+        }
+        let Some(renderer) = app.gfx.map_renderer.as_ref() else {
+            return (None, None, None, None);
+        };
+        let (owners, terrain) = (&renderer.owners, &renderer.terrain);
+        let Some(me) = snapshot
+            .players
+            .iter()
+            .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
+        else {
+            return (None, None, None, None);
+        };
+        let (cx, cy) = (me.centroid_x as i32, me.centroid_y as i32);
+        const RADIUS: i32 = 48;
+        let mut expand = None;
+        'scan: for ring in 0..=RADIUS {
+            for dy in -ring..=ring {
+                for dx in -ring..=ring {
+                    if dx.abs().max(dy.abs()) != ring {
                         continue;
                     }
-                    let nidx = (nrow as u32 * map_w + ncol as u32) as usize;
-                    if terrain.get(nidx).copied().unwrap_or(0) & 0x80 == 0 {
+                    let (col, row) = (cx + dx, cy + dy);
+                    if col < 0 || row < 0 || col >= map_w as i32 || row >= map_h as i32 {
                         continue;
                     }
-                    let Some(owner) = owners.get(nidx).copied() else {
+                    let idx = (row as u32 * map_w + col as u32) as usize;
+                    if owners.get(idx).copied().unwrap_or(0) != my_pid {
                         continue;
+                    }
+                    let odd = (row & 1) != 0;
+                    let deltas = if odd {
+                        [(1, 0), (-1, 0), (0, -1), (1, -1), (0, 1), (1, 1)]
+                    } else {
+                        [(1, 0), (-1, 0), (-1, -1), (0, -1), (-1, 1), (0, 1)]
                     };
-                    if owner == 0 && expand.is_none() {
-                        expand = Some(nidx as u32);
-                        break 'scan;
+                    for (ndx, ndy) in deltas {
+                        let (ncol, nrow) = (col + ndx, row + ndy);
+                        if ncol < 0 || nrow < 0 || ncol >= map_w as i32 || nrow >= map_h as i32 {
+                            continue;
+                        }
+                        let nidx = (nrow as u32 * map_w + ncol as u32) as usize;
+                        if terrain.get(nidx).copied().unwrap_or(0) & 0x80 == 0 {
+                            continue;
+                        }
+                        let Some(owner) = owners.get(nidx).copied() else {
+                            continue;
+                        };
+                        if owner == 0 && expand.is_none() {
+                            expand = Some(nidx as u32);
+                            break 'scan;
+                        }
                     }
                 }
             }
         }
-    }
 
-    let border_tiles = app
-        .sim
-        .engine
-        .as_ref()
-        .and_then(|engine| engine.state.player(my_pid))
-        .map(|player| &player.border_tiles);
-    let assault = border_tiles.and_then(|border_tiles| {
-        tutorial_assault_tile(
-            owners,
-            terrain,
-            map_w,
-            map_h,
-            border_tiles,
-            my_pid,
-            me,
-            &snapshot.players,
-        )
-    });
-    let target_action = border_tiles.and_then(|border_tiles| {
-        tutorial_target_action_tile(
-            owners,
-            terrain,
-            map_w,
-            map_h,
-            border_tiles,
-            my_pid,
-            target_owner,
-            me,
-            &snapshot.players,
-        )
-    });
-    observation.guide_expand = expand;
-    observation.guide_assault = assault;
-    observation.guide_target_action = target_action;
-    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
-    let viewport_w = app.input.screen_w / sf;
-    let viewport_h = app.input.screen_h / sf;
-    let nameplate_screen = crate::render::world::overlays::world_to_screen(
-        nameplate_anchor[0],
-        nameplate_anchor[1],
-        &app.input,
-        sf,
-    );
-    let mut build_site_best = None;
-    let radius = 48_i32.min(map_w.min(map_h) as i32);
-    let map_area = map_w.checked_mul(map_h).unwrap_or(0);
-    let occupied_tiles = snapshot
-        .buildings
-        .iter()
-        .flat_map(|building| {
-            let footprint = sow_core::building::BuildingFootprint::at(
-                building.kind,
-                building.tile_idx % map_w,
-                building.tile_idx / map_w,
-            );
-            (footprint.top..footprint.top + footprint.height as i32).flat_map(move |row| {
-                (footprint.left..footprint.left + footprint.width as i32).filter_map(move |col| {
-                    (col >= 0 && row >= 0 && col < map_w as i32 && row < map_h as i32)
-                        .then_some(row as u32 * map_w + col as u32)
-                })
-            })
-        })
-        .collect::<HashSet<_>>();
-    {
+        let border_tiles = app
+            .sim
+            .engine
+            .as_ref()
+            .and_then(|engine| engine.state.player(my_pid))
+            .map(|player| &player.border_tiles);
+        let assault = border_tiles.and_then(|border_tiles| {
+            tutorial_assault_tile(
+                owners,
+                terrain,
+                map_w,
+                map_h,
+                border_tiles,
+                my_pid,
+                me,
+                &snapshot.players,
+            )
+        });
+        let target_action = border_tiles.and_then(|border_tiles| {
+            tutorial_target_action_tile(
+                owners,
+                terrain,
+                map_w,
+                map_h,
+                border_tiles,
+                my_pid,
+                target_owner,
+                me,
+                &snapshot.players,
+            )
+        });
+        let radius = 48_i32.min(map_w.min(map_h) as i32);
+        let map_area = map_w.checked_mul(map_h).unwrap_or(0);
+        let mut build_site_candidates = Vec::new();
+        let placement_cache = &mut app.ui.building_placement_cache;
         let mut consider_build_site = |idx: u32, is_border: bool| {
             if idx >= map_area {
                 return;
@@ -1953,36 +1933,31 @@ fn tutorial_guide_tiles(
             if dx * dx + dy * dy > radius * radius
                 || owners.get(idx as usize).copied() != Some(my_pid)
                 || terrain_byte & 0x80 == 0
-                || terrain_byte & 0x1f >= 10
-                || occupied_tiles.contains(&idx)
             {
                 return;
             }
-            let screen = crate::render::world::overlays::world_to_screen(
-                col as f32 + 0.5,
-                row as f32 + 0.5,
-                &app.input,
-                sf,
-            );
-            if !tutorial_screen_point_visible(screen, viewport_w, viewport_h) {
+            let query = crate::input::placement::PlacementQuery {
+                kind: build_kind,
+                click_x: col,
+                click_y: row,
+                map_w,
+                map_h,
+                owners,
+                terrain,
+                my_id: my_pid,
+                buildings: &snapshot.buildings,
+            };
+            if !placement_cache.is_legal_site(snapshot.tick, &query, idx) {
                 return;
             }
-            let distance = (screen[0] - nameplate_screen[0]).powi(2)
-                + (screen[1] - nameplate_screen[1]).powi(2);
-            let candidate = (is_border, distance, idx);
-            if distance.is_finite()
-                && tutorial_build_site_candidate_better(candidate, build_site_best)
-            {
-                build_site_best = Some(candidate);
-            }
+            build_site_candidates.push((
+                is_border,
+                sow_core::building::hex_distance(cx, cy, col, row),
+                idx,
+            ));
         };
-        if let Some(border_tiles) = border_tiles {
-            for idx in border_tiles.ones() {
-                consider_build_site(idx, true);
-            }
-        }
-        for dy in (-radius..=radius).step_by(3) {
-            for dx in (-radius..=radius).step_by(3) {
+        for dy in -radius..=radius {
+            for dx in -radius..=radius {
                 let (col, row) = (cx + dx, cy + dy);
                 if dx * dx + dy * dy > radius * radius
                     || col < 0
@@ -1993,16 +1968,36 @@ fn tutorial_guide_tiles(
                     continue;
                 }
                 let idx = row as u32 * map_w + col as u32;
-                if border_tiles.is_some_and(|tiles| tiles.contains(idx)) {
-                    continue;
-                }
-                consider_build_site(idx, false);
+                consider_build_site(
+                    idx,
+                    border_tiles.is_some_and(|tiles| tiles.contains(idx)),
+                );
             }
         }
+        build_site_candidates.sort();
+        let observation = &mut app.sim.tutorial_observation;
+        observation.guide_expand = expand;
+        observation.guide_assault = assault;
+        observation.guide_target_action = target_action;
+        observation.guide_build_site_candidates = build_site_candidates;
     }
-    let build_site = build_site_best.map(|(_, _, tile)| tile);
-    observation.guide_build_site = build_site;
-    (expand, assault, target_action, build_site)
+    let sf = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
+    let viewport_w = app.input.screen_w / sf;
+    let viewport_h = app.input.screen_h / sf;
+    let build_site = tutorial_visible_build_site_candidate(
+        &app.sim.tutorial_observation.guide_build_site_candidates,
+        |tile| {
+            tutorial_project_tile(Some(tile), map_w, map_h, &app.input, sf)
+                .is_some_and(|point| tutorial_screen_point_visible(point, viewport_w, viewport_h))
+        },
+    );
+    let observation = &mut app.sim.tutorial_observation;
+    (
+        observation.guide_expand,
+        observation.guide_assault,
+        observation.guide_target_action,
+        build_site,
+    )
 }
 
 fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
@@ -3660,19 +3655,33 @@ mod tests {
     }
 
     #[test]
-    fn tutorial_build_site_prefers_border_then_distance_from_nameplate() {
-        let mut best = None;
-        for candidate in [
-            (false, 100.0, 1),
-            (true, 50.0, 5),
-            (true, 75.0, 9),
-            (true, 75.0, 3),
-        ] {
-            if tutorial_build_site_candidate_better(candidate, best) {
-                best = Some(candidate);
-            }
-        }
-        assert_eq!(best, Some((true, 75.0, 3)));
+    fn tutorial_build_site_prefers_interior_nearest_to_center() {
+        let mut candidates = vec![(true, 1, 9), (false, 4, 8), (false, 2, 5), (false, 2, 3)];
+        candidates.sort();
+
+        assert_eq!(
+            tutorial_visible_build_site_candidate(&candidates, |_| true),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn tutorial_build_site_tracks_camera_changes_while_paused_with_border_fallback() {
+        let candidates = [(false, 1, 10), (false, 2, 11), (true, 0, 12)];
+
+        // Reuse the same tick's candidates as the camera moves between publishes.
+        assert_eq!(
+            tutorial_visible_build_site_candidate(&candidates, |tile| tile == 11 || tile == 12),
+            Some(11)
+        );
+        assert_eq!(
+            tutorial_visible_build_site_candidate(&candidates, |tile| tile == 12),
+            Some(12)
+        );
+        assert_eq!(
+            tutorial_visible_build_site_candidate(&candidates, |tile| tile == 10),
+            Some(10)
+        );
     }
 
     #[test]
