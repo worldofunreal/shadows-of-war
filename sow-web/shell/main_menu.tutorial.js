@@ -171,7 +171,7 @@
         return text;
     }
 
-    function renderContext(step, hud, anchor) {
+    function renderContext(step, hud, anchor, machineView) {
         var context = {
             anchor: anchor,
             reducedMotion: Boolean(hud && hud.settings && hud.settings.reduced_motion),
@@ -205,11 +205,17 @@
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
                 context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
             }
-            if (step.guide.gesture === "tap" && (step.guide.kind === "ui"
-                || step.trigger && ["attack", "territory"].includes(step.trigger.type))) {
-                var actionKey = stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action");
-                context.gestureLabel = hasText(actionKey) ? tr(actionKey)
-                    : step.guide.kind === "ui" ? tr(context.zoomMode === "pinch" ? "tutorial.hand_tap" : "tutorial.hand_click") : undefined;
+            if (step.guide.gesture === "tap" && step.guide.show_label !== false) {
+                var expansionResumed = step.paused_action === "expand_once_then_resume"
+                    && machineView && machineView.paused_action == null;
+                var actionSuffix = expansionResumed ? "_continue_action"
+                    : context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action";
+                var actionKey = stepTextKey(step, actionSuffix);
+                var action = window.SOWCampaign.guideAction(step);
+                var fallbackKey = action === "upgrade_progress" ? "tutorial.hand_upgrade_progress"
+                    : action === "interact" ? "tutorial.hand_" + (context.zoomMode === "pinch" ? "tap" : "click")
+                        : "tutorial.hand_" + (context.zoomMode === "pinch" ? "tap" : "click") + "_" + action;
+                context.gestureLabel = hasText(actionKey) ? tr(actionKey) : tr(fallbackKey);
             }
             if (hintKey && tr(hintKey) !== hintKey) {
                 context.hintOverride = tr(hintKey);
@@ -737,7 +743,7 @@
                 }
             } else {
                 clearStepRevealTimer();
-                runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud)));
+                runtime.view.render(machineView, renderContext(machineView.step, hud, anchorFor(machineView.step, hud), machineView));
             }
         }
         if (machineView.done && !runtime.completionSent) {
@@ -899,7 +905,7 @@
             else {
                 var model = runtime.machine.view();
                 syncTutorialPause(model);
-                runtime.view.render(model, renderContext(model.step, null, null));
+                runtime.view.render(model, renderContext(model.step, null, null, model));
             }
         }
     }
@@ -910,7 +916,7 @@
         if (!runtime.latestHud) return;
         var model = runtime.machine.view();
         if (model.waiting) runtime.view.render(null);
-        else runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud)));
+        else runtime.view.render(model, renderContext(model.step, runtime.latestHud, anchorFor(model.step, runtime.latestHud), model));
     }
     window.addEventListener("resize", function () {
         runtime.guidedScrollStepId = null;

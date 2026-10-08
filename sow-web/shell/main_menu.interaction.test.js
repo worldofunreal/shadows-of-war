@@ -1387,12 +1387,22 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     assert.equal(expansion.update({ tiles_gained: 250, wilderness_orders_accepted: 1 }, {}).step.id, "boudica_camera_intro");
     assert.equal(expansion.view().paused, true);
 
-    for (const id of ["boudica_first_contact", "boudica_second_contact", "boudica_third_contact"]) {
+    for (const id of ["boudica_first_contact", "boudica_third_contact"]) {
         assert.equal(step(id).attack_ratio_on_enter, 1);
         assert.equal(step(id).pause_game, true);
         assert.equal(step(id).paused_action, "expand_once_then_resume");
         assert.equal(step(id).guide.target, "expand");
     }
+    assert.equal(step("boudica_second_contact").pause_game, undefined, "the second Iceni meeting does not pause after Stonea's dialogue");
+    assert.equal(step("boudica_second_contact").paused_action, undefined);
+    assert.equal(step("boudica_second_contact").guide.target, "expand");
+    assert.equal(definition.settings.starting_gold, 150, "Boudica starts with 50 more gold than the 100 default");
+    assert.deepEqual(campaign.validate(definition, roster).errors, [], "the Boudica gold setting is accepted by the shared campaign validator");
+    const invalidGold = structuredClone(definition);
+    invalidGold.settings.starting_gold = -1;
+    assert.ok(campaign.validate(invalidGold, roster).errors.some(issue => issue.field === "settings.starting_gold"));
+    const secondContact = campaign.create(definition, "boudica_second_contact", roster);
+    assert.equal(secondContact.update({ contact_faction_ids: [] }, {}).paused, false, "the Snettisham objective runs without pausing");
     const contact = campaign.create(definition, "boudica_first_contact", roster);
     const contactFacts = { tiles_gained: 250, wilderness_orders_accepted: 0, contact_faction_ids: [] };
     assert.equal(contact.update(contactFacts, {}).paused, true);
@@ -2128,6 +2138,9 @@ test("campaign validation rejects unsupported rules and duplicate event response
         ]
     };
     assert.deepEqual(campaign.validate(tapGuide, null, { hasText: key => ["tutorial.tap_title", "tutorial.tap_end"].includes(key) }).errors, [], "missing optional hand labels do not block campaign saves");
+    const labelOptOut = JSON.parse(JSON.stringify(tapGuide));
+    labelOptOut.steps[0].guide.show_label = false;
+    assert.deepEqual(campaign.validate(labelOptOut, null, { hasText: key => ["tutorial.tap_title", "tutorial.tap_end"].includes(key) }).errors, [], "show_label false remains an explicit valid exception");
     const roster = { map: "test", player_spawn: [0, 0], factions: [{ id: "ally", name: "Ally", x: 1, y: 0, starting_troops: 500, relation: "neutral", civ: "Iceni Kingdom", leader: "Boudica", support_interval_seconds: 5 }] };
     const definition = {
         version: 2, episode_id: "fact_test", default_locale: "en", entry: "objective",
@@ -3959,7 +3972,7 @@ test("tutorial locale and UI guides resolve per episode and point to actual HUD 
     assert.match(storyCss, /data-gesture="pan_keys"/);
     assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : "wheel"/);
     assert.match(tutorial, /context\.gestureHint = context\.hintOverride/);
-    assert.match(campaignView, /showGestureHint = gestureType === "hover"[\s\S]*context\.gestureHint \|\| context\.hintOverride/);
+    assert.match(campaignView, /showGestureHint = showGestureText && gestureType === "hover"[\s\S]*context\.gestureHint \|\| context\.hintOverride/);
     assert.match(storyCss, /\.sow-story__gesture-hint \{[^}]*text-transform: none/);
     assert.match(campaignEngine, /menu_campaign:/);
     assert.match(campaignEngine, /map_attack:/);
@@ -4657,6 +4670,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = { episode_id: "test_campaign", text_namespace: "tutorial.test_campaign_" };
     const step = { id: "home_camera", hint_key: "tutorial.test_home_hint", guide: { kind: "ui", target: "hud_center_camera", gesture: "tap" }, trigger: { type: "ui", action: "hud_center_camera" } };
+    const expansionStep = { id: "boudica_first_expansion", paused_action: "expand_once_then_resume", guide: { kind: "world", target: "expand", gesture: "tap" }, trigger: { type: "territory" } };
     assert.equal(campaign.UI_TARGETS.hud_center_camera, '#sow-hud [data-command="center_camera"]');
 
     const selector = campaign.UI_TARGETS.hud_center_camera;
@@ -4670,10 +4684,16 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     const contextStart = tutorial.indexOf("    function renderContext(");
     const contextEnd = tutorial.indexOf("\n    function fetchJson(", contextStart);
     const contextSource = tutorial.slice(contextStart, contextEnd);
-    function renderContextFor(mode, translated = true) {
+    function renderContextFor(mode, translated = true, candidateStep = step, machineView = {}) {
         const desktopKey = definition.text_namespace + step.id + "_desktop_action";
         const mobileKey = definition.text_namespace + step.id + "_mobile_action";
-        const translations = translated ? { [desktopKey]: "Click Home", [mobileKey]: "Tap Home" } : {};
+        const expansionKey = definition.text_namespace + expansionStep.id;
+        const translations = translated ? {
+            [desktopKey]: "Click Home", [mobileKey]: "Tap Home",
+            [expansionKey + "_desktop_action"]: "Click to expand",
+            [expansionKey + "_mobile_action"]: "Tap to expand",
+            [expansionKey + "_continue_action"]: "Keep expanding"
+        } : {};
         const renderContext = vm.runInNewContext(contextSource + "\nrenderContext;", {
             document: { documentElement: { dir: "ltr" } },
             window: { SOWCampaign: campaign },
@@ -4682,16 +4702,35 @@ test("a UI step uses its configured target and device-specific hand labels", () 
             hasText: key => Object.hasOwn(translations, key),
             tr: key => translations[key] || ({
                 "tutorial.hand_click": "Click the highlighted control",
-                "tutorial.hand_tap": "Tap the highlighted control"
+                "tutorial.hand_tap": "Tap the highlighted control",
+                "tutorial.hand_click_home": "Click Home",
+                "tutorial.hand_tap_home": "Tap Home",
+                "tutorial.hand_click_expand": "Click to expand",
+                "tutorial.hand_tap_expand": "Tap to expand"
             })[key] || key
         });
-        return renderContext(step, { settings: {} }, null);
+        return renderContext(candidateStep, { settings: {} }, null, machineView);
     }
+    assert.equal(campaign.guideAction(step), "home");
+    assert.equal(campaign.guideAction(expansionStep), "expand");
     assert.equal(renderContextFor("wheel").gestureLabel, "Click Home");
     assert.equal(renderContextFor("pinch").gestureLabel, "Tap Home");
-    assert.equal(renderContextFor("wheel", false).gestureLabel, "Click the highlighted control", "missing episode-specific copy uses the shared localized fallback");
+    assert.equal(renderContextFor("wheel", false).gestureLabel, "Click Home", "missing episode-specific copy uses the localized action fallback");
+    assert.equal(renderContextFor("wheel", true, { ...step, guide: { ...step.guide, show_label: false } }).gestureLabel, undefined, "explicit opt-out hides hand text");
+    assert.equal(renderContextFor("wheel", true, expansionStep, { paused_action: "expand_once_then_resume" }).gestureLabel, "Click to expand");
+    assert.equal(renderContextFor("pinch", true, expansionStep, { paused_action: "expand_once_then_resume" }).gestureLabel, "Tap to expand");
+    assert.equal(renderContextFor("wheel", true, expansionStep, { paused_action: null }).gestureLabel, "Keep expanding");
+    const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
+    const spanish = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8");
+    assert.match(english, /campaign_boudica_boudica_first_expansion_desktop_action = "Click to expand"/);
+    assert.match(english, /campaign_boudica_boudica_first_expansion_mobile_action = "Tap to expand"/);
+    assert.match(english, /campaign_boudica_boudica_first_expansion_continue_action = "Keep expanding"/);
+    assert.match(spanish, /campaign_boudica_boudica_first_expansion_desktop_action = "Haz clic para expandir"/);
+    assert.match(spanish, /campaign_boudica_boudica_first_expansion_mobile_action = "Toca para expandir"/);
+    assert.match(spanish, /campaign_boudica_boudica_first_expansion_continue_action = "Sigue expandiendo"/);
     assert.match(campaignView, /Boolean\(context\.gestureLabel\)/);
     assert.match(campaignView, /if \(labeledGesture\) setText\(gestureCopy,[^\n]*context\.gestureLabel/);
+    assert.match(campaignView, /showGestureText = !step\.guide \|\| step\.guide\.show_label !== false/);
 
     const anchorStart = tutorial.indexOf("    function anchorFor(");
     const anchorEnd = tutorial.indexOf("\n    function syncTransferGuide(", anchorStart);
@@ -4706,6 +4745,73 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.match(campaignView, /Number\.isFinite\(anchor\.spotlightX\) \? anchor\.spotlightX : anchor\.x/);
     assert.match(storyCss, /\.sow-story__spotlight\.is-dimmed \{[^}]*9999px/);
     assert.match(storyCss, /\.sow-story__spotlight \{[^}]*pointer-events:\s*none/);
+});
+
+test("all campaign tap guides have a shared action label and localized fallback", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const definitions = fs.readdirSync(campaignDir)
+        .filter(file => file.endsWith(".triggers.json"))
+        .map(file => JSON.parse(fs.readFileSync(path.join(campaignDir, file), "utf8")));
+    const tapSteps = definitions.flatMap(definition => definition.steps
+        .filter(step => step.guide && step.guide.gesture === "tap")
+        .map(step => ({ definition, step })));
+    assert.equal(tapSteps.length, 54);
+    const categories = new Set(tapSteps.map(({ step }) => campaign.guideAction(step)));
+    assert.deepEqual([...categories].sort(), ["attack", "build", "contact", "expand", "home", "return", "select", "send", "upgrade", "upgrade_progress"].sort());
+    assert.equal(campaign.guideAction({ guide: { kind: "world", target: "expand", gesture: "tap" }, trigger: { type: "contact" } }), "expand");
+    assert.equal(campaign.guideAction({ guide: { kind: "world", target: "target_action", gesture: "tap" }, trigger: { type: "contact" } }), "contact");
+    assert.equal(campaign.guideAction({ guide: { kind: "world", target: "upgrade_building", gesture: "tap" }, trigger: { type: "structure_level" } }), "upgrade_progress");
+
+    const localesDir = path.join(shell, "../../sow-i18n/strings");
+    const localeDirs = fs.readdirSync(localesDir).filter(locale => fs.existsSync(path.join(localesDir, locale, "web.toml")));
+    assert.equal(localeDirs.length, 15);
+    for (const locale of localeDirs) {
+        const catalog = fs.readFileSync(path.join(localesDir, locale, "web.toml"), "utf8");
+        for (const category of categories) {
+            const keys = category === "upgrade_progress"
+                ? ["hand_upgrade_progress"]
+                : ["hand_click_" + category, "hand_tap_" + category];
+            for (const key of keys) assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"), locale + " is missing " + key);
+        }
+        for (const stepId of ["boudica_first_expansion", "boudica_camera_home"]) {
+            for (const suffix of ["_desktop_action", "_mobile_action"]) {
+                const key = "campaign_boudica_" + stepId + suffix;
+                assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"), locale + " is missing " + key);
+            }
+        }
+        assert.match(catalog, /^campaign_boudica_boudica_first_expansion_continue_action = ".+"$/m, locale + " is missing the resumed expansion label");
+    }
+    const contextStart = tutorial.indexOf("    function renderContext(");
+    const contextEnd = tutorial.indexOf("\n    function fetchJson(", contextStart);
+    const contextSource = tutorial.slice(contextStart, contextEnd);
+    function renderFallbackLabel(mode, step) {
+        const renderContext = vm.runInNewContext(contextSource + "\nrenderContext;", {
+            document: { documentElement: { dir: "ltr" } },
+            window: { SOWCampaign: campaign },
+            zoomMode: () => mode,
+            stepTextKey: (candidate, suffix) => "tutorial." + candidate.id + suffix,
+            hasText: () => false,
+            tr: key => key
+        });
+        return renderContext(step, { settings: {} }, null, { paused_action: null }).gestureLabel;
+    }
+    for (const { step } of tapSteps) {
+        if (step.guide.show_label === false) {
+            assert.equal(renderFallbackLabel("wheel", step), undefined, step.id + " opted out of hand text");
+            continue;
+        }
+        const action = campaign.guideAction(step);
+        const expected = mode => action === "upgrade_progress" ? "tutorial.hand_upgrade_progress"
+            : action === "interact" ? "tutorial.hand_" + mode
+                : "tutorial.hand_" + mode + "_" + action;
+        assert.equal(renderFallbackLabel("wheel", step), expected("click"), step.id + " desktop label");
+        assert.equal(renderFallbackLabel("pinch", step), expected("tap"), step.id + " mobile label");
+    }
+    assert.match(campaignEditor, /window\.SOWCampaign\.guideAction\(model\.step\)/);
+    assert.match(campaignEditor, /gestureLabel:\s*gestureLabel/);
+    assert.match(campaignView, /const guideVisible = !modal && step\.guide && anchor/);
+    assert.match(campaignView, /gesture\.hidden = !guideVisible/);
 });
 
 test("Boudica UI guides spotlight the requested controls and Legion IX attack slider", () => {

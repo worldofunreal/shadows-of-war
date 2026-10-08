@@ -9,6 +9,7 @@
       "after_defeated": "roman_outpost",
       "share_percent": 50
     },
+    "starting_gold": 150,
     "starting_troops": 2000
   },
   "entry": "boudica_rise_of_the_iceni_intro",
@@ -618,8 +619,6 @@
         "target": "expand",
         "gesture": "tap"
       },
-      "pause_game": true,
-      "paused_action": "expand_once_then_resume",
       "next": "boudica_third_contact"
     },
     {

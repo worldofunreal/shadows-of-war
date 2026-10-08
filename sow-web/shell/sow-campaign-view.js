@@ -324,15 +324,16 @@
                 { duration: 180, easing: "cubic-bezier(.2,.7,.2,1)" }
             );
             const gestureType = step.guide && step.guide.gesture;
+            const showGestureText = !step.guide || step.guide.show_label !== false;
             const zoomGuide = gestureType && gestureType.startsWith("zoom_");
             const zoomButtonGuide = step.guide && step.guide.kind === "ui" && ["hud_zoom_in", "hud_zoom_out"].includes(step.guide.target);
             const anchor = context.anchor;
-            const labeledGesture = zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel);
+            const labeledGesture = showGestureText && (zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel));
             gestureLabel.hidden = !labeledGesture;
             const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")
                 : zoomButtonGuide ? (step.guide.target === "hud_zoom_in" ? "hud.zoom_in" : "hud.zoom_out") : step.title_key;
             if (labeledGesture) setText(gestureCopy, zoomGuide || zoomButtonGuide ? t(gestureTitleKey) : context.gestureLabel || t(gestureTitleKey));
-            const showGestureHint = gestureType === "hover" && Boolean(context.gestureHint || context.hintOverride);
+            const showGestureHint = showGestureText && gestureType === "hover" && Boolean(context.gestureHint || context.hintOverride);
             gestureHint.hidden = !showGestureHint;
             if (showGestureHint) setText(gestureHint, context.gestureHint || context.hintOverride);
             renderGuideMetric(context.guideMetric, reducedMotion, step.id);

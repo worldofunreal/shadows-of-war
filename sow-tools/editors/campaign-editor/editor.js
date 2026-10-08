@@ -629,6 +629,11 @@
                     if (["zoom_in", "zoom_out"].includes(value)) { step.guide.kind = "world"; step.guide.target = "player"; step.trigger.type = step.trigger.type === value + "_complete" ? value + "_complete" : value; }
                     markDirty(); renderInspector();
                 }));
+                objective.appendChild(checkboxField("Show text beside hand", step.guide.show_label !== false, function (show) {
+                    if (show) delete step.guide.show_label;
+                    else step.guide.show_label = false;
+                    markDirty();
+                }));
                 if (step.guide.gesture === "drag") {
                     var dragTargets = step.guide.kind === "world"
                         ? [{ value: "expand", label: "Map · expansion" }, { value: "assault", label: "Map · attack" }, { value: "target_action", label: "Map · target action" }, { value: "player", label: "Map · player base" }, { value: "nameplate", label: "Map · faction nameplate" }]
@@ -1299,7 +1304,17 @@
         var zoomGuide = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture);
         var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
             ? translated(stepTextKey(model.step, "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint"), state.previewLanguage) : null;
-        var previewHint = deviceHint || "", guideMetric = null;
+        var previewHint = deviceHint || "", guideMetric = null, gestureLabel = null;
+        if (model.step.guide && model.step.guide.gesture === "tap" && model.step.guide.show_label !== false) {
+            var expansionResumed = model.step.paused_action === "expand_once_then_resume" && model.paused_action == null;
+            var actionSuffix = expansionResumed ? "_continue_action" : "_" + (zoomMode === "pinch" ? "mobile" : "desktop") + "_action";
+            var actionKey = stepTextKey(model.step, actionSuffix), actionText = textValue(actionKey, state.previewLanguage);
+            var action = window.SOWCampaign.guideAction(model.step);
+            var fallbackKey = action === "upgrade_progress" ? "tutorial.hand_upgrade_progress"
+                : action === "interact" ? "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click")
+                    : "tutorial.hand_" + (zoomMode === "pinch" ? "tap" : "click") + "_" + action;
+            gestureLabel = actionText || translated(fallbackKey, state.previewLanguage);
+        }
         if (zoomGuide) {
             var zoomTarget = model.step.trigger && model.step.trigger.type === "zoom_out_complete" ? window.SOWCampaign.zoomOutTarget(state.facts, model.step.trigger.value)
                 : model.step.trigger && model.step.trigger.type === "zoom_in_complete" ? state.facts.camera_zoom_target : null;
@@ -1313,7 +1328,7 @@
         } else if (model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
-        try { state.renderer.render(model.waiting ? null : model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric }); }
+        try { state.renderer.render(model.waiting ? null : model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
         $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";

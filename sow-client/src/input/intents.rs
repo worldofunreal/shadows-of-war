@@ -2,6 +2,13 @@ use crate::app::SowApp;
 use crate::app::{TutorialObservation, TutorialPausedAction};
 use sow_core::protocol::GameplayIntent;
 
+fn is_tutorial_control_intent(intent: &GameplayIntent) -> bool {
+    matches!(
+        intent,
+        GameplayIntent::Resign | GameplayIntent::ResolveCampaignDiplomacy { .. }
+    )
+}
+
 fn is_waiting_for_campaign_attack(
     waiting: bool,
     campaign: crate::campaign::CampaignId,
@@ -16,7 +23,7 @@ fn paused_tutorial_intent_allowed(
     action: Option<TutorialPausedAction>,
     intent: &GameplayIntent,
 ) -> bool {
-    matches!(intent, GameplayIntent::Resign)
+    is_tutorial_control_intent(intent)
         || match action {
             Some(TutorialPausedAction::ExpandOnceThenResume) => {
                 matches!(intent, GameplayIntent::Attack(attack) if attack.target_owner == 0)
@@ -74,7 +81,8 @@ fn paused_tutorial_action_accepted(before: Option<u64>, after: Option<u64>) -> b
 
 impl SowApp {
     pub(crate) fn send_intent(&mut self, intent: sow_core::protocol::GameplayIntent) -> bool {
-        if self.ui.tutorial_waiting_for_first_attack {
+        let tutorial_control = is_tutorial_control_intent(&intent);
+        if self.ui.tutorial_waiting_for_first_attack && !tutorial_control {
             if !is_waiting_for_campaign_attack(
                 self.ui.tutorial_waiting_for_first_attack,
                 self.ui.tutorial_campaign,
@@ -87,9 +95,7 @@ impl SowApp {
             self.sim.paused = false;
             self.sim.offline_tick_timer = 0.0;
         }
-        if self.ui.tutorial_camera_only
-            && !matches!(&intent, sow_core::protocol::GameplayIntent::Resign)
-        {
+        if self.ui.tutorial_camera_only && !tutorial_control {
             return false;
         }
         let paused_tutorial = self.ui.tutorial_active && self.net.is_offline && self.sim.paused;
@@ -109,7 +115,10 @@ impl SowApp {
         {
             self.ui.app.hud_state.push_map_feedback(
                 crate::ui::UiText::new("hud.spawn_rate_limited"),
-                [self.input.last_mouse_x as f32, self.input.last_mouse_y as f32],
+                [
+                    self.input.last_mouse_x as f32,
+                    self.input.last_mouse_y as f32,
+                ],
             );
             return false;
         }
@@ -173,8 +182,13 @@ impl SowApp {
             _ => {}
         }
 
-        if paused_tutorial {
-            if matches!(&intent, GameplayIntent::Resign) {
+        // A dialogue can pause immediately after sending its outcome, clearing the
+        // offline queue. Apply campaign diplomacy without waiting for a world tick.
+        let campaign_diplomacy = self.ui.tutorial_active
+            && self.net.is_offline
+            && matches!(&intent, GameplayIntent::ResolveCampaignDiplomacy { .. });
+        if paused_tutorial || campaign_diplomacy {
+            if tutorial_control {
                 self.apply_paused_tutorial_intent(intent);
                 return true;
             }
@@ -240,8 +254,9 @@ fn record_attack_launch_notice(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_waiting_for_campaign_attack, paused_tutorial_intent_allowed,
-        paused_tutorial_action_accepted, paused_tutorial_progress, record_attack_launch_notice,
+        is_tutorial_control_intent, is_waiting_for_campaign_attack,
+        paused_tutorial_action_accepted, paused_tutorial_intent_allowed, paused_tutorial_progress,
+        record_attack_launch_notice,
     };
     use crate::app::{TutorialObservation, TutorialPausedAction};
     use crate::campaign::CampaignId;
@@ -254,9 +269,21 @@ mod tests {
             target_owner: 2,
             troops: Some(100.0),
         });
-        assert!(is_waiting_for_campaign_attack(true, CampaignId::Boudica, &attack));
-        assert!(!is_waiting_for_campaign_attack(true, CampaignId::SixSkyEp1, &attack));
-        assert!(!is_waiting_for_campaign_attack(false, CampaignId::Boudica, &attack));
+        assert!(is_waiting_for_campaign_attack(
+            true,
+            CampaignId::Boudica,
+            &attack
+        ));
+        assert!(!is_waiting_for_campaign_attack(
+            true,
+            CampaignId::SixSkyEp1,
+            &attack
+        ));
+        assert!(!is_waiting_for_campaign_attack(
+            false,
+            CampaignId::Boudica,
+            &attack
+        ));
         assert!(!is_waiting_for_campaign_attack(
             true,
             CampaignId::Boudica,
@@ -264,7 +291,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn paused_tutorial_actions_are_limited_to_the_current_step() {
         let spawn = GameplayIntent::Spawn { x: 4, y: 5 };
         let neutral_attack = GameplayIntent::Attack(AttackIntent {
@@ -324,16 +351,121 @@ mod tests {
         ));
         assert!(!paused_tutorial_intent_allowed(None, &spawn));
         assert!(!paused_tutorial_intent_allowed(None, &neutral_attack));
-        assert!(paused_tutorial_intent_allowed(None, &GameplayIntent::Resign));
+        assert!(paused_tutorial_intent_allowed(
+            None,
+            &GameplayIntent::Resign
+        ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn paused_tutorial_only_advances_after_observed_progress() {
         assert!(!paused_tutorial_action_accepted(Some(12), Some(12)));
         assert!(!paused_tutorial_action_accepted(Some(12), Some(11)));
         assert!(!paused_tutorial_action_accepted(Some(12), None));
         assert!(!paused_tutorial_action_accepted(None, Some(13)));
         assert!(paused_tutorial_action_accepted(Some(12), Some(13)));
+    }
+
+    #[wasm_bindgen_test]
+    fn paused_campaign_dialogue_creates_real_alliances_without_advancing_the_world() {
+        use sow_core::engine::SowEngine;
+        use sow_core::game::{GamePhase, GameState};
+        use sow_core::game_config::GameConfig;
+        use sow_core::player::Player;
+        use sow_core::protocol::{CampaignRelation, StampedIntent};
+        use sow_core::water_components::WaterComponents;
+
+        for (relation, gold_cost) in [
+            (CampaignRelation::Allied, 0.0),
+            (CampaignRelation::Allied, 200.0),
+            (CampaignRelation::Enemy, 0.0),
+        ] {
+            let config = GameConfig {
+                tutorial: true,
+                ..Default::default()
+            };
+            let mut state = GameState::new(1, 4, 4, config.clone());
+            state.phase = GamePhase::Playing;
+            state.tick = 17;
+            let mut human = Player::new_human(1, "Boudica".into(), [1.0; 3], &config);
+            human.gold = 250.0;
+            human.troops = 2_000.0;
+            human.has_spawned = true;
+            state.register_player(human);
+            let mut tribe = Player::new_bot(2, "Stonea".into(), [0.5; 3], &config);
+            tribe.gold = 50.0;
+            tribe.has_spawned = true;
+            state.register_player(tribe);
+            state.set_tile_owner(1, 1, 1);
+            state.set_tile_owner(2, 1, 2);
+            let mut engine = SowEngine::new(state, WaterComponents::default());
+            engine
+                .campaign_relations
+                .insert(2, CampaignRelation::Neutral);
+            let intent = GameplayIntent::ResolveCampaignDiplomacy {
+                target_player: 2,
+                relation,
+                gold_cost,
+            };
+
+            assert!(
+                is_tutorial_control_intent(&intent),
+                "diplomacy must bypass camera and first-action restrictions"
+            );
+            assert!(
+                paused_tutorial_intent_allowed(None, &intent),
+                "dialogue pauses must permit their own diplomatic outcome"
+            );
+            engine.apply_intents(&[StampedIntent {
+                player_id: 1,
+                intent,
+            }]);
+            assert_eq!(engine.state.tick, 17);
+            assert!(engine.campaign_contact_resolved.contains(&2));
+            assert_eq!(engine.campaign_relations.get(&2), Some(&relation));
+            assert_eq!(engine.state.player(1).unwrap().gold, 250.0 - gold_cost);
+            assert_eq!(engine.state.player(2).unwrap().gold, 50.0 + gold_cost);
+            let allied = relation == CampaignRelation::Allied;
+            assert_eq!(
+                engine.state.player(1).unwrap().alliances.contains(&2),
+                allied
+            );
+            assert_eq!(
+                engine.state.player(2).unwrap().alliances.contains(&1),
+                allied
+            );
+            if allied {
+                engine.apply_intents(&[StampedIntent {
+                    player_id: 1,
+                    intent: GameplayIntent::Attack(AttackIntent {
+                        target_owner: 2,
+                        troops: Some(100.0),
+                    }),
+                }]);
+                assert!(
+                    engine.attacks.is_empty(),
+                    "an active ally must reject combat"
+                );
+                engine.apply_intents(&[
+                    StampedIntent {
+                        player_id: 1,
+                        intent: GameplayIntent::BreakAlliance { target_player: 2 },
+                    },
+                    StampedIntent {
+                        player_id: 1,
+                        intent: GameplayIntent::Attack(AttackIntent {
+                            target_owner: 2,
+                            troops: Some(100.0),
+                        }),
+                    },
+                ]);
+                assert_eq!(
+                    engine.attacks.len(),
+                    1,
+                    "the same attack is legal only after the alliance ends"
+                );
+            }
+        }
     }
 
     #[test]

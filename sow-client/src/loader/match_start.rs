@@ -84,6 +84,7 @@ impl SowApp {
                 key.as_str(),
                 "buildings_enabled"
                     | "starting_troops"
+                    | "starting_gold"
                     | "buildings_unlock_after_defeated"
                     | "campaign_support"
             ) {
@@ -99,6 +100,16 @@ impl SowApp {
             .and_then(serde_json::Value::as_f64)
             .filter(|value| value.is_finite() && (1.0..=100_000.0).contains(value))
             .ok_or_else(|| "Campaign starting_troops is invalid.".to_string())?;
+        let starting_gold = options
+            .get("starting_gold")
+            .map(|value| {
+                value
+                    .as_f64()
+                    .filter(|value| value.is_finite() && (0.0..=1_000_000.0).contains(value))
+                    .ok_or_else(|| "Campaign starting_gold is invalid.".to_string())
+            })
+            .transpose()?
+            .unwrap_or_else(|| GameConfig::default().starting_gold);
         let resolve_faction_display_name = |reference: &str| {
             factions
                 .iter()
@@ -180,6 +191,7 @@ impl SowApp {
                 player_team: None,
                 campaign_player_color: Some(player_color),
                 starting_troops,
+                starting_gold,
                 global_speed_multiplier: 0.5,
                 buildings_enabled,
                 buildings_unlock_after_defeated,

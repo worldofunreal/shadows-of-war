@@ -2056,14 +2056,18 @@ fn tutorial_guide_tiles(
             }
         }
         let map = app.sim.engine.as_ref().map(|engine| &engine.state.map);
-        let border_distances = map.map(|map| tutorial_border_distance_map(
-            map,
-            owners,
-            terrain,
-            border_tiles,
-            my_pid,
-            max_nameplate_distance,
-        )).unwrap_or_default();
+        let border_distances = map
+            .map(|map| {
+                tutorial_border_distance_map(
+                    map,
+                    owners,
+                    terrain,
+                    border_tiles,
+                    my_pid,
+                    max_nameplate_distance,
+                )
+            })
+            .unwrap_or_default();
         for candidate in &mut build_site_candidates {
             candidate.2 = border_distances
                 .get(candidate.3 as usize)
@@ -3769,6 +3773,22 @@ mod tests {
             tutorial_visible_build_site_candidate(&candidates, |_| true),
             Some(2)
         );
+    }
+
+    #[test]
+    fn tutorial_build_site_prefers_interior_before_border_fallback() {
+        let mut candidates = vec![
+            (true, 20, 0, 1),
+            (false, 2, 1, 9),
+            (false, 6, 1, 8),
+        ];
+        tutorial_rank_build_site_candidates(&mut candidates);
+
+        let ranked_tiles = candidates
+            .iter()
+            .map(|candidate| candidate.3)
+            .collect::<Vec<_>>();
+        assert_eq!(ranked_tiles, [8, 9, 1]);
     }
 
     #[test]

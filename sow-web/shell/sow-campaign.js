@@ -83,6 +83,34 @@
         if (info.androidTwa || info.mobile || appleTouchDevice || /android|iphone|ipad|ipod/i.test(userAgent)) return "pinch";
         return /mac/i.test(platform) ? "trackpad" : "wheel";
     }
+    function guideAction(step) {
+        const guide = step && step.guide;
+        const trigger = step && step.trigger || {};
+        if (!guide || guide.gesture !== "tap") return null;
+        const target = guide.target;
+        if (trigger.type === "structure_level") return "upgrade_progress";
+        if (trigger.type === "building_selected") return "select";
+        if (trigger.type === "structure_upgrade") return "upgrade";
+        if (trigger.type === "resource_transfer") return "send";
+        if (["territory", "attack", "kills", "defeated", "eliminated"].includes(trigger.type)) {
+            return trigger.type === "territory" ? "expand" : "attack";
+        }
+        if (["contact", "alliance"].includes(trigger.type)) return target === "expand" ? "expand" : "contact";
+        if (["city", "factory", "bunker"].includes(trigger.type)) return "build";
+        if (trigger.type === "ui") {
+            if (trigger.action === "map_transfer" || target === "transfer_send") return target === "transfer_send" ? "send" : "select";
+            if (target === "hud_center_camera") return "home";
+            if (target === "menu_lobby") return "return";
+            if (target === "upgrade_structure") return "upgrade";
+            if (/^dock_/.test(target || "")) return "build";
+            return "select";
+        }
+        if (target === "expand") return "expand";
+        if (target === "assault" || target === "target_action" || target === "nameplate") return "attack";
+        if (target === "build_site") return "build";
+        if (target === "upgrade_building") return "select";
+        return "interact";
+    }
     const own = (object, key) => object != null && Object.prototype.hasOwnProperty.call(object, key);
     const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
     const id = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,95}$/.test(value) && !["constructor", "prototype", "__proto__"].includes(value);
@@ -282,7 +310,8 @@
             issue(null, "settings", "Choose buildings on/off and 1–100000 starting troops.");
         }
         if (object(settings)) {
-            if (Object.keys(settings).some(key => !["buildings_enabled", "starting_troops", "buildings_unlock_after_defeated", "campaign_support"].includes(key))) issue(null, "settings", "Unknown match setting.");
+            if (Object.keys(settings).some(key => !["buildings_enabled", "starting_troops", "starting_gold", "buildings_unlock_after_defeated", "campaign_support"].includes(key))) issue(null, "settings", "Unknown match setting.");
+            if (settings.starting_gold != null && (!Number.isInteger(settings.starting_gold) || settings.starting_gold < 0 || settings.starting_gold > 1000000)) issue(null, "settings.starting_gold", "Choose 0–1000000 starting gold.");
             if (settings.buildings_unlock_after_defeated != null && typeof settings.buildings_unlock_after_defeated !== "string") issue(null, "settings.buildings_unlock_after_defeated", "Choose a faction that unlocks construction.");
             if (settings.campaign_support != null) {
                 const support = settings.campaign_support;
@@ -450,12 +479,9 @@
                 ["_mobile_hint", "_desktop_hint"].forEach(dynamicText);
             }
             if (step.trigger && step.trigger.type === "camera_target") dynamicText("_progress");
-            if (step.guide && step.guide.gesture === "tap"
-                && (step.guide.kind === "ui" || step.trigger && ["attack", "territory"].includes(step.trigger.type))) {
+            if (step.guide && step.guide.gesture === "tap" && step.guide.show_label !== false) {
                 ["_mobile_action", "_desktop_action"].forEach(dynamicText);
-            }
-            if (step.trigger && step.trigger.type === "attack" && step.guide && step.guide.gesture === "tap") {
-                ["_mobile_action", "_desktop_action"].forEach(dynamicText);
+                if (step.paused_action === "expand_once_then_resume") dynamicText("_continue_action");
             }
             if (step.speaker && !own(speakers, step.speaker)) issue(step, "speaker", "Unknown character.");
             if (step.presentation && (!["dialogue", "chapter", "celebration", "cinematic"].includes(step.presentation) || step.presentation === "cinematic" && step.type !== "scene")) issue(step, "presentation", "Choose a presentation supported by this step.");
@@ -573,7 +599,6 @@
                     if (["attack", "contact", "alliance", "defeated", "fleet", "camera_target", "hover", "zoom_in_complete"].includes(trigger.type) && targetableFactions.length) {
                         if (!step.marker || !targetableFactions.includes(step.marker.target)) issue(step, "marker", "Faction objectives need a marker on one of their targets.");
                         const expandsToContact = trigger.type === "contact"
-                            && step.paused_action === "expand_once_then_resume"
                             && step.guide && step.guide.kind === "world" && step.guide.target === "expand";
                         if (["attack", "contact", "alliance", "defeated", "fleet"].includes(trigger.type)
                             && !expandsToContact
@@ -588,7 +613,8 @@
             if (step.marker && (!object(step.marker) || !step.marker.target || (roster && !factions.has(step.marker.target) && !allowMissingFactionReferences))) issue(step, "marker", "Unknown marked faction.");
             if (step.guide) {
                 const guide = step.guide;
-                knownFields(guide, ["kind", "target", "gesture", "to"], step, "guide");
+                knownFields(guide, ["kind", "target", "gesture", "to", "show_label"], step, "guide");
+                if (own(guide, "show_label") && typeof guide.show_label !== "boolean") issue(step, "guide.show_label", "Choose whether the hand shows text.");
                 if (!["objective", "guide"].includes(step.type)) issue(step, "guide", "Only mechanics use the hand; decisions never do.");
                 if (!object(guide) || !["world", "ui"].includes(guide.kind) || !["tap", "hold", "drag", "hover", "pan_keys", "zoom_in", "zoom_out"].includes(guide.gesture)) issue(step, "guide", "Choose a world/control target and a gesture.");
                 else if (guide.kind === "world" ? !WORLD_TARGETS.includes(guide.target) : !own(UI_TARGETS, guide.target)) issue(step, "guide.target", "Unknown guide target.");
@@ -1006,7 +1032,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, TEAMS, METRICS, UI_TARGETS, zoomInputMode, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
+    const api = { TYPES, TEAMS, METRICS, UI_TARGETS, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
