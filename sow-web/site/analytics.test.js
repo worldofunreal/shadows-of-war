@@ -103,6 +103,8 @@ test("consent panel loads and rejecting sends nothing or creates an analytics se
   assert.match(controlsCss, /\.sow-analytics-consent \{/);
   assert.equal(runtime.head.children.some((node) => node.id === "sow-analytics-consent-style"), false);
   assert.ok(runtime.card, "website presents the consent choice");
+  assert.equal(runtime.card.hidden, false, "the choice stays visible until an explicit answer");
+  assert.notEqual(runtime.body.style.overflow, "hidden", "the page remains scrollable behind the banner");
   assert.equal(runtime.card.children[0].textContent, "Analítica opcional");
   assert.equal(runtime.card.children[1].textContent, "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.");
   assert.equal(runtime.card.children[2].textContent, "Detalles de cookies");
@@ -118,6 +120,19 @@ test("consent panel loads and rejecting sends nothing or creates an analytics se
   assert.equal(JSON.parse(runtime.local.getItem("sow_analytics_consent_v2")).choice, "rejected");
   assert.equal(runtime.session.values.size, 0);
   assert.deepEqual(runtime.fetchCalls, []);
+});
+
+test("website consent stays in a bottom strip while game settings keep their top panel", () => {
+  const siteRule = controlsCss.match(/\.sow-analytics-consent:not\(\.sow-analytics-consent--game\)\s*\{([^}]*)\}/);
+  assert.ok(siteRule, "website has a separate consent layout");
+  assert.match(siteRule[1], /inset-inline:\s*0;/);
+  assert.match(siteRule[1], /bottom:\s*0;/);
+  assert.match(siteRule[1], /grid-template-areas:\s*"title actions" "copy actions" "policy actions";/);
+  assert.match(controlsCss, /@media \(max-width: 720px\)\s*\{\s*\.sow-analytics-consent:not\(\.sow-analytics-consent--game\)\s*\{[^}]*grid-template-areas:\s*"title" "copy" "policy" "actions";/s);
+  const gameRule = controlsCss.match(/\.sow-analytics-consent--game\s*\{([^}]*)\}/);
+  assert.ok(gameRule, "game settings keep their separate panel");
+  assert.match(gameRule[1], /top:\s*max\(/);
+  assert.match(gameRule[1], /bottom:\s*auto;/);
 });
 
 test("network retries reuse the same event IDs and clear the queue only after success", async () => {

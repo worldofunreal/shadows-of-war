@@ -103,9 +103,9 @@
             cinematic.hidden = !active;
             cinematicPlay.hidden = !active || cinematicStatus === "playing" || cinematicStatus === "ended";
             cinematicSkip.hidden = !active || cinematicStatus === "ended";
-            cinematicPlay.textContent = t("play");
+            cinematicPlay.textContent = t("lobbies.play");
             cinematicSkip.textContent = t("tutorial.skip_cinematic");
-            cinematicPlay.setAttribute("aria-label", t("play"));
+            cinematicPlay.setAttribute("aria-label", t("lobbies.play"));
             cinematicSkip.setAttribute("aria-label", t("tutorial.skip_cinematic"));
             root.classList.toggle("is-cinematic", active);
             root.classList.toggle("is-chapter", step.presentation === "chapter" || step.presentation === "cinematic" && !active);
@@ -306,7 +306,7 @@
             });
             setText(objectiveTitle, t(step.title_key));
             setText(hint, context.hintOverride || t(step.hint_key || step.body_key)); hint.hidden = !hint.textContent;
-            objectiveToggle.setAttribute("aria-label", t("objective_details"));
+            objectiveToggle.setAttribute("aria-label", t("tutorial.objective_details"));
             objectiveToggle.setAttribute("aria-expanded", String(objective.dataset.detailsExpanded === "true"));
             objectiveToggle.hidden = hint.hidden;
             const progress = model.progress;

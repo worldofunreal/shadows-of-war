@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "Thất bại Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "Chạm để tấn công"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "Nhấp để tấn công"
 
+hand_click = "Nhấp vào nút được tô sáng"
+hand_tap = "Chạm vào nút được tô sáng"
+
 [auth]
 account = "Tài khoản"
 continue_with = "Tiếp tục với {provider}"

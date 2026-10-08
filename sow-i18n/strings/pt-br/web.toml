@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "Derrotar Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "Toque para atacar"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "Clique para atacar"
 
+hand_click = "Clique no controle destacado"
+hand_tap = "Toque no controle destacado"
+
 [auth]
 account = "Conta"
 continue_with = "Continuar com {provider}"

@@ -19,7 +19,7 @@ fn paused_tutorial_intent_allowed(
     matches!(intent, GameplayIntent::Resign)
         || match action {
             Some(TutorialPausedAction::ExpandOnceThenResume) => {
-                matches!(intent, GameplayIntent::Spawn { .. })
+                matches!(intent, GameplayIntent::Attack(attack) if attack.target_owner == 0)
             }
             Some(TutorialPausedAction::SendResourcesStayPaused) => {
                 matches!(intent, GameplayIntent::SendResources { .. })
@@ -45,7 +45,9 @@ fn paused_tutorial_progress(
     intent: &GameplayIntent,
 ) -> Option<u64> {
     match intent {
-        GameplayIntent::Spawn { .. } => Some(observation.tiles_gained),
+        GameplayIntent::Attack(attack) if attack.target_owner == 0 => {
+            Some(observation.wilderness_orders_accepted)
+        }
         GameplayIntent::SendResources { .. } => Some(observation.resource_transfers),
         GameplayIntent::BuildStructure { kind, .. } => {
             let key = match *kind {
@@ -239,9 +241,9 @@ fn record_attack_launch_notice(
 mod tests {
     use super::{
         is_waiting_for_campaign_attack, paused_tutorial_intent_allowed,
-        paused_tutorial_action_accepted, record_attack_launch_notice,
+        paused_tutorial_action_accepted, paused_tutorial_progress, record_attack_launch_notice,
     };
-    use crate::app::TutorialPausedAction;
+    use crate::app::{TutorialObservation, TutorialPausedAction};
     use crate::campaign::CampaignId;
     use sow_core::protocol::{AttackIntent, GameplayIntent};
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -265,6 +267,14 @@ mod tests {
     #[test]
     fn paused_tutorial_actions_are_limited_to_the_current_step() {
         let spawn = GameplayIntent::Spawn { x: 4, y: 5 };
+        let neutral_attack = GameplayIntent::Attack(AttackIntent {
+            target_owner: 0,
+            troops: Some(1_000.0),
+        });
+        let faction_attack = GameplayIntent::Attack(AttackIntent {
+            target_owner: 2,
+            troops: Some(1_000.0),
+        });
         let send = GameplayIntent::SendResources {
             target_player: 2,
             gold: 1.0,
@@ -276,9 +286,17 @@ mod tests {
         };
         let upgrade = GameplayIntent::UpgradeStructure { building_id: 1 };
 
-        assert!(paused_tutorial_intent_allowed(
+        assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume),
             &spawn
+        ));
+        assert!(paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::ExpandOnceThenResume),
+            &neutral_attack
+        ));
+        assert!(!paused_tutorial_intent_allowed(
+            Some(TutorialPausedAction::ExpandOnceThenResume),
+            &faction_attack
         ));
         assert!(!paused_tutorial_intent_allowed(
             Some(TutorialPausedAction::ExpandOnceThenResume),
@@ -305,6 +323,7 @@ mod tests {
             &upgrade
         ));
         assert!(!paused_tutorial_intent_allowed(None, &spawn));
+        assert!(!paused_tutorial_intent_allowed(None, &neutral_attack));
         assert!(paused_tutorial_intent_allowed(None, &GameplayIntent::Resign));
     }
 
@@ -315,6 +334,28 @@ mod tests {
         assert!(!paused_tutorial_action_accepted(Some(12), None));
         assert!(!paused_tutorial_action_accepted(None, Some(13)));
         assert!(paused_tutorial_action_accepted(Some(12), Some(13)));
+    }
+
+    #[test]
+    fn wilderness_order_acceptance_is_independent_of_territory_capture() {
+        let attack = GameplayIntent::Attack(AttackIntent {
+            target_owner: 0,
+            troops: Some(1_000.0),
+        });
+        let before = TutorialObservation::default();
+        let mut after = TutorialObservation::default();
+        after.wilderness_orders_accepted = 1;
+
+        assert_eq!(paused_tutorial_progress(&before, &attack), Some(0));
+        assert_eq!(paused_tutorial_progress(&after, &attack), Some(1));
+        assert!(!paused_tutorial_action_accepted(
+            paused_tutorial_progress(&before, &attack),
+            paused_tutorial_progress(&before, &attack)
+        ));
+        assert!(paused_tutorial_action_accepted(
+            paused_tutorial_progress(&before, &attack),
+            paused_tutorial_progress(&after, &attack)
+        ));
     }
 
     #[wasm_bindgen_test]

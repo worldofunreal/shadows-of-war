@@ -481,8 +481,7 @@ fn render_buildings(
             );
         }
 
-        if building.detail == BuildingDetail::Full
-            && let Some(status) = &building.status
+        if let Some(status) = &building.status
             && let Some(label) = &status.label
         {
             render_building_preview_badge(
@@ -614,9 +613,14 @@ fn nearest_building_in_cluster(
 fn building_marker_size(building: &RenderedBuilding, zoom_scaled: f32) -> [f32; 2] {
     if building.tile_idx.is_some() {
         let (width, height) = building.kind.footprint_dimensions();
+        let minimum = if building.status.is_some() {
+            BUILDING_MIN_MARKER_SIZE
+        } else {
+            0.0
+        };
         [
-            width as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL,
-            height as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL,
+            (width as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL).max(minimum),
+            (height as f32 * zoom_scaled * BUILDING_FOOTPRINT_FILL).max(minimum),
         ]
     } else {
         let size = (building_icon_size(zoom_scaled) * if building.count > 1 { 0.6 } else { 0.5 })
@@ -1054,7 +1058,8 @@ fn collect_buildings(
         let tile_y = building.tile_idx / map_w;
         let active_level = building.active_level();
         let detail = lod.detail(building.kind);
-        if detail == BuildingDetail::Cluster {
+        let keep_local_progress = building.owner_id == my_id && building.under_construction;
+        if detail == BuildingDetail::Cluster && !keep_local_progress {
             let (bx, by) = crate::render::world::movers::tile_to_world(building.tile_idx, map_w);
             let key = BuildingClusterKey {
                 grid_x: (tile_x as f32 / lod.cluster_cell_size) as i32,
@@ -1086,7 +1091,7 @@ fn collect_buildings(
                 active_level,
                 my_id,
                 tick_rate_ms,
-                detail == BuildingDetail::Full,
+                detail == BuildingDetail::Full || keep_local_progress,
             ),
         });
     }
@@ -1235,6 +1240,77 @@ mod tests {
             under_construction,
             ticks_until_complete,
         }
+    }
+
+    #[test]
+    fn distant_lod_keeps_only_local_construction_progress_visible() {
+        use sow_core::game::GamePhase;
+        use sow_core::protocol::SimSnapshot;
+        use std::sync::Arc;
+
+        let mut local_construction = building_snapshot(BuildingKind::City, 1, true, 20);
+        local_construction.tile_idx = 0;
+        let mut enemy_construction = local_construction.clone();
+        enemy_construction.owner_id = 8;
+        enemy_construction.tile_idx = 1;
+        let mut completed = building_snapshot(BuildingKind::City, 1, false, 0);
+        completed.tile_idx = 2;
+        let snapshot = SimSnapshot {
+            tick: 1,
+            phase: GamePhase::Playing,
+            spawn_timer_secs: None,
+            players: Vec::new(),
+            dirty_tiles: Vec::new(),
+            fleets: Vec::new(),
+            attacks: Vec::new(),
+            buildings: vec![local_construction, enemy_construction, completed],
+            projectiles: Vec::new(),
+            nuke_alerts: Vec::new(),
+            resource_transfers: Vec::new(),
+            resource_rejections: Vec::new(),
+            resource_transfer_rejections: Vec::new(),
+            winner: None,
+            winning_team: None,
+            defense_posts: Vec::new(),
+            defense_dirty: false,
+            total_land_tiles: 0,
+            sea_lanes: Arc::new(Vec::new()),
+            debug_mem_info: String::new(),
+        };
+        let mut buildings = Vec::new();
+        let mut clusters = HashMap::new();
+
+        collect_buildings(
+            &snapshot,
+            100,
+            BuildingLod::for_zoom(1.0),
+            7,
+            100.0,
+            &mut buildings,
+            &mut clusters,
+        );
+
+        assert_eq!(buildings.len(), 3);
+        let local = buildings
+            .iter()
+            .find(|building| building.tile_idx == Some(0))
+            .expect("local construction remains individual at distant zoom");
+        let status = local
+            .status
+            .as_ref()
+            .expect("local progress remains visible");
+        assert_eq!(status.label.as_deref(), Some("🏗️ 2s"));
+        assert_eq!(
+            building_marker_size(local, 1.0),
+            [BUILDING_MIN_MARKER_SIZE; 2]
+        );
+
+        let clustered: Vec<_> = buildings
+            .iter()
+            .filter(|building| building.tile_idx.is_none())
+            .collect();
+        assert_eq!(clustered.len(), 2);
+        assert!(clustered.iter().all(|building| building.status.is_none()));
     }
 
     #[test]

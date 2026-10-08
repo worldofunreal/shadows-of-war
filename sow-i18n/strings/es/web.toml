@@ -310,9 +310,12 @@ campaign_boudica_boudica_menu_ready_body = "Continúa la campaña, repite este t
 campaign_boudica_boudica_menu_ready_title = "Ya estás listo"
 campaign_boudica_boudica_menu_replay_hint = "Elige a Boudica para volver a jugar este tutorial."
 campaign_boudica_boudica_menu_replay_title = "Repetir el tutorial"
-campaign_boudica_boudica_ninth_body = "La Novena marchó a socorrer Camulodunum, pero la ciudad ya cayó. Deténla antes de que llegue a Londinium."
+campaign_boudica_boudica_ninth_body = "Petilio Cerial marcha con la Novena para socorrer Camulodunum. La colonia ya cayó. Debemos detener a la fuerza de auxilio con toda la hueste."
 campaign_boudica_boudica_ninth_hint = "Derrota a la Legio IX Hispana."
 campaign_boudica_boudica_ninth_title = "La Novena Legión"
+campaign_boudica_boudica_ninth_set_attack_ratio_title = "Compromete todas las tropas"
+campaign_boudica_boudica_ninth_set_attack_ratio_body = "Esta barra define cuántas tropas envías por ataque. Súbela al 100% para enviar toda la fuerza disponible contra la Novena."
+campaign_boudica_boudica_ninth_set_attack_ratio_hint = "Sube la barra de ataque al 100%."
 campaign_boudica_boudica_outpost_colonia_veterans_hint = "Derrota a los veteranos de la colonia antes de avanzar sobre Camulodunum."
 campaign_boudica_boudica_outpost_colonia_veterans_title = "Veteranos de la colonia"
 campaign_boudica_boudica_outpost_colonia_veterans_scene_title = "Los veteranos han caído"
@@ -390,6 +393,9 @@ campaign_boudica_boudica_zoom_out_trackpad_hint = "Junta dos dedos en el trackpa
 campaign_boudica_boudica_zoom_out_trackpad_label = "Alejar · junta los dedos"
 campaign_boudica_boudica_zoom_out_wheel_hint = "Mueve la rueda del ratón hacia abajo para alejar el mapa."
 campaign_boudica_boudica_zoom_out_wheel_label = "Alejar · rueda abajo"
+
+hand_click = "Haz clic en el control resaltado"
+hand_tap = "Toca el control resaltado"
 
 [auth]
 account = "Cuenta"

@@ -1707,13 +1707,78 @@ fn tutorial_screen_anchor(point: [f32; 2], width: f32, height: f32) -> Option<([
     ))
 }
 
+fn tutorial_rank_build_site_candidates(candidates: &mut [(bool, u32, u32, u32)]) {
+    candidates.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| b.1.min(b.2).cmp(&a.1.min(a.2)))
+            .then_with(|| b.1.cmp(&a.1))
+            .then_with(|| b.2.cmp(&a.2))
+            .then_with(|| a.3.cmp(&b.3))
+    });
+}
+
+fn tutorial_border_distance_map(
+    map: &sow_core::map::GameMap,
+    owners: &[u16],
+    terrain: &[u8],
+    border_tiles: Option<&sow_core::bitset::DenseBitSet>,
+    my_pid: u16,
+    max_depth: u32,
+) -> Vec<u32> {
+    let (map_w, map_h) = (map.width, map.height);
+    let Some(area) = map_w.checked_mul(map_h).map(|area| area as usize) else {
+        return Vec::new();
+    };
+    if max_depth == 0 {
+        return vec![0; area];
+    }
+    let mut distances = vec![u32::MAX; area];
+    let Some(border_tiles) = border_tiles else {
+        return vec![max_depth; area];
+    };
+    let mut queue = VecDeque::new();
+    for raw in border_tiles.ones() {
+        let index = raw as usize;
+        if index >= area
+            || owners.get(index).copied() != Some(my_pid)
+            || terrain.get(index).copied().unwrap_or(0) & 0x80 == 0
+        {
+            continue;
+        }
+        distances[index] = 0;
+        queue.push_back(index);
+    }
+    while let Some(index) = queue.pop_front() {
+        let depth = distances[index];
+        if depth >= max_depth {
+            continue;
+        }
+        let (col, row) = ((index as u32) % map_w, (index as u32) / map_w);
+        map.for_each_neighbor(col, row, |next_col, next_row| {
+            let next = (next_row * map_w + next_col) as usize;
+            if distances[next] != u32::MAX
+                || owners.get(next).copied() != Some(my_pid)
+                || terrain.get(next).copied().unwrap_or(0) & 0x80 == 0
+            {
+                return;
+            }
+            distances[next] = depth + 1;
+            queue.push_back(next);
+        });
+    }
+    distances
+        .into_iter()
+        .map(|depth| depth.min(max_depth))
+        .collect()
+}
+
 fn tutorial_visible_build_site_candidate(
-    candidates: &[(bool, i32, u32)],
+    candidates: &[(bool, u32, u32, u32)],
     mut is_visible: impl FnMut(u32) -> bool,
 ) -> Option<u32> {
     candidates
         .iter()
-        .find_map(|&(_, _, tile)| is_visible(tile).then_some(tile))
+        .find_map(|&(_, _, _, tile)| is_visible(tile).then_some(tile))
 }
 
 fn tutorial_project_tile(
@@ -1799,7 +1864,7 @@ fn tutorial_building_anchors(
 /// `assault` is attackable land touching the player's border;
 /// `target_action` is legal land toward a named faction: neutral land to approach allies,
 /// or neutral/enemy land to approach or attack an enemy; `build_site` prefers visible,
-/// buildable interior land nearest the player's centroid, with border land as fallback.
+/// buildable land far from both the player's nameplate and its border.
 fn tutorial_guide_tiles(
     app: &mut SowApp,
     snapshot: &sow_core::protocol::SimSnapshot,
@@ -1816,11 +1881,29 @@ fn tutorial_guide_tiles(
         .hud_state
         .selected_building_kind
         .unwrap_or(sow_core::game::BuildingKind::City);
+    let Some(me) = snapshot
+        .players
+        .iter()
+        .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
+    else {
+        return (None, None, None, None);
+    };
+    let nameplate_anchor = app
+        .ui
+        .nameplates
+        .anchor_for(my_pid)
+        .filter(|[x, y]| x.is_finite() && y.is_finite())
+        .unwrap_or([me.centroid_x, me.centroid_y]);
+    let nameplate_tile = (
+        nameplate_anchor[0].floor().clamp(0.0, map_w.saturating_sub(1) as f32) as i32,
+        nameplate_anchor[1].floor().clamp(0.0, map_h.saturating_sub(1) as f32) as i32,
+    );
     let cache_hit = {
         let observation = &app.sim.tutorial_observation;
         observation.guide_tick == snapshot.tick
             && observation.guide_target_owner == target_owner
             && observation.guide_build_site_kind == Some(build_kind)
+            && observation.guide_build_site_nameplate_tile == Some(nameplate_tile)
     };
     if !cache_hit {
         {
@@ -1828,6 +1911,7 @@ fn tutorial_guide_tiles(
             observation.guide_tick = snapshot.tick;
             observation.guide_target_owner = target_owner;
             observation.guide_build_site_kind = Some(build_kind);
+            observation.guide_build_site_nameplate_tile = Some(nameplate_tile);
             observation.guide_expand = None;
             observation.guide_assault = None;
             observation.guide_target_action = None;
@@ -1837,13 +1921,6 @@ fn tutorial_guide_tiles(
             return (None, None, None, None);
         };
         let (owners, terrain) = (&renderer.owners, &renderer.terrain);
-        let Some(me) = snapshot
-            .players
-            .iter()
-            .find(|player| player.id == my_pid && player.alive && player.tile_count > 0)
-        else {
-            return (None, None, None, None);
-        };
         let (cx, cy) = (me.centroid_x as i32, me.centroid_y as i32);
         const RADIUS: i32 = 48;
         let mut expand = None;
@@ -1922,6 +1999,7 @@ fn tutorial_guide_tiles(
         let radius = 48_i32.min(map_w.min(map_h) as i32);
         let map_area = map_w.checked_mul(map_h).unwrap_or(0);
         let mut build_site_candidates = Vec::new();
+        let mut max_nameplate_distance = 0;
         let placement_cache = &mut app.ui.building_placement_cache;
         let mut consider_build_site = |idx: u32, is_border: bool| {
             if idx >= map_area {
@@ -1950,11 +2028,14 @@ fn tutorial_guide_tiles(
             if !placement_cache.is_legal_site(snapshot.tick, &query, idx) {
                 return;
             }
-            build_site_candidates.push((
-                is_border,
-                sow_core::building::hex_distance(cx, cy, col, row),
-                idx,
-            ));
+            let nameplate_distance = sow_core::building::hex_distance(
+                nameplate_tile.0,
+                nameplate_tile.1,
+                col,
+                row,
+            ) as u32;
+            max_nameplate_distance = max_nameplate_distance.max(nameplate_distance);
+            build_site_candidates.push((is_border, nameplate_distance, 0, idx));
         };
         for dy in -radius..=radius {
             for dx in -radius..=radius {
@@ -1974,7 +2055,22 @@ fn tutorial_guide_tiles(
                 );
             }
         }
-        build_site_candidates.sort();
+        let map = app.sim.engine.as_ref().map(|engine| &engine.state.map);
+        let border_distances = map.map(|map| tutorial_border_distance_map(
+            map,
+            owners,
+            terrain,
+            border_tiles,
+            my_pid,
+            max_nameplate_distance,
+        )).unwrap_or_default();
+        for candidate in &mut build_site_candidates {
+            candidate.2 = border_distances
+                .get(candidate.3 as usize)
+                .copied()
+                .unwrap_or(max_nameplate_distance);
+        }
+        tutorial_rank_build_site_candidates(&mut build_site_candidates);
         let observation = &mut app.sim.tutorial_observation;
         observation.guide_expand = expand;
         observation.guide_assault = assault;
@@ -2224,6 +2320,7 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
             "tutorial_target_hovered": tutorial_target_hovered,
             "tiles": me.map(|player| player.tile_count).unwrap_or(0),
             "tiles_gained": observation.tiles_gained,
+            "wilderness_orders_accepted": observation.wilderness_orders_accepted,
             "zoom_in_events": app.input.tutorial_zoom_in_events,
             "zoom_out_events": app.input.tutorial_zoom_out_events,
             "zoom_out_complete": zoom_out_complete,
@@ -3655,19 +3752,44 @@ mod tests {
     }
 
     #[test]
-    fn tutorial_build_site_prefers_interior_nearest_to_center() {
-        let mut candidates = vec![(true, 1, 9), (false, 4, 8), (false, 2, 5), (false, 2, 3)];
-        candidates.sort();
+    fn tutorial_build_site_prefers_clearance_from_nameplate_and_border() {
+        let mut candidates = vec![
+            (true, 8, 0, 1),
+            (false, 1, 6, 9),
+            (false, 6, 1, 8),
+            (false, 4, 4, 5),
+            (false, 4, 4, 2),
+        ];
+        tutorial_rank_build_site_candidates(&mut candidates);
 
+        assert_eq!(candidates[0], (false, 4, 4, 2));
+        assert_eq!(candidates[1], (false, 4, 4, 5));
+        assert_eq!(candidates.last(), Some(&(true, 8, 0, 1)));
         assert_eq!(
             tutorial_visible_build_site_candidate(&candidates, |_| true),
-            Some(3)
+            Some(2)
         );
     }
 
     #[test]
+    fn tutorial_build_site_border_clearance_uses_owned_land_neighbors() {
+        let owners = vec![1; 25];
+        let terrain = vec![0x80; 25];
+        let mut border = sow_core::bitset::DenseBitSet::new();
+        border.insert(0);
+
+        let map = sow_core::map::GameMap::new(5, 5);
+        let distances = tutorial_border_distance_map(&map, &owners, &terrain, Some(&border), 1, 3);
+
+        assert_eq!(distances[0], 0);
+        assert_eq!(distances[6], 1);
+        assert_eq!(distances[12], 2);
+        assert_eq!(distances[24], 3, "distance beyond the relevant range is capped");
+    }
+
+    #[test]
     fn tutorial_build_site_tracks_camera_changes_while_paused_with_border_fallback() {
-        let candidates = [(false, 1, 10), (false, 2, 11), (true, 0, 12)];
+        let candidates = [(false, 1, 4, 10), (false, 2, 4, 11), (true, 0, 0, 12)];
 
         // Reuse the same tick's candidates as the camera moves between publishes.
         assert_eq!(

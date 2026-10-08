@@ -815,6 +815,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     const pendingTutorialFetches = [];
     const tutorialCommands = [];
     window.SOW_t = key => key;
+    window.SOW_hasText = key => Boolean(window.SOW_t(key));
     window.SOW_menu_command = message => tutorialCommands.push(JSON.parse(message));
     window.SOWCampaign = campaign;
     window.SOWCampaignView = { mount: () => ({ render() {}, destroy() {} }) };
@@ -1304,6 +1305,7 @@ test("campaign runtime shares the JSON interpreter and cinematic view", () => {
     assert.match(tutorial, /complete_campaign_episode/);
     assert.match(webMenu, /WebMenuCommand::SetTutorialPaused \{\s*paused,\s*camera_only,\s*paused_action,\s*\} => \{[\s\S]*?self\.sim\.paused = paused[\s\S]*?tutorial_paused_action/);
     assert.match(simUpdateSource, /if self\.sim\.paused \{\s*self\.sim\.offline_tick_timer = 0\.0;/);
+    assert.match(campaignEngine, /wilderness_orders_accepted/);
     assert.match(campaignEngine, /const paused = \["scene", "choice", "end"\]\.includes\(step\.type\) \|\| \(step\.pause_game === true && !expansionStarted\)/);
     assert.match(campaignView, /data-story-choice/);
     assert.match(storyCss, /\.sow-story__choices/);
@@ -1376,11 +1378,13 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     const step = id => definition.steps.find(candidate => candidate.id === id);
 
     const expansion = campaign.create(definition, "boudica_first_expansion", roster);
-    assert.equal(expansion.update({ tiles_gained: 0 }, {}).paused, true);
+    assert.equal(expansion.update({ tiles_gained: 0, wilderness_orders_accepted: 0 }, {}).paused, true);
     assert.equal(expansion.view().paused_action, "expand_once_then_resume");
-    assert.equal(expansion.update({ tiles_gained: 0 }, {}).paused, true, "an invalid click leaves the game paused");
-    assert.equal(expansion.update({ tiles_gained: 1 }, {}).paused, false);
-    assert.equal(expansion.update({ tiles_gained: 250 }, {}).step.id, "boudica_camera_intro");
+    assert.equal(expansion.update({ tiles_gained: 0, wilderness_orders_accepted: 0 }, {}).paused, true, "a rejected click leaves the game paused");
+    const acceptedExpansion = expansion.update({ tiles_gained: 0, wilderness_orders_accepted: 1 }, {});
+    assert.equal(acceptedExpansion.paused, false, "accepted neutral attack resumes before capture");
+    assert.equal(acceptedExpansion.step.id, "boudica_first_expansion", "the 250-tile goal still waits for actual territory gain");
+    assert.equal(expansion.update({ tiles_gained: 250, wilderness_orders_accepted: 1 }, {}).step.id, "boudica_camera_intro");
     assert.equal(expansion.view().paused, true);
 
     for (const id of ["boudica_first_contact", "boudica_second_contact", "boudica_third_contact"]) {
@@ -1390,10 +1394,11 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
         assert.equal(step(id).guide.target, "expand");
     }
     const contact = campaign.create(definition, "boudica_first_contact", roster);
-    const contactFacts = { tiles_gained: 250, contact_faction_ids: [] };
+    const contactFacts = { tiles_gained: 250, wilderness_orders_accepted: 0, contact_faction_ids: [] };
     assert.equal(contact.update(contactFacts, {}).paused, true);
-    assert.equal(contact.update({ ...contactFacts, tiles_gained: 251 }, {}).paused, false);
-    assert.equal(contact.update({ ...contactFacts, tiles_gained: 251, contact_faction_ids: ["stonea"] }, {}).paused, true);
+    assert.equal(contact.update({ ...contactFacts, wilderness_orders_accepted: 1 }, {}).paused, false);
+    assert.equal(contact.update({ ...contactFacts, tiles_gained: 251, wilderness_orders_accepted: 1 }, {}).paused, false);
+    assert.equal(contact.update({ ...contactFacts, tiles_gained: 251, wilderness_orders_accepted: 1, contact_faction_ids: ["stonea"] }, {}).paused, true);
 
     assert.equal(step("boudica_transfer_target").pause_game, true);
     assert.equal(step("boudica_transfer_send").pause_game, true);
@@ -1413,6 +1418,9 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
         assert.equal(step(id).paused_action, "build_until_started");
         const machine = campaign.create(definition, id, roster);
         assert.equal(machine.update({ [metric]: 0 }, {}).paused, true);
+        const rejected = machine.update({ [metric]: 0 }, {});
+        assert.equal(rejected.paused, true, "a rejected placement leaves the paused action available for another attempt");
+        assert.equal(rejected.step.id, id);
         const started = machine.update({ [metric]: 1 }, {});
         assert.equal(started.step.id, waitId);
         assert.equal(started.paused, false);
@@ -1423,6 +1431,9 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     assert.equal(step("boudica_structure_upgrade").paused_action, "upgrade_until_started");
     const upgradeButton = campaign.create(definition, "boudica_structure_upgrade", roster);
     assert.equal(upgradeButton.update({ structure_upgrades: 0 }, {}).paused, true);
+    const rejectedUpgrade = upgradeButton.update({ structure_upgrades: 0 }, {});
+    assert.equal(rejectedUpgrade.paused, true, "a rejected upgrade leaves the paused action available for another attempt");
+    assert.equal(rejectedUpgrade.step.id, "boudica_structure_upgrade");
     const upgrading = upgradeButton.update({ structure_upgrades: 1 }, {});
     assert.equal(upgrading.step.id, "boudica_city_upgrade_wait");
     assert.equal(upgrading.paused, false, "the upgrade's construction wait runs after upgrade acceptance");
@@ -2731,6 +2742,7 @@ test("campaign start keeps its loaded script and replay clicks belong to that ep
     const window = {
         addEventListener() {}, SOW_menu_command(message) { commands.push(JSON.parse(message)); },
         SOW_t: key => ({ "tutorial.open": "Original", "tutorial.end": "End" })[key] || "[" + key + "]",
+        SOW_hasText: key => Boolean(window.SOW_t(key)),
         SOWCampaign: { ...campaign, create(data) {
             activeRun = campaign.create(data);
             const update = activeRun.update;
@@ -2783,6 +2795,7 @@ test("campaign funnel records each step once and completes only after the ending
         SOW_menu_command() {},
         SOW_trackExperienceEvent(payload) { events.push(JSON.parse(payload)); },
         SOW_t: key => ({ "tutorial.opening": "Opening", "tutorial.ending": "Ending" })[key] || "[" + key + "]",
+        SOW_hasText: key => Boolean(window.SOW_t(key)),
         SOWCampaign: campaign,
         SOWCampaignView: { mount: (_root, options) => {
             viewOptions = options;
@@ -3215,19 +3228,34 @@ test("UI objectives respect step, episode, and total scope", () => {
             version: 2, episode_id: "ui_scope_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 0 },
             strings: { en: {} }, speakers: {}, entry: "opening", steps: [
                 { id: "opening", type: "scene", title_key: "tutorial.opening", next: "objective" },
-                { id: "objective", type: "objective", title_key: "tutorial.objective", hint_key: "tutorial.objective_hint", trigger: { type: "ui", action: "attack_ratio", scope }, next: "ending" },
+                { id: "objective", type: "objective", title_key: "tutorial.objective", hint_key: "tutorial.objective_hint", trigger: { type: "ui", action: "hud_center_camera", scope }, next: "ending" },
                 { id: "ending", type: "end", title_key: "tutorial.ending" }
             ]
         });
-        machine.update({}, { attack_ratio: 0 }, 0);
-        machine.update({}, { attack_ratio: 1 }, 100);
+        machine.update({}, { hud_center_camera: 0 }, 0);
+        machine.update({}, { hud_center_camera: 1 }, 100);
         machine.advance(null, "opening");
-        return machine.update({}, { attack_ratio: 1 }, 200).step.id === "ending";
+        return machine.update({}, { hud_center_camera: 1 }, 200).step.id === "ending";
     };
 
     assert.equal(completed("step"), false);
     assert.equal(completed("episode"), true);
     assert.equal(completed("total"), true);
+});
+
+test("Legion IX slider objective waits for the live HUD ratio to reach 100%", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const machine = campaign.create({
+        version: 2, episode_id: "attack_ratio_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 0 },
+        strings: { en: {} }, speakers: {}, entry: "objective", steps: [
+            { id: "objective", type: "objective", title_key: "tutorial.objective", hint_key: "tutorial.objective_hint", trigger: { type: "ui", action: "attack_ratio", scope: "step", value: 1 }, next: "ending" },
+            { id: "ending", type: "end", title_key: "tutorial.ending" }
+        ]
+    });
+
+    assert.equal(machine.update({ attack_ratio: 0.5 }, {}).step.id, "objective");
+    assert.equal(machine.update({ attack_ratio: 0.99 }, {}).step.id, "objective");
+    assert.equal(machine.update({ attack_ratio: 1 }, {}).step.id, "ending");
 });
 
 test("campaign studio authors cinematic endings and navigable validation notes", () => {
@@ -3545,6 +3573,10 @@ test("campaign hand guides model the actual slider and support local or world dr
         ]
     };
     assert.deepEqual(campaign.validate(definition).errors, []);
+    const machine = campaign.create(definition);
+    assert.equal(machine.update({ attack_ratio: 0.5 }, {}).step.id, "slider");
+    assert.equal(machine.update({ attack_ratio: 0.99 }, {}).step.id, "slider");
+    assert.equal(machine.update({ attack_ratio: 1 }, {}).step.id, "ending");
     definition.steps[0].guide.to = "not_a_control";
     assert.ok(campaign.validate(definition).errors.some(issue => issue.step === "slider" && issue.field === "guide.to"));
     definition.steps[0].guide = { kind: "world", target: "expand", gesture: "drag", to: "assault" };
@@ -4644,16 +4676,20 @@ test("a UI step uses its configured target and device-specific hand labels", () 
         const translations = translated ? { [desktopKey]: "Click Home", [mobileKey]: "Tap Home" } : {};
         const renderContext = vm.runInNewContext(contextSource + "\nrenderContext;", {
             document: { documentElement: { dir: "ltr" } },
+            window: { SOWCampaign: campaign },
             zoomMode: () => mode,
             stepTextKey: (candidate, suffix) => definition.text_namespace + candidate.id + suffix,
             hasText: key => Object.hasOwn(translations, key),
-            tr: key => translations[key] || key
+            tr: key => translations[key] || ({
+                "tutorial.hand_click": "Click the highlighted control",
+                "tutorial.hand_tap": "Tap the highlighted control"
+            })[key] || key
         });
         return renderContext(step, { settings: {} }, null);
     }
     assert.equal(renderContextFor("wheel").gestureLabel, "Click Home");
     assert.equal(renderContextFor("pinch").gestureLabel, "Tap Home");
-    assert.equal(renderContextFor("wheel", false).gestureLabel, undefined, "missing optional copy never appears as a raw translation key");
+    assert.equal(renderContextFor("wheel", false).gestureLabel, "Click the highlighted control", "missing episode-specific copy uses the shared localized fallback");
     assert.match(campaignView, /Boolean\(context\.gestureLabel\)/);
     assert.match(campaignView, /if \(labeledGesture\) setText\(gestureCopy,[^\n]*context\.gestureLabel/);
 
@@ -4672,15 +4708,35 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.match(storyCss, /\.sow-story__spotlight \{[^}]*pointer-events:\s*none/);
 });
 
-test("Boudica UI guides spotlight only the six requested controls and keep the full transfer panel visible", () => {
+test("Boudica UI guides spotlight the requested controls and Legion IX attack slider", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const campaignSource = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const requested = [
         "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade",
         "boudica_choose_factory", "boudica_choose_bunker", "boudica_return_lobby"
     ];
     const uiSteps = definition.steps.filter(step => step.guide && step.guide.kind === "ui").map(step => step.id).sort();
-    assert.deepEqual(uiSteps, ["boudica_camera_home", ...requested].sort(), "no other campaign steps gain a UI guide");
+    const ratioStepId = "boudica_ninth_legion_set_attack_ratio";
+    assert.deepEqual(uiSteps, ["boudica_camera_home", ...requested, ratioStepId].sort());
     for (const id of requested) assert.equal(definition.steps.find(step => step.id === id).guide.gesture, "tap");
+    const intro = definition.steps.find(step => step.id === "boudica_ninth_legion_intro");
+    const ratioStep = definition.steps.find(step => step.id === ratioStepId);
+    const legionObjective = definition.steps.find(step => step.id === "boudica_ninth_legion");
+    assert.equal(intro.next, ratioStepId);
+    assert.equal(ratioStep.next, legionObjective.id);
+    assert.equal(ratioStep.pause_game, true);
+    assert.equal(ratioStep.trigger.type, "ui");
+    assert.equal(ratioStep.trigger.action, "attack_ratio");
+    assert.equal(ratioStep.trigger.value, 1);
+    assert.deepEqual(ratioStep.guide, { kind: "ui", target: "attack_ratio", gesture: "drag" });
+    assert.equal(intro.attack_ratio_on_enter, 0.5, "start the demonstration below 100%");
+    assert.equal(ratioStep.attack_ratio_on_enter, undefined, "the player must set 100% manually");
+    assert.match(tutorial, /attack_ratio: Number\(hud\.attack_ratio\)/);
+    assert.match(campaignSource, /trigger\.action === "attack_ratio"[\s\S]*current = Number\(facts\.attack_ratio \|\| 0\)[\s\S]*target = Number\(trigger\.value \|\| 1\)/);
+    assert.match(tutorial, /key === "attack_ratio" && currentStep && currentStep\.trigger[\s\S]*currentStep\.trigger\.action === key\) return/);
+    assert.match(fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8"), /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
+    assert.match(fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8"), /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
     assert.match(campaignView, /anchor\.dimOutside \|\| step\.guide\.kind === "ui"/);
     assert.match(campaignView, /spotlightWidth = Number\.isFinite\(anchor\.spotlightWidth\) \? anchor\.spotlightWidth : anchor\.width/);
     assert.match(tutorial, /step\.id === "boudica_transfer_send"[\s\S]*source\.closest\("#sow-hud-transfer"\)/);

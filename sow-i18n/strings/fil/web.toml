@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "Pagkatalo Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "I-tap para umatake"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "I-click para umatake"
 
+hand_click = "I-click ang naka-highlight na kontrol"
+hand_tap = "I-tap ang naka-highlight na kontrol"
+
 [auth]
 account = "Ulat"
 continue_with = "Patuloy na samahan {provider}"

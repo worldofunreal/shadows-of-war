@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "Kekalahan Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "Ketuk untuk menyerang"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "Klik untuk menyerang"
 
+hand_click = "Klik kontrol yang disorot"
+hand_tap = "Ketuk kontrol yang disorot"
+
 [auth]
 account = "Akun"
 continue_with = "Lanjutkan dengan {provider}"

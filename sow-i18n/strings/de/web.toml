@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "Niederlage Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "Zum Angreifen tippen"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "Zum Angreifen klicken"
 
+hand_click = "Klicke auf das hervorgehobene Steuerelement"
+hand_tap = "Tippe auf das hervorgehobene Steuerelement"
+
 [auth]
 account = "Konto"
 continue_with = "Mit {provider} fortfahren"

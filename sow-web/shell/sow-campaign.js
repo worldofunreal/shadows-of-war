@@ -751,9 +751,14 @@
                     target = 1;
                 }
             } else if (trigger.type === "ui") {
-                const uiReference = trigger.scope === "step" ? uiBaseline : trigger.scope === "episode" ? initialUi : {};
-                current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
-                target = 1;
+                if (trigger.action === "attack_ratio") {
+                    current = Number(facts.attack_ratio || 0);
+                    target = Number(trigger.value || 1);
+                } else {
+                    const uiReference = trigger.scope === "step" ? uiBaseline : trigger.scope === "episode" ? initialUi : {};
+                    current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
+                    target = 1;
+                }
             } else if (trigger.type === "building_selected") {
                 current = facts.selected_building_kind === trigger.kind ? 1 : 0;
                 target = 1;
@@ -890,7 +895,7 @@
             const startDelayMs = step.type === "scene" ? Number(step.start_delay_seconds || 0) * 1000 : 0;
             const waitRemainingMs = startDelayMs > 0 ? Math.max(0, startDelayMs - (currentTimeMs - stepEnteredAtMs)) : 0;
             const expansionStarted = step.paused_action === "expand_once_then_resume"
-                && Number(facts.tiles_gained || 0) > Number(baseline.tiles_gained || 0);
+                && Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
             const paused = ["scene", "choice", "end"].includes(step.type) || (step.pause_game === true && !expansionStarted);
             return { definition, step, line, progress: progress(), paused, paused_action: paused ? step.paused_action || null : null, done: state.done, choices: step.choices || [], state, waiting: waitRemainingMs > 0, wait_remaining_ms: waitRemainingMs };
         }

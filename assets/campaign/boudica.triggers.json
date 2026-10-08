@@ -1085,6 +1085,28 @@
       "body_key": "tutorial.campaign_boudica_boudica_ninth_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "attack_ratio_on_enter": 0.5,
+      "next": "boudica_ninth_legion_set_attack_ratio"
+    },
+    {
+      "id": "boudica_ninth_legion_set_attack_ratio",
+      "type": "objective",
+      "title_key": "tutorial.campaign_boudica_boudica_ninth_set_attack_ratio_title",
+      "body_key": "tutorial.campaign_boudica_boudica_ninth_set_attack_ratio_body",
+      "hint_key": "tutorial.campaign_boudica_boudica_ninth_set_attack_ratio_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "trigger": {
+        "type": "ui",
+        "action": "attack_ratio",
+        "scope": "step",
+        "value": 1
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "attack_ratio",
+        "gesture": "drag"
+      },
       "next": "boudica_ninth_legion"
     },
     {
@@ -1468,8 +1490,12 @@
       "x": 350,
       "y": 2730
     },
-    "boudica_ninth_legion": {
+    "boudica_ninth_legion_set_attack_ratio": {
       "x": 630,
+      "y": 2730
+    },
+    "boudica_ninth_legion": {
+      "x": 910,
       "y": 2730
     },
     "boudica_pact_choice": {

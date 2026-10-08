@@ -204,10 +204,12 @@
                 }
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
                 context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
-            } else if (step.guide.gesture === "tap" && (step.guide.kind === "ui"
+            }
+            if (step.guide.gesture === "tap" && (step.guide.kind === "ui"
                 || step.trigger && ["attack", "territory"].includes(step.trigger.type))) {
                 var actionKey = stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action");
-                if (hasText(actionKey)) context.gestureLabel = tr(actionKey);
+                context.gestureLabel = hasText(actionKey) ? tr(actionKey)
+                    : step.guide.kind === "ui" ? tr(context.zoomMode === "pinch" ? "tutorial.hand_tap" : "tutorial.hand_click") : undefined;
             }
             if (hintKey && tr(hintKey) !== hintKey) {
                 context.hintOverride = tr(hintKey);
@@ -225,9 +227,7 @@
     }
 
     function hasText(key) {
-        if (typeof window.SOW_t !== "function") return false;
-        var text = window.SOW_t(key);
-        return Boolean(text && text !== "[" + key + "]");
+        return typeof window.SOW_hasText === "function" && window.SOW_hasText(key);
     }
 
     function loadEpisode(episodeId) {
@@ -591,7 +591,8 @@
         var facts = Object.assign({}, tutorial.facts || {}, {
             hover_events: runtime.hoverEvents,
             touch_controls: zoomMode() === "pinch" ? 1 : 0,
-            selected_building_kind: selectedBuildingKind
+            selected_building_kind: selectedBuildingKind,
+            attack_ratio: Number(hud.attack_ratio)
         });
         if (currentStep.trigger && currentStep.trigger.type === "ui"
             && currentStep.trigger.action === "map_transfer" && currentStep.marker
@@ -925,10 +926,13 @@
         if (!runtime.machine) return;
         if (root.contains(event.target)) return;
         var changed = false;
+        var currentStep = runtime.machine.view().step;
         Object.keys(window.SOWCampaign.UI_TARGETS).forEach(function (key) {
             var control = window.SOWCampaign.resolveUiTarget(key, document, runtime.episodeId);
             var actionEvent = control && control.matches("input") ? "change" : "click";
             if (event.type === actionEvent && control && !control.disabled && control.getClientRects().length && (control === event.target || control.contains(event.target))) {
+                if (key === "attack_ratio" && currentStep && currentStep.trigger && currentStep.trigger.type === "ui"
+                    && currentStep.trigger.action === key) return;
                 runtime.uiCounts[key] = (runtime.uiCounts[key] || 0) + 1; changed = true;
             }
         });

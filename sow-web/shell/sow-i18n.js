@@ -171,6 +171,12 @@
         });
     }
 
+    function hasText(key) {
+        var value = lookup(activeStrings, key);
+        if (typeof value !== "string") value = lookup(englishStrings, key);
+        return typeof value === "string" && value.trim().length > 0;
+    }
+
     function saveLocale(locale) {
         try {
             window.localStorage.setItem(STORAGE_KEY, locale);
@@ -202,6 +208,7 @@
     }
 
     window.SOW_t = translate;
+    window.SOW_hasText = hasText;
     window.SOW_getLocale = function () { return localeTag(activeLocale); };
     window.SOW_getSupportedLocales = function () { return supportedCodes.map(localeTag); };
     window.SOW_getLocaleTag = function (locale) { return localeTag(normalizeLocale(locale)); };

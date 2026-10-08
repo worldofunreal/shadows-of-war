@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "デフティング Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "タップして攻撃"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "クリックして攻撃"
 
+hand_click = "強調表示された操作項目をクリックしてください"
+hand_tap = "強調表示された操作項目をタップしてください"
+
 [auth]
 account = "会員アカウント"
 continue_with = "続行する {provider}"

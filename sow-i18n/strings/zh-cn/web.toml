@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "失败 Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "轻触以攻击"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "单击以攻击"
 
+hand_click = "点击突出显示的控件"
+hand_tap = "轻触突出显示的控件"
+
 [auth]
 account = "账户"
 continue_with = "继续 {provider}"

@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "Tikal"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "Saldırmak için dokun"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "Saldırmak için tıkla"
 
+hand_click = "Vurgulanan kontrole tıklayın"
+hand_tap = "Vurgulanan kontrole dokunun"
+
 [auth]
 account = "Hesap"
 continue_with = "{provider} ile devam et"

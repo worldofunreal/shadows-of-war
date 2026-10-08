@@ -89,15 +89,18 @@ pub struct TutorialObservation {
     pub alliances_initialized: bool,
     /// Sum of positive per-update territory changes, excluding the initial spawn.
     pub tiles_gained: u64,
+    /// Accepted neutral-land attack orders, independent of when territory is captured.
+    pub wilderness_orders_accepted: u64,
     pub previous_tiles: Option<u32>,
     pub guide_tick: u64,
     pub guide_target_owner: u16,
     pub guide_expand: Option<u32>,
     pub guide_assault: Option<u32>,
     pub guide_target_action: Option<u32>,
-    /// Legal building tiles ranked interior-first, cached for the current tutorial tick.
-    pub guide_build_site_candidates: Vec<(bool, i32, u32)>,
+    /// Legal building tiles ranked by nameplate and border clearance for this tutorial tick.
+    pub guide_build_site_candidates: Vec<(bool, u32, u32, u32)>,
     pub guide_build_site_kind: Option<sow_core::game::BuildingKind>,
+    pub guide_build_site_nameplate_tile: Option<(i32, i32)>,
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, PartialEq, Eq)]

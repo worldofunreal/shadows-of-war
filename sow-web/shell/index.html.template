@@ -374,6 +374,13 @@
                 return;
             }
 
+            const wasmResponsePromise = fetch('./__WASM_FILE__').then(function (response) {
+                if (!response.ok) throw new Error("WASM request returned " + response.status);
+                return { response: response };
+            }).catch(function (error) {
+                return { error: error };
+            });
+
             try {
                 await window.SOW_I18N_READY;
                 if (typeof window.SOW_refreshWebLoaderText === 'function') {
@@ -425,7 +432,9 @@
 
             try {
                 const wasm = await import('./__JS_FILE__');
-                await wasm.default({ module_or_path: './__WASM_FILE__' });
+                const wasmLoad = await wasmResponsePromise;
+                if (wasmLoad.error) throw wasmLoad.error;
+                await wasm.default({ module_or_path: wasmLoad.response });
                 if (typeof wasm.SOW_wake_event_loop === "function") {
                     window.SOW_wake_event_loop = wasm.SOW_wake_event_loop;
                 }

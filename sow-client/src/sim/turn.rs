@@ -335,10 +335,44 @@ impl SowApp {
             let Some(engine) = self.sim.engine.as_mut() else {
                 return;
             };
+            let neutral_attack_troops_before = match &intent {
+                sow_core::protocol::GameplayIntent::Attack(attack)
+                    if attack.target_owner == 0 =>
+                {
+                    Some(
+                        engine
+                            .attacks
+                            .iter()
+                            .filter(|execution| {
+                                execution.owner_id == my_id && execution.target_owner == 0
+                            })
+                            .map(|execution| execution.troops)
+                            .sum::<f64>(),
+                    )
+                }
+                _ => None,
+            };
             engine.apply_intents(&[sow_core::protocol::StampedIntent {
                 player_id: my_id,
                 intent,
             }]);
+            if let Some(before) = neutral_attack_troops_before {
+                let after = engine
+                    .attacks
+                    .iter()
+                    .filter(|execution| {
+                        execution.owner_id == my_id && execution.target_owner == 0
+                    })
+                    .map(|execution| execution.troops)
+                    .sum::<f64>();
+                if after > before {
+                    self.sim.tutorial_observation.wilderness_orders_accepted = self
+                        .sim
+                        .tutorial_observation
+                        .wilderness_orders_accepted
+                        .saturating_add(1);
+                }
+            }
             if observe_tutorial {
                 self.sim.tutorial_observation.observe_events(engine, my_id);
                 self.sim.tutorial_observation.observe_sim(engine, my_id);

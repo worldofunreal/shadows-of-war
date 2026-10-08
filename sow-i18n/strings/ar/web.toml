@@ -220,6 +220,9 @@ six_sky_ep3_legacy_hint = "اهزم تيكال"
 campaign_boudica_boudica_attack_roman_outpost_mobile_action = "المس للهجوم"
 campaign_boudica_boudica_attack_roman_outpost_desktop_action = "انقر للهجوم"
 
+hand_click = "انقر على عنصر التحكم المحدد"
+hand_tap = "المس عنصر التحكم المحدد"
+
 [auth]
 account = "الحساب"
 continue_with = "تابع {provider}"

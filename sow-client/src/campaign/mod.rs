@@ -282,7 +282,7 @@ pub(crate) fn tutorial_camera_frame(
     );
     let fit_zoom = (screen_w.max(1.0) / (dx + 7.0))
         .min(screen_h.max(1.0) / (dy + 7.0))
-        .min(30.0);
+        .min(crate::camera_zoom_upper_bound(screen_w, screen_h));
     let min_zoom =
         crate::camera_zoom_lower_bound(screen_w, screen_h, config.map_width, config.map_height);
     Some((center, fit_zoom.max(min_zoom)))
@@ -430,7 +430,7 @@ mod tests {
             ..GameConfig::default()
         };
 
-        for (screen, expected_zoom) in [((1440.0, 900.0), 30.0), ((390.0, 844.0), 390.0 / 14.0)] {
+        for (screen, expected_zoom) in [((1440.0, 900.0), 100.0), ((390.0, 844.0), 390.0 / 14.0)] {
             let (center, zoom) =
                 tutorial_camera_frame(CampaignId::Boudica, &config, screen.0, screen.1).unwrap();
             assert_eq!(center, (719.0, 79.5));

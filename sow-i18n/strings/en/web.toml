@@ -312,9 +312,12 @@ campaign_boudica_boudica_menu_ready_body = "Continue the campaign, replay this t
 campaign_boudica_boudica_menu_ready_title = "You're ready"
 campaign_boudica_boudica_menu_replay_hint = "Choose Boudica to play this tutorial again."
 campaign_boudica_boudica_menu_replay_title = "Replay the tutorial"
-campaign_boudica_boudica_ninth_body = "The Ninth marched to relieve Camulodunum, but the city has fallen. Stop it before it reaches Londinium."
+campaign_boudica_boudica_ninth_body = "Petilius Cerialis marches with the Ninth to relieve Camulodunum. The colony has fallen. We must stop Rome's relief force with our full strength."
 campaign_boudica_boudica_ninth_hint = "Defeat Legio IX Hispana."
 campaign_boudica_boudica_ninth_title = "The Ninth Legion"
+campaign_boudica_boudica_ninth_set_attack_ratio_title = "Commit Every Troop"
+campaign_boudica_boudica_ninth_set_attack_ratio_body = "This slider sets the share sent in each attack. Set it to 100% to send every available troop against the Ninth."
+campaign_boudica_boudica_ninth_set_attack_ratio_hint = "Set the attack slider to 100%."
 campaign_boudica_boudica_outpost_colonia_veterans_hint = "Defeat the Colonia Veterans before advancing on Camulodunum."
 campaign_boudica_boudica_outpost_colonia_veterans_title = "Colonia Veterans"
 campaign_boudica_boudica_outpost_colonia_veterans_scene_title = "The veterans are routed"
@@ -428,6 +431,9 @@ campaign_boudica_boudica_zoom_out_trackpad_hint = "Pinch two fingers together on
 campaign_boudica_boudica_zoom_out_trackpad_label = "Zoom out · pinch in"
 campaign_boudica_boudica_zoom_out_wheel_hint = "Scroll the mouse wheel down to zoom out."
 campaign_boudica_boudica_zoom_out_wheel_label = "Zoom out · scroll down"
+
+hand_click = "Click the highlighted control"
+hand_tap = "Tap the highlighted control"
 
 [auth]
 account = "Account"
