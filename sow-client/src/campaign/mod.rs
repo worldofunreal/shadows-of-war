@@ -273,7 +273,10 @@ pub(crate) fn tutorial_camera_frame(
     let target = config
         .scripted_spawns
         .iter()
-        .find(|spawn| spawn.campaign_faction_id.as_deref() == Some("roman_outpost"))?;
+        .find(|spawn| {
+            spawn.campaign_relation == Some(sow_core::protocol::CampaignRelation::Enemy)
+        })
+        .or_else(|| config.scripted_spawns.first())?;
     let dx = player_x.abs_diff(target.x) as f32;
     let dy = player_y.abs_diff(target.y) as f32;
     let center = (
@@ -371,9 +374,6 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             assault_force: e.assault_force,
         });
     }
-    if factions.is_empty() {
-        return None;
-    }
     let player_color = match rf.player_color.as_deref() {
         Some(color) => parse_campaign_color(color)?,
         None => PLAYER_COLOR,
@@ -454,6 +454,10 @@ mod tests {
             parse_roster(r##"{"factions":[{"name":"Rome","x":2,"y":1,"role":"vassal"}]}"##)
                 .is_none()
         );
+
+        let empty = parse_roster(r##"{"player_spawn":[1,1],"factions":[]}"##).unwrap();
+        assert!(empty.0.is_empty());
+        assert!(to_scripted(&empty.0).is_empty());
     }
 
     #[test]
@@ -476,7 +480,7 @@ mod tests {
     }
 
     #[test]
-    fn campaign_team_enum_reaches_spawns_and_unifies_boudica_romans() {
+    fn campaign_team_enum_reaches_spawns_and_validates_assignments() {
         let roster = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"enemy","team":"Red","civ":"Roman Empire","leader":"Caesar"}]}"##;
         let (factions, _, _) = parse_roster(roster).unwrap();
         let spawn = &to_scripted(&factions)[0];
@@ -490,19 +494,5 @@ mod tests {
         assert_eq!(to_scripted(&parse_roster(without_team).unwrap().0)[0].team, None);
         let invalid_team = roster.replace("Red", "Romans");
         assert!(parse_roster(&invalid_team).is_none());
-
-        let (boudica, _, _) = parse_roster(include_str!("../../../assets/campaign/boudica.json")).unwrap();
-        let romans: Vec<_> = boudica
-            .iter()
-            .filter(|faction| faction.civ == Civilization::Rome)
-            .collect();
-        assert_eq!(romans.len(), 11);
-        assert!(romans.iter().all(|faction| {
-            faction.team == Some(Team::Red) && faction.relation == CampaignRelation::Enemy
-        }));
-        assert!(boudica
-            .iter()
-            .filter(|faction| faction.civ != Civilization::Rome)
-            .all(|faction| faction.team.is_none()));
     }
 }

@@ -128,7 +128,7 @@ function hasText(key, definition) {
 }
 
 async function validatePair(episodeId, roster, definition) {
-  if (!roster || typeof roster.map !== "string" || !Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2 || !roster.player_spawn.every(Number.isFinite) || !Array.isArray(roster.factions) || !roster.factions.length) throw new Error("Invalid campaign map or factions.");
+  if (!roster || typeof roster.map !== "string" || !Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2 || !roster.player_spawn.every(Number.isFinite) || !Array.isArray(roster.factions)) throw new Error("Invalid campaign map or factions.");
   const names = new Set(), ids = new Set();
   for (const faction of roster.factions) {
     if (!faction || typeof faction.id !== "string" || !entityId.test(faction.id) || ids.has(faction.id)
@@ -300,29 +300,44 @@ async function handle(req, res) {
     if (saving.has(episodeId)) { reply(res, 409, "A save for this episode is already in progress."); return; }
     saving.add(episodeId);
     let bodyTag;
+    let autoAdjusted = null;
     try {
       const current = await fs.readFile(target);
       if (!req.headers["if-match"] || req.headers["if-match"] !== etag(current)) {
         reply(res, 409, "This episode changed since it was loaded. Reload before saving.");
         return;
       }
-      if (factionRenames) {
-        const previousRoster = JSON.parse(current.toString("utf8"));
-        const previousNames = new Set((previousRoster.factions || []).map(faction => faction.name));
-        const nextNames = new Set((value.factions || []).map(faction => faction.name));
-        const renamedFrom = new Set();
-        if (!factionRenames.length || factionRenames.some(item => {
-          if (!item || typeof item.from !== "string" || !item.from || typeof item.to !== "string" || !item.to
-            || item.from === item.to || !previousNames.has(item.from) || !nextNames.has(item.to) || renamedFrom.has(item.from)) return true;
-          renamedFrom.add(item.from);
-          return false;
-        })) {
-          reply(res, 400, "Invalid faction rename list."); return;
+      const previousRoster = !isTriggerFile ? JSON.parse(current.toString("utf8")) : null;
+      const nextFactionIds = new Set((Array.isArray(value && value.factions) ? value.factions : []).map(faction => faction && faction.id));
+      const removedFactions = previousRoster
+        ? (Array.isArray(previousRoster.factions) ? previousRoster.factions : []).filter(faction => faction && !nextFactionIds.has(faction.id))
+        : [];
+      if (factionRenames || removedFactions.length) {
+        const previousRosterValue = previousRoster;
+        const previousNames = new Set((Array.isArray(previousRosterValue.factions) ? previousRosterValue.factions : []).map(faction => faction.name));
+        const nextNames = new Set((Array.isArray(value && value.factions) ? value.factions : []).map(faction => faction.name));
+        let definition;
+        let definitionPath;
+        if (factionRenames) {
+          const renamedFrom = new Set();
+          if (!factionRenames.length || factionRenames.some(item => {
+            if (!item || typeof item.from !== "string" || !item.from || typeof item.to !== "string" || !item.to
+              || item.from === item.to || !previousNames.has(item.from) || !nextNames.has(item.to) || renamedFrom.has(item.from)) return true;
+            renamedFrom.add(item.from);
+            return false;
+          })) {
+            reply(res, 400, "Invalid faction rename list."); return;
+          }
         }
-        const definitionPath = path.join(campaignDir, episodeId + ".triggers.json");
-        const definition = loadCampaignRuntime().renameFactionText(
-          JSON.parse(await fs.readFile(definitionPath, "utf8")), factionRenames, previousRoster.factions
-        );
+        definitionPath = path.join(campaignDir, episodeId + ".triggers.json");
+        const runtime = loadCampaignRuntime();
+        definition = JSON.parse(await fs.readFile(definitionPath, "utf8"));
+        if (factionRenames) definition = runtime.renameFactionText(definition, factionRenames, previousRosterValue.factions);
+        if (removedFactions.length) {
+          const cleanup = runtime.removeFactionReferences(definition, removedFactions);
+          definition = cleanup.definition;
+          autoAdjusted = cleanup.adjusted;
+        }
         try { await validatePair(episodeId, value, definition); }
         catch (error) { reply(res, 400, error.message || "invalid campaign data"); return; }
         const definitionBody = Buffer.from(JSON.stringify(definition, null, 2) + "\n");
@@ -358,7 +373,7 @@ async function handle(req, res) {
       return;
     }
     console.log(`  saved assets/campaign/${file}`);
-    reply(res, 200, JSON.stringify({ saved: file }), "application/json; charset=utf-8", { ETag: bodyTag });
+    reply(res, 200, JSON.stringify({ saved: file, ...(autoAdjusted ? { auto_adjusted: autoAdjusted } : {}) }), "application/json; charset=utf-8", { ETag: bodyTag });
     return;
   }
   if (req.method === "GET" && url.pathname === "/__avatars") {

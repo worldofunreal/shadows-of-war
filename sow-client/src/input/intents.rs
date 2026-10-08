@@ -1,34 +1,22 @@
 use crate::app::SowApp;
 
-fn is_waiting_for_roman_attack(
+fn is_waiting_for_campaign_attack(
     waiting: bool,
     campaign: crate::campaign::CampaignId,
     intent: &sow_core::protocol::GameplayIntent,
-    faction_id: Option<&str>,
 ) -> bool {
     waiting
         && campaign == crate::campaign::CampaignId::Boudica
         && matches!(intent, sow_core::protocol::GameplayIntent::Attack(_))
-        && faction_id == Some("roman_outpost")
 }
 
 impl SowApp {
     pub(crate) fn send_intent(&mut self, intent: sow_core::protocol::GameplayIntent) -> bool {
         if self.ui.tutorial_waiting_for_first_attack {
-            let target_faction = match &intent {
-                sow_core::protocol::GameplayIntent::Attack(attack) => self
-                    .sim
-                    .engine
-                    .as_ref()
-                    .and_then(|engine| engine.campaign_faction_ids.get(&attack.target_owner))
-                    .map(String::as_str),
-                _ => None,
-            };
-            if !is_waiting_for_roman_attack(
+            if !is_waiting_for_campaign_attack(
                 self.ui.tutorial_waiting_for_first_attack,
                 self.ui.tutorial_campaign,
                 &intent,
-                target_faction,
             ) {
                 return false;
             }
@@ -180,46 +168,24 @@ fn record_attack_launch_notice(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_waiting_for_roman_attack, record_attack_launch_notice};
+    use super::{is_waiting_for_campaign_attack, record_attack_launch_notice};
     use crate::campaign::CampaignId;
     use sow_core::protocol::{AttackIntent, GameplayIntent};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
-    fn only_the_first_boudica_attack_on_roman_outpost_unpauses() {
+    fn first_boudica_attack_unpauses_without_a_fixed_faction_id() {
         let attack = GameplayIntent::Attack(AttackIntent {
             target_owner: 2,
             troops: Some(100.0),
         });
-        assert!(is_waiting_for_roman_attack(
+        assert!(is_waiting_for_campaign_attack(true, CampaignId::Boudica, &attack));
+        assert!(!is_waiting_for_campaign_attack(true, CampaignId::SixSkyEp1, &attack));
+        assert!(!is_waiting_for_campaign_attack(false, CampaignId::Boudica, &attack));
+        assert!(!is_waiting_for_campaign_attack(
             true,
             CampaignId::Boudica,
-            &attack,
-            Some("roman_outpost")
-        ));
-        assert!(!is_waiting_for_roman_attack(
-            true,
-            CampaignId::Boudica,
-            &attack,
-            Some("stonea")
-        ));
-        assert!(!is_waiting_for_roman_attack(
-            true,
-            CampaignId::SixSkyEp1,
-            &attack,
-            Some("roman_outpost")
-        ));
-        assert!(!is_waiting_for_roman_attack(
-            false,
-            CampaignId::Boudica,
-            &attack,
-            Some("roman_outpost")
-        ));
-        assert!(!is_waiting_for_roman_attack(
-            true,
-            CampaignId::Boudica,
-            &GameplayIntent::Resign,
-            Some("roman_outpost")
+            &GameplayIntent::Resign
         ));
     }
 

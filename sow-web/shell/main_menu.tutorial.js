@@ -169,17 +169,17 @@
                     var distance = cameraTargetDistance(step, hud);
                     var targetRadius = Number(facts.camera_target_radius);
                     if (!Number.isFinite(targetRadius) || targetRadius <= 0) targetRadius = step.trigger.distance;
-                    if (Number.isFinite(distance)) context.guideMetric = { text: metricText(stepTextKey(step, "_progress"), {
+                    var progressKey = stepTextKey(step, "_progress");
+                    if (Number.isFinite(distance) && hasText(progressKey)) context.guideMetric = { text: metricText(progressKey, {
                         current: Math.ceil(distance), target: Math.ceil(targetRadius)
                     }) };
                 }
             } else if (step.trigger && step.trigger.type === "ui" && step.trigger.action === "cancel_building_mode") {
                 context.hintOverride = tr("tutorial.building_mode_exit_" + (context.zoomMode === "pinch" ? "mobile" : "desktop") + "_hint");
-            } else if (step.id === "boudica_camera_home") {
-                context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
-            } else if (step.guide.gesture === "tap" && (step.id === "boudica_first_expansion"
-                || step.trigger && step.trigger.type === "attack")) {
-                context.gestureLabel = tr(stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action"));
+            } else if (step.guide.gesture === "tap" && (step.guide.kind === "ui"
+                || step.trigger && ["attack", "territory"].includes(step.trigger.type))) {
+                var actionKey = stepTextKey(step, context.zoomMode === "pinch" ? "_mobile_action" : "_desktop_action");
+                if (hasText(actionKey)) context.gestureLabel = tr(actionKey);
             }
             if (hintKey && tr(hintKey) !== hintKey) {
                 context.hintOverride = tr(hintKey);
@@ -427,7 +427,7 @@
             var source = window.SOWCampaign.resolveUiTarget(guide.target, document, runtime.episodeId);
             if (!source || source.disabled || source.getClientRects().length === 0) return null;
             result = window.SOWCampaign.resolveUiAnchor(source);
-            if (step.id === "boudica_camera_home") {
+            if (guide.kind === "ui" && step.trigger && step.trigger.type === "ui" && guide.target === "hud_center_camera") {
                 result.toX = result.x; result.toY = result.y;
                 result.spotlightX = result.x; result.spotlightY = result.y; result.dimOutside = true;
                 result.x = (root.clientWidth || window.innerWidth) * 0.5;

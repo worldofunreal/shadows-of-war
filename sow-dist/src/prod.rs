@@ -1377,6 +1377,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
             &paths.assets_gameplay,
             &paths.assets_site,
             &paths.assets_maps,
+            &paths.root.join("assets/campaign"),
             &paths.map_sources,
             &paths.root.join("sow-i18n/src"),
             &paths.root.join("sow-i18n/strings"),

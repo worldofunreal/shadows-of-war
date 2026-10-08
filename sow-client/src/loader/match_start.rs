@@ -203,7 +203,8 @@ impl SowApp {
         self.sim.offline_tick_timer = 0.0;
         self.sim.offline_last_update = web_time::Instant::now();
         self.ui.tutorial_waiting_for_first_attack = tutorial
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica;
+            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
+            && !config.scripted_spawns.is_empty();
         self.sim.paused = self.ui.tutorial_waiting_for_first_attack;
         self.sim.tutorial_observation.reset();
         self.net.client = None;

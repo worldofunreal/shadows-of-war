@@ -1636,7 +1636,7 @@ fn tutorial_target_action_tile(
 }
 
 impl SowApp {
-    pub(crate) fn tutorial_roman_attack_tile(&self) -> Option<u32> {
+    pub(crate) fn tutorial_campaign_attack_tile(&self) -> Option<u32> {
         if !self.ui.tutorial_waiting_for_first_attack
             || self.ui.tutorial_campaign != CampaignId::Boudica
         {
@@ -1647,9 +1647,15 @@ impl SowApp {
         let snapshot = self.sim.current_snapshot.as_ref()?;
         let my_pid = self.sim.my_player_id?;
         let target_owner = engine
-            .campaign_faction_ids
+            .campaign_relations
             .iter()
-            .find_map(|(&id, faction)| (faction == "roman_outpost").then_some(id))?;
+            .filter_map(|(&id, relation)| {
+                (*relation == sow_core::protocol::CampaignRelation::Enemy
+                    && engine.campaign_faction_ids.contains_key(&id))
+                .then_some(id)
+            })
+            .min()
+            .or_else(|| engine.campaign_faction_ids.keys().copied().min())?;
         let me = snapshot.players.iter().find(|player| player.id == my_pid)?;
         let border_tiles = &engine.state.player(my_pid)?.border_tiles;
         let tile = tutorial_target_action_tile(

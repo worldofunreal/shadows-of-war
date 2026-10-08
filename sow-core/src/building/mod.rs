@@ -625,6 +625,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "wall-clock benchmark; run explicitly on an idle machine with --ignored --nocapture"]
     fn defense_query_tick_stays_within_5_percent_at_match_limit_and_stress() {
         let config = crate::game_config::GameConfig::default();
         for (name, towers, attacks, distributed) in [

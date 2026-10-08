@@ -230,6 +230,12 @@
             (terrain[y * width + x] & 0x80) !== 0;
     }
 
+    function clampTile(value, size) {
+        var coordinate = Number(value);
+        if (!Number.isFinite(coordinate) || !Number.isInteger(size) || size < 1) return 0;
+        return Math.max(0, Math.min(size - 1, Math.round(coordinate)));
+    }
+
     function terrainCanvas(terrain, width, height) {
         var canvas = document.createElement("canvas");
         canvas.width = width; canvas.height = height;
@@ -260,7 +266,7 @@
         });
     }
 
-    var api = { parse: parse, geoToMapPoint: geoToMapPoint, mapPointToGeo: mapPointToGeo, geoToMapPoints: geoToMapPoints, centerMapOffsets: centerMapOffsets, resizeCanvas: resizeCanvas, fitMapView: fitMapView, mapToScreen: mapToScreen, screenToMap: screenToMap, panMapView: panMapView, zoomMapView: zoomMapView, geoToTile: geoToTile, tileToGeo: tileToGeo, isLand: isLand, drawMapLabel: drawMapLabel, terrainCanvas: terrainCanvas, load: load };
+    var api = { parse: parse, geoToMapPoint: geoToMapPoint, mapPointToGeo: mapPointToGeo, geoToMapPoints: geoToMapPoints, centerMapOffsets: centerMapOffsets, resizeCanvas: resizeCanvas, fitMapView: fitMapView, mapToScreen: mapToScreen, screenToMap: screenToMap, panMapView: panMapView, zoomMapView: zoomMapView, geoToTile: geoToTile, tileToGeo: tileToGeo, isLand: isLand, clampTile: clampTile, drawMapLabel: drawMapLabel, terrainCanvas: terrainCanvas, load: load };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaignMapPreview = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

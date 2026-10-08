@@ -203,7 +203,7 @@ impl SowApp {
         {
             return false;
         }
-        if self.try_tutorial_roman_nameplate_attack(x, y) {
+        if self.try_tutorial_campaign_nameplate_attack(x, y) {
             return true;
         }
         let Some((col, row)) = self.mouse_to_tile(x, y) else {
@@ -227,7 +227,7 @@ impl SowApp {
             self.clear_placement();
             return;
         }
-        if self.try_tutorial_roman_nameplate_attack(x, y) {
+        if self.try_tutorial_campaign_nameplate_attack(x, y) {
             return;
         }
 
@@ -278,7 +278,7 @@ impl SowApp {
         self.primary_target(tile_idx);
     }
 
-    fn try_tutorial_roman_nameplate_attack(&mut self, x: f64, y: f64) -> bool {
+    fn try_tutorial_campaign_nameplate_attack(&mut self, x: f64, y: f64) -> bool {
         if self.ui.tutorial_camera_only
             || self.ui.observing
             || self.ui.app.phase != crate::ClientPhase::Playing
@@ -291,7 +291,7 @@ impl SowApp {
         {
             return false;
         }
-        let Some(tile_idx) = self.tutorial_roman_attack_tile() else {
+        let Some(tile_idx) = self.tutorial_campaign_attack_tile() else {
             return false;
         };
         let Some(target) = self.map_target(tile_idx) else {

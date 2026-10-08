@@ -143,7 +143,6 @@ let avatarCatalog = [];
 let entityCatalog = null;
 let atlasEntityPicker = null;
 let rosterEtag = null;
-let storyDefinition = null;
 let rosterDirty = false, rosterExternal = false, rosterSaving = false;
 const factionRenameOrigins = new WeakMap(), factionRenames = new Map();
 let sel = -1;                  // index into factions, or -2 = player spawn
@@ -305,11 +304,13 @@ function renderSide() {
   if (sel === -2) {
     const spawnLand = isLand(...roster.player_spawn);
     host.innerHTML = `<label>Player spawn</label>
-      <div class="row"><input id="psx" type="number" value="${roster.player_spawn[0]}"><input id="psy" type="number" value="${roster.player_spawn[1]}"></div>
+      <div class="row"><input id="psx" type="number" min="0" max="${MAPW-1}" value="${roster.player_spawn[0]}"><input id="psy" type="number" min="0" max="${MAPH-1}" value="${roster.player_spawn[1]}"></div>
       <label>Player color</label><input id="playerColor" type="color" value="${escapeHtml(roster.player_color || PLAYER_COLOR)}">
       <div class="hint">${spawnLand===null?"Checking map…":spawnLand?"on land ✓":"⚠ in water"}</div>`;
-    document.getElementById("psx").oninput = e => { roster.player_spawn[0]=+e.target.value|0; markRosterDirty(); draw(); };
-    document.getElementById("psy").oninput = e => { roster.player_spawn[1]=+e.target.value|0; markRosterDirty(); draw(); };
+    document.getElementById("psx").oninput = e => { if(e.target.value==="" || !Number.isFinite(Number(e.target.value))) return; roster.player_spawn[0]=Math.round(Number(e.target.value)); markRosterDirty(); draw(); };
+    document.getElementById("psy").oninput = e => { if(e.target.value==="" || !Number.isFinite(Number(e.target.value))) return; roster.player_spawn[1]=Math.round(Number(e.target.value)); markRosterDirty(); draw(); };
+    document.getElementById("psx").onchange = e => { roster.player_spawn[0]=SOWCampaignMapPreview.clampTile(e.target.value,MAPW); e.target.value=roster.player_spawn[0]; markRosterDirty(); draw(); };
+    document.getElementById("psy").onchange = e => { roster.player_spawn[1]=SOWCampaignMapPreview.clampTile(e.target.value,MAPH); e.target.value=roster.player_spawn[1]; markRosterDirty(); draw(); };
     document.getElementById("playerColor").oninput = e => { roster.player_color=e.target.value; markRosterDirty(); draw(); };
   } else if (sel >= 0) {
     const f = roster.factions[sel];
@@ -339,7 +340,7 @@ function renderSide() {
       <label>Bonus gold loot on defeat</label><input id="fgoldloot" type="number" min="0" max="1000000" step="1" value="${goldLootBonus}">
       <div class="hint" id="goldLootPreview"></div>
       <label>Alliance group</label><input id="fgroup" value="${escapeHtml(f.alliance_group || "")}" placeholder="e.g. trinovantes">
-      <label>Position (x, y)</label><div class="row"><input id="fx" type="number" value="${f.x}"><input id="fy" type="number" value="${f.y}"></div>
+      <label>Position (x, y)</label><div class="row"><input id="fx" type="number" min="0" max="${MAPW-1}" value="${f.x}"><input id="fy" type="number" min="0" max="${MAPH-1}" value="${f.y}"></div>
       <label>Bot IQ — <span id="iqtier">${iqTier(iq)}</span></label>
       <div class="row"><input id="fiq" type="range" min="0" max="180" step="5" value="${iq}" style="flex:3"><input id="fiqn" type="number" min="0" max="180" value="${iq}" style="flex:1;min-width:56px"></div>
       <div class="hint" id="factionHint"></div>
@@ -400,8 +401,10 @@ function renderSide() {
       markRosterDirty();
     };
     document.getElementById("fgroup").oninput = e => { if(e.target.value.trim()) f.alliance_group=e.target.value.trim(); else delete f.alliance_group; markRosterDirty(); };
-    document.getElementById("fx").oninput = e => { f.x=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
-    document.getElementById("fy").oninput = e => { f.y=+e.target.value|0; updateFactionHint(); renderList(); draw(); };
+    document.getElementById("fx").oninput = e => { if(e.target.value==="" || !Number.isFinite(Number(e.target.value))) return; f.x=Math.round(Number(e.target.value)); markRosterDirty(); updateFactionHint(); renderList(); draw(); };
+    document.getElementById("fy").oninput = e => { if(e.target.value==="" || !Number.isFinite(Number(e.target.value))) return; f.y=Math.round(Number(e.target.value)); markRosterDirty(); updateFactionHint(); renderList(); draw(); };
+    document.getElementById("fx").onchange = e => { f.x=SOWCampaignMapPreview.clampTile(e.target.value,MAPW); e.target.value=f.x; markRosterDirty(); updateFactionHint(); renderList(); draw(); };
+    document.getElementById("fy").onchange = e => { f.y=SOWCampaignMapPreview.clampTile(e.target.value,MAPH); e.target.value=f.y; markRosterDirty(); updateFactionHint(); renderList(); draw(); };
     const setIq = v => { v=Math.max(0,Math.min(180,v|0)); f.iq=v; document.getElementById("fiq").value=v; document.getElementById("fiqn").value=v; document.getElementById("iqtier").textContent=iqTier(v); };
     document.getElementById("fiq").oninput = e => setIq(+e.target.value);
     document.getElementById("fiqn").oninput = e => setIq(+e.target.value);
@@ -450,10 +453,7 @@ function addFactionAt(mx, my) {
 function deleteSelected() {
   if (sel >= 0) {
     const faction=roster.factions[sel];
-    if(!storyDefinition){toast("Campaign story is not loaded; reload before deleting factions");return;}
-    const references=SOWCampaign.factionReferenceIds(storyDefinition);
-    if(references.has(faction.id)){toast("Cannot delete: campaign story still uses this faction");return;}
-    const nm = faction.name; roster.factions.splice(sel,1); markRosterDirty(); sel=-1; renderAll(); toast("Deleted "+nm);
+    const nm = faction.name; roster.factions.splice(sel,1); markRosterDirty(); sel=-1; renderAll(); toast("Deleted "+nm+"; story references will be adjusted when saved");
   }
   else if (sel === -2) { toast("Boudica's spawn can't be deleted — she's the main character"); }
 }
@@ -518,16 +518,31 @@ function serialize() {
   };
   return JSON.stringify(out, null, 2) + "\n";
 }
+function clampRosterPositions() {
+  let changed = false;
+  for (let axis = 0; axis < 2; axis++) {
+    const size = axis === 0 ? MAPW : MAPH;
+    const value = SOWCampaignMapPreview.clampTile(roster.player_spawn[axis], size);
+    if (value !== roster.player_spawn[axis]) { roster.player_spawn[axis] = value; changed = true; }
+  }
+  roster.factions.forEach(faction => {
+    const x = SOWCampaignMapPreview.clampTile(faction.x, MAPW), y = SOWCampaignMapPreview.clampTile(faction.y, MAPH);
+    if (x !== faction.x || y !== faction.y) { faction.x = x; faction.y = y; changed = true; }
+  });
+  return changed;
+}
 async function saveRoster(){
   if(rosterSaving) return false;
   rosterSaving = true;
   try {
+    if (clampRosterPositions()) { markRosterDirty(); renderAll(); }
     const file = `${episodeId}.json`;
     const savedDraft = serialize();
     const renames = Array.from(factionRenames, ([from, to]) => ({ from, to }));
     const body = renames.length ? JSON.stringify({ roster: JSON.parse(savedDraft), faction_renames: renames }) : savedDraft;
     const res = await fetch(`/__save?file=${encodeURIComponent(file)}`, {method:"POST", headers:{"Content-Type":"application/json", "If-Match":rosterEtag||""}, body});
     if(!res.ok){ if(res.status===409){ rosterExternal=true; document.getElementById("rosterStatus").textContent="Changed elsewhere · draft preserved"; } throw new Error(await res.text()); }
+    const result = await res.json();
     rosterEtag = res.headers.get("ETag");
     rosterDirty = serialize() !== savedDraft; rosterExternal = false;
     const savedRoster = JSON.parse(savedDraft);
@@ -539,7 +554,11 @@ async function saveRoster(){
     });
     document.getElementById("rosterStatus").textContent = rosterDirty ? "Newer edits not saved" : "Saved";
     document.getElementById("rosterStatus").className = rosterDirty ? "hint warn" : "hint";
-    toast(rosterDirty ? "Saved; newer map edits remain" : renames.length ? "Saved name and updated campaign references" : `Saved → assets/campaign/${file}`);
+    const adjusted = result.auto_adjusted;
+    const changedStory = adjusted && (adjusted.steps_to_scenes || adjusted.reactions_removed || adjusted.speakers_unlinked || adjusted.settings_cleared);
+    toast(rosterDirty ? "Saved; newer map edits remain" : changedStory
+      ? `Saved; story adjusted (${adjusted.steps_to_scenes} objectives became scenes, ${adjusted.reactions_removed} faction responses removed)`
+      : renames.length ? "Saved name and updated campaign references" : `Saved → assets/campaign/${file}`);
     return !rosterDirty;
   } catch(e){ toast("Save failed: "+e.message); }
   finally { rosterSaving = false; }
@@ -587,7 +606,7 @@ function normalize(j){
 function validateRoster(value){
   if(!value || typeof value.map!=="string" || !Array.isArray(value.player_spawn) || value.player_spawn.length!==2 || !value.player_spawn.every(Number.isFinite) || !/^#[0-9a-fA-F]{6}$/.test(value.player_color || PLAYER_COLOR)) throw new Error("invalid roster");
   const names = new Set(), ids = new Set();
-  if(!Array.isArray(value.factions) || !value.factions.length) throw new Error("roster needs factions");
+  if(!Array.isArray(value.factions)) throw new Error("factions must be a list");
   for(const f of value.factions){
     if(!/^[a-z][a-z0-9_]{0,95}$/.test(f.id) || ids.has(f.id) || !f.name.trim() || names.has(f.name) || !Number.isInteger(f.starting_troops) || f.starting_troops<0 || f.starting_troops>1000000 || !Object.prototype.hasOwnProperty.call(RELATIONS,f.relation) || (f.team!=null && !SOWCampaign.TEAMS.includes(f.team)) || typeof f.can_request_alliance!=="boolean" || (f.assault_force!=null && typeof f.assault_force!=="boolean") || !/^#[0-9a-fA-F]{6}$/.test(f.color) || !Number.isInteger(f.x) || !Number.isInteger(f.y) || !f.civ || !f.leader || (f.iq!=null && (!Number.isInteger(f.iq) || f.iq<0 || f.iq>180)) || (f.support_interval_seconds!=null && (!Number.isInteger(f.support_interval_seconds) || f.support_interval_seconds<5 || f.support_interval_seconds>600)) || (f.gold_loot_bonus!=null && (!Number.isInteger(f.gold_loot_bonus) || f.gold_loot_bonus<0 || f.gold_loot_bonus>1000000)) || (f.gold_loot_override!=null && (!Number.isInteger(f.gold_loot_override) || f.gold_loot_override<0 || f.gold_loot_override>1000000)) || (f.alliance_group!=null && !/^[a-z][a-z0-9_]{0,63}$/.test(f.alliance_group)) || (f.avatar && (!/^[a-z][a-z0-9_]*$/.test(f.avatar) || !avatarCatalog.includes(f.avatar)))) throw new Error("invalid faction, duplicate identity/name, or missing portrait asset");
     ids.add(f.id); names.add(f.name);
@@ -614,14 +633,10 @@ async function loadMap(){
 }
 async function loadRoster(){
   try {
-    const [res, storyRes] = await Promise.all([
-      fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.json`, {cache:"no-store"}),
-      fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.triggers.json`, {cache:"no-store"})
-    ]);
-    if(!res.ok || !storyRes.ok) throw new Error("episode files unavailable");
+    const res = await fetch(`/assets/campaign/${encodeURIComponent(episodeId)}.json`, {cache:"no-store"});
+    if(!res.ok) throw new Error("campaign roster unavailable");
     rosterEtag=res.headers.get("ETag");
     roster = normalize(await res.json());
-    storyDefinition = await storyRes.json();
     rosterDirty=false; rosterExternal=false; document.getElementById("rosterStatus").textContent="Saved"; document.getElementById("rosterStatus").className="hint";
   } catch(e){
     const message = "Roster load failed: "+e.message;

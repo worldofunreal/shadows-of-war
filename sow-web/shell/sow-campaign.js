@@ -150,6 +150,88 @@
         return refs;
     }
 
+    function removeFactionReferences(definition, removedFactions) {
+        const removed = new Map((Array.isArray(removedFactions) ? removedFactions : [])
+            .filter(faction => object(faction) && typeof faction.id === "string")
+            .map(faction => [faction.id, faction.name]));
+        const result = copy(definition);
+        const adjusted = { steps_to_scenes: 0, reactions_removed: 0, speakers_unlinked: 0, settings_cleared: 0 };
+        if (!removed.size || !object(result)) return { definition: result, adjusted };
+
+        const settings = object(result.settings) ? result.settings : {};
+        if (removed.has(settings.buildings_unlock_after_defeated)) {
+            delete settings.buildings_unlock_after_defeated;
+            adjusted.settings_cleared++;
+        }
+        if (object(settings.campaign_support) && removed.has(settings.campaign_support.after_defeated)) {
+            delete settings.campaign_support;
+            adjusted.settings_cleared++;
+        }
+        Object.values(object(result.speakers) ? result.speakers : {}).forEach(speaker => {
+            if (!object(speaker) || !removed.has(speaker.faction)) return;
+            const factionId = speaker.faction;
+            delete speaker.faction;
+            if (!(typeof speaker.name === "string" && speaker.name.trim()) && !(typeof speaker.name_key === "string" && speaker.name_key.trim())) {
+                speaker.name = removed.get(factionId) || factionId;
+            }
+            adjusted.speakers_unlinked++;
+        });
+
+        (Array.isArray(result.steps) ? result.steps : []).forEach(step => {
+            if (!object(step)) return;
+            const trigger = object(step.trigger) ? step.trigger : null;
+            let targetRemoved = false;
+            if (trigger && Array.isArray(trigger.targets)) {
+                const originalTargetCount = trigger.targets.length;
+                const targets = trigger.targets.filter(target => !removed.has(target));
+                if (targets.length !== trigger.targets.length) trigger.targets = targets;
+                if (targets.length) {
+                    if (trigger.type === "contact" && Number.isInteger(trigger.value)) trigger.value = Math.min(trigger.value, targets.length);
+                    if (trigger.type === "defeated") trigger.value = targets.length;
+                } else if (originalTargetCount) targetRemoved = true;
+            }
+            if (trigger && removed.has(trigger.target)) {
+                delete trigger.target;
+                if (["contact", "defeated", "eliminated", "camera_target"].includes(trigger.type)
+                    && !Array.isArray(trigger.targets)) targetRemoved = true;
+            }
+            if (trigger && removed.has(trigger.recipient)) delete trigger.recipient;
+
+            if (targetRemoved && ["objective", "guide"].includes(step.type)) {
+                step.type = "scene";
+                ["trigger", "guide", "marker", "hint_key", "camera_only", "advance_delay_seconds"].forEach(field => delete step[field]);
+                adjusted.steps_to_scenes++;
+                return;
+            }
+            if (object(step.marker) && removed.has(step.marker.target)) {
+                const targets = trigger && (Array.isArray(trigger.targets) ? trigger.targets : [trigger.target]);
+                const replacement = Array.isArray(targets) && targets.find(target => typeof target === "string" && !removed.has(target));
+                if (replacement) step.marker.target = replacement;
+                else delete step.marker;
+            }
+            if (object(step.campaign_assault_on_enter) && removed.has(step.campaign_assault_on_enter.target)) {
+                delete step.campaign_assault_on_enter;
+            }
+        });
+
+        if (Array.isArray(result.reactions)) {
+            result.reactions = result.reactions.filter(reaction => {
+                const when = object(reaction && reaction.when) ? reaction.when : null;
+                if (!when) return true;
+                if (removed.has(when.target)) { adjusted.reactions_removed++; return false; }
+                if (Array.isArray(when.targets)) {
+                    when.targets = when.targets.filter(target => !removed.has(target));
+                    if (!when.targets.length) { adjusted.reactions_removed++; return false; }
+                }
+                return true;
+            });
+        }
+        if (object(result.faction_story_names)) {
+            Object.keys(result.faction_story_names).forEach(id => { if (removed.has(id)) delete result.faction_story_names[id]; });
+        }
+        return { definition: result, adjusted };
+    }
+
     function resolveUiTarget(key, root, episodeId) {
         const selector = UI_TARGETS[key];
         if (!selector || !root) return null;
@@ -205,7 +287,7 @@
             knownFields(roster, ["_comment", "map", "player_spawn", "player_color", "factions"], null, "roster");
             const expectedMap = definition.episode_id === "boudica" ? ["eastanglia", 896, 504]
                 : /^six_sky_ep[123]$/.test(definition.episode_id) ? ["northamerica", 1000, 516] : null;
-            if (!object(roster) || typeof roster.map !== "string" || !/^[a-z0-9_-]+$/.test(roster.map) || !Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2 || !roster.player_spawn.every(n => Number.isInteger(n) && n >= 0) || !Array.isArray(roster.factions) || !roster.factions.length) {
+            if (!object(roster) || typeof roster.map !== "string" || !/^[a-z0-9_-]+$/.test(roster.map) || !Array.isArray(roster.player_spawn) || roster.player_spawn.length !== 2 || !roster.player_spawn.every(n => Number.isInteger(n) && n >= 0) || !Array.isArray(roster.factions)) {
                 issue(null, "roster", "Invalid map, player spawn or factions.");
             }
             if (expectedMap && roster.map !== expectedMap[0]) issue(null, "roster.map", "This episode uses the " + expectedMap[0] + " map.");
@@ -332,7 +414,11 @@
             if (own(step, "camera_only") && (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))) issue(step, "camera_only", "Camera-only input requires a paused objective.");
             ["title_key", "body_key", "hint_key"].forEach(field => text(step, field, step[field], false));
             const textNamespace = typeof definition.text_namespace === "string" ? definition.text_namespace : "tutorial.";
-            const dynamicText = suffix => text(step, "guide.text." + suffix, textNamespace + step.id + suffix, true);
+            const dynamicText = suffix => {
+                const key = textNamespace + step.id + suffix;
+                if (options.hasText && !options.hasText(key)) return;
+                text(step, "guide.text." + suffix, key, true);
+            };
             if (step.guide && ["zoom_in", "zoom_out"].includes(step.guide.gesture)) {
                 ["pinch", "wheel"].forEach(mode => ["_hint", "_label"].forEach(suffix => dynamicText("_" + mode + suffix)));
             }
@@ -340,7 +426,8 @@
                 ["_mobile_hint", "_desktop_hint"].forEach(dynamicText);
             }
             if (step.trigger && step.trigger.type === "camera_target") dynamicText("_progress");
-            if (step.id === "boudica_first_expansion" && step.guide && step.guide.gesture === "tap") {
+            if (step.guide && step.guide.gesture === "tap"
+                && (step.guide.kind === "ui" || step.trigger && ["attack", "territory"].includes(step.trigger.type))) {
                 ["_mobile_action", "_desktop_action"].forEach(dynamicText);
             }
             if (step.trigger && step.trigger.type === "attack" && step.guide && step.guide.gesture === "tap") {
@@ -883,7 +970,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, TEAMS, METRICS, UI_TARGETS, zoomInputMode, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, replaceFactionStoryNames, factionReferenceIds, validate, create };
+    const api = { TYPES, TEAMS, METRICS, UI_TARGETS, zoomInputMode, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
