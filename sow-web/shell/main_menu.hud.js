@@ -228,25 +228,33 @@
         });
     }
 
-    function observeNotificationObjective() {
+    function observeNotificationAnchors() {
         var story = document.getElementById("sow-story");
-        if (story !== notificationLayoutStory) {
-            if (notificationLayoutStory && notificationMutationObserver) notificationMutationObserver.unobserve(notificationLayoutStory);
-            notificationLayoutStory = story;
-            if (story && notificationMutationObserver) {
-                notificationMutationObserver.observe(story, { childList: true, attributes: true, attributeFilter: ["hidden"] });
-            }
-        }
         var objective = story && story.querySelector(".sow-story__objective");
-        if (objective === notificationLayoutObjective) return;
-        if (notificationLayoutObjective && notificationResizeObserver) notificationResizeObserver.unobserve(notificationLayoutObjective);
-        if (notificationLayoutObjective && notificationMutationObserver) notificationMutationObserver.unobserve(notificationLayoutObjective);
+        var nameplate = hudRefs && hudRefs.nameplate;
+        if (story === notificationLayoutStory && objective === notificationLayoutObjective
+            && nameplate === notificationLayoutNameplate) return;
+        if (objective !== notificationLayoutObjective && notificationResizeObserver) {
+            if (notificationLayoutObjective) notificationResizeObserver.unobserve(notificationLayoutObjective);
+            if (objective) notificationResizeObserver.observe(objective);
+        }
+        if (nameplate !== notificationLayoutNameplate && notificationResizeObserver) {
+            if (notificationLayoutNameplate) notificationResizeObserver.unobserve(notificationLayoutNameplate);
+            if (nameplate) notificationResizeObserver.observe(nameplate);
+        }
+        notificationLayoutStory = story;
         notificationLayoutObjective = objective;
-        if (objective && notificationResizeObserver) notificationResizeObserver.observe(objective);
-        if (objective && notificationMutationObserver) {
-            notificationMutationObserver.observe(objective, notificationResizeObserver
-                ? { attributes: true, attributeFilter: ["hidden"] }
-                : { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true, characterData: true });
+        notificationLayoutNameplate = nameplate;
+        if (notificationMutationObserver) {
+            // MutationObserver disconnects all targets; rebind the current anchors together.
+            notificationMutationObserver.disconnect();
+            if (nameplate) notificationMutationObserver.observe(nameplate, { attributes: true, attributeFilter: ["hidden"] });
+            if (story) notificationMutationObserver.observe(story, { childList: true, attributes: true, attributeFilter: ["hidden"] });
+            if (objective) {
+                notificationMutationObserver.observe(objective, notificationResizeObserver
+                    ? { attributes: true, attributeFilter: ["hidden"] }
+                    : { attributes: true, attributeFilter: ["hidden"], childList: true, subtree: true, characterData: true });
+            }
         }
     }
 
@@ -264,23 +272,14 @@
         }
         if (!notificationMutationObserver && typeof window.MutationObserver === "function") {
             notificationMutationObserver = new window.MutationObserver(function () {
-                observeNotificationObjective();
+                observeNotificationAnchors();
                 scheduleNotificationPlacement();
             });
-        }
-        if (notificationLayoutNameplate !== hudRefs.nameplate) {
-            if (notificationLayoutNameplate && notificationResizeObserver) notificationResizeObserver.unobserve(notificationLayoutNameplate);
-            if (notificationLayoutNameplate && notificationMutationObserver) notificationMutationObserver.unobserve(notificationLayoutNameplate);
-            notificationLayoutNameplate = hudRefs.nameplate;
-            if (notificationResizeObserver) notificationResizeObserver.observe(notificationLayoutNameplate);
-            if (notificationMutationObserver) {
-                notificationMutationObserver.observe(notificationLayoutNameplate, { attributes: true, attributeFilter: ["hidden"] });
-            }
         }
         [hudRefs.topbar, hudRefs.nameplate, hudRefs.dock, hudRefs.dockStack, hudRefs.buildingCancel].forEach(function (element) {
             if (element && notificationResizeObserver) notificationResizeObserver.observe(element);
         });
-        observeNotificationObjective();
+        observeNotificationAnchors();
         syncCompactHudBounds();
         if (!notificationLayoutStarted) {
             notificationLayoutStarted = true;
