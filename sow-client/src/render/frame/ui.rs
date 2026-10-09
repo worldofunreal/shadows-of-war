@@ -257,4 +257,28 @@ mod tests {
             assert!((zoom - 8.0).abs() < 0.01);
         }
     }
+
+    #[wasm_bindgen_test]
+    fn tutorial_camera_focus_moves_without_changing_zoom() {
+        let screen = (1440.0, 900.0);
+        let map = (2000, 1000);
+        let zoom = 10.0;
+        let center = (700.0, 80.0);
+        let focus = (715.0, 200.0);
+        let camera = (
+            screen.0 * 0.5 - center.0 * zoom,
+            screen.1 * 0.5 - center.1 * zoom,
+        );
+        let (next_camera, next_zoom, _) =
+            focus_camera_step(camera, zoom, zoom, focus, screen, map, 0.5);
+
+        assert_eq!(next_zoom, zoom);
+        assert_ne!(next_camera, camera);
+        let next_center = (
+            (screen.0 * 0.5 - next_camera.0) / next_zoom,
+            (screen.1 * 0.5 - next_camera.1) / next_zoom,
+        );
+        assert!(next_center.0 > center.0 && next_center.0 < focus.0);
+        assert!(next_center.1 > center.1 && next_center.1 < focus.1);
+    }
 }

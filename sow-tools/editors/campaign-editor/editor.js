@@ -5,7 +5,7 @@
     var query = new URLSearchParams(location.search);
     var episodeId = /^[a-z][a-z0-9_]{0,63}$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
     var rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
-    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, previewRevealTimer: null, pickingFaction: false, flow: "episode", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
+    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, previewRevealTimer: null, previewRevealToken: 0, pickingFaction: false, flow: "episode", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
     var types = ["scene", "choice", "objective", "guide", "end"];
     var triggerTypes = [
         { value: "territory", label: "Gain territory" }, { value: "kills", label: "Defeat troops" },
@@ -179,6 +179,11 @@
         if (state.renderer) { refresh(true); syncPreview(); renderGraph(); }
         else refresh();
     }
+    function clearPreviewRevealTimer() {
+        state.previewRevealToken++;
+        if (state.previewRevealTimer !== null) window.clearTimeout(state.previewRevealTimer);
+        state.previewRevealTimer = null;
+    }
     function status(message, kind) {
         var node = $("#saveStatus");
         node.textContent = message;
@@ -327,14 +332,14 @@
             var next = step.type === "choice" ? sharedChoiceTarget : step.next || "";
             var keepsFlow = ["scene", "objective", "guide"].includes(value);
             var keepsMechanics = ["objective", "guide"].includes(value);
-            var keepsMarker = ["scene", "objective", "guide"].includes(value);
+            var keepsMarker = ["scene", "choice", "objective", "guide"].includes(value);
             var discarded = [];
             if (step.lines && value !== "scene") discarded.push("dialogue lines");
             if (step.choices && value !== "choice") discarded.push("decision answers");
             if (step.trigger && (!keepsMechanics || (value === "guide" && step.trigger.type === "elapsed"))) discarded.push("mechanic condition");
             if (step.guide && (!keepsMechanics || (value === "guide" && step.trigger && step.trigger.type === "elapsed"))) discarded.push("hand guide");
             if (step.marker && !keepsMarker) discarded.push("map marker");
-            if (step.advance_delay_seconds != null && !keepsMechanics) discarded.push("completion delay");
+            if (step.wait_before === true && !["scene", "choice"].includes(value)) discarded.push("one-second reveal wait");
             if (step.paused_action && !keepsMechanics) discarded.push("paused action permission");
             if (step.campaign_assault_on_enter && value === "end") discarded.push("campaign assault action");
             if (step.routes && !keepsFlow) discarded.push("conditional routes");
@@ -354,7 +359,7 @@
             if (step.speaker || firstLine && firstLine.speaker) replacement.speaker = step.speaker || firstLine.speaker;
             if (Number.isFinite(step.attack_ratio_on_enter)) replacement.attack_ratio_on_enter = step.attack_ratio_on_enter;
             if (step.campaign_assault_on_enter && value !== "end") replacement.campaign_assault_on_enter = step.campaign_assault_on_enter;
-            if (keepsMechanics && Number.isFinite(step.advance_delay_seconds)) replacement.advance_delay_seconds = step.advance_delay_seconds;
+            if (["scene", "choice"].includes(value) && step.wait_before === true) replacement.wait_before = true;
             if (keepsMechanics && step.pause_game === true) replacement.pause_game = true;
             if (keepsMechanics && step.paused_action) replacement.paused_action = step.paused_action;
             if (["scene", "end"].includes(value)) replacement.presentation = value === "end" && step.presentation === "cinematic" ? "chapter" : step.presentation || "dialogue";
@@ -387,12 +392,12 @@
         }));
         basics.appendChild(selectField("Speaker", step.speaker || "", speakerOptions(), function (value) { step.speaker = value || undefined; if (!value) delete step.speaker; markDirty(); }));
         if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", step.type === "scene" ? ["dialogue", "chapter", "celebration", "cinematic"] : ["dialogue", "chapter", "celebration"], function (value) { step.presentation = value; markDirty(); }));
+        if (step.type === "scene" || step.type === "choice") basics.appendChild(checkboxField("Wait 1 second before showing", step.wait_before === true, function (value) {
+            if (value) step.wait_before = true;
+            else delete step.wait_before;
+            markDirty();
+        }));
         if (step.type === "scene") {
-            basics.appendChild(inputField("Wait before showing (seconds)", step.start_delay_seconds, function (value) {
-                if (value.trim() === "") delete step.start_delay_seconds;
-                else step.start_delay_seconds = Number(value);
-                markDirty();
-            }, { type: "number", min: 0.1, max: 10, step: 0.1, placeholder: "No wait" }));
             basics.appendChild(inputField("Local cinematic video", step.video_src || "", function (value) {
                 var source = value.trim();
                 if (source) { step.video_src = source; step.presentation = "cinematic"; }
@@ -519,11 +524,6 @@
         }
         if (step.type === "objective" || step.type === "guide") {
             var objective = section("Mechanic and guide");
-            objective.appendChild(inputField("Wait after completion (seconds)", step.advance_delay_seconds, function (value) {
-                if (value.trim() === "") delete step.advance_delay_seconds;
-                else step.advance_delay_seconds = Number(value);
-                markDirty();
-            }, { type: "number", min: 0.1, max: 10, step: 0.1, placeholder: "No wait" }));
             objective.appendChild(checkboxField("Pause game until this objective completes", step.pause_game === true, function (value) { if (value) step.pause_game = true; else { delete step.pause_game; delete step.camera_only; delete step.paused_action; } markDirty(); renderInspector(); }));
             objective.appendChild(checkboxField("Allow camera controls only while paused", step.camera_only === true, function (value) { if (value) { step.pause_game = true; step.camera_only = true; delete step.paused_action; } else delete step.camera_only; markDirty(); renderInspector(); }));
             objective.appendChild(selectField("Action allowed while paused", step.paused_action || "", [
@@ -664,7 +664,7 @@
             next.appendChild(selectField("Next step", step.next, destinationOptions(step.id), function (value) { step.next = value; markDirty(); }));
             host.appendChild(next);
         }
-        if (["scene", "objective", "guide"].includes(step.type)) {
+        if (["scene", "choice", "objective", "guide"].includes(step.type)) {
             var markerPanel = section("Map marker");
             if (step.marker) markerPanel.appendChild(selectField("Highlight faction", step.marker.target, [{ value: "player", label: "Player" }].concat(factionOptions()), function (value) { step.marker.target = value; markDirty(); }));
             else {
@@ -1279,8 +1279,7 @@
 
     function paintPreview(updateMachine) {
         if (!state.machine || state.validation.errors.length) return;
-        if (state.previewRevealTimer !== null) window.clearTimeout(state.previewRevealTimer);
-        state.previewRevealTimer = null;
+        clearPreviewRevealTimer();
         $("#previewFrame").dataset.device = $("#device").value;
         state.facts.touch_controls = $("#device").value === "mobile" ? 1 : 0;
         var model;
@@ -1341,7 +1340,15 @@
         var previewTitle = translated(model.step.title_key, state.previewLanguage) || model.step.id.replace(/_/g, " ");
         var assaultHint = model.step.campaign_assault_on_enter ? " · on entry: " + model.step.campaign_assault_on_enter.attacker_team + " attacks " + (model.step.campaign_assault_on_enter.target === "player" ? "player" : model.step.campaign_assault_on_enter.target === "player_and_allies" ? "player and current allies" : factionName(model.step.campaign_assault_on_enter.target)) + (model.step.campaign_assault_on_enter.hold_last_tile ? " · hold at one tile" : "") : "";
         $("#previewStatus").textContent = (state.demoBackup ? "Sample preview · not saved — " : "Previewing · ") + previewTitle + (model.waiting ? " · appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + "s" : "") + menuHint + assaultHint + (state.validation.errors.length ? " · draft needs fixes before saving" : "");
-        if (model.waiting) state.previewRevealTimer = window.setTimeout(function () { state.previewRevealTimer = null; paintPreview(); }, Math.max(1, model.wait_remaining_ms));
+        if (model.waiting) {
+            var waitingMachine = state.machine, waitingStepId = model.step.id, waitingToken = state.previewRevealToken;
+            var timerId = window.setTimeout(function () {
+                if (state.previewRevealToken !== waitingToken || state.previewRevealTimer !== timerId) return;
+                state.previewRevealTimer = null;
+                if (state.machine === waitingMachine && waitingMachine.view().step.id === waitingStepId) paintPreview();
+            }, Math.max(1, model.wait_remaining_ms));
+            state.previewRevealTimer = timerId;
+        }
         if (previousStep !== model.step.id) renderGraph();
         renderFactControls(model);
     }
@@ -1375,6 +1382,15 @@
         if (step.id === "boudica_transfer_send" && (!spotlightPanel || spotlightPanel.getClientRects().length === 0)) return null;
         var anchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(target, spotlightPanel) : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         var anchorRect = guide.kind === "ui" ? $("#previewRoot").getBoundingClientRect() : frameRect;
+        if (guide.kind === "ui" && guide.target === "attack_ratio" && step.trigger && step.trigger.action === "attack_ratio" && target.type === "range") {
+            var rangeStart = window.SOWCampaign.resolveUiRangeAnchor(target, Number(target.value));
+            var rangeMin = Number(target.min), rangeMax = Number(target.max);
+            var rangeTarget = rangeMin + (rangeMax - rangeMin) * Number(step.trigger.value || 1);
+            var rangeEnd = window.SOWCampaign.resolveUiRangeAnchor(target, rangeTarget);
+            if (!rangeStart || !rangeEnd) return null;
+            anchor.x = rangeStart.x; anchor.y = rangeStart.y;
+            anchor.toX = rangeEnd.x - anchorRect.left; anchor.toY = rangeEnd.y - anchorRect.top;
+        }
         anchor.x -= anchorRect.left; anchor.y -= anchorRect.top;
         if (Number.isFinite(anchor.spotlightX)) anchor.spotlightX -= anchorRect.left;
         if (Number.isFinite(anchor.spotlightY)) anchor.spotlightY -= anchorRect.top;
@@ -1487,7 +1503,7 @@
         if (model.waiting) { host.appendChild(el("small", {}, "Scene appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + " seconds.")); return; }
         var trigger = model.step.trigger;
         var timedRoute = (model.step.routes || []).some(function (route) { return route.when && route.when.fact === "elapsed_seconds"; });
-        var canTick = Boolean((trigger && trigger.type === "elapsed") || timedRoute || Number(model.step.advance_delay_seconds) > 0);
+        var canTick = Boolean((trigger && trigger.type === "elapsed") || timedRoute);
         var simulateButton = $("#simulateBtn"), tickButton = $("#tickBtn");
         simulateButton.hidden = !trigger;
         simulateButton.disabled = !trigger;
@@ -1500,7 +1516,6 @@
             if (trigger.type === "fleet") description += " · " + (trigger.unit || "any ship") + (trigger.target ? " to " + factionName(trigger.target) : "");
             if (trigger.type === "resource_transfer") description += (trigger.recipient ? " · to " + factionName(trigger.recipient) : " · any recipient") + (trigger.resources ? " · " + trigger.resources.join(" + ") : " · any resources");
             host.appendChild(el("small", {}, "Waiting for " + description + " · " + progress.current + " / " + progress.target));
-            if (Number(model.step.advance_delay_seconds) > 0) host.appendChild(el("small", {}, "Advance game time to test the pause before the next step."));
             var territoryMaximum = trigger.type === "territory" && trigger.scope === "total" && trigger.comparison === "lte";
             if (!territoryMaximum && !["troops", "elapsed", "contact", "eliminated", "fleet", "resource_transfer", "alliance"].includes(trigger.type)) {
                 var button = el("button", { type: "button" }, "+1 " + trigger.type);
@@ -1649,6 +1664,7 @@
         menu.querySelectorAll("[data-preview-menu-screen]").forEach(function (panel) { panel.hidden = panel.dataset.previewMenuScreen !== screen; });
     }
     function resetPreview() {
+        clearPreviewRevealTimer();
         state.facts = freshFacts(); state.ui = {}; state.previewFocusActive = false;
         var mapLayer = $("#campaignPreviewLayer");
         ["--map-focus-x", "--map-focus-y", "--map-focus-scale"].forEach(function (property) { mapLayer.style.removeProperty(property); });

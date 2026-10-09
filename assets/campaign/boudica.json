@@ -71,8 +71,8 @@
     {
       "id": "colonia_veterans",
       "name": "Colonia Veterans",
-      "x": 809,
-      "y": 83,
+      "x": 802,
+      "y": 65,
       "starting_troops": 100,
       "relation": "neutral",
       "team": "Red",
@@ -102,8 +102,8 @@
     {
       "id": "roman_supply_depot",
       "name": "Roman Supply Depot",
-      "x": 758,
-      "y": 214,
+      "x": 760,
+      "y": 137,
       "starting_troops": 500,
       "relation": "neutral",
       "team": "Red",
@@ -117,8 +117,8 @@
     {
       "id": "tax_collectors",
       "name": "Tax Collectors",
-      "x": 629,
-      "y": 137,
+      "x": 665,
+      "y": 113,
       "starting_troops": 250,
       "relation": "neutral",
       "team": "Red",

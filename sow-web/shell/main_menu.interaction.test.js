@@ -43,6 +43,7 @@ const mapRosterWriter = fs.readFileSync(path.join(shell, "../../sow-tools/src/ma
 const gameFonts = fs.readFileSync(path.join(shell, "../../sow-web/site/fonts/fonts.css"), "utf8");
 const landingHtml = fs.readFileSync(path.join(shell, "../../sow-web/site/index.html"), "utf8");
 const siteDistSource = fs.readFileSync(path.join(shell, "../../sow-dist/src/main.rs"), "utf8");
+const prodDistSource = fs.readFileSync(path.join(shell, "../../sow-dist/src/prod.rs"), "utf8");
 const siteHeader = fs.readFileSync(path.join(shell, "../../sow-web/site/site-header.html"), "utf8");
 const siteChrome = fs.readFileSync(path.join(shell, "../../sow-web/site/site-chrome.js"), "utf8");
 const siteDropdown = fs.readFileSync(path.join(shell, "sow-dropdown.js"), "utf8");
@@ -77,6 +78,8 @@ const surfaceSource = fs.readFileSync(path.join(shell, "../../sow-client/src/inp
 const cameraFrameUiSource = fs.readFileSync(path.join(shell, "../../sow-client/src/render/frame/ui.rs"), "utf8");
 const netUpdateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/net/update/mod.rs"), "utf8");
 const webMenu = fs.readFileSync(path.join(shell, "../../sow-client/src/web_menu.rs"), "utf8");
+const settingsStateSource = fs.readFileSync(path.join(shell, "../../sow-client/src/ui/settings/mod.rs"), "utf8");
+const uiAppSource = fs.readFileSync(path.join(shell, "../../sow-client/src/ui/app.rs"), "utf8");
 const intentApplySource = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/apply.rs"), "utf8");
 const coreCost = fs.readFileSync(path.join(shell, "../../sow-core/src/building/cost.rs"), "utf8");
 const buildingsIntent = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/buildings.rs"), "utf8");
@@ -1370,6 +1373,76 @@ test("authored campaign files validate through the shared runtime schema", () =>
     }
 });
 
+test("Boudica final decision opens at 5,000 tiles and targets her on the map", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const stand = definition.steps.find(step => step.id === "boudica_last_stand");
+    const choice = definition.steps.find(step => step.id === "boudica_final_choice");
+    assert.equal(stand.trigger.value, 5000);
+    assert.deepEqual(choice.marker, { target: "player" });
+    const machine = campaign.create(definition, stand.id, { factions: [] });
+    assert.equal(machine.update({ tiles: 5001 }, {}).step.id, stand.id);
+    assert.equal(machine.update({ tiles: 5000 }, {}).step.id, choice.id);
+    const editorPreviewFocus = campaignEditor.slice(campaignEditor.indexOf("function applyPreviewFocus"), campaignEditor.indexOf("function renderPreview", campaignEditor.indexOf("function applyPreviewFocus")));
+    assert.match(editorPreviewFocus, /step\.marker && step\.marker\.target/);
+    assert.match(campaignEditor, /var keepsMarker = \["scene", "choice", "objective", "guide"\]/);
+    assert.match(campaignEditor, /if \(\["scene", "choice", "objective", "guide"\]\.includes\(step\.type\)\) \{\s*var markerPanel/);
+});
+
+test("Boudica reveal beats share a fixed one-second wait while tribal contact stays immediate", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const waitSteps = definition.steps.filter(step => step.wait_before === true).map(step => step.id);
+    assert.equal(campaign.WAIT_MS, 1000);
+    assert.deepEqual(waitSteps, [
+        "boudica_first_victory_scene", "boudica_city_intro", "boudica_aid_choice",
+        "boudica_city_ready", "boudica_city_upgrade_ready", "boudica_factory_ready",
+        "boudica_bunker_built", "boudica_outpost_colonia_veterans_scene",
+        "boudica_outpost_tax_collectors_scene", "boudica_outpost_roman_supply_depot_scene"
+    ]);
+    const next = id => definition.steps.find(step => step.id === id).next;
+    assert.equal(next("boudica_factory_ready"), "boudica_outpost_colonia_veterans");
+    assert.equal(next("boudica_outpost_colonia_veterans_scene"), "boudica_bunker_choice");
+    assert.equal(next("boudica_bunker_built"), "boudica_camulodunum_intro");
+    assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
+    assert.doesNotMatch(campaignEditor, /start_delay_seconds|advance_delay_seconds/);
+    assert.match(campaignEditor, /Wait 1 second before showing/);
+    assert.match(campaignEditor, /var canTick = Boolean\(\(trigger && trigger\.type === "elapsed"\) \|\| timedRoute\)/);
+    assert.match(tutorial, /stepRevealToken !== waitingToken[\s\S]*waitingMachine\.view\(\)\.step\.id === waitingStepId/);
+    assert.match(campaignEditor, /previewRevealToken !== waitingToken[\s\S]*waitingMachine\.view\(\)\.step\.id === waitingStepId/);
+    assert.match(tutorial, /function clearStepRevealTimer\(\)[\s\S]*stepRevealToken\+\+[\s\S]*window\.clearTimeout/);
+    assert.match(campaignEditor, /function clearPreviewRevealTimer\(\)[\s\S]*previewRevealToken\+\+[\s\S]*window\.clearTimeout/);
+    assert.match(campaignView, /\}, host\.SOWCampaign\.WAIT_MS\);/);
+    assert.match(tutorial, /window\.setTimeout\(updateMenuGuide, 650\)/);
+    for (const [type, legacyField] of [["scene", "start_delay_seconds"], ["objective", "advance_delay_seconds"]]) {
+        const legacyStep = { id: "wait", type, title_key: "tutorial.wait", next: "end", [legacyField]: 1 };
+        if (type === "objective") legacyStep.trigger = { type: "elapsed", scope: "step", value: 1 };
+        const invalid = campaign.validate({
+            version: 2, episode_id: "legacy_wait", settings: { buildings_enabled: false, starting_troops: 1000 },
+            speakers: {}, entry: "wait", steps: [legacyStep, { id: "end", type: "end", title_key: "tutorial.end" }]
+        }, null, { hasText: () => true });
+        assert.ok(invalid.errors.some(issue => issue.step === "wait" && issue.field === "fields"), `${legacyField} remains rejected`);
+    }
+    const immediate = campaign.create({ entry: "scene", steps: [
+        { id: "scene", type: "scene", title_key: "scene", next: "end" },
+        { id: "end", type: "end", title_key: "end" }
+    ] }, "scene", null, () => 0);
+    assert.equal(immediate.view().waiting, false, "unflagged dialogue has no artificial wait");
+    assert.equal(immediate.advance(null, "scene"), true, "unflagged dialogue continues normally");
+
+    let choiceClock = 0;
+    const decision = campaign.create({ entry: "choice", steps: [
+        { id: "choice", type: "choice", wait_before: true, choices: [{ id: "yes", next: "scene" }] },
+        { id: "scene", type: "scene", title_key: "scene", next: "end" },
+        { id: "end", type: "end", title_key: "end" }
+    ] }, "choice", null, () => choiceClock);
+    assert.equal(decision.advance("yes", "choice"), false, "a hidden choice cannot be selected");
+    choiceClock = 1000;
+    assert.equal(decision.view().waiting, false);
+    assert.equal(decision.advance("yes", "choice"), true, "the visible choice responds immediately");
+    assert.equal(decision.view().step.id, "scene");
+});
+
 test("Boudica pauses for action steps and resumes only after valid expansion or construction", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const campaignDir = path.join(shell, "../../assets/campaign");
@@ -1477,7 +1550,7 @@ test("camera practice stays paused through desktop and touch routes", () => {
             { id: "boudica_zoom_in", type: "objective", title_key: "tutorial.zoom_in", trigger: { type: "zoom_in_complete", target: "suetonius_paulinus", distance: 8, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_in" }, pause_game: true, camera_only: true, next: "boudica_found_suetonius" },
             { id: "boudica_found_suetonius", type: "scene", title_key: "tutorial.found", body_key: "tutorial.found_body", next: "boudica_camera_home" },
             { id: "boudica_camera_home", type: "objective", title_key: "tutorial.home", trigger: { type: "ui", action: "hud_center_camera", scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "tap" }, pause_game: true, camera_only: true, next: "boudica_city_intro" },
-            { id: "boudica_city_intro", type: "scene", title_key: "tutorial.city", body_key: "tutorial.city_body", start_delay_seconds: 2, next: "boudica_choose_city" },
+            { id: "boudica_city_intro", type: "scene", title_key: "tutorial.city", body_key: "tutorial.city_body", wait_before: true, next: "boudica_choose_city" },
             { id: "boudica_choose_city", type: "scene", title_key: "tutorial.choose_city", body_key: "tutorial.choose_city_body", next: "boudica_end" },
             { id: "boudica_end", type: "end", title_key: "tutorial.end" }
         ]
@@ -1543,7 +1616,8 @@ test("camera practice stays paused through desktop and touch routes", () => {
     const zoomOutGoal = campaign.zoomOutTarget(initialFacts, 0.85);
     assert.ok(Math.abs(zoomOutGoal - 0.32) < 0.00001, "zoom-out brings the battlefield close to its wide-view limit");
     assert.ok(Math.abs(campaign.zoomOutProgress({ ...initialFacts, camera_zoom: zoomOutGoal }) - 0.85) < 0.00001);
-    const desktop = campaign.create(definition, "boudica_zoom_out", { factions: [] });
+    let desktopClock = 0;
+    const desktop = campaign.create(definition, "boudica_zoom_out", { factions: [] }, () => desktopClock);
     desktop.update(initialFacts, {}, 0);
     assert.equal(desktop.view().paused, true);
     assert.equal(desktop.update({ ...initialFacts, camera_zoom: zoomOutGoal }, {}, 0.5).step.id, "boudica_zoom_out", "reaching the target without a zoom action does not count");
@@ -1586,13 +1660,19 @@ test("camera practice stays paused through desktop and touch routes", () => {
     assert.equal(desktop.view().paused, true);
     assert.match(tutorial, /machineView\.waiting[\s\S]*runtime\.view\.render\(null\)[\s\S]*window\.setTimeout/);
     assert.equal(desktop.advance(null, "boudica_city_intro"), false);
+    desktopClock = 999;
+    assert.equal(desktop.view().waiting, true, "dialogue stays hidden through 999ms");
+    desktopClock = 1000;
+    assert.equal(desktop.view().waiting, false, "dialogue reveals at exactly 1000ms");
+    assert.equal(desktop.advance(null, "boudica_city_intro"), true);
+    assert.equal(desktop.view().step.id, "boudica_choose_city");
     let revealClock = 0;
     const timedReturn = campaign.create(definition, "boudica_camera_home", { factions: [] }, () => revealClock);
     timedReturn.update({}, {});
     assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
-    revealClock = 1999;
+    revealClock = 999;
     assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
-    revealClock = 2000;
+    revealClock = 1000;
     assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, false);
     assert.equal(timedReturn.advance(null, "boudica_city_intro"), true);
     assert.equal(timedReturn.view().step.id, "boudica_choose_city");
@@ -1638,8 +1718,11 @@ test("disabled neutral offers stay hidden while named story dialogues and legacy
     const neutralOffer = { id: "neutral_contact_terms", when: { type: "contact", relation: "neutral" } };
     const storyFacts = { contact_faction_ids: ["story_faction"] };
 
-    const story = campaign.create({ entry: "waiting", steps: [waiting], reactions: [storyOffer] }, undefined, roster);
-    assert.equal(story.update(storyFacts, {}).reaction, "named_story", "an exact story response ignores the generic-offer flag");
+    const story = campaign.create({ entry: "waiting", steps: [waiting], reactions: [storyOffer] }, undefined, roster, () => 0);
+    const immediateContact = story.update(storyFacts, {});
+    assert.equal(immediateContact.reaction, "named_story", "an exact story response ignores the generic-offer flag");
+    assert.equal(immediateContact.step.type, "scene", "contact opens its response on the first campaign update");
+    assert.equal(immediateContact.paused, true);
 
     const genericDefinition = { entry: "waiting", steps: [waiting], reactions: [neutralOffer] };
     const neutralFacts = { contact_faction_ids: ["neutral_faction"] };
@@ -1656,13 +1739,14 @@ test("disabled neutral offers stay hidden while named story dialogues and legacy
 
 test("defeat scenes wait one second when attack and defeat arrive in the same turn", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
+    let clock = 0;
     const definition = { entry: "attack", steps: [
         { id: "attack", type: "objective", trigger: { type: "attack", target: "outpost", value: 1, scope: "total" }, next: "victory" },
-        { id: "victory", type: "objective", trigger: { type: "defeated", target: "outpost", value: 1, scope: "total" }, advance_delay_seconds: 1, next: "victory_scene" },
-        { id: "victory_scene", type: "scene", title_key: "tutorial.victory", next: "end" },
+        { id: "victory", type: "objective", trigger: { type: "defeated", target: "outpost", value: 1, scope: "total" }, next: "victory_scene" },
+        { id: "victory_scene", type: "scene", title_key: "tutorial.victory", wait_before: true, next: "end" },
         { id: "end", type: "end", title_key: "tutorial.end" }
     ] };
-    const machine = campaign.create(definition, "attack", { factions: [] });
+    const machine = campaign.create(definition, "attack", { factions: [] }, () => clock);
     const beforeDefeat = {
         elapsed_seconds: 3,
         attacks_by_faction_id: {},
@@ -1677,9 +1761,16 @@ test("defeat scenes wait one second when attack and defeat arrive in the same tu
         defeated_faction_ids: ["outpost"],
         eliminated_faction_ids: ["outpost"]
     };
-    assert.equal(machine.update(attackAndDefeat, {}).step.id, "victory");
-    assert.equal(machine.update({ ...attackAndDefeat, elapsed_seconds: 4.99 }, {}).step.id, "victory");
-    assert.equal(machine.update({ ...attackAndDefeat, elapsed_seconds: 5 }, {}).step.id, "victory_scene");
+    const revealed = machine.update(attackAndDefeat, {});
+    assert.equal(revealed.step.id, "victory_scene", "objective completion transitions immediately to the one-second scene wait");
+    assert.equal(revealed.waiting, true);
+    assert.equal(machine.advance(null, "victory_scene"), false, "the hidden scene cannot be skipped");
+    clock = 999;
+    assert.equal(machine.view().waiting, true);
+    clock = 1000;
+    assert.equal(machine.view().waiting, false);
+    assert.equal(machine.advance(null, "victory_scene"), true);
+    assert.equal(machine.view().step.id, "end");
 });
 
 test("campaign cinematic steps reuse the shared editor/game player and validate local media", () => {
@@ -1780,6 +1871,44 @@ test("gameplay chrome: vertical right panel with exit on top, fps in dock, deskt
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard,\s*\.sow-hud__panel,\s*\.sow-hud__emoji-popout \{ top: 50px/);
     assert.doesNotMatch(hudCss, /\.sow-hud__leaderboard \{ top: calc\(max\(12px, var\(--sow-sat\)\) \+ 272px\)/);
     assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
+});
+
+test("FPS/ping and developer tools settings reach the shared HUD and persist locally", () => {
+    assert.match(settingsStateSource, /pub show_fps_ping: bool/);
+    assert.match(settingsStateSource, /show_fps_ping: true/);
+    assert.match(settingsStateSource, /sow_settings_v1_show_fps_ping/);
+    assert.match(settingsStateSource, /sow_settings_v1_show_dev_tools/);
+    assert.match(settingsStateSource, /get_item\(Self::SHOW_FPS_PING_KEY\)/);
+    assert.match(settingsStateSource, /set_item\(key,/);
+    assert.match(uiAppSource, /SettingsState::load_local\(\)/);
+    assert.match(webMenu, /SetShowFpsPing\s*\{\s*value: bool/);
+    assert.match(webMenu, /WebMenuCommand::SetShowFpsPing[\s\S]*?settings_state\.show_fps_ping = value;[\s\S]*?persist_local\(\)/);
+    assert.match(webMenu, /WebMenuCommand::SetShowDevTools[\s\S]*?settings_state\.show_dev_tools = value;[\s\S]*?show_dev_sidebar = value;/);
+    assert.match(webMenu, /settings_show_fps_ping: app\.ui\.app\.settings_state\.show_fps_ping/);
+    assert.equal((webMenu.match(/"show_fps_ping": app\.ui\.app\.settings_state\.show_fps_ping/g) || []).length, 2);
+    assert.equal((webMenu.match(/"show_dev_tools_available": cfg!\(any\(feature = "dev", debug_assertions\)\)/g) || []).length, 2);
+    assert.doesNotMatch(webMenu, /"available": app\.ui\.app\.settings_state\.show_dev_tools/);
+    assert.match(webMenu, /"dev_tools": dev_tools_payload\(app\)/);
+    assert.match(siteDistSource, /fn build_local_preview[\s\S]*?compile_wasm\(paths, true\)/);
+    assert.match(siteDistSource, /fn cmd_jest[\s\S]*?compile_wasm\(paths, false\)/);
+    assert.match(prodDistSource, /fn build_web[\s\S]*?compile_wasm\(paths, true\)/);
+    assert.match(shellSource, /data-setting='show_fps_ping'/);
+    assert.match(shellSource, /settings\.show_dev_tools_available \? "<label class='sow-menu__form-field'>"/);
+    assert.match(shellSource, /set_show_fps_ping/);
+    assert.match(hud, /SOW_t\("hud\.show_fps_ping"\)/);
+    assert.match(hud, /data-hud-setting="show_fps_ping"/);
+    assert.match(hud, /hudState\.settings && hudState\.settings\.show_dev_tools_available/);
+    assert.match(hud, /hudRefs\.devBtn\.classList\.toggle\("hidden", !settings\.show_dev_tools_available\)/);
+    assert.match(hud, /hudRefs\.devSidebar\.classList\.toggle\("hidden", !devSidebarOpen\)/);
+    assert.match(hud, /devSidebarOpen = hudState\.hud\.dev_tools\.open/);
+    assert.match(hud, /set_show_fps_ping/);
+    assert.match(hud, /if \(input\.checked\) \{\s*setHudPanel\(null\);\s*renderHud\(\);/);
+    assert.match(hud, /hudRefs\.fps\.hidden = settings\.show_fps_ping === false/);
+    assert.doesNotMatch(hudCss, /sow-hud__fps\s*\{\s*display:\s*none/);
+    for (const locale of fs.readdirSync(path.join(shell, "../../sow-i18n/strings"))) {
+        const catalog = fs.readFileSync(path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`), "utf8");
+        assert.equal((catalog.match(/^show_fps_ping\s*=/gm) || []).length, 2, `${locale} has menu and HUD labels`);
+    }
 });
 
 test("compact HUD density follows the available horizontal frame and restores full size", () => {
@@ -2081,6 +2210,51 @@ test("campaign negotiation uses the canonical HUD gold balance, not player-list 
     assert.equal(short.commands.find(command => command.type === "resolve_campaign_diplomacy").relation, "enemy");
     assert.equal(short.commands.find(command => command.type === "resolve_campaign_diplomacy").gold_cost, 0);
     assert.equal(short.advanced, "refuse");
+});
+
+test("a marked campaign decision smoothly focuses its player target once on entry", async () => {
+    const commands = [], root = { hidden: true, isConnected: false };
+    const model = {
+        step: { id: "final_choice", type: "choice", marker: { target: "player" } },
+        paused: true,
+        state: { choices: {} },
+        choices: [{ id: "poison", label_key: "poison" }, { id: "fight", label_key: "fight" }]
+    };
+    const document = {
+        body: { appendChild(node) { node.isConnected = true; } },
+        documentElement: { dir: "ltr" },
+        getElementById: () => null,
+        createElement: () => root,
+        addEventListener() {}
+    };
+    const window = {
+        addEventListener() {},
+        SOW_menu_command(message) { commands.push(JSON.parse(message)); },
+        SOWCampaign: {
+            validate: () => ({ errors: [] }), UI_TARGETS: {}, zoomInputMode: () => "wheel",
+            create: () => ({ state: { choices: {} }, update: () => model, view: () => model, advance: () => true })
+        },
+        SOWCampaignView: { mount: () => ({ render() {}, destroy() {} }) }
+    };
+    vm.runInNewContext(tutorial, { window, document, performance: { now: () => 0 }, console,
+        fetch(url) {
+            const data = url.endsWith(".triggers.json")
+                ? { episode_id: "boudica", settings: {}, strings: {}, speakers: {}, steps: [model.step] }
+                : { factions: [] };
+            return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+        }
+    });
+    const update = () => window.SOW_tutorial_state_update({ phase: "Playing", hud: {
+        players: [{ id: 1, name: "Boudica", is_me: true, is_alive: true, centroid_x: 12, centroid_y: 34 }],
+        settings: {}, tutorial: { active: true, episode_id: "boudica", facts: {} }
+    } });
+    update();
+    await new Promise(setImmediate);
+    update();
+    const focuses = commands.filter(command => command.type === "focus_world");
+    assert.equal(focuses.length, 1, JSON.stringify(commands));
+    assert.deepEqual([focuses[0].x, focuses[0].y], [12.5, 34.5]);
+    assert.match(tutorial, /targetStep\.type === "choice" && targetStep\.marker[\s\S]*?send\("focus_world"/);
 });
 
 test("campaign objectives distinguish the intended contact, alliance, fleet and transfer action", () => {
@@ -4603,14 +4777,17 @@ test("army allocation starts centered and only formats send/keep while shown", (
     assert.doesNotMatch(hud, /allocationHideTimer|setTimeout\([^\n]*allocation/);
     assert.match(hud, /detailsVisible = forceDetails \|\|[\s\S]*?if \(!detailsVisible\) return;[\s\S]*?SOW_t\("hud\.attack_allocation"/);
     assert.match(hud, /pointerup[\s\S]*?remove\("is-adjusting"\)/);
-    assert.match(hudCss, /range-vertical::-webkit-slider-runnable-track \{ height: 12px/);
-    assert.match(hudCss, /range-vertical::-moz-range-track \{ height: 12px/);
+    assert.match(hudCss, /writing-mode: vertical-lr;\s*direction: rtl;/);
+    assert.match(hudCss, /\.sow-hud__range-vertical \{[^}]*width: 32px;\s*height: 100%/);
+    assert.doesNotMatch(hudCss, /\.sow-hud__range-vertical \{ width: (?:58|76|88|92)px/);
+    assert.match(hudCss, /range-vertical::-webkit-slider-runnable-track \{ width: 12px/);
+    assert.match(hudCss, /range-vertical::-moz-range-track \{ width: 12px/);
     assert.match(hudCss, /range-vertical::-webkit-slider-thumb/);
     assert.match(hudCss, /range-vertical::-moz-range-thumb/);
     const allocationRail = hud.slice(hud.indexOf("'<aside class=\"sow-hud__left-rail\""), hud.indexOf("'<aside class=\"sow-hud__right-rail\""));
     assert.doesNotMatch(allocationRail, /hudIcon\("troops", "sow-hud__action-icon"\)/);
     assert.match(hud, /slider\.style\.setProperty\("--sow-crossed-swords", 'url\("' \+ asset\(HUD_ICONS\.troops\)/);
-    assert.match(hudCss, /background: var\(--sow-gold\) var\(--sow-crossed-swords\) center/);
+    assert.match(hudCss, /background: #10181d var\(--sow-crossed-swords\) center/);
 });
 
 test("campaign players use the active leader name in both map and leaderboard", () => {
@@ -4654,7 +4831,7 @@ test("tutorial camera anchors and paused build guides publish current map coordi
     const guideEnd = webMenu.indexOf("\nfn tutorial_payload(", guideStart);
     const guide = webMenu.slice(guideStart, guideEnd);
     assert.match(guide, /guide_build_site_candidates[\s\S]*tutorial_visible_build_site_candidate\([\s\S]*tutorial_project_tile\([\s\S]*&app\.input[\s\S]*tutorial_screen_point_visible/);
-    assert.match(tutorial, /var targetFactionId = targetStep\.guide[\s\S]*?targetStep\.trigger[\s\S]*?send\("focus_world"/);
+    assert.match(tutorial, /var targetFactionId = targetStep\.type === "choice" && targetStep\.marker[\s\S]*?targetStep\.guide && targetStep\.guide\.kind[\s\S]*?send\("focus_world"/);
     const anchorFunction = tutorial.slice(tutorial.indexOf("function anchorFor"), tutorial.indexOf("function syncTransferGuide"));
     assert.match(anchorFunction, /factionAction[\s\S]*?tutorial\.target_nameplate[\s\S]*?cameraTracked: true/);
     const uiAnchorBranch = anchorFunction.slice(anchorFunction.indexOf("var source = window.SOWCampaign.resolveUiTarget"));
@@ -4839,11 +5016,23 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.equal(intro.attack_ratio_on_enter, 0.5, "start the demonstration below 100%");
     assert.equal(ratioStep.attack_ratio_on_enter, undefined, "the player must set 100% manually");
     assert.match(tutorial, /attack_ratio: Number\(hud\.attack_ratio\)/);
+    assert.match(tutorial, /resolveUiRangeAnchor\(source, Number\(source\.value\)\)[\s\S]*resolveUiRangeAnchor\(source, ratioTarget\)[\s\S]*result\.toX = sliderEnd\.x; result\.toY = sliderEnd\.y/);
+    assert.match(campaignEditor, /resolveUiRangeAnchor\(target, Number\(target\.value\)\)[\s\S]*resolveUiRangeAnchor\(target, rangeTarget\)/);
     assert.match(campaignSource, /trigger\.action === "attack_ratio"[\s\S]*current = Number\(facts\.attack_ratio \|\| 0\)[\s\S]*target = Number\(trigger\.value \|\| 1\)/);
     assert.match(tutorial, /key === "attack_ratio" && currentStep && currentStep\.trigger[\s\S]*currentStep\.trigger\.action === key\) return/);
-    assert.match(fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8"), /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
-    assert.match(fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8"), /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
+    const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
+    const spanish = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8");
+    assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Move the attack slider to 100%\."/);
+    assert.match(spanish, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Sube la barra de ataque al 100%\."/);
+    assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
+    assert.match(spanish, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
     assert.match(campaignView, /anchor\.dimOutside \|\| step\.guide\.kind === "ui"/);
+    assert.match(campaignView, /root\.dataset\.guideTarget = "attack_ratio"/);
+    assert.match(storyCss, /orientation: landscape\) and \(max-height: 560px\)[\s\S]*?data-guide-target="attack_ratio"\] \.sow-story__objective \{ inset-inline-start: 50%/);
+    assert.match(storyCss, /data-guide-target="attack_ratio"\]\[data-guide-path="true"\] \.sow-story__hand \{ animation: story-attack-ratio-path/);
+    assert.match(storyCss, /@keyframes story-attack-ratio-path[\s\S]*opacity: 0[\s\S]*var\(--guide-dy\)/);
+    assert.match(storyCss, /data-guide-target="attack_ratio"\] \.sow-story__gesture-label \{ left: 68px; right: auto/);
+    assert.match(storyCss, /#sow-story\[dir="rtl"\].*left: auto; right: 68px/);
     assert.match(campaignView, /spotlightWidth = Number\.isFinite\(anchor\.spotlightWidth\) \? anchor\.spotlightWidth : anchor\.width/);
     assert.match(tutorial, /step\.id === "boudica_transfer_send"[\s\S]*source\.closest\("#sow-hud-transfer"\)/);
     assert.match(campaignEditor, /step\.id === "boudica_transfer_send"[\s\S]*target\.closest\("#sow-hud-transfer"\)/);
@@ -4896,6 +5085,14 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
         x: 130, y: 115, width: 60, height: 30,
         spotlightX: 170, spotlightY: 140, spotlightWidth: 300, spotlightHeight: 200
     });
+    const range = {
+        min: "5", max: "100",
+        ownerDocument: { defaultView: { getComputedStyle: () => ({ writingMode: "vertical-lr", direction: "rtl", getPropertyValue: () => "26px" }) } },
+        getBoundingClientRect: () => rect(10, 20, 32, 106)
+    };
+    assert.equal(campaign.resolveUiRangeAnchor(range, 50).x, 26);
+    assert.equal(Math.round(campaign.resolveUiRangeAnchor(range, 50).y * 100) / 100, 75.11, "the current range value resolves to its vertical thumb position");
+    assert.deepEqual(campaign.resolveUiRangeAnchor(range, 100), { x: 26, y: 33 }, "100% resolves to the top end of the slider");
 });
 
 test("tutorial hand keeps bouncing over the Roman target and moving expansion edge", () => {

@@ -392,7 +392,10 @@ fn render_death_nameplates(
         );
         let gap = 3.0 * sf;
         let icon_block = icon_size * sf + gap;
-        let row_width = icon_block * 2.0 + name_measure.width;
+        let death_icon = death_emoji(animation.by_nuke, &animation.avatar);
+        let death_icon_count = if death_icon.is_some() { 1 } else { 0 };
+        let icon_count = 1 + death_icon_count;
+        let row_width = icon_block * icon_count as f32 + name_measure.width;
         let margin = row_width * 0.5 + 8.0;
         if center[0] < -margin
             || center[0] > screen_w + margin
@@ -405,18 +408,24 @@ fn render_death_nameplates(
         let center_px = [center[0] * sf, center[1] * sf];
         let row_left = center_px[0] - row_width * 0.5;
         let emoji_outline = dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, alpha]);
-        text.push_emoji(
-            death_emoji(animation.by_nuke),
-            [row_left + icon_size * sf * 0.5, center_px[1]],
-            icon_size * sf * 0.5,
-            [1.0, 1.0, 1.0, alpha],
-            emoji_outline,
-        );
+        if let Some(emoji) = death_icon {
+            text.push_emoji(
+                emoji,
+                [row_left + icon_size * sf * 0.5, center_px[1]],
+                icon_size * sf * 0.5,
+                [1.0, 1.0, 1.0, alpha],
+                emoji_outline,
+            );
+        }
+        let avatar_offset = icon_block * death_icon_count as f32;
         let avatar = crate::render::world::nameplates::prepare_death_avatar(
             text,
             &animation.avatar,
             campaign_avatar_slots,
-            [row_left + icon_block + icon_size * sf * 0.5, center_px[1]],
+            [
+                row_left + avatar_offset + icon_size * sf * 0.5,
+                center_px[1],
+            ],
             icon_size * sf * 0.5,
             animation.color,
         );
@@ -424,7 +433,7 @@ fn render_death_nameplates(
         text.push_string(
             &animation.name,
             [
-                row_left + icon_block * 2.0,
+                row_left + icon_block * icon_count as f32,
                 center_px[1] + name_measure.height * 0.35,
             ],
             font_size * sf,

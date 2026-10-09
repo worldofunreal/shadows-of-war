@@ -4,6 +4,7 @@
 
     const TYPES = ["scene", "choice", "objective", "guide", "end"];
     const TEAMS = Object.freeze(["Red", "Blue"]);
+    const WAIT_MS = 1000;
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
         building: "buildings", city: "cities", farm: "farms", factory: "factories",
@@ -226,7 +227,7 @@
 
             if (targetRemoved && ["objective", "guide"].includes(step.type)) {
                 step.type = "scene";
-                ["trigger", "guide", "marker", "hint_key", "camera_only", "advance_delay_seconds"].forEach(field => delete step[field]);
+                ["trigger", "guide", "marker", "hint_key", "camera_only"].forEach(field => delete step[field]);
                 adjusted.steps_to_scenes++;
                 return;
             }
@@ -289,6 +290,28 @@
             anchor.spotlightHeight = spotlight.height;
         }
         return anchor;
+    }
+
+    function resolveUiRangeAnchor(element, value) {
+        if (!element || typeof element.getBoundingClientRect !== "function") return null;
+        const rect = element.getBoundingClientRect();
+        const min = Number(element.min), max = Number(element.max);
+        if (!(max > min) || ![rect.left, rect.top, rect.width, rect.height, value].every(Number.isFinite)) return null;
+        const view = element.ownerDocument && element.ownerDocument.defaultView;
+        const style = view && typeof view.getComputedStyle === "function" ? view.getComputedStyle(element) : null;
+        const vertical = style ? String(style.writingMode || "").startsWith("vertical") : rect.height > rect.width;
+        const direction = style && style.direction || element.dir || "ltr";
+        const thumbSize = style && typeof style.getPropertyValue === "function"
+            ? parseFloat(style.getPropertyValue("--sow-range-thumb-size")) || 0 : 0;
+        const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
+        if (vertical) {
+            const usable = Math.max(0, rect.height - thumbSize);
+            const fromTop = direction === "rtl" ? 1 - ratio : ratio;
+            return { x: rect.left + rect.width / 2, y: rect.top + thumbSize / 2 + fromTop * usable };
+        }
+        const usable = Math.max(0, rect.width - thumbSize);
+        const fromLeft = direction === "rtl" ? 1 - ratio : ratio;
+        return { x: rect.left + thumbSize / 2 + fromLeft * usable, y: rect.top + rect.height / 2 };
     }
 
     function validate(definition, roster, options) {
@@ -416,18 +439,17 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "start_delay_seconds"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "advance_delay_seconds"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter"],
             end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
             if (!TYPES.includes(step.type)) issue(step, "type", "Unknown step type.");
             if (own(step, "attack_ratio_on_enter") && (!Number.isFinite(step.attack_ratio_on_enter) || step.attack_ratio_on_enter < 0.05 || step.attack_ratio_on_enter > 1)) issue(step, "attack_ratio_on_enter", "Attack ratio must be between 0.05 and 1.");
-            if (own(step, "advance_delay_seconds") && (!Number.isFinite(step.advance_delay_seconds) || step.advance_delay_seconds < 0.1 || step.advance_delay_seconds > 10)) issue(step, "advance_delay_seconds", "Completion delay must be between 0.1 and 10 seconds.");
-            if (own(step, "start_delay_seconds") && (!Number.isFinite(step.start_delay_seconds) || step.start_delay_seconds < 0.1 || step.start_delay_seconds > 10 || step.type !== "scene")) issue(step, "start_delay_seconds", "Scene reveal delay must be between 0.1 and 10 seconds and only applies to scenes.");
+            if (own(step, "wait_before") && (typeof step.wait_before !== "boolean" || !["scene", "choice"].includes(step.type))) issue(step, "wait_before", "The one-second reveal wait only applies to dialogue and decisions.");
             if (own(step, "campaign_assault_on_enter")) {
                 const assault = step.campaign_assault_on_enter;
                 knownFields(assault, ["attacker_team", "target", "preserve_relation", "reinforcement", "hold_last_tile"], step, "campaign_assault_on_enter");
@@ -746,14 +768,14 @@
             const value = typeof clock === "function" ? clock() : (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
             return Number.isFinite(value) ? value : Date.now();
         };
-        let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, externallyPaused = false, advanceDelayStartedAt = null;
-        let currentTimeMs = readClock(), stepEnteredAtMs = currentTimeMs;
+        let facts = {}, ui = {}, initial = null, initialUi = {}, baseline = {}, uiBaseline = {}, externallyPaused = false;
+        let currentTimeMs = readClock(), waitUntilMs = null;
         function enter(key) {
             if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
             state.id = key; state.line = 0; state.done = false;
             baseline = copy(facts); uiBaseline = { ...ui };
-            advanceDelayStartedAt = null;
-            stepEnteredAtMs = currentTimeMs;
+            currentTimeMs = readClock();
+            waitUntilMs = byId.get(key).wait_before === true ? currentTimeMs + WAIT_MS : null;
         }
         function matches(when) {
             if (when.choice) return state.choices[when.choice] === when.equals;
@@ -861,12 +883,6 @@
             if (trigger.type === "alliance" && (facts.alliance_faction_ids || []).includes(factionTargets[0]) && result.current < result.target) return true;
             return eliminated.includes(factionTargets[0]) && result.current < result.target;
         }
-        function completionDelayPending(step, result, unavailable) {
-            const delay = Number(step.advance_delay_seconds || 0);
-            if (unavailable || result.current < result.target || delay <= 0) return false;
-            if (advanceDelayStartedAt == null) advanceDelayStartedAt = Number(facts.elapsed_seconds || 0);
-            return Number(facts.elapsed_seconds || 0) - advanceDelayStartedAt < delay;
-        }
         let activeReaction = null;
         function nextReaction() {
             const contactFactionIds = facts.contact_faction_ids || [];
@@ -904,6 +920,7 @@
                     || a.index - b.index)[0] || null;
         }
         function view() {
+            currentTimeMs = readClock();
             const step = byId.get(state.id);
             if (activeReaction) {
                 const reaction = activeReaction.reaction;
@@ -918,8 +935,7 @@
                 return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
             const line = step.lines ? step.lines[state.line] : step;
-            const startDelayMs = step.type === "scene" ? Number(step.start_delay_seconds || 0) * 1000 : 0;
-            const waitRemainingMs = startDelayMs > 0 ? Math.max(0, startDelayMs - (currentTimeMs - stepEnteredAtMs)) : 0;
+            const waitRemainingMs = waitUntilMs === null ? 0 : Math.max(0, waitUntilMs - currentTimeMs);
             const expansionStarted = step.paused_action === "expand_once_then_resume"
                 && Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
             const paused = ["scene", "choice", "end"].includes(step.type) || (step.pause_game === true && !expansionStarted);
@@ -942,15 +958,14 @@
                 return true;
             }
             if (expectedStepId && expectedStepId !== state.id) return false;
+            currentTimeMs = readClock();
             const step = byId.get(state.id);
-            const startDelayMs = step.type === "scene" ? Number(step.start_delay_seconds || 0) * 1000 : 0;
-            if (startDelayMs > 0 && startDelayMs > currentTimeMs - stepEnteredAtMs) return false;
+            if (waitUntilMs !== null && currentTimeMs < waitUntilMs) return false;
             if (step.type === "scene" && step.lines && state.line + 1 < step.lines.length) { state.line++; return true; }
             if (["objective", "guide"].includes(step.type)) {
                 const result = progress();
                 const unavailable = allowUnavailable && targetUnavailable(step, result);
                 if (result.current < result.target && !unavailable) return false;
-                if (completionDelayPending(step, result, unavailable)) return false;
             }
             if (step.type === "end") {
                 if (!state.completed.includes(step.id)) state.completed.push(step.id);
@@ -975,14 +990,16 @@
         function update(nextFacts, nextUi) {
             currentTimeMs = readClock();
             facts = copy(nextFacts || {}); ui = { ...(nextUi || {}) };
-            if (initial == null) { initial = copy(facts); initialUi = { ...ui }; baseline = copy(facts); uiBaseline = { ...ui }; stepEnteredAtMs = currentTimeMs; }
+            if (initial == null) {
+                initial = copy(facts); initialUi = { ...ui }; baseline = copy(facts); uiBaseline = { ...ui };
+                waitUntilMs = byId.get(state.id).wait_before === true ? currentTimeMs + WAIT_MS : null;
+            }
             if (state.done || externallyPaused) return view();
             while (!state.done) {
                 const step = byId.get(state.id);
                 const objectiveStep = ["objective", "guide"].includes(step.type);
                 const result = objectiveStep ? progress() : null;
                 const unavailable = objectiveStep && targetUnavailable(step, result);
-                const completionWaiting = objectiveStep && completionDelayPending(step, result, unavailable);
                 if (!activeReaction) {
                     const next = nextReaction();
                     if (next) {
@@ -991,7 +1008,6 @@
                     }
                 }
                 if (activeReaction) return view();
-                if (completionWaiting) break;
                 if (!objectiveStep) break;
                 if (result.current < result.target && !unavailable) break;
                 if (!advance(null, step.id, true)) break;
@@ -1013,8 +1029,10 @@
             const nextById = new Map(replacement.steps.filter(object).map(step => [step.id, step]));
             const previousStep = byId.get(state.id), nextStep = nextById.get(state.id);
             if (!nextStep) return false;
-            if (Number(previousStep && previousStep.advance_delay_seconds || 0) !== Number(nextStep.advance_delay_seconds || 0)) advanceDelayStartedAt = null;
-            if (Number(previousStep && previousStep.start_delay_seconds || 0) !== Number(nextStep.start_delay_seconds || 0)) stepEnteredAtMs = currentTimeMs;
+            if ((previousStep && previousStep.wait_before === true) !== (nextStep.wait_before === true)) {
+                currentTimeMs = readClock();
+                waitUntilMs = nextStep.wait_before === true ? currentTimeMs + WAIT_MS : null;
+            }
             const resetProgress = !previousStep || previousStep.type !== nextStep.type || JSON.stringify(previousStep.trigger) !== JSON.stringify(nextStep.trigger);
             definition = replacement;
             byId.clear();
@@ -1032,7 +1050,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, TEAMS, METRICS, UI_TARGETS, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
+    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

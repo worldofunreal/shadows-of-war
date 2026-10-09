@@ -630,10 +630,12 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "sow-client/src/render/frame/ui.rs",
             "sow-core/src/map.rs",
             "sow-core/src/player/mod.rs",
+            "sow-client/src/death_nameplate.rs",
             "sow-render/src/text/renderer.rs",
             "sow-render/src/text/types.rs",
             "sow-render/src/nameplate.rs",
             "sow-render/src/lib.rs",
+            "sow-client/src/render/world/feedback.rs",
             "sow-client/src/render/world/nameplates.rs",
             "sow-client/src/render/world/mod.rs",
             "sow-client/src/ui/utils.rs",
@@ -648,6 +650,19 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
         Some(&paths.root),
     )
     .context("nameplate renderer regression tests failed")?;
+    run(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "sow-client",
+            "--test",
+            "death_nameplate",
+        ],
+        Some(&paths.root),
+    )
+    .context("death nameplate icon regression tests failed")?;
     run(
         "cargo",
         &[
@@ -692,8 +707,6 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             bail!("{vendored} missing (blade/ is gitignored) — run ./scripts/vendor-blade.sh");
         }
     }
-    run("sudo", &["test", "-d", "/var/lib/machines/debian12"], None)
-        .context("Debian 12 nspawn container (/var/lib/machines/debian12) missing")?;
     run(
         "ssh",
         &[
@@ -1579,6 +1592,8 @@ fn fstack_version(config: &Config) -> Result<String> {
 /// Azure receives only the packaged binary — zero compiler/source on production.
 fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let fstack_hash = fstack_version(config)?;
+    let repo_mount = paths.root.display().to_string();
+    let fstack_mount = config.fstack_repo.clone();
     let local = paths.root.join("dist/relay-bin");
     let fingerprint = input_fingerprint(
         "relay-v1",
@@ -1602,10 +1617,25 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
         return Ok(local);
     }
 
+    run("sudo", &["test", "-d", "/var/lib/machines/debian12"], None)
+        .context("Debian 12 nspawn container (/var/lib/machines/debian12) missing")?;
     println!("==> Building relay in local Debian 12 container (nspawn)...");
 
     let fstack_cache = paths.root.join("dist/.sow-state/fstack-build");
-    let fstack_key = format!("{fstack_hash}:FF_ZC_RECV=1");
+    let dpdk_version = output(
+        "sudo",
+        &[
+            "systemd-nspawn",
+            "-D",
+            "/var/lib/machines/debian12",
+            "--as-pid2",
+            "pkg-config",
+            "--modversion",
+            "libdpdk",
+        ],
+    )
+    .context("reading DPDK version in Debian 12 relay builder")?;
+    let fstack_key = format!("{fstack_hash}:DPDK={dpdk_version}:FF_ZC_RECV=1");
     if !fs::read_to_string(&fstack_cache).is_ok_and(|value| value.trim() == fstack_key) {
         println!(
             "==> F-Stack changed ({}) — rebuilding libfstack.a in Debian 12 container",
@@ -1621,6 +1651,10 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
                 "systemd-nspawn",
                 "-D",
                 "/var/lib/machines/debian12",
+                "--bind",
+                &repo_mount,
+                "--bind",
+                &fstack_mount,
                 "--as-pid2",
                 "bash",
                 "-c",
@@ -1652,6 +1686,10 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
             "systemd-nspawn",
             "-D",
             "/var/lib/machines/debian12",
+            "--bind",
+            &repo_mount,
+            "--bind",
+            &fstack_mount,
             "--as-pid2",
             "bash",
             "-c",

@@ -223,9 +223,13 @@
                                 "<input class='sow-menu__field' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + ">" +
                             "</label>" +
                             "<label class='sow-menu__form-field'>" +
+                                "<span>" + esc(SOW_t("menu.show_fps_ping")) + "</span>" +
+                                "<input class='sow-menu__field' type='checkbox' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping !== false ? " checked" : "") + ">" +
+                            "</label>" +
+                            (settings.show_dev_tools_available ? "<label class='sow-menu__form-field'>" +
                                 "<span>" + esc(SOW_t("menu.show_dev_tools")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='show_dev_tools' data-setting='show_dev_tools'" + (settings.show_dev_tools ? " checked" : "") + ">" +
-                            "</label>" +
+                            "</label>" : "") +
                             "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                                 SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                             "</label>" +
@@ -1077,9 +1081,11 @@
         var motionInput = root.querySelector("[data-setting='reduced_motion']");
         var freeZoomInput = root.querySelector("[data-setting='free_zoom_out']");
         var stickyBuildingInput = root.querySelector("[data-setting='sticky_building_mode']");
+        var fpsPingInput = root.querySelector("[data-setting='show_fps_ping']");
         var devToolsInput = root.querySelector("[data-setting='show_dev_tools']");
         if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
         if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
+        if (fpsPingInput && document.activeElement !== fpsPingInput) fpsPingInput.checked = settings.show_fps_ping !== false;
         if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
         if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
         if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
@@ -2034,6 +2040,7 @@
         if (input.dataset.setting === "reduced_motion") send("set_reduced_motion", { value: input.value === "reduced" });
         if (input.dataset.setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
         if (input.dataset.setting === "sticky_building_mode") send("set_sticky_building_mode", { value: input.checked });
+        if (input.dataset.setting === "show_fps_ping") send("set_show_fps_ping", { value: input.checked });
         if (input.dataset.setting === "show_dev_tools") send("set_show_dev_tools", { value: input.checked });
     });
 

@@ -46,6 +46,10 @@ impl Building {
     }
 }
 
+pub fn income_level_weight(level: u8) -> f64 {
+    (0..level).map(|n| 1.5_f64.powi(i32::from(n))).sum()
+}
+
 /// Per-player totals for income / fleet gates (only **ready** structures count).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BuildingAggregate {
@@ -54,6 +58,10 @@ pub struct BuildingAggregate {
     pub factory_levels: u32,
     pub port_levels: u32,
     pub farm_levels: u32,
+    /// Sum of 1.5x marginal level weights across active Farms.
+    pub farm_income_level_weight: f64,
+    /// Sum of 1.5x marginal level weights across active Ports.
+    pub port_income_level_weight: f64,
     pub has_completed_port: bool,
     /// Ready cities only (for bot `city_equivalent` base).
     pub ready_city_count: u32,
@@ -130,10 +138,12 @@ pub fn aggregate_buildings_per_player(
             }
             BuildingKind::Port => {
                 a.port_levels += active_lvl as u32;
+                a.port_income_level_weight += income_level_weight(active_lvl);
                 a.has_completed_port = true;
             }
             BuildingKind::Farm => {
                 a.farm_levels += active_lvl as u32;
+                a.farm_income_level_weight += income_level_weight(active_lvl);
             }
         }
     }

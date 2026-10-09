@@ -4,16 +4,16 @@ mod bot_iq_alliance_tests {
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::BotDifficulty;
     use crate::intent::nation::combat::nation_target_allowed;
-    use crate::intent::nation::profile::{AiSlot, AiTier, ai_profile_for};
-    use crate::intent::nation::structures::bot_structure_target_count;
-    use crate::player::{Player, PlayerType};
-    use crate::protocol::GameplayIntent;
-    use crate::water_components::WaterComponents;
     use crate::intent::nation::combat::{
         ghost_retaliation_delay_ticks, ghost_retaliation_send_troops,
     };
     use crate::intent::nation::diplomacy::ghost_alliance_probability;
     use crate::intent::nation::profile::GhostRetaliation;
+    use crate::intent::nation::profile::{AiSlot, AiTier, ai_profile_for};
+    use crate::intent::nation::structures::bot_structure_target_count;
+    use crate::player::{Player, PlayerType};
+    use crate::protocol::GameplayIntent;
+    use crate::water_components::WaterComponents;
 
     fn test_engine_two_players(seed: u64) -> SowEngine {
         let mut game = GameState::new(seed, 8, 8, crate::game_config::GameConfig::default());
@@ -159,10 +159,12 @@ mod bot_iq_alliance_tests {
                     false,
                     &mut decisions,
                 );
-                if decisions.iter().any(|decision| matches!(
-                    decision.intent,
-                    GameplayIntent::ProposeAlliance { target_player: 2 }
-                )) {
+                if decisions.iter().any(|decision| {
+                    matches!(
+                        decision.intent,
+                        GameplayIntent::ProposeAlliance { target_player: 2 }
+                    )
+                }) {
                     offered = true;
                     break;
                 }
@@ -197,8 +199,7 @@ mod bot_iq_alliance_tests {
             .map(|attack_id| {
                 let mut varied = retaliation;
                 varied.attack_id = attack_id;
-                ghost_retaliation_send_troops(42, 7, varied, 5_000.0, 5_000.0, 0.02)
-                    .to_bits()
+                ghost_retaliation_send_troops(42, 7, varied, 5_000.0, 5_000.0, 0.02).to_bits()
             })
             .collect();
         assert!(forces.len() > 1);
@@ -355,10 +356,13 @@ mod bot_iq_alliance_tests {
         engine.nation_run_combat_for_slot(&slot, (1, 165), (5.0, 5.0), &[], true, &mut decisions);
 
         assert_eq!(attack_targets(&decisions), vec![2]);
-        let sent = decisions.iter().find_map(|decision| match &decision.intent {
-            GameplayIntent::Attack(attack) if attack.target_owner == 2 => attack.troops,
-            _ => None,
-        }).unwrap();
+        let sent = decisions
+            .iter()
+            .find_map(|decision| match &decision.intent {
+                GameplayIntent::Attack(attack) if attack.target_owner == 2 => attack.troops,
+                _ => None,
+            })
+            .unwrap();
         assert!((375.0..=625.0).contains(&sent));
     }
 
@@ -1301,7 +1305,9 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().iq_points = 10_000.0;
         engine.state.player_mut(1).unwrap().alliances.push(2);
         engine.state.player_mut(2).unwrap().alliances.push(1);
-        engine.campaign_relations.insert(1, CampaignRelation::Allied);
+        engine
+            .campaign_relations
+            .insert(1, CampaignRelation::Allied);
 
         for _ in 0..128 {
             let mut decisions = Vec::new();
@@ -1313,10 +1319,12 @@ mod bot_iq_alliance_tests {
                 false,
                 &mut decisions,
             );
-            assert!(!decisions.iter().any(|decision| matches!(
-                decision.intent,
-                GameplayIntent::ProposeAlliance { .. }
-            )));
+            assert!(
+                !decisions.iter().any(|decision| matches!(
+                    decision.intent,
+                    GameplayIntent::ProposeAlliance { .. }
+                ))
+            );
         }
     }
 
@@ -1329,15 +1337,19 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.state.player_mut(1).unwrap().iq_points = 10_000.0;
         engine.state.player_mut(1).unwrap().alliances.push(2);
-        engine.state.player_mut(1).unwrap().alliance_timers.insert(
-            2,
-            ALLIANCE_RENEWAL_WINDOW_TICKS,
-        );
+        engine
+            .state
+            .player_mut(1)
+            .unwrap()
+            .alliance_timers
+            .insert(2, ALLIANCE_RENEWAL_WINDOW_TICKS);
         engine.state.player_mut(2).unwrap().alliances.push(1);
-        engine.state.player_mut(2).unwrap().alliance_timers.insert(
-            1,
-            ALLIANCE_RENEWAL_WINDOW_TICKS,
-        );
+        engine
+            .state
+            .player_mut(2)
+            .unwrap()
+            .alliance_timers
+            .insert(1, ALLIANCE_RENEWAL_WINDOW_TICKS);
 
         let mut proposed = false;
         for _ in 0..128 {
@@ -1350,10 +1362,12 @@ mod bot_iq_alliance_tests {
                 false,
                 &mut decisions,
             );
-            if decisions.iter().any(|decision| matches!(
-                decision.intent,
-                GameplayIntent::ProposeAlliance { target_player: 2 }
-            )) {
+            if decisions.iter().any(|decision| {
+                matches!(
+                    decision.intent,
+                    GameplayIntent::ProposeAlliance { target_player: 2 }
+                )
+            }) {
                 proposed = true;
                 break;
             }
@@ -1371,7 +1385,9 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(1).unwrap().iq_points = 10_000.0;
         engine.state.player_mut(2).unwrap().troops = 1_000.0;
         engine.state.player_mut(2).unwrap().tile_count = 10;
-        engine.campaign_relations.insert(1, CampaignRelation::Neutral);
+        engine
+            .campaign_relations
+            .insert(1, CampaignRelation::Neutral);
         engine.campaign_can_request_alliance.insert(1, true);
 
         let mut proposed = false;
@@ -1385,16 +1401,21 @@ mod bot_iq_alliance_tests {
                 false,
                 &mut decisions,
             );
-            if decisions.iter().any(|decision| matches!(
-                decision.intent,
-                GameplayIntent::ProposeAlliance { target_player: 2 }
-            )) {
+            if decisions.iter().any(|decision| {
+                matches!(
+                    decision.intent,
+                    GameplayIntent::ProposeAlliance { target_player: 2 }
+                )
+            }) {
                 proposed = true;
                 break;
             }
         }
 
-        assert!(proposed, "enabled neutral campaign faction should offer alliance");
+        assert!(
+            proposed,
+            "enabled neutral campaign faction should offer alliance"
+        );
     }
 
     #[test]
@@ -1403,16 +1424,19 @@ mod bot_iq_alliance_tests {
 
         let mut engine = test_engine_two_players(42);
         let config = engine.state.config.clone();
-        let mut second_attacker = Player::new_bot(3, "Roman reserve".into(), [1.0, 0.0, 0.0], &config);
+        let mut second_attacker =
+            Player::new_bot(3, "Roman reserve".into(), [1.0, 0.0, 0.0], &config);
         second_attacker.team = Some(Team::Red);
         second_attacker.tile_count = 5;
         engine.state.register_player(second_attacker);
-        let mut defeated_attacker = Player::new_bot(4, "Defeated Roman force".into(), [1.0, 0.0, 0.0], &config);
+        let mut defeated_attacker =
+            Player::new_bot(4, "Defeated Roman force".into(), [1.0, 0.0, 0.0], &config);
         defeated_attacker.team = Some(Team::Red);
         defeated_attacker.tile_count = 5;
         defeated_attacker.alive = false;
         engine.state.register_player(defeated_attacker);
-        let mut unlisted_attacker = Player::new_bot(5, "Unlisted force".into(), [1.0, 0.0, 0.0], &config);
+        let mut unlisted_attacker =
+            Player::new_bot(5, "Unlisted force".into(), [1.0, 0.0, 0.0], &config);
         unlisted_attacker.team = Some(Team::Red);
         unlisted_attacker.tile_count = 5;
         engine.state.register_player(unlisted_attacker);
@@ -1426,24 +1450,49 @@ mod bot_iq_alliance_tests {
             (3, "legio_ii_augusta".to_string()),
             (4, "defeated_roman_force".to_string()),
         ]);
-        engine.campaign_relations.insert(1, CampaignRelation::Neutral);
-        engine.campaign_relations.insert(3, CampaignRelation::Neutral);
+        engine
+            .campaign_relations
+            .insert(1, CampaignRelation::Neutral);
+        engine
+            .campaign_relations
+            .insert(3, CampaignRelation::Neutral);
 
-        assert_eq!(engine.campaign_relations.get(&3), Some(&CampaignRelation::Neutral));
-        assert_eq!(engine.activate_campaign_assault(Team::Red, 2, false, false, None, false), 2);
-        assert_eq!(engine.campaign_relations.get(&1), Some(&CampaignRelation::Enemy));
-        assert_eq!(engine.campaign_relations.get(&3), Some(&CampaignRelation::Enemy));
-        assert_eq!(engine.campaign_faction_ids.get(&3).map(String::as_str), Some("legio_ii_augusta"));
+        assert_eq!(
+            engine.campaign_relations.get(&3),
+            Some(&CampaignRelation::Neutral)
+        );
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Red, 2, false, false, None, false),
+            2
+        );
+        assert_eq!(
+            engine.campaign_relations.get(&1),
+            Some(&CampaignRelation::Enemy)
+        );
+        assert_eq!(
+            engine.campaign_relations.get(&3),
+            Some(&CampaignRelation::Enemy)
+        );
+        assert_eq!(
+            engine.campaign_faction_ids.get(&3).map(String::as_str),
+            Some("legio_ii_augusta")
+        );
         assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2]));
         assert_eq!(engine.campaign_assault_targets.get(&3), Some(&vec![2]));
-        assert!(!engine.campaign_assault_targets.contains_key(&4), "defeated campaign factions must not return for the final assault");
-        assert!(!engine.campaign_assault_targets.contains_key(&5), "only listed campaign factions join the assault");
+        assert!(
+            !engine.campaign_assault_targets.contains_key(&4),
+            "defeated campaign factions must not return for the final assault"
+        );
+        assert!(
+            !engine.campaign_assault_targets.contains_key(&5),
+            "only listed campaign factions join the assault"
+        );
         assert!(!engine.state.player(1).unwrap().alliances.contains(&2));
         assert!(!engine.state.player(2).unwrap().alliances.contains(&1));
     }
 
     #[test]
-    fn final_assault_uses_live_alliances_and_reinforces_only_the_deficit() {
+    fn final_assault_uses_live_alliances_without_recalling_in_flight_forces() {
         use crate::protocol::Team;
 
         let mut engine = test_engine_two_players(52);
@@ -1466,7 +1515,8 @@ mod bot_iq_alliance_tests {
         blue_ally.alliances.push(2);
         blue_ally.border_insert(8);
         engine.state.register_player(blue_ally);
-        let mut teamless_ally = Player::new_bot(4, "Teamless ally".into(), [0.2, 0.7, 0.4], &config);
+        let mut teamless_ally =
+            Player::new_bot(4, "Teamless ally".into(), [0.2, 0.7, 0.4], &config);
         teamless_ally.tile_count = 1;
         teamless_ally.max_troops = 3000.0;
         teamless_ally.alliances.push(2);
@@ -1485,47 +1535,204 @@ mod bot_iq_alliance_tests {
         engine.state.map.set_owner_id(0, 2, 5);
         engine.state.player_mut(1).unwrap().border_insert(8);
 
-        engine.campaign_faction_ids.insert(1, "suetonius_paulinus".into());
+        engine
+            .campaign_faction_ids
+            .insert(1, "suetonius_paulinus".into());
         engine.campaign_assault_force_ids.insert(1);
-        let activated = engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false);
+        let activated =
+            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false);
         assert_eq!(activated, 1);
-        assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2, 3, 4]));
-        let first_wave: Vec<_> = engine.attacks.iter().filter(|attack| attack.owner_id == 1).collect();
-        let mut first_wave_targets: Vec<_> = first_wave.iter().map(|attack| attack.target_owner).collect();
+        assert_eq!(
+            engine.campaign_assault_targets.get(&1),
+            Some(&vec![2, 3, 4])
+        );
+        let first_wave: Vec<_> = engine
+            .attacks
+            .iter()
+            .filter(|attack| attack.owner_id == 1)
+            .collect();
+        let mut first_wave_targets: Vec<_> = first_wave
+            .iter()
+            .map(|attack| attack.target_owner)
+            .collect();
         first_wave_targets.sort_unstable();
         assert_eq!(first_wave_targets, [2, 3, 4]);
-        assert!(first_wave.iter().all(|attack| attack.created_tick == engine.state.tick));
+        assert!(
+            first_wave
+                .iter()
+                .all(|attack| attack.created_tick == engine.state.tick)
+        );
         let first_wave_troops: f64 = first_wave.iter().map(|attack| attack.troops).sum();
         assert!((first_wave_troops - 12_000.0).abs() < 0.01);
 
         let attack_count = engine.attacks.len();
-        assert_eq!(engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false), 1);
-        assert_eq!(engine.attacks.len(), attack_count, "repeated activation must not launch or create troops again");
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false),
+            1
+        );
+        assert_eq!(
+            engine.attacks.len(),
+            attack_count,
+            "repeated activation must not launch or create troops again"
+        );
 
-        engine.state.player_mut(2).unwrap().alliances.retain(|id| *id != 3);
-        engine.state.player_mut(3).unwrap().alliances.retain(|id| *id != 2);
+        let incoming_for = |engine: &SowEngine, target_id| {
+            engine
+                .attacks
+                .iter()
+                .filter(|attack| attack.owner_id == 1 && attack.target_owner == target_id)
+                .map(|attack| attack.troops)
+                .sum::<f64>()
+                + engine
+                    .fleets
+                    .iter()
+                    .filter(|fleet| fleet.owner_id == 1 && fleet.target_owner == target_id)
+                    .map(|fleet| fleet.troops)
+                    .sum::<f64>()
+        };
+        let former_ally_in_flight = incoming_for(&engine, 3);
+        let before_new_ally_wave = [
+            incoming_for(&engine, 2),
+            incoming_for(&engine, 4),
+            incoming_for(&engine, 5),
+        ];
+        engine
+            .state
+            .player_mut(2)
+            .unwrap()
+            .alliances
+            .retain(|id| *id != 3);
+        engine
+            .state
+            .player_mut(3)
+            .unwrap()
+            .alliances
+            .retain(|id| *id != 2);
         engine.state.player_mut(2).unwrap().alliances.push(5);
         engine.state.player_mut(5).unwrap().alliances.push(2);
         engine.state.tick += 100;
         engine.update_campaign_assault();
-        assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2, 4, 5]));
-        assert!(!engine.attacks.iter().any(|attack| attack.owner_id == 1 && attack.target_owner == 3));
+        assert_eq!(
+            engine.campaign_assault_targets.get(&1),
+            Some(&vec![2, 4, 5])
+        );
+        assert_eq!(
+            engine
+                .campaign_assault
+                .as_ref()
+                .unwrap()
+                .focus_targets
+                .get(&1),
+            Some(&5)
+        );
+        assert_eq!(incoming_for(&engine, 3), former_ally_in_flight);
+        assert!(
+            !engine
+                .campaign_assault_targets
+                .get(&1)
+                .unwrap()
+                .contains(&3),
+            "a former ally receives no new campaign orders"
+        );
+        let new_ally_wave = [
+            incoming_for(&engine, 2),
+            incoming_for(&engine, 4),
+            incoming_for(&engine, 5),
+        ];
+        assert!(
+            new_ally_wave[2] - before_new_ally_wave[2] > new_ally_wave[0] - before_new_ally_wave[0]
+        );
+        assert!(
+            new_ally_wave[2] - before_new_ally_wave[2] > new_ally_wave[1] - before_new_ally_wave[1]
+        );
         let army_mass = engine.state.player(1).unwrap().troops
-            + engine.attacks.iter().filter(|attack| attack.owner_id == 1).map(|attack| attack.troops).sum::<f64>()
-            + engine.fleets.iter().filter(|fleet| fleet.owner_id == 1).map(|fleet| fleet.troops).sum::<f64>();
-        assert!((army_mass - 16_000.0).abs() < 0.01, "live allied capacity must set the refreshed 2:1 force total");
+            + engine
+                .attacks
+                .iter()
+                .filter(|attack| attack.owner_id == 1)
+                .map(|attack| attack.troops)
+                .sum::<f64>()
+            + engine
+                .fleets
+                .iter()
+                .filter(|fleet| fleet.owner_id == 1)
+                .map(|fleet| fleet.troops)
+                .sum::<f64>();
+        assert!(
+            (army_mass - 16_000.0).abs() < 0.01,
+            "live allied capacity must set the refreshed 2:1 force total"
+        );
 
+        let in_flight_before_final_target_change = [
+            incoming_for(&engine, 3),
+            incoming_for(&engine, 4),
+            incoming_for(&engine, 5),
+        ];
         engine.state.player_mut(2).unwrap().alliances.clear();
         engine.state.player_mut(4).unwrap().alliances.clear();
         engine.state.player_mut(5).unwrap().alliances.clear();
         engine.state.tick += 100;
         engine.update_campaign_assault();
+        assert_eq!(
+            [
+                incoming_for(&engine, 3),
+                incoming_for(&engine, 4),
+                incoming_for(&engine, 5),
+            ],
+            in_flight_before_final_target_change,
+            "already-launched attacks remain unchanged after alliance changes"
+        );
         let army_mass = engine.state.player(1).unwrap().troops
-            + engine.attacks.iter().filter(|attack| attack.owner_id == 1).map(|attack| attack.troops).sum::<f64>()
-            + engine.fleets.iter().filter(|fleet| fleet.owner_id == 1).map(|fleet| fleet.troops).sum::<f64>();
-        assert!((army_mass - 2_000.0).abs() < 0.01, "Roman force must contract to the new allied capacity");
-        assert!(!engine.campaign_assault_targets.get(&1).unwrap().contains(&4));
-        assert!(!engine.campaign_assault_targets.get(&1).unwrap().contains(&5));
+            + engine
+                .attacks
+                .iter()
+                .filter(|attack| attack.owner_id == 1)
+                .map(|attack| attack.troops)
+                .sum::<f64>()
+            + engine
+                .fleets
+                .iter()
+                .filter(|fleet| fleet.owner_id == 1)
+                .map(|fleet| fleet.troops)
+                .sum::<f64>();
+        assert!(
+            (army_mass - 16_000.0).abs() < 0.01,
+            "existing in-flight troops remain; standing reserves stop at the new cap"
+        );
+        assert!(
+            !engine
+                .campaign_assault_targets
+                .get(&1)
+                .unwrap()
+                .contains(&4)
+        );
+        assert!(
+            !engine
+                .campaign_assault_targets
+                .get(&1)
+                .unwrap()
+                .contains(&5)
+        );
+
+        // Once the old commitments resolve, the next wave obeys the smaller live-target cap.
+        engine.attacks.clear();
+        engine.fleets.clear();
+        engine.state.tick += 100;
+        engine.update_campaign_assault();
+        let army_mass = engine.state.player(1).unwrap().troops
+            + engine
+                .attacks
+                .iter()
+                .filter(|attack| attack.owner_id == 1)
+                .map(|attack| attack.troops)
+                .sum::<f64>()
+            + engine
+                .fleets
+                .iter()
+                .filter(|fleet| fleet.owner_id == 1)
+                .map(|fleet| fleet.troops)
+                .sum::<f64>();
+        assert!((army_mass - 2_000.0).abs() < 0.01);
     }
 
     #[test]
@@ -1575,8 +1782,14 @@ mod bot_iq_alliance_tests {
             state.map.terrain[tile as usize] = MapTile::from_byte(0xC0);
             state.map.set_owner_id(9, tile / 10, id);
         }
-        for (id, dead, mutual) in [(10, true, true), (11, false, false), (12, false, false), (13, false, false)] {
-            let mut faction = Player::new_bot(id, format!("Faction {id}"), [0.4, 0.4, 0.4], &config);
+        for (id, dead, mutual) in [
+            (10, true, true),
+            (11, false, false),
+            (12, false, false),
+            (13, false, false),
+        ] {
+            let mut faction =
+                Player::new_bot(id, format!("Faction {id}"), [0.4, 0.4, 0.4], &config);
             faction.alive = !dead;
             faction.tile_count = 1;
             faction.max_troops = 4_000.0;
@@ -1594,17 +1807,30 @@ mod bot_iq_alliance_tests {
         let mut engine = SowEngine::new(state, water);
         for id in 1..=5 {
             engine.campaign_assault_force_ids.insert(id);
-            engine.campaign_faction_ids.insert(id, format!("roman_{id}"));
+            engine
+                .campaign_faction_ids
+                .insert(id, format!("roman_{id}"));
         }
-        engine.campaign_relations.insert(12, crate::protocol::CampaignRelation::Neutral);
-        engine.campaign_relations.insert(13, crate::protocol::CampaignRelation::Enemy);
+        engine
+            .campaign_relations
+            .insert(12, crate::protocol::CampaignRelation::Neutral);
+        engine
+            .campaign_relations
+            .insert(13, crate::protocol::CampaignRelation::Enemy);
 
         assert_eq!(
             engine.activate_campaign_assault(Team::Red, 6, false, true, Some((2.0, 10)), false),
             5
         );
-        assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![6, 7, 8, 9]));
-        assert_eq!(engine.fleets.len(), 20, "each of five Roman forces must launch one fleet at each of four live targets");
+        assert_eq!(
+            engine.campaign_assault_targets.get(&1),
+            Some(&vec![6, 7, 8, 9])
+        );
+        assert_eq!(
+            engine.fleets.len(),
+            20,
+            "each of five Roman forces must launch one fleet at each of four live targets"
+        );
         for roman_id in 1..=5 {
             let targets: std::collections::HashSet<_> = engine
                 .fleets
@@ -1616,7 +1842,10 @@ mod bot_iq_alliance_tests {
             assert_eq!(engine.state.player(roman_id).unwrap().troops, 0.0);
         }
         let launched: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
-        assert!((launched - 5_000.0).abs() < 0.01, "the wave must not exceed the total available 2:1 force");
+        assert!(
+            (launched - 5_000.0).abs() < 0.01,
+            "the wave must not exceed the total available 2:1 force"
+        );
     }
 
     #[test]
@@ -1624,23 +1853,47 @@ mod bot_iq_alliance_tests {
         use crate::protocol::Team;
 
         let mut engine = test_engine_two_players(53);
-        engine.state.map.terrain.fill(crate::map::MapTile::from_byte(0x80));
+        engine
+            .state
+            .map
+            .terrain
+            .fill(crate::map::MapTile::from_byte(0x80));
         engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
         engine.state.player_mut(2).unwrap().team = None;
         engine.state.player_mut(1).unwrap().team = Some(Team::Red);
-        engine.campaign_faction_ids.insert(1, "legio_xiv_gemina".into());
+        engine
+            .campaign_faction_ids
+            .insert(1, "legio_xiv_gemina".into());
         engine.campaign_assault_force_ids.insert(1);
         engine.kill_player(1);
 
-        assert_eq!(engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), true), 1);
-        let reserves: Vec<_> = engine.state.players.iter().filter(|player| player.name == "Roman Reserve" && player.alive).collect();
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), true),
+            1
+        );
+        let reserves: Vec<_> = engine
+            .state
+            .players
+            .iter()
+            .filter(|player| player.name == "Roman Reserve" && player.alive)
+            .collect();
         assert_eq!(reserves.len(), 1);
         assert!(engine.campaign_assault.as_ref().unwrap().reserve_spawned);
         assert!(engine.campaign_assault.as_ref().unwrap().hold_last_tile);
         let before = engine.state.players.len();
-        assert_eq!(engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false), 1);
-        assert_eq!(engine.state.players.len(), before, "repeated activation must not spawn another reserve");
-        assert!(!engine.campaign_assault.as_ref().unwrap().hold_last_tile, "choosing resistance releases the final tile");
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false),
+            1
+        );
+        assert_eq!(
+            engine.state.players.len(),
+            before,
+            "repeated activation must not spawn another reserve"
+        );
+        assert!(
+            !engine.campaign_assault.as_ref().unwrap().hold_last_tile,
+            "choosing resistance releases the final tile"
+        );
     }
 
     #[test]
@@ -1660,12 +1913,20 @@ mod bot_iq_alliance_tests {
             (1, "trinovantes".to_string()),
             (2, "camulodunum".to_string()),
         ]);
-        engine.campaign_relations.insert(1, CampaignRelation::Allied);
+        engine
+            .campaign_relations
+            .insert(1, CampaignRelation::Allied);
         engine.campaign_support_next_tick.insert(1, 100);
 
-        assert_eq!(engine.activate_campaign_assault(Team::Blue, 2, true, false, None, false), 1);
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Blue, 2, true, false, None, false),
+            1
+        );
         assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2]));
-        assert_eq!(engine.campaign_relations.get(&1), Some(&CampaignRelation::Allied));
+        assert_eq!(
+            engine.campaign_relations.get(&1),
+            Some(&CampaignRelation::Allied)
+        );
         assert!(engine.state.player(1).unwrap().alliances.contains(&3));
         assert!(engine.state.player(3).unwrap().alliances.contains(&1));
         assert!(engine.campaign_support_next_tick.contains_key(&1));
@@ -1697,7 +1958,62 @@ mod bot_iq_alliance_tests {
         engine.nation_run_combat_for_slot(&slot, (1, 85), (5.0, 5.0), &[2], true, &mut decisions);
 
         assert_eq!(attack_targets(&decisions), vec![2]);
-        assert!(matches!(&decisions[0].intent, GameplayIntent::Attack(attack) if attack.troops == Some(1000.0)));
+        assert!(
+            matches!(&decisions[0].intent, GameplayIntent::Attack(attack) if attack.troops == Some(1000.0))
+        );
+    }
+
+    #[test]
+    fn coordinated_campaign_assault_uses_the_saved_legion_focus() {
+        use crate::engine::CampaignAssaultState;
+        use crate::game_config::BotDifficulty;
+        use crate::protocol::{CampaignRelation, Team};
+
+        let mut engine = test_engine_two_players(45);
+        engine.state.player_mut(1).unwrap().team = Some(Team::Red);
+        engine.state.player_mut(2).unwrap().team = Some(Team::Blue);
+        let config = engine.state.config.clone();
+        let mut ally = Player::new_human(3, "Ally".into(), [0.2, 0.5, 1.0], &config);
+        ally.team = Some(Team::Blue);
+        engine.state.register_player(ally);
+        engine.campaign_relations.insert(1, CampaignRelation::Enemy);
+        engine.campaign_assault_targets.insert(1, vec![2, 3]);
+        engine.campaign_assault = Some(CampaignAssaultState {
+            root_target: 2,
+            team: Team::Red,
+            include_allies: true,
+            preserve_relation: false,
+            hold_last_tile: false,
+            capacity_ratio: 2.0,
+            interval_ticks: 100,
+            next_tick: 100,
+            attacker_ids: vec![1],
+            target_ids: vec![2, 3],
+            wave_index: 0,
+            focus_targets: std::collections::HashMap::from([(1, 2)]),
+            reserve_spawned: false,
+        });
+
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Tribe,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: false,
+            ghost_retaliation: None,
+            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+        };
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (1, 85),
+            (5.0, 5.0),
+            &[2, 3],
+            true,
+            &mut decisions,
+        );
+
+        assert_eq!(attack_targets(&decisions), vec![2]);
     }
 
     #[test]
@@ -1744,7 +2060,9 @@ mod bot_iq_alliance_tests {
         let mut decisions = Vec::new();
         engine.nation_run_combat_for_slot(&slot, (1, 85), (5.0, 5.0), &[], true, &mut decisions);
 
-        assert!(matches!(decisions.as_slice(), [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet { target_tile, troops } if *target_tile == 2 && *troops == Some(1000.0))));
+        assert!(
+            matches!(decisions.as_slice(), [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet { target_tile, troops } if *target_tile == 2 && *troops == Some(1000.0)))
+        );
     }
 
     #[test]
@@ -1823,11 +2141,24 @@ mod bot_iq_alliance_tests {
             profile,
         };
         let mut decisions = Vec::new();
-        engine.nation_run_combat_for_slot(&slot, (1, 135), (5.0, 5.0), &[2, 3], false, &mut decisions);
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (1, 135),
+            (5.0, 5.0),
+            &[2, 3],
+            false,
+            &mut decisions,
+        );
 
         assert_eq!(attack_targets(&decisions), vec![3]);
-        assert_eq!(engine.campaign_relations.get(&1), Some(&CampaignRelation::Enemy));
-        assert_eq!(engine.campaign_relations.get(&2), Some(&CampaignRelation::Enemy));
+        assert_eq!(
+            engine.campaign_relations.get(&1),
+            Some(&CampaignRelation::Enemy)
+        );
+        assert_eq!(
+            engine.campaign_relations.get(&2),
+            Some(&CampaignRelation::Enemy)
+        );
     }
 
     #[test]

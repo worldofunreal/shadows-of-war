@@ -41,8 +41,11 @@ pub fn death_animation(elapsed: f32) -> Option<(f32, f32, f32)> {
     Some((t, eased, alpha))
 }
 
-pub fn death_emoji(by_nuke: bool) -> &'static str {
-    if by_nuke { "☢️" } else { "🕊️" }
+pub fn death_emoji(by_nuke: bool, avatar: &AvatarIdentity) -> Option<&'static str> {
+    if matches!(avatar, AvatarIdentity::Emblem { .. }) {
+        return None;
+    }
+    Some(if by_nuke { "☢️" } else { "🕊️" })
 }
 
 #[cfg(test)]
@@ -71,9 +74,21 @@ mod tests {
     }
 
     #[test]
-    fn animation_uses_dove_or_nuke_emoji() {
-        assert_eq!(death_emoji(false), "🕊️");
-        assert_eq!(death_emoji(true), "☢️");
+    fn emblem_avatar_replaces_the_extra_death_emoji() {
+        let avatar = AvatarIdentity::Emblem { symbol: "🐺" };
+        assert_eq!(death_emoji(false, &avatar), None);
+        assert_eq!(death_emoji(true, &avatar), None);
+    }
+
+    #[test]
+    fn image_avatars_keep_the_death_emoji() {
+        let portrait = AvatarIdentity::Portrait {
+            slug: "test".to_string(),
+            leader: None,
+        };
+        assert_eq!(death_emoji(false, &portrait), Some("🕊️"));
+        assert_eq!(death_emoji(true, &portrait), Some("☢️"));
+        assert_eq!(death_emoji(false, &AvatarIdentity::Fallback), Some("🕊️"));
     }
 
     #[test]

@@ -475,32 +475,26 @@ mod tests {
     }
 
     #[test]
-    fn two_minute_budget_pays_for_one_upgrade_not_an_upgrade_and_new_building() {
+    fn upgrades_use_the_agreed_fraction_of_the_next_placement_cost() {
         let mut game = pacing_match();
         game.add_building(building(1, BuildingKind::City, 1));
+        game.state.player_mut(1).unwrap().gold = 1_000.0;
         let config = game.state.config.clone();
-        for tick in 1..=1_200 {
-            game.state.tick = tick;
-            game.execute_income();
-            game.execute_construction();
-        }
+        let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 1, &config);
+        assert_eq!(
+            upgrade_cost,
+            structure_build_cost_gold(BuildingKind::City, 1, &config) * 0.75
+        );
 
         let gold = game.state.player(1).unwrap().gold;
-        let upgrade_cost = structure_upgrade_cost_gold(BuildingKind::City, 2, 1, &config);
-        assert!(gold >= upgrade_cost, "gold after two minutes: {gold}");
-        assert!(gold < upgrade_cost + config.cost_bunker);
-
         game.apply_upgrade_structure_intent(1, 1);
         assert!(game.buildings[0].under_construction);
         let after_upgrade = game.state.player(1).unwrap().gold;
         assert!((after_upgrade - (gold - upgrade_cost)).abs() < 1e-9);
-        game.apply_build_structure_intent(1, BuildingKind::Bunker, 2 * game.state.map.width + 8);
-        assert_eq!(game.buildings.len(), 1);
-        assert_eq!(game.state.player(1).unwrap().gold, after_upgrade);
     }
 
     #[test]
-    fn gold_pacing_covers_early_midgame_large_armies_and_trade_ships() {
+    fn gold_income_does_not_charge_troop_upkeep_and_trade_ships_add_income() {
         fn trace(
             troops: f64,
             tiles: u32,
@@ -570,15 +564,8 @@ mod tests {
                 if matches!(tick, 300 | 1_200 | 3_600 | 6_000) {
                     let player = game.state.player(1).unwrap();
                     eprintln!(
-                        "economy tick={tick} tiles={} troops={:.0} gold={:.2} base={:.1} upkeep={:.2} trade={trade_ships}",
-                        player.tile_count,
-                        player.troops,
-                        player.gold,
-                        game.state.config.gold_base_income,
-                        crate::execution::income_rates::troop_upkeep_per_second(
-                            player.troops,
-                            &game.state.config
-                        ),
+                        "economy tick={tick} tiles={} troops={:.0} gold={:.2} trade={trade_ships}",
+                        player.tile_count, player.troops, player.gold,
                     );
                 }
                 match tick {
@@ -593,6 +580,7 @@ mod tests {
         }
 
         let early = trace(1_000.0, 32, 0, 0, false);
+        let large_army_same_territory = trace(100_000.0, 32, 0, 0, false);
         let growing_army = trace(25_000.0, 1_024, 0, 0, true);
         let industrial_trade = trace(100_000.0, 10_000, 4, 3, false);
         eprintln!(
@@ -602,15 +590,10 @@ mod tests {
         assert!(early.iter().all(|gold| gold.is_finite()));
         assert!(growing_army.iter().all(|gold| gold.is_finite()));
         assert!(industrial_trade.iter().all(|gold| gold.is_finite()));
-        assert!(early[0] >= 125.0 && early[0] < 200.0);
-        assert!(
-            early[1] >= 200.0 && early[1] < 325.0,
-            "at two minutes, City is affordable but City and Factory together are not"
-        );
-        assert!(growing_army[1] > growing_army[0]);
-        assert!(growing_army[2] < growing_army[1]);
-        assert!(growing_army[3] < growing_army[2]);
-        assert!(industrial_trade[0] > 100.0);
+        assert_eq!(early, large_army_same_territory);
+        assert!(early.windows(2).all(|pair| pair[1] > pair[0]));
+        assert!(growing_army.windows(2).all(|pair| pair[1] > pair[0]));
+        assert!(industrial_trade.windows(2).all(|pair| pair[1] > pair[0]));
         assert!(industrial_trade[1] > industrial_trade[0]);
     }
 }

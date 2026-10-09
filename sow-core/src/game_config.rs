@@ -17,7 +17,7 @@ fn default_max_tiles_per_tick_at_reference() -> f64 {
 }
 
 fn default_troop_base_income() -> f64 {
-    2.0
+    175.0
 }
 
 fn default_cost_scale_cap_multiplier() -> f64 {
@@ -25,11 +25,11 @@ fn default_cost_scale_cap_multiplier() -> f64 {
 }
 
 fn default_troop_upkeep_per_1000() -> f64 {
-    0.2
+    0.0
 }
 
 fn default_trade_ship_gold_income() -> f64 {
-    5.0
+    12.0 / 21.0
 }
 fn default_territory_gold_amount() -> f64 {
     1.0
@@ -39,27 +39,35 @@ fn default_territory_troop_amount() -> f64 {
 }
 
 fn default_territory_troop_tiles() -> u32 {
-    8
+    24
 }
 
 fn default_territory_gold_tiles() -> u32 {
-    1_024
+    2_048
 }
 
 fn default_city_troop_income() -> f64 {
-    12.5
+    6.25
 }
 
 fn default_farm_troop_income() -> f64 {
-    12.5
+    40.0 / 21.0
+}
+
+fn default_farm_gold_income() -> f64 {
+    4.0 / 21.0
+}
+
+fn default_port_gold_income() -> f64 {
+    12.0 / 21.0
 }
 
 fn default_structure_upgrade_scale() -> f64 {
-    1.8
+    0.75
 }
 
 fn default_cost_farm() -> f64 {
-    100.0
+    125.0
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -205,31 +213,31 @@ pub struct GameConfig {
     pub starting_troops: f64,
     /// Amount of gold given to players at spawn.
     pub starting_gold: f64,
-    /// Gold earned per second at 1x speed (before city bonuses). Scaled by `per_tick()`.
+    /// Gold earned per game second before `per_tick()` scaling.
     pub gold_base_income: f64,
-    /// Gold per second produced per `territory_gold_tiles` owned, before `per_tick()` scaling.
+    /// Gold per game second per `territory_gold_tiles` owned, before `per_tick()` scaling.
     #[serde(default = "default_territory_gold_amount")]
     pub territory_gold_amount: f64,
     /// Tiles per territory gold interval (e.g. 128 → 1 gold/s per 128 tiles).
     #[serde(default = "default_territory_gold_tiles")]
     pub territory_gold_tiles: u32,
-    /// Troops regenerated per second at 1x speed (before factory bonuses). Scaled by `per_tick()`.
+    /// Troops regenerated per game second before `per_tick()` scaling.
     #[serde(default = "default_troop_base_income")]
     pub troop_base_income: f64,
     /// Base maximum troop capacity cap before territory size is accounted for.
     pub max_troops_base: f64,
     /// How much extra troop capacity is gained based on total territory owned.
     pub max_troops_scale: f64,
-    /// Raw gold per second charged for each 1,000 troops owned by a real player.
+    /// Legacy setting retained when loading old configs; troop upkeep is no longer charged.
     #[serde(default = "default_troop_upkeep_per_1000")]
     pub troop_upkeep_per_1000: f64,
-    /// Raw gold per second produced by each Trade Ship.
+    /// Raw gold per game second produced by each Trade Ship.
     #[serde(default = "default_trade_ship_gold_income")]
     pub trade_ship_gold_income: f64,
     /// Troops per second per `territory_troop_tiles` owned (smooth fractional scaling).
     #[serde(default = "default_territory_troop_amount")]
     pub territory_troop_amount: f64,
-    /// Tiles per territory troop interval (e.g. 8 → 1 troop/s per 8 tiles).
+    /// Tiles per territory troop interval (24 → 1 troop/s per 24 tiles).
     #[serde(default = "default_territory_troop_tiles")]
     pub territory_troop_tiles: u32,
 
@@ -238,22 +246,26 @@ pub struct GameConfig {
     // ==========================================
     /// Max troop capacity added per City.
     pub city_max_troops: f64,
-    /// Troop income per second added per City level.
+    /// Troop income per game second added per City level.
     #[serde(default = "default_city_troop_income")]
     pub city_troop_income: f64,
-    /// Troop income per second added per Farm level. Farms never affect capacity.
+    /// Troop income per game second added per weighted Farm level. Farms never affect capacity.
     #[serde(default = "default_farm_troop_income")]
     pub farm_troop_income: f64,
+    /// Gold income per game second added per weighted Farm level.
+    #[serde(default = "default_farm_gold_income")]
+    pub farm_gold_income: f64,
     /// Defense range/radius of each Bunker.
     pub bunker_range: f64,
     /// Extra attack frontier priority per Bunker within range.
     pub bunker_priority: f64,
     /// Defensive troop loss multiplier per Bunker within range.
     pub bunker_strength: f64,
-    /// Gold income per second added per Factory.
+    /// Gold income per game second added per Factory level.
     pub factory_gold_income: f64,
-    /// Troop income per second added per Port.
-    pub port_troop_income: f64,
+    /// Gold income per game second added per weighted Port level.
+    #[serde(default = "default_port_gold_income")]
+    pub port_gold_income: f64,
     /// Gold cost to place a City.
     pub cost_city: f64,
     /// Gold cost to place a Bunker.
@@ -265,7 +277,7 @@ pub struct GameConfig {
     /// Gold cost to place a Farm.
     #[serde(default = "default_cost_farm")]
     pub cost_farm: f64,
-    /// Multiplier applied to each successive structure upgrade level.
+    /// Legacy field retained for saved configs; upgrades use a fixed 75% price.
     #[serde(default = "default_structure_upgrade_scale")]
     pub structure_upgrade_scale: f64,
     /// Max multiplier applied to structure base cost as count grows (cost plateaus at base × this).
@@ -354,33 +366,35 @@ impl Default for GameConfig {
 
             // Economy & Income Rates
             starting_troops: 5000.0,
-            starting_gold: 100.0,
-            gold_base_income: 4.0,
+            starting_gold: 160.0,
+            gold_base_income: 1.0,
             territory_gold_amount: default_territory_gold_amount(),
             territory_gold_tiles: default_territory_gold_tiles(),
-            troop_base_income: 250.0,
+            troop_base_income: default_troop_base_income(),
             max_troops_base: 10.0,
             max_troops_scale: 350.0,
             troop_upkeep_per_1000: default_troop_upkeep_per_1000(),
             trade_ship_gold_income: default_trade_ship_gold_income(),
             territory_troop_amount: 1.0,
-            territory_troop_tiles: 16,
+            territory_troop_tiles: default_territory_troop_tiles(),
 
             // Buildings (stacking)
             city_max_troops: 1250.0,
             city_troop_income: 6.25,
-            farm_troop_income: 6.25,
+            farm_troop_income: default_farm_troop_income(),
+            farm_gold_income: default_farm_gold_income(),
             bunker_range: 14.0,
             bunker_priority: 120.0,
             bunker_strength: 0.05,
-            factory_gold_income: 2.0,
-            port_troop_income: 12.5,
+            // 24 gold/minute at the standard 0.35x game speed.
+            factory_gold_income: 8.0 / 7.0,
+            port_gold_income: default_port_gold_income(),
             cost_city: 200.0,
-            cost_bunker: 75.0,
-            cost_factory: 125.0,
-            cost_port: 150.0,
-            cost_farm: 100.0,
-            structure_upgrade_scale: 1.8,
+            cost_bunker: 100.0,
+            cost_factory: 175.0,
+            cost_port: 200.0,
+            cost_farm: 125.0,
+            structure_upgrade_scale: default_structure_upgrade_scale(),
             cost_scale_cap_multiplier: 10.0,
             nuke_cost: 500.0,
 

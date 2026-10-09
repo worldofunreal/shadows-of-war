@@ -43,7 +43,7 @@ pub fn structure_upgrade_cost_gold(
         return f64::INFINITY;
     }
     let foundation = structure_build_cost_gold(kind, owned_levels, cfg);
-    foundation * 0.85
+    foundation * 0.75
 }
 
 #[inline]
@@ -140,11 +140,45 @@ mod tests {
         let next_foundation = structure_build_cost_gold(BuildingKind::City, 2, &cfg);
         let normal = structure_upgrade_cost_gold(BuildingKind::City, 2, 2, &cfg);
 
-        assert_eq!(normal, next_foundation * 0.85);
+        assert_eq!(normal, next_foundation * 0.75);
     }
 
     #[test]
     fn every_building_has_three_upgrades_after_its_foundation() {
         assert!(BuildingKind::ALL.into_iter().all(|kind| kind.max_level() == 4));
+    }
+
+    #[test]
+    fn initial_building_prices_match_the_balance_table() {
+        let cfg = crate::game_config::GameConfig::default();
+        for (kind, expected) in [
+            (BuildingKind::City, 200.0),
+            (BuildingKind::Bunker, 100.0),
+            (BuildingKind::Factory, 175.0),
+            (BuildingKind::Port, 200.0),
+            (BuildingKind::Farm, 125.0),
+        ] {
+            assert_eq!(structure_build_cost_gold(kind, 0, &cfg), expected);
+        }
+    }
+
+    #[test]
+    fn every_upgrade_level_uses_seventy_five_percent_after_existing_cost_growth() {
+        let cfg = crate::game_config::GameConfig::default();
+        for kind in BuildingKind::ALL {
+            let base = structure_build_cost_gold(kind, 0, &cfg);
+            for target_level in 2..=kind.max_level() {
+                let previous_owned_levels = u32::from(target_level - 1);
+                let placement = structure_build_cost_gold(kind, previous_owned_levels, &cfg);
+                let upgrade = structure_upgrade_cost_gold(
+                    kind,
+                    target_level,
+                    previous_owned_levels,
+                    &cfg,
+                );
+                assert!((placement / base - 1.1_f64.powi(previous_owned_levels as i32)).abs() < 1e-12);
+                assert_eq!(upgrade, placement * 0.75);
+            }
+        }
     }
 }

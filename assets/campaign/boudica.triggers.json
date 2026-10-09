@@ -215,7 +215,6 @@
         "target": "roman_outpost",
         "scope": "episode"
       },
-      "advance_delay_seconds": 1,
       "marker": {
         "target": "roman_outpost"
       },
@@ -233,6 +232,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_victory_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "wait_before": true,
       "attack_ratio_on_enter": 0.5,
       "next": "boudica_first_expansion"
     },
@@ -428,7 +428,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_city_intro_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "start_delay_seconds": 2,
+      "wait_before": true,
       "next": "boudica_choose_city"
     },
     {
@@ -442,7 +442,6 @@
         "value": 1,
         "scope": "total"
       },
-      "advance_delay_seconds": 2,
       "next": "boudica_aid_choice"
     },
     {
@@ -451,6 +450,7 @@
       "title_key": "tutorial.campaign_boudica_boudica_aid_choice_title",
       "body_key": "tutorial.campaign_boudica_boudica_aid_choice_body",
       "speaker": "boudica",
+      "wait_before": true,
       "choices": [
         {
           "id": "share",
@@ -586,7 +586,6 @@
       "marker": {
         "target": "player"
       },
-      "advance_delay_seconds": 3,
       "next": "boudica_city_ready"
     },
     {
@@ -596,6 +595,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_city_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "wait_before": true,
       "next": "boudica_first_contact"
     },
     {
@@ -705,7 +705,6 @@
         "target": "upgrade_building",
         "gesture": "tap"
       },
-      "advance_delay_seconds": 3,
       "next": "boudica_city_upgrade_ready"
     },
     {
@@ -715,6 +714,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_city_upgrade_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "wait_before": true,
       "next": "boudica_ninth_legion_intro"
     },
     {
@@ -734,7 +734,7 @@
       },
       "guide": {
         "kind": "world",
-        "target": "target_action",
+        "target": "expand",
         "gesture": "tap"
       },
       "next": "boudica_ally_support_wait"
@@ -796,7 +796,6 @@
       "marker": {
         "target": "player"
       },
-      "advance_delay_seconds": 3,
       "next": "boudica_factory_ready"
     },
     {
@@ -806,7 +805,8 @@
       "body_key": "tutorial.campaign_boudica_boudica_factory_ready_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_bunker_choice"
+      "wait_before": true,
+      "next": "boudica_outpost_colonia_veterans"
     },
     {
       "id": "boudica_bunker_choice",
@@ -874,7 +874,6 @@
       "marker": {
         "target": "player"
       },
-      "advance_delay_seconds": 3,
       "next": "boudica_bunker_built"
     },
     {
@@ -884,7 +883,8 @@
       "body_key": "tutorial.campaign_boudica_boudica_bunker_built_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_outpost_colonia_veterans"
+      "wait_before": true,
+      "next": "boudica_camulodunum_intro"
     },
     {
       "id": "boudica_outpost_colonia_veterans",
@@ -897,7 +897,6 @@
         "target": "colonia_veterans",
         "scope": "total"
       },
-      "advance_delay_seconds": 1,
       "marker": {
         "target": "colonia_veterans"
       },
@@ -915,7 +914,8 @@
       "body_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_scene_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_camulodunum_intro"
+      "wait_before": true,
+      "next": "boudica_bunker_choice"
     },
     {
       "id": "boudica_outpost_tax_collectors",
@@ -928,7 +928,6 @@
         "target": "tax_collectors",
         "scope": "total"
       },
-      "advance_delay_seconds": 1,
       "marker": {
         "target": "tax_collectors"
       },
@@ -946,6 +945,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_outpost_tax_collectors_scene_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "wait_before": true,
       "next": "boudica_outpost_roman_supply_depot"
     },
     {
@@ -959,7 +959,6 @@
         "target": "roman_supply_depot",
         "scope": "total"
       },
-      "advance_delay_seconds": 1,
       "marker": {
         "target": "roman_supply_depot"
       },
@@ -977,6 +976,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_outpost_roman_supply_depot_scene_body",
       "speaker": "boudica",
       "presentation": "dialogue",
+      "wait_before": true,
       "next": "boudica_trinovantes_contact"
     },
     {
@@ -1185,6 +1185,9 @@
       "title_key": "tutorial.campaign_boudica_boudica_final_choice_title",
       "body_key": "tutorial.campaign_boudica_boudica_final_choice_body",
       "speaker": "boudica",
+      "marker": {
+        "target": "player"
+      },
       "choices": [
         {
           "id": "poison",
@@ -1236,7 +1239,7 @@
         "type": "territory",
         "comparison": "lte",
         "scope": "total",
-        "value": 1
+        "value": 5000
       },
       "next": "boudica_final_choice"
     },

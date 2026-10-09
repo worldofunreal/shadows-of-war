@@ -33,6 +33,7 @@
         reactionHighlightPlayerId: null,
         stepRevealTimer: null,
         stepRevealStepId: null,
+        stepRevealToken: 0,
         completionSent: false,
         analyticsStepId: null,
         analyticsStartedStepIds: new Set(),
@@ -52,6 +53,7 @@
     };
 
     function clearStepRevealTimer() {
+        runtime.stepRevealToken++;
         if (runtime.stepRevealTimer !== null && typeof window.clearTimeout === "function") window.clearTimeout(runtime.stepRevealTimer);
         runtime.stepRevealTimer = null;
         runtime.stepRevealStepId = null;
@@ -471,6 +473,16 @@
                 ? source.closest("#sow-hud-transfer") : null;
             if (step.id === "boudica_transfer_send" && (!spotlightPanel || spotlightPanel.getClientRects().length === 0)) return null;
             result = window.SOWCampaign.resolveUiAnchor(source, spotlightPanel);
+            if (guide.target === "attack_ratio" && step.trigger && step.trigger.type === "ui"
+                && step.trigger.action === "attack_ratio" && source.type === "range") {
+                var sliderStart = window.SOWCampaign.resolveUiRangeAnchor(source, Number(source.value));
+                var sliderMin = Number(source.min), sliderMax = Number(source.max);
+                var ratioTarget = sliderMin + (sliderMax - sliderMin) * Number(step.trigger.value || 1);
+                var sliderEnd = window.SOWCampaign.resolveUiRangeAnchor(source, ratioTarget);
+                if (!sliderStart || !sliderEnd) return null;
+                result.x = sliderStart.x; result.y = sliderStart.y;
+                result.toX = sliderEnd.x; result.toY = sliderEnd.y;
+            }
             if (guide.kind === "ui" && step.trigger && step.trigger.type === "ui" && guide.target === "hud_center_camera") {
                 result.toX = result.x; result.toY = result.y;
                 result.spotlightX = result.x; result.spotlightY = result.y; result.dimOutside = true;
@@ -694,15 +706,19 @@
             send("continue_observing");
         }
         var targetStep = machineView.step;
-        var targetFactionId = targetStep.guide && targetStep.guide.kind === "world"
+        var targetFactionId = targetStep.type === "choice" && targetStep.marker
+            ? markerTargetFor(targetStep)
+            : targetStep.guide && targetStep.guide.kind === "world"
             && ["target_action", "nameplate", "player"].includes(targetStep.guide.target)
             && targetStep.trigger && ["attack", "contact", "alliance", "defeated", "fleet"].includes(targetStep.trigger.type)
             ? markerTargetFor(targetStep) : null;
         if (targetFactionId !== runtime.cameraTargetFactionId) {
             runtime.cameraTargetFactionId = targetFactionId;
-            var targetPlayer = targetFactionId && (hud.players || []).find(function (player) {
-                return player && player.campaign_faction_id === targetFactionId;
-            });
+            var targetPlayer = targetFactionId === "player"
+                ? (hud.players || []).find(function (player) { return player && player.is_me; })
+                : targetFactionId && (hud.players || []).find(function (player) {
+                    return player && player.campaign_faction_id === targetFactionId;
+                });
             if (targetPlayer && targetPlayer.is_alive === true
                 && Number.isFinite(Number(targetPlayer.centroid_x))
                 && Number.isFinite(Number(targetPlayer.centroid_y))) {
@@ -734,12 +750,15 @@
                 if (runtime.stepRevealTimer === null && typeof window.setTimeout === "function") {
                     var waitingMachine = runtime.machine, waitingStepId = machineView.step.id;
                     runtime.stepRevealStepId = waitingStepId;
-                    runtime.stepRevealTimer = window.setTimeout(function () {
+                    var waitingToken = ++runtime.stepRevealToken;
+                    var timerId = window.setTimeout(function () {
+                        if (runtime.stepRevealToken !== waitingToken || runtime.stepRevealTimer !== timerId) return;
                         runtime.stepRevealTimer = null;
                         runtime.stepRevealStepId = null;
                         if (runtime.machine === waitingMachine && runtime.latestHud && !runtime.modalOpen
                             && waitingMachine.view().step.id === waitingStepId) update(runtime.latestHud);
                     }, Math.max(1, machineView.wait_remaining_ms));
+                    runtime.stepRevealTimer = timerId;
                 }
             } else {
                 clearStepRevealTimer();

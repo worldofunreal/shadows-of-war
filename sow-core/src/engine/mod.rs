@@ -23,7 +23,152 @@ pub struct CampaignAssaultState {
     pub next_tick: u64,
     pub attacker_ids: Vec<PlayerId>,
     pub target_ids: Vec<PlayerId>,
+    /// Scheduled wave number used to rotate equal-pressure targets deterministically.
+    pub wave_index: u64,
+    /// Primary target selected by the latest coordinated wave for each Roman force.
+    pub focus_targets: std::collections::HashMap<PlayerId, PlayerId>,
     pub reserve_spawned: bool,
+}
+
+struct CampaignAssaultRouteCandidate {
+    target_id: PlayerId,
+    target_tile: u32,
+    route: Option<crate::warp_fleet::FleetRoute>,
+    committed_troops: f64,
+    defense_capacity: f64,
+    tie_rank: usize,
+}
+
+fn allocate_campaign_assault_shares(
+    available: f64,
+    min_attack: f64,
+    targets: &[(f64, f64)],
+) -> Vec<f64> {
+    let count = targets.len();
+    if count == 0 || !available.is_finite() || !min_attack.is_finite() || min_attack <= 0.0 {
+        return Vec::new();
+    }
+    let minimum_total = min_attack * count as f64;
+    if available < minimum_total {
+        return Vec::new();
+    }
+
+    // Water-fill each legal minimum attack until projected pressure is balanced.
+    let mut breakpoints: Vec<(f64, usize)> = targets
+        .iter()
+        .enumerate()
+        .map(|(index, (committed, capacity))| {
+            let committed = if committed.is_nan() {
+                0.0
+            } else {
+                committed.max(0.0).min(f64::MAX / 4.0)
+            };
+            let capacity = if capacity.is_finite() {
+                capacity.max(min_attack)
+            } else {
+                min_attack
+            };
+            ((committed + min_attack) / capacity, index)
+        })
+        .collect();
+    breakpoints.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+
+    let mut active_capacity = 0.0;
+    let mut next = 0;
+    let mut level = breakpoints[0].0;
+    while next < count && breakpoints[next].0 == level {
+        let index = breakpoints[next].1;
+        active_capacity += targets[index].1.max(min_attack);
+        next += 1;
+    }
+
+    let mut remaining = (available - minimum_total).max(0.0);
+    while remaining > 0.0 && next < count {
+        let next_level = breakpoints[next].0;
+        let cost = (next_level - level).max(0.0) * active_capacity;
+        if remaining <= cost {
+            level += remaining / active_capacity;
+            remaining = 0.0;
+            break;
+        }
+        remaining -= cost;
+        level = next_level;
+        while next < count && breakpoints[next].0 == level {
+            let index = breakpoints[next].1;
+            active_capacity += targets[index].1.max(min_attack);
+            next += 1;
+        }
+    }
+    if remaining > 0.0 {
+        level += remaining / active_capacity;
+    }
+
+    targets
+        .iter()
+        .map(|(committed, capacity)| {
+            let committed = if committed.is_nan() {
+                0.0
+            } else {
+                committed.max(0.0).min(f64::MAX / 4.0)
+            };
+            let capacity = if capacity.is_finite() {
+                capacity.max(min_attack)
+            } else {
+                min_attack
+            };
+            (level * capacity - committed).max(min_attack)
+        })
+        .collect()
+}
+
+fn prioritize_campaign_assault_targets(
+    mut reachable: Vec<CampaignAssaultRouteCandidate>,
+    limit: usize,
+    wave_index: u64,
+) -> Vec<CampaignAssaultRouteCandidate> {
+    if reachable.is_empty() || limit == 0 {
+        return Vec::new();
+    }
+    let count = reachable.len();
+    let tie_start = (wave_index % count as u64) as usize;
+    for (index, candidate) in reachable.iter_mut().enumerate() {
+        candidate.tie_rank = (index + count - tie_start) % count;
+    }
+    reachable.sort_by(|a, b| {
+        (a.committed_troops / a.defense_capacity)
+            .total_cmp(&(b.committed_troops / b.defense_capacity))
+            .then_with(|| a.tie_rank.cmp(&b.tie_rank))
+            .then_with(|| a.target_id.cmp(&b.target_id))
+    });
+    reachable.truncate(limit.min(count));
+    reachable
+}
+
+fn aggregate_campaign_assault_incoming(
+    attacker_ids: &std::collections::HashSet<PlayerId>,
+    target_ids: &std::collections::HashSet<PlayerId>,
+    commitments: impl IntoIterator<Item = (PlayerId, PlayerId, f64, bool)>,
+) -> std::collections::HashMap<PlayerId, f64> {
+    let mut incoming: std::collections::HashMap<PlayerId, f64> = target_ids
+        .iter()
+        .copied()
+        .map(|target_id| (target_id, 0.0))
+        .collect();
+    for (attacker_id, target_id, troops, retreating) in commitments {
+        if !retreating
+            && attacker_ids.contains(&attacker_id)
+            && troops.is_finite()
+            && let Some(projected) = incoming.get_mut(&target_id)
+        {
+            let total = *projected + troops.max(0.0);
+            *projected = if total.is_finite() {
+                total
+            } else {
+                f64::MAX / 4.0
+            };
+        }
+    }
+    incoming
 }
 
 /// Build the deterministic match state used by lockstep clients and replay verification.
@@ -711,6 +856,8 @@ impl SowEngine {
                 next_tick: self.state.tick.saturating_add(interval_ticks),
                 attacker_ids: attackers.clone(),
                 target_ids: targets,
+                wave_index: 0,
+                focus_targets: std::collections::HashMap::new(),
                 reserve_spawned,
             });
             self.run_campaign_assault_cycle(true);
@@ -767,41 +914,6 @@ impl SowEngine {
                 if let Some(target) = self.state.player_mut(*target_id) {
                     target.alliances.retain(|id| id != attacker_id);
                     target.alliance_timers.remove(attacker_id);
-                }
-            }
-        }
-    }
-
-    fn recall_campaign_assault_targets(
-        &mut self,
-        attackers: &[PlayerId],
-        removed_targets: &[PlayerId],
-    ) {
-        if removed_targets.is_empty() {
-            return;
-        }
-        let mut refunds = std::collections::HashMap::<PlayerId, f64>::new();
-        self.attacks.retain(|attack| {
-            let remove = attackers.contains(&attack.owner_id)
-                && removed_targets.contains(&attack.target_owner);
-            if remove && attack.troops.is_finite() {
-                *refunds.entry(attack.owner_id).or_default() += attack.troops.max(0.0);
-            }
-            !remove
-        });
-        self.fleets.retain(|fleet| {
-            let remove = attackers.contains(&fleet.owner_id)
-                && removed_targets.contains(&fleet.target_owner);
-            if remove && fleet.troops.is_finite() {
-                *refunds.entry(fleet.owner_id).or_default() += fleet.troops.max(0.0);
-            }
-            !remove
-        });
-        if !refunds.is_empty() {
-            self.ai_attack_index_dirty = true;
-            for (attacker_id, troops) in refunds {
-                if let Some(attacker) = self.state.player_mut(attacker_id) {
-                    attacker.troops += troops;
                 }
             }
         }
@@ -895,31 +1007,6 @@ impl SowEngine {
             return false;
         }
 
-        let mut removed_targets: Vec<PlayerId> = assault
-            .target_ids
-            .iter()
-            .copied()
-            .filter(|id| !targets.contains(id))
-            .collect();
-        removed_targets.extend(
-            self.attacks
-                .iter()
-                .filter(|attack| {
-                    attackers.contains(&attack.owner_id) && !targets.contains(&attack.target_owner)
-                })
-                .map(|attack| attack.target_owner),
-        );
-        removed_targets.extend(
-            self.fleets
-                .iter()
-                .filter(|fleet| {
-                    attackers.contains(&fleet.owner_id) && !targets.contains(&fleet.target_owner)
-                })
-                .map(|fleet| fleet.target_owner),
-        );
-        removed_targets.sort_unstable();
-        removed_targets.dedup();
-        self.recall_campaign_assault_targets(&attackers, &removed_targets);
         self.break_campaign_assault_alliances(&attackers, &targets, assault.preserve_relation);
         for old_id in &assault.attacker_ids {
             self.campaign_assault_targets.remove(old_id);
@@ -962,7 +1049,7 @@ impl SowEngine {
         }
         let per_force = enemy_capacity * assault.capacity_ratio / forces.len() as f64;
         for id in &forces {
-            let mut deployed = self
+            let deployed = self
                 .attacks
                 .iter()
                 .filter(|attack| attack.owner_id == *id && attack.troops.is_finite())
@@ -974,56 +1061,7 @@ impl SowEngine {
                     .filter(|fleet| fleet.owner_id == *id && fleet.troops.is_finite())
                     .map(|fleet| fleet.troops.max(0.0))
                     .sum::<f64>();
-            let standing = self
-                .state
-                .player(*id)
-                .map_or(0.0, |player| player.troops.max(0.0));
-            let mut excess = (standing + deployed - per_force).max(0.0);
-            if excess > 0.0 {
-                let removed_from_standing = standing.min(excess);
-                if let Some(player) = self.state.player_mut(*id) {
-                    player.troops = (player.troops - removed_from_standing).max(0.0);
-                }
-                excess -= removed_from_standing;
-                for attack in self
-                    .attacks
-                    .iter_mut()
-                    .rev()
-                    .filter(|attack| attack.owner_id == *id)
-                {
-                    if excess <= 0.0 {
-                        break;
-                    }
-                    let removed = attack.troops.max(0.0).min(excess);
-                    attack.troops -= removed;
-                    excess -= removed;
-                }
-                for fleet in self
-                    .fleets
-                    .iter_mut()
-                    .rev()
-                    .filter(|fleet| fleet.owner_id == *id)
-                {
-                    if excess <= 0.0 {
-                        break;
-                    }
-                    let removed = fleet.troops.max(0.0).min(excess);
-                    fleet.troops -= removed;
-                    excess -= removed;
-                }
-                deployed = self
-                    .attacks
-                    .iter()
-                    .filter(|attack| attack.owner_id == *id && attack.troops.is_finite())
-                    .map(|attack| attack.troops.max(0.0))
-                    .sum::<f64>()
-                    + self
-                        .fleets
-                        .iter()
-                        .filter(|fleet| fleet.owner_id == *id && fleet.troops.is_finite())
-                        .map(|fleet| fleet.troops.max(0.0))
-                        .sum::<f64>();
-            }
+            // Launched troops are committed; a smaller live target set only reduces reserves.
             let standing_cap = (per_force - deployed).max(0.0);
             self.campaign_assault_troop_caps.insert(*id, standing_cap);
             if let Some(player) = self.state.player_mut(*id) {
@@ -1060,100 +1098,182 @@ impl SowEngine {
             return;
         };
         let min_attack = self.state.config.attack_cost_neutral;
+        if !min_attack.is_finite() || min_attack <= 0.0 {
+            return;
+        }
+
+        let target_snapshots: Vec<_> = assault
+            .target_ids
+            .iter()
+            .filter_map(|target_id| {
+                let target = self.state.player(*target_id)?;
+                (target.alive && target.tile_count > 0).then(|| {
+                    (
+                        *target_id,
+                        target.tile_count,
+                        if target.max_troops.is_finite() {
+                            target.max_troops.max(min_attack)
+                        } else {
+                            min_attack
+                        },
+                        target.border_tiles.clone(),
+                    )
+                })
+            })
+            .collect();
+        let target_ids: std::collections::HashSet<_> =
+            target_snapshots.iter().map(|(id, _, _, _)| *id).collect();
+        let attacker_ids: std::collections::HashSet<_> =
+            assault.attacker_ids.iter().copied().collect();
+        let commitments = self
+            .attacks
+            .iter()
+            .map(|attack| {
+                (
+                    attack.owner_id,
+                    attack.target_owner,
+                    attack.troops,
+                    attack.retreating,
+                )
+            })
+            .chain(self.fleets.iter().map(|fleet| {
+                (
+                    fleet.owner_id,
+                    fleet.target_owner,
+                    fleet.troops,
+                    fleet.retreating,
+                )
+            }));
+        let mut projected_incoming =
+            aggregate_campaign_assault_incoming(&attacker_ids, &target_ids, commitments);
+
         let mut intent_index = 0u32;
-        for attacker_id in assault.attacker_ids {
+        let mut focus_targets =
+            std::collections::HashMap::with_capacity(assault.attacker_ids.len());
+        for attacker_id in &assault.attacker_ids {
             let Some((available, attacker_border)) = self
                 .state
-                .player(attacker_id)
+                .player(*attacker_id)
                 .filter(|player| player.alive && player.tile_count > 0)
                 .map(|player| (player.troops.max(0.0), player.border_tiles.clone()))
             else {
                 continue;
             };
             let mut reachable = Vec::new();
-            for target_id in &assault.target_ids {
-                if assault.hold_last_tile
-                    && *target_id == assault.root_target
-                    && self
-                        .state
-                        .player(*target_id)
-                        .is_some_and(|target| target.tile_count <= 1)
-                {
+            for (target_id, tile_count, defense_capacity, target_border) in &target_snapshots {
+                if assault.hold_last_tile && *target_id == assault.root_target && *tile_count <= 1 {
                     continue;
                 }
-                let Some(target_border) = self
-                    .state
-                    .player(*target_id)
-                    .filter(|player| player.alive && player.tile_count > 0)
-                    .map(|player| player.border_tiles.clone())
-                else {
-                    continue;
-                };
-                if *target_id == attacker_id {
+                if *target_id == *attacker_id {
                     continue;
                 }
                 let Some(target_tile) = target_border
-                    .first_one_from(self.state.tick.wrapping_add(u64::from(attacker_id)) as u32)
+                    .first_one_from(self.state.tick.wrapping_add(u64::from(*attacker_id)) as u32)
                 else {
                     continue;
                 };
-                if self.has_campaign_land_front(attacker_id, *target_id) {
-                    reachable.push((*target_id, target_tile, None));
-                    continue;
-                }
-                let route = crate::warp_fleet::resolve_fleet_route(
-                    &self.state.map,
-                    &self.water,
-                    &mut self.path_scratch,
-                    attacker_id,
-                    (*target_id, target_tile),
-                    &attacker_border,
-                    Some(&target_border),
-                );
-                if let Ok(route) = route {
-                    reachable.push((*target_id, target_tile, Some(route)));
-                }
+                let route = if self.has_campaign_land_front(*attacker_id, *target_id) {
+                    None
+                } else {
+                    match crate::warp_fleet::resolve_fleet_route(
+                        &self.state.map,
+                        &self.water,
+                        &mut self.path_scratch,
+                        *attacker_id,
+                        (*target_id, target_tile),
+                        &attacker_border,
+                        Some(target_border),
+                    ) {
+                        Ok(route) => Some(route),
+                        Err(_) => continue,
+                    }
+                };
+                reachable.push(CampaignAssaultRouteCandidate {
+                    target_id: *target_id,
+                    target_tile,
+                    route,
+                    committed_troops: projected_incoming
+                        .get(target_id)
+                        .copied()
+                        .unwrap_or_default(),
+                    defense_capacity: *defense_capacity,
+                    tie_rank: 0,
+                });
             }
-            if reachable.is_empty() || available < min_attack {
+            if reachable.is_empty() || !available.is_finite() || available < min_attack {
                 continue;
             }
+
             let affordable = (available / min_attack).floor() as usize;
-            let count = reachable.len().min(affordable.max(1));
-            let offset =
-                (self.state.tick.wrapping_add(u64::from(attacker_id)) as usize) % reachable.len();
-            let targets: Vec<_> = (0..count)
-                .map(|index| reachable[(offset + index) % reachable.len()].clone())
+            let reachable =
+                prioritize_campaign_assault_targets(reachable, affordable, assault.wave_index);
+            if reachable.is_empty() {
+                continue;
+            }
+            let allocation_inputs: Vec<_> = reachable
+                .iter()
+                .map(|candidate| (candidate.committed_troops, candidate.defense_capacity))
                 .collect();
+            let shares =
+                allocate_campaign_assault_shares(available, min_attack, &allocation_inputs);
+            if shares.len() != reachable.len() {
+                continue;
+            }
+
             let mut remaining = available;
-            for (index, (target_id, target_tile, route)) in targets.into_iter().enumerate() {
-                let share = if index + 1 == count {
+            let mut assigned_targets = Vec::with_capacity(reachable.len());
+            let last_index = reachable.len() - 1;
+            for (index, (candidate, planned_share)) in reachable.into_iter().zip(shares).enumerate()
+            {
+                let share = if index == last_index {
                     remaining
                 } else {
-                    available / count as f64
+                    planned_share.min(remaining)
                 };
                 remaining = (remaining - share).max(0.0);
                 if share < min_attack {
                     continue;
                 }
-                if let Some(route) = route {
+
+                if let Some(route) = candidate.route {
                     self.apply_campaign_assault_fleet_with_route(
-                        attacker_id,
-                        target_tile,
+                        *attacker_id,
+                        candidate.target_tile,
                         Some(share),
                         route,
                     );
                 } else {
                     self.apply_campaign_assault_attack(
-                        attacker_id,
+                        *attacker_id,
                         &crate::protocol::AttackIntent {
-                            target_owner: target_id,
+                            target_owner: candidate.target_id,
                             troops: Some(share),
                         },
                         intent_index,
                     );
                 }
                 intent_index = intent_index.wrapping_add(1);
+                let projected = projected_incoming.entry(candidate.target_id).or_default();
+                *projected = (*projected + share).min(f64::MAX / 4.0);
+                assigned_targets.push((
+                    candidate.target_id,
+                    *projected / candidate.defense_capacity,
+                    candidate.tie_rank,
+                ));
             }
+            let focus = assigned_targets.into_iter().min_by(|a, b| {
+                a.1.total_cmp(&b.1)
+                    .then_with(|| a.2.cmp(&b.2))
+                    .then_with(|| a.0.cmp(&b.0))
+            });
+            if let Some((target_id, _, _)) = focus {
+                focus_targets.insert(*attacker_id, target_id);
+            }
+        }
+
+        if let Some(active) = &mut self.campaign_assault {
+            active.focus_targets = focus_targets;
+            active.wave_index = active.wave_index.wrapping_add(1);
         }
     }
 
@@ -1257,6 +1377,97 @@ mod tests {
     use crate::game_config::GameConfig;
     use crate::player::{Player, PlayerType};
     use crate::water_components::WaterComponents;
+
+    fn assault_candidate(
+        target_id: PlayerId,
+        committed_troops: f64,
+    ) -> CampaignAssaultRouteCandidate {
+        CampaignAssaultRouteCandidate {
+            target_id,
+            target_tile: target_id as u32,
+            route: None,
+            committed_troops,
+            defense_capacity: 1_000.0,
+            tie_rank: 0,
+        }
+    }
+
+    #[test]
+    fn campaign_assault_prioritizes_low_pressure_and_rotates_equal_targets() {
+        let selected = prioritize_campaign_assault_targets(
+            vec![
+                assault_candidate(1, 0.0),
+                assault_candidate(2, 500.0),
+                assault_candidate(3, 250.0),
+            ],
+            2,
+            0,
+        );
+        assert_eq!(
+            selected
+                .iter()
+                .map(|target| target.target_id)
+                .collect::<Vec<_>>(),
+            vec![1, 3]
+        );
+
+        let equal_targets = || {
+            vec![
+                assault_candidate(1, 0.0),
+                assault_candidate(2, 0.0),
+                assault_candidate(3, 0.0),
+            ]
+        };
+        let rotated: Vec<_> = (0..3)
+            .map(|wave| {
+                prioritize_campaign_assault_targets(equal_targets(), 1, wave)
+                    .first()
+                    .unwrap()
+                    .target_id
+            })
+            .collect();
+        assert_eq!(rotated, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn campaign_assault_pressure_counts_attacks_and_fleets_but_not_retreats() {
+        let attackers = std::collections::HashSet::from([1]);
+        let targets = std::collections::HashSet::from([8, 9]);
+        let incoming = aggregate_campaign_assault_incoming(
+            &attackers,
+            &targets,
+            [
+                (1, 8, 250.0, false),
+                (1, 8, 500.0, true),
+                (1, 9, 300.0, false),
+                (2, 8, 900.0, false),
+            ],
+        );
+
+        assert_eq!(incoming.get(&8), Some(&250.0));
+        assert_eq!(incoming.get(&9), Some(&300.0));
+    }
+
+    #[test]
+    fn campaign_assault_shares_equalize_projected_defense_pressure() {
+        let shares =
+            allocate_campaign_assault_shares(500.0, 100.0, &[(100.0, 1_000.0), (300.0, 1_000.0)]);
+
+        assert_eq!(shares.len(), 2);
+        assert!((shares[0] - 350.0).abs() < 0.01);
+        assert!((shares[1] - 150.0).abs() < 0.01);
+        assert!(((100.0 + shares[0]) / 1_000.0 - (300.0 + shares[1]) / 1_000.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn campaign_assault_shares_weight_targets_by_defense_capacity() {
+        let shares =
+            allocate_campaign_assault_shares(1_000.0, 100.0, &[(0.0, 1_000.0), (0.0, 500.0)]);
+
+        assert_eq!(shares.len(), 2);
+        assert!((shares.iter().sum::<f64>() - 1_000.0).abs() < 0.01);
+        assert!((shares[0] / 1_000.0 - shares[1] / 500.0).abs() < 0.0001);
+    }
 
     #[test]
     fn elimination_bounty_is_fixed_by_victim_type_and_keeps_campaign_bonus() {

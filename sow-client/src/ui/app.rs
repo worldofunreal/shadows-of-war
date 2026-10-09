@@ -36,7 +36,7 @@ impl ClientApp {
             is_privacy_open: false,
             is_terms_open: false,
             is_showcase_open: false,
-            settings_state: settings::SettingsState::default(),
+            settings_state: settings::SettingsState::load_local(),
         }
     }
 }

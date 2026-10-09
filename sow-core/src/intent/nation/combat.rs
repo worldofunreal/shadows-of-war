@@ -141,11 +141,13 @@ impl SowEngine {
                 attack_id: attack.id,
                 attacker_id: attack.owner_id,
                 incoming_troops: attack.troops,
-                ready_tick: attack.created_tick.saturating_add(ghost_retaliation_delay_ticks(
-                    self.state.seed,
-                    ghost_id,
-                    attack.id,
-                )),
+                ready_tick: attack
+                    .created_tick
+                    .saturating_add(ghost_retaliation_delay_ticks(
+                        self.state.seed,
+                        ghost_id,
+                        attack.id,
+                    )),
             };
             let chosen = if retaliation.is_ready_at(tick) {
                 &mut largest_ready
@@ -244,16 +246,24 @@ impl SowEngine {
         let (attack_cost, alliance_cost) = costs;
         let is_mfo = slot.tier == AiTier::Nation;
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
-        let attacks_players = campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
+        let attacks_players =
+            campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
         // ── Attack logic (both Bots and Nations) ────────────────────
         if slot.do_attack {
-            let campaign_target = self.campaign_assault_targets.get(&bot_id).and_then(|targets| {
-                (!targets.is_empty()).then(|| {
-                    let index = (self.state.tick.wrapping_add(u64::from(bot_id))
-                        % targets.len() as u64) as usize;
-                    targets[index]
-                })
-            });
+            let campaign_target = if let Some(assault) = &self.campaign_assault {
+                assault.focus_targets.get(&bot_id).copied()
+            } else {
+                self.campaign_assault_targets
+                    .get(&bot_id)
+                    .and_then(|targets| {
+                        (!targets.is_empty()).then(|| {
+                            let index = (self.state.tick.wrapping_add(u64::from(bot_id))
+                                % targets.len() as u64)
+                                as usize;
+                            targets[index]
+                        })
+                    })
+            };
             let ready_retaliation = slot
                 .ghost_retaliation
                 .filter(|retaliation| retaliation.is_ready_at(self.state.tick));
@@ -269,7 +279,10 @@ impl SowEngine {
                 });
                 if can_pursue {
                     if neighbor_players.contains(&target_id) {
-                        let available = self.state.player(bot_id).map_or(0.0, |player| player.troops);
+                        let available = self
+                            .state
+                            .player(bot_id)
+                            .map_or(0.0, |player| player.troops);
                         if available >= self.state.config.attack_cost_neutral {
                             if let Some(attacker) = self.state.player_mut(bot_id) {
                                 attacker.iq_points = (attacker.iq_points - attack_cost).max(0.0);
@@ -285,12 +298,12 @@ impl SowEngine {
                         }
                         return;
                     }
-                    let available = self.state.player(bot_id).map_or(0.0, |player| player.troops);
+                    let available = self
+                        .state
+                        .player(bot_id)
+                        .map_or(0.0, |player| player.troops);
                     if self.nation_launch_campaign_assault_fleet(
-                        bot_id,
-                        target_id,
-                        available,
-                        decisions,
+                        bot_id, target_id, available, decisions,
                     ) {
                         if let Some(attacker) = self.state.player_mut(bot_id) {
                             attacker.iq_points = (attacker.iq_points - attack_cost).max(0.0);
@@ -364,37 +377,36 @@ impl SowEngine {
                 // nearest neutral shores. Free like land expansion (growth,
                 // not war); every tier — neutral
                 // never means combat.
-                let defensive_player_attackers = if campaign_relation
-                    == Some(crate::protocol::CampaignRelation::Neutral)
-                {
-                    let mut attackers = std::collections::HashSet::new();
-                    if let (Some(defender), Some(inbound_attacks)) = (
-                        self.state.player(bot_id),
-                        self.ai_attack_index.get(bot_id as usize),
-                    ) {
-                        for &attack_index in inbound_attacks {
-                            let Some(attack) = self.attacks.get(attack_index) else {
-                                continue;
-                            };
-                            if attack.target_owner != bot_id
-                                || !neighbor_players.contains(&attack.owner_id)
-                            {
-                                continue;
-                            }
-                            let Some(attacker) = self.state.player(attack.owner_id) else {
-                                continue;
-                            };
-                            let is_friendly = defender.alliances.contains(&attack.owner_id)
-                                || (defender.team.is_some() && defender.team == attacker.team);
-                            if is_real_human(attacker) && !is_friendly {
-                                attackers.insert(attack.owner_id);
+                let defensive_player_attackers =
+                    if campaign_relation == Some(crate::protocol::CampaignRelation::Neutral) {
+                        let mut attackers = std::collections::HashSet::new();
+                        if let (Some(defender), Some(inbound_attacks)) = (
+                            self.state.player(bot_id),
+                            self.ai_attack_index.get(bot_id as usize),
+                        ) {
+                            for &attack_index in inbound_attacks {
+                                let Some(attack) = self.attacks.get(attack_index) else {
+                                    continue;
+                                };
+                                if attack.target_owner != bot_id
+                                    || !neighbor_players.contains(&attack.owner_id)
+                                {
+                                    continue;
+                                }
+                                let Some(attacker) = self.state.player(attack.owner_id) else {
+                                    continue;
+                                };
+                                let is_friendly = defender.alliances.contains(&attack.owner_id)
+                                    || (defender.team.is_some() && defender.team == attacker.team);
+                                if is_real_human(attacker) && !is_friendly {
+                                    attackers.insert(attack.owner_id);
+                                }
                             }
                         }
-                    }
-                    attackers
-                } else {
-                    std::collections::HashSet::new()
-                };
+                        attackers
+                    } else {
+                        std::collections::HashSet::new()
+                    };
                 if ready_retaliation.is_none()
                     && !has_neutral
                     && defensive_player_attackers.is_empty()
@@ -430,9 +442,8 @@ impl SowEngine {
                         {
                             return false;
                         }
-                        if ready_retaliation.is_none_or(|retaliation| {
-                            id != retaliation.attacker_id
-                        }) && let Some(target_id) = campaign_target
+                        if ready_retaliation.is_none_or(|retaliation| id != retaliation.attacker_id)
+                            && let Some(target_id) = campaign_target
                             && (!neighbor_players.contains(&target_id) || id != target_id)
                         {
                             return false;
@@ -463,14 +474,17 @@ impl SowEngine {
 
                 if let Some(retaliation) = ready_retaliation
                     && !targets.contains(&retaliation.attacker_id)
-                    && self.state.player(retaliation.attacker_id).is_some_and(|attacker| {
-                        attacker.alive
-                            && !self.state.player(bot_id).is_some_and(|defender| {
-                                defender.alliances.contains(&retaliation.attacker_id)
-                                    || (defender.team.is_some()
-                                        && defender.team == attacker.team)
-                            })
-                    })
+                    && self
+                        .state
+                        .player(retaliation.attacker_id)
+                        .is_some_and(|attacker| {
+                            attacker.alive
+                                && !self.state.player(bot_id).is_some_and(|defender| {
+                                    defender.alliances.contains(&retaliation.attacker_id)
+                                        || (defender.team.is_some()
+                                            && defender.team == attacker.team)
+                                })
+                        })
                 {
                     targets.push(retaliation.attacker_id);
                 }
@@ -1219,9 +1233,18 @@ mod campaign_relationship_tests {
 
     #[test]
     fn campaign_relation_alone_controls_player_attack_permission() {
-        assert!(campaign_attacks_players(Some(CampaignRelation::Enemy), false));
-        assert!(!campaign_attacks_players(Some(CampaignRelation::Neutral), true));
-        assert!(!campaign_attacks_players(Some(CampaignRelation::Allied), true));
+        assert!(campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            false
+        ));
+        assert!(!campaign_attacks_players(
+            Some(CampaignRelation::Neutral),
+            true
+        ));
+        assert!(!campaign_attacks_players(
+            Some(CampaignRelation::Allied),
+            true
+        ));
         assert!(campaign_attacks_players(None, true));
         assert!(!campaign_attacks_players(None, false));
     }

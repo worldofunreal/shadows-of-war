@@ -225,6 +225,9 @@ enum WebMenuCommand {
     DevVfxAll {
         on: bool,
     },
+    SetShowFpsPing {
+        value: bool,
+    },
     SetShowDevTools {
         value: bool,
     },
@@ -333,6 +336,7 @@ struct HudPublishKey {
     settings_reduced_motion: bool,
     settings_free_zoom_out: bool,
     settings_sticky_building_mode: bool,
+    settings_show_fps_ping: bool,
     settings_show_dev_tools: bool,
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
@@ -1204,9 +1208,12 @@ impl SowApp {
                 }
                 WebMenuCommand::SetShowDevTools { value } => {
                     self.ui.app.settings_state.show_dev_tools = value;
-                    if !value {
-                        self.ui.show_dev_sidebar = false;
-                    }
+                    self.ui.app.settings_state.persist_local();
+                    self.ui.show_dev_sidebar = value;
+                }
+                WebMenuCommand::SetShowFpsPing { value } => {
+                    self.ui.app.settings_state.show_fps_ping = value;
+                    self.ui.app.settings_state.persist_local();
                 }
                 WebMenuCommand::ExpressEmoji { emoji, pinned } => {
                     self.send_intent(sow_core::protocol::GameplayIntent::ExpressEmoji {
@@ -1342,6 +1349,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         settings_reduced_motion: app.ui.app.settings_state.reduced_motion,
         settings_free_zoom_out: app.ui.app.settings_state.free_zoom_out,
         settings_sticky_building_mode: app.ui.app.settings_state.sticky_building_mode,
+        settings_show_fps_ping: app.ui.app.settings_state.show_fps_ping,
         settings_show_dev_tools: app.ui.app.settings_state.show_dev_tools,
         leaderboard_open: app.ui.show_leaderboard,
         leaderboard_publish_revision: app.ui.leaderboard_publish_revision,
@@ -1462,7 +1470,6 @@ fn dev_config_key(_app: &SowApp) -> (bool, [u32; 29]) {
 fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
     let open = app.ui.show_dev_sidebar;
     let mut payload = serde_json::json!({
-        "available": app.ui.app.settings_state.show_dev_tools,
         "open": open,
     });
     if open {
@@ -1505,7 +1512,6 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
 #[cfg(not(any(feature = "dev", debug_assertions)))]
 fn dev_tools_payload(_app: &SowApp) -> serde_json::Value {
     serde_json::json!({
-        "available": false,
         "open": false,
     })
 }
@@ -2616,20 +2622,28 @@ fn build_inbox(snapshot: &sow_core::protocol::SimSnapshot, my_pid: u16) -> serde
 fn building_benefit_label(
     kind: sow_core::game::BuildingKind,
     level: u8,
+    leader: sow_core::player::Leader,
     config: &sow_core::game_config::GameConfig,
 ) -> String {
     use sow_core::game::BuildingKind as Kind;
+    let per_minute = config.global_speed_multiplier * 60.0;
+    let level_weight = sow_core::building::income_level_weight(level);
     match kind {
         Kind::City => format!(
-            "Adds +{:.0} troop capacity and +{:.2} troops/s{}.",
+            "Adds +{:.0} troop capacity and +{:.0} troops/min{}.",
             config.city_max_troops * f64::from(level),
-            config.city_troop_income * f64::from(level),
+            config.city_troop_income * f64::from(level) * per_minute,
             if level == Kind::City.max_level() { "; unlocks nuclear attacks" } else { "" },
         ),
         Kind::Port => format!(
-            "Adds {level} boat slots and +{level}% boat speed.",
+            "Adds {level} boat slots, +{level}% boat speed, +{:.0} port gold/min and up to +{:.0} merchant gold/min with routes.",
+            config.port_gold_income
+                * level_weight
+                * if leader == sow_core::player::Leader::Ragnar { 1.5 } else { 1.0 }
+                * per_minute,
+            config.trade_ship_gold_income * f64::from(level) * per_minute,
         ),
-        Kind::Factory => format!("Produces +{:.2} gold/s.", config.factory_gold_income * f64::from(level)),
+        Kind::Factory => format!("Produces +{:.0} gold/min.", config.factory_gold_income * f64::from(level) * per_minute),
         Kind::Bunker => {
             let range = (config.bunker_range.round() as u32
                 + u32::from(level.saturating_sub(1)) * 2)
@@ -2646,8 +2660,9 @@ fn building_benefit_label(
             }
         }
         Kind::Farm => format!(
-            "This plot produces +{:.2} troops/s.",
-            config.farm_troop_income * f64::from(level)
+            "This plot produces +{:.0} troops/min and +{:.0} gold/min.",
+            config.farm_troop_income * level_weight * per_minute,
+            config.farm_gold_income * level_weight * per_minute,
         ),
     }
 }
@@ -2665,13 +2680,16 @@ fn building_metric(
 fn building_metrics(
     kind: sow_core::game::BuildingKind,
     level: u8,
+    leader: sow_core::player::Leader,
     config: &sow_core::game_config::GameConfig,
 ) -> Vec<serde_json::Value> {
     use sow_core::game::BuildingKind as Kind;
     if level == 0 {
         return Vec::new();
     }
+    let level_weight = sow_core::building::income_level_weight(level);
     let level = f64::from(level);
+    let per_minute = config.global_speed_multiplier * 60.0;
     let metrics = match kind {
         Kind::City => vec![
             building_metric(
@@ -2684,22 +2702,39 @@ fn building_metrics(
             building_metric(
                 "troops",
                 "Troop income",
-                config.city_troop_income * level,
+                config.city_troop_income * level * per_minute,
                 "+",
-                "/s",
+                "/min",
             ),
         ],
         Kind::Port => vec![
             building_metric("port", "Boat slots", level, "+", ""),
             building_metric("speed", "Boat speed", level, "+", "%"),
+            building_metric(
+                "gold",
+                "Port gold income",
+                config.port_gold_income
+                    * level_weight
+                    * if leader == sow_core::player::Leader::Ragnar { 1.5 } else { 1.0 }
+                    * per_minute,
+                "+",
+                "/min",
+            ),
+            building_metric(
+                "gold",
+                "Merchant income with routes",
+                config.trade_ship_gold_income * level * per_minute,
+                "up to +",
+                "/min",
+            ),
         ],
         Kind::Factory => vec![building_metric(
-                "gold",
-                "Gold income",
-                config.factory_gold_income * level,
-                "+",
-                "/s",
-            )],
+            "gold",
+            "Gold income",
+            config.factory_gold_income * level * per_minute,
+            "+",
+            "/min",
+        )],
         Kind::Bunker => {
             let range = (config.bunker_range.round() as u32 + (level as u32 - 1) * 2).min(20);
             let mut stats = vec![
@@ -2715,13 +2750,22 @@ fn building_metrics(
             }
             stats
         }
-        Kind::Farm => vec![building_metric(
-            "troops",
-            "Troop income",
-            config.farm_troop_income * level,
-            "+",
-            "/s",
-        )],
+        Kind::Farm => vec![
+            building_metric(
+                "troops",
+                "Troop income",
+                config.farm_troop_income * level_weight * per_minute,
+                "+",
+                "/min",
+            ),
+            building_metric(
+                "gold",
+                "Gold income",
+                config.farm_gold_income * level_weight * per_minute,
+                "+",
+                "/min",
+            ),
+        ],
     };
     metrics
 }
@@ -2738,6 +2782,10 @@ fn building_detail_payload(
         .unwrap_or(app.ui.app.hud_state.my_player_id);
     let owns = building.owner_id == my_id;
     let snapshot = app.sim.current_snapshot.as_ref();
+    let leader = snapshot
+        .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == building.owner_id))
+        .map(|player| player.leader)
+        .unwrap_or_default();
     let cost = app
         .map_menu_cost(
             crate::input::map_click::MapMenuAction::UpgradeStructure,
@@ -2782,13 +2830,13 @@ fn building_detail_payload(
         } else {
             building.kind.level_name(active_level)
         },
-        "benefit_label": building_benefit_label(building.kind, active_level, &app.sim.config),
-        "metrics": building_metrics(building.kind, active_level, &app.sim.config),
+        "benefit_label": building_benefit_label(building.kind, active_level, leader, &app.sim.config),
+        "metrics": building_metrics(building.kind, active_level, leader, &app.sim.config),
         "next_level": (!building.under_construction && !maxed).then_some(next_level),
         "next_benefit_label": (!building.under_construction && !maxed)
-            .then(|| building_benefit_label(building.kind, next_level, &app.sim.config)),
+            .then(|| building_benefit_label(building.kind, next_level, leader, &app.sim.config)),
         "next_metrics": (!building.under_construction && !maxed)
-            .then(|| building_metrics(building.kind, next_level, &app.sim.config)),
+            .then(|| building_metrics(building.kind, next_level, leader, &app.sim.config)),
         "cost": cost,
         "duration_seconds": (!building.under_construction && !maxed).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
         "under_construction": building.under_construction,
@@ -3489,7 +3537,9 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
                 "sticky_building_mode": app.ui.app.settings_state.sticky_building_mode,
+                "show_fps_ping": app.ui.app.settings_state.show_fps_ping,
                 "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
+                "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
             },
         })
     } else {
@@ -3676,7 +3726,9 @@ pub(crate) fn publish_state(app: &mut SowApp) {
                 "reduced_motion": app.ui.app.settings_state.reduced_motion,
                 "free_zoom_out": app.ui.app.settings_state.free_zoom_out,
                 "sticky_building_mode": app.ui.app.settings_state.sticky_building_mode,
+                "show_fps_ping": app.ui.app.settings_state.show_fps_ping,
                 "show_dev_tools": app.ui.app.settings_state.show_dev_tools,
+                "show_dev_tools_available": cfg!(any(feature = "dev", debug_assertions)),
             },
         })
     };
@@ -4065,6 +4117,7 @@ mod tests {
         let port = building_metrics(
             sow_core::game::BuildingKind::Port,
             2,
+            sow_core::player::Leader::Caesar,
             &sow_core::game_config::GameConfig::default(),
         );
         assert!(
@@ -4072,11 +4125,36 @@ mod tests {
                 .any(|metric| { metric["icon"] == "port" && metric["value"] == 2.0 })
         );
         assert!(port.iter().any(|metric| {
-            metric["icon"] == "troops" && metric["value"] == 25.0 && metric["unit"] == "/s"
+            metric["label"] == "Port gold income" && metric["value"] == 30.0 && metric["unit"] == "/min"
+        }));
+        assert!(port.iter().any(|metric| {
+            metric["label"] == "Merchant income with routes" && metric["value"] == 24.0
+        }));
+        let ragnar_port = building_metrics(
+            sow_core::game::BuildingKind::Port,
+            2,
+            sow_core::player::Leader::Ragnar,
+            &sow_core::game_config::GameConfig::default(),
+        );
+        assert!(ragnar_port.iter().any(|metric| {
+            metric["label"] == "Port gold income" && metric["value"] == 45.0
+        }));
+        let farm = building_metrics(
+            sow_core::game::BuildingKind::Farm,
+            2,
+            sow_core::player::Leader::Caesar,
+            &sow_core::game_config::GameConfig::default(),
+        );
+        assert!(farm.iter().any(|metric| {
+            metric["label"] == "Troop income" && metric["value"] == 100.0
+        }));
+        assert!(farm.iter().any(|metric| {
+            metric["label"] == "Gold income" && metric["value"] == 10.0
         }));
         let bunker = building_metrics(
             sow_core::game::BuildingKind::Bunker,
             2,
+            sow_core::player::Leader::Caesar,
             &sow_core::game_config::GameConfig::default(),
         );
         assert!(

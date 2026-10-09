@@ -3671,7 +3671,7 @@ fn start_local_server(port: u16, webroot: &str) -> Result<LocalPreviewServer> {
 
 fn build_local_preview(paths: &Paths, version: &str, compile: bool) -> Result<()> {
     if compile {
-        compile_wasm(paths, false)?;
+        compile_wasm(paths, true)?;
     }
     package_self(paths, &paths.dist_web, version, compile)?;
     let maps_cache_bust = thumbnail_cache_bust(&paths.dist_web.join("maps"))?;

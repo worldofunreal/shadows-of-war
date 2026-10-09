@@ -436,7 +436,10 @@
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.reduced_motion") + '</span><input type="checkbox" data-hud-setting="reduced_motion"></label>'
             + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.free_zoom_out") + '</span><input type="checkbox" data-hud-setting="free_zoom_out"></label>'
             + '  <label class="sow-hud__setting-row sow-hud__setting-row--hint" title="' + SOW_t("menu.sticky_building_mode_hint") + '"><span><b>' + SOW_t("menu.sticky_building_mode") + '</b><small>' + SOW_t("menu.sticky_building_mode_hint") + '</small></span><input type="checkbox" data-hud-setting="sticky_building_mode"></label>'
-            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
+            + '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_fps_ping") + '</span><input type="checkbox" data-hud-setting="show_fps_ping"></label>'
+            + (hudState.settings && hudState.settings.show_dev_tools_available
+                ? '  <label class="sow-hud__setting-row"><span>' + SOW_t("hud.show_dev_tools") + '</span><input type="checkbox" data-hud-setting="show_dev_tools"></label>'
+                : '')
             + '</aside>'
             + '<div class="sow-hud__dock-stack" id="sow-hud-dock-stack">'
             + '<footer class="sow-hud__dock" id="sow-hud-dock">'
@@ -743,7 +746,14 @@
             if (setting === "reduced_motion") send("set_reduced_motion", { value: input.checked });
             if (setting === "free_zoom_out") send("set_free_zoom_out", { value: input.checked });
             if (setting === "sticky_building_mode") send("set_sticky_building_mode", { value: input.checked });
-            if (setting === "show_dev_tools") send("set_show_dev_tools", { value: input.checked });
+            if (setting === "show_fps_ping") send("set_show_fps_ping", { value: input.checked });
+            if (setting === "show_dev_tools") {
+                if (input.checked) {
+                    setHudPanel(null);
+                    renderHud();
+                }
+                send("set_show_dev_tools", { value: input.checked });
+            }
         });
     }
 
@@ -1981,13 +1991,14 @@
         syncCompactHudDensity();
 
         var hud = hudState.hud;
+        var settings = hudState.settings || {};
         var settingsOpen = activeHudPanel === "settings";
         var inboxOpen = activeHudPanel === "inbox";
         var leaderboardOpen = activeHudPanel === "leaderboard";
         hudRoot.classList.toggle("is-reduced-motion", Boolean(hudState.settings && hudState.settings.reduced_motion));
         var devTools = hud.dev_tools || {};
         if (hudRefs.devBtn) {
-            hudRefs.devBtn.classList.toggle("hidden", !devTools.available);
+            hudRefs.devBtn.classList.toggle("hidden", !settings.show_dev_tools_available);
         }
         if (devTools.config && hudRefs.devSidebar) {
             hudRefs.devSidebar.querySelectorAll("[data-dev]").forEach(function (input) {
@@ -2065,6 +2076,7 @@
         }
 
         if (hudRefs.fps) {
+            hudRefs.fps.hidden = settings.show_fps_ping === false;
             var hasFps = Number.isFinite(hud.fps) && hud.fps > 0;
             var hasPing = Number.isFinite(hud.ping);
             hudRefs.fps.textContent = hasFps && hasPing
@@ -2228,12 +2240,14 @@
                 var motionInput = hudRefs.settings.querySelector('[data-hud-setting="reduced_motion"]');
                 var freeZoomInput = hudRefs.settings.querySelector('[data-hud-setting="free_zoom_out"]');
                 var stickyBuildingInput = hudRefs.settings.querySelector('[data-hud-setting="sticky_building_mode"]');
+                var fpsPingInput = hudRefs.settings.querySelector('[data-hud-setting="show_fps_ping"]');
                 var devToolsInput = hudRefs.settings.querySelector('[data-hud-setting="show_dev_tools"]');
                 if (muteInput && document.activeElement !== muteInput) muteInput.checked = !settings.mute_all;
                 if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
                 if (motionInput && document.activeElement !== motionInput) motionInput.checked = Boolean(settings.reduced_motion);
                 if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
                 if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
+                if (fpsPingInput && document.activeElement !== fpsPingInput) fpsPingInput.checked = settings.show_fps_ping !== false;
                 if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
             }
         }

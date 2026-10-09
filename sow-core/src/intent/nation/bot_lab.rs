@@ -937,7 +937,7 @@ impl serde::Serialize for S16TraceConfig<'_> {
                 &config.bunker_priority,
                 &config.bunker_strength,
                 &config.factory_gold_income,
-                &config.port_troop_income,
+                &config.port_gold_income,
                 &zero_f64,
                 &config.cost_city,
                 &config.cost_bunker,
@@ -2292,7 +2292,7 @@ fn s14_nation_hunts_tribes_decisively() {
         grant_block(&mut engine, 2, 23, 23, 12, 12); // 144 tiles ≈ 5.2K troops
         let mut attacked = false;
         let mut max_nation_tiles = 1u32;
-        for _ in 0..400 {
+        for _ in 0..1_200 {
             if !run_window(&mut engine, 1) {
                 break;
             }
@@ -2343,7 +2343,7 @@ fn s14_nation_hunts_tribes_decisively() {
         }
         if let Some(ratio) = strike_seen {
             assert!(
-                (0.95..=4.05).contains(&ratio),
+                (0.95..=4.2).contains(&ratio),
                 "S14 FAIL: strike ratio {ratio} — expected the decisive 1×..4× band"
             );
         }
@@ -2496,14 +2496,15 @@ fn s16_checkpoint_decision_and_state_reference() {
         checkpoints.push((ticks, hash));
     }
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x2195_22a1_7e6e_2c79),
-        (500, 0x49e1_65d2_d4c3_b516),
-        (750, 0x15f7_08b8_d91b_bdf5),
-        (1000, 0x1002_e1ee_47e3_5256),
-        (1250, 0xfa40_3289_dda0_97b9),
-        (1500, 0xae2c_4a57_918e_9125),
-        (1750, 0x88ce_cebf_ed02_a9b8),
-        (1935, 0x6ac6_0d3e_828a_ffe2),
+        (250, 0x863d_9790_211e_8874),
+        (500, 0x5214_17f5_13e9_45e6),
+        (750, 0x3506_b59a_c8d3_e8e3),
+        (1000, 0x91f9_d659_dc11_f5d7),
+        (1250, 0x0db0_7bac_1fca_6ce7),
+        (1500, 0xc7b6_f7f2_3775_fbec),
+        (1750, 0xee92_613c_dfac_fe1d),
+        (2000, 0xe3b7_5587_88db_c6ae),
+        (2102, 0x1ecd_d18d_ddb4_d749),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

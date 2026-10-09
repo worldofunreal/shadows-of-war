@@ -132,7 +132,10 @@ impl SowEngine {
 
             loop {
                 if held_target == Some(execution.target_owner)
-                    && self.state.player(execution.target_owner).is_some_and(|target| target.tile_count <= 1)
+                    && self
+                        .state
+                        .player(execution.target_owner)
+                        .is_some_and(|target| target.tile_count <= 1)
                 {
                     let refund = execution.troops.max(0.0);
                     if refund.is_finite()
@@ -364,7 +367,6 @@ impl SowEngine {
                     break;
                 }
             }
-
         }
 
         // Remove dead attacks in O(1) and re-sort to preserve deterministic order
@@ -457,8 +459,7 @@ mod tests {
             engine.state.seed,
             &engine.state.config,
         );
-        let tile_cost = (1_000.0_f64 / (5.0 * 10_000.0_f64))
-            .clamp(0.2, 1.5)
+        let tile_cost = (1_000.0_f64 / (5.0 * 10_000.0_f64)).clamp(0.2, 1.5)
             * terrain_capture_speed(TerrainType::Land)
             * current_influence.capture_multiplier;
         let mut base_budget = 1.5;
@@ -467,8 +468,7 @@ mod tests {
             crate::player::Leader::Napoleon => base_budget *= 1.20,
             _ => {}
         }
-        engine.state.config.global_speed_multiplier =
-            (tile_cost / base_budget) * (1.0 - 1e-8);
+        engine.state.config.global_speed_multiplier = (tile_cost / base_budget) * (1.0 - 1e-8);
         let troops = 10_000.0;
         let speed = engine
             .state
@@ -557,6 +557,8 @@ mod tests {
             next_tick: 100,
             attacker_ids: vec![1],
             target_ids: vec![2],
+            wave_index: 0,
+            focus_targets: std::collections::HashMap::new(),
             reserve_spawned: false,
         });
         engine.add_attack(AttackExecution {
@@ -566,8 +568,18 @@ mod tests {
             created_tick: 0,
             troops: 100_000.0,
             to_conquer: BinaryHeap::from([
-                PrioritizedTile { priority: 0, insert_seq: 0, x: 3, y: 3 },
-                PrioritizedTile { priority: 0, insert_seq: 1, x: 4, y: 3 },
+                PrioritizedTile {
+                    priority: 0,
+                    insert_seq: 0,
+                    x: 3,
+                    y: 3,
+                },
+                PrioritizedTile {
+                    priority: 0,
+                    insert_seq: 1,
+                    x: 4,
+                    y: 3,
+                },
             ]),
             insert_seq_counter: 2,
             rng: WyRand::new(88),

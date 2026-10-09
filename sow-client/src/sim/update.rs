@@ -405,19 +405,15 @@ impl SowApp {
                     })
                     .count() as u32;
                 self.ui.app.hud_state.gold_rate =
-                    sow_core::execution::income_rates::gold_net_income_per_second(
-                        player.troops,
+                    (sow_core::execution::income_rates::gold_income_per_second(
                         player.tile_count,
                         agg,
-                        trade_ships,
-                        e.state
-                            .player(my_pid)
-                            .is_some_and(|state_player| {
-                                state_player.player_type == sow_core::player::PlayerType::Human
-                                    && !state_player.is_ai_controlled
-                            }),
+                        player.leader,
                         &self.sim.config,
-                    ) * self.sim.config.global_speed_multiplier;
+                    ) + sow_core::execution::income_rates::trade_income_per_second(
+                        trade_ships,
+                        &self.sim.config,
+                    )) * self.sim.config.global_speed_multiplier;
             }
         }
     }

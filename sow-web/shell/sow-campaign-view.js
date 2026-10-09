@@ -60,7 +60,7 @@
                     dialog.classList.remove("is-nudged");
                     dialog.classList.add("is-waiting");
                 }
-            }, 5000);
+            }, host.SOWCampaign.WAIT_MS);
         }
         function syncMobilePortrait() {
             if (root.hidden) return;
@@ -221,6 +221,8 @@
             root.dir = context.direction || doc.documentElement.dir || "ltr";
             root.dataset.localeScript = context.localeScript || doc.documentElement.dataset.localeScript || "latin";
             const modal = ["scene", "choice", "end"].includes(step.type);
+            if (step.guide && step.guide.kind === "ui" && step.guide.target === "attack_ratio") root.dataset.guideTarget = "attack_ratio";
+            else delete root.dataset.guideTarget;
             root.classList.toggle("is-modal", modal);
             root.classList.toggle("is-celebration", step.presentation === "celebration");
             root.classList.toggle("is-reduced", reducedMotion);
@@ -345,6 +347,8 @@
                 gesture.classList.toggle("is-camera-following", cameraTracking);
                 gesture.dataset.gesture = step.guide.gesture;
                 gesture.dataset.zoomMode = context.zoomMode || "pinch";
+                if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") gesture.dataset.guideTarget = "attack_ratio";
+                else delete gesture.dataset.guideTarget;
                 gesture.dataset.guidePath = anchor.toX != null && anchor.toY != null ? "true" : "false";
                 const follow = guideWasVisible && !wasHidden;
                 gesture.classList.toggle("is-following", follow);
@@ -353,15 +357,19 @@
                 }
                 guideX = anchor.x; guideY = anchor.y; guideWasVisible = true;
                 if (labeledGesture) {
-                    const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth;
-                    if (measureKey !== guideLabelMeasureKey) {
-                        guideLabelMeasureKey = measureKey;
-                        guideLabelWidth = gestureLabel.getBoundingClientRect().width;
+                    if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") {
+                        gestureLabel.style.transform = "translateY(-50%)";
+                    } else {
+                        const measureKey = gestureCopy.textContent + ":" + gestureMetric.textContent + ":" + root.clientWidth;
+                        if (measureKey !== guideLabelMeasureKey) {
+                            guideLabelMeasureKey = measureKey;
+                            guideLabelWidth = gestureLabel.getBoundingClientRect().width;
+                        }
+                        const halfLabel = guideLabelWidth / 2, viewportWidth = root.clientWidth;
+                        const shift = Math.max(12 - (anchor.x - halfLabel), Math.min(0, viewportWidth - 12 - (anchor.x + halfLabel)));
+                        const labelTransform = "translateX(calc(-50% + " + shift + "px))";
+                        if (gestureLabel.style.transform !== labelTransform) gestureLabel.style.transform = labelTransform;
                     }
-                    const halfLabel = guideLabelWidth / 2, viewportWidth = root.clientWidth;
-                    const shift = Math.max(12 - (anchor.x - halfLabel), Math.min(0, viewportWidth - 12 - (anchor.x + halfLabel)));
-                    const labelTransform = "translateX(calc(-50% + " + shift + "px))";
-                    if (gestureLabel.style.transform !== labelTransform) gestureLabel.style.transform = labelTransform;
                 }
                 const direction = root.dir === "rtl" ? -1 : 1;
                 const localDragX = anchor.width ? Math.min(64, anchor.width * 0.35) * direction : 0;

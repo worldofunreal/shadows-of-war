@@ -2,7 +2,6 @@ use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::execution::income_rates::{
     gold_income_per_second, trade_income_per_second, troop_income_per_second,
-    troop_upkeep_per_second,
 };
 use crate::game::GamePhase;
 
@@ -87,21 +86,13 @@ impl SowEngine {
             }
             self.state.players[idx].troops = (safe_troops + troop_income).min(max_tr);
 
-            let gold_ps = gold_income_per_second(tiles_owned, agg, &config);
+            let gold_ps = gold_income_per_second(tiles_owned, agg, leader, &config);
             let mut gold_income = config.per_tick(gold_ps);
 
             if is_standard_bot {
                 gold_income *= 0.75;
             }
-            let player = &self.state.players[idx];
-            let upkeep = if player.player_type == crate::player::PlayerType::Human
-                && !player.is_ai_controlled
-            {
-                config.per_tick(troop_upkeep_per_second(player.troops, &config))
-            } else {
-                0.0
-            };
-            self.state.players[idx].gold += gold_income - upkeep;
+            self.state.players[idx].gold += gold_income;
 
             let iq_gain = config.per_tick(self.state.players[idx].iq as f64 / 100.0);
             self.state.players[idx].iq_points =
@@ -365,7 +356,8 @@ mod zero_troop_bot_income_tests {
     fn debt_rebellion_waits_thirty_seconds_and_rearms_after_debt_ends() {
         let mut config = GameConfig::default();
         config.gold_base_income = 0.0;
-        config.troop_upkeep_per_1000 = 1_000.0;
+        config.factory_gold_income = 0.0;
+        config.territory_gold_amount = 0.0;
         let mut state = GameState::new(9, 8, 4, config.clone());
         state.phase = GamePhase::Playing;
         for (id, name) in [(1, "Human"), (2, "Opponent")] {
@@ -426,11 +418,9 @@ mod zero_troop_bot_income_tests {
             1
         );
 
-        engine.state.config.troop_upkeep_per_1000 = 0.0;
         engine.state.player_mut(1).unwrap().gold = 100.0;
         engine.state.tick = 301;
         engine.execute_income();
-        engine.state.config.troop_upkeep_per_1000 = 1_000.0;
         engine.state.player_mut(1).unwrap().gold = -1.0;
         for tick in 302..602 {
             engine.state.tick = tick;
