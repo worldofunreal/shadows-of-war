@@ -1649,33 +1649,43 @@
         }
     }
 
+    function syncDefaultDockReserve() {
+        if (hudRefs.dock && hudRefs.dock.hidden) {
+            hudRoot.style.setProperty("--sow-dock-reserve", "0px");
+        } else {
+            hudRoot.style.removeProperty("--sow-dock-reserve");
+        }
+    }
+
     function syncCompactHudBounds() {
         if (!hudRoot || !hudRefs) return;
         var density = syncCompactHudDensity();
         var coarsePointer = window.matchMedia
             && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+        hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
+        var operationAnchorTop = window.innerHeight;
+        [hudRefs.dock, hudRefs.buildingCancel].forEach(function (element) {
+            if (!element || element.hidden || !element.getClientRects().length) return;
+            operationAnchorTop = Math.min(operationAnchorTop, element.getBoundingClientRect().top);
+        });
+        if (operationAnchorTop < window.innerHeight) {
+            hudRoot.style.setProperty(
+                "--sow-hud-layout-operations-bottom",
+                Math.ceil(window.innerHeight - operationAnchorTop + 2) + "px"
+            );
+        }
         if (!coarsePointer) {
-            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge", "--sow-hud-layout-operations-bottom", "--sow-dock-reserve"].forEach(function (property) {
+            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge"].forEach(function (property) {
                 hudRoot.style.removeProperty(property);
             });
+            syncDefaultDockReserve();
             return;
         }
-        hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
         if (density >= 1) {
-            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge", "--sow-dock-reserve"].forEach(function (property) {
+            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge"].forEach(function (property) {
                 hudRoot.style.removeProperty(property);
             });
-            var operationAnchorTop = window.innerHeight;
-            [hudRefs.dock, hudRefs.buildingCancel].forEach(function (element) {
-                if (!element || element.hidden || !element.getClientRects().length) return;
-                operationAnchorTop = Math.min(operationAnchorTop, element.getBoundingClientRect().top);
-            });
-            if (operationAnchorTop < window.innerHeight) {
-                hudRoot.style.setProperty(
-                    "--sow-hud-layout-operations-bottom",
-                    Math.ceil(window.innerHeight - operationAnchorTop + 8) + "px"
-                );
-            }
+            syncDefaultDockReserve();
             return;
         }
         var top = 0;
@@ -1712,7 +1722,8 @@
         });
         if (stackBottom === 0) stackBottom = window.innerHeight;
         var stackHeight = Math.max(0, Math.ceil(stackBottom - stackTop));
-        hudRoot.style.setProperty("--sow-dock-reserve", (stackHeight + Math.max(8, safeBottom) + 8) + "px");
+        var dockReserve = stackHeight > 0 ? stackHeight + Math.max(8, safeBottom) + 8 : 0;
+        hudRoot.style.setProperty("--sow-dock-reserve", dockReserve + "px");
         hudRoot.style.setProperty("--sow-hud-layout-bottom-edge", Math.floor(stackTop - 8) + "px");
         var freeOperationsHeight = Math.max(0, dockAnchorTop - Math.max(actionTop, top + 8) - safeBottom - 6);
         var operationCap = Math.max(0, Math.min(window.innerHeight * 0.2, freeOperationsHeight) / density).toFixed(1) + "px";
@@ -2114,6 +2125,8 @@
         var currentRatio = Number.isFinite(hud.attack_ratio) ? hud.attack_ratio : 0.5;
         var spawnSecs = hud.spawn_timer_secs;
         var isDeploying = spawnSecs != null && spawnSecs > 0;
+        var hasBuildingItems = false;
+        var hasFleetItems = false;
 
         var goldText = formatHudMetric(gold);
         if (hudRefs.plateGold && hudRefs.plateGold.dataset.val !== goldText) {
@@ -2209,7 +2222,6 @@
             }
         }
         if (hudRefs.buildingsStrip) {
-            hudRefs.buildingsStrip.style.display = isDeploying ? "none" : "flex";
             var selectedBuilding = hud.selected_building;
             var buildingCosts = hud.building_costs || {};
             var buildUnlocks = campaignUnlocks(hud);
@@ -2237,6 +2249,8 @@
                 button.setAttribute("aria-label", accessibleLabel);
                 if (button.title !== accessibleLabel) button.title = accessibleLabel;
             });
+            hasBuildingItems = hudRefs.buildingButtons.some(function (button) { return !button.hidden; });
+            hudRefs.buildingsStrip.style.display = !isDeploying && hasBuildingItems ? "flex" : "none";
         }
         if (hudRefs.fleetStrip) {
             var fleetPanel = hud.fleet_panel || {};
@@ -2321,7 +2335,7 @@
                 hudRefs.fleetNuke.title = nukeLabel;
                 setCampaignLock(hudRefs.fleetNuke, fleetUnlocks === null && nukeDisabled, nukeReason);
             }
-            var hasFleetItems = (hudRefs.fleetTrade && !hudRefs.fleetTrade.hidden)
+            hasFleetItems = (hudRefs.fleetTrade && !hudRefs.fleetTrade.hidden)
                 || (hudRefs.fleetWarship && !hudRefs.fleetWarship.hidden)
                 || (hudRefs.fleetNuke && !hudRefs.fleetNuke.hidden);
             hudRefs.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
@@ -2485,6 +2499,11 @@
             surrenderModalOpen || emojiPickerOpen || isOver
             || devSidebarOpen || settingsOpen || mapMenuOpen
         ));
+        var dockHidden = !(isDeploying || hasBuildingItems || hasFleetItems);
+        if (hudRefs.dock && hudRefs.dock.hidden !== dockHidden) {
+            hudRefs.dock.hidden = dockHidden;
+            syncCompactHudBounds();
+        }
     }
 
     if (hudRoot) {

@@ -28,7 +28,6 @@ const licenseMenuLayout = fs.readFileSync(path.join(shell, "main_menu.layout.css
 const lobbiesSource = fs.readFileSync(path.join(shell, "main_menu.lobbies.js"), "utf8");
 const tutorial = fs.readFileSync(path.join(shell, "main_menu.tutorial.js"), "utf8");
 const webCatalogEn = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
-const webCatalogEs = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8");
 const campaignEngine = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
 const campaignView = fs.readFileSync(path.join(shell, "sow-campaign-view.js"), "utf8");
 const storyCss = fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
@@ -1391,11 +1390,11 @@ test("Boudica final decision opens at 5,000 tiles and targets her on the map", (
     assert.match(campaignEditor, /if \(\["scene", "choice", "objective", "guide"\]\.includes\(step\.type\)\) \{\s*var markerPanel/);
 });
 
-test("Boudica reveal beats share a fixed one-second wait while tribal contact stays immediate", () => {
+test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact stays immediate", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const waitSteps = definition.steps.filter(step => step.wait_before === true).map(step => step.id);
-    assert.equal(campaign.WAIT_MS, 1000);
+    assert.equal(campaign.WAIT_MS, 1100);
     assert.deepEqual(waitSteps, [
         "boudica_first_victory_scene", "boudica_city_intro", "boudica_aid_choice",
         "boudica_city_ready", "boudica_city_upgrade_ready", "boudica_outpost_colonia_veterans_scene",
@@ -1408,7 +1407,7 @@ test("Boudica reveal beats share a fixed one-second wait while tribal contact st
     assert.equal(definition.steps.some(step => /factory|bunker/.test(step.id)), false);
     assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
     assert.doesNotMatch(campaignEditor, /start_delay_seconds|advance_delay_seconds/);
-    assert.match(campaignEditor, /Wait 1 second before showing/);
+    assert.match(campaignEditor, /Wait 1\.1 seconds before showing/);
     assert.match(campaignEditor, /var canTick = Boolean\(\(trigger && trigger\.type === "elapsed"\) \|\| timedRoute\)/);
     assert.match(tutorial, /stepRevealToken !== waitingToken[\s\S]*waitingMachine\.view\(\)\.step\.id === waitingStepId/);
     assert.match(campaignEditor, /previewRevealToken !== waitingToken[\s\S]*waitingMachine\.view\(\)\.step\.id === waitingStepId/);
@@ -1439,7 +1438,7 @@ test("Boudica reveal beats share a fixed one-second wait while tribal contact st
         { id: "end", type: "end", title_key: "end" }
     ] }, "choice", null, () => choiceClock);
     assert.equal(decision.advance("yes", "choice"), false, "a hidden choice cannot be selected");
-    choiceClock = 1000;
+    choiceClock = 1100;
     assert.equal(decision.view().waiting, false);
     assert.equal(decision.advance("yes", "choice"), true, "the visible choice responds immediately");
     assert.equal(decision.view().step.id, "scene");
@@ -1626,7 +1625,7 @@ test("camera practice stays paused through desktop and touch routes", () => {
         version: 2, episode_id: "camera_practice_test", text_namespace: "tutorial.camera_practice_",
         settings: { starting_troops: 1000 }, speakers: {}, entry: "boudica_zoom_out",
         steps: [
-            { id: "boudica_zoom_out", type: "objective", title_key: "tutorial.zoom_out", trigger: { type: "zoom_out_complete", value: 1, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_out" }, pause_game: true, camera_only: true, next: "boudica_camera_drag" },
+            { id: "boudica_zoom_out", type: "objective", title_key: "tutorial.zoom_out", trigger: { type: "zoom_out_complete", value: 0.95, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_out" }, pause_game: true, camera_only: true, next: "boudica_camera_drag" },
             { id: "boudica_camera_drag", type: "objective", title_key: "tutorial.camera_drag", trigger: { type: "camera_target", target: "suetonius_paulinus", distance: 8, scope: "step" }, marker: { target: "suetonius_paulinus" }, guide: { kind: "world", target: "target_action", gesture: "drag" }, pause_game: true, camera_only: true, next: "boudica_camera_hover" },
             { id: "boudica_camera_hover", type: "objective", title_key: "tutorial.camera_hover", trigger: { type: "hover", target: "suetonius_paulinus", value: 1, scope: "step" }, marker: { target: "suetonius_paulinus" }, guide: { kind: "world", target: "target_action", gesture: "hover" }, pause_game: true, camera_only: true, next: "boudica_zoom_in" },
             { id: "boudica_zoom_in", type: "objective", title_key: "tutorial.zoom_in", trigger: { type: "zoom_in_complete", target: "suetonius_paulinus", distance: 8, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_in" }, pause_game: true, camera_only: true, next: "boudica_found_suetonius" },
@@ -1695,9 +1694,9 @@ test("camera practice stays paused through desktop and touch routes", () => {
     }
     const zoomStart = 1, zoomFloor = 0.2, zoomClose = 0.75;
     const initialFacts = { camera_zoom: zoomStart, camera_zoom_start: zoomStart, camera_zoom_floor: zoomFloor, camera_zoom_target: zoomClose, zoom_out_events: 0, zoom_in_events: 0, camera_target_distance: 30, zoom_out_complete: 0, zoom_in_complete: 0 };
-    const zoomOutGoal = campaign.zoomOutTarget(initialFacts, 1);
-    assert.equal(zoomOutGoal, zoomFloor, "zoom-out reaches the map's zoom limit");
-    assert.equal(campaign.zoomOutProgress({ ...initialFacts, camera_zoom: zoomOutGoal }), 1);
+    const zoomOutGoal = campaign.zoomOutTarget(initialFacts, 0.95);
+    assert.ok(Math.abs(zoomOutGoal - 0.24) < 0.00001, "zoom-out brings the battlefield close to its wide-view limit");
+    assert.ok(Math.abs(campaign.zoomOutProgress({ ...initialFacts, camera_zoom: zoomOutGoal }) - 0.95) < 0.00001);
     let desktopClock = 0;
     const desktop = campaign.create(definition, "boudica_zoom_out", { factions: [] }, () => desktopClock);
     desktop.update(initialFacts, {}, 0);
@@ -1742,19 +1741,19 @@ test("camera practice stays paused through desktop and touch routes", () => {
     assert.equal(desktop.view().paused, true);
     assert.match(tutorial, /machineView\.waiting[\s\S]*runtime\.view\.render\(null\)[\s\S]*window\.setTimeout/);
     assert.equal(desktop.advance(null, "boudica_city_intro"), false);
-    desktopClock = 999;
-    assert.equal(desktop.view().waiting, true, "dialogue stays hidden through 999ms");
-    desktopClock = 1000;
-    assert.equal(desktop.view().waiting, false, "dialogue reveals at exactly 1000ms");
+    desktopClock = 1099;
+    assert.equal(desktop.view().waiting, true, "dialogue stays hidden through 1099ms");
+    desktopClock = 1100;
+    assert.equal(desktop.view().waiting, false, "dialogue reveals at exactly 1100ms");
     assert.equal(desktop.advance(null, "boudica_city_intro"), true);
     assert.equal(desktop.view().step.id, "boudica_choose_city");
     let revealClock = 0;
     const timedReturn = campaign.create(definition, "boudica_camera_home", { factions: [] }, () => revealClock);
     timedReturn.update({}, {});
     assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
-    revealClock = 999;
+    revealClock = 1099;
     assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, true);
-    revealClock = 1000;
+    revealClock = 1100;
     assert.equal(timedReturn.update({}, { hud_center_camera: 1 }).waiting, false);
     assert.equal(timedReturn.advance(null, "boudica_city_intro"), true);
     assert.equal(timedReturn.view().step.id, "boudica_choose_city");
@@ -1818,7 +1817,7 @@ test("disabled neutral offers stay hidden while named story dialogues and legacy
     assert.equal(legacyGeneric.update(neutralFacts, {}).reaction, "neutral_contact_terms", "a missing legacy field keeps the old offer behavior");
 });
 
-test("defeat scenes wait one second when attack and defeat arrive in the same turn", () => {
+test("defeat scenes wait 1.1 seconds when attack and defeat arrive in the same turn", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     let clock = 0;
     const definition = { entry: "attack", steps: [
@@ -1843,12 +1842,12 @@ test("defeat scenes wait one second when attack and defeat arrive in the same tu
         eliminated_faction_ids: ["outpost"]
     };
     const revealed = machine.update(attackAndDefeat, {});
-    assert.equal(revealed.step.id, "victory_scene", "objective completion transitions immediately to the one-second scene wait");
+    assert.equal(revealed.step.id, "victory_scene", "objective completion transitions immediately to the 1.1-second scene wait");
     assert.equal(revealed.waiting, true);
     assert.equal(machine.advance(null, "victory_scene"), false, "the hidden scene cannot be skipped");
-    clock = 999;
+    clock = 1099;
     assert.equal(machine.view().waiting, true);
-    clock = 1000;
+    clock = 1100;
     assert.equal(machine.view().waiting, false);
     assert.equal(machine.advance(null, "victory_scene"), true);
     assert.equal(machine.view().step.id, "end");
@@ -3368,6 +3367,167 @@ test("campaign speaker picker is sourced from existing avatar assets and rejects
     assert.ok(campaign.validate(definition, null, { hasAvatar: avatar => avatar === "boudica" }).errors.some(issue => issue.field === "speakers"));
 });
 
+test("Boudica spoken cards and contact responses require named existing portraits", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definitionPath = path.join(shell, "../../assets/campaign/boudica.triggers.json");
+    const rosterPath = path.join(shell, "../../assets/campaign/boudica.json");
+    const avatarDir = path.join(shell, "../../assets/gameplay/avatars");
+    const definition = JSON.parse(fs.readFileSync(definitionPath, "utf8"));
+    const roster = JSON.parse(fs.readFileSync(rosterPath, "utf8"));
+    const options = { hasText: () => true, hasAvatar: avatar => fs.existsSync(path.join(avatarDir, avatar + ".webp")) };
+    const report = value => campaign.validate(value, roster, options);
+    assert.equal(definition.require_speaker_portraits, true);
+    assert.deepEqual(report(definition).errors, []);
+
+    const inheritedSpeaker = structuredClone(definition);
+    const inheritedScene = inheritedSpeaker.steps.find(step => step.id === "boudica_camera_intro");
+    inheritedScene.lines = [{ title_key: inheritedScene.title_key, body_key: inheritedScene.body_key }];
+    assert.deepEqual(report(inheritedSpeaker).errors, [], "conversation lines inherit the scene speaker");
+
+    const missingSpeaker = structuredClone(definition);
+    delete missingSpeaker.steps.find(step => step.id === "boudica_camera_intro").speaker;
+    assert.ok(report(missingSpeaker).errors.some(issue => issue.step === "boudica_camera_intro" && issue.field === "speaker"));
+
+    const missingPortrait = structuredClone(definition);
+    missingPortrait.speakers.boudica.avatar = "missing_portrait";
+    assert.ok(report(missingPortrait).errors.some(issue => issue.field === "speakers" || issue.field === "speaker"));
+
+    const missingDynamicRole = structuredClone(definition);
+    delete missingDynamicRole.reactions.find(reaction => reaction.id === "neutral_contact_terms").speaker_role_key;
+    assert.ok(report(missingDynamicRole).errors.some(issue => issue.field === "reactions.speaker"));
+
+    const missingFactionPortrait = structuredClone(definition);
+    roster.factions.find(faction => faction.id === "stonea").avatar = "null";
+    assert.ok(report(missingFactionPortrait).errors.some(issue => issue.field === "speaker" && /portrait/.test(issue.message)));
+    roster.factions.find(faction => faction.id === "stonea").avatar = "stonea";
+
+    const completion = definition.steps.find(step => step.id === "boudica_complete");
+    assert.equal(completion.type, "end");
+    assert.equal(completion.body_key, undefined);
+    assert.equal(completion.speaker, undefined, "the technical completion card remains unvoiced");
+
+    assert.match(campaignView, /data:image\/svg\+xml/);
+    assert.match(campaignView, /sow_portrait_retry=1/);
+    assert.match(campaignView, /requestId !== portraitRequestId/);
+    assert.match(campaignView, /portrait\.hidden = false; root\.classList\.add\("has-portrait"\)/);
+    assert.match(campaignView, /dialogue_id: stepId, image: source/);
+    assert.doesNotMatch(campaignView, /image\.addEventListener\("error",\s*\(\)\s*=>\s*\{\s*portrait\.hidden\s*=\s*true/);
+
+    assert.match(campaignView, /const speakerName = \[roleName, factionName\]\.filter\(Boolean\)\.join\(" · "\)/);
+    assert.match(campaignView, /character\.name_key \? t\(character\.name_key\)/);
+    assert.match(campaignEditor, /if \(speaker\.name_key\) catalogTextField\(card, "Role", speaker\.name_key, 2\)/);
+    assert.match(campaignEditor, /if \(value\.indexOf\("faction:"\) === 0\) \{ speaker\.faction = value\.slice\(8\); delete speaker\.avatar; \}/);
+    for (const key of ["campaign_boudica_speaker_warrior", "campaign_boudica_speaker_elder", "campaign_boudica_speaker_chief", "campaign_boudica_speaker_envoy", "campaign_boudica_speaker_clan_envoy"]) {
+        assert.match(webCatalogEn, new RegExp("^" + key + " = \\\".+\\\"$", "m"));
+    }
+});
+
+test("campaign portraits retry, recover, keep a fallback, and ignore stale image errors", async () => {
+    const createdImages = [], warnings = [];
+    class Element {
+        constructor(ownerDocument, tagName) {
+            this.ownerDocument = ownerDocument; this.tagName = tagName; this.listeners = {}; this.queries = new Map();
+            this.children = []; this.attributes = {}; this.dataset = {}; this.hidden = false; this.textContent = "";
+            this.style = { setProperty() {}, removeProperty() {}, getPropertyValue() { return ""; } };
+            const classes = new Set();
+            this.classList = {
+                add: (...values) => values.forEach(value => classes.add(value)),
+                remove: (...values) => values.forEach(value => classes.delete(value)),
+                toggle: (value, force) => force === undefined ? (classes.has(value) ? classes.delete(value) : classes.add(value)) : (force ? classes.add(value) : classes.delete(value)),
+                contains: value => classes.has(value)
+            };
+            this.clientWidth = 800; this.clientHeight = 600; this.scrollHeight = 20; this.isConnected = true;
+        }
+        addEventListener(type, listener, options) { (this.listeners[type] ||= []).push({ listener, once: Boolean(options && options.once) }); }
+        removeEventListener(type, listener) { this.listeners[type] = (this.listeners[type] || []).filter(item => item.listener !== listener); }
+        dispatch(type) {
+            const listeners = this.listeners[type] || [];
+            this.listeners[type] = listeners.filter(item => !item.once);
+            listeners.forEach(item => item.listener({ type, target: this, stopPropagation() {}, preventDefault() {} }));
+        }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) { return this.attributes[name] || null; }
+        hasAttribute(name) { return Object.hasOwn(this.attributes, name); }
+        removeAttribute(name) { delete this.attributes[name]; }
+        querySelector(selector) {
+            if (!this.queries.has(selector)) this.queries.set(selector, new Element(this.ownerDocument, /img$/.test(selector) ? "img" : selector === "video" ? "video" : "div"));
+            return this.queries.get(selector);
+        }
+        querySelectorAll() { return []; }
+        replaceChildren(...children) { this.children = children; }
+        appendChild(child) { this.children.push(child); return child; }
+        contains(child) { return this.children.includes(child) || [...this.queries.values()].includes(child); }
+        getBoundingClientRect() { return { width: 100, height: 40 }; }
+        focus() { this.ownerDocument.activeElement = this; }
+        pause() {}
+        load() {}
+        click() {}
+    }
+    const doc = {
+        documentElement: { dir: "ltr", dataset: { localeScript: "latin" } },
+        defaultView: { matchMedia: () => ({ matches: false }), performance: { now: () => 1 }, navigator: {} },
+        createElement(tagName) { const element = new Element(this, tagName); if (tagName === "img") createdImages.push(element); return element; },
+        addEventListener() {}, removeEventListener() {}
+    };
+    doc.defaultView.getComputedStyle = () => ({ marginBottom: "0px" });
+    const root = new Element(doc, "div"); root.ownerDocument = doc; root.hidden = true;
+    const sandbox = { console: { warn: (...args) => warnings.push(args) }, setTimeout, clearTimeout };
+    vm.runInNewContext(campaignView, sandbox, { filename: "sow-campaign-view.js" });
+    const renderer = sandbox.SOWCampaignView.mount(root, {
+        asset: value => "/" + value,
+        translate: key => key,
+        roster: { factions: [] },
+        onContinue() {}, onDismiss() {}, onChoice() {}
+    });
+    const definition = {
+        episode_id: "portrait_test",
+        speakers: {
+            first: { name: "First Speaker", avatar: "first" },
+            retry: { name: "Retry Speaker", avatar: "retry" },
+            recover: { name: "Recover Speaker", avatar: "recover" },
+            late: { name: "Late Speaker", avatar: "late" }
+        }, steps: [], reactions: []
+    };
+    const paint = (id, speakerKey) => {
+        const step = { id, type: "scene", speaker: speakerKey, title_key: id + "_title", body_key: id + "_body", presentation: "dialogue" };
+        renderer.render({ definition, step, line: step, paused: true, done: false, choices: [], progress: { target: 1, current: 0 }, state: { line: 0 } }, {});
+    };
+    const candidate = avatar => createdImages.slice().reverse().find(image => image.src === "/gameplay/avatars/" + avatar + ".webp");
+    const settle = () => new Promise(resolve => setImmediate(resolve));
+
+    paint("first_scene", "first");
+    candidate("first").dispatch("load"); await settle();
+    assert.equal(root.querySelector(".sow-story__portrait").children[0], candidate("first"), "a successful preloaded portrait is reused");
+
+    paint("retry_scene", "retry");
+    const retry = candidate("retry"); retry.dispatch("error");
+    assert.match(retry.src, /sow_portrait_retry=1/);
+    retry.dispatch("load"); await settle();
+    assert.equal(root.querySelector(".sow-story__portrait").children[0], retry, "the one retry restores the correct portrait");
+
+    paint("failed_scene", "recover");
+    const failed = candidate("recover"); failed.dispatch("error"); failed.dispatch("error"); await settle();
+    const portrait = root.querySelector(".sow-story__portrait");
+    assert.match(portrait.children[0].src, /^data:image\/svg\+xml/);
+    assert.equal(portrait.hidden, false);
+    assert.equal(root.querySelector(".sow-story__speaker").textContent, "Recover Speaker");
+    assert.ok(warnings.some(args => args[1] && args[1].dialogue_id === "failed_scene" && args[1].image.includes("recover.webp")));
+
+    paint("recovered_scene", "recover");
+    const recovered = candidate("recover"); recovered.dispatch("load"); await settle();
+    assert.equal(portrait.children[0], recovered, "a later successful load replaces the generic fallback");
+
+    paint("late_scene", "late");
+    const late = candidate("late"); late.dispatch("load"); await settle();
+    paint("current_scene", "first"); await settle();
+    const current = candidate("first");
+    assert.equal(portrait.children[0], current);
+    late.dispatch("error");
+    assert.equal(portrait.children[0], current, "a late error from the previous speaker does not replace the current portrait");
+    assert.equal(root.querySelector(".sow-story__speaker").textContent, "First Speaker");
+    renderer.destroy();
+});
+
 test("campaign studio reads speaker names from shared text keys", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     assert.match(campaignEditor, /var keyBase = storyKey\("speaker_" \+ speakerId \+ "_name"\)/);
@@ -3678,20 +3838,22 @@ test("shared player and economy panel stays above tutorial quests on desktop and
     assert.doesNotMatch(hud, /id="sow-hud-resource-row"/);
     assert.match(hudCss, /\.sow-hud__nameplate:not\(\[hidden\]\) \{ display: grid/);
     assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*top: max\(12px, var\(--sow-sat\)\)[^}]*inset-inline-start: max\(16px, var\(--sow-sal\)\)[^}]*height: var\(--sow-player-panel-height\)/);
-    assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*grid-template-columns: 54px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) 24px 20px/);
-    assert.match(hudCss, /\.sow-hud__nameplate-avatar \{[^}]*grid-row: 1 \/ -1;[^}]*height: 100%/);
+    assert.match(hudCss, /\.sow-hud__nameplate-avatar \{[^}]*grid-row: 1 \/ 3;[^}]*width: 100%;[^}]*height: auto;[^}]*aspect-ratio: 1;/);
+    assert.doesNotMatch(hudCss, /\.sow-hud__nameplate-avatar\s*\{[^}]*height: 100%/,
+        "responsive rules cannot stretch a square avatar across the whole plate");
+    assert.match(hudCss, /\.sow-hud__nameplate-economy \{[^}]*grid-column: 1 \/ -1;[^}]*align-self: stretch;/,
+        "the three indicators use the full width and height of the bottom row");
     assert.match(hudCss, /\.sow-hud__nameplate-copy \{\s*display: contents;\s*\}/);
     assert.match(hudCss, /\.sow-hud__nameplate-copy strong \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap/);
     assert.match(hudCss, /\.sow-hud__nameplate-copy strong \{[^}]*font-size: 20px/);
-    assert.match(hudCss, /\.sow-hud__nameplate-bar \{[^}]*grid-column: 2;[^}]*height: 24px/);
+    assert.match(hudCss, /\.sow-hud__nameplate-bar \{[^}]*grid-column: 2;[^}]*grid-row: 2;/);
     assert.match(hudCss, /\.sow-hud__nameplate-bar > span \{[^}]*inset: 0;[^}]*display: flex;[^}]*align-items: center;[^}]*justify-content: center/);
     assert.match(hud, /formatNameplateTroops\(troops\) \+ " \/ " \+ formatNameplateTroops\(maxTroops\)/);
     assert.match(hud, /var plateFillPct = maxTroops > 0 \? Math\.min\(100, Math\.max\(0, \(troops \/ maxTroops\) \* 100\)\) : 0/);
     assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*width: 280px/);
     assert.match(hudCss, /@media \(max-width: 720px\) \{\s*:root \{[^}]*--sow-player-panel-height: 84px;[^}]*\}[^]*?\.sow-hud__nameplate \{[^}]*width: min\(224px,/);
-    assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate \{[^}]*grid-template-columns: 50px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) 20px 18px/);
     assert.match(hudCss, /@media \(max-width: 720px\) \{\s*:root \{[^}]*--sow-tutorial-progress-height: 28px;[^}]*--sow-tutorial-progress-label-size: 15px/);
-    assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate-copy strong \{ font-size: 18px; \}[^]*?\.sow-hud__nameplate-bar \{ height: 20px; \}/);
+    assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate-copy strong \{ font-size: 18px; \}/);
     assert.match(hud, /"--sow-player-panel-height": \(storyRoot \? 92 \* density : 92\)\.toFixed\(2\) \+ "px"[\s\S]*?"--sow-tutorial-progress-height": "24px"[\s\S]*?"--sow-tutorial-progress-label-size": \(14 \/ density\)\.toFixed\(2\) \+ "px"/);
     assert.match(hudCss, /grid-template-columns: 46px minmax\(0, 1fr\)/);
     assert.match(storyCss, /\.sow-story__meter progress \{[^}]*height: var\(--sow-tutorial-progress-height\)/);
@@ -4202,11 +4364,21 @@ test("mobile overlays never hide the building dock and story dialogs remain abov
     assert.ok(overlayRules.length >= 2, "portrait and short-landscape overlay rules remain covered");
     assert.ok(overlayRules.every(rule => !rule.includes(".sow-hud__dock")),
         "transient menus and panels cannot hide the persistent building dock");
-    assert.match(hud, /hudRefs\.buildingsStrip\.style\.display = isDeploying \? "none" : "flex"/,
-        "the building strip still hides during deployment and returns afterward");
+    assert.match(hud, /hudRefs\.buildingsStrip\.style\.display = !isDeploying && hasBuildingItems \? "flex" : "none"/,
+        "the building strip hides when deployment is active or the tutorial locks every building");
     assert.match(hudCss, /\.sow-hud__dock\s*\{[^}]*z-index: 50/s);
     assert.match(storyCss, /\.sow-story\s*\{[^}]*z-index: 210/s,
         "blocking story dialogs can cover the dock");
+});
+
+test("tutorial collapses an empty action dock and releases its combat-operation space", () => {
+    assert.match(hud, /hasBuildingItems = hudRefs\.buildingButtons\.some\(function \(button\) \{ return !button\.hidden; \}\)/);
+    assert.match(hud, /var dockHidden = !\(isDeploying \|\| hasBuildingItems \|\| hasFleetItems\)/);
+    assert.match(hud, /if \(hudRefs\.dock && hudRefs\.dock\.hidden !== dockHidden\) \{\s*hudRefs\.dock\.hidden = dockHidden;\s*syncCompactHudBounds\(\);\s*\}/);
+    assert.match(hudCss, /\.sow-hud__dock\[hidden\] \{ display: none !important; \}/);
+    assert.match(hud, /function syncDefaultDockReserve\(\) \{\s*if \(hudRefs\.dock && hudRefs\.dock\.hidden\) \{\s*hudRoot\.style\.setProperty\("--sow-dock-reserve", "0px"\)/);
+    assert.match(hud, /var dockReserve = stackHeight > 0 \? stackHeight \+ Math\.max\(8, safeBottom\) \+ 8 : 0/);
+    assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__dock-stack\s*\{[^}]*flex-direction: column-reverse/);
 });
 
 // Owner decision: the return guide in the main menu is the hand only. The
@@ -4255,9 +4427,13 @@ test("tutorial locale and UI guides resolve per episode and point to actual HUD 
     assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-left-together/);
     assert.match(storyCss, /data-gesture="zoom_out"[^\n]*story-right-together/);
     assert.match(storyCss, /data-gesture="pan_keys"/);
-    assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : "wheel"/);
+    assert.match(campaignEditor, /var zoomMode = \$\("#device"\)\.value === "mobile" \? "pinch" : window\.SOWCampaign\.zoomInputMode\(\{ platform: previewPlatform \}\)/);
+    assert.match(campaignEditor, /stepTextKey\(model\.step, "_" \+ zoomMode\)[\s\S]*_hint[\s\S]*_label/);
+    assert.match(tutorial, /stepTextKey\(step, "_" \+ context\.zoomMode \+ "_hint"\)/);
+    assert.match(tutorial, /stepTextKey\(step, "_" \+ context\.zoomMode \+ "_label"\)/);
     assert.match(tutorial, /context\.gestureHint = context\.hintOverride/);
-    assert.match(campaignView, /showGestureHint = showGestureText && gestureType === "hover"[\s\S]*context\.gestureHint \|\| context\.hintOverride/);
+    assert.match(campaignView, /showGestureHint = showGestureText && \(gestureType === "hover" \|\| zoomGuide\)[\s\S]*context\.gestureHint \|\| context\.hintOverride/);
+    assert.match(campaignEngine, /\["pinch", "trackpad", "wheel"\]\.forEach\(mode => \["_hint", "_label"\]/);
     assert.match(storyCss, /\.sow-story__gesture-hint \{[^}]*text-transform: none/);
     assert.match(campaignEngine, /menu_campaign:/);
     assert.match(campaignEngine, /map_attack:/);
@@ -5084,13 +5260,11 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.equal(renderContextFor("pinch", true, expansionStep, { paused_action: "expand_once_then_resume" }).gestureLabel, "Tap to expand");
     assert.equal(renderContextFor("wheel", true, expansionStep, { paused_action: null }).gestureLabel, "Keep expanding");
     const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
-    const spanish = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8");
     assert.match(english, /campaign_boudica_boudica_first_expansion_desktop_action = "Click to expand"/);
     assert.match(english, /campaign_boudica_boudica_first_expansion_mobile_action = "Tap to expand"/);
     assert.match(english, /campaign_boudica_boudica_first_expansion_continue_action = "Keep expanding"/);
-    assert.match(spanish, /campaign_boudica_boudica_first_expansion_desktop_action = "Haz clic para expandir"/);
-    assert.match(spanish, /campaign_boudica_boudica_first_expansion_mobile_action = "Toca para expandir"/);
-    assert.match(spanish, /campaign_boudica_boudica_first_expansion_continue_action = "Sigue expandiendo"/);
+    assert.match(english, /campaign_boudica_boudica_camera_home_desktop_action = "Click Home"/);
+    assert.match(english, /campaign_boudica_boudica_camera_home_mobile_action = "Tap Home"/);
     assert.match(campaignView, /Boolean\(context\.gestureLabel\)/);
     assert.match(campaignView, /if \(labeledGesture\) setText\(gestureCopy,[^\n]*context\.gestureLabel/);
     assert.match(campaignView, /showGestureText = !step\.guide \|\| step\.guide\.show_label !== false/);
@@ -5103,8 +5277,11 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.doesNotMatch(anchorSource, /guide\.target === "hud_center_camera"[\s\S]*root\.clientWidth/);
     assert.doesNotMatch(anchorSource, /delete result\.(?:width|height)/);
     assert.match(campaignView, /const homeGuide = Boolean\(step\.guide[\s\S]*step\.trigger\.action === "hud_center_camera"\)/);
-    assert.match(campaignView, /const originX = homeGuide \? root\.clientWidth \* 0\.5 : anchor\.x/);
-    assert.match(campaignView, /const originY = homeGuide \? root\.clientHeight \* 0\.5 : anchor\.y/);
+    assert.match(campaignView, /const animateHomeGuide = homeGuide && !reducedMotion/);
+    assert.match(campaignView, /const originX = animateHomeGuide \? root\.clientWidth \* 0\.5 : anchor\.x/);
+    assert.match(campaignView, /const originY = animateHomeGuide \? root\.clientHeight \* 0\.5 : anchor\.y/);
+    assert.match(campaignView, /const homeMotionPending = animateHomeGuide && homeGuideAnimationStep !== step.id/);
+    assert.match(campaignView, /const follow = !homeGuide && guideWasVisible && !wasHidden/);
     assert.match(campaignView, /homeGuide \? anchor\.x - originX/);
     assert.match(campaignView, /homeGuide \? anchor\.y - originY/);
     assert.match(campaignView, /spotlight\.classList\.toggle\("is-dimmed", Boolean\(guideVisible && \(anchor\.dimOutside \|\| step\.guide\.kind === "ui"\)\)\)/);
@@ -5114,7 +5291,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     assert.match(storyCss, /\.sow-story__spotlight \{[^}]*pointer-events:\s*none/);
 });
 
-test("all campaign tap guides have a shared action label and localized fallback", () => {
+test("campaign tap guides use shared action labels and localized fallback", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const campaignDir = path.join(shell, "../../assets/campaign");
     const definitions = fs.readdirSync(campaignDir)
@@ -5141,13 +5318,6 @@ test("all campaign tap guides have a shared action label and localized fallback"
                 : ["hand_click_" + category, "hand_tap_" + category];
             for (const key of keys) assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"), locale + " is missing " + key);
         }
-        for (const stepId of ["boudica_first_expansion", "boudica_camera_home"]) {
-            for (const suffix of ["_desktop_action", "_mobile_action"]) {
-                const key = "campaign_boudica_" + stepId + suffix;
-                assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"), locale + " is missing " + key);
-            }
-        }
-        assert.match(catalog, /^campaign_boudica_boudica_first_expansion_continue_action = ".+"$/m, locale + " is missing the resumed expansion label");
     }
     const contextStart = tutorial.indexOf("    function renderContext(");
     const contextEnd = tutorial.indexOf("\n    function fetchJson(", contextStart);
@@ -5225,15 +5395,10 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.match(campaignSource, /trigger\.action === "attack_ratio"[\s\S]*current = Number\(facts\.attack_ratio \|\| 0\)[\s\S]*target = Number\(trigger\.value \|\| 1\)/);
     assert.match(tutorial, /key === "attack_ratio" && currentStep && currentStep\.trigger[\s\S]*currentStep\.trigger\.action === key\) return/);
     const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
-    const spanish = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/es/web.toml"), "utf8");
-    assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Move the attack slider to 100%\."/);
-    assert.match(spanish, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Sube la barra de ataque al 100%\."/);
+    assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Commit the Full Host"/);
     assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
-    assert.match(spanish, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
     assert.match(english, /campaign_boudica_boudica_ninth_strike_title = "No Escape for the Ninth"/);
-    assert.match(english, /campaign_boudica_boudica_ninth_strike_body = "The Ninth came to save Camulodunum\. Its infantry fell; Cerialis fled with the cavalry\.[^"]*Leave none of the Ninth to run\./);
-    assert.match(spanish, /campaign_boudica_boudica_ninth_strike_title = "La Novena no escapará"/);
-    assert.match(spanish, /campaign_boudica_boudica_ninth_strike_body = "La Novena llegó para salvar Camulodunum\. Su infantería cayó; Cerialis huyó con la caballería\.[^"]*Que ningún hombre de la Novena vuelva a escapar\./);
+    assert.match(english, /campaign_boudica_boudica_ninth_strike_body = "The Ninth is Rome’s answer to Camulodunum\.[^"]*leave Cerialis no chance to regroup\./);
     assert.match(campaignView, /anchor\.dimOutside \|\| step\.guide\.kind === "ui"/);
     assert.match(campaignView, /root\.dataset\.guideTarget = "attack_ratio"/);
     assert.match(storyCss, /orientation: landscape\) and \(max-height: 560px\)[\s\S]*?data-guide-target="attack_ratio"\] \.sow-story__objective \{ inset-inline-start: 50%/);
@@ -5248,6 +5413,55 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.match(campaignEditor, /anchorRect = guide\.kind === "ui" \? \$\("#previewRoot"\)\.getBoundingClientRect\(\) : frameRect/);
     assert.match(campaignEditor, /if \(Number\.isFinite\(anchor\.spotlightX\)\) anchor\.spotlightX -= anchorRect\.left/);
     assert.match(campaignEditor, /if \(Number\.isFinite\(anchor\.spotlightY\)\) anchor\.spotlightY -= anchorRect\.top/);
+});
+
+test("Boudica dialogue follows the next mission and source copy exists in English", () => {
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const catalogValue = (catalog, key) => {
+        const shortKey = key.replace(/^tutorial\./, "");
+        const match = catalog.match(new RegExp("^" + shortKey + " = (\"(?:\\\\.|[^\"])*\")$", "m"));
+        assert.ok(match, "missing catalog key " + key);
+        return JSON.parse(match[1]);
+    };
+    const textKeys = new Set();
+    for (const step of definition.steps) {
+        for (const key of [step.title_key, step.body_key, step.hint_key]) if (key && key.startsWith("tutorial.campaign_boudica_")) textKeys.add(key);
+        for (const option of step.choices || []) for (const key of [option.label_key, option.body_key]) if (key && key.startsWith("tutorial.campaign_boudica_")) textKeys.add(key);
+        for (const line of step.lines || []) for (const key of [line.title_key, line.body_key]) if (key && key.startsWith("tutorial.campaign_boudica_")) textKeys.add(key);
+        if (step.guide && ["zoom_in", "zoom_out"].includes(step.guide.gesture)) {
+            for (const mode of ["pinch", "trackpad", "wheel"]) for (const suffix of ["_hint", "_label"]) textKeys.add(definition.text_namespace + step.id + "_" + mode + suffix);
+        }
+        if (["boudica_camera_drag", "boudica_camera_hover"].includes(step.id)) {
+            for (const suffix of ["_mobile_hint", "_desktop_hint"]) textKeys.add(definition.text_namespace + step.id + suffix);
+        }
+    }
+    for (const speaker of Object.values(definition.speakers || {})) if (speaker.name_key && speaker.name_key.startsWith("tutorial.campaign_boudica_")) textKeys.add(speaker.name_key);
+    for (const reaction of definition.reactions) {
+        for (const key of [reaction.title_key, reaction.body_key, reaction.speaker_role_key]) if (key && key.startsWith("tutorial.campaign_boudica_")) textKeys.add(key);
+        for (const choice of reaction.choices || []) for (const key of [choice.label_key, choice.body_key]) if (key && key.startsWith("tutorial.campaign_boudica_")) textKeys.add(key);
+    }
+    for (const key of textKeys) {
+        catalogValue(webCatalogEn, key);
+    }
+
+    const step = id => definition.steps.find(item => item.id === id);
+    assert.equal(step("boudica_outpost_colonia_veterans_scene").next, "boudica_outpost_tax_collectors");
+    assert.equal(step("boudica_outpost_tax_collectors_scene").next, "boudica_outpost_roman_supply_depot");
+    assert.equal(step("boudica_outpost_roman_supply_depot_scene").next, "boudica_trinovantes_contact");
+    assert.match(catalogValue(webCatalogEn, step("boudica_outpost_colonia_veterans_scene").body_key), /tax collectors/i);
+    assert.match(catalogValue(webCatalogEn, step("boudica_outpost_tax_collectors_scene").body_key), /supply depot/i);
+    assert.match(catalogValue(webCatalogEn, step("boudica_outpost_roman_supply_depot_scene").body_key), /Trinovantes/i);
+    assert.equal(step("boudica_last_stand").trigger.comparison, "lte");
+    assert.equal(step("boudica_last_stand").trigger.value, 5000);
+    assert.match(catalogValue(webCatalogEn, step("boudica_last_stand").hint_key), /5,000/);
+    assert.equal(step("boudica_poison_end").speaker, "council");
+    assert.equal(step("boudica_end").speaker, "council");
+    assert.doesNotMatch(catalogValue(webCatalogEn, step("boudica_poison_end").body_key), /Boudica chooses/i);
+    assert.equal(definition.reactions.find(item => item.id === "contact_snettisham").choices[1].relation, "enemy");
+    assert.equal(definition.reactions.find(item => item.id === "contact_snettisham").choices[1].gold_cost, 0);
+    assert.equal(definition.reactions.find(item => item.id === "contact_thetford").choices[1].relation, "enemy");
+    assert.equal(definition.reactions.find(item => item.id === "contact_thetford").choices[1].gold_cost, 0);
+    assert.equal(definition.reactions.find(item => item.id === "neutral_contact_terms").choices[0].gold_cost, 200);
 });
 
 test("terms dialog smoothly focuses the requesting entity without changing zoom", () => {
@@ -5312,7 +5526,7 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
     );
 });
 
-test("tutorial hand keeps bouncing over the Roman target and moving expansion edge", () => {
+test("tutorial hand and ripple fade in at screen center and glide together to the dimmed Home button", () => {
     const hand = fs.readFileSync(path.join(shell, "../../assets/gameplay/icons/tutorial_hand.webp"));
     assert.equal(hand.subarray(0, 4).toString(), "RIFF");
     assert.equal(hand.subarray(8, 12).toString(), "WEBP");
@@ -5324,10 +5538,17 @@ test("tutorial hand keeps bouncing over the Roman target and moving expansion ed
     assert.match(storyCss, /@keyframes story-hover \{ 0%, 100% \{ transform: translateY\(-8px\)/);
     assert.match(storyCss, /data-guide-path="true"\] \.sow-story__hand \{ animation: story-guide-path/);
     assert.match(storyCss, /@keyframes story-guide-path/);
-    assert.match(campaignView, /function setHomeGuideCurve\(node, dx, dy\)[\s\S]*?\[\[25, 0\.25\], \[50, 0\.5\], \[75, 0\.75\]\]/);
-    assert.match(storyCss, /data-guide-target="hud_center_camera"\] \.sow-story__ripple \{ transform: translate\(var\(--guide-dx\), var\(--guide-dy\)\); \}/);
-    assert.match(storyCss, /data-guide-target="hud_center_camera"\] \.sow-story__hand \{ animation: story-home-guide 5s linear infinite; \}/);
-    assert.match(storyCss, /@keyframes story-home-guide[\s\S]*?20%[\s\S]*?21%[\s\S]*?23%[\s\S]*?26%, 86%[\s\S]*?91%[\s\S]*?100%/);
+    assert.doesNotMatch(campaignView, /setHomeGuideCurve|home-guide-p(?:25|50|75)/);
+    assert.match(campaignView, /gesture\.animate\(\[/);
+    assert.match(campaignView, /\{ transform: guideTransform\(originX, originY\), opacity: 0 \}/);
+    assert.match(campaignView, /\{ transform: guideTransform\(originX, originY\), opacity: 1, offset: 0\.16 \}/);
+    assert.match(campaignView, /\{ transform: guideTransform\(anchor\.x, anchor\.y\), opacity: 1 \}/);
+    assert.match(campaignView, /\{ duration: 1100, easing: "cubic-bezier/);
+    assert.match(campaignView, /homeGuideAnimationStep = step.id/);
+    assert.match(storyCss, /data-guide-target="hud_center_camera"] \.sow-story__hand { animation: story-hover 1.5s ease-in-out infinite; }/);
+    assert.match(storyCss, /data-guide-target="hud_center_camera"\] \.sow-story__gesture-label \{ left: 0; top: 61px; \}/);
+    assert.doesNotMatch(storyCss, /story-home-arrive|story-home-guide|story-home-ripple/);
+    assert.match(campaignView, /spotlight\.classList\.toggle\("is-dimmed", Boolean\(guideVisible && \(anchor\.dimOutside \|\| step\.guide\.kind === "ui"\)\)\)/);
     assert.match(campaignView, /gesture\.hidden = !guideVisible/);
     assert.match(campaignEditor, /window\.SOWCampaignView\.mount/);
     assert.doesNotMatch(storyCss, /data-gesture\[\^="zoom_"\]\s+\.sow-story__hand/);

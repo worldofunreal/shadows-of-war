@@ -339,7 +339,7 @@
             if (step.trigger && (!keepsMechanics || (value === "guide" && step.trigger.type === "elapsed"))) discarded.push("mechanic condition");
             if (step.guide && (!keepsMechanics || (value === "guide" && step.trigger && step.trigger.type === "elapsed"))) discarded.push("hand guide");
             if (step.marker && !keepsMarker) discarded.push("map marker");
-            if (step.wait_before === true && !["scene", "choice"].includes(value)) discarded.push("one-second reveal wait");
+            if (step.wait_before === true && !["scene", "choice"].includes(value)) discarded.push("1.1-second reveal wait");
             if (step.paused_action && !keepsMechanics) discarded.push("paused action permission");
             if (step.campaign_assault_on_enter && value === "end") discarded.push("campaign assault action");
             if (step.routes && !keepsFlow) discarded.push("conditional routes");
@@ -392,7 +392,7 @@
         }));
         basics.appendChild(selectField("Speaker", step.speaker || "", speakerOptions(), function (value) { step.speaker = value || undefined; if (!value) delete step.speaker; markDirty(); }));
         if (step.type === "scene" || step.type === "end") basics.appendChild(selectField("Presentation", step.presentation || "dialogue", step.type === "scene" ? ["dialogue", "chapter", "celebration", "cinematic"] : ["dialogue", "chapter", "celebration"], function (value) { step.presentation = value; markDirty(); }));
-        if (step.type === "scene" || step.type === "choice") basics.appendChild(checkboxField("Wait 1 second before showing", step.wait_before === true, function (value) {
+        if (step.type === "scene" || step.type === "choice") basics.appendChild(checkboxField("Wait 1.1 seconds before showing", step.wait_before === true, function (value) {
             if (value) step.wait_before = true;
             else delete step.wait_before;
             markDirty();
@@ -908,6 +908,12 @@
                 }
             }
             card.appendChild(selectField("Speaker", reaction.speaker || "", speakerOptions(), function (value) { if (value) reaction.speaker = value; else delete reaction.speaker; markDirty(); }));
+            if (reaction.speaker_role_key) catalogTextField(card, "Faction speaker role", reaction.speaker_role_key, 2);
+            else if (!reaction.speaker) {
+                var addSpeakerRole = el("button", { type: "button" }, "Identify the contacted faction's speaker");
+                addSpeakerRole.addEventListener("click", function () { reaction.speaker_role_key = storyKey(reaction.id + "_speaker_role"); markDirty(); renderSettings(); });
+                card.appendChild(addSpeakerRole);
+            }
             catalogTextField(card, "Title", reaction.title_key, 2);
             catalogTextField(card, "Dialogue", reaction.body_key, 4);
             var remove = el("button", { type: "button", class: "danger" }, "Remove response");
@@ -961,7 +967,7 @@
             );
             card.appendChild(selectField("Name and portrait source", binding, bindingOptions, function (value) {
                 delete speaker.faction;
-                if (value.indexOf("faction:") === 0) { speaker.faction = value.slice(8); delete speaker.name_key; delete speaker.avatar; }
+                if (value.indexOf("faction:") === 0) { speaker.faction = value.slice(8); delete speaker.avatar; }
                 else speaker.name = speaker.name || "New character";
                 markDirty(); renderSettings();
             }));
@@ -974,6 +980,12 @@
                 boundPortrait.addEventListener("error", function () { boundPortrait.hidden = true; });
                 card.appendChild(boundPortrait);
                 card.appendChild(el("small", {}, "Uses the selected faction's name and portrait."));
+                if (speaker.name_key) catalogTextField(card, "Role", speaker.name_key, 2);
+                else {
+                    var addRole = el("button", { type: "button" }, "Identify this character's role");
+                    addRole.addEventListener("click", function () { speaker.name_key = storyKey("speaker_" + speakerId + "_role"); markDirty(); renderSettings(); });
+                    card.appendChild(addRole);
+                }
                 var removeBoundSpeaker = el("button", { type: "button", class: "danger" }, "Remove character");
                 removeBoundSpeaker.addEventListener("click", function () {
                     if (!confirm("Remove " + speakerId + "? Their dialogue will become narrator text.")) return;
@@ -1356,7 +1368,9 @@
             if (actionRatio != null) $("#sow-hud-slider").value = String(Math.round(actionRatio * 100));
         }
         var anchor = previewAnchor(model.step);
-        var zoomMode = $("#device").value === "mobile" ? "pinch" : "wheel";
+        var previewPlatform = window.navigator && window.navigator.userAgentData && window.navigator.userAgentData.platform
+            || window.navigator && window.navigator.platform || "";
+        var zoomMode = $("#device").value === "mobile" ? "pinch" : window.SOWCampaign.zoomInputMode({ platform: previewPlatform });
         var zoomGuide = model.step.guide && ["zoom_in", "zoom_out"].includes(model.step.guide.gesture);
         var deviceHint = model.step.guide && ["drag", "hover"].includes(model.step.guide.gesture)
             ? translated(stepTextKey(model.step, "_" + ($("#device").value === "mobile" ? "mobile" : "desktop") + "_hint"), state.previewLanguage) : null;
@@ -1372,6 +1386,9 @@
             gestureLabel = actionText || translated(fallbackKey, state.previewLanguage);
         }
         if (zoomGuide) {
+            var zoomModeKey = stepTextKey(model.step, "_" + zoomMode);
+            previewHint = textValue(zoomModeKey + "_hint", state.previewLanguage) || "";
+            gestureLabel = textValue(zoomModeKey + "_label", state.previewLanguage) || translated(model.step.guide.gesture === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out", state.previewLanguage);
             var zoomTarget = model.step.trigger && model.step.trigger.type === "zoom_out_complete" ? window.SOWCampaign.zoomOutTarget(state.facts, model.step.trigger.value)
                 : model.step.trigger && model.step.trigger.type === "zoom_in_complete" ? state.facts.camera_zoom_target : null;
             if (zoomTarget != null && Number.isFinite(Number(zoomTarget)) && Number.isFinite(Number(state.facts.camera_zoom))) {
@@ -1381,7 +1398,7 @@
                     direction: model.step.guide.gesture === "zoom_in" ? "min" : "max"
                 };
             }
-        } else if (model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
+        } else if (!zoomGuide && model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
         try { state.renderer.render(model.waiting ? null : model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel }); }

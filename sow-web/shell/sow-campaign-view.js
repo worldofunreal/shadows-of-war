@@ -8,6 +8,7 @@
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
         let objectiveStepId = null;
         let guideWasVisible = false, cameraTracking = false, guideX = null, guideY = null, guideLabelWidth = 0, guideLabelMeasureKey = "", nudgeTimer = 0;
+        let homeGuideAnimation = null, homeGuideAnimationStep = null;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
@@ -25,7 +26,8 @@
             '<div class="sow-story__gesture" data-tutorial-hand aria-hidden="true" hidden><span class="sow-story__ripple"></span><span class="sow-story__hand"><img alt="" aria-hidden="true" draggable="false"></span><span class="sow-story__zoom"><span class="sow-story__zoom-fingers"><i></i><i></i><b>↔</b></span><span class="sow-story__zoom-wheel">↕</span></span><span class="sow-story__pan-keys"><kbd>↑</kbd><span><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></span></span><span class="sow-story__gesture-label" hidden><span class="sow-story__gesture-copy"></span><span class="sow-story__gesture-hint" hidden></span><span class="sow-story__gesture-metric" hidden><b class="sow-story__zoom-current"></b><i aria-hidden="true">→</i><b class="sow-story__zoom-target"></b></span></span></div>';
         const find = selector => root.querySelector(selector);
         const dialog = find(".sow-story__dialog"), shade = find(".sow-story__shade");
-        const portrait = find(".sow-story__portrait"), image = portrait.querySelector("img");
+        const portrait = find(".sow-story__portrait"), portraitLine = portrait.querySelector(".sow-story__portrait-line");
+        let image = portrait.querySelector("img");
         const speaker = find(".sow-story__speaker"), title = find(".sow-story__title"), body = find(".sow-story__body");
         const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
@@ -36,10 +38,93 @@
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
         const gesture = find(".sow-story__gesture"), gestureLabel = find(".sow-story__gesture-label"), gestureCopy = find(".sow-story__gesture-copy"), gestureHint = find(".sow-story__gesture-hint");
         const gestureMetric = find(".sow-story__gesture-metric"), guideCurrent = find(".sow-story__zoom-current"), guideTarget = find(".sow-story__zoom-target");
+        function guideTransform(x, y) { return "translate3d(" + x + "px, " + y + "px, 0)"; }
+        function clearHomeGuideAnimation() {
+            if (homeGuideAnimation) homeGuideAnimation.cancel();
+            homeGuideAnimation = null;
+            if (homeGuideAnimationStep !== null) gesture.style.opacity = "";
+            homeGuideAnimationStep = null;
+        }
         const spotlight = find(".sow-story__spotlight");
         const view = doc.defaultView;
         let cinematicStepKey = "", cinematicStatus = "none";
         let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
+        let portraitRequestId = 0, destroyed = false;
+        const portraitCache = new Map(), preparedDefinitions = new WeakSet(), reportedPortraitFailures = new Set();
+        const fallbackPortrait = "data:image/svg+xml;charset=utf-8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='16' fill='#13221f'/><circle cx='64' cy='48' r='24' fill='#a97a50'/><path d='M20 128c3-32 19-49 44-49s41 17 44 49' fill='#a97a50'/><path d='M38 44c2-23 15-34 28-34 17 0 28 13 28 34-8-9-17-13-28-13s-20 5-28 13' fill='#302419'/><path d='M0 4h128v5H0zM0 119h128v5H0z' fill='#d9aa55'/></svg>");
+        function reportPortraitFailure(source, speakerKey, stepId, episodeId, attempt) {
+            const failureKey = source + "\n" + stepId + "\n" + attempt;
+            if (reportedPortraitFailures.has(failureKey)) return;
+            reportedPortraitFailures.add(failureKey);
+            if (host.console && typeof host.console.warn === "function") host.console.warn("Campaign portrait load failed", {
+                episode_id: episodeId, speaker: speakerKey, dialogue_id: stepId, image: source, attempt
+            });
+        }
+        function portraitImage(source, speakerKey, stepId, episodeId) {
+            if (portraitCache.has(source)) return portraitCache.get(source);
+            let promise;
+            promise = new Promise(resolve => {
+                const candidate = doc.createElement("img");
+                candidate.alt = ""; candidate.draggable = false;
+                let retried = false;
+                candidate.addEventListener("load", () => resolve(candidate), { once: true });
+                candidate.addEventListener("error", () => {
+                    if (!retried) {
+                        retried = true;
+                        reportPortraitFailure(source, speakerKey, stepId, episodeId, 1);
+                        candidate.src = source + (source.includes("?") ? "&" : "?") + "sow_portrait_retry=1";
+                    } else {
+                        reportPortraitFailure(source, speakerKey, stepId, episodeId, 2);
+                        if (portraitCache.get(source) === promise) portraitCache.delete(source);
+                        resolve(null);
+                    }
+                });
+                candidate.src = source;
+            });
+            portraitCache.set(source, promise);
+            return promise;
+        }
+        function preparePortraits(definition) {
+            if (preparedDefinitions.has(definition)) return;
+            preparedDefinitions.add(definition);
+            const roster = typeof options.roster === "function" ? options.roster() : options.roster;
+            Object.entries(definition.speakers || {}).forEach(([key, character]) => {
+                let avatar = character.avatar;
+                if (character.faction) {
+                    const faction = (roster && roster.factions || []).find(item => item.id === character.faction);
+                    avatar = faction && (faction.avatar || avatar);
+                }
+                if (!avatar || avatar === "null") return;
+                const step = (definition.steps || []).find(item => item.speaker === key || (item.lines || []).some(line => line.speaker === key));
+                const reaction = (definition.reactions || []).find(item => item.speaker === key);
+                portraitImage(options.asset("gameplay/avatars/" + avatar + ".webp"), key, step && step.id || reaction && reaction.id || "preload", definition.episode_id);
+            });
+        }
+        function showPortrait(source, speakerKey, stepId, episodeId) {
+            const requestId = ++portraitRequestId;
+            const fallback = doc.createElement("img");
+            fallback.src = fallbackPortrait; fallback.alt = ""; fallback.draggable = false;
+            image = fallback;
+            portrait.replaceChildren(image, portraitLine);
+            portrait.hidden = false; root.classList.add("has-portrait");
+            if (!source) { reportPortraitFailure("missing-avatar-source", speakerKey, stepId, episodeId, "missing-source"); return; }
+            const load = portraitImage(source, speakerKey, stepId, episodeId);
+            load.then(candidate => {
+                if (!candidate) reportPortraitFailure(source, speakerKey, stepId, episodeId, "fallback");
+                if (destroyed || requestId !== portraitRequestId || root.hidden || !candidate) return;
+                image = candidate; image.alt = "";
+                image.addEventListener("error", () => {
+                    if (portraitCache.get(source) === load) portraitCache.delete(source);
+                    if (destroyed || requestId !== portraitRequestId || image !== candidate) return;
+                    reportPortraitFailure(source, speakerKey, stepId, episodeId, "after-load");
+                    const failedImage = doc.createElement("img");
+                    failedImage.src = fallbackPortrait; failedImage.alt = ""; failedImage.draggable = false;
+                    image = failedImage; portrait.replaceChildren(image, portraitLine);
+                }, { once: true });
+                portrait.replaceChildren(image, portraitLine);
+                syncMobilePortrait();
+            });
+        }
         function clearNudge() {
             if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = 0; }
             dialog.classList.remove("is-nudged", "is-waiting");
@@ -144,22 +229,6 @@
             const number = Number(value);
             return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
         }
-        function setHomeGuideCurve(node, dx, dy) {
-            const distance = Math.hypot(dx, dy), bend = Math.min(90, distance * 0.12);
-            const bendX = distance ? -dy / distance * bend : 0;
-            const bendY = distance ? dx / distance * bend : 0;
-            const c1x = dx * 0.25 + bendX, c1y = dy * 0.25 + bendY;
-            const c2x = dx * 0.75 + bendX, c2y = dy * 0.75 + bendY;
-            [[25, 0.25], [50, 0.5], [75, 0.75]].forEach(([percent, t]) => {
-                const u = 1 - t;
-                const x = 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * dx;
-                const y = 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * dy;
-                const xName = "--home-guide-p" + percent + "-x", yName = "--home-guide-p" + percent + "-y";
-                const xValue = x + "px", yValue = y + "px";
-                if (node.style.getPropertyValue(xName) !== xValue) node.style.setProperty(xName, xValue);
-                if (node.style.getPropertyValue(yName) !== yValue) node.style.setProperty(yName, yValue);
-            });
-        }
         function clearGuideMetric() {
             if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
             guideStepId = ""; guideLastPulseValue = NaN; guideLastPulseAt = 0;
@@ -222,7 +291,8 @@
             model = next;
             const wasHidden = root.hidden;
             root.hidden = !model || model.done;
-            if (root.hidden) { guideWasVisible = false; cameraTracking = false; gesture.classList.remove("is-following", "is-camera-following"); clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
+            if (root.hidden) { portraitRequestId++; guideWasVisible = false; cameraTracking = false; clearHomeGuideAnimation(); gesture.classList.remove("is-following", "is-camera-following"); clearNudge(); clearGuideMetric(); objectiveStepId = null; stopCinematic(); if (wasModal) releaseFocus(); wasModal = false; return; }
+            preparePortraits(model.definition);
             const step = model.step, line = model.line || step;
             if (objectiveStepId !== step.id) {
                 objectiveStepId = step.id;
@@ -256,12 +326,16 @@
             const speakerKey = line.speaker || step.speaker;
             const character = Object.assign({}, (model.definition.speakers || {})[speakerKey] || {});
             if (!speakerKey && model.reactionTarget) character.faction = model.reactionTarget;
-            if (character.faction) {
+            let factionName = "";
+            if (character.faction || model.reactionTarget) {
                 const roster = typeof options.roster === "function" ? options.roster() : options.roster;
-                const faction = (roster && roster.factions || []).find(function (item) { return item.id === character.faction; });
-                if (faction) { character.name = faction.name; character.name_key = null; character.avatar = faction.avatar || "null"; }
+                const factionId = character.faction || model.reactionTarget;
+                const faction = (roster && roster.factions || []).find(function (item) { return item.id === factionId; });
+                if (faction) { factionName = faction.name; character.avatar = faction.avatar || character.avatar || "null"; }
             }
-            const speakerName = character.name_key ? t(character.name_key) : character.name || "";
+            const reactionRole = model.reactionData && model.reactionData.speaker_role_key;
+            const roleName = character.name_key ? t(character.name_key) : character.name || (!speakerKey && reactionRole ? t(reactionRole) : "");
+            const speakerName = [roleName, factionName].filter(Boolean).join(" · ");
             const copyTitle = t(line.title_key || step.title_key), copyBody = t(line.body_key || step.body_key) || (modal ? context.hintOverride || t(step.hint_key) : "");
             const key = JSON.stringify([step.id, model.state && model.state.line, copyTitle, copyBody, speakerName, character.avatar, step.presentation, step.video_src, model.choices.map(c => [c.id, t(c.label_key), t(c.body_key), c.gold_available, c.gold_insufficient])]);
             if (renderKey !== key) {
@@ -273,11 +347,9 @@
                 setText(title, copyTitle); title.hidden = !copyTitle;
                 setText(body, copyBody); body.hidden = !copyBody;
                 cinematicVideo.setAttribute("aria-label", copyTitle || speakerName || "Campaign cinematic");
-                const avatar = character.avatar ? options.asset("gameplay/avatars/" + character.avatar + ".webp") : "";
-                portrait.hidden = !avatar;
-                if (avatar && image.getAttribute("src") !== avatar) image.src = avatar;
-                image.alt = speakerName;
-                root.classList.toggle("has-portrait", Boolean(avatar));
+                const avatar = character.avatar && character.avatar !== "null" ? options.asset("gameplay/avatars/" + character.avatar + ".webp") : "";
+                if (modal && speakerName) showPortrait(avatar, speakerKey || model.reactionTarget || "unknown", step.id, model.definition.episode_id);
+                else { portrait.hidden = true; root.classList.remove("has-portrait"); portraitRequestId++; }
                 choices.replaceChildren();
                 model.choices.forEach(choice => {
                     const button = doc.createElement("button");
@@ -352,14 +424,15 @@
             gestureLabel.hidden = !labeledGesture;
             const gestureTitleKey = zoomGuide ? (gestureType === "zoom_in" ? "hud.zoom_in" : "hud.zoom_out")
                 : zoomButtonGuide ? (step.guide.target === "hud_zoom_in" ? "hud.zoom_in" : "hud.zoom_out") : step.title_key;
-            if (labeledGesture) setText(gestureCopy, zoomGuide || zoomButtonGuide ? t(gestureTitleKey) : context.gestureLabel || t(gestureTitleKey));
-            const showGestureHint = showGestureText && gestureType === "hover" && Boolean(context.gestureHint || context.hintOverride);
+            if (labeledGesture) setText(gestureCopy, context.gestureLabel || t(gestureTitleKey));
+            const showGestureHint = showGestureText && (gestureType === "hover" || zoomGuide) && Boolean(context.gestureHint || context.hintOverride);
             gestureHint.hidden = !showGestureHint;
             if (showGestureHint) setText(gestureHint, context.gestureHint || context.hintOverride);
             renderGuideMetric(context.guideMetric, reducedMotion, step.id);
             const guideVisible = !modal && step.guide && anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y);
             gesture.hidden = !guideVisible; spotlight.hidden = !guideVisible || !anchor.width;
             spotlight.classList.toggle("is-dimmed", Boolean(guideVisible && (anchor.dimOutside || step.guide.kind === "ui")));
+            if (!guideVisible || !homeGuide) clearHomeGuideAnimation();
             if (guideVisible) {
                 cameraTracking = anchor.cameraTracked === true;
                 gesture.classList.toggle("is-camera-following", cameraTracking);
@@ -369,14 +442,36 @@
                 else if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") gesture.dataset.guideTarget = "attack_ratio";
                 else delete gesture.dataset.guideTarget;
                 gesture.dataset.guidePath = homeGuide || anchor.toX != null && anchor.toY != null ? "true" : "false";
-                const originX = homeGuide ? root.clientWidth * 0.5 : anchor.x;
-                const originY = homeGuide ? root.clientHeight * 0.5 : anchor.y;
-                const follow = guideWasVisible && !wasHidden;
+                const animateHomeGuide = homeGuide && !reducedMotion;
+                const originX = animateHomeGuide ? root.clientWidth * 0.5 : anchor.x;
+                const originY = animateHomeGuide ? root.clientHeight * 0.5 : anchor.y;
+                const homeMotionPending = animateHomeGuide && homeGuideAnimationStep !== step.id;
+                const follow = !homeGuide && guideWasVisible && !wasHidden;
                 gesture.classList.toggle("is-following", follow);
-                if (!follow || originX !== guideX || originY !== guideY) {
-                    gesture.style.transform = "translate3d(" + originX + "px, " + originY + "px, 0)";
+                if (homeMotionPending) {
+                    gesture.style.transform = guideTransform(originX, originY);
+                } else if (!follow || anchor.x !== guideX || anchor.y !== guideY) {
+                    gesture.style.transform = guideTransform(anchor.x, anchor.y);
                 }
-                guideX = originX; guideY = originY; guideWasVisible = true;
+                guideX = anchor.x; guideY = anchor.y; guideWasVisible = true;
+                if (homeMotionPending) {
+                    homeGuideAnimationStep = step.id;
+                    gesture.style.transform = guideTransform(anchor.x, anchor.y);
+                    gesture.style.opacity = "1";
+                    if (typeof gesture.animate === "function") {
+                        const animation = gesture.animate([
+                            { transform: guideTransform(originX, originY), opacity: 0 },
+                            { transform: guideTransform(originX, originY), opacity: 1, offset: 0.16 },
+                            { transform: guideTransform(anchor.x, anchor.y), opacity: 1 }
+                        ], { duration: 1100, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" });
+                        homeGuideAnimation = animation;
+                        animation.onfinish = () => {
+                            if (homeGuideAnimation !== animation) return;
+                            homeGuideAnimation = null;
+                            animation.cancel();
+                        };
+                    }
+                }
                 if (labeledGesture) {
                     if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") {
                         gestureLabel.style.transform = "translateY(-50%)";
@@ -398,7 +493,6 @@
                 const guideDy = homeGuide ? anchor.y - originY : (anchor.toY == null ? anchor.y : anchor.toY) - anchor.y;
                 gesture.style.setProperty("--guide-dx", guideDx + "px");
                 gesture.style.setProperty("--guide-dy", guideDy + "px");
-                if (homeGuide) setHomeGuideCurve(gesture, guideDx, guideDy);
                 if (anchor.width) {
                     const spotlightX = Number.isFinite(anchor.spotlightX) ? anchor.spotlightX : anchor.x;
                     const spotlightY = Number.isFinite(anchor.spotlightY) ? anchor.spotlightY : anchor.y;
@@ -418,7 +512,7 @@
         }
         function updateCameraAnchor(x, y) {
             if (!cameraTracking || root.hidden || !Number.isFinite(x) || !Number.isFinite(y)) return false;
-            if (x !== guideX || y !== guideY) gesture.style.transform = "translate3d(" + x + "px, " + y + "px, 0)";
+            if (x !== guideX || y !== guideY) gesture.style.transform = guideTransform(x, y);
             guideX = x; guideY = y;
             return true;
         }
@@ -478,7 +572,6 @@
                 event.preventDefault(); continueButton.click();
             }
         }
-        image.addEventListener("error", () => { portrait.hidden = true; root.classList.remove("has-portrait"); });
         root.addEventListener("click", click);
         doc.addEventListener("click", outsideClick, true);
         ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.addEventListener(type, stop, { passive: true }));
@@ -488,9 +581,11 @@
             updateCameraAnchor,
             destroy() {
                 releaseFocus();
+                clearHomeGuideAnimation();
                 clearNudge();
                 clearGuideMetric();
                 stopCinematic();
+                destroyed = true; portraitRequestId++; portraitCache.clear(); reportedPortraitFailures.clear();
                 if (portraitObserver) portraitObserver.disconnect();
                 root.style.removeProperty("--story-portrait-size");
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);

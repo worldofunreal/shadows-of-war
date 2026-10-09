@@ -185,6 +185,13 @@
             var facts = hud && hud.tutorial && hud.tutorial.facts || {};
             var hintKey = "";
             if (step.guide.gesture === "zoom_in" || step.guide.gesture === "zoom_out") {
+                var zoomHintKey = stepTextKey(step, "_" + context.zoomMode + "_hint");
+                var zoomLabelKey = stepTextKey(step, "_" + context.zoomMode + "_label");
+                if (hasText(zoomHintKey)) {
+                    context.hintOverride = tr(zoomHintKey);
+                    context.gestureHint = context.hintOverride;
+                }
+                if (hasText(zoomLabelKey)) context.gestureLabel = tr(zoomLabelKey);
                 var zoomTarget = step.trigger && step.trigger.type === "zoom_out_complete" ? window.SOWCampaign.zoomOutTarget(facts, step.trigger.value)
                     : step.trigger && step.trigger.type === "zoom_in_complete" ? facts.camera_zoom_target : null;
                 if (zoomTarget != null && Number.isFinite(Number(zoomTarget)) && Number.isFinite(Number(facts.camera_zoom))) {

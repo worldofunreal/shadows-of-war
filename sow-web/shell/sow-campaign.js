@@ -4,7 +4,7 @@
 
     const TYPES = ["scene", "choice", "objective", "guide", "end"];
     const TEAMS = Object.freeze(["Red", "Blue"]);
-    const WAIT_MS = 1000;
+    const WAIT_MS = 1100;
     const METRICS = {
         territory: "tiles_gained", kills: "kills", attack: "attacks", troops: "troops",
         building: "buildings", city: "cities", farm: "farms", factory: "factories",
@@ -465,8 +465,10 @@
             issue(null, "version", "Campaign logic must use version 2.");
             return { errors, warnings };
         }
-        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
+        knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "require_speaker_portraits", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
         if (!id(definition.episode_id)) issue(null, "episode_id", "Invalid episode ID.");
+        if (own(definition, "require_speaker_portraits") && typeof definition.require_speaker_portraits !== "boolean") issue(null, "require_speaker_portraits", "Choose whether dialogue needs a named speaker and portrait.");
+        const requireSpeakerPortraits = definition.require_speaker_portraits === true;
         const settings = definition.settings;
         if (!object(settings) || !Number.isInteger(settings.starting_troops) || settings.starting_troops < 1 || settings.starting_troops > 100000) {
             issue(null, "settings", "Choose 1–100000 starting troops.");
@@ -544,6 +546,23 @@
                 text(null, "speakers", speaker.name_key, false);
             }
         });
+        function availableAvatar(avatar) {
+            return typeof avatar === "string" && avatar !== "null" && /^[a-z][a-z0-9_]*$/.test(avatar)
+                && (!options.hasAvatar || options.hasAvatar(avatar));
+        }
+        function speakerHasPortrait(speakerKey) {
+            const character = speakers[speakerKey];
+            if (!object(character)) return false;
+            if (character.faction) {
+                const faction = (roster && roster.factions || []).find(item => item.id === character.faction);
+                return Boolean(faction && availableAvatar(faction.avatar || character.avatar));
+            }
+            return availableAvatar(character.avatar);
+        }
+        function checkDialogueSpeaker(step, speakerKey) {
+            if (!speakerKey || !own(speakers, speakerKey)) issue(step, "speaker", "Spoken dialogue needs a known character.");
+            else if (!speakerHasPortrait(speakerKey)) issue(step, "speaker", "Spoken dialogue needs an existing character portrait.");
+        }
         const steps = Array.isArray(definition.steps) ? definition.steps : [];
         if (!steps.length || steps.length > 512) issue(null, "steps", "Use between 1 and 512 steps.");
         const byId = new Map();
@@ -600,7 +619,7 @@
                     if (unlocks.actions != null && (!Array.isArray(unlocks.actions) || new Set(unlocks.actions).size !== unlocks.actions.length || unlocks.actions.some(action => !CAMPAIGN_ACTIONS.includes(action)))) issue(step, "unlocks.actions", "Choose distinct supported campaign actions.");
                 }
             }
-            if (own(step, "wait_before") && (typeof step.wait_before !== "boolean" || !["scene", "choice"].includes(step.type))) issue(step, "wait_before", "The one-second reveal wait only applies to dialogue and decisions.");
+            if (own(step, "wait_before") && (typeof step.wait_before !== "boolean" || !["scene", "choice"].includes(step.type))) issue(step, "wait_before", "The 1.1-second reveal wait only applies to dialogue and decisions.");
             if (own(step, "campaign_assault_on_enter")) {
                 const assault = step.campaign_assault_on_enter;
                 knownFields(assault, ["attacker_team", "target", "preserve_relation", "reinforcement", "hold_last_tile"], step, "campaign_assault_on_enter");
@@ -646,7 +665,7 @@
                 text(step, "guide.text." + suffix, key, true);
             };
             if (step.guide && ["zoom_in", "zoom_out"].includes(step.guide.gesture)) {
-                ["pinch", "wheel"].forEach(mode => ["_hint", "_label"].forEach(suffix => dynamicText("_" + mode + suffix)));
+                ["pinch", "trackpad", "wheel"].forEach(mode => ["_hint", "_label"].forEach(suffix => dynamicText("_" + mode + suffix)));
             }
             if (step.guide && ["drag", "hover"].includes(step.guide.gesture)) {
                 ["_mobile_hint", "_desktop_hint"].forEach(dynamicText);
@@ -675,6 +694,11 @@
                     text(step, "lines", line.title_key, false);
                     if (line.speaker && !own(speakers, line.speaker)) issue(step, "lines", "Unknown speaking character.");
                 });
+            }
+            if (requireSpeakerPortraits && (step.type === "scene" || step.type === "choice" || step.type === "end" && (step.body_key || step.lines))) {
+                if (step.type === "scene" && Array.isArray(step.lines) && step.lines.length) {
+                    step.lines.forEach(line => checkDialogueSpeaker(step, line && (line.speaker || step.speaker)));
+                } else checkDialogueSpeaker(step, step.speaker);
             }
             if (!step.title_key && !step.body_key && !step.lines) issue(step, "title_key", "Add a title, text or conversation.");
             if (step.type === "end") {
@@ -803,7 +827,7 @@
         const reactionIds = new Set(), reactionEvents = new Set();
         reactions.forEach(reaction => {
             if (!object(reaction)) return issue(null, "reactions", "Invalid story response.");
-            knownFields(reaction, ["id", "after", "when", "speaker", "title_key", "body_key", "outcome", "gold_cost", "choices"], null, "reactions");
+            knownFields(reaction, ["id", "after", "when", "speaker", "speaker_role_key", "title_key", "body_key", "outcome", "gold_cost", "choices"], null, "reactions");
             if (!id(reaction.id) || byId.has(reaction.id) || reactionIds.has(reaction.id)) issue(null, "reactions.id", "Response IDs must be unique and distinct from story steps.");
             reactionIds.add(reaction.id);
             knownFields(reaction.when, ["type", "target", "targets", "relation"], null, "reactions.when");
@@ -835,6 +859,25 @@
             if (reactionEvents.has(eventKey)) issue(null, "reactions.when", "Each event can have only one response.");
             if (type === "first_contact" || typeof target === "string" || when && when.relation) reactionEvents.add(eventKey);
             if (reaction.speaker && !own(speakers, reaction.speaker)) issue(null, "reactions.speaker", "Choose an existing character.");
+            text(null, "reactions.speaker_role_key", reaction.speaker_role_key, false);
+            if (requireSpeakerPortraits) {
+                if (reaction.speaker) checkDialogueSpeaker(null, reaction.speaker);
+                else {
+                    if (!reaction.speaker_role_key) issue(null, "reactions.speaker", "A contact response needs a speaker role.");
+                    const possibleFactions = type === "contact" && when && when.target
+                        ? (roster && roster.factions || []).filter(faction => faction.id === when.target)
+                        : type === "contact" && when && when.relation
+                            ? (roster && roster.factions || []).filter(faction => faction.relation === when.relation)
+                            : type === "first_contact" && when && Array.isArray(when.targets)
+                                ? (roster && roster.factions || []).filter(faction => when.targets.includes(faction.id))
+                                : type === "support" && target
+                                    ? (roster && roster.factions || []).filter(faction => faction.id === target) : [];
+                    if (!possibleFactions.length) issue(null, "reactions.speaker", "A dynamic speaker needs a faction with a portrait.");
+                    else possibleFactions.forEach(faction => {
+                        if (!availableAvatar(faction.avatar)) issue(null, "reactions.speaker", "The contacted faction needs an existing portrait: " + faction.name + ".");
+                    });
+                }
+            }
             text(null, "reactions.title_key", reaction.title_key, true);
             text(null, "reactions.body_key", reaction.body_key, true);
             if (reaction.outcome != null && !["neutral", "allied", "enemy"].includes(reaction.outcome)) issue(null, "reactions.outcome", "Choose a neutral, allied or enemy result.");
@@ -1103,7 +1146,7 @@
                     : null;
                 const response = {
                     id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker,
-                    title_key: reaction.title_key, body_key: reaction.body_key, presentation: "dialogue"
+                    speaker_role_key: reaction.speaker_role_key, title_key: reaction.title_key, body_key: reaction.body_key, presentation: "dialogue"
                 };
                 return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, unlocks: copy(state.unlocks), reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }

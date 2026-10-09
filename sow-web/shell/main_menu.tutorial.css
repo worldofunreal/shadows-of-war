@@ -195,9 +195,8 @@
 .sow-story__gesture[data-gesture="drag"] .sow-story__hand { animation: story-hover 1.5s ease-in-out infinite; }
 .sow-story__gesture[data-guide-path="true"] .sow-story__hand { animation: story-guide-path 2s ease-in-out infinite; }
 .sow-story__gesture[data-guide-target="attack_ratio"][data-guide-path="true"] .sow-story__hand { animation: story-attack-ratio-path 2.8s ease-in-out infinite; }
-.sow-story__gesture[data-guide-target="hud_center_camera"] .sow-story__hand { animation: story-home-guide 5s linear infinite; }
-.sow-story__gesture[data-guide-target="hud_center_camera"] .sow-story__ripple { transform: translate(var(--guide-dx), var(--guide-dy)); }
-.sow-story__gesture[data-guide-target="hud_center_camera"] .sow-story__gesture-label { left: var(--guide-dx); top: calc(var(--guide-dy) + 61px); }
+.sow-story__gesture[data-guide-target="hud_center_camera"] .sow-story__hand { animation: story-hover 1.5s ease-in-out infinite; }
+.sow-story__gesture[data-guide-target="hud_center_camera"] .sow-story__gesture-label { left: 0; top: 61px; }
 .sow-story__gesture[data-gesture="hover"] .sow-story__hand { animation: story-hover 1.8s ease-in-out infinite; }
 .sow-story__pan-keys { display: none; position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); gap: 3px; justify-items: center; filter: drop-shadow(0 3px 8px #000); }
 .sow-story__pan-keys > span { display: flex; gap: 3px; }
@@ -244,7 +243,6 @@
 @keyframes story-hold { 0%, 100% { transform: translateY(-8px); } 20%, 80% { transform: translateY(0) scale(.94); } }
 @keyframes story-hover { 0%, 100% { transform: translateY(-8px); } 50% { transform: translateY(0); } }
 @keyframes story-guide-path { 0%, 100% { transform: translateY(-8px); } 50% { transform: translate(var(--guide-dx), var(--guide-dy)) translateY(-8px); } }
-@keyframes story-home-guide { 0%, 100% { opacity: 0; transform: translate(0, 0); } 2% { opacity: 1; transform: translate(0, 0); } 6.5% { transform: translate(var(--home-guide-p25-x), var(--home-guide-p25-y)); } 11% { transform: translate(var(--home-guide-p50-x), var(--home-guide-p50-y)); } 15.5% { transform: translate(var(--home-guide-p75-x), var(--home-guide-p75-y)); } 20% { transform: translate(var(--guide-dx), var(--guide-dy)); } 21% { transform: translate(var(--guide-dx), var(--guide-dy)) scale(.88); } 23% { transform: translate(var(--guide-dx), calc(var(--guide-dy) - 9px)) scale(1.08); } 26%, 86% { opacity: 1; transform: translate(var(--guide-dx), var(--guide-dy)); } 91% { opacity: 0; transform: translate(var(--guide-dx), var(--guide-dy)); } }
 @keyframes story-attack-ratio-path { 0%, 12%, 100% { opacity: 0; transform: translateY(-8px); } 20% { opacity: 1; transform: translateY(-8px); } 50% { opacity: 1; transform: translate(var(--guide-dx), var(--guide-dy)) translateY(-8px); } 62%, 84% { opacity: 0; transform: translate(var(--guide-dx), var(--guide-dy)) translateY(-8px); } }
 @keyframes story-key-press { 0%, 12%, 100% { transform: translateY(0); border-color: rgb(233 187 100 / 75%); } 6% { transform: translateY(3px); border-color: #fff0b8; box-shadow: inset 0 -1px #0007, 0 0 12px rgb(233 187 100 / 55%); } }
 @keyframes story-ripple { 0%, 20% { opacity: 0; scale: .7; } 32% { opacity: .85; } 85%, 100% { opacity: 0; scale: 1.8; } }

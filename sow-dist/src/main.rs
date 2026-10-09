@@ -1380,6 +1380,51 @@ fn placeholder_names(value: &str) -> Result<Vec<String>> {
     Ok(names)
 }
 
+const APPROVED_CAMPAIGN_TRANSLATION_EPISODES: &[&str] = &[];
+
+const CAMPAIGN_TRANSLATION_NAMESPACES: &[(&str, &str)] = &[
+    ("boudica", "boudica_"),
+    ("boudica", "campaign_boudica_"),
+    ("six_sky_ep1", "campaign_six_sky_ep1_"),
+    ("six_sky_ep2", "campaign_six_sky_ep2_"),
+    ("six_sky_ep3", "campaign_six_sky_ep3_"),
+    ("six_sky_ep1", "six_sky_ep1_"),
+    ("six_sky_ep2", "six_sky_ep2_"),
+    ("six_sky_ep3", "six_sky_ep3_"),
+];
+
+fn is_campaign_translation_key(key: &str) -> bool {
+    if matches!(
+        key,
+        "campaign_episode_locked"
+            | "campaign_chronicles"
+            | "campaign_unavailable"
+            | "campaign_unlock_required"
+    ) || key.starts_with("campaign_menu_guide_")
+        || key.starts_with("campaign_studio_demo_")
+    {
+        return false;
+    }
+    key.starts_with("campaign_") || key.starts_with("boudica_") || key.starts_with("six_sky_ep")
+}
+
+fn is_locked_campaign_translation_key(key: &str, approved_episodes: &[&str]) -> bool {
+    if !is_campaign_translation_key(key) {
+        return false;
+    }
+    let episode_id = CAMPAIGN_TRANSLATION_NAMESPACES
+        .iter()
+        .find_map(|(episode_id, prefix)| key.starts_with(prefix).then_some(*episode_id));
+    episode_id.map_or(true, |episode_id| !approved_episodes.contains(&episode_id))
+}
+
+fn is_non_english_catalog_path(path: &str) -> bool {
+    let locale = path.split('.').next().unwrap_or(path);
+    sow_i18n::Language::registry().iter().any(|(_, code, _, _)| {
+        code.eq_ignore_ascii_case(locale) && !code.eq_ignore_ascii_case("en")
+    })
+}
+
 fn validate_web_node(
     path: &str,
     expected: &serde_json::Value,
@@ -1396,12 +1441,14 @@ fn validate_web_node(
                 let catalog_key = child_path.splitn(2, '.').nth(1).unwrap_or(&child_path);
                 let actual_value = match actual.get(key) {
                     Some(value) => value,
+                    None if is_non_english_catalog_path(path)
+                        && is_locked_campaign_translation_key(
+                            key,
+                            APPROVED_CAMPAIGN_TRANSLATION_EPISODES,
+                        ) => continue,
                     None if path.ends_with(".tutorial")
                         && key.starts_with("campaign_")
-                        && sow_i18n::Language::registry().iter().any(|(_, code, _, _)| {
-                            code.eq_ignore_ascii_case(path.split('.').next().unwrap_or(""))
-                                && !code.eq_ignore_ascii_case("en")
-                        }) => continue,
+                        && is_non_english_catalog_path(path) => continue,
                     None if path.ends_with(".site")
                         && web_key_is_intentionally_english(catalog_key)
                         && !path
@@ -1421,6 +1468,19 @@ fn validate_web_node(
                 validate_web_node(&child_path, expected_value, actual_value)?;
             }
             for key in actual.keys() {
+                if is_non_english_catalog_path(path)
+                    && is_locked_campaign_translation_key(
+                        key,
+                        APPROVED_CAMPAIGN_TRANSLATION_EPISODES,
+                    )
+                {
+                    let child_path = if path.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    bail!("web catalog contains locked campaign text {child_path}");
+                }
                 if !expected.contains_key(key) {
                     let child_path = if path.is_empty() {
                         key.clone()
@@ -4447,6 +4507,55 @@ mod tests {
         assert!(validate_web_node("test", &expected, &matching).is_ok());
         assert!(validate_web_node("test", &expected, &missing_duplicate).is_err());
         assert!(validate_web_node("test", &expected, &malformed).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn locked_campaign_text_is_optional_but_cannot_be_translated() -> Result<()> {
+        let expected = serde_json::json!({
+            "tutorial": {
+                "boudica_rise_title": "Boudica",
+                "campaign_boudica_first_title": "First strike",
+                "campaign_studio_demo_turn_title": "The next decision is yours",
+                "six_sky_ep1_landfall_title": "Landfall",
+                "six_sky_ep2_regent_title": "Regent",
+                "six_sky_ep3_count_title": "The Long Count",
+            },
+            "lobbies": {
+                "campaign_boudica_title": "Rise of the Iceni",
+                "campaign_six_sky_ep1_title": "Arrival",
+            }
+        });
+        let omitted = serde_json::json!({"tutorial": {}, "lobbies": {}});
+        assert!(validate_web_node("es", &expected, &omitted).is_ok());
+        assert!(validate_web_node("en", &expected, &omitted).is_err());
+
+        let translated = serde_json::json!({
+            "tutorial": {"six_sky_ep2_regent_title": "Regente"},
+            "lobbies": {}
+        });
+        assert!(validate_web_node("es", &expected, &translated).is_err());
+        let translated_episode_title = serde_json::json!({
+            "tutorial": {},
+            "lobbies": {"campaign_boudica_title": "Alzamiento de los icenos"}
+        });
+        assert!(validate_web_node("es", &expected, &translated_episode_title).is_err());
+        let translated_six_sky_title = serde_json::json!({
+            "tutorial": {},
+            "lobbies": {"campaign_six_sky_ep1_title": "Llegada"}
+        });
+        assert!(validate_web_node("es", &expected, &translated_six_sky_title).is_err());
+        let generic_campaign_copy = serde_json::json!({
+            "tutorial": {"campaign_studio_demo_turn_title": "The next decision is yours"},
+            "lobbies": {}
+        });
+        assert!(validate_web_node("es", &expected, &generic_campaign_copy).is_ok());
+        assert!(is_locked_campaign_translation_key("campaign_future_title", &[]));
+        assert!(is_locked_campaign_translation_key("boudica_rise_title", &[]));
+        assert!(!is_locked_campaign_translation_key(
+            "campaign_boudica_title",
+            &["boudica"]
+        ));
         Ok(())
     }
 

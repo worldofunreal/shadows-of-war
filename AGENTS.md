@@ -19,6 +19,11 @@ hostnames, paths and compatibility behavior are not production instructions.
   do not build a parallel renderer or projection for convenience.
 - Before map or thumbnail work, read `docs/maps.md` for the reviewed framing,
   current generator limitations, and independent mobile terrain budgets.
+- Campaign episode translations stay locked until the owner explicitly marks
+  that episode finished. Do not add localized episode strings or completeness
+  checks before that decision. Only add an episode ID to
+  `APPROVED_CAMPAIGN_TRANSLATION_EPISODES` in `sow-dist/src/main.rs` after the
+  owner's explicit approval; an episode's end step does not count.
 - Infrastructure decisions, firewall/PF/NSG changes and new resources require
   explicit user approval.
 - The deploy pipeline is the only deployment interface. Never activate a

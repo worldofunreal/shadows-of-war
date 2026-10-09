@@ -71,27 +71,124 @@ stop_local_preview() {
   fuser -k -KILL "${port}/tcp" >/dev/null 2>&1 || true
 }
 
+run_dist_process() {
+  local log_prefix="$1"
+  local bin="$2"
+  shift 2
+
+  cargo build -p sow-dist || return $?
+  if [[ "${log_prefix}" == production ]]; then
+    command -v flock >/dev/null || { echo "flock is required to prevent overlapping production builds" >&2; return 127; }
+    exec flock -n "${ROOT}/dist/.production.lock" "${bin}" "$@"
+  fi
+  exec "${bin}" "$@"
+}
+
+production_summary() {
+  local log_file="$1"
+  local status="$2"
+  local stage no_op no_restart release_id diagnostics warnings skipped
+
+  if [[ ! -r "${log_file}" ]]; then
+    printf '⚠ No se pudo leer el registro: %s\n' "${log_file}"
+    return 0
+  fi
+
+  if (( status == 0 )); then
+    no_op="$(awk '/^✅ Production already serves the requested content$/ { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
+    no_restart="$(awk '/^  no production component changed; no restart performed$/ { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
+    release_id="$(awk '/^✅ Production .* ready as / { sub(/^✅ Production .* ready as /, ""); value=$0 } END { print value }' "${log_file}" 2>/dev/null || true)"
+    if [[ ( "${no_op}" == yes && "${no_restart}" == yes ) || -n "${release_id}" ]]; then
+      printf '✅ Pruebas y compilación\n'
+      printf '✅ Salud del servidor, relay y verificación pública\n'
+      if [[ "${no_op}" == yes && "${no_restart}" == yes ]]; then
+        printf '✅ Producción ya estaba actualizada; no hubo reinicios\n'
+      else
+        printf '✅ Producción publicada: %s\n' "${release_id}"
+      fi
+    else
+      printf '⚠ El proceso terminó con código 0, pero no reconocí el resultado de publicación.\n'
+    fi
+  else
+    stage="$(awk '/^==> / { value=$0 } END { print value }' "${log_file}" 2>/dev/null || true)"
+    if [[ -z "${stage}" ]]; then stage='Preparación de sow-dist'; fi
+    stage="${stage#==> }"
+    printf '❌ Falló %s (código %s)\n' "${stage}" "${status}"
+    diagnostics="$(awk '
+      /^Caused by:/ {
+        lines[++count]=substr($0, 1, 240)
+        cause=1
+        next
+      }
+      cause && /^    / {
+        lines[++count]=substr($0, 1, 240)
+        next
+      }
+      { cause=0 }
+      /^Error:/ || /^error:/ || /^error\[/ || /^fatal:/ || /^warning:/ || /^WARN(ING)?:/ || /^not ok / || /^✖ / || /^failures:/ || /^ssh:/ || /^flock:/ || /^curl:/ {
+        lines[++count]=substr($0, 1, 240)
+      }
+      END {
+        first=(count > 10 ? count-9 : 1)
+        for (i=first; i<=count; i++) print lines[i]
+      }
+    ' "${log_file}" 2>/dev/null || true)"
+    if [[ -z "${diagnostics}" ]]; then
+      diagnostics="$(tail -n 10 "${log_file}" 2>/dev/null | awk '/^\+ ssh / { next } { print substr($0, 1, 240) }' || true)"
+    fi
+    if [[ -n "${diagnostics}" ]]; then
+      printf '%s\n' "${diagnostics}"
+    else
+      printf 'Consulta el registro para ver el error completo.\n'
+    fi
+    printf 'Registro: %s\n' "${log_file}"
+  fi
+
+  warnings="$(awk '
+    {
+      lower=tolower($0)
+      if (lower ~ /^(warning:|warn(ing)?:|⚠|i18n untranslated:)/ && !seen[$0]++) {
+        count++
+        if (count <= 5) print substr($0, 1, 240)
+      }
+    }
+    END { if (count > 5) printf "... y %d avisos más\n", count-5 }
+  ' "${log_file}" 2>/dev/null || true)"
+  if [[ -n "${warnings}" ]]; then
+    printf 'Avisos:\n%s\n' "${warnings}"
+  fi
+
+  skipped="$(awk '/^test .* \.\.\. ignored/ || /^ℹ skipped [1-9][0-9]*/ { found=1 } END { if (found) print "yes" }' "${log_file}" 2>/dev/null || true)"
+  if [[ "${skipped}" == yes ]]; then
+    printf '⚠ La suite omitió pruebas; detalles en el registro.\n'
+  fi
+}
+
 run_dist() {
   local log_prefix="$1"
   shift
   local bin="${CARGO_TARGET_DIR}/debug/sow"
   local log_dir="${ROOT}/dist/logs"
   local log_file="${log_dir}/${log_prefix}-$(date +%Y%m%d-%H%M%S).log"
+  local status
   mkdir -p "${log_dir}"
   : >"${log_file}"
   chmod 600 "${log_file}"
   set +e
-  (
-    cargo build -p sow-dist || exit $?
-    if [[ "${log_prefix}" == production ]]; then
-      command -v flock >/dev/null || { echo "flock is required to prevent overlapping production builds" >&2; exit 127; }
-      exec flock -n "${ROOT}/dist/.production.lock" "${bin}" "$@"
-    fi
-    exec "${bin}" "$@"
-  ) 2>&1 | tee "${log_file}"
-  local status=${PIPESTATUS[0]}
+  if [[ "${log_prefix}" == production ]]; then
+    printf '⏳ ./sow p en curso; registro: %s\n' "${log_file}"
+    (run_dist_process "${log_prefix}" "${bin}" "$@") >"${log_file}" 2>&1
+    status=$?
+  else
+    (run_dist_process "${log_prefix}" "${bin}" "$@") 2>&1 | tee "${log_file}"
+    status=${PIPESTATUS[0]}
+  fi
   set -e
-  echo "SOW log: ${log_file}"
+  if [[ "${log_prefix}" == production ]]; then
+    production_summary "${log_file}" "${status}"
+  else
+    echo "SOW log: ${log_file}"
+  fi
   return "${status}"
 }
 

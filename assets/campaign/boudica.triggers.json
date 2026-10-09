@@ -2,6 +2,7 @@
   "version": 2,
   "episode_id": "boudica",
   "text_namespace": "tutorial.campaign_boudica_",
+  "require_speaker_portraits": true,
   "settings": {
     "campaign_support": {
       "after_defeated": "roman_outpost",
@@ -97,6 +98,7 @@
         "type": "contact",
         "relation": "neutral"
       },
+      "speaker_role_key": "tutorial.campaign_boudica_speaker_clan_envoy",
       "title_key": "tutorial.campaign_boudica_neutral_contact_terms_title",
       "body_key": "tutorial.campaign_boudica_neutral_contact_terms_body",
       "choices": [
@@ -128,15 +130,19 @@
       "avatar": "iceni_council"
     },
     "snettisham": {
+      "name_key": "tutorial.campaign_boudica_speaker_elder",
       "faction": "snettisham"
     },
     "stonea": {
+      "name_key": "tutorial.campaign_boudica_speaker_warrior",
       "faction": "stonea"
     },
     "thetford": {
+      "name_key": "tutorial.campaign_boudica_speaker_chief",
       "faction": "thetford"
     },
     "trinovantes": {
+      "name_key": "tutorial.campaign_boudica_speaker_envoy",
       "faction": "trinovantes"
     }
   },
@@ -273,7 +279,7 @@
       "camera_only": true,
       "trigger": {
         "type": "zoom_out_complete",
-        "value": 1,
+        "value": 0.95,
         "scope": "step"
       },
       "marker": {
@@ -1072,7 +1078,7 @@
       "type": "scene",
       "title_key": "tutorial.campaign_boudica_boudica_poison_end_title",
       "body_key": "tutorial.campaign_boudica_boudica_poison_end_body",
-      "speaker": "boudica",
+      "speaker": "council",
       "presentation": "dialogue",
       "next": "boudica_end"
     },
@@ -1138,7 +1144,7 @@
       "type": "scene",
       "title_key": "tutorial.campaign_boudica_boudica_end_title",
       "body_key": "tutorial.campaign_boudica_boudica_end_body",
-      "speaker": "boudica",
+      "speaker": "council",
       "presentation": "chapter",
       "next": "boudica_complete"
     },
