@@ -299,7 +299,7 @@ pub struct GameConfig {
     pub player_team: Option<crate::protocol::Team>,
     #[serde(default = "default_true")]
     pub buildings_enabled: bool,
-    /// Campaign-only milestone for enabling structures after a named faction is defeated.
+    /// Inert legacy wire slot. Campaign building access is controlled by step unlocks.
     #[serde(default)]
     pub buildings_unlock_after_defeated: Option<String>,
     /// Deterministic campaign aid from contacted teammates after a story milestone.
@@ -309,12 +309,10 @@ pub struct GameConfig {
     #[serde(default)]
     pub campaign_player_color: Option<[f32; 3]>,
 
-    /// **Tutorial firewall flag.** `true` only for the scripted campaign/tutorial. The engine
-    /// ignores it — it exists so the *client* can derive its tutorial UI from the match it is
-    /// actually running, instead of a sticky session flag that leaks across matches. Defaults
-    /// **closed** (`false`): any match that does not explicitly opt in — every solo skirmish and
-    /// every server-sent multiplayer config — is non-tutorial. Read at exactly one place, the
-    /// match-init chokepoint in `sow-client-world/src/loader/engine.rs`.
+    /// **Tutorial firewall flag.** `true` only for scripted campaigns. It enables the closed-by-
+    /// default campaign unlock policy in the engine and lets the client derive tutorial UI from
+    /// the active match instead of a sticky session flag. Defaults to `false` for skirmishes and
+    /// multiplayer; set only at the match initialization boundary.
     #[serde(default)]
     pub tutorial: bool,
 }

@@ -81,26 +81,6 @@ impl BuildingKind {
         }
     }
 
-    pub const fn level_benefit(self, level: u8) -> &'static str {
-        match (self, level) {
-            (Self::City, 1) => "troop_capacity",
-            (Self::City, 2..=3) => "troop_capacity",
-            (Self::City, 4) => "unlocks_nukes",
-            (Self::Port, 1) => "unlocks_trade_ships_and_transports",
-            (Self::Port, 2) => "unlocks_warships",
-            (Self::Port, 3) => "boat_capacity",
-            (Self::Port, 4) => "departure_speed",
-            (Self::Factory, 1..=4) => "gold_income",
-            (Self::Bunker, 1) => "attack_cost_aura",
-            (Self::Bunker, 2) => "defense_range",
-            (Self::Bunker, 3) => "defender_strength",
-            (Self::Bunker, 4) => "nuke_interception",
-            (Self::Farm, 1) => "farm_troop_income",
-            (Self::Farm, 2) => "farm_troop_income_plus",
-            (Self::Farm, 3..=4) => "farm_troop_income_max",
-            _ => "none",
-        }
-    }
     pub fn construction_duration_ticks(self) -> u32 {
         match self {
             BuildingKind::City => 20,

@@ -68,6 +68,9 @@ impl SowEngine {
         allow_same_team: bool,
         ignore_fleet_capacity: bool,
     ) {
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
+            return;
+        }
         let Some(player) = self.state.player(player_id) else {
             log::debug!("apply_launch_fleet_intent: player {} not found", player_id);
             return;

@@ -264,6 +264,9 @@ impl SowEngine {
     pub fn apply_stamped_intent(&mut self, stamped: &StampedIntent, intent_index: u32) {
         match &stamped.intent {
             GameplayIntent::RecallFleet { fleet_id } => {
+                if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
+                    return;
+                }
                 let pid = stamped.player_id;
                 for wf in &mut self.fleets {
                     if wf.id != *fleet_id {
@@ -345,6 +348,11 @@ impl SowEngine {
                 if *kind == crate::game::UnitType::TradeShip {
                     return;
                 }
+                if *kind == crate::game::UnitType::Warship
+                    && !self.campaign_allows_action(crate::campaign::CampaignAction::Warship)
+                {
+                    return;
+                }
                 let cost = kind.gold_cost();
                 let required_port_level = kind.required_port_level();
                 let port_id = self
@@ -377,6 +385,9 @@ impl SowEngine {
                 unit_ids,
                 target_tile,
             } => {
+                if !self.campaign_allows_action(crate::campaign::CampaignAction::Warship) {
+                    return;
+                }
                 let pid = stamped.player_id;
                 let target = *target_tile;
                 let w = self.state.map.width;
@@ -838,6 +849,9 @@ impl SowEngine {
         troops: Option<f64>,
         route: Option<crate::warp_fleet::FleetRoute>,
     ) {
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
+            return;
+        }
         let owner = self.state.map.owner_states()[target_tile as usize];
         let is_betrayer = self
             .state

@@ -2,7 +2,6 @@
   "version": 2,
   "episode_id": "six_sky_ep2",
   "settings": {
-    "buildings_enabled": false,
     "starting_troops": 1000
   },
   "entry": "six_sky_ep2_regent_intro",

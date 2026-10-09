@@ -36,8 +36,6 @@ pub enum FleetLaunchError {
     NoLaunchShore { component: u32 },
     /// Water A* found no path between `src_tile` and `landing_tile`.
     NoWaterPath,
-    /// No **ready** Port — a port is required before transport launches.
-    NoPort,
 }
 
 impl fmt::Display for FleetLaunchError {
@@ -56,7 +54,6 @@ impl fmt::Display for FleetLaunchError {
                 write!(f, "no launch shore on water component {component}")
             }
             FleetLaunchError::NoWaterPath => write!(f, "no water path to landing"),
-            FleetLaunchError::NoPort => write!(f, "fleet requires a completed port"),
         }
     }
 }

@@ -11,6 +11,8 @@ use crate::warp_fleet::WarpFleet;
 use crate::water_components::WaterComponents;
 use serde::{Deserialize, Serialize};
 
+const CAMPAIGN_ASSAULT_PHASES: u8 = 4;
+
 #[derive(Clone, Debug)]
 pub struct CampaignAssaultState {
     pub root_target: PlayerId,
@@ -21,10 +23,16 @@ pub struct CampaignAssaultState {
     pub capacity_ratio: f64,
     pub interval_ticks: u64,
     pub next_tick: u64,
+    /// Current phase in the four-phase troop release window (0 before first launch).
+    pub phase_index: u8,
     pub attacker_ids: Vec<PlayerId>,
     pub target_ids: Vec<PlayerId>,
     /// Scheduled wave number used to rotate equal-pressure targets deterministically.
     pub wave_index: u64,
+    /// Troops already launched by each force during the current 12-second window.
+    pub cycle_released_troops: std::collections::HashMap<PlayerId, f64>,
+    /// Last wave that successfully dispatched troops to each live target.
+    pub target_last_dispatched_wave: std::collections::HashMap<PlayerId, u64>,
     /// Primary target selected by the latest coordinated wave for each Roman force.
     pub focus_targets: std::collections::HashMap<PlayerId, PlayerId>,
     pub reserve_spawned: bool,
@@ -125,6 +133,7 @@ fn prioritize_campaign_assault_targets(
     mut reachable: Vec<CampaignAssaultRouteCandidate>,
     limit: usize,
     wave_index: u64,
+    last_dispatched_wave: &std::collections::HashMap<PlayerId, u64>,
 ) -> Vec<CampaignAssaultRouteCandidate> {
     if reachable.is_empty() || limit == 0 {
         return Vec::new();
@@ -135,8 +144,19 @@ fn prioritize_campaign_assault_targets(
         candidate.tie_rank = (index + count - tie_start) % count;
     }
     reachable.sort_by(|a, b| {
-        (a.committed_troops / a.defense_capacity)
-            .total_cmp(&(b.committed_troops / b.defense_capacity))
+        match (
+            last_dispatched_wave.get(&a.target_id),
+            last_dispatched_wave.get(&b.target_id),
+        ) {
+            (None, Some(_)) => std::cmp::Ordering::Less,
+            (Some(_), None) => std::cmp::Ordering::Greater,
+            (Some(a), Some(b)) => a.cmp(b),
+            (None, None) => std::cmp::Ordering::Equal,
+            }
+            .then_with(|| {
+                (a.committed_troops / a.defense_capacity)
+                    .total_cmp(&(b.committed_troops / b.defense_capacity))
+            })
             .then_with(|| a.tie_rank.cmp(&b.tie_rank))
             .then_with(|| a.target_id.cmp(&b.target_id))
     });
@@ -339,6 +359,9 @@ pub struct SowEngine {
     /// Bot id → tick when another betrayal is allowed.
     pub alliance_betray_cooldown_until: std::collections::HashMap<PlayerId, u32>,
     pub resource_requests_proposed: Vec<ResourceRequestProposed>,
+    /// Campaign progression is episode-local and absent from every other match.
+    pub campaign_unlocks: Option<crate::campaign::CampaignUnlocks>,
+    pub campaign_unlock_revision: u64,
     /// Scripted roster portrait slugs, kept out of Player so ordinary matches stay unchanged.
     pub campaign_avatars: std::collections::HashMap<PlayerId, String>,
     /// Scripted campaign membership, kept out of Player and ordinary matches.
@@ -383,6 +406,10 @@ pub struct SowEngine {
 
 impl SowEngine {
     pub fn new(mut state: GameState, water: WaterComponents) -> Self {
+        let campaign_unlocks = state
+            .config
+            .tutorial
+            .then(crate::campaign::CampaignUnlocks::default);
         state.map.compute_shorelines();
         let w = state.map.width;
         let h = state.map.height;
@@ -420,6 +447,8 @@ impl SowEngine {
             alliance_request_cooldown_until: std::collections::HashMap::new(),
             alliance_betray_cooldown_until: std::collections::HashMap::new(),
             resource_requests_proposed: Vec::new(),
+            campaign_unlocks,
+            campaign_unlock_revision: 0,
             campaign_avatars: std::collections::HashMap::new(),
             campaign_support_intervals: std::collections::HashMap::new(),
             campaign_gold_loot_bonus: std::collections::HashMap::new(),
@@ -450,6 +479,35 @@ impl SowEngine {
             #[cfg(test)]
             test_last_ai_intents: Vec::new(),
         }
+    }
+
+    #[inline]
+    pub fn campaign_allows_building(&self, kind: crate::game::BuildingKind, level: u8) -> bool {
+        self.campaign_unlocks
+            .as_ref()
+            .is_none_or(|unlocks| unlocks.allows_building(kind, level))
+    }
+
+    #[inline]
+    pub fn campaign_allows_action(&self, action: crate::campaign::CampaignAction) -> bool {
+        self.campaign_unlocks
+            .as_ref()
+            .is_none_or(|unlocks| unlocks.allows_action(action))
+    }
+
+    /// Accept only valid, cumulative updates from the active local campaign runtime.
+    pub fn set_campaign_unlocks(&mut self, unlocks: crate::campaign::CampaignUnlocks) -> bool {
+        let Some(current) = self.campaign_unlocks.as_ref() else {
+            return false;
+        };
+        if !unlocks.extends(current) {
+            return false;
+        }
+        if unlocks != *current {
+            self.campaign_unlocks = Some(unlocks);
+            self.campaign_unlock_revision = self.campaign_unlock_revision.wrapping_add(1);
+        }
+        true
     }
 
     #[inline]
@@ -854,12 +912,16 @@ impl SowEngine {
                 capacity_ratio,
                 interval_ticks,
                 next_tick: self.state.tick.saturating_add(interval_ticks),
+                phase_index: 0,
                 attacker_ids: attackers.clone(),
                 target_ids: targets,
                 wave_index: 0,
+                cycle_released_troops: std::collections::HashMap::new(),
+                target_last_dispatched_wave: std::collections::HashMap::new(),
                 focus_targets: std::collections::HashMap::new(),
                 reserve_spawned,
             });
+            self.advance_campaign_assault_phase();
             self.run_campaign_assault_cycle(true);
         }
         attackers.len()
@@ -878,6 +940,25 @@ impl SowEngine {
         }
         let mut targets = vec![root_id];
         if include_allies {
+            for ally in self.state.players.iter().filter(|ally| {
+                ally.id != root_id
+                    && ally.alive
+                    && ally.tile_count > 0
+            }) {
+                let root_lists_ally = root.alliances.contains(&ally.id);
+                let ally_lists_root = ally.alliances.contains(&root_id);
+                let relation_is_allied = self.campaign_relations.get(&ally.id)
+                    == Some(&crate::protocol::CampaignRelation::Allied);
+                if root_lists_ally != ally_lists_root || (relation_is_allied && !root_lists_ally) {
+                    log::debug!(
+                        "[CAMPAIGN_ASSAULT] faction {} alliance mismatch with {} (relation={:?}, mutual={}); excluding until both alliance lists agree",
+                        ally.id,
+                        root_id,
+                        self.campaign_relations.get(&ally.id),
+                        root_lists_ally && ally_lists_root
+                    );
+                }
+            }
             targets.extend(root.alliances.iter().copied().filter(|ally_id| {
                 *ally_id != root_id
                     && self.state.player(*ally_id).is_some_and(|ally| {
@@ -1015,12 +1096,32 @@ impl SowEngine {
             self.campaign_assault_targets
                 .insert(*attacker_id, targets.clone());
         }
+        let live_attacker_ids: std::collections::HashSet<_> =
+            attackers.iter().copied().collect();
+        let live_target_ids: std::collections::HashSet<_> = targets.iter().copied().collect();
         if let Some(active) = &mut self.campaign_assault {
             active.attacker_ids = attackers;
             active.target_ids = targets;
             active.reserve_spawned = reserve_spawned;
+            active
+                .cycle_released_troops
+                .retain(|id, _| live_attacker_ids.contains(id));
+            active
+                .target_last_dispatched_wave
+                .retain(|id, _| live_target_ids.contains(id));
         }
         true
+    }
+
+    fn advance_campaign_assault_phase(&mut self) {
+        if let Some(assault) = &mut self.campaign_assault {
+            if assault.phase_index >= CAMPAIGN_ASSAULT_PHASES {
+                assault.phase_index = 1;
+                assault.cycle_released_troops.clear();
+            } else {
+                assault.phase_index = assault.phase_index.saturating_add(1);
+            }
+        }
     }
 
     fn update_campaign_assault_force_caps(&mut self, refill: bool) {
@@ -1147,11 +1248,45 @@ impl SowEngine {
         let mut projected_incoming =
             aggregate_campaign_assault_incoming(&attacker_ids, &target_ids, commitments);
 
+        let force_count = assault
+            .attacker_ids
+            .iter()
+            .filter(|id| {
+                self.state.player(**id).is_some_and(|player| {
+                    player.alive && player.tile_count > 0 && player.team == Some(assault.team)
+                })
+            })
+            .count();
+        if force_count == 0 {
+            return;
+        }
+        let enemy_capacity: f64 = target_snapshots
+            .iter()
+            .filter_map(|(id, _, _, _)| self.state.player(*id))
+            .map(|player| player.max_troops.max(0.0))
+            .sum();
+        let per_force = enemy_capacity * assault.capacity_ratio / force_count as f64;
+        if !per_force.is_finite() || per_force <= 0.0 {
+            return;
+        }
+        let phase = assault.phase_index.clamp(1, CAMPAIGN_ASSAULT_PHASES);
+        let phase_release_limit = per_force * (f64::from(phase) / f64::from(CAMPAIGN_ASSAULT_PHASES));
+        let mut cycle_released_troops = assault.cycle_released_troops.clone();
+        cycle_released_troops.retain(|id, _| attacker_ids.contains(id));
+        let mut target_last_dispatched_wave = assault.target_last_dispatched_wave.clone();
+        target_last_dispatched_wave.retain(|id, _| target_ids.contains(id));
+
+        let mut routeable_targets = std::collections::HashSet::new();
+        let mut eligible_targets = std::collections::HashSet::new();
+        let mut attempted_targets = std::collections::HashSet::new();
+        let mut dispatched_targets = std::collections::HashSet::new();
+        let mut held_targets = std::collections::HashSet::new();
+
         let mut intent_index = 0u32;
         let mut focus_targets =
             std::collections::HashMap::with_capacity(assault.attacker_ids.len());
         for attacker_id in &assault.attacker_ids {
-            let Some((available, attacker_border)) = self
+            let Some((standing_troops, attacker_border)) = self
                 .state
                 .player(*attacker_id)
                 .filter(|player| player.alive && player.tile_count > 0)
@@ -1159,9 +1294,17 @@ impl SowEngine {
             else {
                 continue;
             };
+            let remaining_phase_budget = (phase_release_limit
+                - cycle_released_troops
+                    .get(attacker_id)
+                    .copied()
+                    .unwrap_or_default())
+            .max(0.0);
+            let available = standing_troops.min(remaining_phase_budget);
             let mut reachable = Vec::new();
             for (target_id, tile_count, defense_capacity, target_border) in &target_snapshots {
                 if assault.hold_last_tile && *target_id == assault.root_target && *tile_count <= 1 {
+                    held_targets.insert(*target_id);
                     continue;
                 }
                 if *target_id == *attacker_id {
@@ -1188,6 +1331,7 @@ impl SowEngine {
                         Err(_) => continue,
                     }
                 };
+                routeable_targets.insert(*target_id);
                 reachable.push(CampaignAssaultRouteCandidate {
                     target_id: *target_id,
                     target_tile,
@@ -1200,13 +1344,23 @@ impl SowEngine {
                     tie_rank: 0,
                 });
             }
-            if reachable.is_empty() || !available.is_finite() || available < min_attack {
+            if !available.is_finite() || available < min_attack {
+                continue;
+            }
+            for candidate in &reachable {
+                eligible_targets.insert(candidate.target_id);
+            }
+            if reachable.is_empty() {
                 continue;
             }
 
             let affordable = (available / min_attack).floor() as usize;
-            let reachable =
-                prioritize_campaign_assault_targets(reachable, affordable, assault.wave_index);
+            let reachable = prioritize_campaign_assault_targets(
+                reachable,
+                affordable,
+                assault.wave_index,
+                &target_last_dispatched_wave,
+            );
             if reachable.is_empty() {
                 continue;
             }
@@ -1235,6 +1389,11 @@ impl SowEngine {
                     continue;
                 }
 
+                let troops_before = self
+                    .state
+                    .player(*attacker_id)
+                    .map_or(0.0, |player| player.troops);
+                attempted_targets.insert(candidate.target_id);
                 if let Some(route) = candidate.route {
                     self.apply_campaign_assault_fleet_with_route(
                         *attacker_id,
@@ -1253,8 +1412,19 @@ impl SowEngine {
                     );
                 }
                 intent_index = intent_index.wrapping_add(1);
+                let troops_after = self
+                    .state
+                    .player(*attacker_id)
+                    .map_or(troops_before, |player| player.troops);
+                let launched = (troops_before - troops_after).max(0.0);
+                if launched <= 0.0 {
+                    continue;
+                }
+                *cycle_released_troops.entry(*attacker_id).or_default() += launched;
+                target_last_dispatched_wave.insert(candidate.target_id, assault.wave_index);
+                dispatched_targets.insert(candidate.target_id);
                 let projected = projected_incoming.entry(candidate.target_id).or_default();
-                *projected = (*projected + share).min(f64::MAX / 4.0);
+                *projected = (*projected + launched).min(f64::MAX / 4.0);
                 assigned_targets.push((
                     candidate.target_id,
                     *projected / candidate.defense_capacity,
@@ -1271,8 +1441,35 @@ impl SowEngine {
             }
         }
 
+        for (target_id, _, _, _) in &target_snapshots {
+            if dispatched_targets.contains(target_id) {
+                continue;
+            }
+            let reason = if held_targets.contains(target_id) {
+                "the final tile is held until the player chooses resistance"
+            } else if !routeable_targets.contains(target_id) {
+                "no legal land or sea route"
+            } else if !eligible_targets.contains(target_id) {
+                "every force is below its current phase minimum"
+            } else if attempted_targets.contains(target_id) {
+                "launch was rejected before troops left the force"
+            } else {
+                "deferred by the phase budget or fair target rotation"
+            };
+            log::debug!(
+                "[CAMPAIGN_ASSAULT] wave={} phase={}/{} target={} omitted: {}; it remains eligible next phase",
+                assault.wave_index,
+                phase,
+                CAMPAIGN_ASSAULT_PHASES,
+                target_id,
+                reason
+            );
+        }
+
         if let Some(active) = &mut self.campaign_assault {
             active.focus_targets = focus_targets;
+            active.cycle_released_troops = cycle_released_troops;
+            active.target_last_dispatched_wave = target_last_dispatched_wave;
             active.wave_index = active.wave_index.wrapping_add(1);
         }
     }
@@ -1299,6 +1496,7 @@ impl SowEngine {
         if let Some(active) = &mut self.campaign_assault {
             active.next_tick = self.state.tick.saturating_add(interval);
         }
+        self.advance_campaign_assault_phase();
         self.run_campaign_assault_cycle(true);
     }
 
@@ -1378,6 +1576,43 @@ mod tests {
     use crate::player::{Player, PlayerType};
     use crate::water_components::WaterComponents;
 
+    #[test]
+    fn campaign_building_policy_is_closed_only_for_tutorial_matches() {
+        let mut custom_state = GameState::new(1, 4, 4, GameConfig::default());
+        custom_state.config.tutorial = false;
+        let mut custom = SowEngine::new(custom_state, WaterComponents::default());
+        assert!(custom.campaign_unlocks.is_none());
+        assert!(
+            crate::campaign::CampaignAction::ALL
+                .into_iter()
+                .all(|action| custom.campaign_allows_action(action))
+        );
+        assert!(
+            crate::game::BuildingKind::ALL
+                .into_iter()
+                .all(|kind| custom.campaign_allows_building(kind, 1))
+        );
+        assert!(!custom.set_campaign_unlocks(crate::campaign::CampaignUnlocks::default()));
+
+        let mut tutorial_state = GameState::new(1, 4, 4, GameConfig::default());
+        tutorial_state.config.tutorial = true;
+        let mut tutorial = SowEngine::new(tutorial_state, WaterComponents::default());
+        assert!(!tutorial.campaign_allows_building(crate::game::BuildingKind::City, 1));
+        assert!(!tutorial.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet));
+
+        let first_grant = crate::campaign::CampaignUnlocks {
+            buildings: std::collections::HashMap::from([(crate::game::BuildingKind::City, 1)]),
+            actions: vec![],
+        };
+        assert!(tutorial.set_campaign_unlocks(first_grant));
+        assert!(tutorial.campaign_allows_building(crate::game::BuildingKind::City, 1));
+        assert!(!tutorial.campaign_allows_building(crate::game::BuildingKind::Factory, 1));
+
+        let attempted_revoke = crate::campaign::CampaignUnlocks::default();
+        assert!(!tutorial.set_campaign_unlocks(attempted_revoke));
+        assert!(tutorial.campaign_allows_building(crate::game::BuildingKind::City, 1));
+    }
+
     fn assault_candidate(
         target_id: PlayerId,
         committed_troops: f64,
@@ -1402,6 +1637,7 @@ mod tests {
             ],
             2,
             0,
+            &std::collections::HashMap::new(),
         );
         assert_eq!(
             selected
@@ -1420,13 +1656,182 @@ mod tests {
         };
         let rotated: Vec<_> = (0..3)
             .map(|wave| {
-                prioritize_campaign_assault_targets(equal_targets(), 1, wave)
+                prioritize_campaign_assault_targets(
+                    equal_targets(),
+                    1,
+                    wave,
+                    &std::collections::HashMap::new(),
+                )
                     .first()
                     .unwrap()
                     .target_id
             })
             .collect();
         assert_eq!(rotated, vec![1, 2, 3]);
+
+        let mut served = std::collections::HashMap::from([(1, 7), (2, 4)]);
+        let waiting = prioritize_campaign_assault_targets(equal_targets(), 1, 8, &served);
+        assert_eq!(waiting[0].target_id, 3, "never-served allies get first turn");
+        served.insert(3, 8);
+        let waiting = prioritize_campaign_assault_targets(equal_targets(), 1, 9, &served);
+        assert_eq!(waiting[0].target_id, 2, "the least-recently-served ally rotates next");
+    }
+
+    #[test]
+    fn boudica_assault_uses_the_authored_alliance_and_east_anglia_map() {
+        use crate::game::{GamePhase, GameState};
+        use crate::game_config::{GameConfig, ScriptedSpawn};
+        use crate::map::MapTile;
+        use crate::player::{Civilization, Leader, Player};
+        use crate::protocol::{CampaignRelation, Team};
+        use crate::water_components::WaterComponents;
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct BoudicaRoster {
+            map: String,
+            player_spawn: [u32; 2],
+            factions: Vec<RosterFaction>,
+        }
+
+        #[derive(Deserialize)]
+        struct RosterFaction {
+            id: String,
+            name: String,
+            x: u32,
+            y: u32,
+            starting_troops: f64,
+            relation: String,
+            #[serde(default)]
+            team: Option<String>,
+            #[serde(default)]
+            can_request_alliance: bool,
+            #[serde(default)]
+            assault_force: bool,
+            #[serde(default)]
+            iq: Option<u32>,
+            #[serde(default)]
+            leader: Option<String>,
+            #[serde(default)]
+            civ: Option<String>,
+        }
+
+        let roster: BoudicaRoster =
+            serde_json::from_slice(include_bytes!("../../../assets/campaign/boudica.json"))
+                .expect("authored Boudica campaign roster");
+        assert_eq!(roster.map, "eastanglia");
+        let map = crate::map_file::parse(include_bytes!(
+            "../../../assets/maps/eastanglia/map.bin"
+        ))
+        .expect("packaged East Anglia terrain");
+
+        let selected = [
+            "trinovantes",
+            "legio_xiv_gemina",
+            "legio_xx_valeria",
+            "suetonius_paulinus",
+            "suetonius_auxilia",
+        ];
+        let mut config = GameConfig::default();
+        config.map_width = map.width;
+        config.map_height = map.height;
+        config.tick_rate_ms = 100.0;
+        config.attack_cost_neutral = 1.0;
+        config.scripted_spawns = roster
+            .factions
+            .into_iter()
+            .filter(|faction| selected.contains(&faction.id.as_str()))
+            .map(|faction| ScriptedSpawn {
+                name: faction.name,
+                x: faction.x,
+                y: faction.y,
+                color: [0.8, 0.2, 0.2],
+                team: match faction.team.as_deref() {
+                    Some("Red") => Some(Team::Red),
+                    Some("Blue") => Some(Team::Blue),
+                    _ => None,
+                },
+                leader: match faction.leader.as_deref() {
+                    Some("Boudica") => Leader::Boudica,
+                    _ => Leader::Caesar,
+                },
+                civilization: match faction.civ.as_deref() {
+                    Some("Gallic Tribes") => Civilization::Gallic,
+                    Some("Iceni Kingdom") => Civilization::Iceni,
+                    _ => Civilization::Rome,
+                },
+                troops: Some(faction.starting_troops),
+                iq: faction.iq,
+                campaign_avatar: None,
+                campaign_support_interval_seconds: None,
+                campaign_gold_loot_bonus: None,
+                campaign_gold_loot_override: None,
+                campaign_alliance_group: None,
+                campaign_relation: Some(match faction.relation.as_str() {
+                    "allied" => CampaignRelation::Allied,
+                    "enemy" => CampaignRelation::Enemy,
+                    _ => CampaignRelation::Neutral,
+                }),
+                campaign_faction_id: Some(faction.id),
+                campaign_can_request_alliance: Some(faction.can_request_alliance),
+                campaign_assault_force: faction.assault_force,
+            })
+            .collect();
+        assert_eq!(config.scripted_spawns.len(), selected.len());
+
+        let mut state = GameState::new(20261009, map.width, map.height, config.clone());
+        state.phase = GamePhase::Playing;
+        state.map.terrain = map.terrain.into_iter().map(MapTile::from_byte).collect();
+        let boudica = Player::new_human(1, "Boudica".into(), [0.2, 0.5, 1.0], &config);
+        state.spawn_player(boudica, roster.player_spawn[0], roster.player_spawn[1]);
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = SowEngine::new(state, water);
+        engine.spawn_scripted();
+
+        let faction_id = |name: &str| {
+            *engine
+                .campaign_faction_ids
+                .iter()
+                .find_map(|(id, faction)| (faction == name).then_some(id))
+                .expect("campaign faction spawned")
+        };
+        let trinovantes = faction_id("trinovantes");
+        let roman_forces: Vec<_> = selected
+            .iter()
+            .filter(|id| **id != "trinovantes")
+            .map(|id| faction_id(id))
+            .collect();
+        assert_eq!(roman_forces.len(), 4);
+        assert!(engine.state.player(1).unwrap().alliances.contains(&trinovantes));
+        assert!(engine
+            .state
+            .player(trinovantes)
+            .unwrap()
+            .alliances
+            .contains(&1));
+
+        assert_eq!(
+            engine.campaign_assault_force_ids,
+            roman_forces.iter().copied().collect()
+        );
+        assert_eq!(
+            engine.activate_campaign_assault(
+                Team::Red,
+                1,
+                false,
+                true,
+                Some((2.0, 3)),
+                false,
+            ),
+            4
+        );
+        let targets = &engine.campaign_assault.as_ref().unwrap().target_ids;
+        assert_eq!(targets, &vec![1, trinovantes]);
+        assert!(
+            engine.attacks.iter().any(|attack| attack.target_owner == trinovantes)
+                || engine.fleets.iter().any(|fleet| fleet.target_owner == trinovantes),
+            "the actual East Anglia map must provide a valid launch route to the authored Iceni ally"
+        );
     }
 
     #[test]

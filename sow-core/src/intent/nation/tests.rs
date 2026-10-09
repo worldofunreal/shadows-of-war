@@ -1540,7 +1540,7 @@ mod bot_iq_alliance_tests {
             .insert(1, "suetonius_paulinus".into());
         engine.campaign_assault_force_ids.insert(1);
         let activated =
-            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false);
+            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 3)), false);
         assert_eq!(activated, 1);
         assert_eq!(
             engine.campaign_assault_targets.get(&1),
@@ -1563,11 +1563,12 @@ mod bot_iq_alliance_tests {
                 .all(|attack| attack.created_tick == engine.state.tick)
         );
         let first_wave_troops: f64 = first_wave.iter().map(|attack| attack.troops).sum();
-        assert!((first_wave_troops - 12_000.0).abs() < 0.01);
+        assert!((first_wave_troops - 3_000.0).abs() < 0.01);
+        assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
 
         let attack_count = engine.attacks.len();
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 10)), false),
+            engine.activate_campaign_assault(Team::Red, 2, false, true, Some((2.0, 3)), false),
             1
         );
         assert_eq!(
@@ -1610,7 +1611,11 @@ mod bot_iq_alliance_tests {
             .retain(|id| *id != 2);
         engine.state.player_mut(2).unwrap().alliances.push(5);
         engine.state.player_mut(5).unwrap().alliances.push(2);
-        engine.state.tick += 100;
+        engine.state.tick += 29;
+        engine.update_campaign_assault();
+        assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
+        assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2, 3, 4]));
+        engine.state.tick += 1;
         engine.update_campaign_assault();
         assert_eq!(
             engine.campaign_assault_targets.get(&1),
@@ -1639,12 +1644,7 @@ mod bot_iq_alliance_tests {
             incoming_for(&engine, 4),
             incoming_for(&engine, 5),
         ];
-        assert!(
-            new_ally_wave[2] - before_new_ally_wave[2] > new_ally_wave[0] - before_new_ally_wave[0]
-        );
-        assert!(
-            new_ally_wave[2] - before_new_ally_wave[2] > new_ally_wave[1] - before_new_ally_wave[1]
-        );
+        assert!(new_ally_wave[2] > before_new_ally_wave[2]);
         let army_mass = engine.state.player(1).unwrap().troops
             + engine
                 .attacks
@@ -1671,7 +1671,7 @@ mod bot_iq_alliance_tests {
         engine.state.player_mut(2).unwrap().alliances.clear();
         engine.state.player_mut(4).unwrap().alliances.clear();
         engine.state.player_mut(5).unwrap().alliances.clear();
-        engine.state.tick += 100;
+        engine.state.tick += 30;
         engine.update_campaign_assault();
         assert_eq!(
             [
@@ -1696,7 +1696,7 @@ mod bot_iq_alliance_tests {
                 .map(|fleet| fleet.troops)
                 .sum::<f64>();
         assert!(
-            (army_mass - 16_000.0).abs() < 0.01,
+            (army_mass - 8_000.0).abs() < 0.01,
             "existing in-flight troops remain; standing reserves stop at the new cap"
         );
         assert!(
@@ -1714,10 +1714,10 @@ mod bot_iq_alliance_tests {
                 .contains(&5)
         );
 
-        // Once the old commitments resolve, the next wave obeys the smaller live-target cap.
+        // Clearing flights does not reuse a release budget already spent in this 12-second window.
         engine.attacks.clear();
         engine.fleets.clear();
-        engine.state.tick += 100;
+        engine.state.tick += 30;
         engine.update_campaign_assault();
         let army_mass = engine.state.player(1).unwrap().troops
             + engine
@@ -1733,10 +1733,16 @@ mod bot_iq_alliance_tests {
                 .map(|fleet| fleet.troops)
                 .sum::<f64>();
         assert!((army_mass - 2_000.0).abs() < 0.01);
+        assert!(engine.attacks.is_empty());
+
+        engine.state.tick += 30;
+        engine.update_campaign_assault();
+        assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
+        assert!(!engine.attacks.is_empty(), "the next 12-second window releases troops again");
     }
 
     #[test]
-    fn final_assault_sends_every_roman_force_to_every_live_ally_by_sea_in_one_activation() {
+    fn final_assault_distributes_troops_over_four_phases_and_repeats_by_sea() {
         use crate::game::{GamePhase, GameState};
         use crate::map::MapTile;
         use crate::protocol::Team;
@@ -1813,13 +1819,16 @@ mod bot_iq_alliance_tests {
         }
         engine
             .campaign_relations
+            .insert(11, crate::protocol::CampaignRelation::Allied);
+        engine
+            .campaign_relations
             .insert(12, crate::protocol::CampaignRelation::Neutral);
         engine
             .campaign_relations
             .insert(13, crate::protocol::CampaignRelation::Enemy);
 
         assert_eq!(
-            engine.activate_campaign_assault(Team::Red, 6, false, true, Some((2.0, 10)), false),
+            engine.activate_campaign_assault(Team::Red, 6, false, true, Some((2.0, 3)), false),
             5
         );
         assert_eq!(
@@ -1829,7 +1838,7 @@ mod bot_iq_alliance_tests {
         assert_eq!(
             engine.fleets.len(),
             20,
-            "each of five Roman forces must launch one fleet at each of four live targets"
+            "each Roman force must share its first phase across the reachable live targets"
         );
         for roman_id in 1..=5 {
             let targets: std::collections::HashSet<_> = engine
@@ -1839,13 +1848,38 @@ mod bot_iq_alliance_tests {
                 .map(|fleet| fleet.target_owner)
                 .collect();
             assert_eq!(targets, [6, 7, 8, 9].into_iter().collect());
-            assert_eq!(engine.state.player(roman_id).unwrap().troops, 0.0);
+            assert!((engine.state.player(roman_id).unwrap().troops - 750.0).abs() < 0.01);
         }
-        let launched: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
+        let first_phase: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
         assert!(
-            (launched - 5_000.0).abs() < 0.01,
-            "the wave must not exceed the total available 2:1 force"
+            (first_phase - 1_250.0).abs() < 0.01,
+            "the immediate phase releases one quarter of the configured 2:1 force"
         );
+        for phase in 2..=4 {
+            engine.state.tick += 30;
+            engine.update_campaign_assault();
+            assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, phase);
+            let released: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
+            assert!(released <= 5_000.0 + 0.01);
+        }
+        let full_window: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
+        assert!((full_window - 5_000.0).abs() < 0.01);
+        let served: std::collections::HashSet<_> = engine
+            .campaign_assault
+            .as_ref()
+            .unwrap()
+            .target_last_dispatched_wave
+            .keys()
+            .copied()
+            .collect();
+        assert_eq!(served, [6, 7, 8, 9].into_iter().collect());
+
+        engine.fleets.clear();
+        engine.state.tick += 30;
+        engine.update_campaign_assault();
+        assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
+        let next_window_phase: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
+        assert!((next_window_phase - 1_250.0).abs() < 0.01);
     }
 
     #[test]
@@ -1964,7 +1998,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn coordinated_campaign_assault_uses_the_saved_legion_focus() {
+    fn active_campaign_assault_forces_do_not_issue_unscheduled_ai_attacks() {
         use crate::engine::CampaignAssaultState;
         use crate::game_config::BotDifficulty;
         use crate::protocol::{CampaignRelation, Team};
@@ -1987,9 +2021,12 @@ mod bot_iq_alliance_tests {
             capacity_ratio: 2.0,
             interval_ticks: 100,
             next_tick: 100,
+            phase_index: 1,
             attacker_ids: vec![1],
             target_ids: vec![2, 3],
             wave_index: 0,
+            cycle_released_troops: std::collections::HashMap::new(),
+            target_last_dispatched_wave: std::collections::HashMap::new(),
             focus_targets: std::collections::HashMap::from([(1, 2)]),
             reserve_spawned: false,
         });
@@ -2013,7 +2050,7 @@ mod bot_iq_alliance_tests {
             &mut decisions,
         );
 
-        assert_eq!(attack_targets(&decisions), vec![2]);
+        assert!(decisions.is_empty());
     }
 
     #[test]

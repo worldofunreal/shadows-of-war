@@ -1,4 +1,4 @@
-use crate::building::{structure_build_cost_gold, structure_kind_enabled};
+use crate::building::structure_build_cost_gold;
 use crate::engine::SowEngine;
 use crate::game::BuildingKind;
 use crate::protocol::GameplayIntent;
@@ -67,7 +67,7 @@ impl SowEngine {
                             .unwrap_or(std::cmp::Ordering::Equal)
                     });
                     for kind in build_order {
-                        if !structure_kind_enabled(kind) {
+                        if !self.campaign_allows_building(kind, 1) {
                             continue;
                         }
                         let owned = agg.total_structures_of_kind(kind);
@@ -103,6 +103,9 @@ impl SowEngine {
                                 kind,
                                 player_gold,
                                 &self.state.config,
+                                self.campaign_unlocks
+                                    .as_ref()
+                                    .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
                             ) {
                                 if let Some(p_me) = self.state.player_mut(bot_id) {
                                     p_me.iq_points -= build_cost;
@@ -211,6 +214,9 @@ impl SowEngine {
                                 kind,
                                 player_gold,
                                 &self.state.config,
+                                self.campaign_unlocks
+                                    .as_ref()
+                                    .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
                             )
                         {
                             if let Some(p_me) = self.state.player_mut(bot_id) {

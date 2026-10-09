@@ -86,11 +86,6 @@ pub fn boat_speed_bonus_from_port_levels(port_levels: u32) -> f64 {
     (port_levels as f64 * 0.01).min(0.30)
 }
 
-#[inline]
-pub fn structure_kind_enabled(_kind: BuildingKind) -> bool {
-    true
-}
-
 /// Whether `player_id` owns a finished Port; the AI uses this for naval strategy.
 #[inline]
 pub fn player_has_completed_port(buildings: &[Building], player_id: u16) -> bool {

@@ -173,6 +173,9 @@ impl SowEngine {
         troops: f64,
         decisions: &mut Vec<BotDecision>,
     ) -> bool {
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
+            return false;
+        }
         #[cfg(not(feature = "ai-metrics"))]
         use crate::warp_fleet::resolve_fleet_route;
 
@@ -248,8 +251,12 @@ impl SowEngine {
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
         let attacks_players =
             campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
+        let assault_controls_attacks = self
+            .campaign_assault
+            .as_ref()
+            .is_some_and(|assault| assault.attacker_ids.contains(&bot_id));
         // ── Attack logic (both Bots and Nations) ────────────────────
-        if slot.do_attack {
+        if slot.do_attack && !assault_controls_attacks {
             let campaign_target = if let Some(assault) = &self.campaign_assault {
                 assault.focus_targets.get(&bot_id).copied()
             } else {
@@ -495,7 +502,8 @@ impl SowEngine {
                 // (is_ai_controlled humans) get the same naval breakout so a
                 // teammate fully enclosed by allies keeps advancing instead
                 // of idling when its border has no enemy contact.
-                let can_fleet = is_mfo || slot.tier == AiTier::Ghost;
+                let can_fleet = (is_mfo || slot.tier == AiTier::Ghost)
+                    && self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet);
                 let has_port =
                     crate::building::cost::player_has_completed_port(&self.buildings, bot_id);
                 let has_tribe_target = is_mfo
@@ -931,6 +939,9 @@ impl SowEngine {
         bot_id: u16,
         decisions: &mut Vec<BotDecision>,
     ) -> bool {
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet) {
+            return false;
+        }
         use crate::rng::NextIntExt;
         #[cfg(not(feature = "ai-metrics"))]
         use crate::warp_fleet::resolve_fleet_route;
@@ -1029,6 +1040,9 @@ impl SowEngine {
         targets: &[u16],
         defender_target: Option<u16>,
     ) {
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::Nuke) {
+            return;
+        }
         if bot_iq < 100 {
             return;
         }

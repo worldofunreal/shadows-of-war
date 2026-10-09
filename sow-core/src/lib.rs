@@ -9,6 +9,7 @@
 
 pub mod bitset;
 pub mod building;
+pub mod campaign;
 pub mod config;
 pub mod diplomacy;
 #[cfg(test)]

@@ -446,6 +446,42 @@
         }
         host.appendChild(basics);
 
+        if (state.flow !== "menu") {
+            var unlockSection = section("Campaign availability");
+            var grants = step.unlocks || { buildings: {}, actions: [] };
+            var levelOptions = [{ value: "0", label: "Locked" }];
+            Object.keys(window.SOWCampaign.STRUCTURE_LEVEL_LIMITS).forEach(function (kind) {
+                var maxLevel = window.SOWCampaign.STRUCTURE_LEVEL_LIMITS[kind];
+                var choices = levelOptions.concat(Array.from({ length: maxLevel }, function (_, index) {
+                    var level = index + 1;
+                    return { value: String(level), label: "Level " + level };
+                }));
+                unlockSection.appendChild(selectField(kind + " maximum level", String(Number(grants.buildings && grants.buildings[kind]) || 0), choices, function (value) {
+                    step.unlocks = step.unlocks || { buildings: {}, actions: [] };
+                    step.unlocks.buildings = step.unlocks.buildings || {};
+                    if (Number(value)) step.unlocks.buildings[kind] = Number(value); else delete step.unlocks.buildings[kind];
+                    if (!Object.keys(step.unlocks.buildings).length && !(step.unlocks.actions || []).length) delete step.unlocks;
+                    markDirty(); renderInspector();
+                }));
+            });
+            var actionNames = { transport_fleet: "Transport fleets", trade_ship: "Trade ships", warship: "Warships", nuke: "Nukes" };
+            window.SOWCampaign.CAMPAIGN_ACTIONS.forEach(function (action) {
+                unlockSection.appendChild(checkboxField(actionNames[action], (grants.actions || []).includes(action), function (enabled) {
+                    step.unlocks = step.unlocks || { buildings: {}, actions: [] };
+                    var actions = new Set(step.unlocks.actions || []);
+                    if (enabled) actions.add(action); else actions.delete(action);
+                    step.unlocks.actions = window.SOWCampaign.CAMPAIGN_ACTIONS.filter(function (item) { return actions.has(item); });
+                    if (!Object.keys(step.unlocks.buildings || {}).length && !step.unlocks.actions.length) delete step.unlocks;
+                    markDirty(); renderInspector();
+                }));
+            });
+            var policies = campaignStepPolicies(state.machine && state.machine.state.choices, state.facts);
+            var effective = window.SOWCampaign.applyCampaignUnlocks(policies.get(step.id), step.unlocks);
+            var available = campaignUnlockLabel(effective);
+            unlockSection.appendChild(el("small", { class: "muted" }, available ? "Available when this step begins: " + available : "Nothing is available yet on this route."));
+            host.appendChild(unlockSection);
+        }
+
         if (step.type !== "end") {
             var campaignActions = section("Campaign actions");
             campaignActions.appendChild(checkboxField("Order a team to attack when this step begins", Boolean(step.campaign_assault_on_enter), function (enabled) {
@@ -550,7 +586,7 @@
                 if (value === "zoom_out_complete") step.trigger.value = 0.55;
                 if (value === "fleet") step.trigger.unit = "TransportShip";
                 if (value === "resource_transfer") { step.trigger.recipient = ""; step.trigger.resources = ["gold", "troops"]; }
-                if (value === "structure_level") step.trigger.kind = "City";
+                if (value === "structure_level" || value === "structure_upgrade") step.trigger.kind = "City";
                 else if (value === "ui") {
                     step.trigger.action = state.flow === "menu" ? inGameUiTargets()[0] || "menu_campaign" : "map_attack";
                     if (step.guide) Object.assign(step.guide, { kind: "ui", target: step.trigger.action });
@@ -596,8 +632,12 @@
                 objective.appendChild(checkboxField("Must include troops", requiredResources.includes("troops"), function (enabled) { step.trigger.resources = requiredResources.filter(function (item) { return item !== "troops"; }); if (enabled) step.trigger.resources.push("troops"); if (!step.trigger.resources.length) delete step.trigger.resources; markDirty(); renderInspector(); }));
                 objective.appendChild(inputField("Required amount", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
             }
+            else if (step.trigger.type === "structure_upgrade") {
+                objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Bunker", "Port"], function (value) { step.trigger.kind = value; markDirty(); renderInspector(); }));
+                objective.appendChild(inputField("Upgrades to complete", step.trigger.value || 1, function (value) { step.trigger.value = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
+            }
             else if (step.trigger.type === "structure_level") {
-                var structureLevelLimits = { City: 6, Farm: 3, Factory: 4, Bunker: 4, Port: 5 };
+                var structureLevelLimits = window.SOWCampaign.STRUCTURE_LEVEL_LIMITS;
                 objective.appendChild(selectField("Building type", step.trigger.kind || "City", ["City", "Farm", "Factory", "Bunker", "Port"], function (value) {
                     step.trigger.kind = value;
                     step.trigger.value = Math.min(Number(step.trigger.value || 1), structureLevelLimits[value]);
@@ -764,6 +804,24 @@
     function inGameUiTargets() { return Object.keys(window.SOWCampaign.UI_TARGETS).filter(function (key) { return state.flow === "menu" ? key.startsWith("menu_") || key === "campaign_replay" : !key.startsWith("menu_") && key !== "campaign_replay"; }); }
     function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : ["hover", "camera_target"].includes(type) ? "player" : "expand"; }
     function flowEntry() { return state.flow === "menu" ? state.definition.menu_guide && state.definition.menu_guide.entry : state.definition.entry; }
+    function campaignStepPolicies(choices, facts) {
+        var byId = new Map(state.definition.steps.map(function (step) { return [step.id, step]; }));
+        return window.SOWCampaign.campaignUnlockStates(byId, state.definition.entry, choices, facts);
+    }
+    function campaignUnlockLabel(unlocks) {
+        var labels = Object.keys(unlocks && unlocks.buildings || {}).sort().map(function (kind) { return kind + " L" + unlocks.buildings[kind]; });
+        var names = { transport_fleet: "Transport fleets", trade_ship: "Trade ships", warship: "Warships", nuke: "Nukes" };
+        (unlocks && unlocks.actions || []).forEach(function (action) {
+            if (!names[action]) return;
+            if (window.SOWCampaign.campaignAllowsAction(unlocks, action)) {
+                labels.push(names[action]);
+                return;
+            }
+            var requirement = window.SOWCampaign.CAMPAIGN_ACTION_BUILDING_REQUIREMENTS[action];
+            if (requirement) labels.push(names[action] + " (needs " + requirement.kind + " L" + requirement.level + ")");
+        });
+        return labels.join(" · ");
+    }
     function choiceAnswerOptions() {
         var result = [];
         state.definition.steps.filter(function (step) { return step.type === "choice"; }).forEach(function (step) {
@@ -775,16 +833,11 @@
     function renderSettings() {
         var host = $("#settings"); host.replaceChildren();
         var settings = state.definition.settings;
-        host.appendChild(checkboxField("Buildings available", settings.buildings_enabled, function (value) { settings.buildings_enabled = value; markDirty(); }));
         host.appendChild(inputField("Starting troops", settings.starting_troops, function (value) { settings.starting_troops = Number(value); $("#sampleTroops").textContent = Number(value).toLocaleString(); markDirty(); }, { type: "number", min: 1, max: 100000, step: 100 }));
-        host.appendChild(selectField("Unlock buildings after", settings.buildings_unlock_after_defeated || "", [{ value: "", label: "No delayed unlock" }].concat(factionOptions()), function (value) {
-            if (value) settings.buildings_unlock_after_defeated = value; else delete settings.buildings_unlock_after_defeated;
-            markDirty();
-        }));
         host.appendChild(checkboxField("Allied support after milestone", Boolean(settings.campaign_support), function (enabled) {
             if (!enabled) delete settings.campaign_support;
             else {
-                var defaultMilestone = settings.buildings_unlock_after_defeated || (state.roster.factions.find(function (faction) { return faction.avatar === "the_iceni_despoilers"; }) || {}).id || "";
+                var defaultMilestone = (state.roster.factions.find(function (faction) { return faction.avatar === "the_iceni_despoilers"; }) || {}).id || "";
                 settings.campaign_support = settings.campaign_support || { after_defeated: defaultMilestone, share_percent: 50 };
             }
             markDirty(); renderSettings();
@@ -1015,7 +1068,7 @@
         var parts = [definition ? definition.label : "Set a condition"];
         if (trigger.type === "contact" && Array.isArray(trigger.targets)) parts[0] += " · " + (trigger.value || 1) + " of " + trigger.targets.join(", ");
         else if (["contact", "defeated", "attack", "hover", "camera_target"].includes(trigger.type) && trigger.target) parts[0] += " · " + trigger.target;
-        if (trigger.type === "structure_level" && trigger.kind) parts[0] += " · " + trigger.kind;
+        if (["structure_level", "structure_upgrade"].includes(trigger.type) && trigger.kind) parts[0] += " · " + trigger.kind;
         if (trigger.type === "fleet" && trigger.unit) parts[0] += " · " + trigger.unit + (trigger.target ? " to " + trigger.target : "");
         if (trigger.type === "resource_transfer") parts[0] += (trigger.recipient ? " · to " + trigger.recipient : "") + (trigger.resources && trigger.resources.length ? " · " + trigger.resources.join(" + ") : "");
         else if (trigger.type === "ui" && typeof trigger.action === "string") parts[0] += " · " + trigger.action.replace(/_/g, " ");
@@ -1079,6 +1132,7 @@
             warningsByStep[issue.step] = (warningsByStep[issue.step] || 0) + 1;
         });
         state.definition.steps.forEach(function (step) { byId[step.id] = step; });
+        var policyByStep = campaignStepPolicies(state.machine && state.machine.state.choices, state.facts);
         state.definition.steps.forEach(function (step) {
             var pos = state.definition.layout[step.id] || defaultLayout(0);
             var rootLabel = step.id === state.definition.entry ? "IN-GAME START" : state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? "MENU START" : step.id;
@@ -1097,6 +1151,9 @@
             var head = el("header", { class: "node-hd" }); head.append(el("span", {}, step.type), el("small", { title: step.id, "aria-label": step.id }, rootLabel)); card.appendChild(head);
             card.appendChild(el("div", { class: "node-title" }, translated(step.title_key, state.previewLanguage) || step.title_key || "Untitled"));
             card.appendChild(el("div", { class: "node-summary", title: summary }, summary));
+            var effectiveUnlocks = window.SOWCampaign.applyCampaignUnlocks(policyByStep.get(step.id), step.unlocks);
+            var availability = campaignUnlockLabel(effectiveUnlocks);
+            if (availability) card.appendChild(el("div", { class: "node-summary" }, "Available: " + availability));
             if (castIds.length) {
                 var cast = el("div", { class: "node-cast", "aria-hidden": "true" });
                 castIds.slice(0, 3).forEach(function (speakerId) {
@@ -1329,7 +1386,7 @@
         }
         try { state.renderer.render(model.waiting ? null : model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
-        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
+        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, unlocks: model.unlocks, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
         var requiredMenu = /^map_(?:build|upgrade)_/.test(guideTarget) ? "build" : "";
         var menuHint = requiredMenu && $("#sow-hud").dataset.previewMapMenu !== requiredMenu ? " · open the " + requiredMenu + " submenu in the preview to reveal this guide" : "";
@@ -1383,13 +1440,11 @@
         var anchor = guide.kind === "ui" ? window.SOWCampaign.resolveUiAnchor(target, spotlightPanel) : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         var anchorRect = guide.kind === "ui" ? $("#previewRoot").getBoundingClientRect() : frameRect;
         if (guide.kind === "ui" && guide.target === "attack_ratio" && step.trigger && step.trigger.action === "attack_ratio" && target.type === "range") {
-            var rangeStart = window.SOWCampaign.resolveUiRangeAnchor(target, Number(target.value));
             var rangeMin = Number(target.min), rangeMax = Number(target.max);
             var rangeTarget = rangeMin + (rangeMax - rangeMin) * Number(step.trigger.value || 1);
-            var rangeEnd = window.SOWCampaign.resolveUiRangeAnchor(target, rangeTarget);
-            if (!rangeStart || !rangeEnd) return null;
-            anchor.x = rangeStart.x; anchor.y = rangeStart.y;
-            anchor.toX = rangeEnd.x - anchorRect.left; anchor.toY = rangeEnd.y - anchorRect.top;
+            anchor = window.SOWCampaign.resolveUiRangeGuideAnchor(target, Number(target.value), rangeTarget);
+            if (!anchor) return null;
+            anchor.toX -= anchorRect.left; anchor.toY -= anchorRect.top;
         }
         anchor.x -= anchorRect.left; anchor.y -= anchorRect.top;
         if (Number.isFinite(anchor.spotlightX)) anchor.spotlightX -= anchorRect.left;

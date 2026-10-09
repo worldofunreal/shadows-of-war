@@ -40,6 +40,9 @@ impl SowEngine {
         if self.state.phase != GamePhase::Playing {
             return;
         }
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::Warship) {
+            return;
+        }
 
         let mut new_fleets = Vec::new();
 
@@ -100,6 +103,9 @@ impl SowEngine {
 
     pub fn execute_trade_ships(&mut self) {
         if self.state.phase != GamePhase::Playing {
+            return;
+        }
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::TradeShip) {
             return;
         }
 

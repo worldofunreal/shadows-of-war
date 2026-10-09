@@ -555,9 +555,12 @@ mod tests {
             capacity_ratio: 2.0,
             interval_ticks: 100,
             next_tick: 100,
+            phase_index: 1,
             attacker_ids: vec![1],
             target_ids: vec![2],
             wave_index: 0,
+            cycle_released_troops: std::collections::HashMap::new(),
+            target_last_dispatched_wave: std::collections::HashMap::new(),
             focus_targets: std::collections::HashMap::new(),
             reserve_spawned: false,
         });

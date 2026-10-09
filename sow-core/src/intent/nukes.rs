@@ -9,6 +9,9 @@ impl SowEngine {
         if self.state.phase != GamePhase::Playing {
             return;
         }
+        if !self.campaign_allows_action(crate::campaign::CampaignAction::Nuke) {
+            return;
+        }
         let Some(player) = self.state.player(player_id) else {
             return;
         };

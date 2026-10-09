@@ -1,6 +1,5 @@
 use crate::building::{
-    Building, resolve_structure_spawn_tile, structure_build_cost_gold, structure_kind_enabled,
-    structure_upgrade_cost_gold,
+    Building, resolve_structure_spawn_tile, structure_build_cost_gold, structure_upgrade_cost_gold,
 };
 use crate::engine::SowEngine;
 use crate::game::{BuildingKind, GameEvent, GamePhase};
@@ -49,7 +48,7 @@ impl SowEngine {
         if !player.alive {
             return;
         }
-        if !structure_kind_enabled(kind) {
+        if !self.campaign_allows_building(kind, 1) {
             return;
         }
         let w = self.state.map.width;
@@ -155,7 +154,9 @@ impl SowEngine {
             return;
         }
         let target_level = building.level.saturating_add(1);
-        if target_level > building.kind.max_level() {
+        if target_level > building.kind.max_level()
+            || !self.campaign_allows_building(building.kind, target_level)
+        {
             return;
         }
 
@@ -301,6 +302,10 @@ mod tests {
     #[test]
     fn first_boudica_tutorial_city_upgrade_is_free_once() {
         let mut game = engine(true);
+        assert!(game.set_campaign_unlocks(crate::campaign::CampaignUnlocks {
+            buildings: std::collections::HashMap::from([(BuildingKind::City, 2)]),
+            actions: vec![],
+        }));
         game.buildings.push(building(1, BuildingKind::City, 1));
         game.state.player_mut(1).unwrap().gold = 0.0;
 
@@ -339,6 +344,10 @@ mod tests {
     #[test]
     fn factory_build_order_has_no_city_level_requirement() {
         let mut game = engine(true);
+        assert!(game.set_campaign_unlocks(crate::campaign::CampaignUnlocks {
+            buildings: std::collections::HashMap::from([(BuildingKind::Factory, 1)]),
+            actions: vec![],
+        }));
         game.state.map = crate::map::GameMap::new(32, 32);
         for y in 0..32 {
             for x in 0..32 {

@@ -423,6 +423,8 @@ pub struct UiState {
     pub app: crate::ClientApp,
     /// True during an offline scripted tutorial or campaign match.
     pub tutorial_active: bool,
+    /// Monotonic local campaign generation; delayed JS commands from prior episodes are ignored.
+    pub campaign_session_id: u32,
     pub tutorial_camera_only: bool,
     pub tutorial_paused_action: Option<TutorialPausedAction>,
     /// Boudica remains frozen until the player starts the first Roman attack.

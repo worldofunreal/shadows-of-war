@@ -59,6 +59,20 @@ pub(crate) struct MapMenuItem {
     pub level: Option<u8>,
     pub disabled: bool,
     pub reason_key: Option<&'static str>,
+    pub reason_level: Option<u8>,
+    pub reason_seconds: Option<u32>,
+    pub reason_troops: Option<u64>,
+}
+
+fn fleet_error_reason_key(error: sow_core::warp_fleet::FleetLaunchError) -> &'static str {
+    use sow_core::warp_fleet::FleetLaunchError as Error;
+    match error {
+        Error::InvalidTile | Error::TargetPlayerNotFound { .. } => "hud.fleet_invalid_target",
+        Error::SelfTarget => "hud.fleet_own_target",
+        Error::NoWaterAccess | Error::NoLaunchShore { .. } => "hud.fleet_no_water_access",
+        Error::NoLandingShore => "hud.fleet_no_landing_shore",
+        Error::NoWaterPath => "hud.fleet_no_water_path",
+    }
 }
 
 pub(crate) fn is_quick_tap(elapsed_ms: u128, distance_sq: f64) -> bool {
@@ -175,6 +189,24 @@ impl MapTarget {
 }
 
 impl SowApp {
+    pub(crate) fn campaign_building_max_level(&self, kind: sow_core::game::BuildingKind) -> u8 {
+        self.sim
+            .engine
+            .as_ref()
+            .and_then(|engine| engine.campaign_unlocks.as_ref())
+            .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind))
+    }
+
+    pub(crate) fn campaign_action_unlocked(
+        &self,
+        action: sow_core::campaign::CampaignAction,
+    ) -> bool {
+        self.sim
+            .engine
+            .as_ref()
+            .is_none_or(|engine| engine.campaign_allows_action(action))
+    }
+
     pub(crate) fn map_menu_alliance_state(
         &self,
         tile_idx: u32,
@@ -445,39 +477,33 @@ impl SowApp {
     }
 
     fn show_fleet_unavailable(&mut self, error: sow_core::warp_fleet::FleetLaunchError) {
+        use sow_core::warp_fleet::FleetLaunchError as Error;
         let text = match error {
-            sow_core::warp_fleet::FleetLaunchError::InvalidTile
-            | sow_core::warp_fleet::FleetLaunchError::TargetPlayerNotFound { .. } => {
+            Error::InvalidTile | Error::TargetPlayerNotFound { .. } => {
                 crate::ui::UiText::new("hud.fleet_invalid_target")
             }
-            sow_core::warp_fleet::FleetLaunchError::SelfTarget => {
-                crate::ui::UiText::new("hud.fleet_own_target")
-            }
-            sow_core::warp_fleet::FleetLaunchError::NoWaterAccess
-            | sow_core::warp_fleet::FleetLaunchError::NoLaunchShore { .. } => {
+            Error::SelfTarget => crate::ui::UiText::new("hud.fleet_own_target"),
+            Error::NoWaterAccess | Error::NoLaunchShore { .. } => {
                 crate::ui::UiText::new("hud.fleet_no_water_access")
             }
-            sow_core::warp_fleet::FleetLaunchError::NoLandingShore => {
-                crate::ui::UiText::new("hud.fleet_no_landing_shore")
-            }
-            sow_core::warp_fleet::FleetLaunchError::NoWaterPath => {
-                crate::ui::UiText::new("hud.fleet_no_water_path")
-            }
-            sow_core::warp_fleet::FleetLaunchError::NoPort => {
-                crate::ui::UiText::new("hud.fleet_no_port")
-            }
+            Error::NoLandingShore => crate::ui::UiText::new("hud.fleet_no_landing_shore"),
+            Error::NoWaterPath => crate::ui::UiText::new("hud.fleet_no_water_path"),
         };
         self.add_map_feedback(text);
     }
 
     fn show_map_menu_unavailable(&mut self, tile_idx: u32) {
-        let message = match self.map_target(tile_idx) {
-            Some(target) if target.owner == 0 => {
-                match self.fleet_route_check(tile_idx, 0, FleetRouteCheck::Access) {
-                    Err(_) => "Fleet unavailable: no shoreline water access.".to_string(),
-                    Ok(()) => "No action is available here.".to_string(),
-                }
+        if self
+            .map_target(tile_idx)
+            .is_some_and(|target| target.owner == 0)
+        {
+            if let Err(error) = self.fleet_route_check(tile_idx, 0, FleetRouteCheck::Access) {
+                self.show_fleet_unavailable(error);
+                return;
             }
+        }
+        let message = match self.map_target(tile_idx) {
+            Some(target) if target.owner == 0 => "No action is available here.".to_string(),
             Some(target) if target.is_teammate => "Teammates cannot be targeted. 🤝".to_string(),
             Some(target) if target.owner == target.my_id && !target.is_land => {
                 "Buildings require owned land. 🗺️".to_string()
@@ -525,12 +551,18 @@ impl SowApp {
                     .find(|player| player.id == target.my_id)
             })
             .is_none_or(|player| player.boats_in_use < player.boat_capacity);
+        let campaign_fleet = self
+            .sim
+            .engine
+            .as_ref()
+            .is_some_and(|engine| engine.campaign_unlocks.is_some());
         let can_fleet = !spawning
-            && has_boat_capacity
             && target.owner == 0
-            && self
-                .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
-                .is_ok();
+            && ((campaign_fleet && target.is_land)
+                || (has_boat_capacity
+                    && self
+                        .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
+                        .is_ok()));
         let mut actions = target.menu_actions(
             spawning,
             target.is_land && self.can_attack(tile_idx, target.owner),
@@ -549,7 +581,10 @@ impl SowApp {
             .and_then(|snapshot| snapshot.buildings.iter().find(|b| b.tile_idx == tile_idx));
         match building {
             Some(building) if !building.under_construction => {
-                if building.level < building.kind.max_level() {
+                if building.level < building.kind.max_level()
+                    && building.level.saturating_add(1)
+                        <= self.campaign_building_max_level(building.kind)
+                {
                     actions.push(MapMenuAction::UpgradeStructure);
                 }
             }
@@ -569,7 +604,10 @@ impl SowApp {
                         ),
                         (MapMenuAction::BuildFarm, sow_core::game::BuildingKind::Farm),
                     ] {
-                        if self.resolve_building_target(kind, col, row).is_ok() {
+                        if kind.max_level() > 0
+                            && self.campaign_building_max_level(kind) >= 1
+                            && self.resolve_building_target(kind, col, row).is_ok()
+                        {
                             actions.push(action);
                         }
                     }
@@ -585,12 +623,120 @@ impl SowApp {
             .into_iter()
             .map(|action| {
                 let (cost, level) = self.map_menu_cost(action, tile_idx);
+                let campaign_action = match action {
+                    MapMenuAction::Fleet => {
+                        Some(sow_core::campaign::CampaignAction::TransportFleet)
+                    }
+                    MapMenuAction::Nuke => Some(sow_core::campaign::CampaignAction::Nuke),
+                    MapMenuAction::BuildWarship => {
+                        Some(sow_core::campaign::CampaignAction::Warship)
+                    }
+                    _ => None,
+                };
+                let campaign_locked = campaign_action
+                    .is_some_and(|required| !self.campaign_action_unlocked(required));
+                let mut reason_key = campaign_locked.then_some("hud.campaign_unlock_required");
+                let mut reason_level = None;
+                let mut reason_seconds = None;
+                let mut reason_troops = None;
+                let campaign_fleet = action == MapMenuAction::Fleet
+                    && self
+                        .sim
+                        .engine
+                        .as_ref()
+                        .is_some_and(|engine| engine.campaign_unlocks.is_some());
+                let action_unavailable = if campaign_fleet && !campaign_locked {
+                    let blocker = self.map_target(tile_idx).and_then(|target| {
+                        if target.is_teammate {
+                            Some(("hud.fleet_teammate", None))
+                        } else if target.is_allied {
+                            Some(("hud.fleet_alliance", None))
+                        } else if self
+                            .sim
+                            .current_snapshot
+                            .as_ref()
+                            .and_then(|snapshot| {
+                                snapshot
+                                    .players
+                                    .iter()
+                                    .find(|player| player.id == target.my_id)
+                            })
+                            .is_some_and(|player| player.boats_in_use >= player.boat_capacity)
+                        {
+                            Some(("hud.fleet_capacity_full", None))
+                        } else if let Err(error) =
+                            self.fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
+                        {
+                            Some((fleet_error_reason_key(error), None))
+                        } else {
+                            let troops = self.ui.app.hud_state.troops
+                                * self.ui.app.hud_state.attack_ratio as f64;
+                            let minimum = self.sim.config.attack_cost_neutral;
+                            if !attack_troops_meet_minimum(troops, minimum) {
+                                reason_troops = Some(minimum.ceil() as u64);
+                                Some(("hud.fleet_need_troops", reason_troops))
+                            } else {
+                                None
+                            }
+                        }
+                    });
+                    if let Some((key, troops)) = blocker {
+                        reason_key = Some(key);
+                        reason_troops = troops;
+                        true
+                    } else {
+                        false
+                    }
+                } else if action == MapMenuAction::Nuke && !campaign_locked {
+                    let owner_id = self.sim.my_player_id.unwrap_or_default();
+                    let required_level = sow_core::game::NukeKind::AtomBomb.required_city_level();
+                    let ready_city = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
+                        snapshot.buildings.iter().any(|building| {
+                            building.owner_id == owner_id
+                                && building.kind == sow_core::game::BuildingKind::City
+                                && !building.under_construction
+                                && building.active_level() >= required_level
+                        })
+                    });
+                    if !ready_city {
+                        reason_key = Some("hud.map_action_city");
+                        reason_level = Some(required_level);
+                        true
+                    } else {
+                        let cooldown_ticks = self
+                            .sim
+                            .current_snapshot
+                            .as_ref()
+                            .and_then(|snapshot| {
+                                snapshot.players.iter().find(|player| player.id == owner_id)
+                            })
+                            .map_or(0, |player| player.nuke_cooldown_ticks);
+                        if cooldown_ticks > 0 {
+                            reason_key = Some("lobbies.locked");
+                            reason_seconds = Some(
+                                ((cooldown_ticks as f32 * self.sim.config.tick_rate_ms / 1000.0)
+                                    .ceil() as u32)
+                                    .max(1),
+                            );
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
                 MapMenuItem {
                     action,
                     cost,
                     level,
-                    disabled: cost.is_some_and(|value| !value.is_finite() || gold < value),
-                    reason_key: None,
+                    disabled: campaign_locked
+                        || action_unavailable
+                        || cost.is_some_and(|value| !value.is_finite() || gold < value),
+                    reason_key,
+                    reason_level,
+                    reason_seconds,
+                    reason_troops,
                 }
             })
             .collect()
@@ -893,6 +1039,7 @@ impl SowApp {
             MapMenuAction::BuildWarship => {
                 (Some(sow_core::game::UnitType::Warship.gold_cost()), None)
             }
+            MapMenuAction::Nuke => (Some(self.sim.config.nuke_cost), None),
             MapMenuAction::BuildCity
             | MapMenuAction::BuildFactory
             | MapMenuAction::BuildPort
@@ -1094,6 +1241,10 @@ impl SowApp {
     }
 
     pub(crate) fn launch_fleet_from_tile(&mut self, tile_idx: u32) -> bool {
+        if !self.campaign_action_unlocked(sow_core::campaign::CampaignAction::TransportFleet) {
+            self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
+            return false;
+        }
         let Some(target) = self.map_target(tile_idx) else {
             return false;
         };
@@ -1321,6 +1472,10 @@ impl SowApp {
         {
             return;
         }
+        if self.campaign_building_max_level(kind) < 1 {
+            self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
+            return;
+        }
         let cost_index = match kind {
             sow_core::game::BuildingKind::City => 0,
             sow_core::game::BuildingKind::Bunker => 1,
@@ -1351,6 +1506,10 @@ impl SowApp {
                 matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
             })
         {
+            return;
+        }
+        if !self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Warship) {
+            self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
             return;
         }
         let owner_id = self
@@ -1394,6 +1553,10 @@ impl SowApp {
                 matches!(snapshot.phase, sow_core::game::GamePhase::Playing)
             })
         {
+            return;
+        }
+        if !self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke) {
+            self.add_map_feedback(crate::ui::UiText::new("hud.campaign_unlock_required"));
             return;
         }
         let owner_id = self
@@ -1441,17 +1604,6 @@ fn action_notice(message: &str) -> crate::ui::UiText {
         .and_then(|value| value.strip_suffix(" troops for a fleet. 🚢"))
     {
         return UiText::new("hud.fleet_need_troops").with("troops", troops);
-    }
-    if message.starts_with("Fleet unavailable:") {
-        return if message.contains("completed port") {
-            UiText::new("hud.fleet_no_port")
-        } else if message.contains("landing shore") {
-            UiText::new("hud.fleet_no_landing_shore")
-        } else if message.contains("water path") {
-            UiText::new("hud.fleet_no_water_path")
-        } else {
-            UiText::new("hud.fleet_no_water_access")
-        };
     }
     match message {
         "No action is available here." | "Action unavailable here." => {

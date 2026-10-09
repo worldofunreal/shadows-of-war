@@ -77,6 +77,10 @@ enum WebMenuCommand {
         #[serde(default)]
         paused_action: Option<crate::app::TutorialPausedAction>,
     },
+    SetCampaignUnlocks {
+        campaign_session_id: u32,
+        unlocks: sow_core::campaign::CampaignUnlocks,
+    },
     SetTutorialMarker {
         #[serde(default)]
         player_id: Option<u16>,
@@ -341,6 +345,8 @@ struct HudPublishKey {
     leaderboard_open: bool,
     leaderboard_publish_revision: u64,
     tutorial_active: bool,
+    campaign_session_id: u32,
+    campaign_unlock_revision: u64,
     dev_sidebar_open: bool,
     dev_config: [u32; 29],
     inbox_open: bool,
@@ -561,9 +567,9 @@ impl SowApp {
                     match serde_json::from_value::<sow_core::game_config::GameConfig>(config) {
                         Ok(config) => {
                             crate::store_portals::track_product_event("menu_single_player_start");
-                            self.process_ui_actions(Some(UiAction::StartSinglePlayer(
-                                Box::new(config),
-                            )))
+                            self.process_ui_actions(Some(UiAction::StartSinglePlayer(Box::new(
+                                config,
+                            ))))
                         }
                         Err(error) => {
                             log::warn!("[WEB MENU] invalid single-player config: {error}");
@@ -607,8 +613,11 @@ impl SowApp {
                     if self.ui.tutorial_active && self.net.is_offline {
                         self.sim.paused = paused;
                         self.ui.tutorial_camera_only = paused && camera_only;
-                        self.ui.tutorial_paused_action =
-                            if paused && !camera_only { paused_action } else { None };
+                        self.ui.tutorial_paused_action = if paused && !camera_only {
+                            paused_action
+                        } else {
+                            None
+                        };
                         self.input.tutorial_camera_drag_recorded = false;
                         if paused {
                             self.sim.offline_intents.clear();
@@ -618,6 +627,19 @@ impl SowApp {
                             self.cancel_hold_build();
                             self.close_map_context_menu();
                         }
+                    }
+                }
+                WebMenuCommand::SetCampaignUnlocks {
+                    campaign_session_id,
+                    unlocks,
+                } => {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && campaign_session_id == self.ui.campaign_session_id
+                        && let Some(engine) = self.sim.engine.as_mut()
+                        && engine.state.config.tutorial
+                    {
+                        engine.set_campaign_unlocks(unlocks);
                     }
                 }
                 WebMenuCommand::ActivateCampaignAssault {
@@ -633,20 +655,32 @@ impl SowApp {
                             self.sim.my_player_id
                         } else {
                             self.sim.engine.as_ref().and_then(|engine| {
-                                engine.campaign_faction_ids.iter().find_map(|(player_id, id)| {
-                                    (id == &target_faction_id).then_some(*player_id)
-                                })
+                                engine
+                                    .campaign_faction_ids
+                                    .iter()
+                                    .find_map(|(player_id, id)| {
+                                        (id == &target_faction_id).then_some(*player_id)
+                                    })
                             })
                         };
                         if let (Some(target_player_id), Some(engine)) =
                             (target_player_id, self.sim.engine.as_mut())
                         {
-                            let reinforcement = reinforcement.map(|settings| (settings.capacity_ratio, settings.interval_seconds));
-                            if engine
-                                .activate_campaign_assault(attacker_team, target_player_id, preserve_relation, target_allies, reinforcement, hold_last_tile)
-                                == 0
+                            let reinforcement = reinforcement.map(|settings| {
+                                (settings.capacity_ratio, settings.interval_seconds)
+                            });
+                            if engine.activate_campaign_assault(
+                                attacker_team,
+                                target_player_id,
+                                preserve_relation,
+                                target_allies,
+                                reinforcement,
+                                hold_last_tile,
+                            ) == 0
                             {
-                                log::warn!("[CAMPAIGN] assault had no valid scripted attackers or target");
+                                log::warn!(
+                                    "[CAMPAIGN] assault had no valid scripted attackers or target"
+                                );
                             }
                         } else {
                             log::warn!("[CAMPAIGN] assault target not found: {target_faction_id}");
@@ -933,11 +967,12 @@ impl SowApp {
                     gold,
                     troops,
                 } => {
-                    let accepted = self.send_intent(sow_core::protocol::GameplayIntent::SendResources {
-                        target_player: target_player_id,
-                        gold: gold.max(0.0),
-                        troops: troops.max(0.0),
-                    });
+                    let accepted =
+                        self.send_intent(sow_core::protocol::GameplayIntent::SendResources {
+                            target_player: target_player_id,
+                            gold: gold.max(0.0),
+                            troops: troops.max(0.0),
+                        });
                     if accepted {
                         self.ui.app.hud_state.show_ask_panel = None;
                         self.ui.app.hud_state.transfer_confirm_pending = false;
@@ -1001,7 +1036,10 @@ impl SowApp {
                         if target_player_id == 0 || target_player_id == my_player_id {
                             return None;
                         }
-                        let me = snapshot.players.iter().find(|player| player.id == my_player_id)?;
+                        let me = snapshot
+                            .players
+                            .iter()
+                            .find(|player| player.id == my_player_id)?;
                         let target = snapshot
                             .players
                             .iter()
@@ -1252,8 +1290,8 @@ impl SowApp {
                         self.input.target_zoom = self.input.camera_zoom;
                         self.input.camera_focus_target = Some((x, y));
                         self.input.tutorial_camera_focus = tutorial_focus;
-                        self.input.camera_focus_waiting_for_input_release = tutorial_focus
-                            && self.input.is_pointer_gesture_active();
+                        self.input.camera_focus_waiting_for_input_release =
+                            tutorial_focus && self.input.is_pointer_gesture_active();
                     }
                 }
             }
@@ -1367,6 +1405,19 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             .map(|player| [player.kills, player.deaths, player.assists])
             .unwrap_or_default(),
         tutorial_active,
+        campaign_session_id: if tutorial_active {
+            app.ui.campaign_session_id
+        } else {
+            0
+        },
+        campaign_unlock_revision: if tutorial_active {
+            app.sim
+                .engine
+                .as_ref()
+                .map_or(0, |engine| engine.campaign_unlock_revision)
+        } else {
+            0
+        },
         camera_zoom_hundredths: (app.input.camera_zoom * 100.0).round() as i32,
         camera_zoom_floor_hundredths: (app.zoom_floor() * 100.0).round() as i32,
         camera_zoom_ceiling_hundredths: (crate::camera_zoom_upper_bound(
@@ -1392,7 +1443,10 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
             None
         },
         tutorial_pointer: if tutorial_active {
-            Some((app.input.last_mouse_x.to_bits(), app.input.last_mouse_y.to_bits()))
+            Some((
+                app.input.last_mouse_x.to_bits(),
+                app.input.last_mouse_y.to_bits(),
+            ))
         } else {
             None
         },
@@ -1901,8 +1955,12 @@ fn tutorial_guide_tiles(
         .filter(|[x, y]| x.is_finite() && y.is_finite())
         .unwrap_or([me.centroid_x, me.centroid_y]);
     let nameplate_tile = (
-        nameplate_anchor[0].floor().clamp(0.0, map_w.saturating_sub(1) as f32) as i32,
-        nameplate_anchor[1].floor().clamp(0.0, map_h.saturating_sub(1) as f32) as i32,
+        nameplate_anchor[0]
+            .floor()
+            .clamp(0.0, map_w.saturating_sub(1) as f32) as i32,
+        nameplate_anchor[1]
+            .floor()
+            .clamp(0.0, map_h.saturating_sub(1) as f32) as i32,
     );
     let cache_hit = {
         let observation = &app.sim.tutorial_observation;
@@ -2034,12 +2092,9 @@ fn tutorial_guide_tiles(
             if !placement_cache.is_legal_site(snapshot.tick, &query, idx) {
                 return;
             }
-            let nameplate_distance = sow_core::building::hex_distance(
-                nameplate_tile.0,
-                nameplate_tile.1,
-                col,
-                row,
-            ) as u32;
+            let nameplate_distance =
+                sow_core::building::hex_distance(nameplate_tile.0, nameplate_tile.1, col, row)
+                    as u32;
             max_nameplate_distance = max_nameplate_distance.max(nameplate_distance);
             build_site_candidates.push((is_border, nameplate_distance, 0, idx));
         };
@@ -2055,10 +2110,7 @@ fn tutorial_guide_tiles(
                     continue;
                 }
                 let idx = row as u32 * map_w + col as u32;
-                consider_build_site(
-                    idx,
-                    border_tiles.is_some_and(|tiles| tiles.contains(idx)),
-                );
+                consider_build_site(idx, border_tiles.is_some_and(|tiles| tiles.contains(idx)));
             }
         }
         let map = app.sim.engine.as_ref().map(|engine| &engine.state.map);
@@ -2107,8 +2159,21 @@ fn tutorial_guide_tiles(
 }
 
 fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
+    let campaign_unlocks = app
+        .sim
+        .engine
+        .as_ref()
+        .and_then(|engine| engine.campaign_unlocks.as_ref())
+        .cloned()
+        .unwrap_or_default();
     let Some(snapshot) = app.sim.current_snapshot.clone() else {
-        return serde_json::json!({ "active": true, "episode_id": app.ui.tutorial_campaign.episode_id(), "tick": 0 });
+        return serde_json::json!({
+            "active": true,
+            "episode_id": app.ui.tutorial_campaign.episode_id(),
+            "campaign_session_id": app.ui.campaign_session_id,
+            "effective_unlocks": campaign_unlocks,
+            "tick": 0
+        });
     };
     let marker_player_id = app.ui.tutorial_marker_player_id.unwrap_or(my_pid);
     let (expand_tile, assault_tile, target_tile, build_site_tile) =
@@ -2141,8 +2206,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     )
     .map(|(_, zoom)| zoom.max(zoom_floor))
     .unwrap_or(app.input.target_zoom.max(zoom_floor));
-    let zoom_ceiling = crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h)
-        .max(zoom_floor);
+    let zoom_ceiling =
+        crate::camera_zoom_upper_bound(app.input.screen_w, app.input.screen_h).max(zoom_floor);
     let zoom_in_target = TUTORIAL_MAX_ZOOM.clamp(zoom_floor, zoom_ceiling);
     let zoom_in_complete =
         app.input.camera_zoom.is_finite() && app.input.camera_zoom >= zoom_in_target;
@@ -2217,24 +2282,10 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
         .and_then(|point| tutorial_screen_anchor(point, viewport_w, viewport_h))
         .map(|([x, y], offscreen)| serde_json::json!({ "x": x, "y": y, "offscreen": offscreen }))
         .unwrap_or(serde_json::Value::Null);
-    let upgrade_buildings = tutorial_building_anchors(
-        &snapshot,
-        my_pid,
-        map_w,
-        map_h,
-        &app.input,
-        sf,
-        false,
-    );
-    let upgrading_buildings = tutorial_building_anchors(
-        &snapshot,
-        my_pid,
-        map_w,
-        map_h,
-        &app.input,
-        sf,
-        true,
-    );
+    let upgrade_buildings =
+        tutorial_building_anchors(&snapshot, my_pid, map_w, map_h, &app.input, sf, false);
+    let upgrading_buildings =
+        tutorial_building_anchors(&snapshot, my_pid, map_w, map_h, &app.input, sf, true);
     let observation = &app.sim.tutorial_observation;
     let attacks_by_faction_id = observation
         .attacks_by_faction_id
@@ -2307,6 +2358,8 @@ fn tutorial_payload(app: &mut SowApp, my_pid: u16) -> serde_json::Value {
     serde_json::json!({
         "active": true,
         "episode_id": app.ui.tutorial_campaign.episode_id(),
+        "campaign_session_id": app.ui.campaign_session_id,
+        "effective_unlocks": campaign_unlocks,
         "tick": snapshot.tick,
         "expand": guide_screen(expand_tile),
         "assault": guide_screen(assault_tile),
@@ -2633,17 +2686,28 @@ fn building_benefit_label(
             "Adds +{:.0} troop capacity and +{:.0} troops/min{}.",
             config.city_max_troops * f64::from(level),
             config.city_troop_income * f64::from(level) * per_minute,
-            if level == Kind::City.max_level() { "; unlocks nuclear attacks" } else { "" },
+            if level == Kind::City.max_level() {
+                "; unlocks nuclear attacks"
+            } else {
+                ""
+            },
         ),
         Kind::Port => format!(
             "Adds {level} boat slots, +{level}% boat speed, +{:.0} port gold/min and up to +{:.0} merchant gold/min with routes.",
             config.port_gold_income
                 * level_weight
-                * if leader == sow_core::player::Leader::Ragnar { 1.5 } else { 1.0 }
+                * if leader == sow_core::player::Leader::Ragnar {
+                    1.5
+                } else {
+                    1.0
+                }
                 * per_minute,
             config.trade_ship_gold_income * f64::from(level) * per_minute,
         ),
-        Kind::Factory => format!("Produces +{:.0} gold/min.", config.factory_gold_income * f64::from(level) * per_minute),
+        Kind::Factory => format!(
+            "Produces +{:.0} gold/min.",
+            config.factory_gold_income * f64::from(level) * per_minute
+        ),
         Kind::Bunker => {
             let range = (config.bunker_range.round() as u32
                 + u32::from(level.saturating_sub(1)) * 2)
@@ -2715,7 +2779,11 @@ fn building_metrics(
                 "Port gold income",
                 config.port_gold_income
                     * level_weight
-                    * if leader == sow_core::player::Leader::Ragnar { 1.5 } else { 1.0 }
+                    * if leader == sow_core::player::Leader::Ragnar {
+                        1.5
+                    } else {
+                        1.0
+                    }
                     * per_minute,
                 "+",
                 "/min",
@@ -2783,7 +2851,12 @@ fn building_detail_payload(
     let owns = building.owner_id == my_id;
     let snapshot = app.sim.current_snapshot.as_ref();
     let leader = snapshot
-        .and_then(|snapshot| snapshot.players.iter().find(|player| player.id == building.owner_id))
+        .and_then(|snapshot| {
+            snapshot
+                .players
+                .iter()
+                .find(|player| player.id == building.owner_id)
+        })
         .map(|player| player.leader)
         .unwrap_or_default();
     let cost = app
@@ -2795,10 +2868,10 @@ fn building_detail_payload(
         .unwrap_or_default();
     let has_gold = app.current_player_gold() >= cost;
     let maxed = next_level > building.kind.max_level();
-    let duration_ticks = sow_core::building::structure_upgrade_duration_ticks(
-        building.kind,
-        next_level,
-    );
+    let campaign_upgrade_locked =
+        !maxed && next_level > app.campaign_building_max_level(building.kind);
+    let duration_ticks =
+        sow_core::building::structure_upgrade_duration_ticks(building.kind, next_level);
     let boat_slots = snapshot.and_then(|snapshot| {
         snapshot
             .players
@@ -2832,17 +2905,18 @@ fn building_detail_payload(
         },
         "benefit_label": building_benefit_label(building.kind, active_level, leader, &app.sim.config),
         "metrics": building_metrics(building.kind, active_level, leader, &app.sim.config),
-        "next_level": (!building.under_construction && !maxed).then_some(next_level),
-        "next_benefit_label": (!building.under_construction && !maxed)
+        "next_level": (!building.under_construction && !maxed && !campaign_upgrade_locked).then_some(next_level),
+        "next_benefit_label": (!building.under_construction && !maxed && !campaign_upgrade_locked)
             .then(|| building_benefit_label(building.kind, next_level, leader, &app.sim.config)),
-        "next_metrics": (!building.under_construction && !maxed)
+        "next_metrics": (!building.under_construction && !maxed && !campaign_upgrade_locked)
             .then(|| building_metrics(building.kind, next_level, leader, &app.sim.config)),
         "cost": cost,
-        "duration_seconds": (!building.under_construction && !maxed).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
+        "duration_seconds": (!building.under_construction && !maxed && !campaign_upgrade_locked).then_some(duration_ticks as f64 * app.sim.config.tick_rate_ms as f64 / 1000.0),
         "under_construction": building.under_construction,
+        "campaign_upgrade_locked": campaign_upgrade_locked,
         "boat_slots": (building.kind == sow_core::game::BuildingKind::Port).then_some(boat_slots).flatten(),
         "owns": owns,
-        "can_upgrade": owns && !building.under_construction && !maxed && has_gold
+        "can_upgrade": owns && !building.under_construction && !maxed && !campaign_upgrade_locked && has_gold
     })
 }
 
@@ -2873,9 +2947,7 @@ fn incoming_combat_troops(
         .attacks
         .iter()
         .filter(|attack| {
-            attack.owner_id == attacker_id
-                && attack.target_owner == target_id
-                && !attack.retreating
+            attack.owner_id == attacker_id && attack.target_owner == target_id && !attack.retreating
         })
         .map(|attack| attack.troops.max(0.0))
         .sum::<f64>();
@@ -2901,7 +2973,11 @@ fn build_combat_operations_payload(
     engine: Option<&sow_core::engine::SowEngine>,
     map_width: u32,
 ) -> Vec<serde_json::Value> {
-    let players: HashMap<_, _> = snapshot.players.iter().map(|player| (player.id, player)).collect();
+    let players: HashMap<_, _> = snapshot
+        .players
+        .iter()
+        .map(|player| (player.id, player))
+        .collect();
     let local_attacks: HashMap<_, _> = engine
         .into_iter()
         .flat_map(|engine| engine.attacks.iter())
@@ -2925,8 +3001,8 @@ fn build_combat_operations_payload(
 
     for incoming in [true, false] {
         for attack in snapshot.attacks.iter().filter(|attack| {
-            let is_incoming = attack.owner_id != my_player_id
-                && attack.target_owner == my_player_id;
+            let is_incoming =
+                attack.owner_id != my_player_id && attack.target_owner == my_player_id;
             let is_outgoing = attack.owner_id == my_player_id;
             if incoming { is_incoming } else { is_outgoing }
         }) {
@@ -3045,6 +3121,9 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                         "level": item.level,
                         "disabled": item.disabled,
                         "reason_key": item.reason_key,
+                        "reason_level": item.reason_level,
+                        "reason_seconds": item.reason_seconds,
+                        "reason_troops": item.reason_troops,
                     })
                 })
                 .collect::<Vec<_>>();
@@ -3447,12 +3526,8 @@ pub(crate) fn publish_tutorial_camera_anchor_frame(app: &SowApp) {
     let scale = (crate::web_canvas::device_pixel_ratio() as f32).max(0.01);
     let viewport_w = app.input.screen_w / scale;
     let viewport_h = app.input.screen_h / scale;
-    let screen = crate::render::world::overlays::world_to_screen(
-        world_x,
-        world_y,
-        &app.input,
-        scale,
-    );
+    let screen =
+        crate::render::world::overlays::world_to_screen(world_x, world_y, &app.input, scale);
     let Some(([x, y], _)) = tutorial_screen_anchor(screen, viewport_w, viewport_h) else {
         LAST_TUTORIAL_CAMERA_ANCHOR.with(|last| *last.borrow_mut() = None);
         return;
@@ -3757,7 +3832,12 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("SOW_onStateUpdate"))
     {
         if let Ok(func) = func_val.dyn_into::<js_sys::Function>() {
-            let _ = func.call1(window.as_ref(), &js_str);
+            if let Err(error) = func.call1(window.as_ref(), &js_str) {
+                web_sys::console::error_2(
+                    &JsValue::from_str("[WEB MENU] state update failed"),
+                    &error,
+                );
+            }
         }
     }
 }
@@ -3796,6 +3876,7 @@ mod tests {
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
             campaign_avatar: None,
+            is_campaign_faction: false,
             skin_style: 0,
             kills: 0,
             deaths: 0,
@@ -3829,11 +3910,7 @@ mod tests {
 
     #[test]
     fn tutorial_build_site_prefers_interior_before_border_fallback() {
-        let mut candidates = vec![
-            (true, 20, 0, 1),
-            (false, 2, 1, 9),
-            (false, 6, 1, 8),
-        ];
+        let mut candidates = vec![(true, 20, 0, 1), (false, 2, 1, 9), (false, 6, 1, 8)];
         tutorial_rank_build_site_candidates(&mut candidates);
 
         let ranked_tiles = candidates
@@ -3856,7 +3933,10 @@ mod tests {
         assert_eq!(distances[0], 0);
         assert_eq!(distances[6], 1);
         assert_eq!(distances[12], 2);
-        assert_eq!(distances[24], 3, "distance beyond the relevant range is capped");
+        assert_eq!(
+            distances[24], 3,
+            "distance beyond the relevant range is capped"
+        );
     }
 
     #[test]
@@ -3996,9 +4076,33 @@ mod tests {
         let state = GameState::new(1, 4, 4, GameConfig::default());
         let water = WaterComponents::compute(&state.map, |_| {});
         let mut engine = sow_core::engine::SowEngine::new(state, water);
-        engine.add_fleet(WarpFleet::new(10, 2, 1, UnitType::TransportShip, 40.0, (0, 4), vec![4]));
-        engine.add_fleet(WarpFleet::new(11, 2, 0, UnitType::TransportShip, 40.0, (0, 4), vec![4]));
-        engine.add_fleet(WarpFleet::new(12, 2, 1, UnitType::Warship, 40.0, (0, 4), vec![4]));
+        engine.add_fleet(WarpFleet::new(
+            10,
+            2,
+            1,
+            UnitType::TransportShip,
+            40.0,
+            (0, 4),
+            vec![4],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            11,
+            2,
+            0,
+            UnitType::TransportShip,
+            40.0,
+            (0, 4),
+            vec![4],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            12,
+            2,
+            1,
+            UnitType::Warship,
+            40.0,
+            (0, 4),
+            vec![4],
+        ));
 
         assert_eq!(incoming_combat_troops(&snapshot, Some(&engine), 2, 1), 65.0);
     }
@@ -4071,10 +4175,7 @@ mod tests {
         use sow_core::warp_fleet::WarpFleet;
         use sow_core::water_components::WaterComponents;
 
-        let mut snapshot = test_snapshot(vec![
-            test_player(1, 5, 100.0),
-            test_player(2, 5, 100.0),
-        ]);
+        let mut snapshot = test_snapshot(vec![test_player(1, 5, 100.0), test_player(2, 5, 100.0)]);
         let make_snapshot = |id, owner_id, unit_type| FleetSnapshot {
             id,
             owner_id,
@@ -4097,10 +4198,42 @@ mod tests {
         let state = GameState::new(1, 5, 5, GameConfig::default());
         let water = WaterComponents::compute(&state.map, |_| {});
         let mut engine = sow_core::engine::SowEngine::new(state, water);
-        engine.add_fleet(WarpFleet::new(10, 1, 0, UnitType::TransportShip, 40.0, (0, 6), vec![6]));
-        engine.add_fleet(WarpFleet::new(11, 2, 1, UnitType::TransportShip, 40.0, (0, 6), vec![6]));
-        engine.add_fleet(WarpFleet::new(12, 1, 2, UnitType::TradeShip, 40.0, (0, 6), vec![6]));
-        engine.add_fleet(WarpFleet::new(13, 1, 2, UnitType::Warship, 40.0, (0, 6), vec![6]));
+        engine.add_fleet(WarpFleet::new(
+            10,
+            1,
+            0,
+            UnitType::TransportShip,
+            40.0,
+            (0, 6),
+            vec![6],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            11,
+            2,
+            1,
+            UnitType::TransportShip,
+            40.0,
+            (0, 6),
+            vec![6],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            12,
+            1,
+            2,
+            UnitType::TradeShip,
+            40.0,
+            (0, 6),
+            vec![6],
+        ));
+        engine.add_fleet(WarpFleet::new(
+            13,
+            1,
+            2,
+            UnitType::Warship,
+            40.0,
+            (0, 6),
+            vec![6],
+        ));
 
         let operations = build_combat_operations_payload(&snapshot, 1, Some(&engine), 5);
         assert_eq!(operations.len(), 2);
@@ -4125,7 +4258,9 @@ mod tests {
                 .any(|metric| { metric["icon"] == "port" && metric["value"] == 2.0 })
         );
         assert!(port.iter().any(|metric| {
-            metric["label"] == "Port gold income" && metric["value"] == 30.0 && metric["unit"] == "/min"
+            metric["label"] == "Port gold income"
+                && metric["value"] == 30.0
+                && metric["unit"] == "/min"
         }));
         assert!(port.iter().any(|metric| {
             metric["label"] == "Merchant income with routes" && metric["value"] == 24.0
@@ -4136,21 +4271,25 @@ mod tests {
             sow_core::player::Leader::Ragnar,
             &sow_core::game_config::GameConfig::default(),
         );
-        assert!(ragnar_port.iter().any(|metric| {
-            metric["label"] == "Port gold income" && metric["value"] == 45.0
-        }));
+        assert!(
+            ragnar_port
+                .iter()
+                .any(|metric| { metric["label"] == "Port gold income" && metric["value"] == 45.0 })
+        );
         let farm = building_metrics(
             sow_core::game::BuildingKind::Farm,
             2,
             sow_core::player::Leader::Caesar,
             &sow_core::game_config::GameConfig::default(),
         );
-        assert!(farm.iter().any(|metric| {
-            metric["label"] == "Troop income" && metric["value"] == 100.0
-        }));
-        assert!(farm.iter().any(|metric| {
-            metric["label"] == "Gold income" && metric["value"] == 10.0
-        }));
+        assert!(
+            farm.iter()
+                .any(|metric| { metric["label"] == "Troop income" && metric["value"] == 100.0 })
+        );
+        assert!(
+            farm.iter()
+                .any(|metric| { metric["label"] == "Gold income" && metric["value"] == 10.0 })
+        );
         let bunker = building_metrics(
             sow_core::game::BuildingKind::Bunker,
             2,

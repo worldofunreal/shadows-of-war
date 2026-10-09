@@ -420,6 +420,7 @@ mod nuke_alert_tests {
             civilization: Civilization::Rome,
             leader: Leader::Caesar,
             campaign_avatar: None,
+            is_campaign_faction: false,
             skin_style: 0,
             kills: 0,
             deaths: 0,

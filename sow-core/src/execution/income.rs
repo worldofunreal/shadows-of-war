@@ -110,12 +110,11 @@ impl SowEngine {
         self.update_debt_rebellions(&config);
 
         let mut tribes_needing_city = Vec::new();
-        for player in self
-            .state
-            .players
-            .iter()
-            .filter(|p| p.alive && self.state.config.buildings_enabled)
-        {
+        for player in self.state.players.iter().filter(|p| {
+            p.alive
+                && self.state.config.buildings_enabled
+                && self.campaign_allows_building(crate::game::BuildingKind::City, 1)
+        }) {
             let has_city = aggs
                 .get(player.id as usize)
                 .is_some_and(|a| a.city_levels > 0);

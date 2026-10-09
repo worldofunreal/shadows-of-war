@@ -479,6 +479,9 @@ pub struct PlayerSnapshot {
     pub leader: crate::player::Leader,
     #[serde(default)]
     pub campaign_avatar: Option<String>,
+    /// True only for factions spawned from a scripted campaign roster.
+    #[serde(default)]
+    pub is_campaign_faction: bool,
     #[serde(default)]
     pub skin_style: u8,
     #[serde(default)]

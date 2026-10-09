@@ -1445,14 +1445,15 @@ mod tests {
 
     #[test]
     fn nameplate_fit_bounds_contain_the_real_prepared_name_and_troops_quads() {
-        use crate::nameplate::{NameplateLayout, NameplateMetrics, NameplateStatus, ScreenPoint};
-        use sow_core::player::PlayerType;
+        use crate::nameplate::{
+            NameplateLayout, NameplateMetrics, NameplateStatus, NameplateStyle, ScreenPoint,
+        };
 
         let atlas = FontAtlas::load_static();
         let name = prepared_test_text(&atlas, "Ação 42 🏅", 0.95);
         let troops = prepared_test_text_aligned(&atlas, "1 234 567", 0.95, 0.0);
         let center = ScreenPoint([100.0, 90.0]);
-        let metrics = NameplateMetrics::compute(16.0, PlayerType::Human, true);
+        let metrics = NameplateMetrics::compute(16.0, NameplateStyle::HumanGhost, true);
         let status = NameplateStatus {
             show_names: true,
             show_troops: true,

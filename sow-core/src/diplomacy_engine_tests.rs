@@ -84,6 +84,72 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
+    fn active_campaign_assault_tracks_allies_formed_and_broken_through_diplomacy() {
+        use crate::protocol::Team;
+
+        let mut engine = campaign_contact_engine(1_000.0, true);
+        engine
+            .state
+            .map
+            .terrain
+            .fill(crate::map::MapTile::from_byte(0x80));
+        engine.state.player_mut(1).unwrap().tile_count = 1;
+        engine.state.player_mut(2).unwrap().tile_count = 1;
+        engine.state.player_mut(2).unwrap().border_insert(6);
+        engine.state.map.set_owner_id(1, 1, 1);
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::ResolveCampaignDiplomacy {
+                    target_player: 2,
+                    relation: crate::protocol::CampaignRelation::Allied,
+                    gold_cost: 200.0,
+                },
+            },
+            0,
+        );
+        assert!(engine.state.player(1).unwrap().alliances.contains(&2));
+        assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+
+        let config = engine.state.config.clone();
+        let mut roman = Player::new_bot(3, "Roman force".into(), [0.8, 0.2, 0.2], &config);
+        roman.team = Some(Team::Red);
+        roman.tile_count = 1;
+        roman.max_troops = 1_000.0;
+        roman.border_insert(0);
+        engine.state.register_player(roman);
+        engine.state.map.set_owner_id(0, 0, 3);
+        engine.campaign_faction_ids.insert(3, "legio_xiv_gemina".into());
+        engine.campaign_assault_force_ids.insert(3);
+
+        assert_eq!(
+            engine.activate_campaign_assault(Team::Red, 1, false, true, Some((2.0, 3)), false),
+            1
+        );
+        assert_eq!(
+            engine.campaign_assault.as_ref().unwrap().target_ids,
+            vec![1, 2]
+        );
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::BreakAlliance { target_player: 2 },
+            },
+            0,
+        );
+        engine.state.tick = engine.campaign_assault.as_ref().unwrap().next_tick;
+        engine.update_campaign_assault();
+        assert_eq!(
+            engine.campaign_assault.as_ref().unwrap().target_ids,
+            vec![1]
+        );
+        assert!(engine.state.player(1).unwrap().alliances.is_empty());
+        assert!(engine.state.player(2).unwrap().alliances.is_empty());
+    }
+
+    #[test]
     fn campaign_contact_choice_rejects_missing_gold_or_contact_without_partial_changes() {
         for (gold, contact) in [(199.0, true), (500.0, false)] {
             let mut engine = campaign_contact_engine(gold, contact);

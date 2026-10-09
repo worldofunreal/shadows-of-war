@@ -61,6 +61,7 @@ pub(super) fn pick_stack_click_tile(
     buildings: &[crate::building::Building],
     bot_id: u16,
     kind: BuildingKind,
+    max_level: u8,
 ) -> Option<u32> {
     let mut best: Option<(u8, u64, u32)> = None;
     for b in buildings {
@@ -68,6 +69,7 @@ pub(super) fn pick_stack_click_tile(
             || b.kind != kind
             || b.under_construction
             || b.level >= kind.max_level()
+            || b.level.saturating_add(1) > max_level
         {
             continue;
         }
@@ -89,8 +91,9 @@ pub(super) fn stack_build_decision(
     kind: BuildingKind,
     player_gold: f64,
     cfg: &crate::game_config::GameConfig,
+    max_level: u8,
 ) -> Option<BotDecision> {
-    let stack_tile = pick_stack_click_tile(buildings, bot_id, kind)?;
+    let stack_tile = pick_stack_click_tile(buildings, bot_id, kind, max_level)?;
     let building = buildings
         .iter()
         .find(|b| b.owner_id == bot_id && b.kind == kind && b.tile_idx == stack_tile)?;

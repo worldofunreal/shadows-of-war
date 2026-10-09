@@ -1343,7 +1343,9 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
         const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".triggers.json"), "utf8"));
         assert.equal(definition.episode_id, episodeId);
         if (episodeId === "boudica") {
-            assert.equal(definition.steps.find(step => step.id === "boudica_attack_roman_outpost").attack_ratio_on_enter, 0.25);
+            const ratioOverrides = definition.steps.filter(step => Object.hasOwn(step, "attack_ratio_on_enter"))
+                .map(step => ({ id: step.id, ratio: step.attack_ratio_on_enter }));
+            assert.deepEqual(ratioOverrides, [{ id: definition.entry, ratio: 0.25 }], "Boudica sets 25% once at entry and never resets the player's allocation");
         }
         assert.equal(roster.map, expected[episodeId][0], episodeId + " card map");
         assert.ok(Object.values(definition.speakers || {}).some(speaker => speaker.avatar === expected[episodeId][1]), episodeId + " card leader portrait");
@@ -1396,14 +1398,14 @@ test("Boudica reveal beats share a fixed one-second wait while tribal contact st
     assert.equal(campaign.WAIT_MS, 1000);
     assert.deepEqual(waitSteps, [
         "boudica_first_victory_scene", "boudica_city_intro", "boudica_aid_choice",
-        "boudica_city_ready", "boudica_city_upgrade_ready", "boudica_factory_ready",
-        "boudica_bunker_built", "boudica_outpost_colonia_veterans_scene",
+        "boudica_city_ready", "boudica_city_upgrade_ready", "boudica_outpost_colonia_veterans_scene",
         "boudica_outpost_tax_collectors_scene", "boudica_outpost_roman_supply_depot_scene"
     ]);
     const next = id => definition.steps.find(step => step.id === id).next;
-    assert.equal(next("boudica_factory_ready"), "boudica_outpost_colonia_veterans");
-    assert.equal(next("boudica_outpost_colonia_veterans_scene"), "boudica_bunker_choice");
-    assert.equal(next("boudica_bunker_built"), "boudica_camulodunum_intro");
+    assert.equal(next("boudica_share_sent"), "boudica_outpost_colonia_veterans");
+    assert.equal(next("boudica_aid_kept"), "boudica_outpost_colonia_veterans");
+    assert.equal(next("boudica_outpost_colonia_veterans_scene"), "boudica_camulodunum_intro");
+    assert.equal(definition.steps.some(step => /factory|bunker/.test(step.id)), false);
     assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
     assert.doesNotMatch(campaignEditor, /start_delay_seconds|advance_delay_seconds/);
     assert.match(campaignEditor, /Wait 1 second before showing/);
@@ -1418,7 +1420,7 @@ test("Boudica reveal beats share a fixed one-second wait while tribal contact st
         const legacyStep = { id: "wait", type, title_key: "tutorial.wait", next: "end", [legacyField]: 1 };
         if (type === "objective") legacyStep.trigger = { type: "elapsed", scope: "step", value: 1 };
         const invalid = campaign.validate({
-            version: 2, episode_id: "legacy_wait", settings: { buildings_enabled: false, starting_troops: 1000 },
+            version: 2, episode_id: "legacy_wait", settings: { starting_troops: 1000 },
             speakers: {}, entry: "wait", steps: [legacyStep, { id: "end", type: "end", title_key: "tutorial.end" }]
         }, null, { hasText: () => true });
         assert.ok(invalid.errors.some(issue => issue.step === "wait" && issue.field === "fields"), `${legacyField} remains rejected`);
@@ -1443,6 +1445,85 @@ test("Boudica reveal beats share a fixed one-second wait while tribal contact st
     assert.equal(decision.view().step.id, "scene");
 });
 
+test("campaign building and action permissions are cumulative, route-safe, and reject legacy global switches", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const rustCampaign = fs.readFileSync(path.join(shell, "../../sow-core/src/campaign.rs"), "utf8");
+    const rustGame = fs.readFileSync(path.join(shell, "../../sow-core/src/game.rs"), "utf8");
+    const campaignDir = path.join(shell, "../../assets/campaign");
+    const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, "boudica.triggers.json"), "utf8"));
+    const byId = new Map(definition.steps.map(step => [step.id, step]));
+
+    assert.deepEqual(campaign.campaignUnlocksAtStep(byId, definition.entry, "boudica_choose_city"), {
+        buildings: { City: 1 }, actions: []
+    });
+    assert.deepEqual(campaign.campaignUnlocksAtStep(byId, definition.entry, "boudica_select_city_upgrade"), {
+        buildings: { City: 2 }, actions: []
+    });
+    assert.deepEqual(campaign.validate(definition, roster).errors, []);
+    assert.equal(definition.steps.some(step => /factory|bunker/i.test(step.id)), false);
+    assert.ok(definition.steps.every(step => !step.unlocks ||
+        Object.keys(step.unlocks.buildings || {}).every(kind => kind === "City") &&
+        (!step.unlocks.actions || step.unlocks.actions.length === 0)));
+
+    assert.deepEqual(campaign.CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, {
+        transport_fleet: null,
+        trade_ship: { kind: "Port", level: 1 },
+        warship: { kind: "Port", level: 2 },
+        nuke: { kind: "City", level: 4 }
+    });
+    const buildingEnum = rustGame.match(/pub enum BuildingKind \{([\s\S]*?)\n\}/)[1];
+    const rustBuildings = Array.from(buildingEnum.matchAll(/^\s*([A-Z][A-Za-z0-9]*),?\s*$/gm), match => match[1]).sort();
+    assert.deepEqual(rustBuildings, Object.keys(campaign.STRUCTURE_LEVEL_LIMITS).sort(), "Rust buildings, campaign validation and editor controls must stay in sync");
+    const actionEnum = rustCampaign.match(/pub enum CampaignAction \{([\s\S]*?)\n\}/)[1];
+    const rustActions = Array.from(actionEnum.matchAll(/^\s*([A-Z][A-Za-z0-9]*),?\s*$/gm), match => match[1]
+        .replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase()).sort();
+    assert.deepEqual(rustActions, campaign.CAMPAIGN_ACTIONS.slice().sort(), "Rust action permissions and editor controls must stay in sync");
+    assert.match(rustCampaign, /Self::TransportFleet => None/);
+    assert.match(rustCampaign, /Self::TradeShip => Some\(\(BuildingKind::Port, 1\)\)/);
+    assert.match(rustCampaign, /Self::Warship => Some\(\(BuildingKind::Port, 2\)\)/);
+    assert.match(rustCampaign, /Self::Nuke => Some\(\(BuildingKind::City, BuildingKind::City\.max_level\(\)\)\)/);
+    const cityTwo = { buildings: { City: 2 }, actions: ["transport_fleet", "trade_ship", "warship", "nuke"] };
+    assert.equal(campaign.campaignAllowsAction(cityTwo, "transport_fleet"), true);
+    assert.equal(campaign.campaignAllowsAction(cityTwo, "trade_ship"), false);
+    assert.equal(campaign.campaignAllowsAction(cityTwo, "warship"), false);
+    assert.equal(campaign.campaignAllowsAction(cityTwo, "nuke"), false);
+    assert.equal(campaign.campaignAllowsAction({ buildings: { Port: 2, City: 4 }, actions: cityTwo.actions }, "nuke"), true);
+
+    const withoutCityGrant = structuredClone(definition);
+    delete withoutCityGrant.steps.find(step => step.id === "boudica_choose_city").unlocks;
+    assert.ok(campaign.validate(withoutCityGrant, roster).errors.some(issue =>
+        issue.step === "boudica_build_city" && issue.field === "unlocks" && issue.message.includes("City level 1")));
+    const withoutUpgradeGrant = structuredClone(definition);
+    delete withoutUpgradeGrant.steps.find(step => step.id === "boudica_select_city_upgrade").unlocks;
+    assert.ok(campaign.validate(withoutUpgradeGrant, roster).errors.some(issue =>
+        issue.step === "boudica_structure_upgrade" && issue.field === "unlocks" && issue.message.includes("City level 2")));
+
+    const legacySettings = structuredClone(definition);
+    legacySettings.settings.buildings_enabled = true;
+    legacySettings.settings.buildings_unlock_after_defeated = "rome";
+    assert.ok(campaign.validate(legacySettings, roster).errors.some(issue =>
+        issue.field === "settings" && issue.message === "Unknown match setting."));
+
+    const branch = {
+        version: 2, episode_id: "unlock_branch", settings: { starting_troops: 1000 }, entry: "choice",
+        steps: [
+            { id: "choice", type: "choice", title_key: "choice", choices: [
+                { id: "grant", label_key: "grant", next: "grant_city" },
+                { id: "skip", label_key: "skip", next: "skip_city" }
+            ] },
+            { id: "grant_city", type: "scene", title_key: "grant_city", unlocks: { buildings: { City: 1 } }, next: "shared" },
+            { id: "skip_city", type: "scene", title_key: "skip_city", next: "shared" },
+            { id: "shared", type: "objective", title_key: "shared", trigger: { type: "structure_level", kind: "City", value: 1 }, next: "end" },
+            { id: "end", type: "end", title_key: "end" }
+        ]
+    };
+    const branchById = new Map(branch.steps.map(step => [step.id, step]));
+    assert.deepEqual(campaign.campaignUnlocksAtStep(branchById, branch.entry, "shared"), { buildings: {}, actions: [] });
+    assert.ok(campaign.validate(branch, null, { hasText: () => true }).errors.some(issue =>
+        issue.step === "shared" && issue.field === "unlocks" && issue.message.includes("City level 1")));
+});
+
 test("Boudica pauses for action steps and resumes only after valid expansion or construction", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const campaignDir = path.join(shell, "../../assets/campaign");
@@ -1461,15 +1542,16 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     assert.equal(expansion.view().paused, true);
 
     for (const id of ["boudica_first_contact", "boudica_third_contact"]) {
-        assert.equal(step(id).attack_ratio_on_enter, 1);
+        assert.equal(step(id).attack_ratio_on_enter, undefined, "contact missions preserve the player's troop allocation");
         assert.equal(step(id).pause_game, true);
         assert.equal(step(id).paused_action, "expand_once_then_resume");
         assert.equal(step(id).guide.target, "expand");
     }
+    assert.equal(step("boudica_second_contact").attack_ratio_on_enter, undefined);
     assert.equal(step("boudica_second_contact").pause_game, undefined, "the second Iceni meeting does not pause after Stonea's dialogue");
     assert.equal(step("boudica_second_contact").paused_action, undefined);
     assert.equal(step("boudica_second_contact").guide.target, "expand");
-    assert.equal(definition.settings.starting_gold, 150, "Boudica starts with 50 more gold than the 100 default");
+    assert.equal(definition.settings.starting_gold, 180, "Boudica starts with 30 additional gold for the first paid alliance");
     assert.deepEqual(campaign.validate(definition, roster).errors, [], "the Boudica gold setting is accepted by the shared campaign validator");
     const invalidGold = structuredClone(definition);
     invalidGold.settings.starting_gold = -1;
@@ -1493,9 +1575,7 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     assert.equal(sent.paused, true);
 
     for (const [id, metric, waitId] of [
-        ["boudica_build_city", "cities", "boudica_city_construction_wait"],
-        ["boudica_build_factory", "factories", "boudica_factory_construction_wait"],
-        ["boudica_build_bunker", "bunkers", "boudica_bunker_construction_wait"]
+        ["boudica_build_city", "cities", "boudica_city_construction_wait"]
     ]) {
         assert.equal(step(id).pause_game, true);
         assert.equal(step(id).paused_action, "build_until_started");
@@ -1511,6 +1591,7 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     }
 
     assert.equal(step("boudica_structure_upgrade").trigger.type, "structure_upgrade");
+    assert.equal(step("boudica_structure_upgrade").trigger.kind, "City");
     assert.equal(step("boudica_structure_upgrade").paused_action, "upgrade_until_started");
     const upgradeButton = campaign.create(definition, "boudica_structure_upgrade", roster);
     assert.equal(upgradeButton.update({ structure_upgrades: 0 }, {}).paused, true);
@@ -1522,7 +1603,8 @@ test("Boudica pauses for action steps and resumes only after valid expansion or 
     assert.equal(upgrading.paused, false, "the upgrade's construction wait runs after upgrade acceptance");
     assert.equal(step("boudica_city_upgrade_wait").pause_game, undefined);
     assert.equal(step("boudica_attack_roman_outpost").pause_game, true);
-    assert.equal(step("boudica_attack_roman_outpost").attack_ratio_on_enter, 0.25);
+    assert.equal(step("boudica_rise_of_the_iceni_intro").attack_ratio_on_enter, 0.25);
+    assert.equal(step("boudica_attack_roman_outpost").attack_ratio_on_enter, undefined);
     for (const id of ["boudica_outpost_colonia_veterans", "boudica_outpost_tax_collectors", "boudica_outpost_roman_supply_depot", "boudica_camulodunum", "boudica_londinium", "boudica_verulamium", "boudica_ninth_legion"]) {
         assert.equal(step(id).pause_game, undefined, `${id} stays available for border expansion`);
     }
@@ -1542,7 +1624,7 @@ test("camera practice stays paused through desktop and touch routes", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         version: 2, episode_id: "camera_practice_test", text_namespace: "tutorial.camera_practice_",
-        settings: { buildings_enabled: false, starting_troops: 1000 }, speakers: {}, entry: "boudica_zoom_out",
+        settings: { starting_troops: 1000 }, speakers: {}, entry: "boudica_zoom_out",
         steps: [
             { id: "boudica_zoom_out", type: "objective", title_key: "tutorial.zoom_out", trigger: { type: "zoom_out_complete", value: 0.85, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_out" }, pause_game: true, camera_only: true, next: "boudica_camera_drag" },
             { id: "boudica_camera_drag", type: "objective", title_key: "tutorial.camera_drag", trigger: { type: "camera_target", target: "suetonius_paulinus", distance: 8, scope: "step" }, marker: { target: "suetonius_paulinus" }, guide: { kind: "world", target: "target_action", gesture: "drag" }, pause_game: true, camera_only: true, next: "boudica_camera_hover" },
@@ -1688,13 +1770,12 @@ test("camera practice stays paused through desktop and touch routes", () => {
 test("renaming a campaign faction updates catalog copy through stable roster IDs", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
-        settings: { buildings_unlock_after_defeated: "roman_outpost", campaign_support: { after_defeated: "roman_outpost", share_percent: 50 } },
+        settings: { campaign_support: { after_defeated: "roman_outpost", share_percent: 50 } },
         speakers: { roman: { faction: "roman_outpost" } },
         steps: [{ trigger: { target: "roman_outpost", targets: ["roman_outpost", "other"] }, marker: { target: "roman_outpost" } }],
         reactions: [{ when: { type: "contact", target: "roman_outpost" } }]
     };
     const renamed = campaign.renameFactionText(definition, [{ from: "Old Name", to: "Roman Outpost" }], [{ id: "roman_outpost", name: "Old Name" }]);
-    assert.equal(renamed.settings.buildings_unlock_after_defeated, "roman_outpost");
     assert.equal(renamed.settings.campaign_support.after_defeated, "roman_outpost");
     assert.equal(renamed.speakers.roman.faction, "roman_outpost");
     assert.deepEqual(renamed.steps[0].trigger, { target: "roman_outpost", targets: ["roman_outpost", "other"] });
@@ -1779,7 +1860,7 @@ test("campaign cinematic steps reuse the shared editor/game player and validate 
         { id: "cinematic_target", name: "Target", x: 20, y: 20, starting_troops: 500, relation: "enemy", civ: "Roman Empire", leader: "Caesar" }
     ] };
     const definition = {
-        version: 2, episode_id: "cinematic_test", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "cinematic_test", settings: { starting_troops: 1000 },
         entry: "intro", speakers: {}, steps: [
             { id: "intro", type: "scene", presentation: "cinematic", title_key: "tutorial.intro", body_key: "tutorial.intro_body", next: "reveal" },
             { id: "reveal", type: "scene", presentation: "cinematic", title_key: "tutorial.reveal", body_key: "tutorial.reveal_body", next: "end" },
@@ -1815,7 +1896,7 @@ test("contact responses wait behind an open campaign scene", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
         version: 2, episode_id: "queued_contact", entry: "scene",
-        settings: { buildings_enabled: false, starting_troops: 1000 },
+        settings: { starting_troops: 1000 },
         steps: [
             { id: "scene", type: "scene", title_key: "scene", next: "objective" },
             { id: "objective", type: "objective", title_key: "objective", trigger: { type: "territory", value: 10, scope: "total" }, next: "end" },
@@ -2024,7 +2105,7 @@ test("campaign support reactions queue by delivery order, wait for their gate an
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         version: 2, episode_id: "test", entry: "gate",
-        settings: { buildings_enabled: false, starting_troops: 1000 },
+        settings: { starting_troops: 1000 },
         steps: [
             { id: "gate", type: "objective", title_key: "gate", trigger: { type: "territory", value: 1, scope: "step" }, next: "talk" },
             { id: "talk", type: "scene", title_key: "talk", next: "contact" },
@@ -2070,7 +2151,7 @@ test("first-contact responses open on the contact fact and queue each faction on
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
         version: 2, episode_id: "instant_contact", entry: "objective",
-        settings: { buildings_enabled: false, starting_troops: 1000 },
+        settings: { starting_troops: 1000 },
         steps: [
             { id: "objective", type: "objective", title_key: "objective", trigger: { type: "territory", value: 10, scope: "total" }, next: "after" },
             { id: "after", type: "scene", title_key: "after", next: "end" },
@@ -2105,7 +2186,7 @@ test("first Iceni contact is friendly, then each neutral contact negotiates inde
     ] };
     const definition = {
         version: 2, episode_id: "contact_order", entry: "objective",
-        settings: { buildings_enabled: false, starting_troops: 1000 },
+        settings: { starting_troops: 1000 },
         steps: [
             { id: "objective", type: "objective", title_key: "objective", trigger: { type: "territory", value: 10, scope: "total" }, next: "end" },
             { id: "end", type: "end", title_key: "end" }
@@ -2262,7 +2343,7 @@ test("campaign objectives distinguish the intended contact, alliance, fleet and 
     function currentFor(trigger, before, after) {
         const machine = campaign.create({
             version: 2, episode_id: "fact_test", entry: "objective",
-            settings: { buildings_enabled: false, starting_troops: 1000 },
+            settings: { starting_troops: 1000 },
             steps: [
                 { id: "objective", type: "objective", title_key: "test", trigger: trigger, next: "pending" }
             ]
@@ -2305,7 +2386,7 @@ test("campaign objectives distinguish the intended contact, alliance, fleet and 
 test("campaign validation rejects unsupported rules and duplicate event responses", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const tapGuide = {
-        version: 2, episode_id: "tap_copy", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "tap_copy", settings: { starting_troops: 1000 },
         entry: "guide", speakers: {}, steps: [
             { id: "guide", type: "guide", title_key: "tutorial.tap_title", trigger: { type: "ui", action: "hud_center_camera", scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "tap" }, next: "end" },
             { id: "end", type: "end", title_key: "tutorial.tap_end" }
@@ -2318,10 +2399,10 @@ test("campaign validation rejects unsupported rules and duplicate event response
     const roster = { map: "test", player_spawn: [0, 0], factions: [{ id: "ally", name: "Ally", x: 1, y: 0, starting_troops: 500, relation: "neutral", civ: "Iceni Kingdom", leader: "Boudica", support_interval_seconds: 5 }] };
     const definition = {
         version: 2, episode_id: "fact_test", default_locale: "en", entry: "objective",
-        settings: { buildings_enabled: false, starting_troops: 1000 },
+        settings: { starting_troops: 1000 },
         speakers: {},
         steps: [
-            { id: "objective", type: "objective", title_key: "tutorial.objective", trigger: { type: "fleet", unit: "TransportShip", target: "ally", value: 1, scope: "step" }, marker: { target: "ally" }, guide: { kind: "world", target: "target_action", gesture: "tap" }, next: "end" },
+            { id: "objective", type: "objective", title_key: "tutorial.objective", unlocks: { actions: ["transport_fleet"] }, trigger: { type: "fleet", unit: "TransportShip", target: "ally", value: 1, scope: "step" }, marker: { target: "ally" }, guide: { kind: "world", target: "target_action", gesture: "tap" }, next: "end" },
             { id: "end", type: "end", title_key: "tutorial.end" }
         ],
         reactions: [{ id: "aid", after: "objective", when: { type: "support", target: "ally" }, title_key: "tutorial.aid_title", body_key: "tutorial.aid_body" }]
@@ -2380,7 +2461,7 @@ test("campaign editor exposes and preserves the existing team enum", () => {
 test("all HUD message classes have one explicit presentation", () => {
     const local = [
         "action_unavailable", "attack_out_of_range", "fleet_need_troops", "fleet_invalid_target",
-        "fleet_own_target", "fleet_teammate", "fleet_alliance", "fleet_no_port",
+        "fleet_own_target", "fleet_teammate", "fleet_alliance", "fleet_capacity_full",
         "fleet_no_water_access", "fleet_no_landing_shore", "fleet_no_water_path", "need_gold",
         "build_owned_land", "build_land", "build_spacing_city", "build_spacing_structure",
         "build_no_space", "building_in_progress", "spawn_too_close", "spawn_rate_limited",
@@ -2780,7 +2861,7 @@ test("campaign saves use the current validator and call Save by its real action"
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         version: 2, episode_id: "save_test", text_namespace: "tutorial.save_test_",
-        settings: { buildings_enabled: false, starting_troops: 1000 }, speakers: {}, entry: "zoom_out",
+        settings: { starting_troops: 1000 }, speakers: {}, entry: "zoom_out",
         steps: [
             { id: "zoom_out", type: "objective", title_key: "tutorial.zoom_out", trigger: { type: "zoom_out_complete", value: 0.85, scope: "step" }, pause_game: true, camera_only: true, next: "end" },
             { id: "end", type: "end", title_key: "tutorial.end" }
@@ -2885,7 +2966,7 @@ test("campaign editor preview and game share RTL locale coverage", () => {
 test("an active campaign keeps its loaded definition when the editor draft changes", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
-        version: 2, episode_id: "snapshot_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "snapshot_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: { "tutorial.opening": "Original" } }, speakers: {}, entry: "opening",
         steps: [{ id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending" }, { id: "ending", type: "end", title_key: "tutorial.ending" }]
     };
@@ -2906,7 +2987,7 @@ test("campaign start keeps its loaded script and replay clicks belong to that ep
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         version: 2, episode_id: "boudica",
-        settings: { buildings_enabled: false, starting_troops: 1000 }, speakers: {},
+        settings: { starting_troops: 1000 }, speakers: {},
         entry: "opening",
         steps: [{ id: "opening", type: "scene", title_key: "tutorial.open", attack_ratio_on_enter: 0.25, next: "ending" }, { id: "ending", type: "end", title_key: "tutorial.end" }]
     };
@@ -2962,7 +3043,7 @@ test("campaign funnel records each step once and completes only after the ending
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         version: 2, episode_id: "step_funnel_test", default_locale: "en",
-        settings: { buildings_enabled: false, starting_troops: 1000 }, strings: {}, speakers: {},
+        settings: { starting_troops: 1000 }, strings: {}, speakers: {},
         entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3022,7 +3103,7 @@ test("campaign funnel records each step once and completes only after the ending
 test("campaign decisions keep their selected branch and guard stale callbacks", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
-        version: 2, episode_id: "branch_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "branch_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "decision" },
             { id: "decision", type: "choice", title_key: "tutorial.decision", choices: [
@@ -3050,7 +3131,7 @@ test("campaign decisions keep their selected branch and guard stale callbacks", 
 test("campaign validator rejects conditional branches that can loop forever", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const report = campaign.validate({
-        version: 2, episode_id: "route_loop_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "route_loop_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "decision", steps: [
             { id: "decision", type: "choice", title_key: "tutorial.decision", choices: [
                 { id: "repeat", label_key: "tutorial.repeat", next: "loop_scene" },
@@ -3064,7 +3145,7 @@ test("campaign validator rejects conditional branches that can loop forever", ()
     });
     assert.ok(report.errors.some(issue => issue.step === "loop_scene" && issue.message === "This path cannot reach an ending."));
     const legacy = campaign.validate({
-        version: 2, episode_id: "legacy_flag_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "legacy_flag_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending", routes: [{ when: { flag: "old_flag", equals: true }, next: "ending" }] },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3076,7 +3157,7 @@ test("campaign validator rejects conditional branches that can loop forever", ()
 test("campaign validator warns when route order makes a later threshold unreachable", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const report = campaign.validate({
-        version: 2, episode_id: "route_order_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "route_order_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending", routes: [
                 { when: { fact: "tiles_gained", gte: 1 }, next: "ending" },
@@ -3091,7 +3172,7 @@ test("campaign validator warns when route order makes a later threshold unreacha
 test("campaign validator rejects ignored fields and dialog keeps its speaker row", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const report = campaign.validate({
-        version: 2, episode_id: "unsupported_field_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "unsupported_field_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "opening", actions: [{ type: "spawn" }], steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending", actions: [{ type: "grant_troops" }] },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3100,7 +3181,7 @@ test("campaign validator rejects ignored fields and dialog keeps its speaker row
     assert.ok(report.errors.some(issue => issue.field === "campaign" && issue.message.includes("actions")));
     assert.ok(report.errors.some(issue => issue.step === "opening" && issue.field === "fields" && issue.message.includes("actions")));
     const unusedSpeaker = campaign.validate({
-        version: 2, episode_id: "step_field_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "step_field_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: { narrator: { name: "Narrator" } }, entry: "objective", steps: [
             { id: "objective", type: "objective", title_key: "tutorial.objective", speaker: "narrator", trigger: { type: "territory", scope: "step", value: 1 }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3114,7 +3195,7 @@ test("campaign validator rejects ignored fields and dialog keeps its speaker row
 test("campaign preview can seed prior decisions and facts to inspect conditional scenes", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
-        version: 2, episode_id: "preview_branch_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "preview_branch_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "decision", steps: [
             { id: "decision", type: "choice", title_key: "tutorial.decision", choices: [
                 { id: "gather", label_key: "tutorial.gather", next: "rejoin" },
@@ -3145,7 +3226,7 @@ test("campaign preview can seed prior decisions and facts to inspect conditional
 test("live campaign edits preserve prior decisions and conditional story branches", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
-        version: 2, episode_id: "live_edit_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "live_edit_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "decision" },
             { id: "decision", type: "choice", title_key: "tutorial.decision", choices: [
@@ -3175,7 +3256,7 @@ test("live campaign edits preserve prior decisions and conditional story branche
 test("campaign validator rejects speakers without a display name", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const report = campaign.validate({
-        version: 2, episode_id: "speaker_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "speaker_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: { "tutorial.opening": "Opening", "tutorial.ending": "The end" } },
         speakers: { empty: { name: "  " } }, entry: "opening", steps: [
             { id: "opening", type: "scene", speaker: "empty", title_key: "tutorial.opening", next: "ending" },
@@ -3189,7 +3270,7 @@ test("faction deletion adjusts campaign references and keeps the remaining story
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
         version: 2, episode_id: "roster_edit", default_locale: "en",
-        settings: { buildings_enabled: false, starting_troops: 1000, buildings_unlock_after_defeated: "removed_tribe", campaign_support: { after_defeated: "removed_tribe", share_percent: 50 } },
+        settings: { starting_troops: 1000, campaign_support: { after_defeated: "removed_tribe", share_percent: 50 } },
         speakers: { removed_ally: { faction: "removed_tribe" } }, entry: "opening",
         faction_story_names: { removed_tribe: "Old Tribe", existing_tribe: "Existing Tribe" },
         steps: [
@@ -3217,7 +3298,6 @@ test("faction deletion adjusts campaign references and keeps the remaining story
     assert.equal(cleaned.steps.find(step => step.id === "removed_objective").type, "scene");
     assert.equal(cleaned.speakers.removed_ally.name, "Removed Tribe");
     assert.equal(cleaned.speakers.removed_ally.faction, undefined);
-    assert.equal(cleaned.settings.buildings_unlock_after_defeated, undefined);
     assert.equal(cleaned.settings.campaign_support, undefined);
     assert.equal(cleaned.faction_story_names.removed_tribe, undefined);
     assert.deepEqual(cleaned.reactions, []);
@@ -3236,7 +3316,7 @@ test("faction deletion adjusts campaign references and keeps the remaining story
 test("campaign saves clamp spawns and keep map requirements in sync with the game", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
-        version: 2, episode_id: "boudica", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "boudica", default_locale: "en", settings: { starting_troops: 1000 },
         speakers: {}, entry: "opening",
         steps: [{ id: "opening", type: "scene", title_key: "tutorial.open", next: "ending" }, { id: "ending", type: "end", title_key: "tutorial.end" }]
     };
@@ -3266,7 +3346,7 @@ test("campaign speaker picker is sourced from existing avatar assets and rejects
     assert.match(campaignEditor, /selectField\("Portrait"/);
     assert.match(campaignEditor, /hasAvatar: function \(avatar\) \{ return state\.avatars\.includes\(avatar\); \}/);
     const definition = {
-        version: 2, episode_id: "avatar_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "avatar_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: { "tutorial.opening": "Opening", "tutorial.ending": "End" } }, speakers: { leader: { name: "Leader", avatar: "not_real" } }, entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3283,7 +3363,7 @@ test("campaign studio reads speaker names from shared text keys", () => {
     assert.match(campaignEditor, /Use one name for every language/);
     assert.match(campaignView, /character\.name_key \? t\(character\.name_key\)/);
     const report = campaign.validate({
-        version: 2, episode_id: "localized_speaker", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "localized_speaker", settings: { starting_troops: 1000 },
         speakers: { leader: { name_key: "tutorial.speaker_leader_name" } }, entry: "opening", steps: [
             { id: "opening", type: "scene", title_key: "tutorial.opening", next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3381,7 +3461,7 @@ test("campaign map editor renders faction names as text in its HTML templates", 
 test("troop objectives advance on the first update that satisfies the minimum", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
-        version: 2, episode_id: "troop_minimum_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "troop_minimum_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "minimum", steps: [
             { id: "minimum", type: "objective", title_key: "tutorial.minimum", hint_key: "tutorial.minimum_hint", trigger: { type: "troops", value: 1500, scope: "step" }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3394,7 +3474,7 @@ test("troop objectives advance on the first update that satisfies the minimum", 
 test("a completed objective advances immediately after an exit modal closes", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
-        version: 2, episode_id: "modal_pause_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "modal_pause_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "objective", steps: [
             { id: "objective", type: "objective", title_key: "tutorial.objective", hint_key: "tutorial.objective_hint", trigger: { type: "territory", value: 1, scope: "step" }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3412,7 +3492,7 @@ test("UI objectives respect step, episode, and total scope", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const completed = scope => {
         const machine = campaign.create({
-            version: 2, episode_id: "ui_scope_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 0 },
+            version: 2, episode_id: "ui_scope_test", default_locale: "en", settings: { starting_troops: 0 },
             strings: { en: {} }, speakers: {}, entry: "opening", steps: [
                 { id: "opening", type: "scene", title_key: "tutorial.opening", next: "objective" },
                 { id: "objective", type: "objective", title_key: "tutorial.objective", hint_key: "tutorial.objective_hint", trigger: { type: "ui", action: "hud_center_camera", scope }, next: "ending" },
@@ -3433,7 +3513,7 @@ test("UI objectives respect step, episode, and total scope", () => {
 test("Legion IX slider objective waits for the live HUD ratio to reach 100%", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const machine = campaign.create({
-        version: 2, episode_id: "attack_ratio_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 0 },
+        version: 2, episode_id: "attack_ratio_test", default_locale: "en", settings: { starting_troops: 0 },
         strings: { en: {} }, speakers: {}, entry: "objective", steps: [
             { id: "objective", type: "objective", title_key: "tutorial.objective", hint_key: "tutorial.objective_hint", trigger: { type: "ui", action: "attack_ratio", scope: "step", value: 1 }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.ending" }
@@ -3728,7 +3808,7 @@ test("objective completion has no artificial wait or delayed preview timer", () 
 test("campaign pacing can wait without a hand and guide steps require a target", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
-        version: 2, episode_id: "timing_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "timing_test", default_locale: "en", settings: { starting_troops: 1000 },
         speakers: {}, entry: "wait", steps: [
             { id: "wait", type: "objective", title_key: "tutorial.wait", trigger: { type: "elapsed", value: 5, scope: "step" }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.end" }
@@ -3753,7 +3833,7 @@ test("campaign hand guides model the actual slider and support local or world dr
     assert.equal(campaign.UI_TARGETS.troops, undefined);
     assert.equal(campaign.UI_TARGETS.attack_ratio, "#sow-hud-slider");
     const definition = {
-        version: 2, episode_id: "guide_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "guide_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "slider", steps: [
             { id: "slider", type: "objective", title_key: "tutorial.slider", trigger: { type: "ui", action: "attack_ratio", scope: "step" }, guide: { kind: "ui", target: "attack_ratio", gesture: "drag" }, next: "ending" },
             { id: "ending", type: "end", title_key: "tutorial.end" }
@@ -4064,7 +4144,7 @@ test("campaign studio reports each external draft conflict only once per file ve
 test("menu guide uses the shared flow engine from its own entry", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = {
-        version: 2, episode_id: "menu_guide_test", default_locale: "en", settings: { buildings_enabled: false, starting_troops: 1000 },
+        version: 2, episode_id: "menu_guide_test", default_locale: "en", settings: { starting_troops: 1000 },
         strings: { en: {} }, speakers: {}, entry: "game_open", menu_guide: { entry: "menu_open", dismissible: true },
         steps: [
             { id: "game_open", type: "scene", title_key: "tutorial.game", next: "game_end" },
@@ -4313,21 +4393,75 @@ test("building upgrade uses snapshot gold and closes the card after sending", ()
     assert.match(mapClick.slice(mapClick.indexOf("fn select_owned_building"), mapClick.indexOf("pub(crate) fn open_map_context_menu")), /building\.under_construction[\s\S]*?close_map_context_menu\(\)[\s\S]*?return true/);
 });
 
-test("building actions use the shared enabled rule without a city-level factory gate", () => {
-    assert.match(coreCost, /pub fn structure_kind_enabled\(_kind: BuildingKind\)/);
-    assert.match(buildingsIntent, /structure_kind_enabled\(kind\)/);
-    assert.doesNotMatch(coreCost, /structure_kind_unlocked/);
-    assert.doesNotMatch(buildingsIntent, /structure_kind_unlocked/);
-    assert.doesNotMatch(mapClick, /structure_kind_unlocked/);
+test("campaign building access is enforced by the shared step unlock policy", () => {
+    assert.doesNotMatch(coreCost, /structure_kind_enabled/);
+    assert.match(buildingsIntent, /campaign_allows_building\(kind, 1\)/);
+    assert.match(buildingsIntent, /campaign_allows_building\(building\.kind, target_level\)/);
+    assert.match(mapClick, /campaign_building_max_level\(kind\) >= 1/);
     assert.match(webMenu, /"reason_key": item\.reason_key/);
     assert.doesNotMatch(webMenu, /factory_unlocked/);
-    assert.match(hud, /if \(item\.reason_key\) return SOW_t\(item\.reason_key\)/);
+    assert.match(hud, /if \(item\.reason_key\) \{\s*var reason = SOW_t\(item\.reason_key, item\.reason_troops == null/);
     assert.doesNotMatch(hud, /factoryLocked/);
+    assert.match(hud, /button\.hidden = !available/);
+    assert.match(hud, /button\.disabled = disabled/);
+    assert.match(campaignEditor, /Campaign availability/);
+    assert.match(campaignEditor, /STRUCTURE_LEVEL_LIMITS/);
+    assert.match(campaignEditor, /Available when this step begins/);
+    assert.doesNotMatch(campaignEditor, /Buildings available|Unlock buildings after/);
+    assert.match(hud, /campaignActionLockReason/);
+    assert.match(hud, /function campaignAllowsBuilding\(unlocks, kind, level\)\s*\{\s*return unlocks === null \|\|/);
+    assert.match(hud, /item\.reason_key !== "lobbies\.locked"/);
+    assert.match(hud, /warshipCampaignReason/);
+    assert.match(hud, /nukeCampaignReason/);
+    assert.match(campaignEditor, /CAMPAIGN_ACTION_BUILDING_REQUIREMENTS/);
+    assert.match(mapClick, /reason_level: Option<u8>/);
+    assert.match(mapClick, /reason_seconds: Option<u32>/);
+    assert.match(mapClick, /MapMenuAction::Nuke => \(Some\(self\.sim\.config\.nuke_cost\), None\)/);
+    assert.match(webMenu, /"reason_level": item\.reason_level/);
+    assert.match(webMenu, /"reason_seconds": item\.reason_seconds/);
+    assert.match(webMenu, /campaign_session_id == self\.ui\.campaign_session_id[\s\S]*?engine\.state\.config\.tutorial/);
+    assert.match(matchStartSource, /campaign_session_id = self\.ui\.campaign_session_id\.wrapping_add\(1\)\.max\(1\)/);
+    const botBuildingSource = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/nation/build.rs"), "utf8");
+    const botCombatSource = fs.readFileSync(path.join(shell, "../../sow-core/src/intent/nation/combat.rs"), "utf8");
+    const botEconomySource = fs.readFileSync(path.join(shell, "../../sow-core/src/execution/income.rs"), "utf8");
+    assert.match(botBuildingSource, /if !self\.campaign_allows_building\(kind, 1\) \{\s*continue;\s*\}/);
+    assert.match(botCombatSource, /if !self\.campaign_allows_action\(crate::campaign::CampaignAction::Nuke\) \{\s*return;\s*\}/);
+    assert.match(botEconomySource, /campaign_allows_building\(crate::game::BuildingKind::City, 1\)/);
     assert.match(hud, /button\.setAttribute\("aria-disabled", String\(disabled\)\)/);
     assert.match(hud, /if \(mapButton\.disabled\) return/);
     assert.doesNotMatch(hud, /mapButton\.disabled \|\| mapButton\.getAttribute\("aria-disabled"\) === "true"/);
     assert.match(hudCss, /\.sow-hud__building-btn\[aria-disabled="true"\]/);
     assert.match(buildingsIntent, /factory_upgrades_without_a_city_level_requirement/);
+});
+
+test("tutorial HUD evaluates campaign availability without private campaign globals", () => {
+    const start = hud.indexOf("    function campaignAllowsBuilding(");
+    const end = hud.indexOf("    function campaignActionLockReason(", start);
+    const availability = vm.runInNewContext(hud.slice(start, end) + "\n({ campaignAllowsBuilding, campaignAllowsAction });", {
+        window: { SOWCampaign: require(path.join(shell, "sow-campaign.js")) }
+    });
+    const locked = { buildings: {}, actions: [] };
+    const unlocked = { buildings: { City: 1, Port: 1 }, actions: ["warship"] };
+    assert.equal(availability.campaignAllowsBuilding(locked, "City", 1), false);
+    assert.equal(availability.campaignAllowsBuilding(unlocked, "City", 1), true);
+    assert.equal(availability.campaignAllowsBuilding(unlocked, "City", 2), false);
+    assert.equal(availability.campaignAllowsBuilding(unlocked, "Unknown", 1), false);
+    assert.equal(availability.campaignAllowsAction(unlocked, "warship"), false);
+    unlocked.buildings.Port = 2;
+    assert.equal(availability.campaignAllowsAction(unlocked, "warship"), true);
+    assert.equal(availability.campaignAllowsBuilding(null, "City", 1), true);
+    assert.equal(availability.campaignAllowsAction(null, "warship"), true);
+});
+
+test("campaign fleet stays visible and shows the actual localized blocker", () => {
+    assert.match(mapClick, /campaign_fleet && target\.is_land/);
+    assert.match(mapClick, /campaign_locked\.then_some\("hud\.campaign_unlock_required"\)/);
+    assert.match(mapClick, /Some\(\("hud\.fleet_capacity_full", None\)\)/);
+    assert.match(mapClick, /fleet_route_check\([\s\S]*?FleetRouteCheck::Access\)/);
+    assert.match(webMenu, /"reason_troops": item\.reason_troops/);
+    assert.match(hud, /if \(!withDetails && disabled && reason\)[\s\S]*?reasonLabel\.textContent = reason/);
+    assert.match(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
+    assert.doesNotMatch(mapClick, /fleet_no_port|NoPort|completed port/);
 });
 
 test("building upgrade sends the selected card identity instead of the radial menu", () => {
@@ -4594,10 +4728,10 @@ test("fleet dock uses building buttons for real actions and an automatic-trade s
     assert.match(strip, /class="sow-hud__building-btn" data-command="select_nuke"[\s\S]*?emojiIcon\("🚀", "sow-hud__building-icon"\)/);
     assert.doesNotMatch(strip, /data-command="[^"]+" data-fleet-kind="trade"|<b(?:\s|>)|<small(?:\s|>)/);
     assert.match(hud, /var tradeStatus = SOW_t\("hud\.map_action_fleet"\) \+ " · " \+ tradeCount \+ "\/" \+ tradeCapacity/);
-    assert.match(hud, /fleetWarship\.disabled = false;[\s\S]*fleetWarship\.setAttribute\("aria-disabled"[\s\S]*fleetWarship\.setAttribute\("aria-pressed"/);
-    assert.match(hud, /fleetNuke\.disabled = false;[\s\S]*fleetNuke\.setAttribute\("aria-disabled"[\s\S]*fleetNuke\.setAttribute\("aria-pressed"/);
-    assert.match(hud, /warshipDisabled = !warshipUnlocked \|\| militaryFull \|\| gold < warshipCost/);
-    assert.match(hud, /nukeDisabled = !nukeUnlocked \|\| !nukeReady/);
+    assert.match(hud, /hudRefs\.fleetWarship\.disabled = warshipDisabled;[\s\S]*hudRefs\.fleetWarship\.setAttribute\("aria-disabled", String\(warshipDisabled\)\)[\s\S]*hudRefs\.fleetWarship\.setAttribute\("aria-pressed"/);
+    assert.match(hud, /hudRefs\.fleetNuke\.disabled = nukeDisabled;[\s\S]*hudRefs\.fleetNuke\.setAttribute\("aria-disabled", String\(nukeDisabled\)\)[\s\S]*hudRefs\.fleetNuke\.setAttribute\("aria-pressed"/);
+    assert.match(hud, /warshipDisabled = warshipCampaignLocked \|\| !warshipUnlocked \|\| militaryFull \|\| gold < warshipCost/);
+    assert.match(hud, /nukeDisabled = nukeCampaignLocked \|\| !nukeUnlocked \|\| !nukeReady/);
     assert.match(hud, /tradeCount = Math\.floor\(Number\(fleetPanel\.trade_ships\)/);
     assert.match(hud, /tradeCapacity = Math\.floor\(Number\(fleetPanel\.trade_capacity\)/);
     assert.doesNotMatch(hudCss, /sow-hud__fleet-btn/);
@@ -4645,8 +4779,10 @@ test("radial actions restore emoji, visible translated labels, and all alliance 
         const catalog = fs.readFileSync(file, "utf8");
         for (const key of [
             "map_action_build", "map_action_request_alliance", "map_action_accept_alliance",
-            "map_action_alliance_pending", "map_action_alliance_active", "map_action_renew_alliance"
+            "map_action_alliance_pending", "map_action_alliance_active", "map_action_renew_alliance",
+            "fleet_capacity_full"
         ]) assert.match(catalog, new RegExp("^" + key + ' = ".+"$', "m"), `${file} is missing ${key}`);
+        assert.doesNotMatch(catalog, /^fleet_no_port\s*=/m, `${file} has the obsolete Port requirement`);
     }
 
     function element() {
@@ -4662,7 +4798,7 @@ test("radial actions restore emoji, visible translated labels, and all alliance 
         document: { createElement: element },
         mapActionLabels: config.mapActionLabels,
         mapActionContent: undefined,
-        mapActionReason: () => "",
+        mapActionReason: item => item.reason_key ? "Locked in this mission." : "",
         mapLabel: action => action,
         SOW_t: key => "translated:" + key,
         emojiIcon: (emoji, cls) => `<span class="${cls} is-emoji">${emoji}</span>`,
@@ -4683,7 +4819,13 @@ test("radial actions restore emoji, visible translated labels, and all alliance 
     assert.equal(pending.disabled, true);
     assert.equal(pending.getAttribute("aria-disabled"), "true");
     assert.equal(pending.children[0].children[1].textContent, "translated:hud.map_action_alliance_pending");
+    const lockedFleet = renderButton(
+        { action: "fleet", disabled: true, reason_key: "hud.campaign_unlock_required" }, "sector", false
+    );
+    assert.equal(lockedFleet.getAttribute("aria-label"), "fleet. Locked in this mission.");
+    assert.equal(lockedFleet.children[0].children[2].textContent, "Locked in this mission.");
     assert.match(hudCss, /\.sow-hud__map-sector:focus-visible/);
+    assert.match(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
     assert.match(hudCss, /\.sow-hud__map-sector:active/);
 });
 
@@ -4933,7 +5075,7 @@ test("all campaign tap guides have a shared action label and localized fallback"
     const tapSteps = definitions.flatMap(definition => definition.steps
         .filter(step => step.guide && step.guide.gesture === "tap")
         .map(step => ({ definition, step })));
-    assert.equal(tapSteps.length, 54);
+    assert.equal(tapSteps.length, 50);
     const categories = new Set(tapSteps.map(({ step }) => campaign.guideAction(step)));
     assert.deepEqual([...categories].sort(), ["attack", "build", "contact", "expand", "home", "return", "select", "send", "upgrade", "upgrade_progress"].sort());
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "expand", gesture: "tap" }, trigger: { type: "contact" } }), "expand");
@@ -4997,7 +5139,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const requested = [
         "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade",
-        "boudica_choose_factory", "boudica_choose_bunker", "boudica_return_lobby"
+        "boudica_return_lobby"
     ];
     const uiSteps = definition.steps.filter(step => step.guide && step.guide.kind === "ui").map(step => step.id).sort();
     const ratioStepId = "boudica_ninth_legion_set_attack_ratio";
@@ -5005,19 +5147,33 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     for (const id of requested) assert.equal(definition.steps.find(step => step.id === id).guide.gesture, "tap");
     const intro = definition.steps.find(step => step.id === "boudica_ninth_legion_intro");
     const ratioStep = definition.steps.find(step => step.id === ratioStepId);
+    const strikeDialog = definition.steps.find(step => step.id === "boudica_ninth_strike");
     const legionObjective = definition.steps.find(step => step.id === "boudica_ninth_legion");
+    const entry = definition.steps.find(step => step.id === definition.entry);
+    const ratioOverrides = definition.steps.filter(step => Object.hasOwn(step, "attack_ratio_on_enter"))
+        .map(step => ({ id: step.id, ratio: step.attack_ratio_on_enter }));
+    assert.deepEqual(ratioOverrides, [{ id: definition.entry, ratio: 0.25 }]);
+    assert.equal(entry.attack_ratio_on_enter, 0.25);
     assert.equal(intro.next, ratioStepId);
-    assert.equal(ratioStep.next, legionObjective.id);
+    assert.equal(intro.attack_ratio_on_enter, undefined, "the Ninth intro preserves the 25% tutorial allocation");
+    assert.equal(ratioStep.next, strikeDialog.id);
+    assert.equal(strikeDialog.type, "scene");
+    assert.equal(strikeDialog.speaker, "boudica");
+    assert.equal(strikeDialog.next, legionObjective.id);
     assert.equal(ratioStep.pause_game, true);
     assert.equal(ratioStep.trigger.type, "ui");
     assert.equal(ratioStep.trigger.action, "attack_ratio");
     assert.equal(ratioStep.trigger.value, 1);
     assert.deepEqual(ratioStep.guide, { kind: "ui", target: "attack_ratio", gesture: "drag" });
-    assert.equal(intro.attack_ratio_on_enter, 0.5, "start the demonstration below 100%");
     assert.equal(ratioStep.attack_ratio_on_enter, undefined, "the player must set 100% manually");
+    const ratioMachine = campaign.create(definition, ratioStepId);
+    for (const value of [0.25, 0.5, 0.99]) assert.equal(ratioMachine.update({ attack_ratio: value }, {}).step.id, ratioStepId);
+    assert.equal(ratioMachine.update({ attack_ratio: 1 }, {}).step.id, strikeDialog.id);
+    assert.equal(ratioMachine.advance(null, strikeDialog.id), true);
+    assert.equal(ratioMachine.view().step.id, legionObjective.id);
     assert.match(tutorial, /attack_ratio: Number\(hud\.attack_ratio\)/);
-    assert.match(tutorial, /resolveUiRangeAnchor\(source, Number\(source\.value\)\)[\s\S]*resolveUiRangeAnchor\(source, ratioTarget\)[\s\S]*result\.toX = sliderEnd\.x; result\.toY = sliderEnd\.y/);
-    assert.match(campaignEditor, /resolveUiRangeAnchor\(target, Number\(target\.value\)\)[\s\S]*resolveUiRangeAnchor\(target, rangeTarget\)/);
+    assert.match(tutorial, /resolveUiRangeGuideAnchor\(source, Number\(source\.value\), ratioTarget\)/);
+    assert.match(campaignEditor, /resolveUiRangeGuideAnchor\(target, Number\(target\.value\), rangeTarget\)/);
     assert.match(campaignSource, /trigger\.action === "attack_ratio"[\s\S]*current = Number\(facts\.attack_ratio \|\| 0\)[\s\S]*target = Number\(trigger\.value \|\| 1\)/);
     assert.match(tutorial, /key === "attack_ratio" && currentStep && currentStep\.trigger[\s\S]*currentStep\.trigger\.action === key\) return/);
     const english = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en/web.toml"), "utf8");
@@ -5026,6 +5182,10 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     assert.match(spanish, /campaign_boudica_boudica_ninth_set_attack_ratio_title = "Sube la barra de ataque al 100%\."/);
     assert.match(english, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
     assert.match(spanish, /campaign_boudica_boudica_ninth_set_attack_ratio_body = "[^"]*100%/);
+    assert.match(english, /campaign_boudica_boudica_ninth_strike_title = "No Escape for the Ninth"/);
+    assert.match(english, /campaign_boudica_boudica_ninth_strike_body = "The Ninth came to save Camulodunum\. Its infantry fell; Cerialis fled with the cavalry\.[^"]*Leave none of the Ninth to run\./);
+    assert.match(spanish, /campaign_boudica_boudica_ninth_strike_title = "La Novena no escapará"/);
+    assert.match(spanish, /campaign_boudica_boudica_ninth_strike_body = "La Novena llegó para salvar Camulodunum\. Su infantería cayó; Cerialis huyó con la caballería\.[^"]*Que ningún hombre de la Novena vuelva a escapar\./);
     assert.match(campaignView, /anchor\.dimOutside \|\| step\.guide\.kind === "ui"/);
     assert.match(campaignView, /root\.dataset\.guideTarget = "attack_ratio"/);
     assert.match(storyCss, /orientation: landscape\) and \(max-height: 560px\)[\s\S]*?data-guide-target="attack_ratio"\] \.sow-story__objective \{ inset-inline-start: 50%/);
@@ -5093,6 +5253,15 @@ test("tutorial hand uses the map radial action's exact icon anchor", () => {
     assert.equal(campaign.resolveUiRangeAnchor(range, 50).x, 26);
     assert.equal(Math.round(campaign.resolveUiRangeAnchor(range, 50).y * 100) / 100, 75.11, "the current range value resolves to its vertical thumb position");
     assert.deepEqual(campaign.resolveUiRangeAnchor(range, 100), { x: 26, y: 33 }, "100% resolves to the top end of the slider");
+    const guide25 = campaign.resolveUiRangeGuideAnchor(range, 25, 100);
+    const guide50 = campaign.resolveUiRangeGuideAnchor(range, 50, 100);
+    assert.notEqual(guide25.y, guide50.y, "the hand follows the moving slider thumb");
+    assert.deepEqual([guide25.toX, guide25.toY], [guide50.toX, guide50.toY], "the hand always points toward the 100% endpoint");
+    assert.deepEqual(
+        [guide25.spotlightX, guide25.spotlightY, guide25.spotlightWidth, guide25.spotlightHeight],
+        [guide50.spotlightX, guide50.spotlightY, guide50.spotlightWidth, guide50.spotlightHeight],
+        "the frame and dimming geometry stay fixed while the slider moves"
+    );
 });
 
 test("tutorial hand keeps bouncing over the Roman target and moving expansion edge", () => {

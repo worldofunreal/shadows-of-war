@@ -3,13 +3,11 @@
   "episode_id": "boudica",
   "text_namespace": "tutorial.campaign_boudica_",
   "settings": {
-    "buildings_enabled": false,
-    "buildings_unlock_after_defeated": "roman_outpost",
     "campaign_support": {
       "after_defeated": "roman_outpost",
       "share_percent": 50
     },
-    "starting_gold": 150,
+    "starting_gold": 180,
     "starting_troops": 2000
   },
   "entry": "boudica_rise_of_the_iceni_intro",
@@ -150,6 +148,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_council_body",
       "speaker": "boudica",
       "presentation": "cinematic",
+      "attack_ratio_on_enter": 0.25,
       "next": "boudica_council_decision"
     },
     {
@@ -192,7 +191,6 @@
         "value": 1,
         "scope": "step"
       },
-      "attack_ratio_on_enter": 0.25,
       "marker": {
         "target": "roman_outpost"
       },
@@ -233,7 +231,6 @@
       "speaker": "boudica",
       "presentation": "dialogue",
       "wait_before": true,
-      "attack_ratio_on_enter": 0.5,
       "next": "boudica_first_expansion"
     },
     {
@@ -402,7 +399,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_contact_hint",
       "speaker": "boudica",
-      "attack_ratio_on_enter": 1.0,
       "trigger": {
         "type": "contact",
         "target": "stonea",
@@ -518,7 +514,7 @@
         "attacker_team": "Blue",
         "target": "camulodunum"
       },
-      "next": "boudica_choose_factory"
+      "next": "boudica_outpost_colonia_veterans"
     },
     {
       "id": "boudica_aid_kept",
@@ -527,7 +523,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_aid_kept_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_choose_factory"
+      "next": "boudica_outpost_colonia_veterans"
     },
     {
       "id": "boudica_choose_city",
@@ -546,6 +542,11 @@
         "gesture": "tap"
       },
       "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "City": 1
+        }
+      },
       "next": "boudica_build_city"
     },
     {
@@ -604,7 +605,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_second_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_second_contact_hint",
       "speaker": "boudica",
-      "attack_ratio_on_enter": 1.0,
       "trigger": {
         "type": "contact",
         "target": "snettisham",
@@ -627,7 +627,6 @@
       "title_key": "tutorial.campaign_boudica_boudica_third_contact_title",
       "hint_key": "tutorial.campaign_boudica_boudica_third_contact_hint",
       "speaker": "boudica",
-      "attack_ratio_on_enter": 1.0,
       "trigger": {
         "type": "contact",
         "target": "thetford",
@@ -663,6 +662,11 @@
         "gesture": "tap"
       },
       "pause_game": true,
+      "unlocks": {
+        "buildings": {
+          "City": 2
+        }
+      },
       "next": "boudica_structure_upgrade"
     },
     {
@@ -673,6 +677,7 @@
       "speaker": "boudica",
       "trigger": {
         "type": "structure_upgrade",
+        "kind": "City",
         "value": 1,
         "scope": "step"
       },
@@ -740,153 +745,6 @@
       "next": "boudica_ally_support_wait"
     },
     {
-      "id": "boudica_choose_factory",
-      "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_choose_factory_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_choose_factory_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "ui",
-        "action": "dock_factory",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "dock_factory",
-        "gesture": "tap"
-      },
-      "pause_game": true,
-      "next": "boudica_build_factory"
-    },
-    {
-      "id": "boudica_build_factory",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_build_factory_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_build_factory_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "factory",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "build_site",
-        "gesture": "tap"
-      },
-      "pause_game": true,
-      "paused_action": "build_until_started",
-      "next": "boudica_factory_construction_wait"
-    },
-    {
-      "id": "boudica_factory_construction_wait",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_build_factory_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_build_factory_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "Factory",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "next": "boudica_factory_ready"
-    },
-    {
-      "id": "boudica_factory_ready",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_factory_ready_title",
-      "body_key": "tutorial.campaign_boudica_boudica_factory_ready_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
-      "next": "boudica_outpost_colonia_veterans"
-    },
-    {
-      "id": "boudica_bunker_choice",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_bunker_choice_title",
-      "body_key": "tutorial.campaign_boudica_boudica_bunker_choice_body",
-      "speaker": "council",
-      "presentation": "dialogue",
-      "next": "boudica_choose_bunker"
-    },
-    {
-      "id": "boudica_choose_bunker",
-      "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_choose_bunker_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_choose_bunker_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "ui",
-        "action": "dock_bunker",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "dock_bunker",
-        "gesture": "tap"
-      },
-      "pause_game": true,
-      "next": "boudica_build_bunker"
-    },
-    {
-      "id": "boudica_build_bunker",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_build_bunker_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_build_bunker_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "bunker",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "guide": {
-        "kind": "world",
-        "target": "build_site",
-        "gesture": "tap"
-      },
-      "pause_game": true,
-      "paused_action": "build_until_started",
-      "next": "boudica_bunker_construction_wait"
-    },
-    {
-      "id": "boudica_bunker_construction_wait",
-      "type": "objective",
-      "title_key": "tutorial.campaign_boudica_boudica_build_bunker_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_build_bunker_hint",
-      "speaker": "council",
-      "trigger": {
-        "type": "structure_level",
-        "kind": "Bunker",
-        "value": 1,
-        "scope": "total"
-      },
-      "marker": {
-        "target": "player"
-      },
-      "next": "boudica_bunker_built"
-    },
-    {
-      "id": "boudica_bunker_built",
-      "type": "scene",
-      "title_key": "tutorial.campaign_boudica_boudica_bunker_built_title",
-      "body_key": "tutorial.campaign_boudica_boudica_bunker_built_body",
-      "speaker": "boudica",
-      "presentation": "dialogue",
-      "wait_before": true,
-      "next": "boudica_camulodunum_intro"
-    },
-    {
       "id": "boudica_outpost_colonia_veterans",
       "type": "objective",
       "title_key": "tutorial.campaign_boudica_boudica_outpost_colonia_veterans_title",
@@ -915,7 +773,7 @@
       "speaker": "boudica",
       "presentation": "dialogue",
       "wait_before": true,
-      "next": "boudica_bunker_choice"
+      "next": "boudica_camulodunum_intro"
     },
     {
       "id": "boudica_outpost_tax_collectors",
@@ -1084,7 +942,6 @@
       "body_key": "tutorial.campaign_boudica_boudica_ninth_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "attack_ratio_on_enter": 0.5,
       "next": "boudica_ninth_legion_set_attack_ratio"
     },
     {
@@ -1106,6 +963,15 @@
         "target": "attack_ratio",
         "gesture": "drag"
       },
+      "next": "boudica_ninth_strike"
+    },
+    {
+      "id": "boudica_ninth_strike",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_ninth_strike_title",
+      "body_key": "tutorial.campaign_boudica_boudica_ninth_strike_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
       "next": "boudica_ninth_legion"
     },
     {
@@ -1232,7 +1098,7 @@
         "hold_last_tile": true,
         "reinforcement": {
           "capacity_ratio": 2,
-          "interval_seconds": 10
+          "interval_seconds": 3
         }
       },
       "trigger": {
@@ -1256,7 +1122,7 @@
         "hold_last_tile": false,
         "reinforcement": {
           "capacity_ratio": 2,
-          "interval_seconds": 10
+          "interval_seconds": 3
         }
       },
       "trigger": {
@@ -1424,38 +1290,6 @@
       "x": 1750,
       "y": 2350
     },
-    "boudica_choose_factory": {
-      "x": 630,
-      "y": 1970
-    },
-    "boudica_build_factory": {
-      "x": 70,
-      "y": 2160
-    },
-    "boudica_factory_construction_wait": {
-      "x": 350,
-      "y": 1970
-    },
-    "boudica_bunker_choice": {
-      "x": 350,
-      "y": 2160
-    },
-    "boudica_choose_bunker": {
-      "x": 630,
-      "y": 2160
-    },
-    "boudica_build_bunker": {
-      "x": 70,
-      "y": 2350
-    },
-    "boudica_bunker_construction_wait": {
-      "x": 350,
-      "y": 2540
-    },
-    "boudica_bunker_built": {
-      "x": 630,
-      "y": 2540
-    },
     "boudica_outpost_colonia_veterans": {
       "x": 910,
       "y": 2540
@@ -1496,8 +1330,12 @@
       "x": 630,
       "y": 2730
     },
-    "boudica_ninth_legion": {
+    "boudica_ninth_strike": {
       "x": 910,
+      "y": 2730
+    },
+    "boudica_ninth_legion": {
+      "x": 1190,
       "y": 2730
     },
     "boudica_pact_choice": {

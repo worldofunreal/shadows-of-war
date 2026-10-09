@@ -48,6 +48,7 @@
     var mapMenuStateKey = "";
     var allocationHoverNone = window.matchMedia ? window.matchMedia("(hover: none)") : null;
     var lastAllocationKey = "";
+    var EMPTY_CAMPAIGN_UNLOCKS = { buildings: {}, actions: [] };
 
     var EMOJIS = [
         "😀", "😎", "😏", "😂", "🤣", "😋", "😉", "😜", "😍", "🥰", "🥳", "🥺", "😇", "🤩", "👍",
@@ -834,12 +835,51 @@
     }
 
     function mapActionReason(item, availableGold) {
-        if (item.reason_key) return SOW_t(item.reason_key);
+        if (item.reason_key) {
+            var reason = SOW_t(item.reason_key, item.reason_troops == null
+                ? {}
+                : { troops: Math.ceil(Number(item.reason_troops)).toLocaleString() });
+            if (item.reason_level != null || item.reason_seconds != null) {
+                if (item.reason_key !== "lobbies.locked") reason = SOW_t("lobbies.locked") + " · " + reason;
+                if (item.reason_level != null) reason += " " + Math.floor(Number(item.reason_level));
+                if (item.reason_seconds != null) reason += " · " + Math.max(1, Math.ceil(Number(item.reason_seconds))) + "s";
+            }
+            return reason;
+        }
         if (!item.disabled || item.cost == null) return "";
         return SOW_t("hud.not_enough_gold", {
             cost: Math.ceil(item.cost).toLocaleString(),
             available: Math.floor(Number(availableGold) || 0).toLocaleString()
         });
+    }
+
+    function campaignUnlocks(hud) {
+        return hud && hud.tutorial && hud.tutorial.active
+            ? hud.tutorial.effective_unlocks || EMPTY_CAMPAIGN_UNLOCKS
+            : null;
+    }
+    function campaignAllowsBuilding(unlocks, kind, level) {
+        return unlocks === null || window.SOWCampaign.campaignAllowsBuilding(unlocks, kind, level);
+    }
+    function campaignAllowsAction(unlocks, action) {
+        return unlocks === null || window.SOWCampaign.campaignAllowsAction(unlocks, action);
+    }
+    function campaignActionLockReason(unlocks, action) {
+        if (unlocks === null || campaignAllowsAction(unlocks, action)) return "";
+        if (!Array.isArray(unlocks.actions) || !unlocks.actions.includes(action)) return SOW_t("hud.campaign_unlock_required");
+        var requirement = {
+            trade_ship: ["Port", "hud.map_action_port", 1],
+            warship: ["Port", "hud.map_action_port", 2],
+            nuke: ["City", "hud.map_action_city", 4]
+        }[action];
+        return requirement
+            ? SOW_t("hud.campaign_unlock_required") + " · " + SOW_t(requirement[1]) + " " + requirement[2]
+            : SOW_t("hud.campaign_unlock_required");
+    }
+    function setCampaignLock(element, locked, reason) {
+        element.classList.toggle("is-campaign-locked", Boolean(locked));
+        if (locked && reason) element.dataset.lockLabel = reason;
+        else delete element.dataset.lockLabel;
     }
 
     function mapItems(mapMenu) {
@@ -854,7 +894,10 @@
                 cost: item && item.cost != null && Number.isFinite(Number(item.cost)) ? Number(item.cost) : null,
                 level: item && Number.isFinite(Number(item.level)) ? Number(item.level) : null,
                 disabled: Boolean(item && item.disabled),
-                reason_key: item && item.reason_key || null
+                reason_key: item && item.reason_key || null,
+                reason_level: item && Number.isFinite(Number(item.reason_level)) ? Number(item.reason_level) : null,
+                reason_seconds: item && Number.isFinite(Number(item.reason_seconds)) ? Number(item.reason_seconds) : null,
+                reason_troops: item && Number.isFinite(Number(item.reason_troops)) ? Number(item.reason_troops) : null
             };
         });
     }
@@ -884,7 +927,7 @@
         button.dataset.mapAction = action;
         button.setAttribute("role", "menuitem");
         var disabled = Boolean(item.disabled || (presentation && presentation.disabled));
-        button.disabled = disabled && !item.reason_key && !(item.disabled && item.cost != null && !(presentation && presentation.disabled));
+        button.disabled = disabled;
         button.setAttribute("aria-disabled", String(disabled));
         var buildingKind = action.indexOf("build_") === 0 ? action.slice(6) : "";
         buildingKind = buildingKind.charAt(0).toUpperCase() + buildingKind.slice(1);
@@ -897,12 +940,22 @@
         var actionName = presentation ? SOW_t(presentation.key) : mapLabel(action);
         button.dataset.mapActionLabel = actionName;
         if (item.reason_key) button.dataset.reasonKey = item.reason_key;
+        if (item.reason_level != null) button.dataset.reasonLevel = String(item.reason_level);
+        if (item.reason_seconds != null) button.dataset.reasonSeconds = String(item.reason_seconds);
+        if (item.reason_troops != null) button.dataset.reasonTroops = String(item.reason_troops);
         if (presentation && presentation.state) button.dataset.allianceState = presentation.state;
         var reason = mapActionReason(item, hudState && hudState.hud && hudState.hud.gold);
         var accessibleLabel = reason ? actionName + ". " + reason : actionName;
         button.setAttribute("aria-label", accessibleLabel);
         button.title = reason ? accessibleLabel : "";
-        button.appendChild(mapActionContent(icon, withDetails ? "" : actionName));
+        var content = mapActionContent(icon, withDetails ? "" : actionName);
+        if (!withDetails && disabled && reason) {
+            var reasonLabel = document.createElement("small");
+            reasonLabel.className = "sow-hud__map-action-reason";
+            reasonLabel.textContent = reason;
+            content.appendChild(reasonLabel);
+        }
+        button.appendChild(content);
         if (withDetails) {
             var copy = document.createElement("span");
             var name = document.createElement("span");
@@ -932,12 +985,15 @@
     }
 
     function updateDisabledMapActionReasons(menu, availableGold) {
-        menu.querySelectorAll('.sow-hud__map-card[aria-disabled="true"]').forEach(function (button) {
+        menu.querySelectorAll('.sow-hud__map-card[aria-disabled="true"], .sow-hud__map-sector[aria-disabled="true"]').forEach(function (button) {
             var cost = Number(button.dataset.mapCost);
             var reason = mapActionReason({
                 disabled: true,
                 cost: Number.isFinite(cost) ? cost : null,
-                reason_key: button.dataset.reasonKey || null
+                reason_key: button.dataset.reasonKey || null,
+                reason_level: Number.isFinite(Number(button.dataset.reasonLevel)) ? Number(button.dataset.reasonLevel) : null,
+                reason_seconds: Number.isFinite(Number(button.dataset.reasonSeconds)) ? Number(button.dataset.reasonSeconds) : null,
+                reason_troops: Number.isFinite(Number(button.dataset.reasonTroops)) ? Number(button.dataset.reasonTroops) : null
             }, availableGold);
             if (!reason) return;
             var reasonLabel = button.querySelector(".sow-hud__map-action-reason");
@@ -1276,7 +1332,11 @@
             hudRefs.buildingCardGold.hidden = true;
             hudRefs.buildingCardBenefit.hidden = !activeMetrics.length;
             hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
-            hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-level sow-hud__building-level--max" title="Maximum level">MAX</span>';
+            if (detail.campaign_upgrade_locked) {
+                hudRefs.buildingCardNext.textContent = SOW_t("hud.campaign_unlock_required");
+            } else {
+                hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-level sow-hud__building-level--max" title="Maximum level">MAX</span>';
+            }
             hudRefs.buildingCardNext.hidden = false;
             hudRefs.buildingCardUpgrade.hidden = true;
         }
@@ -2131,8 +2191,12 @@
             hudRefs.buildingsStrip.style.display = isDeploying ? "none" : "flex";
             var selectedBuilding = hud.selected_building;
             var buildingCosts = hud.building_costs || {};
+            var buildUnlocks = campaignUnlocks(hud);
             hudRefs.buildingButtons.forEach(function (button) {
                 var kind = button.dataset.kind || "";
+                var available = campaignAllowsBuilding(buildUnlocks, kind, 1);
+                button.hidden = !available;
+                button.style.display = available ? "" : "none";
                 var cost = Number(buildingCosts[kind.toLowerCase()]);
                 var hasCost = Number.isFinite(cost) && cost > 0;
                 var affordable = !hasCost || gold >= cost;
@@ -2156,62 +2220,82 @@
         if (hudRefs.fleetStrip) {
             hudRefs.fleetStrip.style.display = isDeploying ? "none" : "flex";
             var fleetPanel = hud.fleet_panel || {};
+            var fleetUnlocks = campaignUnlocks(hud);
             var portLevels = Math.max(0, Number(fleetPanel.port_levels) || 0);
             var cityLevel = Math.max(0, Number(fleetPanel.city_level) || 0);
             var tradeRequiredPortLevel = Math.max(1, Number(fleetPanel.trade_required_port_level) || 1);
             var warshipRequiredPortLevel = Math.max(1, Number(fleetPanel.warship_required_port_level) || 1);
             var nukeRequiredCityLevel = Math.max(1, Number(fleetPanel.nuke_required_city_level) || 1);
-            var tradeUnlocked = portLevels >= tradeRequiredPortLevel;
-            var warshipUnlocked = portLevels >= warshipRequiredPortLevel;
-            var nukeUnlocked = cityLevel >= nukeRequiredCityLevel;
+            var tradeCampaignReason = campaignActionLockReason(fleetUnlocks, "trade_ship");
+            var warshipCampaignReason = campaignActionLockReason(fleetUnlocks, "warship");
+            var nukeCampaignReason = campaignActionLockReason(fleetUnlocks, "nuke");
+            var tradeCampaignLocked = Boolean(tradeCampaignReason) || !campaignAllowsBuilding(fleetUnlocks, "Port", tradeRequiredPortLevel);
+            var warshipCampaignLocked = Boolean(warshipCampaignReason) || !campaignAllowsBuilding(fleetUnlocks, "Port", warshipRequiredPortLevel);
+            var nukeCampaignLocked = Boolean(nukeCampaignReason) || !campaignAllowsBuilding(fleetUnlocks, "City", nukeRequiredCityLevel);
+            var tradeUnlocked = !tradeCampaignLocked && portLevels >= tradeRequiredPortLevel;
+            var warshipUnlocked = !warshipCampaignLocked && portLevels >= warshipRequiredPortLevel;
+            var nukeUnlocked = !nukeCampaignLocked && cityLevel >= nukeRequiredCityLevel;
             var militaryFull = Number(fleetPanel.military_used) >= Number(fleetPanel.military_capacity);
             var warshipSelected = Boolean(hud.selected_warship_build);
             if (hudRefs.fleetTrade) {
                 var tradeCount = Math.floor(Number(fleetPanel.trade_ships) || 0);
                 var tradeCapacity = Math.floor(Number(fleetPanel.trade_capacity) || 0);
                 var tradeStatus = SOW_t("hud.map_action_fleet") + " · " + tradeCount + "/" + tradeCapacity;
+                var tradeReason = tradeCampaignLocked ? (tradeCampaignReason || SOW_t("hud.campaign_unlock_required"))
+                    : !tradeUnlocked ? SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel : "";
+                if (tradeReason) tradeStatus += " · " + tradeReason;
                 hudRefs.fleetTrade.setAttribute("aria-label", tradeStatus);
                 hudRefs.fleetTrade.title = tradeStatus;
                 hudRefs.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
+                setCampaignLock(hudRefs.fleetTrade, !tradeUnlocked, tradeReason);
             }
             if (hudRefs.fleetWarship) {
                 var warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
-                var warshipDisabled = !warshipUnlocked || militaryFull || gold < warshipCost;
-                hudRefs.fleetWarship.disabled = false;
+                var warshipDisabled = warshipCampaignLocked || !warshipUnlocked || militaryFull || gold < warshipCost;
+                hudRefs.fleetWarship.disabled = warshipDisabled;
                 hudRefs.fleetWarship.setAttribute("aria-disabled", String(warshipDisabled));
                 hudRefs.fleetWarship.setAttribute("aria-pressed", String(warshipSelected));
                 hudRefs.fleetWarship.classList.toggle("active", warshipSelected);
                 hudRefs.fleetWarship.classList.toggle("is-locked", warshipDisabled && !warshipSelected);
-                var warshipReason = !warshipUnlocked
+                var warshipReason = warshipCampaignLocked
+                    ? (warshipCampaignReason || SOW_t("hud.campaign_unlock_required"))
+                    : !warshipUnlocked
                     ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_port") + " " + warshipRequiredPortLevel
                     : militaryFull
                         ? Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0)
                         : gold < warshipCost
-                            ? Math.floor(warshipCost).toLocaleString() + "g"
+                            ? SOW_t("hud.not_enough_gold", { cost: Math.ceil(warshipCost).toLocaleString(), available: Math.floor(gold).toLocaleString() })
                             : SOW_t("hud.map_action_port") + " " + warshipRequiredPortLevel + " · " + Math.floor(warshipCost).toLocaleString() + "g";
                 var warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipReason;
                 hudRefs.fleetWarship.setAttribute("aria-label", warshipLabel);
                 hudRefs.fleetWarship.title = warshipLabel;
+                setCampaignLock(hudRefs.fleetWarship, warshipDisabled, warshipReason);
             }
             if (hudRefs.fleetNuke) {
                 var cooldownTicks = Math.max(0, Number(fleetPanel.nuke_cooldown_ticks) || 0);
-                var nukeReady = Boolean(fleetPanel.nuke_available) && cooldownTicks === 0;
-                var nukeDisabled = !nukeUnlocked || !nukeReady;
-                hudRefs.fleetNuke.disabled = false;
+                var nukeCost = Math.max(0, Number(fleetPanel.nuke_cost) || 0);
+                var nukeReady = Boolean(fleetPanel.nuke_available) && cooldownTicks === 0 && gold >= nukeCost;
+                var nukeDisabled = nukeCampaignLocked || !nukeUnlocked || !nukeReady;
+                hudRefs.fleetNuke.disabled = nukeDisabled;
                 hudRefs.fleetNuke.setAttribute("aria-disabled", String(nukeDisabled));
                 hudRefs.fleetNuke.setAttribute("aria-pressed", String(hud.selected_nuke === "AtomBomb"));
                 hudRefs.fleetNuke.classList.toggle("is-locked", nukeDisabled);
                 hudRefs.fleetNuke.classList.toggle("active", hud.selected_nuke === "AtomBomb");
-                var nukeReason = !nukeUnlocked
+                var nukeReason = nukeCampaignLocked
+                    ? (nukeCampaignReason || SOW_t("hud.campaign_unlock_required"))
+                    : !nukeUnlocked
                     ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_city") + " " + nukeRequiredCityLevel
                     : cooldownTicks > 0
                         ? SOW_t("lobbies.locked") + " · " + Math.ceil(cooldownTicks / 10) + "s"
+                        : gold < nukeCost
+                            ? SOW_t("hud.not_enough_gold", { cost: Math.ceil(nukeCost).toLocaleString(), available: Math.floor(gold).toLocaleString() })
                         : !nukeReady
-                            ? SOW_t("lobbies.locked") + " · " + Math.floor(Number(fleetPanel.nuke_cost) || 0).toLocaleString() + "g"
-                            : SOW_t("hud.map_action_nuke") + " · " + Math.floor(Number(fleetPanel.nuke_cost) || 0).toLocaleString() + "g";
+                            ? SOW_t("lobbies.locked")
+                            : SOW_t("hud.map_action_nuke") + " · " + Math.floor(nukeCost).toLocaleString() + "g";
                 var nukeLabel = SOW_t("hud.map_action_nuke") + " · " + nukeReason;
                 hudRefs.fleetNuke.setAttribute("aria-label", nukeLabel);
                 hudRefs.fleetNuke.title = nukeLabel;
+                setCampaignLock(hudRefs.fleetNuke, nukeDisabled, nukeReason);
             }
         }
 

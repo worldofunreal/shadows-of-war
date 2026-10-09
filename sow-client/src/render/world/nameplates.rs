@@ -6,10 +6,10 @@ use sow_core::player::{Leader, PlayerType};
 use sow_core::protocol::{PlayerSnapshot, SimSnapshot};
 use sow_render::nameplate::{
     BadgeKind, MapPoint, NAMEPLATE_SAMPLE_TICKS, NameplateCapacityPlan, NameplateLandCache,
-    NameplateLayout, NameplateMetrics, NameplatePresentation, NameplateStatus, ScreenPoint,
-    WorldRect, assign_nameplate_capacity, fit_bounds_to_land, fit_size_to_land, fitted_font_px,
-    fog_allows_nameplate, font_size_scale, nameplate_visible_after_viewport_and_fog,
-    sample_due as nameplate_sample_due,
+    NameplateLayout, NameplateMetrics, NameplatePresentation, NameplateStatus, NameplateStyle,
+    ScreenPoint, WorldRect, assign_nameplate_capacity, fit_bounds_to_land, fit_size_to_land,
+    fitted_font_px, fog_allows_nameplate, font_size_scale,
+    nameplate_visible_after_viewport_and_fog, sample_due as nameplate_sample_due,
     size_needs_interpolation as nameplate_size_needs_interpolation,
 };
 use sow_render::text::NameplateStatusSprite;
@@ -65,7 +65,7 @@ pub(crate) struct NameplateSystem {
 #[derive(Clone, Copy)]
 struct PreparedNameplate {
     player_index: usize,
-    is_human: bool,
+    has_human_priority: bool,
     full: Option<FullNameplate>,
     dot: LodDot,
     presentation: NameplatePresentation,
@@ -73,8 +73,8 @@ struct PreparedNameplate {
 }
 
 impl NameplateCapacityPlan for PreparedNameplate {
-    fn is_human(&self) -> bool {
-        self.is_human
+    fn has_human_priority(&self) -> bool {
+        self.has_human_priority
     }
 
     fn full_instance_count(&self) -> Option<usize> {
@@ -204,12 +204,8 @@ pub(super) fn render_nameplates(
     for &player_index in order.iter() {
         let player = &snapshot.players[player_index];
         let is_me = player.id == my_id;
-        let presentation_type = if tutorial_target_player == Some(player.id) {
-            PlayerType::Human
-        } else {
-            player.player_type
-        };
-        let is_human = presentation_type == PlayerType::Human;
+        let has_human_priority = player.player_type == PlayerType::Human;
+        let style = NameplateStyle::for_player(player.player_type, player.is_campaign_faction);
         let Some(state) = visuals.get(&player.id) else {
             continue;
         };
@@ -260,10 +256,10 @@ pub(super) fn render_nameplates(
             ),
         };
 
-        if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !is_human {
+        if zoom_scaled < NAMEPLATE_HIDE_ZOOM && !is_me && !has_human_priority {
             frame_plans.push(PreparedNameplate {
                 player_index,
-                is_human,
+                has_human_priority,
                 full: None,
                 dot,
                 presentation: NameplatePresentation::Hidden,
@@ -278,7 +274,7 @@ pub(super) fn render_nameplates(
             lerp(state.from_size, state.to_size, inverse_alpha)
         }) * spawn_settle_scale;
 
-        let scaled_size = nameplate_font_px(world_size, zoom_scaled, is_human);
+        let scaled_size = nameplate_font_px(world_size, zoom_scaled, style);
 
         let is_allied = my_player
             .filter(|me| me.id != player.id)
@@ -306,7 +302,7 @@ pub(super) fn render_nameplates(
         };
         let show_bot_avatars = dev.vfx_bot_avatars || player.campaign_avatar.is_some();
         let layout = compute_nameplate_layout(
-            presentation_type,
+            style,
             show_bot_avatars,
             center,
             scaled_size,
@@ -335,11 +331,11 @@ pub(super) fn render_nameplates(
             dev.vfx_nameplate_names,
             dev.vfx_nameplate_troops,
         );
-        let show_full = fitted_font_size >= 7.0 && (is_human || full_labels_drawn < 80);
+        let show_full = fitted_font_size >= 7.0 && (has_human_priority || full_labels_drawn < 80);
         if !show_full {
             frame_plans.push(PreparedNameplate {
                 player_index,
-                is_human,
+                has_human_priority,
                 full: None,
                 dot,
                 presentation: NameplatePresentation::Hidden,
@@ -347,7 +343,7 @@ pub(super) fn render_nameplates(
             });
             continue;
         }
-        if !is_human {
+        if !has_human_priority {
             full_labels_drawn += 1;
         }
 
@@ -359,7 +355,7 @@ pub(super) fn render_nameplates(
             scaled_size,
             layout,
             fit_scale,
-            presentation_type,
+            style,
             dev,
             campaign_avatar_slots,
             sf,
@@ -377,7 +373,7 @@ pub(super) fn render_nameplates(
         });
         frame_plans.push(PreparedNameplate {
             player_index,
-            is_human,
+            has_human_priority,
             full: Some(full),
             dot,
             presentation: NameplatePresentation::Hidden,
@@ -713,9 +709,9 @@ fn nameplate_world_size(tile_count: u32) -> f32 {
     (tile_count as f32).sqrt().clamp(0.2, 150.0)
 }
 
-fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
+fn nameplate_font_px(world_size: f32, zoom_scaled: f32, style: NameplateStyle) -> f32 {
     let world_px = world_size * NAMEPLATE_WORLD_SCALE * zoom_scaled;
-    if is_human {
+    if style == NameplateStyle::HumanGhost {
         world_px.clamp(NAMEPLATE_MIN_FONT, NAMEPLATE_MAX_FONT)
     } else {
         world_px
@@ -723,7 +719,7 @@ fn nameplate_font_px(world_size: f32, zoom_scaled: f32, is_human: bool) -> f32 {
 }
 
 fn compute_nameplate_layout(
-    player_type: PlayerType,
+    style: NameplateStyle,
     show_bot_avatars: bool,
     center: ScreenPoint,
     scaled_size: f32,
@@ -733,7 +729,7 @@ fn compute_nameplate_layout(
     dev: &DevConfig,
     sf: f32,
 ) -> NameplateLayout {
-    let metrics = NameplateMetrics::compute(scaled_size, player_type, show_bot_avatars);
+    let metrics = NameplateMetrics::compute(scaled_size, style, show_bot_avatars);
     let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
     let badge_padding = outline
         .scaled_for_emoji(metrics.badge_size() * sf)
@@ -758,7 +754,7 @@ fn prepare_full_nameplate(
     scaled_size: f32,
     layout: NameplateLayout,
     fit_scale: f32,
-    presentation_type: PlayerType,
+    style: NameplateStyle,
     dev: &DevConfig,
     campaign_avatar_slots: &std::collections::HashMap<String, usize>,
     sf: f32,
@@ -768,7 +764,7 @@ fn prepare_full_nameplate(
     let font_scale = font_size_scale(dev.font_size_scale);
     let metrics = NameplateMetrics::compute(
         scaled_size,
-        presentation_type,
+        style,
         dev.vfx_bot_avatars || player.campaign_avatar.is_some(),
     );
     let name_font_size = metrics.render_size() * font_scale;

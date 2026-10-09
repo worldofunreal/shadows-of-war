@@ -113,7 +113,7 @@ impl SowEngine {
         self.execute_projectiles();
         self.execute_sam();
         self.execute_combat();
-        self.apply_campaign_unlocks_and_support();
+        self.apply_campaign_support();
         self.update_campaign_assault();
 
         // Sync building ownership with tile ownership
@@ -194,19 +194,7 @@ impl SowEngine {
         }
     }
 
-    fn apply_campaign_unlocks_and_support(&mut self) {
-        let unlock_target = self.state.config.buildings_unlock_after_defeated.clone();
-        if !self.state.config.buildings_enabled
-            && unlock_target.as_ref().is_some_and(|name| {
-                self.state
-                    .players
-                    .iter()
-                    .any(|player| player.name == *name && !player.alive)
-            })
-        {
-            self.state.config.buildings_enabled = true;
-        }
-
+    fn apply_campaign_support(&mut self) {
         let Some(support) = self.state.config.campaign_support.clone() else {
             return;
         };
@@ -460,8 +448,6 @@ mod tests {
         let milestone = "The Iceni Despoilers";
         let config = GameConfig {
             tick_rate_ms: 1000.0,
-            buildings_enabled: false,
-            buildings_unlock_after_defeated: Some(milestone.to_string()),
             campaign_support: Some(CampaignSupport {
                 after_defeated: milestone.to_string(),
                 share_percent: 50,
@@ -496,8 +482,7 @@ mod tests {
             .insert(2, crate::protocol::CampaignRelation::Allied);
         engine.campaign_support_intervals.insert(2, 8);
         engine.state.tick = 1;
-        engine.apply_campaign_unlocks_and_support();
-        assert!(!engine.state.config.buildings_enabled);
+        engine.apply_campaign_support();
         assert!(
             !engine
                 .state
@@ -507,8 +492,7 @@ mod tests {
         );
 
         engine.state.player_mut(3).unwrap().alive = false;
-        engine.apply_campaign_unlocks_and_support();
-        assert!(engine.state.config.buildings_enabled);
+        engine.apply_campaign_support();
         assert!(
             !engine
                 .state
@@ -518,13 +502,13 @@ mod tests {
         );
 
         engine.state.map.set_owner_id(0, 1, 2);
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert_eq!(engine.state.player(1).unwrap().gold, 0.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 500.0);
 
         engine.state.events.clear();
         engine.state.tick = 8;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert!(
             !engine
                 .state
@@ -534,7 +518,7 @@ mod tests {
         );
 
         engine.state.tick = 9;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert_eq!(engine.state.player(1).unwrap().gold, 250.0);
         assert_eq!(engine.state.player(1).unwrap().troops, 250.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
@@ -542,7 +526,7 @@ mod tests {
 
         engine.state.events.clear();
         engine.state.tick = 16;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert!(
             !engine
                 .state
@@ -552,7 +536,7 @@ mod tests {
         );
 
         engine.state.tick = 17;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert_eq!(engine.state.player(1).unwrap().gold, 375.0);
         assert_eq!(engine.state.player(1).unwrap().troops, 375.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 125.0);
@@ -606,7 +590,7 @@ mod tests {
         }]);
 
         engine.state.tick = 1;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert_eq!(engine.state.player(1).unwrap().gold, 350.0);
         assert_eq!(engine.state.player(1).unwrap().troops, 250.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
@@ -622,7 +606,7 @@ mod tests {
         )));
 
         engine.state.tick = 2;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         assert_eq!(engine.state.player(1).unwrap().gold, 350.0);
         assert_eq!(engine.state.player(2).unwrap().gold, 250.0);
     }
@@ -678,9 +662,9 @@ mod tests {
         engine.campaign_support_intervals.insert(2, 5);
         engine.campaign_support_intervals.insert(3, 5);
         engine.state.tick = 1;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
         engine.state.tick = 6;
-        engine.apply_campaign_unlocks_and_support();
+        engine.apply_campaign_support();
 
         assert_eq!(engine.state.player(1).unwrap().gold, 100.0);
         assert_eq!(engine.state.player(1).unwrap().troops, 100.0);

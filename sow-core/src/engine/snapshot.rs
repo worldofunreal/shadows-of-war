@@ -97,6 +97,7 @@ impl SowEngine {
                     civilization: p.civilization,
                     leader: p.leader,
                     campaign_avatar: self.campaign_avatars.get(&p.id).cloned(),
+                    is_campaign_faction: self.campaign_faction_ids.contains_key(&p.id),
                     skin_style: p.skin_style,
                     kills: p.kills,
                     deaths: p.deaths,
@@ -341,5 +342,55 @@ impl SowEngine {
                 String::new()
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::engine::SowEngine;
+    use crate::game::GameState;
+    use crate::game_config::GameConfig;
+    use crate::player::Player;
+    use crate::water_components::WaterComponents;
+
+    #[test]
+    fn snapshot_marks_campaign_membership_not_avatar_presence() {
+        let state = GameState::new(1, 4, 4, GameConfig::default());
+        let mut engine = SowEngine::new(state, WaterComponents::default());
+        let config = engine.state.config.clone();
+        engine.state.players.push(Player::new_bot(
+            1,
+            "Roman Outpost".into(),
+            [1.0, 0.0, 0.0],
+            &config,
+        ));
+        engine.state.players.push(Player::new_bot(
+            2,
+            "Geographic faction".into(),
+            [0.0, 1.0, 0.0],
+            &config,
+        ));
+        engine
+            .campaign_faction_ids
+            .insert(1, "roman_outpost".into());
+        engine.campaign_avatars.insert(2, "some_portrait".into());
+
+        let snapshot = engine.build_snapshot();
+        assert!(
+            snapshot
+                .players
+                .iter()
+                .find(|p| p.id == 1)
+                .unwrap()
+                .is_campaign_faction
+        );
+        assert!(
+            !snapshot
+                .players
+                .iter()
+                .find(|p| p.id == 2)
+                .unwrap()
+                .is_campaign_faction
+        );
     }
 }

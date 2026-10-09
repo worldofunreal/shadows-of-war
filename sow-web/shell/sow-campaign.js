@@ -20,6 +20,136 @@
     };
     const WORLD_TARGETS = ["expand", "assault", "target_action", "player", "nameplate", "build_site", "upgrade_building"];
     const STRUCTURE_LEVEL_LIMITS = { City: 4, Farm: 4, Factory: 4, Bunker: 4, Port: 4 };
+    const CAMPAIGN_ACTIONS = ["transport_fleet", "trade_ship", "warship", "nuke"];
+    const CAMPAIGN_ACTION_BUILDING_REQUIREMENTS = Object.freeze({
+        transport_fleet: null,
+        trade_ship: Object.freeze({ kind: "Port", level: 1 }),
+        warship: Object.freeze({ kind: "Port", level: 2 }),
+        nuke: Object.freeze({ kind: "City", level: STRUCTURE_LEVEL_LIMITS.City })
+    });
+    const BUILDING_METRIC_KINDS = {
+        city: "City", city_level: "City", city_upgrade: "City",
+        farm: "Farm", farm_level: "Farm", farm_upgrade: "Farm",
+        factory: "Factory", factory_level: "Factory", factory_upgrade: "Factory",
+        bunker: "Bunker", bunker_level: "Bunker", bunker_upgrade: "Bunker",
+        port: "Port", port_level: "Port", port_upgrade: "Port"
+    };
+    function emptyCampaignUnlocks() { return { buildings: {}, actions: [] }; }
+    function applyCampaignUnlocks(previous, grant) {
+        const result = copy(previous || emptyCampaignUnlocks());
+        const buildings = object(grant && grant.buildings) ? grant.buildings : {};
+        Object.keys(buildings).forEach(kind => {
+            result.buildings[kind] = Math.max(Number(result.buildings[kind]) || 0, Number(buildings[kind]) || 0);
+        });
+        const actions = new Set((result.actions || []).concat(Array.isArray(grant && grant.actions) ? grant.actions : []));
+        result.actions = CAMPAIGN_ACTIONS.filter(action => actions.has(action));
+        return result;
+    }
+    function intersectCampaignUnlocks(a, b) {
+        const buildings = {};
+        Object.keys(STRUCTURE_LEVEL_LIMITS).forEach(kind => {
+            const level = Math.min(Number(a && a.buildings && a.buildings[kind]) || 0, Number(b && b.buildings && b.buildings[kind]) || 0);
+            if (level > 0) buildings[kind] = level;
+        });
+        const actions = CAMPAIGN_ACTIONS.filter(action => (a && a.actions || []).includes(action) && (b && b.actions || []).includes(action));
+        return { buildings, actions };
+    }
+    function campaignUnlocksEqual(a, b) {
+        return Object.keys(STRUCTURE_LEVEL_LIMITS).every(kind => (Number(a && a.buildings && a.buildings[kind]) || 0) === (Number(b && b.buildings && b.buildings[kind]) || 0))
+            && CAMPAIGN_ACTIONS.every(action => (a && a.actions || []).includes(action) === (b && b.actions || []).includes(action));
+    }
+    function campaignAllowsBuilding(unlocks, kind, level) {
+        return Boolean(STRUCTURE_LEVEL_LIMITS[kind] && Number(unlocks && unlocks.buildings && unlocks.buildings[kind]) >= level);
+    }
+    function campaignAllowsAction(unlocks, action) {
+        if (!CAMPAIGN_ACTIONS.includes(action) || !(unlocks && Array.isArray(unlocks.actions) && unlocks.actions.includes(action))) return false;
+        const requirement = CAMPAIGN_ACTION_BUILDING_REQUIREMENTS[action];
+        return !requirement || campaignAllowsBuilding(unlocks, requirement.kind, requirement.level);
+    }
+    function campaignEdges(step, byId, choices, facts) {
+        if (step.type === "choice" && choices && choices[step.id]) {
+            const selected = (step.choices || []).find(choice => choice && choice.id === choices[step.id]);
+            return selected && byId.has(selected.next) ? [selected.next] : [];
+        }
+        if (Array.isArray(step.routes) && (choices || facts)) {
+            const route = step.routes.find(candidate => {
+                const when = candidate && candidate.when;
+                if (!object(when)) return false;
+                if (when.choice) return choices && choices[when.choice] === when.equals;
+                if (when.fact && facts && Number.isFinite(Number(facts[when.fact]))) return Number(facts[when.fact]) >= Number(when.gte);
+                return false;
+            });
+            if (route) return byId.has(route.next) ? [route.next] : [];
+            const allConditionsKnown = step.routes.every(candidate => {
+                const when = candidate && candidate.when;
+                return object(when) && (when.choice ? choices && own(choices, when.choice) : when.fact && facts && Number.isFinite(Number(facts[when.fact])));
+            });
+            if (allConditionsKnown) return byId.has(step.next) ? [step.next] : [];
+        }
+        return [step.next]
+            .concat((Array.isArray(step.routes) ? step.routes : []).map(route => route && route.next))
+            .concat((Array.isArray(step.choices) ? step.choices : []).map(choice => choice && choice.next))
+            .filter(target => byId.has(target));
+    }
+    function campaignUnlockStates(byId, entry, choices, facts) {
+        const states = new Map();
+        if (!byId.has(entry)) return states;
+        states.set(entry, emptyCampaignUnlocks());
+        const queue = [entry];
+        const queued = new Set(queue);
+        while (queue.length) {
+            const key = queue.shift();
+            queued.delete(key);
+            const step = byId.get(key);
+            const outgoing = applyCampaignUnlocks(states.get(key), step && step.unlocks);
+            campaignEdges(step, byId, choices, facts).forEach(target => {
+                const previous = states.get(target);
+                const merged = previous ? intersectCampaignUnlocks(previous, outgoing) : outgoing;
+                if (!previous || !campaignUnlocksEqual(previous, merged)) {
+                    states.set(target, merged);
+                    if (!queued.has(target)) { queued.add(target); queue.push(target); }
+                }
+            });
+        }
+        return states;
+    }
+    function campaignUnlocksAtStep(byId, entry, key, choices, facts) {
+        const step = byId.get(key);
+        return step ? applyCampaignUnlocks(campaignUnlockStates(byId, entry, choices, facts).get(key), step.unlocks) : emptyCampaignUnlocks();
+    }
+    function stepCampaignRequirements(step) {
+        const requirements = [];
+        const trigger = step && step.trigger || {};
+        const addBuilding = (kind, level) => {
+            if (STRUCTURE_LEVEL_LIMITS[kind]) requirements.push({ type: "building", kind, level: Math.max(1, Number(level) || 1) });
+        };
+        const addAction = action => {
+            if (!CAMPAIGN_ACTIONS.includes(action)) return;
+            requirements.push({ type: "action", action });
+            const building = CAMPAIGN_ACTION_BUILDING_REQUIREMENTS[action];
+            if (building) addBuilding(building.kind, building.level);
+        };
+        const triggerKind = BUILDING_METRIC_KINDS[trigger.type];
+        if (triggerKind) addBuilding(triggerKind, trigger.type.endsWith("_level") ? trigger.value : trigger.type.endsWith("_upgrade") ? 2 : 1);
+        if (trigger.type === "structure_level") addBuilding(trigger.kind, trigger.value);
+        if (trigger.type === "building_selected") addBuilding(trigger.kind, step.guide && step.guide.target === "upgrade_building" ? 2 : 1);
+        if (trigger.type === "structure_upgrade") addBuilding(trigger.kind, 2);
+        if (trigger.type === "nuke") addAction("nuke");
+        if (trigger.type === "fleet") {
+            const fleetAction = { TransportShip: "transport_fleet", TradeShip: "trade_ship", Warship: "warship" }[trigger.unit];
+            if (fleetAction) addAction(fleetAction);
+        }
+        const uiTargets = [trigger.action, step.guide && step.guide.target].filter(value => typeof value === "string");
+        uiTargets.forEach(target => {
+            const dock = /^dock_(city|factory|port|bunker|farm)$/.exec(target);
+            if (dock) addBuilding(dock[1] === "bunker" ? "Bunker" : dock[1][0].toUpperCase() + dock[1].slice(1), 1);
+            if (target === "dock_trade_ship") addAction("trade_ship");
+            if (target === "dock_warship" || target === "map_build_warship") addAction("warship");
+            if (target === "dock_nuke" || target === "map_nuke" || target === "map_nuke_launch") addAction("nuke");
+            if (target === "map_fleet") addAction("transport_fleet");
+        });
+        return requirements;
+    }
     function zoomOutProgress(facts) {
         const start = Number(facts && facts.camera_zoom_start);
         const floor = Number(facts && facts.camera_zoom_floor);
@@ -158,7 +288,6 @@
         const add = value => { if (typeof value === "string" && value && value !== "player") refs.add(value); };
         if (!object(definition)) return refs;
         const settings = definition.settings || {};
-        add(settings.buildings_unlock_after_defeated);
         add(settings.campaign_support && settings.campaign_support.after_defeated);
         Object.values(object(definition.speakers) ? definition.speakers : {}).forEach(speaker => add(speaker && speaker.faction));
         (Array.isArray(definition.steps) ? definition.steps : []).forEach(step => {
@@ -187,10 +316,6 @@
         if (!removed.size || !object(result)) return { definition: result, adjusted };
 
         const settings = object(result.settings) ? result.settings : {};
-        if (removed.has(settings.buildings_unlock_after_defeated)) {
-            delete settings.buildings_unlock_after_defeated;
-            adjusted.settings_cleared++;
-        }
         if (object(settings.campaign_support) && removed.has(settings.campaign_support.after_defeated)) {
             delete settings.campaign_support;
             adjusted.settings_cleared++;
@@ -314,6 +439,18 @@
         return { x: rect.left + thumbSize / 2 + fromLeft * usable, y: rect.top + rect.height / 2 };
     }
 
+    function resolveUiRangeGuideAnchor(element, value, targetValue) {
+        const start = resolveUiRangeAnchor(element, value), end = resolveUiRangeAnchor(element, targetValue);
+        if (!start || !end) return null;
+        const frame = resolveUiAnchor(element);
+        return {
+            x: start.x, y: start.y, toX: end.x, toY: end.y,
+            width: frame.width, height: frame.height,
+            spotlightX: frame.x, spotlightY: frame.y,
+            spotlightWidth: frame.width, spotlightHeight: frame.height
+        };
+    }
+
     function validate(definition, roster, options) {
         options = options || {};
         const allowMissingFactionReferences = options.allowMissingFactionReferences === true;
@@ -329,13 +466,12 @@
         knownFields(definition, ["version", "episode_id", "default_locale", "text_namespace", "faction_story_names", "settings", "entry", "menu_guide", "speakers", "strings", "layout", "steps", "reactions"], null, "campaign");
         if (!id(definition.episode_id)) issue(null, "episode_id", "Invalid episode ID.");
         const settings = definition.settings;
-        if (!object(settings) || typeof settings.buildings_enabled !== "boolean" || !Number.isInteger(settings.starting_troops) || settings.starting_troops < 1 || settings.starting_troops > 100000) {
-            issue(null, "settings", "Choose buildings on/off and 1–100000 starting troops.");
+        if (!object(settings) || !Number.isInteger(settings.starting_troops) || settings.starting_troops < 1 || settings.starting_troops > 100000) {
+            issue(null, "settings", "Choose 1–100000 starting troops.");
         }
         if (object(settings)) {
-            if (Object.keys(settings).some(key => !["buildings_enabled", "starting_troops", "starting_gold", "buildings_unlock_after_defeated", "campaign_support"].includes(key))) issue(null, "settings", "Unknown match setting.");
+            if (Object.keys(settings).some(key => !["starting_troops", "starting_gold", "campaign_support"].includes(key))) issue(null, "settings", "Unknown match setting.");
             if (settings.starting_gold != null && (!Number.isInteger(settings.starting_gold) || settings.starting_gold < 0 || settings.starting_gold > 1000000)) issue(null, "settings.starting_gold", "Choose 0–1000000 starting gold.");
-            if (settings.buildings_unlock_after_defeated != null && typeof settings.buildings_unlock_after_defeated !== "string") issue(null, "settings.buildings_unlock_after_defeated", "Choose a faction that unlocks construction.");
             if (settings.campaign_support != null) {
                 const support = settings.campaign_support;
                 if (!object(support) || Object.keys(support).some(key => !["after_defeated", "share_percent"].includes(key)) || typeof support.after_defeated !== "string" || !Number.isInteger(support.share_percent) || support.share_percent < 1 || support.share_percent > 100) issue(null, "settings.campaign_support", "Choose a valid milestone and 1–100 percent share.");
@@ -373,7 +509,6 @@
                 if (faction.alliance_group != null && (typeof faction.alliance_group !== "string" || !/^[a-z][a-z0-9_]{0,63}$/.test(faction.alliance_group))) issue(null, "roster.factions.alliance_group", "Use a lowercase alliance group ID.");
                 if (faction.avatar != null && (!/^[a-z][a-z0-9_]*$/.test(faction.avatar) || faction.avatar !== "null" && options.hasAvatar && !options.hasAvatar(faction.avatar))) issue(null, "roster.factions.avatar", "Choose an existing portrait for " + faction.name + ".");
             });
-            if (!allowMissingFactionReferences && object(settings) && settings.buildings_unlock_after_defeated && !rosterFactions.has(settings.buildings_unlock_after_defeated)) issue(null, "settings.buildings_unlock_after_defeated", "Construction unlock refers to an unknown faction.");
             if (!allowMissingFactionReferences && object(settings) && object(settings.campaign_support) && !rosterFactions.has(settings.campaign_support.after_defeated)) issue(null, "settings.campaign_support.after_defeated", "Support milestone refers to an unknown faction.");
         }
         const strings = definition.strings;
@@ -439,16 +574,30 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter"],
-            end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game"]
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "unlocks"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "unlocks"],
+            end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
         };
         steps.filter(object).forEach(step => {
             knownFields(step, stepFields[step.type] || ["id", "type"], step, "fields");
             if (!TYPES.includes(step.type)) issue(step, "type", "Unknown step type.");
             if (own(step, "attack_ratio_on_enter") && (!Number.isFinite(step.attack_ratio_on_enter) || step.attack_ratio_on_enter < 0.05 || step.attack_ratio_on_enter > 1)) issue(step, "attack_ratio_on_enter", "Attack ratio must be between 0.05 and 1.");
+            if (own(step, "unlocks")) {
+                const unlocks = step.unlocks;
+                knownFields(unlocks, ["buildings", "actions"], step, "unlocks");
+                if (!object(unlocks)) issue(step, "unlocks", "Unlocks must list building levels and available actions.");
+                else {
+                    if (unlocks.buildings != null) {
+                        if (!object(unlocks.buildings) || Array.isArray(unlocks.buildings)) issue(step, "unlocks.buildings", "Building unlocks must map building names to levels.");
+                        else Object.entries(unlocks.buildings).forEach(([kind, level]) => {
+                            if (!own(STRUCTURE_LEVEL_LIMITS, kind) || !Number.isInteger(level) || level < 1 || level > STRUCTURE_LEVEL_LIMITS[kind]) issue(step, "unlocks.buildings", "Unknown building or invalid unlock level: " + kind + " " + level + ".");
+                        });
+                    }
+                    if (unlocks.actions != null && (!Array.isArray(unlocks.actions) || new Set(unlocks.actions).size !== unlocks.actions.length || unlocks.actions.some(action => !CAMPAIGN_ACTIONS.includes(action)))) issue(step, "unlocks.actions", "Choose distinct supported campaign actions.");
+                }
+            }
             if (own(step, "wait_before") && (typeof step.wait_before !== "boolean" || !["scene", "choice"].includes(step.type))) issue(step, "wait_before", "The one-second reveal wait only applies to dialogue and decisions.");
             if (own(step, "campaign_assault_on_enter")) {
                 const assault = step.campaign_assault_on_enter;
@@ -591,6 +740,9 @@
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
                     } else if (trigger.type === "building_selected") {
                         if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
+                    } else if (trigger.type === "structure_upgrade") {
+                        if (!own(STRUCTURE_LEVEL_LIMITS, trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type for this upgrade.");
+                        if (!Number.isInteger(trigger.value) || trigger.value < 1) issue(step, "trigger.value", "Choose how many upgrades must complete.");
                     } else if (trigger.type === "camera_target") {
                         if (!trigger.target) issue(step, "trigger.target", "Choose a faction or the player as the camera target.");
                         if (!Number.isFinite(trigger.distance) || trigger.distance <= 0) issue(step, "trigger.distance", "Set the maximum distance from the camera target.");
@@ -706,7 +858,7 @@
             if (reaction.outcome != null && reaction.choices != null) issue(null, "reactions", "Choose an automatic result or negotiation choices, not both.");
             if (type === "support" && (reaction.outcome != null || reaction.gold_cost != null || reaction.choices != null)) issue(null, "reactions", "Support notices cannot change diplomacy.");
         });
-        const edges = step => [step.next].concat((Array.isArray(step.routes) ? step.routes : []).map(r => r && r.next), (Array.isArray(step.choices) ? step.choices : []).map(c => c && c.next)).filter(target => byId.has(target));
+        const edges = step => campaignEdges(step, byId);
         const menuFlowReachable = new Set();
         if (object(definition.menu_guide) && byId.has(definition.menu_guide.entry)) {
             const visitMenu = key => { if (menuFlowReachable.has(key) || !byId.has(key)) return; menuFlowReachable.add(key); edges(byId.get(key)).forEach(visitMenu); };
@@ -727,6 +879,23 @@
         const reached = new Set();
         const visit = key => { if (reached.has(key) || !byId.has(key)) return; reached.add(key); edges(byId.get(key)).forEach(visit); };
         visit(definition.entry);
+        const unlockStateByStep = campaignUnlockStates(byId, definition.entry);
+        reached.forEach(key => {
+            const step = byId.get(key);
+            const policy = applyCampaignUnlocks(unlockStateByStep.get(key), step.unlocks);
+            const seenRequirements = new Set();
+            stepCampaignRequirements(step).forEach(requirement => {
+                const requirementKey = JSON.stringify(requirement);
+                if (seenRequirements.has(requirementKey)) return;
+                seenRequirements.add(requirementKey);
+                if (requirement.type === "building") {
+                    const available = Number(policy.buildings[requirement.kind]) || 0;
+                    if (available < requirement.level) issue(step, "unlocks", "This route reaches the step without " + requirement.kind + " level " + requirement.level + " unlocked (available: " + available + ").");
+                } else if (!campaignAllowsAction(policy, requirement.action)) {
+                    issue(step, "unlocks", "This route reaches the step without the " + requirement.action + " action unlocked.");
+                }
+            });
+        });
         byId.forEach(step => { if (!reached.has(step.id) && !menuFlowReachable.has(step.id)) warnings.push({ step: step.id, field: "id", message: "This step is not connected to either flow." }); });
         const ends = new Set(steps.filter(s => s && s.type === "end").map(s => s.id));
         let changed = true;
@@ -763,7 +932,8 @@
         // Each run owns its definition; editor changes cannot mutate an active game.
         definition = copy(definition);
         const byId = new Map(definition.steps.map(step => [step.id, step]));
-        const state = { id: null, line: 0, choices: Object.create(null), completed: [], reactionsShown: [], reactionChoices: Object.create(null), contactsResolved: [], firstContactTarget: null, done: false };
+        const campaignEntry = entry || definition.entry;
+        const state = { id: null, line: 0, choices: Object.create(null), completed: [], reactionsShown: [], reactionChoices: Object.create(null), contactsResolved: [], firstContactTarget: null, done: false, unlocks: emptyCampaignUnlocks() };
         const readClock = () => {
             const value = typeof clock === "function" ? clock() : (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
             return Number.isFinite(value) ? value : Date.now();
@@ -773,6 +943,7 @@
         function enter(key) {
             if (!byId.has(key)) throw new Error("Unknown campaign destination: " + key);
             state.id = key; state.line = 0; state.done = false;
+            state.unlocks = applyCampaignUnlocks(state.unlocks, byId.get(key).unlocks);
             baseline = copy(facts); uiBaseline = { ...ui };
             currentTimeMs = readClock();
             waitUntilMs = byId.get(key).wait_before === true ? currentTimeMs + WAIT_MS : null;
@@ -932,14 +1103,14 @@
                     id: "reaction-" + activeReaction.instanceId, type: hasChoices ? "choice" : "scene", speaker: reaction.speaker || factionSpeaker,
                     title_key: reaction.title_key, body_key: reaction.body_key, presentation: "dialogue"
                 };
-                return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
+                return { definition, step: response, line: response, progress: progress(), paused: true, paused_action: null, done: false, choices: reaction.choices || [], state, unlocks: copy(state.unlocks), reaction: reaction.id, reactionInstance: activeReaction.instanceId, reactionTarget: activeReaction.target, reactionData: reaction };
             }
             const line = step.lines ? step.lines[state.line] : step;
             const waitRemainingMs = waitUntilMs === null ? 0 : Math.max(0, waitUntilMs - currentTimeMs);
             const expansionStarted = step.paused_action === "expand_once_then_resume"
                 && Number(facts.wilderness_orders_accepted || 0) > Number(baseline.wilderness_orders_accepted || 0);
             const paused = ["scene", "choice", "end"].includes(step.type) || (step.pause_game === true && !expansionStarted);
-            return { definition, step, line, progress: progress(), paused, paused_action: paused ? step.paused_action || null : null, done: state.done, choices: step.choices || [], state, waiting: waitRemainingMs > 0, wait_remaining_ms: waitRemainingMs };
+            return { definition, step, line, progress: progress(), paused, paused_action: paused ? step.paused_action || null : null, done: state.done, choices: step.choices || [], state, unlocks: copy(state.unlocks), waiting: waitRemainingMs > 0, wait_remaining_ms: waitRemainingMs };
         }
         function setPaused(paused) { externallyPaused = Boolean(paused); }
         function advance(choiceId, expectedStepId, allowUnavailable) {
@@ -1020,6 +1191,7 @@
                 const decision = byId.get(decisionId);
                 if (decision && decision.type === "choice" && Array.isArray(decision.choices) && decision.choices.some(answer => answer.id === answerId)) state.choices[decisionId] = answerId;
             });
+            state.unlocks = campaignUnlocksAtStep(byId, campaignEntry, key, state.choices, facts);
             enter(key);
             return view();
         }
@@ -1050,7 +1222,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
+    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, STRUCTURE_LEVEL_LIMITS, CAMPAIGN_ACTIONS, CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, emptyCampaignUnlocks, applyCampaignUnlocks, campaignAllowsBuilding, campaignAllowsAction, campaignUnlockStates, campaignUnlocksAtStep, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, resolveUiRangeGuideAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

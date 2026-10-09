@@ -254,6 +254,7 @@ impl SowApp {
             ui: UiState {
                 app,
                 tutorial_active: false,
+                campaign_session_id: 0,
                 tutorial_camera_only: false,
                 tutorial_paused_action: None,
                 tutorial_waiting_for_first_attack: false,

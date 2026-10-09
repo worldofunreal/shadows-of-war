@@ -587,6 +587,7 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 }
 
 .sow-hud__building-btn {
+    position: relative;
     min-width: 0;
     min-height: 54px;
     flex: 1 1 0;
@@ -761,6 +762,24 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     cursor: default;
     opacity: 0.35;
     filter: grayscale(0.6);
+}
+.sow-hud__building-btn.is-campaign-locked::after {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    left: 2px;
+    overflow: hidden;
+    padding: 1px 2px;
+    border-radius: 3px;
+    background: rgb(9 15 19 / 88%);
+    color: #f2d7a0;
+    content: attr(data-lock-label);
+    font-size: 7px;
+    line-height: 1.2;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .sow-hud__fleet-strip {
@@ -1650,6 +1669,20 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
     font-weight: 500;
     line-height: 1.35;
     overflow-wrap: anywhere;
+}
+
+.sow-hud__map-sector .sow-hud__map-action-reason {
+    display: -webkit-box;
+    max-width: 78px;
+    color: var(--sow-gold-bright);
+    font-size: clamp(7px, 2.2vw, 8px);
+    font-weight: 750;
+    line-height: 1.05;
+    text-align: center;
+    text-shadow: 0 1px 3px #000;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
 }
 
 .sow-hud__map-sector .sow-hud__map-action-content,

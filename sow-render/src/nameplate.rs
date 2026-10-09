@@ -8,7 +8,6 @@ const SPAWN_LOCAL_SIDE: usize = sow_core::config::SPAWN_RADIUS as usize * 2 + 1;
 const SPAWN_LOCAL_AREA: usize = SPAWN_LOCAL_SIDE * SPAWN_LOCAL_SIDE;
 const HUMAN_AVATAR_SCALE: f32 = 4.0;
 const BOT_AVATAR_SCALE: f32 = 3.0;
-const NATION_AVATAR_SCALE: f32 = 3.6;
 const BADGE_SCALE: f32 = 1.8;
 const TROOPS_SCALE: f32 = 1.30;
 const NAMEPLATE_SIZE_DEADZONE: f32 = 0.2;
@@ -23,8 +22,24 @@ pub enum NameplatePresentation {
     Hidden,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NameplateStyle {
+    HumanGhost,
+    Tribe,
+}
+
+impl NameplateStyle {
+    pub fn for_player(player_type: PlayerType, is_campaign_faction: bool) -> Self {
+        match player_type {
+            PlayerType::Human | PlayerType::Nation => Self::HumanGhost,
+            PlayerType::Bot if is_campaign_faction => Self::HumanGhost,
+            PlayerType::Bot => Self::Tribe,
+        }
+    }
+}
+
 pub trait NameplateCapacityPlan {
-    fn is_human(&self) -> bool;
+    fn has_human_priority(&self) -> bool;
     fn full_instance_count(&self) -> Option<usize>;
     fn select_presentation(&mut self, presentation: NameplatePresentation);
     fn selected_presentation(&self) -> NameplatePresentation;
@@ -33,7 +48,7 @@ pub trait NameplateCapacityPlan {
 pub fn assign_nameplate_capacity<T: NameplateCapacityPlan>(plans: &mut [T], mut remaining: usize) {
     const COMPACT_INSTANCES: usize = 2;
 
-    for plan in plans.iter_mut().filter(|plan| plan.is_human()) {
+    for plan in plans.iter_mut().filter(|plan| plan.has_human_priority()) {
         if remaining >= COMPACT_INSTANCES {
             plan.select_presentation(NameplatePresentation::Compact);
             remaining -= COMPACT_INSTANCES;
@@ -42,7 +57,7 @@ pub fn assign_nameplate_capacity<T: NameplateCapacityPlan>(plans: &mut [T], mut 
         }
     }
 
-    for plan in plans.iter_mut().filter(|plan| plan.is_human()) {
+    for plan in plans.iter_mut().filter(|plan| plan.has_human_priority()) {
         if plan.selected_presentation() != NameplatePresentation::Compact {
             continue;
         }
@@ -59,7 +74,7 @@ pub fn assign_nameplate_capacity<T: NameplateCapacityPlan>(plans: &mut [T], mut 
         }
     }
 
-    for plan in plans.iter_mut().filter(|plan| !plan.is_human()) {
+    for plan in plans.iter_mut().filter(|plan| !plan.has_human_priority()) {
         if let Some(full_count) = plan.full_instance_count()
             && full_count <= remaining
         {
@@ -84,17 +99,16 @@ pub struct NameplateMetrics {
 }
 
 impl NameplateMetrics {
-    pub fn compute(scaled_size: f32, player_type: PlayerType, show_bot_avatars: bool) -> Self {
+    pub fn compute(scaled_size: f32, style: NameplateStyle, show_bot_avatars: bool) -> Self {
         let render_size = if scaled_size.is_finite() {
             scaled_size.max(7.0)
         } else {
             7.0
         };
-        let avatar_scale = match player_type {
-            PlayerType::Human => HUMAN_AVATAR_SCALE,
-            PlayerType::Bot if show_bot_avatars => BOT_AVATAR_SCALE,
-            PlayerType::Nation => NATION_AVATAR_SCALE,
-            PlayerType::Bot => 0.0,
+        let avatar_scale = match style {
+            NameplateStyle::HumanGhost => HUMAN_AVATAR_SCALE,
+            NameplateStyle::Tribe if show_bot_avatars => BOT_AVATAR_SCALE,
+            NameplateStyle::Tribe => 0.0,
         };
         let avatar_diameter = if avatar_scale > 0.0 {
             (render_size * avatar_scale).max(4.0)
@@ -1458,7 +1472,7 @@ mod tests {
     #[test]
     fn full_nameplate_and_badges_fit_the_owned_rectangle_at_each_zoom() {
         let center = ScreenPoint([40.0, 50.0]);
-        let metrics = NameplateMetrics::compute(16.0, PlayerType::Human, true);
+        let metrics = NameplateMetrics::compute(16.0, NameplateStyle::HumanGhost, true);
         let empty_text = PreparedText::default();
         let undecorated_status = NameplateStatus {
             ..Default::default()
@@ -1534,16 +1548,36 @@ mod tests {
     }
 
     #[test]
-    fn nameplate_metrics_preserve_human_bot_and_nation_avatar_sizes() {
-        let human = NameplateMetrics::compute(14.0, PlayerType::Human, true);
-        let bot = NameplateMetrics::compute(14.0, PlayerType::Bot, true);
-        let nation = NameplateMetrics::compute(14.0, PlayerType::Nation, true);
+    fn global_nameplate_styles_group_human_ghost_nation_and_campaign_factions() {
+        assert_eq!(
+            NameplateStyle::for_player(PlayerType::Human, false),
+            NameplateStyle::HumanGhost
+        );
+        assert_eq!(
+            NameplateStyle::for_player(PlayerType::Nation, false),
+            NameplateStyle::HumanGhost
+        );
+        assert_eq!(
+            NameplateStyle::for_player(PlayerType::Bot, false),
+            NameplateStyle::Tribe
+        );
+        assert_eq!(
+            NameplateStyle::for_player(PlayerType::Bot, true),
+            NameplateStyle::HumanGhost
+        );
+
+        let human = NameplateMetrics::compute(14.0, NameplateStyle::HumanGhost, true);
+        let campaign_bot = NameplateMetrics::compute(
+            14.0,
+            NameplateStyle::for_player(PlayerType::Bot, true),
+            true,
+        );
+        let tribe = NameplateMetrics::compute(14.0, NameplateStyle::Tribe, true);
         assert_eq!(human.avatar_diameter, 14.0 * HUMAN_AVATAR_SCALE);
-        assert_eq!(bot.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
-        assert_eq!(nation.avatar_diameter, 14.0 * NATION_AVATAR_SCALE);
+        assert_eq!(campaign_bot.avatar_diameter, human.avatar_diameter);
+        assert_eq!(tribe.avatar_diameter, 14.0 * BOT_AVATAR_SCALE);
         assert_eq!(human.badge_size(), human.avatar_diameter());
-        assert_eq!(bot.badge_size(), bot.avatar_diameter());
-        assert_eq!(nation.badge_size(), nation.avatar_diameter());
+        assert_eq!(tribe.badge_size(), tribe.avatar_diameter());
     }
 
     #[test]
@@ -1655,14 +1689,14 @@ mod tests {
     }
 
     struct TestCapacityPlan {
-        human: bool,
+        human_priority: bool,
         full_count: Option<usize>,
         selected: NameplatePresentation,
     }
 
     impl NameplateCapacityPlan for TestCapacityPlan {
-        fn is_human(&self) -> bool {
-            self.human
+        fn has_human_priority(&self) -> bool {
+            self.human_priority
         }
 
         fn full_instance_count(&self) -> Option<usize> {
@@ -1680,7 +1714,7 @@ mod tests {
 
     fn capacity_plan(human: bool, full_count: Option<usize>) -> TestCapacityPlan {
         TestCapacityPlan {
-            human,
+            human_priority: human,
             full_count,
             selected: NameplatePresentation::Hidden,
         }

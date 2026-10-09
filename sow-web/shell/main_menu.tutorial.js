@@ -43,6 +43,7 @@
         resolvedReactions: new Set(),
         priorChoices: Object.create(null),
         failedEpisode: null,
+        lastUnlockCommand: null,
         bootEpisode: null,
         lastPhase: null,
         modalObserver: null,
@@ -321,6 +322,7 @@
         if (!/^[a-z][a-z0-9_]{0,63}$/.test(episodeId) || runtime.starting === episodeId || (runtime.active && runtime.episodeId === episodeId)) return;
         if (runtime.menuGuide) dismissMenuGuide();
         runtime.priorChoices = Object.create(null);
+        runtime.lastUnlockCommand = null;
         var generation = ++runtime.generation;
         runtime.starting = episodeId;
         runtime.failedEpisode = null;
@@ -383,6 +385,7 @@
             runtime.definition = data.definition;
             runtime.machine = window.SOWCampaign.create(data.definition, undefined, data.roster);
             runtime.active = true;
+            runtime.lastUnlockCommand = null;
             runtime.uiCounts = Object.create(null);
             runtime.uiPaused = null;
             runtime.cameraOnly = null;
@@ -475,13 +478,10 @@
             result = window.SOWCampaign.resolveUiAnchor(source, spotlightPanel);
             if (guide.target === "attack_ratio" && step.trigger && step.trigger.type === "ui"
                 && step.trigger.action === "attack_ratio" && source.type === "range") {
-                var sliderStart = window.SOWCampaign.resolveUiRangeAnchor(source, Number(source.value));
                 var sliderMin = Number(source.min), sliderMax = Number(source.max);
                 var ratioTarget = sliderMin + (sliderMax - sliderMin) * Number(step.trigger.value || 1);
-                var sliderEnd = window.SOWCampaign.resolveUiRangeAnchor(source, ratioTarget);
-                if (!sliderStart || !sliderEnd) return null;
-                result.x = sliderStart.x; result.y = sliderStart.y;
-                result.toX = sliderEnd.x; result.toY = sliderEnd.y;
+                result = window.SOWCampaign.resolveUiRangeGuideAnchor(source, Number(source.value), ratioTarget);
+                if (!result) return null;
             }
             if (guide.kind === "ui" && step.trigger && step.trigger.type === "ui" && guide.target === "hud_center_camera") {
                 result.toX = result.x; result.toY = result.y;
@@ -628,6 +628,12 @@
             if (Number.isFinite(targetDistance)) facts.camera_target_distance = targetDistance;
         }
         var machineView = runtime.machine.update(facts, runtime.uiCounts);
+        var campaignSessionId = Number(tutorial.campaign_session_id) || 0;
+        var unlockCommandKey = campaignSessionId + ":" + JSON.stringify(machineView.unlocks || { buildings: {}, actions: [] });
+        if (campaignSessionId > 0 && runtime.lastUnlockCommand !== unlockCommandKey
+            && send("set_campaign_unlocks", { campaign_session_id: campaignSessionId, unlocks: machineView.unlocks || { buildings: {}, actions: [] } })) {
+            runtime.lastUnlockCommand = unlockCommandKey;
+        }
         if (!runtime.menuGuide && machineView.step) {
             var visibleStep = runtime.definition.steps.find(function (step) {
                 return step.id === machineView.step.id;
@@ -1053,6 +1059,7 @@
         runtime.resolvedReactions = new Set();
         runtime.lastActionStepId = null;
         runtime.failedEpisode = null;
+        runtime.lastUnlockCommand = null;
         runtime.markerId = undefined;
         if (runtime.view) { runtime.view.destroy(); runtime.view = null; }
         var error = document.getElementById("sow-campaign-error");

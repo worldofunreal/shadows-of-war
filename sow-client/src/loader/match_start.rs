@@ -82,19 +82,11 @@ impl SowApp {
         for key in options.keys() {
             if !matches!(
                 key.as_str(),
-                "buildings_enabled"
-                    | "starting_troops"
-                    | "starting_gold"
-                    | "buildings_unlock_after_defeated"
-                    | "campaign_support"
+                "starting_troops" | "starting_gold" | "campaign_support"
             ) {
                 return Err(format!("Campaign setting is not allowed: {key}"));
             }
         }
-        let buildings_enabled = options
-            .get("buildings_enabled")
-            .and_then(serde_json::Value::as_bool)
-            .ok_or_else(|| "Campaign buildings_enabled is invalid.".to_string())?;
         let starting_troops = options
             .get("starting_troops")
             .and_then(serde_json::Value::as_f64)
@@ -116,15 +108,6 @@ impl SowApp {
                 .find(|faction| faction.id == reference || faction.name == reference)
                 .map(|faction| faction.name.clone())
         };
-        let buildings_unlock_after_defeated = options
-            .get("buildings_unlock_after_defeated")
-            .map(|value| {
-                value
-                    .as_str()
-                    .and_then(&resolve_faction_display_name)
-                    .ok_or_else(|| "Campaign building unlock target is invalid.".to_string())
-            })
-            .transpose()?;
         let campaign_support = options
             .get("campaign_support")
             .map(|value| {
@@ -193,8 +176,7 @@ impl SowApp {
                 starting_troops,
                 starting_gold,
                 global_speed_multiplier: 0.5,
-                buildings_enabled,
-                buildings_unlock_after_defeated,
+                buildings_enabled: true,
                 campaign_support,
                 ..Default::default()
             },
@@ -212,6 +194,7 @@ impl SowApp {
         config.player_leader = leader;
         config.player_civilization = leader.civilization();
         self.net.is_offline = true;
+        self.ui.campaign_session_id = self.ui.campaign_session_id.wrapping_add(1).max(1);
         self.sim.offline_tick_timer = 0.0;
         self.sim.offline_last_update = web_time::Instant::now();
         self.ui.tutorial_waiting_for_first_attack = tutorial
