@@ -483,12 +483,6 @@
                 result = window.SOWCampaign.resolveUiRangeGuideAnchor(source, Number(source.value), ratioTarget);
                 if (!result) return null;
             }
-            if (guide.kind === "ui" && step.trigger && step.trigger.type === "ui" && guide.target === "hud_center_camera") {
-                result.toX = result.x; result.toY = result.y;
-                result.spotlightX = result.x; result.spotlightY = result.y; result.dimOutside = true;
-                result.x = (root.clientWidth || window.innerWidth) * 0.5;
-                result.y = (root.clientHeight || window.innerHeight) * 0.5;
-            }
         }
         if (guide.gesture === "drag" && guide.to) {
             if (guide.kind === "world") {

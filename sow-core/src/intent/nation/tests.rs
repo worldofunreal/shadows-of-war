@@ -1621,15 +1621,6 @@ mod bot_iq_alliance_tests {
             engine.campaign_assault_targets.get(&1),
             Some(&vec![2, 4, 5])
         );
-        assert_eq!(
-            engine
-                .campaign_assault
-                .as_ref()
-                .unwrap()
-                .focus_targets
-                .get(&1),
-            Some(&5)
-        );
         assert_eq!(incoming_for(&engine, 3), former_ally_in_flight);
         assert!(
             !engine
@@ -1773,6 +1764,7 @@ mod bot_iq_alliance_tests {
         for ally_id in [7, 8, 9, 10, 11] {
             boudica.alliances.push(ally_id);
         }
+        boudica.alliances.push(13);
         state.register_player(boudica);
         state.map.terrain[9] = MapTile::from_byte(0xC0);
         state.map.set_owner_id(9, 0, 6);
@@ -1792,7 +1784,7 @@ mod bot_iq_alliance_tests {
             (10, true, true),
             (11, false, false),
             (12, false, false),
-            (13, false, false),
+            (13, false, true),
         ] {
             let mut faction =
                 Player::new_bot(id, format!("Faction {id}"), [0.4, 0.4, 0.4], &config);
@@ -1833,11 +1825,11 @@ mod bot_iq_alliance_tests {
         );
         assert_eq!(
             engine.campaign_assault_targets.get(&1),
-            Some(&vec![6, 7, 8, 9])
+            Some(&vec![6, 7, 8, 9, 11])
         );
         assert_eq!(
             engine.fleets.len(),
-            20,
+            25,
             "each Roman force must share its first phase across the reachable live targets"
         );
         for roman_id in 1..=5 {
@@ -1847,12 +1839,12 @@ mod bot_iq_alliance_tests {
                 .filter(|fleet| fleet.owner_id == roman_id)
                 .map(|fleet| fleet.target_owner)
                 .collect();
-            assert_eq!(targets, [6, 7, 8, 9].into_iter().collect());
-            assert!((engine.state.player(roman_id).unwrap().troops - 750.0).abs() < 0.01);
+            assert_eq!(targets, [6, 7, 8, 9, 11].into_iter().collect());
+            assert!((engine.state.player(roman_id).unwrap().troops - 1_950.0).abs() < 0.01);
         }
         let first_phase: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
         assert!(
-            (first_phase - 1_250.0).abs() < 0.01,
+            (first_phase - 3_250.0).abs() < 0.01,
             "the immediate phase releases one quarter of the configured 2:1 force"
         );
         for phase in 2..=4 {
@@ -1860,10 +1852,10 @@ mod bot_iq_alliance_tests {
             engine.update_campaign_assault();
             assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, phase);
             let released: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
-            assert!(released <= 5_000.0 + 0.01);
+            assert!(released <= 13_000.0 + 0.01);
         }
         let full_window: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
-        assert!((full_window - 5_000.0).abs() < 0.01);
+        assert!((full_window - 13_000.0).abs() < 0.01);
         let served: std::collections::HashSet<_> = engine
             .campaign_assault
             .as_ref()
@@ -1872,14 +1864,14 @@ mod bot_iq_alliance_tests {
             .keys()
             .copied()
             .collect();
-        assert_eq!(served, [6, 7, 8, 9].into_iter().collect());
+        assert_eq!(served, [6, 7, 8, 9, 11].into_iter().collect());
 
         engine.fleets.clear();
         engine.state.tick += 30;
         engine.update_campaign_assault();
         assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
         let next_window_phase: f64 = engine.fleets.iter().map(|fleet| fleet.troops).sum();
-        assert!((next_window_phase - 1_250.0).abs() < 0.01);
+        assert!((next_window_phase - 3_250.0).abs() < 0.01);
     }
 
     #[test]
@@ -1998,7 +1990,7 @@ mod bot_iq_alliance_tests {
     }
 
     #[test]
-    fn active_campaign_assault_forces_do_not_issue_unscheduled_ai_attacks() {
+    fn active_campaign_assault_forces_expand_neutrally_without_unscheduled_player_attacks() {
         use crate::engine::CampaignAssaultState;
         use crate::game_config::BotDifficulty;
         use crate::protocol::{CampaignRelation, Team};
@@ -2050,7 +2042,7 @@ mod bot_iq_alliance_tests {
             &mut decisions,
         );
 
-        assert!(decisions.is_empty());
+        assert_eq!(attack_targets(&decisions), vec![0]);
     }
 
     #[test]

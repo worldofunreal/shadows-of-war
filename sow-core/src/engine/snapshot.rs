@@ -41,6 +41,11 @@ impl SowEngine {
             .players
             .iter()
             .map(|p| {
+                let nuke_city_level = if p.player_type == crate::player::PlayerType::Human {
+                    1
+                } else {
+                    crate::game::NukeKind::AtomBomb.required_city_level()
+                };
                 let (cx, cy) = if p.tile_count > 0 {
                     (
                         (p.sum_x / p.tile_count as u64) as f32,
@@ -109,8 +114,7 @@ impl SowEngine {
                         && self.buildings.iter().any(|building| {
                             building.owner_id == p.id
                                 && building.kind == crate::game::BuildingKind::City
-                                && building.active_level()
-                                    >= crate::game::NukeKind::AtomBomb.required_city_level()
+                                && building.active_level() >= nuke_city_level
                                 && self.silo_cooldowns.get(&building.id).copied().unwrap_or(0) == 0
                         }),
                     nuke_cooldown_ticks: self
@@ -119,8 +123,7 @@ impl SowEngine {
                         .filter(|building| {
                             building.owner_id == p.id
                                 && building.kind == crate::game::BuildingKind::City
-                                && building.active_level()
-                                    >= crate::game::NukeKind::AtomBomb.required_city_level()
+                                && building.active_level() >= nuke_city_level
                         })
                         .map(|building| self.silo_cooldowns.get(&building.id).copied().unwrap_or(0))
                         .min()

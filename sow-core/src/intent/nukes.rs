@@ -18,6 +18,11 @@ impl SowEngine {
         if !player.alive || player.gold < self.state.config.nuke_cost {
             return;
         }
+        let required_city_level = if player.player_type == crate::player::PlayerType::Human {
+            1
+        } else {
+            crate::game::NukeKind::AtomBomb.required_city_level()
+        };
 
         let w = self.state.map.width;
         let area = w.saturating_mul(self.state.map.height);
@@ -36,7 +41,7 @@ impl SowEngine {
                 b.kind == BuildingKind::City
                     && b.owner_id == player_id
                     && !b.under_construction
-                    && b.active_level() >= crate::game::NukeKind::AtomBomb.required_city_level()
+                    && b.active_level() >= required_city_level
                     && self.silo_cooldowns.get(&b.id).copied().unwrap_or(0) == 0
             })
             .min_by_key(|b| {

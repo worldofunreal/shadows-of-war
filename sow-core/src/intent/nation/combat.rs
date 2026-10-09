@@ -256,8 +256,10 @@ impl SowEngine {
             .as_ref()
             .is_some_and(|assault| assault.attacker_ids.contains(&bot_id));
         // ── Attack logic (both Bots and Nations) ────────────────────
-        if slot.do_attack && !assault_controls_attacks {
-            let campaign_target = if let Some(assault) = &self.campaign_assault {
+        if slot.do_attack {
+            let campaign_target = if assault_controls_attacks {
+                None
+            } else if let Some(assault) = &self.campaign_assault {
                 assault.focus_targets.get(&bot_id).copied()
             } else {
                 self.campaign_assault_targets
@@ -271,8 +273,9 @@ impl SowEngine {
                         })
                     })
             };
-            let ready_retaliation = slot
-                .ghost_retaliation
+            let ready_retaliation = (!assault_controls_attacks)
+                .then_some(slot.ghost_retaliation)
+                .flatten()
                 .filter(|retaliation| retaliation.is_ready_at(self.state.tick));
             if let Some(target_id) = campaign_target
                 && ready_retaliation.is_none()
@@ -322,61 +325,65 @@ impl SowEngine {
             // War still spends iq_points (clamped at zero below); growth and
             // defense never freeze for lack of budget.
             {
-                let tick = self.current_tick_u32();
-                let betray_cd = self.alliance_betray_cooldown_until.get(&bot_id).copied();
-                let bordering_count = neighbor_players.len();
-                let allied_on_border: Vec<u16> = {
-                    let p_me = self.state.player(bot_id).unwrap();
-                    p_me.alliances
-                        .iter()
-                        .copied()
-                        .filter(|id| neighbor_players.contains(id))
-                        .collect()
-                };
                 let mut betray_then_attack: Option<u16> = None;
-                for ally_id in allied_on_border {
-                    let should_betray = {
+                if !assault_controls_attacks {
+                    let tick = self.current_tick_u32();
+                    let betray_cd = self.alliance_betray_cooldown_until.get(&bot_id).copied();
+                    let bordering_count = neighbor_players.len();
+                    let allied_on_border: Vec<u16> = {
                         let p_me = self.state.player(bot_id).unwrap();
-                        let Some(p_ally) = self.state.player(ally_id) else {
-                            continue;
-                        };
-                        if p_ally.is_human() && !human_betrayal_allowed(is_mfo, campaign_relation) {
-                            continue;
-                        }
-                        let mut rng = WyRand::new(
-                            self.state
-                                .seed
-                                .wrapping_add(bot_id as u64)
-                                .wrapping_add(ally_id as u64)
-                                .wrapping_add(tick as u64),
-                        );
-                        maybe_betray_for_attack(
-                            p_me,
-                            p_ally,
-                            bordering_count,
-                            tick,
-                            betray_cd,
-                            &mut rng,
-                        )
+                        p_me.alliances
+                            .iter()
+                            .copied()
+                            .filter(|id| neighbor_players.contains(id))
+                            .collect()
                     };
-                    if should_betray {
-                        betray_then_attack = Some(ally_id);
-                        break;
+                    for ally_id in allied_on_border {
+                        let should_betray = {
+                            let p_me = self.state.player(bot_id).unwrap();
+                            let Some(p_ally) = self.state.player(ally_id) else {
+                                continue;
+                            };
+                            if p_ally.is_human()
+                                && !human_betrayal_allowed(is_mfo, campaign_relation)
+                            {
+                                continue;
+                            }
+                            let mut rng = WyRand::new(
+                                self.state
+                                    .seed
+                                    .wrapping_add(bot_id as u64)
+                                    .wrapping_add(ally_id as u64)
+                                    .wrapping_add(tick as u64),
+                            );
+                            maybe_betray_for_attack(
+                                p_me,
+                                p_ally,
+                                bordering_count,
+                                tick,
+                                betray_cd,
+                                &mut rng,
+                            )
+                        };
+                        if should_betray {
+                            betray_then_attack = Some(ally_id);
+                            break;
+                        }
                     }
-                }
-                if let Some(ally_id) = betray_then_attack {
-                    if let Some(p_me) = self.state.player_mut(bot_id)
-                        && p_me.iq_points >= alliance_cost
-                    {
-                        p_me.iq_points -= alliance_cost;
+                    if let Some(ally_id) = betray_then_attack {
+                        if let Some(p_me) = self.state.player_mut(bot_id)
+                            && p_me.iq_points >= alliance_cost
+                        {
+                            p_me.iq_points -= alliance_cost;
+                        }
+                        decisions.push(BotDecision {
+                            bot_id,
+                            kind: BotDecisionKind::Build,
+                            intent: GameplayIntent::BreakAlliance {
+                                target_player: ally_id,
+                            },
+                        });
                     }
-                    decisions.push(BotDecision {
-                        bot_id,
-                        kind: BotDecisionKind::Build,
-                        intent: GameplayIntent::BreakAlliance {
-                            target_player: ally_id,
-                        },
-                    });
                 }
 
                 // D1 — OpenFront `sendBoatAttackToNearbyTerraNullius` parity:
@@ -437,7 +444,10 @@ impl SowEngine {
                 // `apply_attack_intent` would silently block it anyway.
                 // Neutral campaign factions target a human only to answer an
                 // attack already launched against them.
-                let mut targets: Vec<u16> = neighbor_players
+                let mut targets: Vec<u16> = if assault_controls_attacks {
+                    Vec::new()
+                } else {
+                    neighbor_players
                     .iter()
                     .copied()
                     .filter(|&id| {
@@ -477,7 +487,8 @@ impl SowEngine {
                             true
                         }
                     })
-                    .collect();
+                    .collect()
+                };
 
                 if let Some(retaliation) = ready_retaliation
                     && !targets.contains(&retaliation.attacker_id)
@@ -502,7 +513,8 @@ impl SowEngine {
                 // (is_ai_controlled humans) get the same naval breakout so a
                 // teammate fully enclosed by allies keeps advancing instead
                 // of idling when its border has no enemy contact.
-                let can_fleet = (is_mfo || slot.tier == AiTier::Ghost)
+                let can_fleet = !assault_controls_attacks
+                    && (is_mfo || slot.tier == AiTier::Ghost)
                     && self.campaign_allows_action(crate::campaign::CampaignAction::TransportFleet);
                 let has_port =
                     crate::building::cost::player_has_completed_port(&self.buildings, bot_id);
@@ -782,7 +794,7 @@ impl SowEngine {
                 // (Vanilla tribes are passive food: they expand into neutral
                 // land but never target another player). Active tiers may
                 // initiate once their trigger threshold is reached.
-                let can_initiate = attacks_players;
+                let can_initiate = attacks_players && !assault_controls_attacks;
                 let (mut target_owner, mut is_neutral) = (target_owner, is_neutral);
 
                 // OF odds discipline (AiAttackBehavior parity) — initiation
@@ -924,7 +936,7 @@ impl SowEngine {
                         });
                     }
                 }
-                if slot.tier == AiTier::Nation {
+                if slot.tier == AiTier::Nation && !assault_controls_attacks {
                     self.maybe_launch_nuke(bot_id, decisions, bot_iq, &targets, defender_target);
                 }
             }

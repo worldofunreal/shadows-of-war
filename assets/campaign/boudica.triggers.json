@@ -273,7 +273,7 @@
       "camera_only": true,
       "trigger": {
         "type": "zoom_out_complete",
-        "value": 0.85,
+        "value": 1,
         "scope": "step"
       },
       "marker": {
@@ -514,7 +514,7 @@
         "attacker_team": "Blue",
         "target": "camulodunum"
       },
-      "next": "boudica_outpost_colonia_veterans"
+      "next": "boudica_camulodunum_intro"
     },
     {
       "id": "boudica_aid_kept",
@@ -523,7 +523,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_aid_kept_body",
       "speaker": "boudica",
       "presentation": "dialogue",
-      "next": "boudica_outpost_colonia_veterans"
+      "next": "boudica_camulodunum_intro"
     },
     {
       "id": "boudica_choose_city",
@@ -643,7 +643,7 @@
       },
       "pause_game": true,
       "paused_action": "expand_once_then_resume",
-      "next": "boudica_outpost_tax_collectors"
+      "next": "boudica_outpost_colonia_veterans"
     },
     {
       "id": "boudica_select_city_upgrade",
@@ -773,7 +773,7 @@
       "speaker": "boudica",
       "presentation": "dialogue",
       "wait_before": true,
-      "next": "boudica_camulodunum_intro"
+      "next": "boudica_outpost_tax_collectors"
     },
     {
       "id": "boudica_outpost_tax_collectors",

@@ -196,6 +196,21 @@
         return (count / (useMillions ? 1000000 : 1000)).toFixed(1) + (useMillions ? "M" : "K");
     }
 
+    function formatHudMetric(value) {
+        var amount = Number(value);
+        if (!Number.isFinite(amount)) return "0";
+        var abs = Math.abs(amount);
+        var sign = amount < 0 ? "-" : "";
+        if (abs >= 1000000) return sign + (abs / 1000000).toFixed(1) + "M";
+        if (abs >= 10000) return sign + (abs / 1000).toFixed(1) + "K";
+        return amount.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    }
+
+    function formatHudRate(value) {
+        var amount = Number(value) || 0;
+        return (amount > 0 ? "+" : "") + formatHudMetric(amount) + "/s";
+    }
+
     function notificationAnchor(storyRoot, objective, nameplate, gap) {
         if (storyRoot && !storyRoot.hidden && objective && !objective.hidden) {
             var objectiveRect = objective.getBoundingClientRect();
@@ -343,6 +358,7 @@
             + '    <button class="sow-hud__icon-pill hidden" type="button" data-command="toggle_dev_sidebar" id="sow-hud-dev-btn" aria-label="' + SOW_t("hud.dev_tools") + '" title="' + SOW_t("hud.dev_tools") + '">' + hudIcon("tools", "sow-hud__action-icon") + '</button>'
             + '  </div>'
             + '  <div class="sow-hud__status-right">'
+            + '    <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
             + '    <button class="sow-hud__icon-pill sow-hud__exit-pill" type="button" data-command="prompt_surrender" aria-label="' + SOW_t("hud.leave_match") + '" title="' + SOW_t("hud.leave_match") + '">' + hudIcon("leave", "sow-hud__action-icon") + '</button>'
             + '    <button class="sow-hud__icon-pill" type="button" data-command="toggle_settings" aria-label="' + SOW_t("menu.settings") + '" title="' + SOW_t("menu.settings") + '">' + hudIcon("settings", "sow-hud__action-icon") + '</button>'
             + '    <button class="sow-hud__icon-pill sow-hud__inbox-pill" type="button" data-command="toggle_inbox" aria-label="' + SOW_t("hud.inbox") + '" title="' + SOW_t("hud.inbox") + '">' + hudIcon("inbox") + '<span class="sow-hud__inbox-badge" id="sow-hud-inbox-count" hidden>0</span></button>'
@@ -352,7 +368,12 @@
             + '<div class="sow-hud__nameplate" id="sow-hud-nameplate" hidden>'
             + '  <img class="sow-hud__nameplate-avatar" id="sow-hud-nameplate-avatar" alt="" draggable="false">'
             + '  <div class="sow-hud__nameplate-copy"><strong id="sow-hud-nameplate-name"></strong>'
-            + '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' + hudIcon("troops", "sow-hud__inline-icon") + '</span></div></div>'
+            + '  <div class="sow-hud__nameplate-bar"><i id="sow-hud-nameplate-fill"></i><span class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"></span>' + hudIcon("troops", "sow-hud__inline-icon") + '</span></div>'
+            + '  <div class="sow-hud__nameplate-economy">'
+            + '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--gold" title="' + SOW_t("hud.gold_treasury") + '" aria-label="' + SOW_t("hud.gold_treasury") + '"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b id="sow-hud-nameplate-gold">0</b></span>'
+            + '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--gold-rate" title="' + SOW_t("hud.gold_net_rate") + '" aria-label="' + SOW_t("hud.gold_net_rate") + '"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b id="sow-hud-nameplate-gold-rate">0/s</b></span>'
+            + '    <span class="sow-hud__nameplate-stat sow-hud__nameplate-stat--troop-rate" title="' + SOW_t("hud.troop_production_rate") + '" aria-label="' + SOW_t("hud.troop_production_rate") + '">' + hudIcon("troops", "sow-hud__inline-icon") + '<b id="sow-hud-nameplate-troop-rate">0/s</b></span>'
+            + '  </div></div>'
             + '</div>'
             + '<div class="sow-hud__hover-card hidden" id="sow-hud-hover-card">'
             + '  <div class="sow-hud__hover-header"><span id="sow-hud-hover-avatar">👑</span> <b id="sow-hud-hover-name">' + SOW_t("hud.territory") + '</b></div>'
@@ -463,20 +484,6 @@
             + '        <button type="button" class="sow-hud__building-btn" data-command="select_nuke" data-fleet-kind="nuke" aria-label="' + SOW_t("hud.map_action_nuke") + '" title="' + SOW_t("hud.map_action_nuke") + '">' + emojiIcon("🚀", "sow-hud__building-icon") + '</button>'
             + '      </div>'
             + '    </div>'
-            + '    <div class="sow-hud__resource-row" id="sow-hud-resource-row">'
-            + '      <div class="sow-hud__res-rate" id="sow-hud-res-rate" title="' + SOW_t("hud.troop_production_rate") + '">'
-            + '        <span class="sow-hud__rate-text" data-role="prod">' + hudIcon("troops", "sow-hud__inline-icon") + ' +0/s</span>'
-            + '      </div>'
-            + '      <div class="sow-hud__res-bar-wrap" title="' + SOW_t("hud.troop_pool_capacity") + '">'
-            + '        <div class="sow-hud__res-bar-fill" id="sow-hud-troop-fill" style="width: 0%;"></div>'
-            + '        <span class="sow-hud__res-bar-text" data-role="troops">0 / 0 ' + hudIcon("troops", "sow-hud__inline-icon") + '</span>'
-            + '      </div>'
-            + '      <div class="sow-hud__res-gold" id="sow-hud-res-gold" title="' + SOW_t("hud.gold_net_rate") + '">'
-            + '        <span class="sow-hud__gold-text"><img class="sow-hud__currency-icon sow-hud__currency-icon--gold" src="' + currencyAsset("gold") + '" alt="" aria-hidden="true"><b data-role="gold">0</b></span>'
-            + '        <small class="sow-hud__gold-rate" data-role="gold-rate">+0/s</small>'
-            + '      </div>'
-            + '      <span class="sow-hud__fps" id="sow-hud-fps">' + SOW_t("hud.fps", { fps: "--" }) + '</span>'
-            + '    </div>'
             + '  </div>'
             + '</footer>'
             + '<button type="button" class="sow-hud__building-cancel" data-command="cancel_building_mode" aria-label="' + SOW_t("endgame.cancel") + '" title="' + SOW_t("endgame.cancel") + '" hidden><span class="sow-hud__building-cancel-icon" aria-hidden="true">×</span><span>' + SOW_t("endgame.cancel") + '</span></button>'
@@ -578,17 +585,16 @@
         }
 
         hudRefs = {
-            gold: hudRoot.querySelector('[data-role="gold"]'),
-            goldRate: hudRoot.querySelector('[data-role="gold-rate"]'),
-            goldWrap: document.getElementById("sow-hud-res-gold"),
-            troops: hudRoot.querySelector('[data-role="troops"]'),
-            prod: hudRoot.querySelector('[data-role="prod"]'),
             fps: document.getElementById("sow-hud-fps"),
             nameplate: document.getElementById("sow-hud-nameplate"),
             plateAvatar: document.getElementById("sow-hud-nameplate-avatar"),
             plateName: document.getElementById("sow-hud-nameplate-name"),
             plateFill: document.getElementById("sow-hud-nameplate-fill"),
             plateTroops: document.getElementById("sow-hud-nameplate-troops"),
+            plateGold: document.getElementById("sow-hud-nameplate-gold"),
+            plateGoldWrap: hudRoot.querySelector(".sow-hud__nameplate-stat--gold"),
+            plateGoldRate: document.getElementById("sow-hud-nameplate-gold-rate"),
+            plateTroopRate: document.getElementById("sow-hud-nameplate-troop-rate"),
             inboxCount: document.getElementById("sow-hud-inbox-count"),
             hoverCard: document.getElementById("sow-hud-hover-card"),
             hoverAvatar: document.getElementById("sow-hud-hover-avatar"),
@@ -617,7 +623,6 @@
             fleetNuke: hudRoot.querySelector("[data-fleet-kind='nuke']"),
             buildingCancel: hudRoot.querySelector("[data-command='cancel_building_mode']"),
             panelButtons: Array.prototype.slice.call(hudRoot.querySelectorAll(".sow-hud__topbar [data-command^='toggle_'], .sow-hud__right-rail [data-command='toggle_emoji']")),
-            troopFill: document.getElementById("sow-hud-troop-fill"),
             leaderboard: document.getElementById("sow-hud-leaderboard"),
             rows: document.getElementById("sow-hud-lb-rows"),
             inbox: document.getElementById("sow-hud-inbox"),
@@ -864,18 +869,6 @@
     function campaignAllowsAction(unlocks, action) {
         return unlocks === null || window.SOWCampaign.campaignAllowsAction(unlocks, action);
     }
-    function campaignActionLockReason(unlocks, action) {
-        if (unlocks === null || campaignAllowsAction(unlocks, action)) return "";
-        if (!Array.isArray(unlocks.actions) || !unlocks.actions.includes(action)) return SOW_t("hud.campaign_unlock_required");
-        var requirement = {
-            trade_ship: ["Port", "hud.map_action_port", 1],
-            warship: ["Port", "hud.map_action_port", 2],
-            nuke: ["City", "hud.map_action_city", 4]
-        }[action];
-        return requirement
-            ? SOW_t("hud.campaign_unlock_required") + " · " + SOW_t(requirement[1]) + " " + requirement[2]
-            : SOW_t("hud.campaign_unlock_required");
-    }
     function setCampaignLock(element, locked, reason) {
         element.classList.toggle("is-campaign-locked", Boolean(locked));
         if (locked && reason) element.dataset.lockLabel = reason;
@@ -902,7 +895,7 @@
         });
     }
 
-    function mapActionContent(icon, label) {
+    function mapActionContent(icon, label, reason) {
         var content = document.createElement("span");
         content.className = "sow-hud__map-action-content";
         var title = document.createElement("span");
@@ -914,6 +907,12 @@
             caption.className = "sow-hud__map-sector-caption";
             caption.textContent = label;
             content.appendChild(caption);
+        }
+        if (reason) {
+            var reasonLabel = document.createElement("small");
+            reasonLabel.className = "sow-hud__map-action-reason";
+            reasonLabel.textContent = reason;
+            content.appendChild(reasonLabel);
         }
         return content;
     }
@@ -948,13 +947,7 @@
         var accessibleLabel = reason ? actionName + ". " + reason : actionName;
         button.setAttribute("aria-label", accessibleLabel);
         button.title = reason ? accessibleLabel : "";
-        var content = mapActionContent(icon, withDetails ? "" : actionName);
-        if (!withDetails && disabled && reason) {
-            var reasonLabel = document.createElement("small");
-            reasonLabel.className = "sow-hud__map-action-reason";
-            reasonLabel.textContent = reason;
-            content.appendChild(reasonLabel);
-        }
+        var content = mapActionContent(icon, withDetails ? "" : actionName, withDetails ? "" : reason);
         button.appendChild(content);
         if (withDetails) {
             var copy = document.createElement("span");
@@ -985,7 +978,7 @@
     }
 
     function updateDisabledMapActionReasons(menu, availableGold) {
-        menu.querySelectorAll('.sow-hud__map-card[aria-disabled="true"], .sow-hud__map-sector[aria-disabled="true"]').forEach(function (button) {
+        menu.querySelectorAll('.sow-hud__map-card[aria-disabled="true"]').forEach(function (button) {
             var cost = Number(button.dataset.mapCost);
             var reason = mapActionReason({
                 disabled: true,
@@ -1117,6 +1110,7 @@
             menu.classList.toggle("is-submenu", mapMenuView !== "root");
             var buildItems = items.filter(function (item) { return buildMenuActions[item.action]; });
             var nukeItem = items.find(function (item) { return item.action === "nuke"; });
+            var campaignMenu = campaignUnlocks(hudState && hudState.hud) !== null;
             if (mapMenuView === "root") {
                 var radial = document.createElement("div");
                 radial.className = "sow-hud__map-radial";
@@ -1138,17 +1132,17 @@
                 var alliancePresentation = allianceActionLabels[mapMenu.alliance_state] || null;
                 var radialCount = 4;
                 if (transfer) mapSector(radial, transfer, 0, radialCount, "transfer");
-                else mapDisabledSector(radial, 0, radialCount, "transfer", emojiIcon("📦", "sow-hud__map-action-icon"), mapLabel("transfer"));
+                else if (!campaignMenu) mapDisabledSector(radial, 0, radialCount, "transfer", emojiIcon("📦", "sow-hud__map-action-icon"), mapLabel("transfer"));
                 if (fleet) mapSector(radial, fleet, 1, radialCount, "fleet");
-                else mapDisabledSector(radial, 1, radialCount, "fleet", emojiIcon("⛵", "sow-hud__map-action-icon"), mapLabel("fleet"));
+                else if (!campaignMenu) mapDisabledSector(radial, 1, radialCount, "fleet", emojiIcon("⛵", "sow-hud__map-action-icon"), mapLabel("fleet"));
                 if (alliance) mapSector(radial, alliance, 2, radialCount, "alliance", alliancePresentation);
-                else mapDisabledSector(radial, 2, radialCount, "alliance", emojiIcon("🤝", "sow-hud__map-action-icon"), mapLabel("alliance"), alliancePresentation);
+                else if (!campaignMenu) mapDisabledSector(radial, 2, radialCount, "alliance", emojiIcon("🤝", "sow-hud__map-action-icon"), mapLabel("alliance"), alliancePresentation);
                 if (buildItems.length) {
                     var buildIcon = emojiIcon("🏗️", "sow-hud__map-action-icon");
                     mapGroupSector(radial, buildItems, 3, radialCount, "build", buildIcon, SOW_t("hud.map_action_build"));
                 } else if (nukeItem) {
                     mapSector(radial, nukeItem, 3, radialCount, "nuke");
-                } else {
+                } else if (!campaignMenu) {
                     mapDisabledSector(radial, 3, radialCount, "build", emojiIcon("🏗️", "sow-hud__map-action-icon"), SOW_t("hud.map_action_build"));
                 }
                 menu.appendChild(radial);
@@ -1333,11 +1327,13 @@
             hudRefs.buildingCardBenefit.hidden = !activeMetrics.length;
             hudRefs.buildingCardBenefit.innerHTML = buildingMetricMarkup(activeMetrics);
             if (detail.campaign_upgrade_locked) {
-                hudRefs.buildingCardNext.textContent = SOW_t("hud.campaign_unlock_required");
+                hudRefs.buildingCardNext.innerHTML = "";
+                hudRefs.buildingCardNext.textContent = "";
+                hudRefs.buildingCardNext.hidden = true;
             } else {
                 hudRefs.buildingCardNext.innerHTML = '<span class="sow-hud__building-level sow-hud__building-level--max" title="Maximum level">MAX</span>';
+                hudRefs.buildingCardNext.hidden = false;
             }
-            hudRefs.buildingCardNext.hidden = false;
             hudRefs.buildingCardUpgrade.hidden = true;
         }
         positionBuildingCard(mapMenu);
@@ -1450,10 +1446,7 @@
             image.alt = "";
             image.draggable = false;
             image.hidden = true;
-            image.onerror = function () {
-                var fallback = asset("gameplay/avatars/null.webp");
-                if (this.getAttribute("src") !== fallback) this.src = fallback;
-            };
+            bindAvatarFallback(image);
             var emblem = document.createElement("span");
             emblem.className = "sow-hud__notification-emblem";
             emblem.hidden = true;
@@ -1468,6 +1461,44 @@
         return { card: card, seal: seal, avatars: avatars, copy: copy, renderKey: "" };
     }
 
+    function bindAvatarFallback(image) {
+        image.onerror = function () {
+            var fallback = asset("gameplay/avatars/null.webp");
+            if (this.getAttribute("src") !== fallback) {
+                this.hidden = false;
+                this.src = fallback;
+            } else {
+                this.hidden = true;
+                this.removeAttribute("src");
+            }
+        };
+    }
+
+    function renderAvatarIdentity(image, emblem, presentation) {
+        var identityKey = presentation ? JSON.stringify(presentation) : "";
+        if (image._sowAvatarIdentityKey === identityKey) return;
+        image._sowAvatarIdentityKey = identityKey;
+        image.hidden = true;
+        if (image.removeAttribute) image.removeAttribute("src");
+        else image.src = "";
+        emblem.hidden = true;
+        emblem.textContent = "";
+        if (!presentation) return;
+
+        if (presentation.kind === "emblem" && typeof presentation.symbol === "string" && presentation.symbol) {
+            emblem.textContent = presentation.symbol;
+            emblem.hidden = false;
+            return;
+        }
+
+        var slug = presentation.kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
+            ? presentation.slug
+            : "null";
+        var src = asset("gameplay/avatars/" + slug + ".webp");
+        image.hidden = false;
+        if (image.getAttribute("src") !== src) image.src = src;
+    }
+
     function clearNotificationCard(parts) {
         parts.card.hidden = true;
         parts.renderKey = "";
@@ -1477,6 +1508,7 @@
             avatar.wrapper.hidden = true;
             avatar.wrapper.className = "sow-hud__notification-avatar";
             avatar.image.hidden = true;
+            avatar.image._sowAvatarIdentityKey = null;
             if (avatar.image.removeAttribute) avatar.image.removeAttribute("src");
             else avatar.image.src = "";
             avatar.emblem.hidden = true;
@@ -1512,29 +1544,10 @@
         parts.seal.innerHTML = notificationIcon(key);
         parts.avatars.forEach(function (slot, index) {
             var presentation = avatars[index] || null;
-            var kind = presentation && String(presentation.kind || "");
             slot.wrapper.hidden = !presentation;
             slot.wrapper.className = "sow-hud__notification-avatar"
                 + (index > 0 && avatars[index - 1] ? " sow-hud__notification-avatar--overlap" : "");
-            slot.image.hidden = true;
-            if (slot.image.removeAttribute) slot.image.removeAttribute("src");
-            else slot.image.src = "";
-            slot.emblem.hidden = true;
-            slot.emblem.textContent = "";
-            if (!presentation) return;
-
-            if (kind === "emblem" && typeof presentation.symbol === "string" && presentation.symbol) {
-                slot.emblem.textContent = presentation.symbol;
-                slot.emblem.hidden = false;
-                return;
-            }
-
-            var slug = kind === "portrait" && /^[a-z][a-z0-9_]*$/.test(presentation.slug || "")
-                ? presentation.slug
-                : "null";
-            var src = asset("gameplay/avatars/" + slug + ".webp");
-            slot.image.hidden = false;
-            if (slot.image.getAttribute("src") !== src) slot.image.src = src;
+            renderAvatarIdentity(slot.image, slot.emblem, presentation);
         });
         parts.copy.textContent = SOW_t(key, entry.values || {});
     }
@@ -1583,7 +1596,7 @@
                 "--sow-hud-hit-target-zoom": (1 / density).toFixed(4),
                 "--sow-hud-text-primary-size": (12 / density).toFixed(2) + "px",
                 "--sow-hud-text-secondary-size": (11 / density).toFixed(2) + "px",
-                "--sow-tutorial-player-panel-height": (storyRoot ? 56 * density : 56).toFixed(2) + "px",
+                "--sow-player-panel-height": (storyRoot ? 92 * density : 92).toFixed(2) + "px",
                 "--sow-tutorial-progress-height": "24px",
                 "--sow-tutorial-progress-label-size": (14 / density).toFixed(2) + "px"
             };
@@ -1592,7 +1605,7 @@
             });
         } else {
             if (target.dataset.compact) delete target.dataset.compact;
-            ["--sow-hud-density", "--sow-hud-hit-target-zoom", "--sow-hud-text-primary-size", "--sow-hud-text-secondary-size", "--sow-tutorial-player-panel-height", "--sow-tutorial-progress-height", "--sow-tutorial-progress-label-size"].forEach(function (property) {
+            ["--sow-hud-density", "--sow-hud-hit-target-zoom", "--sow-hud-text-primary-size", "--sow-hud-text-secondary-size", "--sow-player-panel-height", "--sow-tutorial-progress-height", "--sow-tutorial-progress-label-size"].forEach(function (property) {
                 if (target.style.getPropertyValue(property)) target.style.removeProperty(property);
             });
         }
@@ -1631,16 +1644,38 @@
         if (hudRoot && hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height")) {
             hudRoot.style.removeProperty("--sow-hud-layout-operations-max-height");
         }
+        if (hudRoot && hudRoot.style.getPropertyValue("--sow-hud-layout-operations-bottom")) {
+            hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
+        }
     }
 
     function syncCompactHudBounds() {
         if (!hudRoot || !hudRefs) return;
         var density = syncCompactHudDensity();
-        if (density >= 1 || !window.matchMedia
-            || !window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+        var coarsePointer = window.matchMedia
+            && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+        if (!coarsePointer) {
+            ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge", "--sow-hud-layout-operations-bottom", "--sow-dock-reserve"].forEach(function (property) {
+                hudRoot.style.removeProperty(property);
+            });
+            return;
+        }
+        hudRoot.style.removeProperty("--sow-hud-layout-operations-bottom");
+        if (density >= 1) {
             ["--sow-hud-layout-top-reserve", "--sow-hud-layout-action-top", "--sow-hud-layout-dock-height", "--sow-hud-layout-bottom-edge", "--sow-dock-reserve"].forEach(function (property) {
                 hudRoot.style.removeProperty(property);
             });
+            var operationAnchorTop = window.innerHeight;
+            [hudRefs.dock, hudRefs.buildingCancel].forEach(function (element) {
+                if (!element || element.hidden || !element.getClientRects().length) return;
+                operationAnchorTop = Math.min(operationAnchorTop, element.getBoundingClientRect().top);
+            });
+            if (operationAnchorTop < window.innerHeight) {
+                hudRoot.style.setProperty(
+                    "--sow-hud-layout-operations-bottom",
+                    Math.ceil(window.innerHeight - operationAnchorTop + 8) + "px"
+                );
+            }
             return;
         }
         var top = 0;
@@ -1662,6 +1697,11 @@
         }
         var safeBottom = Number.parseFloat(window.getComputedStyle(hudRoot).getPropertyValue("--sow-sab")) || 0;
         hudRoot.style.setProperty("--sow-hud-layout-dock-height", dockHeight + "px");
+        var dockAnchorTop = window.innerHeight;
+        [hudRefs.dock, hudRefs.buildingCancel].forEach(function (element) {
+            if (!element || element.hidden || !element.getClientRects().length) return;
+            dockAnchorTop = Math.min(dockAnchorTop, element.getBoundingClientRect().top);
+        });
         var stackTop = window.innerHeight;
         var stackBottom = 0;
         [dockInner, hudRefs.buildingCancel, hudRefs.operations].forEach(function (element) {
@@ -1674,7 +1714,7 @@
         var stackHeight = Math.max(0, Math.ceil(stackBottom - stackTop));
         hudRoot.style.setProperty("--sow-dock-reserve", (stackHeight + Math.max(8, safeBottom) + 8) + "px");
         hudRoot.style.setProperty("--sow-hud-layout-bottom-edge", Math.floor(stackTop - 8) + "px");
-        var freeOperationsHeight = Math.max(0, stackTop - actionTop - safeBottom - 6);
+        var freeOperationsHeight = Math.max(0, dockAnchorTop - Math.max(actionTop, top + 8) - safeBottom - 6);
         var operationCap = Math.max(0, Math.min(window.innerHeight * 0.2, freeOperationsHeight) / density).toFixed(1) + "px";
         if (hudRoot.style.getPropertyValue("--sow-hud-layout-operations-max-height") !== operationCap) {
             hudRoot.style.setProperty("--sow-hud-layout-operations-max-height", operationCap);
@@ -1872,26 +1912,26 @@
         var details = document.createElement("small");
         var troops = document.createElement("b");
         var actions = document.createElement("span");
+        var emblem = document.createElement("span");
         element.className = "sow-hud__operation";
         avatar.className = "sow-hud__operation-avatar";
         portrait.className = "sow-hud__operation-portrait";
         portrait.alt = "";
         portrait.draggable = false;
         portrait.loading = "lazy";
-        portrait.onerror = function () {
-            this.hidden = true;
-            this.removeAttribute("src");
-        };
+        bindAvatarFallback(portrait);
+        emblem.className = "sow-hud__operation-emblem sow-hud__notification-emblem";
+        emblem.hidden = true;
         glyph.className = "sow-hud__operation-glyph";
         copy.className = "sow-hud__operation-copy";
         name.className = "sow-hud__operation-name";
         details.className = "sow-hud__operation-details";
         troops.className = "sow-hud__operation-troops";
         actions.className = "sow-hud__operation-actions";
-        avatar.append(portrait, glyph);
+        avatar.append(portrait, emblem, glyph);
         copy.append(name, details);
         element.append(avatar, copy, troops, actions);
-        return { element: element, portrait: portrait, glyph: glyph, name: name, details: details, troops: troops, actions: actions, avatarSrc: "", actionKey: "" };
+        return { element: element, portrait: portrait, emblem: emblem, glyph: glyph, name: name, details: details, troops: troops, actions: actions, actionKey: "" };
     }
 
     function operationAction(command, glyph, label, operation) {
@@ -1949,20 +1989,17 @@
             var details = operation.kind === "attack" && incoming
                 ? SOW_t("hud.attack_incoming", { count: formatNameplateTroops(troops) })
                 : SOW_t(operation.kind === "fleet" ? "hud.map_action_fleet" : "hud.map_action_attack");
-            var avatarSlug = typeof operation.avatar === "string" && /^[a-z0-9_-]+$/i.test(operation.avatar)
-                ? operation.avatar
-                : "";
-            var avatarSrc = avatarSlug ? asset("gameplay/avatars/" + avatarSlug + ".webp") : "";
             row.element.classList.toggle("is-incoming", incoming);
             row.element.classList.toggle("is-outgoing", outgoing);
             row.element.classList.toggle("is-retreating", retreating);
             row.element.classList.toggle("is-neutral", neutral);
-            if (row.avatarSrc !== avatarSrc) {
-                row.avatarSrc = avatarSrc;
-                row.portrait.hidden = !avatarSrc;
-                if (avatarSrc) row.portrait.src = avatarSrc;
-                else row.portrait.removeAttribute("src");
-            }
+            renderAvatarIdentity(
+                row.portrait,
+                row.emblem,
+                operation.avatar && typeof operation.avatar === "object"
+                    ? operation.avatar
+                    : { kind: "fallback" }
+            );
             if (row.name.textContent !== name) row.name.textContent = name;
             if (row.details.textContent !== details) row.details.textContent = details;
             var troopText = formatNameplateTroops(troops);
@@ -2078,37 +2115,26 @@
         var spawnSecs = hud.spawn_timer_secs;
         var isDeploying = spawnSecs != null && spawnSecs > 0;
 
-        if (hudRefs.gold && hudRefs.gold.dataset.val !== String(gold)) {
-            hudRefs.gold.textContent = gold.toLocaleString();
-            hudRefs.gold.dataset.val = String(gold);
+        var goldText = formatHudMetric(gold);
+        if (hudRefs.plateGold && hudRefs.plateGold.dataset.val !== goldText) {
+            hudRefs.plateGold.textContent = goldText;
+            hudRefs.plateGold.dataset.val = goldText;
         }
-        if (hudRefs.goldRate) {
-            var goldRateText = (goldRate > 0 ? "+" : "") + goldRate.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + "/s";
-            if (hudRefs.goldRate.textContent !== goldRateText) hudRefs.goldRate.textContent = goldRateText;
-            hudRefs.goldRate.classList.toggle("is-negative", goldRate < 0);
+        var goldRateText = formatHudRate(goldRate);
+        if (hudRefs.plateGoldRate && hudRefs.plateGoldRate.textContent !== goldRateText) {
+            hudRefs.plateGoldRate.textContent = goldRateText;
         }
-        if (hudRefs.goldWrap) hudRefs.goldWrap.classList.toggle("is-in-debt", gold < 0);
-
-        if (hudRefs.troops) {
-            var troopText = maxTroops > 0 ? troops.toLocaleString() + ' / ' + maxTroops.toLocaleString() + ' ' + hudIcon("troops", "sow-hud__inline-icon") : troops.toLocaleString() + ' ' + hudIcon("troops", "sow-hud__inline-icon");
-            if (hudRefs.troops.dataset.val !== troopText) {
-                hudRefs.troops.innerHTML = troopText;
-                hudRefs.troops.dataset.val = troopText;
-            }
+        if (hudRefs.plateGoldRate) hudRefs.plateGoldRate.classList.toggle("is-negative", goldRate < 0);
+        if (hudRefs.plateGoldWrap) hudRefs.plateGoldWrap.classList.toggle("is-in-debt", gold < 0);
+        var troopRateText = formatHudRate(prod);
+        if (hudRefs.plateTroopRate && hudRefs.plateTroopRate.textContent !== troopRateText) {
+            hudRefs.plateTroopRate.textContent = troopRateText;
         }
 
-        if (hudRefs.troopFill) {
-            var fillPct = maxTroops > 0 ? Math.min(100, Math.max(0, (troops / maxTroops) * 100)) : 0;
-            var fillStr = fillPct.toFixed(1) + '%';
-            if (hudRefs.troopFill.style.width !== fillStr) {
-                hudRefs.troopFill.style.width = fillStr;
-            }
-        }
-
-        var tutorialOn = Boolean(hud.tutorial && hud.tutorial.active);
+        var playerPlateHidden = Boolean(hud.is_spectating);
         if (hudRefs.nameplate) {
-            if (hudRefs.nameplate.hidden === tutorialOn) hudRefs.nameplate.hidden = !tutorialOn;
-            if (tutorialOn) {
+            if (hudRefs.nameplate.hidden !== playerPlateHidden) hudRefs.nameplate.hidden = playerPlateHidden;
+            if (!playerPlateHidden) {
                 var plateLeader = leaderById(hud.player_leader || (hudState && hudState.selected_leader));
                 var plateSrc = asset("gameplay/avatars/" + plateLeader.slug + ".webp");
                 if (hudRefs.plateAvatar && hudRefs.plateAvatar.getAttribute("src") !== plateSrc) {
@@ -2128,11 +2154,6 @@
                     hudRefs.plateFill.style.width = plateFillStr;
                 }
             }
-        }
-
-        if (hudRefs.prod && hudRefs.prod.dataset.val !== String(prod)) {
-            hudRefs.prod.innerHTML = hudIcon("troops", "sow-hud__inline-icon") + ' +' + prod.toLocaleString() + '/s';
-            hudRefs.prod.dataset.val = String(prod);
         }
 
         if (hudRefs.fps) {
@@ -2218,7 +2239,6 @@
             });
         }
         if (hudRefs.fleetStrip) {
-            hudRefs.fleetStrip.style.display = isDeploying ? "none" : "flex";
             var fleetPanel = hud.fleet_panel || {};
             var fleetUnlocks = campaignUnlocks(hud);
             var portLevels = Math.max(0, Number(fleetPanel.port_levels) || 0);
@@ -2226,30 +2246,35 @@
             var tradeRequiredPortLevel = Math.max(1, Number(fleetPanel.trade_required_port_level) || 1);
             var warshipRequiredPortLevel = Math.max(1, Number(fleetPanel.warship_required_port_level) || 1);
             var nukeRequiredCityLevel = Math.max(1, Number(fleetPanel.nuke_required_city_level) || 1);
-            var tradeCampaignReason = campaignActionLockReason(fleetUnlocks, "trade_ship");
-            var warshipCampaignReason = campaignActionLockReason(fleetUnlocks, "warship");
-            var nukeCampaignReason = campaignActionLockReason(fleetUnlocks, "nuke");
-            var tradeCampaignLocked = Boolean(tradeCampaignReason) || !campaignAllowsBuilding(fleetUnlocks, "Port", tradeRequiredPortLevel);
-            var warshipCampaignLocked = Boolean(warshipCampaignReason) || !campaignAllowsBuilding(fleetUnlocks, "Port", warshipRequiredPortLevel);
-            var nukeCampaignLocked = Boolean(nukeCampaignReason) || !campaignAllowsBuilding(fleetUnlocks, "City", nukeRequiredCityLevel);
+            var tradeCampaignLocked = !campaignAllowsAction(fleetUnlocks, "trade_ship")
+                || !campaignAllowsBuilding(fleetUnlocks, "Port", tradeRequiredPortLevel);
+            var warshipCampaignLocked = !campaignAllowsAction(fleetUnlocks, "warship")
+                || !campaignAllowsBuilding(fleetUnlocks, "Port", warshipRequiredPortLevel);
+            var nukeCampaignLocked = !campaignAllowsAction(fleetUnlocks, "nuke")
+                || !campaignAllowsBuilding(fleetUnlocks, "City", nukeRequiredCityLevel);
             var tradeUnlocked = !tradeCampaignLocked && portLevels >= tradeRequiredPortLevel;
             var warshipUnlocked = !warshipCampaignLocked && portLevels >= warshipRequiredPortLevel;
             var nukeUnlocked = !nukeCampaignLocked && cityLevel >= nukeRequiredCityLevel;
             var militaryFull = Number(fleetPanel.military_used) >= Number(fleetPanel.military_capacity);
             var warshipSelected = Boolean(hud.selected_warship_build);
             if (hudRefs.fleetTrade) {
+                var hideTrade = fleetUnlocks !== null && tradeCampaignLocked;
+                hudRefs.fleetTrade.hidden = hideTrade;
+                hudRefs.fleetTrade.style.display = hideTrade ? "none" : "";
                 var tradeCount = Math.floor(Number(fleetPanel.trade_ships) || 0);
                 var tradeCapacity = Math.floor(Number(fleetPanel.trade_capacity) || 0);
                 var tradeStatus = SOW_t("hud.map_action_fleet") + " · " + tradeCount + "/" + tradeCapacity;
-                var tradeReason = tradeCampaignLocked ? (tradeCampaignReason || SOW_t("hud.campaign_unlock_required"))
-                    : !tradeUnlocked ? SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel : "";
+                var tradeReason = !tradeUnlocked ? SOW_t("hud.map_action_port") + " " + tradeRequiredPortLevel : "";
                 if (tradeReason) tradeStatus += " · " + tradeReason;
                 hudRefs.fleetTrade.setAttribute("aria-label", tradeStatus);
                 hudRefs.fleetTrade.title = tradeStatus;
                 hudRefs.fleetTrade.classList.toggle("is-locked", !tradeUnlocked);
-                setCampaignLock(hudRefs.fleetTrade, !tradeUnlocked, tradeReason);
+                setCampaignLock(hudRefs.fleetTrade, fleetUnlocks === null && !tradeUnlocked, tradeReason);
             }
             if (hudRefs.fleetWarship) {
+                var hideWarship = fleetUnlocks !== null && warshipCampaignLocked;
+                hudRefs.fleetWarship.hidden = hideWarship;
+                hudRefs.fleetWarship.style.display = hideWarship ? "none" : "";
                 var warshipCost = Math.max(0, Number(fleetPanel.warship_cost) || 0);
                 var warshipDisabled = warshipCampaignLocked || !warshipUnlocked || militaryFull || gold < warshipCost;
                 hudRefs.fleetWarship.disabled = warshipDisabled;
@@ -2257,9 +2282,7 @@
                 hudRefs.fleetWarship.setAttribute("aria-pressed", String(warshipSelected));
                 hudRefs.fleetWarship.classList.toggle("active", warshipSelected);
                 hudRefs.fleetWarship.classList.toggle("is-locked", warshipDisabled && !warshipSelected);
-                var warshipReason = warshipCampaignLocked
-                    ? (warshipCampaignReason || SOW_t("hud.campaign_unlock_required"))
-                    : !warshipUnlocked
+                var warshipReason = !warshipUnlocked
                     ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_port") + " " + warshipRequiredPortLevel
                     : militaryFull
                         ? Math.floor(Number(fleetPanel.military_used) || 0) + "/" + Math.floor(Number(fleetPanel.military_capacity) || 0)
@@ -2269,9 +2292,12 @@
                 var warshipLabel = SOW_t("hud.map_action_build_warship") + " · " + warshipReason;
                 hudRefs.fleetWarship.setAttribute("aria-label", warshipLabel);
                 hudRefs.fleetWarship.title = warshipLabel;
-                setCampaignLock(hudRefs.fleetWarship, warshipDisabled, warshipReason);
+                setCampaignLock(hudRefs.fleetWarship, fleetUnlocks === null && warshipDisabled, warshipReason);
             }
             if (hudRefs.fleetNuke) {
+                var hideNuke = fleetUnlocks !== null && nukeCampaignLocked;
+                hudRefs.fleetNuke.hidden = hideNuke;
+                hudRefs.fleetNuke.style.display = hideNuke ? "none" : "";
                 var cooldownTicks = Math.max(0, Number(fleetPanel.nuke_cooldown_ticks) || 0);
                 var nukeCost = Math.max(0, Number(fleetPanel.nuke_cost) || 0);
                 var nukeReady = Boolean(fleetPanel.nuke_available) && cooldownTicks === 0 && gold >= nukeCost;
@@ -2281,9 +2307,7 @@
                 hudRefs.fleetNuke.setAttribute("aria-pressed", String(hud.selected_nuke === "AtomBomb"));
                 hudRefs.fleetNuke.classList.toggle("is-locked", nukeDisabled);
                 hudRefs.fleetNuke.classList.toggle("active", hud.selected_nuke === "AtomBomb");
-                var nukeReason = nukeCampaignLocked
-                    ? (nukeCampaignReason || SOW_t("hud.campaign_unlock_required"))
-                    : !nukeUnlocked
+                var nukeReason = !nukeUnlocked
                     ? SOW_t("lobbies.locked") + " · " + SOW_t("hud.map_action_city") + " " + nukeRequiredCityLevel
                     : cooldownTicks > 0
                         ? SOW_t("lobbies.locked") + " · " + Math.ceil(cooldownTicks / 10) + "s"
@@ -2295,8 +2319,12 @@
                 var nukeLabel = SOW_t("hud.map_action_nuke") + " · " + nukeReason;
                 hudRefs.fleetNuke.setAttribute("aria-label", nukeLabel);
                 hudRefs.fleetNuke.title = nukeLabel;
-                setCampaignLock(hudRefs.fleetNuke, nukeDisabled, nukeReason);
+                setCampaignLock(hudRefs.fleetNuke, fleetUnlocks === null && nukeDisabled, nukeReason);
             }
+            var hasFleetItems = (hudRefs.fleetTrade && !hudRefs.fleetTrade.hidden)
+                || (hudRefs.fleetWarship && !hudRefs.fleetWarship.hidden)
+                || (hudRefs.fleetNuke && !hudRefs.fleetNuke.hidden);
+            hudRefs.fleetStrip.style.display = isDeploying || !hasFleetItems ? "none" : "flex";
         }
 
         // Emoji Popout

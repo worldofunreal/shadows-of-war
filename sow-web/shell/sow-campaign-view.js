@@ -144,6 +144,22 @@
             const number = Number(value);
             return Number.isFinite(number) ? number.toFixed(2).replace(/\.?0+$/, "") + "×" : "";
         }
+        function setHomeGuideCurve(node, dx, dy) {
+            const distance = Math.hypot(dx, dy), bend = Math.min(90, distance * 0.12);
+            const bendX = distance ? -dy / distance * bend : 0;
+            const bendY = distance ? dx / distance * bend : 0;
+            const c1x = dx * 0.25 + bendX, c1y = dy * 0.25 + bendY;
+            const c2x = dx * 0.75 + bendX, c2y = dy * 0.75 + bendY;
+            [[25, 0.25], [50, 0.5], [75, 0.75]].forEach(([percent, t]) => {
+                const u = 1 - t;
+                const x = 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * dx;
+                const y = 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * dy;
+                const xName = "--home-guide-p" + percent + "-x", yName = "--home-guide-p" + percent + "-y";
+                const xValue = x + "px", yValue = y + "px";
+                if (node.style.getPropertyValue(xName) !== xValue) node.style.setProperty(xName, xValue);
+                if (node.style.getPropertyValue(yName) !== yValue) node.style.setProperty(yName, yValue);
+            });
+        }
         function clearGuideMetric() {
             if (guidePulse) { guidePulse.cancel(); guidePulse = null; }
             guideStepId = ""; guideLastPulseValue = NaN; guideLastPulseAt = 0;
@@ -329,6 +345,8 @@
             const showGestureText = !step.guide || step.guide.show_label !== false;
             const zoomGuide = gestureType && gestureType.startsWith("zoom_");
             const zoomButtonGuide = step.guide && step.guide.kind === "ui" && ["hud_zoom_in", "hud_zoom_out"].includes(step.guide.target);
+            const homeGuide = Boolean(step.guide && step.guide.kind === "ui" && step.guide.target === "hud_center_camera"
+                && step.guide.gesture === "tap" && step.trigger && step.trigger.type === "ui" && step.trigger.action === "hud_center_camera");
             const anchor = context.anchor;
             const labeledGesture = showGestureText && (zoomGuide || zoomButtonGuide || ["drag", "pan_keys", "hover"].includes(gestureType) || Boolean(context.gestureLabel));
             gestureLabel.hidden = !labeledGesture;
@@ -347,15 +365,18 @@
                 gesture.classList.toggle("is-camera-following", cameraTracking);
                 gesture.dataset.gesture = step.guide.gesture;
                 gesture.dataset.zoomMode = context.zoomMode || "pinch";
-                if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") gesture.dataset.guideTarget = "attack_ratio";
+                if (homeGuide) gesture.dataset.guideTarget = "hud_center_camera";
+                else if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") gesture.dataset.guideTarget = "attack_ratio";
                 else delete gesture.dataset.guideTarget;
-                gesture.dataset.guidePath = anchor.toX != null && anchor.toY != null ? "true" : "false";
+                gesture.dataset.guidePath = homeGuide || anchor.toX != null && anchor.toY != null ? "true" : "false";
+                const originX = homeGuide ? root.clientWidth * 0.5 : anchor.x;
+                const originY = homeGuide ? root.clientHeight * 0.5 : anchor.y;
                 const follow = guideWasVisible && !wasHidden;
                 gesture.classList.toggle("is-following", follow);
-                if (!follow || anchor.x !== guideX || anchor.y !== guideY) {
-                    gesture.style.transform = "translate3d(" + anchor.x + "px, " + anchor.y + "px, 0)";
+                if (!follow || originX !== guideX || originY !== guideY) {
+                    gesture.style.transform = "translate3d(" + originX + "px, " + originY + "px, 0)";
                 }
-                guideX = anchor.x; guideY = anchor.y; guideWasVisible = true;
+                guideX = originX; guideY = originY; guideWasVisible = true;
                 if (labeledGesture) {
                     if (step.guide.kind === "ui" && step.guide.target === "attack_ratio") {
                         gestureLabel.style.transform = "translateY(-50%)";
@@ -373,8 +394,11 @@
                 }
                 const direction = root.dir === "rtl" ? -1 : 1;
                 const localDragX = anchor.width ? Math.min(64, anchor.width * 0.35) * direction : 0;
-                gesture.style.setProperty("--guide-dx", ((anchor.toX == null ? anchor.x + localDragX : anchor.toX) - anchor.x) + "px");
-                gesture.style.setProperty("--guide-dy", ((anchor.toY == null ? anchor.y : anchor.toY) - anchor.y) + "px");
+                const guideDx = homeGuide ? anchor.x - originX : (anchor.toX == null ? anchor.x + localDragX : anchor.toX) - anchor.x;
+                const guideDy = homeGuide ? anchor.y - originY : (anchor.toY == null ? anchor.y : anchor.toY) - anchor.y;
+                gesture.style.setProperty("--guide-dx", guideDx + "px");
+                gesture.style.setProperty("--guide-dy", guideDy + "px");
+                if (homeGuide) setHomeGuideCurve(gesture, guideDx, guideDy);
                 if (anchor.width) {
                     const spotlightX = Number.isFinite(anchor.spotlightX) ? anchor.spotlightX : anchor.x;
                     const spotlightY = Number.isFinite(anchor.spotlightY) ? anchor.spotlightY : anchor.y;

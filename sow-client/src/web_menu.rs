@@ -361,6 +361,7 @@ struct HudPublishKey {
     endgame_team: Option<sow_core::protocol::Team>,
     player_kda: [u32; 3],
     snapshot_tick: u64,
+    combat_operations_tick: u64,
     camera_zoom_hundredths: i32,
     camera_zoom_floor_hundredths: i32,
     camera_zoom_ceiling_hundredths: i32,
@@ -1330,6 +1331,38 @@ fn hovered_tile_owner(app: &SowApp) -> (u32, u16) {
     (idx as u32, owner)
 }
 
+fn combat_operations_snapshot_tick(
+    snapshot: &sow_core::protocol::SimSnapshot,
+    my_player_id: u16,
+    engine: Option<&sow_core::engine::SowEngine>,
+) -> u64 {
+    let has_attack = snapshot.attacks.iter().any(|attack| {
+        attack.owner_id == my_player_id
+            || (attack.owner_id != my_player_id && attack.target_owner == my_player_id)
+    });
+    let has_outgoing_transport = snapshot.fleets.iter().any(|fleet| {
+        fleet.unit_type == sow_core::game::UnitType::TransportShip
+            && fleet.owner_id == my_player_id
+    });
+    let has_incoming_transport = engine.is_some_and(|engine| {
+        engine.fleets.iter().any(|fleet| {
+            fleet.unit_type == sow_core::game::UnitType::TransportShip
+                && fleet.owner_id != my_player_id
+                && fleet.target_owner == my_player_id
+                && snapshot.fleets.iter().any(|item| {
+                    item.id == fleet.id
+                        && item.unit_type == sow_core::game::UnitType::TransportShip
+                })
+        })
+    });
+
+    if has_attack || has_outgoing_transport || has_incoming_transport {
+        snapshot.tick
+    } else {
+        0
+    }
+}
+
 fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let hud = &app.ui.app.hud_state;
     let (hovered_tile, hovered_owner) = hovered_tile_owner(app);
@@ -1353,6 +1386,9 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let my_pid = app.sim.my_player_id.unwrap_or(hud.my_player_id);
     let me = my_player_summary(app, snapshot_tick, my_pid);
     let snapshot = app.sim.current_snapshot.as_ref();
+    let combat_operations_tick = snapshot.map_or(0, |snapshot| {
+        combat_operations_snapshot_tick(snapshot, my_pid, app.sim.engine.as_ref())
+    });
     let endgame_active = !app.ui.is_spectating
         && snapshot.is_some_and(|snapshot| {
             snapshot.winner.is_some()
@@ -1459,6 +1495,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         dev_sidebar_open,
         dev_config: dev_config_key,
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
+        combat_operations_tick,
         hovered_tile,
         hovered_owner,
         map_menu_view: map_menu.map(|menu| menu.view),
@@ -2989,13 +3026,9 @@ fn build_combat_operations_payload(
         .map(|fleet| (fleet.id, fleet))
         .collect();
     let player_identity = |player_id: u16| {
-        players.get(&player_id).map(|player| {
-            let avatar = match sow_core::player::avatar_identity_ref(player) {
-                sow_core::player::AvatarIdentityRef::Portrait { slug, .. } => Some(slug),
-                _ => None,
-            };
-            (player.name.as_str(), avatar)
-        })
+        players
+            .get(&player_id)
+            .map(|player| (player.name.as_str(), sow_core::player::avatar_identity(player)))
     };
     let mut operations = Vec::new();
 
@@ -3012,9 +3045,16 @@ fn build_combat_operations_payload(
             } else {
                 attack.target_owner
             };
-            let (name, avatar) = player_identity(subject_id)
-                .map(|(name, avatar)| (Some(name), avatar))
-                .unwrap_or((None, None));
+            let (name, avatar) = if neutral {
+                (
+                    None,
+                    sow_core::player::AvatarIdentity::Emblem { symbol: "🌱" },
+                )
+            } else {
+                player_identity(subject_id)
+                    .map(|(name, avatar)| (Some(name), avatar))
+                    .unwrap_or((None, sow_core::player::AvatarIdentity::Fallback))
+            };
             let focus = local_attacks
                 .get(&attack.id)
                 .filter(|attack| !attack.to_conquer.is_empty())
@@ -3061,9 +3101,16 @@ fn build_combat_operations_payload(
             } else {
                 target_owner.unwrap_or(0)
             };
-            let (name, avatar) = player_identity(subject_id)
-                .map(|(name, avatar)| (Some(name), avatar))
-                .unwrap_or((None, None));
+            let (name, avatar) = if neutral {
+                (
+                    None,
+                    sow_core::player::AvatarIdentity::Emblem { symbol: "🌱" },
+                )
+            } else {
+                player_identity(subject_id)
+                    .map(|(name, avatar)| (Some(name), avatar))
+                    .unwrap_or((None, sow_core::player::AvatarIdentity::Fallback))
+            };
             let focus = (map_width > 0).then_some((
                 (fleet.current_tile % map_width) as f32 + 0.5,
                 (fleet.current_tile / map_width) as f32 + 0.5,
@@ -3343,8 +3390,8 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
             "port_levels": port_levels,
             "city_level": city_level,
             "trade_required_port_level": trade_ship.required_port_level(),
-            "warship_required_port_level": warship.required_port_level(),
-            "nuke_required_city_level": nuke.required_city_level(),
+            "warship_required_port_level": 1,
+            "nuke_required_city_level": 1,
             "warship_cost": warship.gold_cost(),
             "nuke_cost": app.sim.config.nuke_cost,
             "nuke_available": me.map(|player| player.nuke_available).unwrap_or(false),
@@ -4168,6 +4215,90 @@ mod tests {
     }
 
     #[test]
+    fn combat_operation_snapshot_tick_tracks_add_update_remove_without_unrelated_state() {
+        use sow_core::protocol::AttackSnapshot;
+
+        let mut snapshot = test_snapshot(Vec::new());
+        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), 0);
+
+        snapshot.attacks.push(AttackSnapshot {
+            id: 1,
+            owner_id: 1,
+            target_owner: 0,
+            troops: 25.0,
+            retreating: false,
+            front_cx: 4.0,
+            front_cy: 3.0,
+        });
+        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), snapshot.tick);
+
+        snapshot.tick += 1;
+        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), snapshot.tick);
+
+        snapshot.attacks.clear();
+        snapshot.attacks.push(AttackSnapshot {
+            id: 2,
+            owner_id: 2,
+            target_owner: 3,
+            troops: 25.0,
+            retreating: false,
+            front_cx: 4.0,
+            front_cy: 3.0,
+        });
+        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), 0);
+    }
+
+    #[test]
+    fn combat_operations_keep_typed_player_avatars_and_mark_wilderness() {
+        use sow_core::protocol::AttackSnapshot;
+
+        let mut human = test_player(1, 5, 100.0);
+        human.player_type = PlayerType::Human;
+        human.leader = Leader::Caesar;
+        let bot = test_player(2, 5, 100.0);
+        let mut nation = test_player(3, 5, 100.0);
+        nation.player_type = PlayerType::Nation;
+        let mut snapshot = test_snapshot(vec![human, bot, nation]);
+        let attack = |id, owner_id, target_owner| AttackSnapshot {
+            id,
+            owner_id,
+            target_owner,
+            troops: 25.0,
+            retreating: false,
+            front_cx: 4.0,
+            front_cy: 3.0,
+        };
+        snapshot.attacks = vec![
+            attack(1, 4, 0),
+            attack(2, 1, 4),
+            attack(3, 2, 4),
+            attack(4, 3, 4),
+            attack(5, 9, 4),
+        ];
+
+        let operations = build_combat_operations_payload(&snapshot, 4, None, 20);
+        assert_eq!(operations.len(), 5);
+        assert_eq!(
+            operations.iter().find(|row| row["id"] == 1).unwrap()["avatar"],
+            serde_json::json!({ "kind": "emblem", "symbol": "🌱" })
+        );
+        let human_avatar = &operations.iter().find(|row| row["id"] == 2).unwrap()["avatar"];
+        assert_eq!(human_avatar["kind"], "portrait");
+        assert_eq!(human_avatar["slug"], "caesar");
+        let bot_avatar = &operations.iter().find(|row| row["id"] == 3).unwrap()["avatar"];
+        assert_eq!(bot_avatar["kind"], "emblem");
+        assert!(bot_avatar["symbol"].as_str().is_some_and(|symbol| !symbol.is_empty()));
+        assert_eq!(
+            operations.iter().find(|row| row["id"] == 4).unwrap()["avatar"]["kind"],
+            "emblem"
+        );
+        assert_eq!(
+            operations.iter().find(|row| row["id"] == 5).unwrap()["avatar"],
+            serde_json::json!({ "kind": "fallback" })
+        );
+    }
+
+    #[test]
     fn combat_operations_join_only_troop_transports_to_local_targets() {
         use sow_core::game::{GameState, UnitType};
         use sow_core::game_config::GameConfig;
@@ -4237,12 +4368,18 @@ mod tests {
 
         let operations = build_combat_operations_payload(&snapshot, 1, Some(&engine), 5);
         assert_eq!(operations.len(), 2);
+        assert_eq!(
+            combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)),
+            snapshot.tick
+        );
         assert_eq!(operations[0]["direction"], "incoming");
         assert_eq!(operations[0]["kind"], "fleet");
         assert_eq!(operations[0]["id"], 11);
         assert_eq!(operations[1]["direction"], "outgoing");
         assert_eq!(operations[1]["id"], 10);
         assert_eq!(operations[1]["neutral"], true);
+        snapshot.fleets.clear();
+        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)), 0);
     }
 
     #[test]

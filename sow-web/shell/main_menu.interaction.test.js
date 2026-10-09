@@ -1402,9 +1402,9 @@ test("Boudica reveal beats share a fixed one-second wait while tribal contact st
         "boudica_outpost_tax_collectors_scene", "boudica_outpost_roman_supply_depot_scene"
     ]);
     const next = id => definition.steps.find(step => step.id === id).next;
-    assert.equal(next("boudica_share_sent"), "boudica_outpost_colonia_veterans");
-    assert.equal(next("boudica_aid_kept"), "boudica_outpost_colonia_veterans");
-    assert.equal(next("boudica_outpost_colonia_veterans_scene"), "boudica_camulodunum_intro");
+    assert.equal(next("boudica_share_sent"), "boudica_camulodunum_intro");
+    assert.equal(next("boudica_aid_kept"), "boudica_camulodunum_intro");
+    assert.equal(next("boudica_outpost_colonia_veterans_scene"), "boudica_outpost_tax_collectors");
     assert.equal(definition.steps.some(step => /factory|bunker/.test(step.id)), false);
     assert.equal(definition.steps.some(step => Object.hasOwn(step, "start_delay_seconds") || Object.hasOwn(step, "advance_delay_seconds")), false);
     assert.doesNotMatch(campaignEditor, /start_delay_seconds|advance_delay_seconds/);
@@ -1626,7 +1626,7 @@ test("camera practice stays paused through desktop and touch routes", () => {
         version: 2, episode_id: "camera_practice_test", text_namespace: "tutorial.camera_practice_",
         settings: { starting_troops: 1000 }, speakers: {}, entry: "boudica_zoom_out",
         steps: [
-            { id: "boudica_zoom_out", type: "objective", title_key: "tutorial.zoom_out", trigger: { type: "zoom_out_complete", value: 0.85, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_out" }, pause_game: true, camera_only: true, next: "boudica_camera_drag" },
+            { id: "boudica_zoom_out", type: "objective", title_key: "tutorial.zoom_out", trigger: { type: "zoom_out_complete", value: 1, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_out" }, pause_game: true, camera_only: true, next: "boudica_camera_drag" },
             { id: "boudica_camera_drag", type: "objective", title_key: "tutorial.camera_drag", trigger: { type: "camera_target", target: "suetonius_paulinus", distance: 8, scope: "step" }, marker: { target: "suetonius_paulinus" }, guide: { kind: "world", target: "target_action", gesture: "drag" }, pause_game: true, camera_only: true, next: "boudica_camera_hover" },
             { id: "boudica_camera_hover", type: "objective", title_key: "tutorial.camera_hover", trigger: { type: "hover", target: "suetonius_paulinus", value: 1, scope: "step" }, marker: { target: "suetonius_paulinus" }, guide: { kind: "world", target: "target_action", gesture: "hover" }, pause_game: true, camera_only: true, next: "boudica_zoom_in" },
             { id: "boudica_zoom_in", type: "objective", title_key: "tutorial.zoom_in", trigger: { type: "zoom_in_complete", target: "suetonius_paulinus", distance: 8, scope: "step" }, guide: { kind: "ui", target: "hud_center_camera", gesture: "zoom_in" }, pause_game: true, camera_only: true, next: "boudica_found_suetonius" },
@@ -1695,9 +1695,9 @@ test("camera practice stays paused through desktop and touch routes", () => {
     }
     const zoomStart = 1, zoomFloor = 0.2, zoomClose = 0.75;
     const initialFacts = { camera_zoom: zoomStart, camera_zoom_start: zoomStart, camera_zoom_floor: zoomFloor, camera_zoom_target: zoomClose, zoom_out_events: 0, zoom_in_events: 0, camera_target_distance: 30, zoom_out_complete: 0, zoom_in_complete: 0 };
-    const zoomOutGoal = campaign.zoomOutTarget(initialFacts, 0.85);
-    assert.ok(Math.abs(zoomOutGoal - 0.32) < 0.00001, "zoom-out brings the battlefield close to its wide-view limit");
-    assert.ok(Math.abs(campaign.zoomOutProgress({ ...initialFacts, camera_zoom: zoomOutGoal }) - 0.85) < 0.00001);
+    const zoomOutGoal = campaign.zoomOutTarget(initialFacts, 1);
+    assert.equal(zoomOutGoal, zoomFloor, "zoom-out reaches the map's zoom limit");
+    assert.equal(campaign.zoomOutProgress({ ...initialFacts, camera_zoom: zoomOutGoal }), 1);
     let desktopClock = 0;
     const desktop = campaign.create(definition, "boudica_zoom_out", { factions: [] }, () => desktopClock);
     desktop.update(initialFacts, {}, 0);
@@ -1916,17 +1916,18 @@ test("contact responses wait behind an open campaign scene", () => {
     assert.equal(machine.update(facts, {}).step.id, "objective");
     assert.equal(machine.view().reaction, undefined, "the contact response is shown only once");
 });
-test("gameplay chrome: vertical right panel with exit on top, fps in dock, desktop notices follow the active quest stack", () => {
+test("gameplay chrome: vertical right panel with FPS at top, exit first, desktop notices follow the active quest stack", () => {
     const statusRight = hud.slice(hud.indexOf("sow-hud__status-right"), hud.indexOf("</header>"));
+    assert.ok(statusRight.includes("sow-hud-fps"), "FPS stays in the top-right menu");
     const exitAt = statusRight.indexOf("prompt_surrender");
     assert.ok(exitAt > 0 && exitAt < statusRight.indexOf("toggle_settings")
         && exitAt < statusRight.indexOf("toggle_inbox")
         && exitAt < statusRight.indexOf("toggle_leaderboard"),
         "exit stays first in the vertical panel");
-    assert.ok(!statusRight.includes("sow-hud-fps"), "fps meter leaves the topbar");
-    const goldAt = hud.indexOf('class="sow-hud__res-gold"');
+    const goldAt = hud.indexOf('id="sow-hud-nameplate-gold"');
     const fpsAt = hud.indexOf('class="sow-hud__fps"');
-    assert.ok(goldAt >= 0 && fpsAt > goldAt, "gold and FPS remain in the dock resource row");
+    assert.ok(goldAt >= 0 && fpsAt >= 0, "resources stay in the player plate and FPS stays top-right");
+    assert.doesNotMatch(hud, /sow-hud-resource-row|sow-hud-res-rate|sow-hud-res-gold|sow-hud-troop-fill/);
     assert.match(hudCss, /\.sow-hud__status-right \{[^}]*flex-direction: column/);
     assert.match(hudCss, /\.sow-hud__status-left:not\(:has\(> :not\(\.hidden\)\)\)/);
     assert.match(hudCss, /@media \(min-width: 721px\) \{\s*\.sow-hud__notifications \{[^}]*top: var\(--sow-hud-notifications-top, var\(--sow-hud-top-edge\)\);[^}]*inset-inline-start: var\(--sow-hud-notifications-inline-start, max\(16px, var\(--sow-sal\)\)\);[^}]*transform: none;/);
@@ -2072,6 +2073,9 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
     assert.doesNotMatch(hudStateSource, /^\s*(attacks|fleets):\s*Vec</m, "the HUD state does not retain unused attack or fleet vectors");
     assert.match(webMenu, /let operations = snapshot[\s\S]*build_combat_operations_payload\(/);
     assert.match(webMenu, /"operations": operations/);
+    assert.match(webMenu, /combat_operations_snapshot_tick\(snapshot, my_pid, app\.sim\.engine\.as_ref\(\)\)/);
+    assert.match(webMenu, /combat_operations_tick,/);
+    assert.match(webMenu, /fn combat_operations_snapshot_tick\(/);
     assert.match(webMenu, /unit_type == sow_core::game::UnitType::TransportShip/);
     assert.match(webMenu, /WebMenuCommand::CounterAttack \{ target_player_id \}/);
     assert.match(webMenu, /fn incoming_combat_troops\(/);
@@ -2079,17 +2083,21 @@ test("combat operations reuse snapshots and intents across desktop and mobile HU
     assert.match(webMenu, /attack_ratio/);
     assert.match(intentApplySource, /wf\.unit_type != crate::game::UnitType::TransportShip/);
     assert.match(hud, /function renderCombatOperations\(operations\)/);
+    assert.match(hud, /renderAvatarIdentity\([\s\S]*operation\.avatar[\s\S]*kind: "fallback"/);
+    assert.match(hud, /function renderAvatarIdentity\(image, emblem, presentation\)/);
     assert.match(hud, /aria-label="' \+ SOW_t\("hud\.combat_operations"\)/);
     assert.doesNotMatch(hud, /sow-hud__operations-header|retreat_cost|operation-penalty/);
     assert.match(hud, /var canCounter = incoming && !retreating/);
     assert.match(hud, /pendingCounterAttacks\[playerId\]/);
     assert.match(hud, /send\("counter_attack", \{ target_player_id: counterTarget \}\)/);
     assert.match(hud, /send\("focus_world", \{ x: focusX, y: focusY \}\)/);
-    assert.match(hudCss, /\.sow-hud__operations \{[^}]*bottom: calc\(max\(14px, var\(--sow-sab\)\) \+ 116px\)/);
+    assert.match(hudCss, /\.sow-hud__operations \{[^}]*bottom: var\(--sow-hud-layout-operations-bottom, calc\(max\(14px, var\(--sow-sab\)\) \+ var\(--sow-dock-reserve\)\)\)/);
     assert.match(hudCss, /\.sow-hud__operation-action \{[^}]*width: 44px; height: 44px/);
     assert.match(hudCss, /@media \(max-width: 599px\) and \(orientation: portrait\)[\s\S]*?\.sow-hud__operations \{[^}]*width: min\(560px, calc\(100vw - 124px\)\)/);
     assert.match(hudCss, /\.sow-hud__dock-stack \{[^}]*flex-direction: column-reverse/);
     assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__operations \{[^}]*max-height: var\(--sow-hud-layout-operations-max-height, 20dvh\)/);
+    assert.match(hudCss, /@media \(orientation: portrait\)\s*\{\s*#sow-hud\[data-compact="true"\] \.sow-hud__operations \{\s*width: min\(560px, calc\(100vw - 124px\)\)/);
+    assert.match(hudCss, /\.sow-hud__operation-emblem \{ font-size: 18px; line-height: 1; \}/);
 
     for (const locale of fs.readdirSync(path.join(shell, "../../sow-i18n/strings"))) {
         const catalog = path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`);
@@ -2685,7 +2693,8 @@ test("notification cards render typed avatars, recover failed art, and clear reu
     const renderer = hud.slice(start, end)
         + "\nthis.createNotificationCard = createNotificationCard;"
         + "\nthis.renderNotificationCard = renderNotificationCard;"
-        + "\nthis.clearNotificationCard = clearNotificationCard;";
+        + "\nthis.clearNotificationCard = clearNotificationCard;"
+        + "\nthis.renderAvatarIdentity = renderAvatarIdentity;";
     vm.runInNewContext(renderer, context);
 
     const parts = context.createNotificationCard(container, false);
@@ -2708,6 +2717,10 @@ test("notification cards render typed avatars, recover failed art, and clear reu
 
     parts.avatars[0].image.onerror.call(parts.avatars[0].image);
     assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/null.webp");
+
+    context.renderAvatarIdentity(parts.avatars[0].image, parts.avatars[0].emblem, { kind: "fallback" });
+    assert.equal(parts.avatars[0].image.src, "/assets/gameplay/avatars/null.webp");
+    assert.equal(parts.avatars[0].image.hidden, false);
 
     context.renderNotificationCard(parts, {
         entry: { id: 2, key: "hud.alliance_formed", values: {}, avatars: [{ kind: "emblem", symbol: "🏛️" }] },
@@ -3639,7 +3652,7 @@ test("mobile story dialogs scroll long text and choices while keeping speaker co
     assert.match(campaignView, /button\.className = "sow-story__choice"[\s\S]*?choices\.appendChild\(button\)/);
 });
 
-test("tutorial player panel stays above quests on the left on desktop and mobile", () => {
+test("shared player and economy panel stays above tutorial quests on desktop and mobile", () => {
     assert.match(campaignView, /data-story-objective-toggle/);
     assert.match(campaignView, /aria-controls="' \+ uid \+ '-hint"/);
     assert.match(storyCss, /\.sow-story__details-toggle/);
@@ -3650,12 +3663,22 @@ test("tutorial player panel stays above quests on the left on desktop and mobile
     assert.match(hud, /hudRefs\.plateName\.textContent = plateLeader\.name/);
     assert.match(hud, /hudRefs\.plateTroops\.textContent = plateText/);
     assert.match(hud, /hudRefs\.plateFill\.style\.width = plateFillStr/);
+    assert.match(hud, /var playerPlateHidden = Boolean\(hud\.is_spectating\)/);
+    assert.doesNotMatch(hud.slice(hud.indexOf("var playerPlateHidden"), hud.indexOf("if (hudRefs.fps)")), /tutorialOn/);
+    assert.match(hud, /hudRefs\.plateGold\.dataset\.val = goldText/);
+    assert.match(hud, /hudRefs\.plateGoldRate\.textContent = goldRateText/);
+    assert.match(hud, /hudRefs\.plateTroopRate\.textContent = troopRateText/);
     const statusRight = hud.slice(hud.indexOf("sow-hud__status-right"), hud.indexOf("</header>"));
     assert.doesNotMatch(statusRight, /sow-hud-nameplate/);
     assert.match(hud, /class="sow-hud__nameplate-readout"><span id="sow-hud-nameplate-troops"><\/span>' \+ hudIcon\("troops", "sow-hud__inline-icon"\)/);
+    const nameplateMarkup = hud.slice(hud.indexOf('id="sow-hud-nameplate"'), hud.indexOf('id="sow-hud-hover-card"'));
+    assert.match(nameplateMarkup, /sow-hud-nameplate-gold/);
+    assert.match(nameplateMarkup, /sow-hud-nameplate-gold-rate/);
+    assert.match(nameplateMarkup, /sow-hud-nameplate-troop-rate/);
+    assert.doesNotMatch(hud, /id="sow-hud-resource-row"/);
     assert.match(hudCss, /\.sow-hud__nameplate:not\(\[hidden\]\) \{ display: grid/);
-    assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*top: max\(12px, var\(--sow-sat\)\)[^}]*inset-inline-start: max\(16px, var\(--sow-sal\)\)[^}]*height: var\(--sow-tutorial-player-panel-height\)/);
-    assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*grid-template-columns: 54px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*top: max\(12px, var\(--sow-sat\)\)[^}]*inset-inline-start: max\(16px, var\(--sow-sal\)\)[^}]*height: var\(--sow-player-panel-height\)/);
+    assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*grid-template-columns: 54px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) 24px 20px/);
     assert.match(hudCss, /\.sow-hud__nameplate-avatar \{[^}]*grid-row: 1 \/ -1;[^}]*height: 100%/);
     assert.match(hudCss, /\.sow-hud__nameplate-copy \{\s*display: contents;\s*\}/);
     assert.match(hudCss, /\.sow-hud__nameplate-copy strong \{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap/);
@@ -3665,11 +3688,11 @@ test("tutorial player panel stays above quests on the left on desktop and mobile
     assert.match(hud, /formatNameplateTroops\(troops\) \+ " \/ " \+ formatNameplateTroops\(maxTroops\)/);
     assert.match(hud, /var plateFillPct = maxTroops > 0 \? Math\.min\(100, Math\.max\(0, \(troops \/ maxTroops\) \* 100\)\) : 0/);
     assert.match(hudCss, /\.sow-hud__nameplate \{[^}]*width: 280px/);
-    assert.match(hudCss, /@media \(max-width: 720px\) \{\s*:root \{[^}]*--sow-tutorial-player-panel-height: 64px;[^}]*\}[^]*?\.sow-hud__nameplate \{[^}]*width: min\(224px,/);
-    assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate \{[^}]*grid-template-columns: 50px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+    assert.match(hudCss, /@media \(max-width: 720px\) \{\s*:root \{[^}]*--sow-player-panel-height: 84px;[^}]*\}[^]*?\.sow-hud__nameplate \{[^}]*width: min\(224px,/);
+    assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate \{[^}]*grid-template-columns: 50px minmax\(0, 1fr\)[^}]*grid-template-rows: minmax\(0, 1fr\) 20px 18px/);
     assert.match(hudCss, /@media \(max-width: 720px\) \{\s*:root \{[^}]*--sow-tutorial-progress-height: 28px;[^}]*--sow-tutorial-progress-label-size: 15px/);
     assert.match(hudCss, /@media \(max-width: 720px\) \{[^]*?\.sow-hud__nameplate-copy strong \{ font-size: 18px; \}[^]*?\.sow-hud__nameplate-bar \{ height: 20px; \}/);
-    assert.match(hud, /"--sow-tutorial-player-panel-height": \(storyRoot \? 56 \* density : 56\)\.toFixed\(2\) \+ "px"[\s\S]*?"--sow-tutorial-progress-height": "24px"[\s\S]*?"--sow-tutorial-progress-label-size": \(14 \/ density\)\.toFixed\(2\) \+ "px"/);
+    assert.match(hud, /"--sow-player-panel-height": \(storyRoot \? 92 \* density : 92\)\.toFixed\(2\) \+ "px"[\s\S]*?"--sow-tutorial-progress-height": "24px"[\s\S]*?"--sow-tutorial-progress-label-size": \(14 \/ density\)\.toFixed\(2\) \+ "px"/);
     assert.match(hudCss, /grid-template-columns: 46px minmax\(0, 1fr\)/);
     assert.match(storyCss, /\.sow-story__meter progress \{[^}]*height: var\(--sow-tutorial-progress-height\)/);
     assert.match(storyCss, /\.sow-story__meter output \{[^}]*inset: 0;[^}]*display: grid;[^}]*place-items: center;[^}]*font-size: var\(--sow-tutorial-progress-label-size\)/);
@@ -3681,12 +3704,12 @@ test("tutorial player panel stays above quests on the left on desktop and mobile
     const desktopObjective = storyCss.match(/#sow-story \.sow-story__objective \{[^}]*\}/);
     assert.ok(desktopObjective, "tutorial objective uses its own stacked placement");
     assert.match(desktopObjective[0], /inset-inline-start: max\(16px, var\(--story-inset-left\)\)/);
-    assert.match(desktopObjective[0], /calc\(max\(12px, var\(--story-inset-top\)\) \+ var\(--sow-tutorial-player-panel-height\) \+ var\(--sow-tutorial-player-panel-gap\)\)/);
+    assert.match(desktopObjective[0], /calc\(max\(12px, var\(--story-inset-top\)\) \+ var\(--sow-player-panel-height\) \+ var\(--sow-tutorial-player-panel-gap\)\)/);
     const mobileObjective = storyCss.slice(storyCss.indexOf("@container (max-width: 720px)"), storyCss.indexOf("@container (max-width: 640px)"));
     const mobileTutorialObjective = mobileObjective.match(/#sow-story \.sow-story__objective \{[^}]*\}/);
     assert.ok(mobileTutorialObjective, "mobile tutorial objective uses the player panel stack");
     assert.match(mobileTutorialObjective[0], /inset-inline-start: max\(8px, var\(--story-inset-left\)\)/);
-    assert.match(mobileTutorialObjective[0], /calc\(max\(8px, var\(--story-inset-top\)\) \+ var\(--sow-tutorial-player-panel-height\) \+ var\(--sow-tutorial-player-panel-gap\)\)/);
+    assert.match(mobileTutorialObjective[0], /calc\(max\(8px, var\(--story-inset-top\)\) \+ var\(--sow-player-panel-height\) \+ var\(--sow-tutorial-player-panel-gap\)\)/);
 });
 
 test("tutorial troop totals keep grouped digits below 100k and compact decimals above it", () => {
@@ -3700,6 +3723,14 @@ test("tutorial troop totals keep grouped digits below 100k and compact decimals 
     assert.equal(formatNameplateTroops(123300), "123.3K");
     assert.equal(formatNameplateTroops(999999), "1.0M");
     assert.equal(formatNameplateTroops(34200000), "34.2M");
+    const metricStart = hud.indexOf("    function formatHudMetric(");
+    const metricEnd = hud.indexOf("\n    function notificationAnchor", metricStart);
+    const formatHudMetric = vm.runInNewContext(hud.slice(metricStart, metricEnd) + "\n({ formatHudMetric, formatHudRate });");
+    assert.equal(formatHudMetric.formatHudMetric(764704), "764.7K");
+    assert.equal(formatHudMetric.formatHudMetric(-45), "-45");
+    assert.equal(formatHudMetric.formatHudMetric(Infinity), "0");
+    assert.equal(formatHudMetric.formatHudRate(12.5), "+12.5/s");
+    assert.equal(formatHudMetric.formatHudRate(-0.5), "-0.5/s");
 });
 
 test("short landscape compaction stays on mobile and the editor reuses the shared dialogue", () => {
@@ -3741,7 +3772,7 @@ test("short landscape HUD geometry fits the requested phone widths and heights",
         const dockLeft = (width - dockWidth) / 2;
         const operationsRight = width - rightInset;
         const operationsHeight = Math.min(height * 0.2, Math.max(0, height - 56 - 84 - 6 - 6));
-        assert.ok(dockWidth >= 280, `${width}x${height}: dock has room for its resource row`);
+        assert.ok(dockWidth >= 280, `${width}x${height}: dock has room for the building action strip`);
         assert.ok(operationWidth >= 220, `${width}x${height}: operations keep a usable width`);
         assert.ok(dockLeft >= leftInset && dockLeft + dockWidth <= width - rightInset, `${width}x${height}: dock stays inside safe edges`);
         assert.ok(operationsRight <= width - rightInset && operationsRight - operationWidth >= leftInset, `${width}x${height}: operations stay inside safe edges`);
@@ -4408,11 +4439,9 @@ test("campaign building access is enforced by the shared step unlock policy", ()
     assert.match(campaignEditor, /STRUCTURE_LEVEL_LIMITS/);
     assert.match(campaignEditor, /Available when this step begins/);
     assert.doesNotMatch(campaignEditor, /Buildings available|Unlock buildings after/);
-    assert.match(hud, /campaignActionLockReason/);
+    assert.doesNotMatch(hud, /campaignActionLockReason/);
     assert.match(hud, /function campaignAllowsBuilding\(unlocks, kind, level\)\s*\{\s*return unlocks === null \|\|/);
     assert.match(hud, /item\.reason_key !== "lobbies\.locked"/);
-    assert.match(hud, /warshipCampaignReason/);
-    assert.match(hud, /nukeCampaignReason/);
     assert.match(campaignEditor, /CAMPAIGN_ACTION_BUILDING_REQUIREMENTS/);
     assert.match(mapClick, /reason_level: Option<u8>/);
     assert.match(mapClick, /reason_seconds: Option<u32>/);
@@ -4436,7 +4465,7 @@ test("campaign building access is enforced by the shared step unlock policy", ()
 
 test("tutorial HUD evaluates campaign availability without private campaign globals", () => {
     const start = hud.indexOf("    function campaignAllowsBuilding(");
-    const end = hud.indexOf("    function campaignActionLockReason(", start);
+    const end = hud.indexOf("    function setCampaignLock(", start);
     const availability = vm.runInNewContext(hud.slice(start, end) + "\n({ campaignAllowsBuilding, campaignAllowsAction });", {
         window: { SOWCampaign: require(path.join(shell, "sow-campaign.js")) }
     });
@@ -4453,14 +4482,21 @@ test("tutorial HUD evaluates campaign availability without private campaign glob
     assert.equal(availability.campaignAllowsAction(null, "warship"), true);
 });
 
-test("campaign fleet stays visible and shows the actual localized blocker", () => {
-    assert.match(mapClick, /campaign_fleet && target\.is_land/);
-    assert.match(mapClick, /campaign_locked\.then_some\("hud\.campaign_unlock_required"\)/);
+test("campaign hides unavailable actions instead of rendering lock-label UI", () => {
+    assert.match(mapClick, /campaign_fleet\s*&&\s*target\.is_land/);
+    assert.match(mapClick, /MapMenuAction::Fleet => self[\s\S]*?CampaignAction::TransportFleet/);
+    assert.doesNotMatch(mapClick, /campaign_locked\.then_some\("hud\.campaign_unlock_required"\)/);
     assert.match(mapClick, /Some\(\("hud\.fleet_capacity_full", None\)\)/);
     assert.match(mapClick, /fleet_route_check\([\s\S]*?FleetRouteCheck::Access\)/);
     assert.match(webMenu, /"reason_troops": item\.reason_troops/);
-    assert.match(hud, /if \(!withDetails && disabled && reason\)[\s\S]*?reasonLabel\.textContent = reason/);
-    assert.match(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
+    assert.match(hud, /var campaignMenu = campaignUnlocks\(hudState && hudState\.hud\) !== null/);
+    assert.match(hud, /else if \(!campaignMenu\) mapDisabledSector/);
+    assert.match(hud, /fleetTrade\.hidden = hideTrade/);
+    assert.match(hud, /fleetWarship\.hidden = hideWarship/);
+    assert.match(hud, /fleetNuke\.hidden = hideNuke/);
+    assert.match(hud, /buildingCardNext\.hidden = true/);
+    assert.doesNotMatch(hud, /campaign_unlock_required/);
+    assert.doesNotMatch(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
     assert.doesNotMatch(mapClick, /fleet_no_port|NoPort|completed port/);
 });
 
@@ -4605,6 +4641,17 @@ test("building card anchors to the building and shows compact visual stats", () 
     assert.doesNotMatch(hudRefs.buildingCardNext.innerHTML, /Requires a level 3 City/);
     assert.equal(hudRefs.buildingCardUpgrade.disabled, false);
 
+    renderBuildingCard(menu({
+        kind: "Bunker",
+        level: 2,
+        metrics: [{ icon: "defense", label: "Enemy attack losses", value: 10, prefix: "+", unit: "%" }],
+        campaign_upgrade_locked: true,
+        can_upgrade: false
+    }));
+    assert.equal(hudRefs.buildingCardNext.hidden, true);
+    assert.equal(hudRefs.buildingCardNext.textContent, "");
+    assert.equal(hudRefs.buildingCardUpgrade.hidden, true);
+
     renderBuildingCard(menu({ kind: "Bunker", level: 2 }, "radial"));
     assert.equal(hudRefs.buildingCard.classes.has("hidden"), true);
     renderBuildingCard(null);
@@ -4685,7 +4732,7 @@ test("map menu stays visible with disabled sectors when no action is available",
     const renderEnd = hud.indexOf("function updateLeaderboard", renderStart);
     const renderBody = hud.slice(renderStart, renderEnd);
     assert.doesNotMatch(renderBody, /if \(!items\.length\)/);
-    assert.match(renderBody, /mapDisabledSector\(radial, 1, radialCount, "fleet"/);
+    assert.match(renderBody, /else if \(!campaignMenu\) mapDisabledSector\(radial, 1, radialCount, "fleet"/);
 });
 
 test("map menu keeps the radial sectors and recovered submenu actions", () => {
@@ -4706,7 +4753,7 @@ test("map menu keeps the radial sectors and recovered submenu actions", () => {
     assert.match(hudCss, /\.sow-hud__map-submenu/);
     assert.match(hudCss, /@keyframes sow-map-menu-in/);
     assert.match(hud, /label\.emoji\s*\?/);
-    assert.match(hud, /mapActionContent\(icon, withDetails \? "" : actionName\)/);
+    assert.match(hud, /mapActionContent\(icon, withDetails \? "" : actionName, withDetails \? "" : reason\)/);
     assert.match(hud, /parts\.push\(item\.level/);
     assert.match(hud, /sow-hud__buildings-strip/);
     assert.match(hudCss, /\.sow-hud__buildings-strip/);
@@ -4730,6 +4777,9 @@ test("fleet dock uses building buttons for real actions and an automatic-trade s
     assert.match(hud, /var tradeStatus = SOW_t\("hud\.map_action_fleet"\) \+ " · " \+ tradeCount \+ "\/" \+ tradeCapacity/);
     assert.match(hud, /hudRefs\.fleetWarship\.disabled = warshipDisabled;[\s\S]*hudRefs\.fleetWarship\.setAttribute\("aria-disabled", String\(warshipDisabled\)\)[\s\S]*hudRefs\.fleetWarship\.setAttribute\("aria-pressed"/);
     assert.match(hud, /hudRefs\.fleetNuke\.disabled = nukeDisabled;[\s\S]*hudRefs\.fleetNuke\.setAttribute\("aria-disabled", String\(nukeDisabled\)\)[\s\S]*hudRefs\.fleetNuke\.setAttribute\("aria-pressed"/);
+    assert.match(hud, /fleetTrade\.hidden = hideTrade[\s\S]*fleetWarship\.hidden = hideWarship[\s\S]*fleetNuke\.hidden = hideNuke/);
+    assert.match(hud, /fleetStrip\.style\.display = isDeploying \|\| !hasFleetItems \? "none" : "flex"/);
+    assert.match(hud, /setCampaignLock\(hudRefs\.fleetWarship, fleetUnlocks === null && warshipDisabled/);
     assert.match(hud, /warshipDisabled = warshipCampaignLocked \|\| !warshipUnlocked \|\| militaryFull \|\| gold < warshipCost/);
     assert.match(hud, /nukeDisabled = nukeCampaignLocked \|\| !nukeUnlocked \|\| !nukeReady/);
     assert.match(hud, /tradeCount = Math\.floor\(Number\(fleetPanel\.trade_ships\)/);
@@ -4743,8 +4793,8 @@ test("fleet dock uses building buttons for real actions and an automatic-trade s
     assert.match(mapClick, /self\.build_ship_at\(tile_idx, sow_core::game::UnitType::Warship\)/);
     assert.match(mapClick, /self\.launch_nuke_at\(kind, tile_idx\)/);
     assert.doesNotMatch(mapClick, /BuildTradeShip|build_trade_ship/);
-    assert.match(webMenu, /"warship_required_port_level": warship\.required_port_level\(\)/);
-    assert.match(webMenu, /"nuke_required_city_level": nuke\.required_city_level\(\)/);
+    assert.match(webMenu, /"warship_required_port_level": 1/);
+    assert.match(webMenu, /"nuke_required_city_level": 1/);
     assert.match(campaignEngine, /dock_trade_ship: '#sow-hud \[data-fleet-kind="trade"\]'/);
     assert.doesNotMatch(campaignEngine, /map_build_trade_ship/);
     assert.doesNotMatch(campaignEditorHtml, /data-map-action="build_trade_ship"/);
@@ -4798,7 +4848,7 @@ test("radial actions restore emoji, visible translated labels, and all alliance 
         document: { createElement: element },
         mapActionLabels: config.mapActionLabels,
         mapActionContent: undefined,
-        mapActionReason: item => item.reason_key ? "Locked in this mission." : "",
+        mapActionReason: item => item.reason_key ? "Unavailable." : "",
         mapLabel: action => action,
         SOW_t: key => "translated:" + key,
         emojiIcon: (emoji, cls) => `<span class="${cls} is-emoji">${emoji}</span>`,
@@ -4819,13 +4869,7 @@ test("radial actions restore emoji, visible translated labels, and all alliance 
     assert.equal(pending.disabled, true);
     assert.equal(pending.getAttribute("aria-disabled"), "true");
     assert.equal(pending.children[0].children[1].textContent, "translated:hud.map_action_alliance_pending");
-    const lockedFleet = renderButton(
-        { action: "fleet", disabled: true, reason_key: "hud.campaign_unlock_required" }, "sector", false
-    );
-    assert.equal(lockedFleet.getAttribute("aria-label"), "fleet. Locked in this mission.");
-    assert.equal(lockedFleet.children[0].children[2].textContent, "Locked in this mission.");
     assert.match(hudCss, /\.sow-hud__map-sector:focus-visible/);
-    assert.match(hudCss, /\.sow-hud__map-sector \.sow-hud__map-action-reason/);
     assert.match(hudCss, /\.sow-hud__map-sector:active/);
 });
 
@@ -5056,9 +5100,13 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     const anchorSource = tutorial.slice(anchorStart, anchorEnd);
     assert.match(anchorSource, /resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
     assert.match(anchorSource, /step\.id === "boudica_transfer_send"[\s\S]*resolveUiAnchor\(source, spotlightPanel\)/);
-    assert.match(anchorSource, /guide\.kind === "ui" && step\.trigger && step\.trigger\.type === "ui" && guide\.target === "hud_center_camera"[\s\S]*result\.toX = result\.x; result\.toY = result\.y[\s\S]*root\.clientWidth[\s\S]*root\.clientHeight/);
-    assert.match(anchorSource, /result\.spotlightX = result\.x; result\.spotlightY = result\.y; result\.dimOutside = true/);
+    assert.doesNotMatch(anchorSource, /guide\.target === "hud_center_camera"[\s\S]*root\.clientWidth/);
     assert.doesNotMatch(anchorSource, /delete result\.(?:width|height)/);
+    assert.match(campaignView, /const homeGuide = Boolean\(step\.guide[\s\S]*step\.trigger\.action === "hud_center_camera"\)/);
+    assert.match(campaignView, /const originX = homeGuide \? root\.clientWidth \* 0\.5 : anchor\.x/);
+    assert.match(campaignView, /const originY = homeGuide \? root\.clientHeight \* 0\.5 : anchor\.y/);
+    assert.match(campaignView, /homeGuide \? anchor\.x - originX/);
+    assert.match(campaignView, /homeGuide \? anchor\.y - originY/);
     assert.match(campaignView, /spotlight\.classList\.toggle\("is-dimmed", Boolean\(guideVisible && \(anchor\.dimOutside \|\| step\.guide\.kind === "ui"\)\)\)/);
     assert.match(campaignView, /Number\.isFinite\(anchor\.spotlightWidth\) \? anchor\.spotlightWidth : anchor\.width/);
     assert.match(campaignView, /Number\.isFinite\(anchor\.spotlightX\) \? anchor\.spotlightX : anchor\.x/);
@@ -5276,7 +5324,12 @@ test("tutorial hand keeps bouncing over the Roman target and moving expansion ed
     assert.match(storyCss, /@keyframes story-hover \{ 0%, 100% \{ transform: translateY\(-8px\)/);
     assert.match(storyCss, /data-guide-path="true"\] \.sow-story__hand \{ animation: story-guide-path/);
     assert.match(storyCss, /@keyframes story-guide-path/);
-    assert.match(tutorial, /guide\.kind === "ui" && step\.trigger && step\.trigger\.type === "ui" && guide\.target === "hud_center_camera"[\s\S]*result\.toX = result\.x[\s\S]*root\.clientWidth/);
+    assert.match(campaignView, /function setHomeGuideCurve\(node, dx, dy\)[\s\S]*?\[\[25, 0\.25\], \[50, 0\.5\], \[75, 0\.75\]\]/);
+    assert.match(storyCss, /data-guide-target="hud_center_camera"\] \.sow-story__ripple \{ transform: translate\(var\(--guide-dx\), var\(--guide-dy\)\); \}/);
+    assert.match(storyCss, /data-guide-target="hud_center_camera"\] \.sow-story__hand \{ animation: story-home-guide 5s linear infinite; \}/);
+    assert.match(storyCss, /@keyframes story-home-guide[\s\S]*?20%[\s\S]*?21%[\s\S]*?23%[\s\S]*?26%, 86%[\s\S]*?91%[\s\S]*?100%/);
+    assert.match(campaignView, /gesture\.hidden = !guideVisible/);
+    assert.match(campaignEditor, /window\.SOWCampaignView\.mount/);
     assert.doesNotMatch(storyCss, /data-gesture\[\^="zoom_"\]\s+\.sow-story__hand/);
     assert.doesNotMatch(storyCss, /@keyframes story-drag/);
     assert.doesNotMatch(tutorial, /step\.trigger && step\.trigger\.type === "territory" && step\.guide\.target === "expand"/);

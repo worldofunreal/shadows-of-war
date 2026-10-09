@@ -558,8 +558,12 @@ impl SowApp {
             .is_some_and(|engine| engine.campaign_unlocks.is_some());
         let can_fleet = !spawning
             && target.owner == 0
-            && ((campaign_fleet && target.is_land)
-                || (has_boat_capacity
+            && ((campaign_fleet
+                && target.is_land
+                && self
+                    .campaign_action_unlocked(sow_core::campaign::CampaignAction::TransportFleet))
+                || (!campaign_fleet
+                    && has_boat_capacity
                     && self
                         .fleet_route_check(tile_idx, target.owner, FleetRouteCheck::Access)
                         .is_ok()));
@@ -568,6 +572,19 @@ impl SowApp {
             target.is_land && self.can_attack(tile_idx, target.owner),
             can_fleet,
         );
+        if campaign_fleet {
+            actions.retain(|action| match action {
+                MapMenuAction::Fleet => self
+                    .campaign_action_unlocked(sow_core::campaign::CampaignAction::TransportFleet),
+                MapMenuAction::Nuke => {
+                    self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Nuke)
+                }
+                MapMenuAction::BuildWarship => {
+                    self.campaign_action_unlocked(sow_core::campaign::CampaignAction::Warship)
+                }
+                _ => true,
+            });
+        }
         if target.owner != target.my_id || !target.is_land || spawning {
             return actions;
         }
@@ -623,19 +640,7 @@ impl SowApp {
             .into_iter()
             .map(|action| {
                 let (cost, level) = self.map_menu_cost(action, tile_idx);
-                let campaign_action = match action {
-                    MapMenuAction::Fleet => {
-                        Some(sow_core::campaign::CampaignAction::TransportFleet)
-                    }
-                    MapMenuAction::Nuke => Some(sow_core::campaign::CampaignAction::Nuke),
-                    MapMenuAction::BuildWarship => {
-                        Some(sow_core::campaign::CampaignAction::Warship)
-                    }
-                    _ => None,
-                };
-                let campaign_locked = campaign_action
-                    .is_some_and(|required| !self.campaign_action_unlocked(required));
-                let mut reason_key = campaign_locked.then_some("hud.campaign_unlock_required");
+                let mut reason_key = None;
                 let mut reason_level = None;
                 let mut reason_seconds = None;
                 let mut reason_troops = None;
@@ -645,7 +650,7 @@ impl SowApp {
                         .engine
                         .as_ref()
                         .is_some_and(|engine| engine.campaign_unlocks.is_some());
-                let action_unavailable = if campaign_fleet && !campaign_locked {
+                let action_unavailable = if campaign_fleet {
                     let blocker = self.map_target(tile_idx).and_then(|target| {
                         if target.is_teammate {
                             Some(("hud.fleet_teammate", None))
@@ -687,9 +692,9 @@ impl SowApp {
                     } else {
                         false
                     }
-                } else if action == MapMenuAction::Nuke && !campaign_locked {
+                } else if action == MapMenuAction::Nuke {
                     let owner_id = self.sim.my_player_id.unwrap_or_default();
-                    let required_level = sow_core::game::NukeKind::AtomBomb.required_city_level();
+                    let required_level = 1;
                     let ready_city = self.sim.current_snapshot.as_ref().is_some_and(|snapshot| {
                         snapshot.buildings.iter().any(|building| {
                             building.owner_id == owner_id
@@ -730,8 +735,7 @@ impl SowApp {
                     action,
                     cost,
                     level,
-                    disabled: campaign_locked
-                        || action_unavailable
+                    disabled: action_unavailable
                         || cost.is_some_and(|value| !value.is_finite() || gold < value),
                     reason_key,
                     reason_level,
@@ -1142,7 +1146,7 @@ impl SowApp {
             .is_some_and(|building| {
                 !building.under_construction
                     && building.kind == sow_core::game::BuildingKind::Port
-                    && building.active_level() >= kind.required_port_level()
+                    && building.active_level() >= 1
             });
         if !ready_port {
             return false;
@@ -1529,8 +1533,7 @@ impl SowApp {
                 building.owner_id == owner_id
                     && building.kind == sow_core::game::BuildingKind::Port
                     && !building.under_construction
-                    && building.active_level()
-                        >= sow_core::game::UnitType::Warship.required_port_level()
+                    && building.active_level() >= 1
             })
         });
         if !has_port
@@ -1575,7 +1578,7 @@ impl SowApp {
                     building.owner_id == owner_id
                         && building.kind == sow_core::game::BuildingKind::City
                         && !building.under_construction
-                        && building.active_level() >= kind.required_city_level()
+                        && building.active_level() >= 1
                 })
         });
         if !available {

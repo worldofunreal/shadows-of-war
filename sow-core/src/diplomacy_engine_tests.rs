@@ -84,7 +84,7 @@ mod alliance_lifecycle_tests {
     }
 
     #[test]
-    fn active_campaign_assault_tracks_allies_formed_and_broken_through_diplomacy() {
+    fn active_campaign_assault_tracks_campaign_relation_and_breaks_live_allies() {
         use crate::protocol::Team;
 
         let mut engine = campaign_contact_engine(1_000.0, true);
@@ -111,6 +111,8 @@ mod alliance_lifecycle_tests {
         );
         assert!(engine.state.player(1).unwrap().alliances.contains(&2));
         assert!(engine.state.player(2).unwrap().alliances.contains(&1));
+        // The campaign relation drives the blue color and remains authoritative if a list is stale.
+        engine.state.player_mut(2).unwrap().alliances.clear();
 
         let config = engine.state.config.clone();
         let mut roman = Player::new_bot(3, "Roman force".into(), [0.8, 0.2, 0.2], &config);
@@ -317,6 +319,41 @@ mod alliance_lifecycle_tests {
         assert_eq!(engine.campaign_relations.get(&2), Some(&crate::protocol::CampaignRelation::Enemy));
         let snapshot = engine.build_snapshot();
         assert_eq!(snapshot.players.iter().find(|player| player.id == 2).unwrap().color, [1.0, 0.2, 0.2]);
+    }
+
+    #[test]
+    fn attacking_a_campaign_betrayer_updates_the_relation_to_enemy() {
+        let mut engine = campaign_contact_engine(250.0, true);
+        engine
+            .campaign_relations
+            .insert(2, crate::protocol::CampaignRelation::Allied);
+        engine.state.player_mut(1).unwrap().alliances.push(2);
+        let betrayer = engine.state.player_mut(2).unwrap();
+        betrayer.alliances.push(1);
+        betrayer.active_emoji = Some("🗡️".into());
+
+        engine.apply_stamped_intent(
+            &StampedIntent {
+                player_id: 1,
+                intent: GameplayIntent::Attack(crate::protocol::AttackIntent {
+                    target_owner: 2,
+                    troops: Some(10.0),
+                }),
+            },
+            0,
+        );
+
+        assert!(engine.state.player(1).unwrap().alliances.is_empty());
+        assert!(engine.state.player(2).unwrap().alliances.is_empty());
+        assert_eq!(
+            engine.campaign_relations.get(&2),
+            Some(&crate::protocol::CampaignRelation::Enemy)
+        );
+        let snapshot = engine.build_snapshot();
+        assert_eq!(
+            snapshot.players.iter().find(|player| player.id == 2).unwrap().color,
+            [1.0, 0.2, 0.2]
+        );
     }
 
     #[test]

@@ -112,6 +112,20 @@ impl SowEngine {
         for id in breakers.into_iter().chain(targets) {
             self.campaign_support_next_tick.remove(&id);
         }
+
+        let human_id = self
+            .state
+            .players
+            .iter()
+            .find(|player| player.player_type == PlayerType::Human)
+            .map(|player| player.id);
+        if human_id == Some(target) && self.campaign_relations.contains_key(&breaker) {
+            self.campaign_relations
+                .insert(breaker, crate::protocol::CampaignRelation::Enemy);
+        } else if human_id == Some(breaker) && self.campaign_relations.contains_key(&target) {
+            self.campaign_relations
+                .insert(target, crate::protocol::CampaignRelation::Enemy);
+        }
     }
 
     fn campaign_players_touch(&self, human_id: u16, target_id: u16) -> bool {
@@ -318,14 +332,7 @@ impl SowEngine {
                 if is_allied_in_list && is_betrayer {
                     // Silently break the alliance without any penalty for the attacker
                     let attacker = stamped.player_id;
-                    if let Some(p1) = self.state.player_mut(attacker) {
-                        p1.alliances.retain(|&id| id != owner);
-                        p1.alliance_timers.remove(&owner);
-                    }
-                    if let Some(p2) = self.state.player_mut(owner) {
-                        p2.alliances.retain(|&id| id != attacker);
-                        p2.alliance_timers.remove(&attacker);
-                    }
+                    self.break_campaign_alliance(attacker, owner);
                 }
 
                 let is_allied = self
@@ -354,7 +361,15 @@ impl SowEngine {
                     return;
                 }
                 let cost = kind.gold_cost();
-                let required_port_level = kind.required_port_level();
+                let required_port_level = if self
+                    .state
+                    .player(pid)
+                    .is_some_and(|player| player.player_type == PlayerType::Human)
+                {
+                    1
+                } else {
+                    kind.required_port_level()
+                };
                 let port_id = self
                     .buildings
                     .iter()
@@ -651,20 +666,6 @@ impl SowEngine {
                 }
                 self.mark_betrayal_cooldown(breaker);
                 self.break_campaign_alliance(breaker, target);
-                let human_id = self
-                    .state
-                    .players
-                    .iter()
-                    .find(|player| player.player_type == PlayerType::Human)
-                    .map(|player| player.id);
-                if human_id == Some(target) && self.campaign_relations.contains_key(&breaker) {
-                    self.campaign_relations
-                        .insert(breaker, crate::protocol::CampaignRelation::Enemy);
-                } else if human_id == Some(breaker) && self.campaign_relations.contains_key(&target)
-                {
-                    self.campaign_relations
-                        .insert(target, crate::protocol::CampaignRelation::Enemy);
-                }
             }
             GameplayIntent::SendResources {
                 target_player,
@@ -866,14 +867,7 @@ impl SowEngine {
 
         if is_allied_in_list && is_betrayer {
             // Silently break the alliance without any penalty for the attacker
-            if let Some(p1) = self.state.player_mut(player_id) {
-                p1.alliances.retain(|&id| id != owner);
-                p1.alliance_timers.remove(&owner);
-            }
-            if let Some(p2) = self.state.player_mut(owner) {
-                p2.alliances.retain(|&id| id != player_id);
-                p2.alliance_timers.remove(&player_id);
-            }
+            self.break_campaign_alliance(player_id, owner);
         }
 
         let is_allied = self

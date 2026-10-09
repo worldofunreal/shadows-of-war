@@ -152,13 +152,13 @@ fn prioritize_campaign_assault_targets(
             (Some(_), None) => std::cmp::Ordering::Greater,
             (Some(a), Some(b)) => a.cmp(b),
             (None, None) => std::cmp::Ordering::Equal,
-            }
-            .then_with(|| {
-                (a.committed_troops / a.defense_capacity)
-                    .total_cmp(&(b.committed_troops / b.defense_capacity))
-            })
-            .then_with(|| a.tie_rank.cmp(&b.tie_rank))
-            .then_with(|| a.target_id.cmp(&b.target_id))
+        }
+        .then_with(|| {
+            (a.committed_troops / a.defense_capacity)
+                .total_cmp(&(b.committed_troops / b.defense_capacity))
+        })
+        .then_with(|| a.tie_rank.cmp(&b.tie_rank))
+        .then_with(|| a.target_id.cmp(&b.target_id))
     });
     reachable.truncate(limit.min(count));
     reachable
@@ -940,31 +940,39 @@ impl SowEngine {
         }
         let mut targets = vec![root_id];
         if include_allies {
-            for ally in self.state.players.iter().filter(|ally| {
-                ally.id != root_id
-                    && ally.alive
-                    && ally.tile_count > 0
-            }) {
+            for ally in self
+                .state
+                .players
+                .iter()
+                .filter(|ally| ally.id != root_id && ally.alive && ally.tile_count > 0)
+            {
                 let root_lists_ally = root.alliances.contains(&ally.id);
                 let ally_lists_root = ally.alliances.contains(&root_id);
-                let relation_is_allied = self.campaign_relations.get(&ally.id)
-                    == Some(&crate::protocol::CampaignRelation::Allied);
-                if root_lists_ally != ally_lists_root || (relation_is_allied && !root_lists_ally) {
+                let relation = self.campaign_relations.get(&ally.id);
+                let mutual_alliance = root_lists_ally && ally_lists_root;
+                let is_ally = match relation {
+                    Some(relation) => *relation == crate::protocol::CampaignRelation::Allied,
+                    None => mutual_alliance,
+                };
+                if relation.is_some() && mutual_alliance != is_ally {
                     log::debug!(
-                        "[CAMPAIGN_ASSAULT] faction {} alliance mismatch with {} (relation={:?}, mutual={}); excluding until both alliance lists agree",
+                        "[CAMPAIGN_ASSAULT] faction {} campaign relation/alliance mismatch with {} (relation={:?}, mutual={}); using campaign relation",
                         ally.id,
                         root_id,
-                        self.campaign_relations.get(&ally.id),
-                        root_lists_ally && ally_lists_root
+                        relation,
+                        mutual_alliance
+                    );
+                } else if relation.is_none() && root_lists_ally != ally_lists_root {
+                    log::debug!(
+                        "[CAMPAIGN_ASSAULT] non-campaign faction {} has a one-sided alliance with {}; excluding",
+                        ally.id,
+                        root_id
                     );
                 }
+                if is_ally {
+                    targets.push(ally.id);
+                }
             }
-            targets.extend(root.alliances.iter().copied().filter(|ally_id| {
-                *ally_id != root_id
-                    && self.state.player(*ally_id).is_some_and(|ally| {
-                        ally.alive && ally.tile_count > 0 && ally.alliances.contains(&root_id)
-                    })
-            }));
         }
         targets.sort_unstable();
         targets.dedup();
@@ -1096,8 +1104,7 @@ impl SowEngine {
             self.campaign_assault_targets
                 .insert(*attacker_id, targets.clone());
         }
-        let live_attacker_ids: std::collections::HashSet<_> =
-            attackers.iter().copied().collect();
+        let live_attacker_ids: std::collections::HashSet<_> = attackers.iter().copied().collect();
         let live_target_ids: std::collections::HashSet<_> = targets.iter().copied().collect();
         if let Some(active) = &mut self.campaign_assault {
             active.attacker_ids = attackers;
@@ -1270,7 +1277,8 @@ impl SowEngine {
             return;
         }
         let phase = assault.phase_index.clamp(1, CAMPAIGN_ASSAULT_PHASES);
-        let phase_release_limit = per_force * (f64::from(phase) / f64::from(CAMPAIGN_ASSAULT_PHASES));
+        let phase_release_limit =
+            per_force * (f64::from(phase) / f64::from(CAMPAIGN_ASSAULT_PHASES));
         let mut cycle_released_troops = assault.cycle_released_troops.clone();
         cycle_released_troops.retain(|id, _| attacker_ids.contains(id));
         let mut target_last_dispatched_wave = assault.target_last_dispatched_wave.clone();
@@ -1662,19 +1670,25 @@ mod tests {
                     wave,
                     &std::collections::HashMap::new(),
                 )
-                    .first()
-                    .unwrap()
-                    .target_id
+                .first()
+                .unwrap()
+                .target_id
             })
             .collect();
         assert_eq!(rotated, vec![1, 2, 3]);
 
         let mut served = std::collections::HashMap::from([(1, 7), (2, 4)]);
         let waiting = prioritize_campaign_assault_targets(equal_targets(), 1, 8, &served);
-        assert_eq!(waiting[0].target_id, 3, "never-served allies get first turn");
+        assert_eq!(
+            waiting[0].target_id, 3,
+            "never-served allies get first turn"
+        );
         served.insert(3, 8);
         let waiting = prioritize_campaign_assault_targets(equal_targets(), 1, 9, &served);
-        assert_eq!(waiting[0].target_id, 2, "the least-recently-served ally rotates next");
+        assert_eq!(
+            waiting[0].target_id, 2,
+            "the least-recently-served ally rotates next"
+        );
     }
 
     #[test]
@@ -1720,10 +1734,8 @@ mod tests {
             serde_json::from_slice(include_bytes!("../../../assets/campaign/boudica.json"))
                 .expect("authored Boudica campaign roster");
         assert_eq!(roster.map, "eastanglia");
-        let map = crate::map_file::parse(include_bytes!(
-            "../../../assets/maps/eastanglia/map.bin"
-        ))
-        .expect("packaged East Anglia terrain");
+        let map = crate::map_file::parse(include_bytes!("../../../assets/maps/eastanglia/map.bin"))
+            .expect("packaged East Anglia terrain");
 
         let selected = [
             "trinovantes",
@@ -1802,35 +1814,71 @@ mod tests {
             .map(|id| faction_id(id))
             .collect();
         assert_eq!(roman_forces.len(), 4);
-        assert!(engine.state.player(1).unwrap().alliances.contains(&trinovantes));
-        assert!(engine
-            .state
-            .player(trinovantes)
-            .unwrap()
-            .alliances
-            .contains(&1));
+        assert!(
+            engine
+                .state
+                .player(1)
+                .unwrap()
+                .alliances
+                .contains(&trinovantes)
+        );
+        assert!(
+            engine
+                .state
+                .player(trinovantes)
+                .unwrap()
+                .alliances
+                .contains(&1)
+        );
 
         assert_eq!(
             engine.campaign_assault_force_ids,
             roman_forces.iter().copied().collect()
         );
         assert_eq!(
-            engine.activate_campaign_assault(
-                Team::Red,
-                1,
-                false,
-                true,
-                Some((2.0, 3)),
-                false,
-            ),
+            engine.activate_campaign_assault(Team::Red, 1, false, true, Some((2.0, 3)), false,),
             4
         );
         let targets = &engine.campaign_assault.as_ref().unwrap().target_ids;
         assert_eq!(targets, &vec![1, trinovantes]);
-        assert!(
-            engine.attacks.iter().any(|attack| attack.target_owner == trinovantes)
-                || engine.fleets.iter().any(|fleet| fleet.target_owner == trinovantes),
-            "the actual East Anglia map must provide a valid launch route to the authored Iceni ally"
+        let routes: Vec<_> = roman_forces
+            .iter()
+            .map(|attacker_id| {
+                let attacker = engine.state.player(*attacker_id).unwrap();
+                if engine.has_campaign_land_front(*attacker_id, trinovantes) {
+                    return (*attacker_id, "land front".to_string());
+                }
+                let target = engine.state.player(trinovantes).unwrap();
+                let tile = target.border_tiles.first_one_from(0).unwrap();
+                let route = crate::warp_fleet::resolve_fleet_route(
+                    &engine.state.map,
+                    &engine.water,
+                    &mut engine.path_scratch,
+                    *attacker_id,
+                    (trinovantes, tile),
+                    &attacker.border_tiles,
+                    Some(&target.border_tiles),
+                );
+                (
+                    *attacker_id,
+                    route.map_or_else(|error| error.to_string(), |_| "sea route".into()),
+                )
+            })
+            .collect();
+        let has_route = routes
+            .iter()
+            .any(|(_, route)| route == "land front" || route == "sea route");
+        let dispatched = engine
+            .attacks
+            .iter()
+            .any(|attack| attack.target_owner == trinovantes)
+            || engine
+                .fleets
+                .iter()
+                .any(|fleet| fleet.target_owner == trinovantes);
+        assert_eq!(
+            dispatched, has_route,
+            "the authored ally must be hit whenever a launch route exists; routes={routes:?}"
         );
     }
 

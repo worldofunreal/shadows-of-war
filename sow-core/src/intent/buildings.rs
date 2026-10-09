@@ -427,12 +427,14 @@ mod tests {
     }
 
     #[test]
-    fn nuclear_launches_require_a_finished_metropolis() {
+    fn nuclear_launches_require_a_finished_city_at_the_minimum_level() {
         let mut game = engine(false);
+        game.state.player_mut(1).unwrap().player_type = crate::player::PlayerType::Bot;
+        let required_level = crate::game::NukeKind::AtomBomb.required_city_level();
         game.buildings.push(building(
             1,
             BuildingKind::City,
-            BuildingKind::City.max_level().saturating_sub(1),
+            required_level.saturating_sub(1),
         ));
         let gold = game.state.player(1).unwrap().gold;
 
@@ -440,7 +442,7 @@ mod tests {
         assert!(game.projectiles.is_empty());
         assert_eq!(game.state.player(1).unwrap().gold, gold);
 
-        game.buildings[0].level = BuildingKind::City.max_level();
+        game.buildings[0].level = required_level;
         game.buildings[0].under_construction = true;
         game.apply_launch_nuke_intent(1, 4);
         assert!(game.projectiles.is_empty());
@@ -452,6 +454,14 @@ mod tests {
             game.state.player(1).unwrap().gold,
             gold - game.state.config.nuke_cost
         );
+    }
+
+    #[test]
+    fn human_nuclear_test_unlock_accepts_a_finished_level_one_city() {
+        let mut game = engine(false);
+        game.add_building(building(1, BuildingKind::City, 1));
+        game.apply_launch_nuke_intent(1, 4);
+        assert_eq!(game.projectiles.len(), 1);
     }
 
     #[test]

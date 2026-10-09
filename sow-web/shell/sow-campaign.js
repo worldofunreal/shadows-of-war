@@ -162,7 +162,9 @@
         const floor = Number(facts && facts.camera_zoom_floor);
         const portion = Number(amount);
         if (![start, floor].every(Number.isFinite) || start <= floor) return floor;
-        return start - (start - floor) * (Number.isFinite(portion) ? Math.max(0, Math.min(1, portion)) : 1);
+        const normalizedPortion = Number.isFinite(portion) ? Math.max(0, Math.min(1, portion)) : 1;
+        if (normalizedPortion === 1) return floor;
+        return start - (start - floor) * normalizedPortion;
     }
     const UI_TARGETS = {
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
