@@ -81,6 +81,10 @@ enum WebMenuCommand {
         campaign_session_id: u32,
         unlocks: sow_core::campaign::CampaignUnlocks,
     },
+    SetCampaignAttackPermission {
+        faction_id: String,
+        can_attack_player: bool,
+    },
     SetTutorialMarker {
         #[serde(default)]
         player_id: Option<u16>,
@@ -641,6 +645,24 @@ impl SowApp {
                         && engine.state.config.tutorial
                     {
                         engine.set_campaign_unlocks(unlocks);
+                    }
+                }
+                WebMenuCommand::SetCampaignAttackPermission {
+                    faction_id,
+                    can_attack_player,
+                } => {
+                    if self.ui.tutorial_active
+                        && self.net.is_offline
+                        && let Some(engine) = self.sim.engine.as_mut()
+                        && engine.state.config.tutorial
+                        && !engine.set_campaign_attack_permission(
+                            &faction_id,
+                            can_attack_player,
+                        )
+                    {
+                        log::warn!(
+                            "[CAMPAIGN] attack permission target is missing or not an enemy: {faction_id}"
+                        );
                     }
                 }
                 WebMenuCommand::ActivateCampaignAssault {

@@ -74,10 +74,11 @@ fn human_betrayal_allowed(
 #[inline]
 fn campaign_attacks_players(
     relation: Option<crate::protocol::CampaignRelation>,
+    campaign_override: Option<bool>,
     profile_default: bool,
 ) -> bool {
     match relation {
-        Some(crate::protocol::CampaignRelation::Enemy) => true,
+        Some(crate::protocol::CampaignRelation::Enemy) => campaign_override.unwrap_or(true),
         Some(
             crate::protocol::CampaignRelation::Allied | crate::protocol::CampaignRelation::Neutral,
         ) => false,
@@ -249,8 +250,11 @@ impl SowEngine {
         let (attack_cost, alliance_cost) = costs;
         let is_mfo = slot.tier == AiTier::Nation;
         let campaign_relation = self.campaign_relations.get(&bot_id).copied();
-        let attacks_players =
-            campaign_attacks_players(campaign_relation, slot.profile.attacks_players);
+        let attacks_players = campaign_attacks_players(
+            campaign_relation,
+            self.campaign_can_attack_player.get(&bot_id).copied(),
+            slot.profile.attacks_players,
+        );
         let assault_controls_attacks = self
             .campaign_assault
             .as_ref()
@@ -1261,18 +1265,31 @@ mod campaign_relationship_tests {
     fn campaign_relation_alone_controls_player_attack_permission() {
         assert!(campaign_attacks_players(
             Some(CampaignRelation::Enemy),
+            None,
+            false
+        ));
+        assert!(!campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            Some(false),
+            true
+        ));
+        assert!(campaign_attacks_players(
+            Some(CampaignRelation::Enemy),
+            Some(true),
             false
         ));
         assert!(!campaign_attacks_players(
             Some(CampaignRelation::Neutral),
+            Some(true),
             true
         ));
         assert!(!campaign_attacks_players(
             Some(CampaignRelation::Allied),
+            Some(true),
             true
         ));
-        assert!(campaign_attacks_players(None, true));
-        assert!(!campaign_attacks_players(None, false));
+        assert!(campaign_attacks_players(None, None, true));
+        assert!(!campaign_attacks_players(None, None, false));
     }
 
     #[test]

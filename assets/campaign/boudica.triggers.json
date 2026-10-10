@@ -1049,6 +1049,9 @@
       "body_key": "tutorial.campaign_boudica_boudica_final_body",
       "speaker": "boudica",
       "presentation": "cinematic",
+      "marker": {
+        "target": "suetonius_paulinus"
+      },
       "next": "boudica_last_stand_intro"
     },
     {
@@ -1069,9 +1072,25 @@
         {
           "id": "fight",
           "label_key": "tutorial.campaign_boudica_boudica_final_choice_fight",
-          "next": "boudica_last_stand_resist"
+          "next": "boudica_postumus_notice"
         }
       ]
+    },
+    {
+      "id": "boudica_postumus_notice",
+      "type": "scene",
+      "title_key": "tutorial.campaign_boudica_boudica_postumus_notice_title",
+      "body_key": "tutorial.campaign_boudica_boudica_postumus_notice_body",
+      "speaker": "boudica",
+      "presentation": "dialogue",
+      "marker": {
+        "target": "legio_ii_augusta"
+      },
+      "campaign_attack_on_enter": {
+        "faction_id": "legio_ii_augusta",
+        "can_attack_player": true
+      },
+      "next": "boudica_last_stand_resist"
     },
     {
       "id": "boudica_poison_end",
@@ -1355,6 +1374,10 @@
     "boudica_final_battle_intro": {
       "x": 630,
       "y": 3680
+    },
+    "boudica_postumus_notice": {
+      "x": 1470,
+      "y": 3880
     },
     "boudica_final_choice": {
       "x": 1470,

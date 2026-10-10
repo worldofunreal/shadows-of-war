@@ -697,6 +697,9 @@
         if (machineView.step.id !== runtime.lastActionStepId) {
             runtime.lastActionStepId = machineView.step.id;
             if (Number.isFinite(machineView.step.attack_ratio_on_enter)) send("set_attack_ratio", { ratio: machineView.step.attack_ratio_on_enter });
+            if (machineView.step.campaign_attack_on_enter) {
+                send("set_campaign_attack_permission", machineView.step.campaign_attack_on_enter);
+            }
             if (machineView.step.campaign_assault_on_enter) {
                 var assault = machineView.step.campaign_assault_on_enter;
                 send("activate_campaign_assault", {

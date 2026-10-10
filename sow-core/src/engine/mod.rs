@@ -372,6 +372,8 @@ pub struct SowEngine {
     pub campaign_gold_loot_override: std::collections::HashMap<PlayerId, u32>,
     pub campaign_alliance_groups: std::collections::HashMap<PlayerId, String>,
     pub campaign_relations: std::collections::HashMap<PlayerId, crate::protocol::CampaignRelation>,
+    /// Explicit per-faction override for autonomous attacks against the human.
+    pub campaign_can_attack_player: std::collections::HashMap<PlayerId, bool>,
     pub campaign_faction_ids: std::collections::HashMap<PlayerId, String>,
     /// Scripted campaign attackers and the live factions they are ordered to pursue.
     pub campaign_assault_targets: std::collections::HashMap<PlayerId, Vec<PlayerId>>,
@@ -455,6 +457,7 @@ impl SowEngine {
             campaign_gold_loot_override: std::collections::HashMap::new(),
             campaign_alliance_groups: std::collections::HashMap::new(),
             campaign_relations: std::collections::HashMap::new(),
+            campaign_can_attack_player: std::collections::HashMap::new(),
             campaign_faction_ids: std::collections::HashMap::new(),
             campaign_assault_targets: std::collections::HashMap::new(),
             campaign_assault_force_ids: std::collections::HashSet::new(),
@@ -507,6 +510,29 @@ impl SowEngine {
             self.campaign_unlocks = Some(unlocks);
             self.campaign_unlock_revision = self.campaign_unlock_revision.wrapping_add(1);
         }
+        true
+    }
+
+    /// Change autonomous attack permission for one enemy in the active local campaign.
+    pub fn set_campaign_attack_permission(
+        &mut self,
+        faction_id: &str,
+        can_attack_player: bool,
+    ) -> bool {
+        let Some((&player_id, _)) = self
+            .campaign_faction_ids
+            .iter()
+            .find(|(_, id)| id.as_str() == faction_id)
+        else {
+            return false;
+        };
+        if self.campaign_relations.get(&player_id)
+            != Some(&crate::protocol::CampaignRelation::Enemy)
+        {
+            return false;
+        }
+        self.campaign_can_attack_player
+            .insert(player_id, can_attack_player);
         true
     }
 
@@ -1721,6 +1747,8 @@ mod tests {
             #[serde(default)]
             can_request_alliance: bool,
             #[serde(default)]
+            can_attack_player: Option<bool>,
+            #[serde(default)]
             assault_force: bool,
             #[serde(default)]
             iq: Option<u32>,
@@ -1739,6 +1767,14 @@ mod tests {
 
         let selected = [
             "trinovantes",
+            "roman_outpost",
+            "legio_ii_augusta",
+            "legio_xiv_gemina",
+            "legio_xx_valeria",
+            "suetonius_paulinus",
+            "suetonius_auxilia",
+        ];
+        let assault_factions = [
             "legio_xiv_gemina",
             "legio_xx_valeria",
             "suetonius_paulinus",
@@ -1786,6 +1822,7 @@ mod tests {
                 }),
                 campaign_faction_id: Some(faction.id),
                 campaign_can_request_alliance: Some(faction.can_request_alliance),
+                campaign_can_attack_player: faction.can_attack_player,
                 campaign_assault_force: faction.assault_force,
             })
             .collect();
@@ -1808,12 +1845,24 @@ mod tests {
                 .expect("campaign faction spawned")
         };
         let trinovantes = faction_id("trinovantes");
-        let roman_forces: Vec<_> = selected
-            .iter()
-            .filter(|id| **id != "trinovantes")
-            .map(|id| faction_id(id))
-            .collect();
+        let roman_forces: Vec<_> = assault_factions.iter().map(|id| faction_id(id)).collect();
         assert_eq!(roman_forces.len(), 4);
+        for id in ["roman_outpost", "legio_ii_augusta", "legio_xiv_gemina"] {
+            assert_eq!(
+                engine.campaign_can_attack_player.get(&faction_id(id)),
+                Some(&false)
+            );
+        }
+        let legio_ii = faction_id("legio_ii_augusta");
+        assert!(engine.set_campaign_attack_permission("legio_ii_augusta", true));
+        assert_eq!(
+            engine.campaign_can_attack_player.get(&legio_ii),
+            Some(&true)
+        );
+        assert_eq!(
+            engine.campaign_relations.get(&legio_ii),
+            Some(&CampaignRelation::Enemy)
+        );
         assert!(
             engine
                 .state

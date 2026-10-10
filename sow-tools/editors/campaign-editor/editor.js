@@ -484,6 +484,16 @@
 
         if (step.type !== "end") {
             var campaignActions = section("Campaign actions");
+            campaignActions.appendChild(checkboxField("Change an enemy's attack behavior when this step begins", Boolean(step.campaign_attack_on_enter), function (enabled) {
+                if (enabled) step.campaign_attack_on_enter = step.campaign_attack_on_enter || { faction_id: enemyFactionOptions()[0] && enemyFactionOptions()[0].value || "", can_attack_player: true };
+                else delete step.campaign_attack_on_enter;
+                markDirty(); renderInspector();
+            }));
+            if (step.campaign_attack_on_enter) {
+                var attackPermission = step.campaign_attack_on_enter;
+                campaignActions.appendChild(selectField("Enemy faction", attackPermission.faction_id || "", enemyFactionOptions(), function (value) { attackPermission.faction_id = value; markDirty(); }));
+                campaignActions.appendChild(checkboxField("Allow autonomous attacks against player", attackPermission.can_attack_player === true, function (enabled) { attackPermission.can_attack_player = enabled; markDirty(); }));
+            }
             campaignActions.appendChild(checkboxField("Order a team to attack when this step begins", Boolean(step.campaign_assault_on_enter), function (enabled) {
                 if (enabled) step.campaign_assault_on_enter = step.campaign_assault_on_enter || { attacker_team: "Red", target: "player" };
                 else delete step.campaign_assault_on_enter;
@@ -798,6 +808,7 @@
         return state.definition.steps.filter(function (step) { return step.id !== except; }).map(stepOption);
     }
     function factionOptions() { return state.roster.factions.map(function (faction) { return { value: faction.id, label: faction.name }; }); }
+    function enemyFactionOptions() { return state.roster.factions.filter(function (faction) { return faction.relation === "enemy"; }).map(function (faction) { return { value: faction.id, label: faction.name }; }); }
     function supportFactionOptions() { return state.roster.factions.filter(function (faction) { return Number.isInteger(faction.support_interval_seconds); }).map(function (faction) { return { value: faction.id, label: faction.name }; }); }
     function factionName(factionId) { var faction = state.roster.factions.find(function (item) { return item.id === factionId; }); return faction ? faction.name : factionId; }
     function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id], faction = state.roster.factions.find(function (item) { return item.id === speaker.faction; }); return { value: id, label: faction ? faction.name : speaker.name || id }; })); }

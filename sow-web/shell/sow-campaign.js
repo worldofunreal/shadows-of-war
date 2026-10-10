@@ -298,6 +298,7 @@
                 add(step.trigger.target); add(step.trigger.recipient);
                 (Array.isArray(step.trigger.targets) ? step.trigger.targets : []).forEach(add);
             }
+            if (object(step.campaign_attack_on_enter)) add(step.campaign_attack_on_enter.faction_id);
             if (object(step.campaign_assault_on_enter) && step.campaign_assault_on_enter.target !== "player_and_allies") add(step.campaign_assault_on_enter.target);
             if (object(step.marker)) add(step.marker.target);
         });
@@ -366,6 +367,9 @@
             }
             if (object(step.campaign_assault_on_enter) && removed.has(step.campaign_assault_on_enter.target)) {
                 delete step.campaign_assault_on_enter;
+            }
+            if (object(step.campaign_attack_on_enter) && removed.has(step.campaign_attack_on_enter.faction_id)) {
+                delete step.campaign_attack_on_enter;
             }
         });
 
@@ -497,7 +501,7 @@
                     issue(null, "roster", "Faction IDs and names must be valid, unique and nonempty.");
                     return;
                 }
-                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group", "assault_force"], null, "roster.factions");
+                knownFields(faction, ["id", "name", "x", "y", "starting_troops", "relation", "team", "can_request_alliance", "can_attack_player", "color", "iq", "civ", "leader", "avatar", "support_interval_seconds", "gold_loot_bonus", "gold_loot_override", "alliance_group", "assault_force"], null, "roster.factions");
                 factions.add(faction.id); factionNames.add(faction.name);
                 rosterFactions.add(faction.id);
                 if (!Number.isInteger(faction.starting_troops) || faction.starting_troops < 0 || faction.starting_troops > 1000000 || typeof faction.civ !== "string" || !faction.civ || typeof faction.leader !== "string" || !faction.leader || ![faction.x, faction.y].every(n => Number.isInteger(n) && n >= 0)) issue(null, "roster", "Invalid starting troops, civilization, leader or spawn: " + faction.name);
@@ -505,6 +509,8 @@
                 if (!["neutral", "allied", "enemy"].includes(faction.relation)) issue(null, "roster.factions.relation", "Choose neutral, allied or enemy for " + faction.name + ".");
                 if (faction.team != null && !TEAMS.includes(faction.team)) issue(null, "roster.factions.team", "Choose Red, Blue or no team for " + faction.name + ".");
                 if (faction.can_request_alliance != null && typeof faction.can_request_alliance !== "boolean") issue(null, "roster.factions.can_request_alliance", "Choose whether this faction can send alliance offers.");
+                if (faction.can_attack_player != null && typeof faction.can_attack_player !== "boolean") issue(null, "roster.factions.can_attack_player", "Choose whether this enemy can initiate attacks against the player.");
+                if (String(faction.civ).replace(/[^a-z0-9]/gi, "").toLowerCase() === "romanempire" && faction.relation === "neutral") issue(null, "roster.factions.relation", "Roman Empire factions must be enemies or allies, never neutral.");
                 if (faction.assault_force != null && typeof faction.assault_force !== "boolean") issue(null, "roster.factions.assault_force", "Choose whether this faction can join a configured campaign assault.");
                 if (faction.color != null && (typeof faction.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(faction.color))) issue(null, "roster.factions.color", "Use a six-digit hex color for " + faction.name + ".");
                 if (faction.support_interval_seconds != null && (!Number.isInteger(faction.support_interval_seconds) || faction.support_interval_seconds < 5 || faction.support_interval_seconds > 600)) issue(null, "roster.factions.support_interval_seconds", "Support intervals must be 5–600 seconds.");
@@ -595,10 +601,10 @@
             } else if (!Object.values(METRICS).concat(["tiles", "contacts", "defeated", "touch_controls"]).includes(when.fact) || !Number.isFinite(when.gte)) issue(step, "routes", "Invalid game fact condition.");
         }
         const stepFields = {
-            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
-            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "unlocks"],
-            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_assault_on_enter", "unlocks"],
+            scene: ["id", "type", "title_key", "body_key", "speaker", "presentation", "video_src", "lines", "marker", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            choice: ["id", "type", "title_key", "body_key", "speaker", "marker", "choices", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "pause_game", "wait_before", "unlocks"],
+            objective: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
+            guide: ["id", "type", "title_key", "body_key", "hint_key", "speaker", "trigger", "guide", "marker", "pause_game", "paused_action", "camera_only", "next", "routes", "attack_ratio_on_enter", "campaign_attack_on_enter", "campaign_assault_on_enter", "unlocks"],
             end: ["id", "type", "title_key", "body_key", "speaker", "presentation", "attack_ratio_on_enter", "pause_game", "unlocks"]
         };
         steps.filter(object).forEach(step => {
@@ -637,6 +643,14 @@
                 if (object(assault) && assault.hold_last_tile === true && (!own(assault, "reinforcement") || !["player", "player_and_allies"].includes(assault.target))) issue(step, "campaign_assault_on_enter.hold_last_tile", "Holding the final territory requires a reinforced assault against the player.");
                 const targetFaction = object(assault) && roster && Array.isArray(roster.factions) && roster.factions.find(faction => faction.id === assault.target);
                 if (targetFaction && targetFaction.team === assault.attacker_team) issue(step, "campaign_assault_on_enter.target", "The target cannot belong to the attacking team.");
+            }
+            if (own(step, "campaign_attack_on_enter")) {
+                const action = step.campaign_attack_on_enter;
+                knownFields(action, ["faction_id", "can_attack_player"], step, "campaign_attack_on_enter");
+                if (!object(action) || !id(action.faction_id) || typeof action.can_attack_player !== "boolean") issue(step, "campaign_attack_on_enter", "Choose an enemy faction and whether it may attack the player.");
+                const faction = object(action) && roster && Array.isArray(roster.factions) && roster.factions.find(entry => entry.id === action.faction_id);
+                if (faction && faction.relation !== "enemy") issue(step, "campaign_attack_on_enter.faction_id", "Attack behavior can only change for an enemy faction.");
+                if (!allowMissingFactionReferences && roster && !rosterFactions.has(action && action.faction_id)) issue(step, "campaign_attack_on_enter.faction_id", "Choose an existing campaign faction.");
             }
             if (own(step, "pause_game") && typeof step.pause_game !== "boolean") issue(step, "pause_game", "Pause game must be true or false.");
             if (own(step, "camera_only") && (typeof step.camera_only !== "boolean" || (step.camera_only && step.pause_game !== true))) issue(step, "camera_only", "Camera-only input requires a paused objective.");

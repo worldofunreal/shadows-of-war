@@ -729,6 +729,10 @@ impl SowEngine {
                 self.campaign_can_request_alliance
                     .insert(bot_id, can_request);
             }
+            if let Some(can_attack_player) = s.campaign_can_attack_player {
+                self.campaign_can_attack_player
+                    .insert(bot_id, can_attack_player);
+            }
             if s.campaign_assault_force {
                 self.campaign_assault_force_ids.insert(bot_id);
             }

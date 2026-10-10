@@ -136,6 +136,7 @@ pub struct Faction {
     pub gold_loot_bonus: Option<u32>,
     pub gold_loot_override: Option<u32>,
     pub alliance_group: Option<String>,
+    pub can_attack_player: Option<bool>,
     pub assault_force: bool,
 }
 
@@ -209,6 +210,7 @@ pub fn to_scripted(factions: &[Faction]) -> Vec<ScriptedSpawn> {
             campaign_relation: Some(f.relation),
             campaign_faction_id: Some(f.id.clone()),
             campaign_can_request_alliance: Some(f.can_request_alliance),
+            campaign_can_attack_player: f.can_attack_player,
             campaign_assault_force: f.assault_force,
         })
         .collect()
@@ -246,6 +248,8 @@ struct RosterEntry {
     gold_loot_override: Option<u32>,
     #[serde(default)]
     alliance_group: Option<String>,
+    #[serde(default)]
+    can_attack_player: Option<bool>,
     #[serde(default)]
     assault_force: bool,
 }
@@ -342,6 +346,9 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             None => NEUTRAL_PALETTE[index % NEUTRAL_PALETTE.len()],
         };
         let civ = civ_from_id(&e.civ)?;
+        if civ == Civilization::Rome && e.relation == CampaignRelation::Neutral {
+            return None;
+        }
         let leader = sow_data::commerce::leader_from_id(&e.leader)?;
         let relation = e.relation;
         if e.avatar
@@ -368,6 +375,7 @@ pub fn parse_roster(text: &str) -> Option<(Vec<Faction>, (u32, u32), [f32; 3])> 
             gold_loot_bonus: e.gold_loot_bonus,
             gold_loot_override: e.gold_loot_override,
             alliance_group: e.alliance_group.clone(),
+            can_attack_player: e.can_attack_player,
             assault_force: e.assault_force,
         });
     }
@@ -459,7 +467,7 @@ mod tests {
 
     #[test]
     fn roster_identity_and_starting_troops_are_required_and_unique() {
-        let entry = r##"{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":0,"relation":"neutral","civ":"Roman Empire","leader":"Caesar"}"##;
+        let entry = r##"{"id":"clan","name":"Clan","x":2,"y":1,"starting_troops":0,"relation":"neutral","civ":"Gallic Tribes","leader":"Caesar"}"##;
         let roster = format!(r##"{{"factions":[{entry}]}}"##);
         let (factions, _, _) = parse_roster(&roster).unwrap();
         let scripted = to_scripted(&factions);
@@ -480,12 +488,13 @@ mod tests {
 
     #[test]
     fn campaign_relationship_and_alliance_offer_setting_reach_scripted_spawns() {
-        let roster = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","can_request_alliance":false,"civ":"Roman Empire","leader":"Caesar","gold_loot_override":200}]}"##;
+        let roster = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","can_request_alliance":false,"can_attack_player":false,"civ":"Roman Empire","leader":"Caesar","gold_loot_override":200}]}"##;
         let (factions, _, _) = parse_roster(roster).unwrap();
         let spawn = &to_scripted(&factions)[0];
         assert!(!factions[0].can_request_alliance);
         assert_eq!(factions[0].starting_troops, 0);
         assert_eq!(spawn.campaign_can_request_alliance, Some(false));
+        assert_eq!(spawn.campaign_can_attack_player, Some(false));
         assert_eq!(spawn.campaign_relation, Some(CampaignRelation::Enemy));
         assert_eq!(spawn.campaign_gold_loot_override, Some(200));
 
@@ -498,6 +507,14 @@ mod tests {
         );
         let removed_behavior = r##"{"factions":[{"id":"outpost","name":"Roman Outpost","x":2,"y":1,"starting_troops":0,"relation":"enemy","hostility":"aggressive","civ":"Roman Empire","leader":"Caesar"}]}"##;
         assert!(parse_roster(removed_behavior).is_none());
+    }
+
+    #[test]
+    fn roman_campaign_factions_cannot_be_neutral() {
+        let neutral_roman = r##"{"factions":[{"id":"rome","name":"Rome","x":2,"y":1,"starting_troops":1000,"relation":"neutral","civ":"Roman Empire","leader":"Caesar"}]}"##;
+        assert!(parse_roster(neutral_roman).is_none());
+        let normalized_roman = neutral_roman.replace("Roman Empire", "roman-empire");
+        assert!(parse_roster(&normalized_roman).is_none());
     }
 
     #[test]

@@ -1374,6 +1374,58 @@ test("authored campaign files validate through the shared runtime schema", () =>
     }
 });
 
+test("Boudica keeps open neutral clans, makes every Roman enemy, and orders the recorded pre-final targets", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const roster = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.json"), "utf8"));
+    const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
+    const candidateNames = ["Catuvellauni", "Cantiaci", "Durovernum", "Parisi", "Corieltauvi", "Cornovii", "Dobunni", "Durotriges", "Dumnonii", "Silures", "Demetae", "Ordovices", "Deceangli", "Caledonii", "Votadini", "Belgae", "Gaulish Traders 1", "Gaulish Traders 2", "Gaulish Traders 3", "Irish Raiders", "Picts"];
+    const byName = new Map(roster.factions.map(faction => [faction.name, faction]));
+    for (const name of candidateNames) assert.equal(byName.get(name).relation, "neutral", name + " remains neutral");
+    const romans = roster.factions.filter(faction => faction.civ.replace(/[^a-z0-9]/gi, "").toLowerCase() === "romanempire");
+    assert.equal(romans.length, 13);
+    assert.ok(romans.every(faction => faction.relation === "enemy" && faction.team === "Red" && faction.can_request_alliance === false));
+    for (const id of ["lindum", "viroconium", "isca_dumnoniorum", "brigantes_1", "atrebates", "regnenses", "calleva", "noviomagus"]) {
+        const faction = roster.factions.find(entry => entry.id === id);
+        assert.ok(faction && faction.relation === "enemy" && faction.team === "Red", id + " is hostile to Boudica");
+    }
+    assert.equal(roster.factions.some(faction => faction.id === "deva"), false);
+    const targets = ["camulodunum", "legio_ix_hispana", "londinium", "verulamium"];
+    const stepsById = new Map(definition.steps.map(step => [step.id, step]));
+    const recordedTargets = [];
+    let current = stepsById.get("boudica_camulodunum");
+    while (current && current.id !== "boudica_pact_choice") {
+        if (current.trigger && current.trigger.type === "defeated" && targets.includes(current.trigger.target)) recordedTargets.push(current.trigger.target);
+        current = stepsById.get(current.next);
+    }
+    assert.deepEqual(recordedTargets, targets, "follow the authored mission links before the pact and final battle");
+    const postumus = definition.steps.find(step => step.id === "boudica_postumus_notice");
+    assert.deepEqual(postumus.marker, { target: "legio_ii_augusta" });
+    assert.deepEqual(postumus.campaign_attack_on_enter, { faction_id: "legio_ii_augusta", can_attack_player: true });
+    assert.equal(definition.steps.find(step => step.id === "boudica_final_choice").choices.find(choice => choice.id === "fight").next, postumus.id);
+    const neutralTerms = definition.reactions.find(reaction => reaction.id === "neutral_contact_terms");
+    assert.equal(neutralTerms.choices.find(choice => choice.id === "accept").gold_cost, 200);
+    const invalidRomanNeutral = structuredClone(roster);
+    invalidRomanNeutral.factions.find(faction => faction.id === "legio_xiv_gemina").relation = "neutral";
+    assert.ok(campaign.validate(definition, invalidRomanNeutral, { hasText: () => true, hasAvatar: () => true }).errors.some(issue => issue.field === "roster.factions.relation"));
+});
+
+test("campaign attack permission changes accept existing enemies only", () => {
+    const campaign = require(path.join(shell, "sow-campaign.js"));
+    const definition = { version: 2, episode_id: "attack_permission", entry: "notice", settings: { starting_troops: 1000 }, speakers: {}, steps: [
+        { id: "notice", type: "scene", title_key: "tutorial.notice", campaign_attack_on_enter: { faction_id: "enemy", can_attack_player: true }, next: "end" },
+        { id: "end", type: "end", title_key: "tutorial.end" }
+    ] };
+    const roster = { map: "eastanglia", player_spawn: [1, 1], factions: [
+        { id: "enemy", name: "Enemy", x: 1, y: 1, starting_troops: 1, relation: "enemy", civ: "Roman Empire", leader: "Caesar" },
+        { id: "clan", name: "Clan", x: 2, y: 2, starting_troops: 1, relation: "neutral", civ: "Gallic Tribes", leader: "Caesar" }
+    ] };
+    assert.deepEqual(campaign.validate(definition, roster, { hasText: () => true }).errors, []);
+    definition.steps[0].campaign_attack_on_enter.faction_id = "clan";
+    assert.ok(campaign.validate(definition, roster, { hasText: () => true }).errors.some(issue => issue.field === "campaign_attack_on_enter.faction_id"));
+    assert.match(campaignEditor, /Change an enemy's attack behavior when this step begins/);
+    assert.match(tutorial, /send\("set_campaign_attack_permission", machineView\.step\.campaign_attack_on_enter\)/);
+});
+
 test("Boudica final decision opens at 5,000 tiles and targets her on the map", () => {
     const campaign = require(path.join(shell, "sow-campaign.js"));
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));

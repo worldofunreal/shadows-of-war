@@ -397,6 +397,19 @@ pub fn display_name(id: u16, name: &str, player_type: PlayerType) -> String {
     }
 }
 
+pub fn nameplate_display_name(id: u16, name: &str, player_type: PlayerType) -> String {
+    let formatted = display_name(id, name, player_type);
+    if player_type == PlayerType::Bot {
+        formatted
+            .strip_prefix(tribe_animal(id, name))
+            .unwrap_or(&formatted)
+            .trim_start()
+            .to_owned()
+    } else {
+        formatted
+    }
+}
+
 #[cfg(test)]
 mod avatar_identity_tests {
     use super::*;
@@ -532,6 +545,22 @@ mod avatar_identity_tests {
             Some(AvatarIdentity::Emblem {
                 symbol: empire_emoji(3, "Rome")
             })
+        );
+    }
+
+    #[test]
+    fn nameplate_display_name_omits_the_tribe_avatar_prefix_only() {
+        let bot_name = "Trinovantes";
+        let prefix = tribe_animal(2, bot_name);
+        assert!(display_name(2, bot_name, PlayerType::Bot).starts_with(prefix));
+        assert_eq!(
+            nameplate_display_name(2, bot_name, PlayerType::Bot),
+            bot_name
+        );
+        assert_eq!(nameplate_display_name(201, "", PlayerType::Bot), "Tribe 2");
+        assert_eq!(
+            nameplate_display_name(3, "Rome", PlayerType::Nation),
+            display_name(3, "Rome", PlayerType::Nation)
         );
     }
 

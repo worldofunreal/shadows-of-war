@@ -203,6 +203,9 @@ pub(super) fn render_nameplates(
     frame_plans.clear();
     for &player_index in order.iter() {
         let player = &snapshot.players[player_index];
+        if !player.alive {
+            continue;
+        }
         let is_me = player.id == my_id;
         let has_human_priority = player.player_type == PlayerType::Human;
         let style = NameplateStyle::for_player(player.player_type, player.is_campaign_faction);
@@ -622,17 +625,8 @@ fn refresh_nameplate_text_cache(
     if identity_changed {
         state.source_name = player.name.clone();
         state.player_type = player.player_type;
-        let display_name =
-            sow_core::player::display_name(player.id, &player.name, player.player_type);
-        state.display_name = if player.player_type == PlayerType::Bot {
-            display_name
-                .strip_prefix(sow_core::player::tribe_animal(player.id, &player.name))
-                .unwrap_or(&display_name)
-                .trim_start()
-                .to_owned()
-        } else {
-            display_name
-        };
+        state.display_name =
+            sow_core::player::nameplate_display_name(player.id, &player.name, player.player_type);
     }
     let troops_bits = player.troops.to_bits();
     let mut troops_text_changed = false;

@@ -55,7 +55,7 @@ impl SowApp {
             .map(|p| p.player_type)
             .unwrap_or(sow_core::player::PlayerType::Bot);
         let name = victim
-            .map(|p| sow_core::player::display_name(p.id, &p.name, p.player_type))
+            .map(|p| sow_core::player::nameplate_display_name(p.id, &p.name, p.player_type))
             .unwrap_or_else(|| format!("Player {player_id}"));
         let seed = (player_id as u32)
             .wrapping_mul(2654435761)

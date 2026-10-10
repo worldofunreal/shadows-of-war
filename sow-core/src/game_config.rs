@@ -116,6 +116,9 @@ pub struct ScriptedSpawn {
     /// Whether campaign AI may send outgoing alliance offers. Missing keeps ordinary behavior.
     #[serde(default)]
     pub campaign_can_request_alliance: Option<bool>,
+    /// Whether campaign AI may initiate attacks against the human. Missing follows relation.
+    #[serde(default)]
+    pub campaign_can_attack_player: Option<bool>,
     /// Eligible to join a campaign's configured final assault.
     #[serde(default)]
     pub campaign_assault_force: bool,

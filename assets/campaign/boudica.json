@@ -74,7 +74,7 @@
       "x": 802,
       "y": 65,
       "starting_troops": 100,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -89,7 +89,7 @@
       "x": 715,
       "y": 79,
       "starting_troops": 1000,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -97,7 +97,8 @@
       "civ": "Roman Empire",
       "leader": "Caesar",
       "gold_loot_override": 200,
-      "avatar": "the_iceni_despoilers"
+      "avatar": "the_iceni_despoilers",
+      "can_attack_player": false
     },
     {
       "id": "roman_supply_depot",
@@ -105,7 +106,7 @@
       "x": 760,
       "y": 137,
       "starting_troops": 500,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -120,7 +121,7 @@
       "x": 665,
       "y": 113,
       "starting_troops": 250,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff2a00",
@@ -135,7 +136,7 @@
       "x": 705,
       "y": 284,
       "starting_troops": 2500,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff00f7",
@@ -150,7 +151,7 @@
       "x": 616,
       "y": 287,
       "starting_troops": 2500,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff007b",
@@ -165,7 +166,7 @@
       "x": 539,
       "y": 288,
       "starting_troops": 2500,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff00f7",
@@ -195,7 +196,7 @@
       "x": 553,
       "y": 22,
       "starting_troops": 8000,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -203,7 +204,8 @@
       "civ": "Roman Empire",
       "leader": "Caesar",
       "assault_force": true,
-      "avatar": "roman_legionary"
+      "avatar": "roman_legionary",
+      "can_attack_player": false
     },
     {
       "id": "legio_xx_valeria",
@@ -211,7 +213,7 @@
       "x": 332,
       "y": 40,
       "starting_troops": 6000,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -219,7 +221,8 @@
       "civ": "Roman Empire",
       "leader": "Caesar",
       "assault_force": true,
-      "avatar": "roman_praetorian"
+      "avatar": "roman_praetorian",
+      "can_attack_player": false
     },
     {
       "id": "suetonius_paulinus",
@@ -227,7 +230,7 @@
       "x": 436,
       "y": 108,
       "starting_troops": 8000,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -235,7 +238,8 @@
       "civ": "Roman Empire",
       "leader": "Caesar",
       "assault_force": true,
-      "avatar": "roman_praetorian"
+      "avatar": "roman_praetorian",
+      "can_attack_player": false
     },
     {
       "id": "suetonius_auxilia",
@@ -243,7 +247,7 @@
       "x": 420,
       "y": 201,
       "starting_troops": 4000,
-      "relation": "neutral",
+      "relation": "enemy",
       "team": "Red",
       "can_request_alliance": false,
       "color": "#ff0000",
@@ -251,7 +255,8 @@
       "civ": "Roman Empire",
       "leader": "Caesar",
       "assault_force": true,
-      "avatar": "roman_legionary"
+      "avatar": "roman_legionary",
+      "can_attack_player": false
     },
     {
       "id": "legio_ii_augusta",
@@ -266,7 +271,8 @@
       "iq": 100,
       "civ": "Roman Empire",
       "leader": "Caesar",
-      "avatar": "colonia_veterans"
+      "avatar": "colonia_veterans",
+      "can_attack_player": false
     },
     {
       "id": "catuvellauni",
@@ -316,13 +322,14 @@
       "x": 635,
       "y": 363,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#b87366",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "regnenses"
+      "avatar": "regnenses",
+      "team": "Red"
     },
     {
       "id": "noviomagus",
@@ -330,13 +337,14 @@
       "x": 580,
       "y": 410,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#7380b8",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "regnenses_male"
+      "avatar": "regnenses_male",
+      "team": "Red"
     },
     {
       "id": "atrebates",
@@ -344,13 +352,14 @@
       "x": 480,
       "y": 393,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#4ca572",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "atrebates"
+      "avatar": "atrebates",
+      "team": "Red"
     },
     {
       "id": "calleva",
@@ -358,13 +367,14 @@
       "x": 538,
       "y": 354,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#a88c40",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "atrebates"
+      "avatar": "atrebates",
+      "team": "Red"
     },
     {
       "id": "lindum",
@@ -372,27 +382,14 @@
       "x": 543,
       "y": 121,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#8c59a8",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "roman"
-    },
-    {
-      "id": "deva",
-      "name": "Deva",
-      "x": 358,
-      "y": 119,
-      "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
-      "color": "#40999e",
-      "iq": 100,
-      "civ": "Gallic Tribes",
-      "leader": "Caesar",
-      "avatar": "roman_legionary"
+      "avatar": "roman",
+      "team": "Red"
     },
     {
       "id": "viroconium",
@@ -400,13 +397,14 @@
       "x": 354,
       "y": 198,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#b87366",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "roman"
+      "avatar": "roman",
+      "team": "Red"
     },
     {
       "id": "isca_dumnoniorum",
@@ -414,13 +412,14 @@
       "x": 260,
       "y": 430,
       "starting_troops": 1000,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#7380b8",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "dumnonii"
+      "avatar": "dumnonii",
+      "team": "Red"
     },
     {
       "id": "brigantes_1",
@@ -428,13 +427,14 @@
       "x": 383,
       "y": 57,
       "starting_troops": 500,
-      "relation": "neutral",
-      "can_request_alliance": true,
+      "relation": "enemy",
+      "can_request_alliance": false,
       "color": "#00eeff",
       "iq": 100,
       "civ": "Gallic Tribes",
       "leader": "Caesar",
-      "avatar": "brigantes"
+      "avatar": "brigantes",
+      "team": "Red"
     },
     {
       "id": "parisi_1",
