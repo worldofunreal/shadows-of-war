@@ -181,6 +181,35 @@
         "</main>";
     }
 
+    var campaignCinematicAvailability = Object.create(null);
+    var campaignCinematicDiscovery = Object.create(null);
+
+    function discoverCampaignCinematics(episodes) {
+        var pending = (episodes || []).filter(function (episode) {
+            var id = String(episode && episode.id || "");
+            return /^[a-z][a-z0-9_]{0,63}$/.test(id)
+                && !Object.prototype.hasOwnProperty.call(campaignCinematicAvailability, id)
+                && !campaignCinematicDiscovery[id];
+        });
+        pending.forEach(function (episode) {
+            var id = String(episode.id);
+            campaignCinematicDiscovery[id] = fetch(asset("campaign/" + id + ".triggers.json"))
+                .then(function (response) { if (!response.ok) throw new Error("Campaign scene unavailable."); return response.json(); })
+                .then(function (definition) {
+                    var entry = (definition.steps || []).find(function (step) { return step.id === definition.entry; });
+                    var source = entry && entry.video_src;
+                    campaignCinematicAvailability[id] = Boolean(entry && entry.type === "scene" && entry.presentation === "cinematic"
+                        && typeof source === "string" && source.indexOf("/assets/campaign/" + id + "/") === 0 && /\.(?:mp4|webm)$/i.test(source));
+                })
+                .catch(function () { campaignCinematicAvailability[id] = false; })
+                .then(function () { delete campaignCinematicDiscovery[id]; });
+        });
+        if (!pending.length) return;
+        Promise.all(pending.map(function (episode) { return campaignCinematicDiscovery[String(episode.id)]; })).then(function () {
+            if (campaignOpen) render();
+        });
+    }
+
     function renderCampaignEpisode(episode, continueId) {
         var completed = !!episode.completed;
         var unlocked = !!episode.unlocked;
@@ -195,12 +224,15 @@
         var action = unlocked
             ? "<button class='sow-menu__secondary sow-campaign__play' type='button' data-command='start_campaign_episode' data-episode-id='" + esc(episode.id) + "'>" + esc(label) + " <span>↗</span></button>"
             : "<button class='sow-menu__secondary sow-campaign__play' type='button' disabled>" + esc(SOW_t("lobbies.locked")) + "</button>";
+        var watch = campaignCinematicAvailability[episode.id]
+            ? "<button class='sow-menu__secondary sow-campaign__watch' type='button' data-command='watch_campaign_cinematic' data-episode-id='" + esc(episode.id) + "'>" + esc(SOW_t("tutorial.watch_cinematic")) + "</button>"
+            : "";
         return "<article class='sow-campaign__episode" + (completed ? " is-complete" : unlocked ? " is-unlocked" : " is-locked") + (isNext ? " is-next" : "") + "'>" +
             "<div class='sow-campaign__episode-art' aria-hidden='true'><img class='sow-campaign__map-art' src='" + esc(mapArt) + "' alt='' loading='lazy' decoding='async'><img class='sow-campaign__leader-art' src='" + esc(avatar) + "' alt='' loading='lazy' decoding='async'></div>" +
             "<div class='sow-campaign__episode-copy'><div class='sow-campaign__episode-status'>" + esc(status) + "</div>" +
                 "<h2>" + esc(title) + "</h2>" +
                 "<p>" + esc(subtitle) + "</p>" +
-                action +
+                "<div class='sow-campaign__episode-actions'>" + action + watch + "</div>" +
             "</div>" +
         "</article>";
     }
@@ -208,6 +240,7 @@
     function renderCampaign() {
         var campaign = state && state.campaign || {};
         var episodes = Array.isArray(campaign.episodes) ? campaign.episodes : [];
+        discoverCampaignCinematics(episodes);
         var continueId = campaign.continue_episode || "";
         var continueButton = continueId
             ? "<button class='sow-menu__primary' type='button' data-command='start_campaign_episode' data-episode-id='" + esc(continueId) + "'>" + esc(SOW_t("lobbies.continue_campaign")) + " <span>↗</span></button>"

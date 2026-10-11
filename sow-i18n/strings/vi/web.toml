@@ -93,6 +93,9 @@ copy_unavailable = "KHÔNG CÓ THỂ"
 
 [tutorial]
 skip_cinematic = "Bỏ qua đoạn phim"
+watch_cinematic = "XEM ĐOẠN PHIM"
+hold_to_skip = "NHẤN GIỮ ĐỂ BỎ QUA"
+cinematic_tap_to_play = "Chạm hoặc nhấp để bắt đầu"
 objective_details = "Chi tiết mục tiêu"
 continue = "(ĐÀN)"
 complete = "HOÀN TẤT CHIẾN DỊCH"

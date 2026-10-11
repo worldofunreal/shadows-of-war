@@ -93,6 +93,9 @@ copy_unavailable = "КОПИ НЕЗАВИСИМЫЙ"
 
 [tutorial]
 skip_cinematic = "ПРОПУСТИТЬ СЦЕНУ"
+watch_cinematic = "СМОТРЕТЬ СИНЕМАТИКУ"
+hold_to_skip = "УДЕРЖИВАЙТЕ, ЧТОБЫ ПРОПУСТИТЬ"
+cinematic_tap_to_play = "Нажмите, чтобы начать"
 objective_details = "Подробности цели"
 continue = "ВСТРЕЧА"
 complete = "ЗАВЕРШИТЬ КАМПАНИЮ"

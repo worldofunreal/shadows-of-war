@@ -93,6 +93,9 @@ copy_unavailable = "COPIE INDISPONIBLE"
 
 [tutorial]
 skip_cinematic = "PASSER LA CINÉMATIQUE"
+watch_cinematic = "VOIR LA CINÉMATIQUE"
+hold_to_skip = "MAINTENIR POUR PASSER"
+cinematic_tap_to_play = "Touchez ou cliquez pour démarrer"
 objective_details = "Détails de l’objectif"
 continue = "CONTINUER"
 complete = "CAMPAGNE COMPLÈTE"

@@ -93,6 +93,9 @@ copy_unavailable = "KOPIEREN NICHT VERFÜGBAR"
 
 [tutorial]
 skip_cinematic = "Szene überspringen"
+watch_cinematic = "KINEMATIK ANSEHEN"
+hold_to_skip = "ZUM ÜBERSPRINGEN GEDRÜCKT HALTEN"
+cinematic_tap_to_play = "Zum Starten tippen oder klicken"
 objective_details = "Zieldetails"
 continue = "ANHALT"
 complete = "VOLLSTÄNDIGE BEMERKUNG"

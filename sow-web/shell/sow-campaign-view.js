@@ -3,6 +3,7 @@
     "use strict";
     let instance = 0;
     function mount(root, options) {
+        options = options || {};
         const doc = root.ownerDocument;
         const uid = "sow-story-" + (++instance);
         let model = null, renderKey = "", lastBeatKey = "", focusBefore = null, wasModal = false, lastAction = -Infinity;
@@ -11,9 +12,10 @@
         let homeGuideAnimation = null, homeGuideAnimationStep = null;
         root.classList.add("sow-story");
         root.innerHTML = '<div class="sow-story__shade" hidden></div>' +
+            '<div class="sow-story__cinematic" tabindex="-1" hidden><video playsinline preload="auto"></video><button class="sow-story__cinematic-start" type="button" data-story-start hidden></button><span class="sow-story__cinematic-hold" data-story-hold hidden aria-hidden="true"><span></span><i><b></b></i></span></div>' +
             '<article class="sow-story__dialog" tabindex="-1" hidden>' +
                 '<div class="sow-story__main"><div class="sow-story__portrait" hidden><img alt="" draggable="false"><span class="sow-story__portrait-line" aria-hidden="true"></span></div>' +
-                '<div class="sow-story__conversation"><div class="sow-story__cinematic" hidden><video playsinline controls preload="metadata"></video><button class="sow-story__cinematic-play" type="button" data-story-play></button><button class="sow-story__cinematic-skip" type="button" data-story-skip></button></div><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
+                '<div class="sow-story__conversation"><header class="sow-story__heading"><p class="sow-story__speaker"></p><button class="sow-story__close" type="button" data-story-dismiss>×</button></header>' +
                 '<div class="sow-story__scroll"><h2 class="sow-story__title" id="' + uid + '-title"></h2><p class="sow-story__body" id="' + uid + '-body" aria-live="polite" aria-atomic="true"></p></div></div></div>' +
                 '<div class="sow-story__actions"><div class="sow-story__choices"></div><footer class="sow-story__footer"><span class="sow-story__lines" aria-hidden="true"></span>' +
                 '<button class="sow-story__continue" type="button" data-story-continue><span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 7 7-7 7"/></svg></button></footer></div>' +
@@ -32,7 +34,7 @@
         const heading = find(".sow-story__heading"), conversation = find(".sow-story__conversation"), scrollContent = find(".sow-story__scroll"), actions = find(".sow-story__actions"), choices = find(".sow-story__choices"), footer = find(".sow-story__footer");
         const continueButton = find("[data-story-continue]"), lines = find(".sow-story__lines");
         const cinematic = find(".sow-story__cinematic"), cinematicVideo = cinematic.querySelector("video");
-        const cinematicPlay = find("[data-story-play]"), cinematicSkip = find("[data-story-skip]");
+        const cinematicStart = find("[data-story-start]"), cinematicHold = find("[data-story-hold]"), cinematicHoldProgress = cinematicHold.querySelector("b");
         const objective = find(".sow-story__objective"), objectiveTitle = objective.querySelector("h3"), hint = objective.querySelector("p");
         const objectiveToggle = find("[data-story-objective-toggle]");
         const meter = objective.querySelector("progress"), amount = objective.querySelector("output");
@@ -47,7 +49,8 @@
         }
         const spotlight = find(".sow-story__spotlight");
         const view = doc.defaultView;
-        let cinematicStepKey = "", cinematicStatus = "none";
+        let cinematicStepKey = "", cinematicStatus = "none", cinematicHoldTimer = 0, cinematicHoldFrame = 0, cinematicPointerId = null;
+        let cinematicAudioActive = false;
         let portraitFrame = 0, guideStepId = "", guideLastPulseValue = NaN, guideLastPulseAt = 0, guidePulse = null;
         let portraitRequestId = 0, destroyed = false;
         const portraitCache = new Map(), preparedDefinitions = new WeakSet(), reportedPortraitFailures = new Set();
@@ -170,35 +173,72 @@
         find(".sow-story__hand img").src = options.asset("gameplay/icons/tutorial_hand.webp");
         const dismissButtons = Array.from(root.querySelectorAll("[data-story-dismiss]"));
         const t = key => key ? options.translate(key) : "";
+        function clearCinematicHold() {
+            if (cinematicHoldTimer) { clearTimeout(cinematicHoldTimer); cinematicHoldTimer = 0; }
+            if (cinematicHoldFrame) {
+                if (view && typeof view.cancelAnimationFrame === "function") view.cancelAnimationFrame(cinematicHoldFrame);
+                else clearTimeout(cinematicHoldFrame);
+            }
+            cinematicHoldFrame = 0; cinematicPointerId = null;
+            cinematic.classList.remove("is-holding");
+            cinematicHoldProgress.style.transition = "none";
+            cinematicHoldProgress.style.transform = "scaleX(0)";
+        }
+        function setCinematicAudioActive(active) {
+            if (cinematicAudioActive === active) return;
+            cinematicAudioActive = active;
+            if (typeof options.onCinematicChange === "function") options.onCinematicChange(active);
+        }
         function stopCinematic() {
+            setCinematicAudioActive(false);
+            clearCinematicHold();
             cinematicStepKey = ""; cinematicStatus = "none";
             cinematicVideo.pause(); cinematicVideo.removeAttribute("src"); cinematicVideo.load();
             cinematic.hidden = true; root.classList.remove("is-cinematic");
+        }
+        function startCinematic(sourceKey) {
+            if (!cinematicStepKey || sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback") return;
+            cinematicStatus = "starting"; syncCinematic(model.step);
+            let playback;
+            try { playback = cinematicVideo.play(); }
+            catch (error) { playbackRejected(error, sourceKey); return; }
+            if (playback && typeof playback.catch === "function") playback.catch(error => playbackRejected(error, sourceKey));
+        }
+        function playbackRejected(error, sourceKey) {
+            if (sourceKey !== cinematicStepKey || !model || cinematicStatus === "fallback") return;
+            if (error && error.name === "NotAllowedError") {
+                cinematicStatus = "blocked";
+                syncCinematic(model.step);
+            } else if (!error || error.name !== "AbortError") failCinematic();
         }
         function syncCinematic(step) {
             const source = step.type === "scene" && step.presentation === "cinematic" ? step.video_src || "" : "";
             const nextKey = source ? step.id + "\u0000" + source : "";
             if (nextKey !== cinematicStepKey) {
-                cinematicStepKey = nextKey; cinematicStatus = source ? "ready" : "none";
+                clearCinematicHold();
+                cinematicStepKey = nextKey; cinematicStatus = source ? (options.autoPlayCinematic === false ? "ready" : "starting") : "none";
                 cinematicVideo.pause(); cinematicVideo.removeAttribute("src");
                 if (source) { cinematicVideo.src = source; cinematicVideo.load(); }
                 else cinematicVideo.load();
+                if (source && options.autoPlayCinematic !== false) startCinematic(nextKey);
             }
-            const active = Boolean(source) && cinematicStatus !== "fallback";
+            const active = Boolean(source) && cinematicStatus !== "fallback" && cinematicStatus !== "ended";
+            setCinematicAudioActive(active);
             cinematic.hidden = !active;
-            cinematicPlay.hidden = !active || cinematicStatus === "playing" || cinematicStatus === "ended";
-            cinematicSkip.hidden = !active || cinematicStatus === "ended";
-            cinematicPlay.textContent = t("lobbies.play");
-            cinematicSkip.textContent = t("tutorial.skip_cinematic");
-            cinematicPlay.setAttribute("aria-label", t("lobbies.play"));
-            cinematicSkip.setAttribute("aria-label", t("tutorial.skip_cinematic"));
+            cinematicStart.hidden = !active || !(cinematicStatus === "blocked" || options.autoPlayCinematic === false && cinematicStatus === "ready");
+            cinematicStart.textContent = t("tutorial.cinematic_tap_to_play");
+            cinematicStart.setAttribute("aria-label", t("tutorial.cinematic_tap_to_play"));
+            cinematicHold.hidden = !active;
+            cinematicHold.querySelector("span").textContent = t("tutorial.hold_to_skip");
             root.classList.toggle("is-cinematic", active);
             root.classList.toggle("is-chapter", step.presentation === "chapter" || step.presentation === "cinematic" && !active);
-            footer.hidden = step.type === "choice" || step.pause_game === true || active && cinematicStatus !== "ended";
+            dialog.hidden = !["scene", "choice", "end"].includes(step.type) || active;
+            shade.hidden = !["scene", "choice", "end"].includes(step.type) || active;
+            footer.hidden = step.type === "choice" || step.pause_game === true || active;
         }
         function failCinematic() {
             if (!cinematicStepKey || cinematicStatus === "fallback") return;
-            const focusVideo = doc.activeElement === cinematicVideo || doc.activeElement === cinematicPlay;
+            const focusVideo = doc.activeElement === cinematic || doc.activeElement === cinematicVideo || doc.activeElement === cinematicStart;
             cinematicStatus = "fallback";
             cinematicVideo.pause(); cinematicVideo.removeAttribute("src"); cinematicVideo.load();
             if (model && model.step) { syncCinematic(model.step); if (focusVideo) continueButton.focus({ preventScroll: true }); }
@@ -206,11 +246,11 @@
         cinematicVideo.addEventListener("playing", () => {
             if (!cinematicStepKey || cinematicStatus === "fallback") return;
             cinematicStatus = "playing"; syncCinematic(model.step);
-            if (doc.activeElement === cinematicPlay) cinematicVideo.focus({ preventScroll: true });
+            if (doc.activeElement === cinematicStart) cinematic.focus({ preventScroll: true });
         });
         cinematicVideo.addEventListener("pause", () => {
             if (!cinematicStepKey || cinematicStatus !== "playing" || cinematicVideo.ended) return;
-            cinematicStatus = "ready"; syncCinematic(model.step);
+            cinematicStatus = "blocked"; syncCinematic(model.step);
         });
         cinematicVideo.addEventListener("ended", () => {
             if (!cinematicStepKey || cinematicStatus === "fallback") return;
@@ -218,6 +258,43 @@
             continueButton.focus({ preventScroll: true });
         });
         cinematicVideo.addEventListener("error", failCinematic);
+        function beginCinematicHold(event) {
+            if (!model || cinematicStatus !== "playing" || cinematicPointerId !== null || event.isPrimary === false || event.button > 0) return;
+            cinematicPointerId = event.pointerId == null ? 0 : event.pointerId;
+            event.preventDefault();
+            try { if (event.pointerId != null && cinematic.setPointerCapture) cinematic.setPointerCapture(event.pointerId); } catch (ignored) {}
+            cinematic.classList.add("is-holding");
+            cinematicHoldProgress.style.transition = "none";
+            cinematicHoldProgress.style.transform = "scaleX(0)";
+            const progress = () => {
+                cinematicHoldFrame = 0;
+                if (cinematicPointerId === null) return;
+                cinematicHoldProgress.style.removeProperty("transition"); cinematicHoldProgress.style.transform = "scaleX(1)";
+            };
+            if (view && typeof view.requestAnimationFrame === "function") cinematicHoldFrame = view.requestAnimationFrame(progress); else cinematicHoldFrame = setTimeout(progress, 16);
+            cinematicHoldTimer = setTimeout(() => {
+                cinematicHoldTimer = 0; cinematicPointerId = null;
+                if (cinematicHoldFrame) {
+                    if (view && typeof view.cancelAnimationFrame === "function") view.cancelAnimationFrame(cinematicHoldFrame);
+                    else clearTimeout(cinematicHoldFrame);
+                }
+                cinematicHoldFrame = 0;
+                cinematic.classList.remove("is-holding");
+                if (options.onContinue) options.onContinue();
+            }, 1250);
+        }
+        function endCinematicHold(event) {
+            if (cinematicPointerId === null || event.pointerId != null && event.pointerId !== cinematicPointerId) return;
+            clearCinematicHold();
+        }
+        function clearHoldWhenHidden() {
+            if (doc.hidden) clearCinematicHold();
+        }
+        cinematic.addEventListener("pointerdown", beginCinematicHold);
+        cinematic.addEventListener("pointerup", endCinematicHold);
+        cinematic.addEventListener("pointercancel", endCinematicHold);
+        cinematic.addEventListener("lostpointercapture", endCinematicHold);
+        doc.addEventListener("visibilitychange", clearHoldWhenHidden);
         function dismissDialog() {
             if (!model) return;
             if (model.step.type === "choice" || model.choices.length) { triggerNudge(); return; }
@@ -283,7 +360,9 @@
             focusBefore = null;
         }
         function focusAction() {
-            const target = model.step.type === "choice" ? choices.querySelector("button") : cinematicStatus === "ready" ? cinematicPlay : model.step.pause_game ? dialog : continueButton;
+            const target = model.step.type === "choice" ? choices.querySelector("button")
+                : !cinematic.hidden ? (cinematicStart.hidden ? cinematic : cinematicStart)
+                : model.step.pause_game ? dialog : continueButton;
             (target || dialog).focus({ preventScroll: true });
         }
         function render(next, context) {
@@ -315,7 +394,7 @@
             syncCinematic(step);
             root.dataset.stepId = step.id;
             root.dataset.stepType = step.type;
-            dialog.hidden = !modal; shade.hidden = !modal; objective.hidden = modal || context.hideObjective === true;
+            objective.hidden = modal || context.hideObjective === true;
             dialog.setAttribute("role", "dialog");
             dialog.setAttribute("aria-modal", "true");
             dialog.setAttribute("aria-labelledby", uid + (line.title_key || step.title_key ? "-title" : "-body"));
@@ -530,12 +609,10 @@
                 button.setAttribute("aria-expanded", objective.dataset.detailsExpanded);
             }
             else if (button.hasAttribute("data-story-continue")) options.onContinue();
-            else if (button.hasAttribute("data-story-play")) {
+            else if (button.hasAttribute("data-story-start")) {
                 const sourceKey = cinematicStepKey;
-                const playback = cinematicVideo.play();
-                if (playback && typeof playback.catch === "function") playback.catch(() => { if (cinematicStepKey === sourceKey) failCinematic(); });
+                startCinematic(sourceKey);
             }
-            else if (button.hasAttribute("data-story-skip")) options.onContinue();
             else if (button.hasAttribute("data-story-focus") && options.onFocus) options.onFocus();
             else if (button.hasAttribute("data-story-dismiss")) dismissDialog();
         }
@@ -561,12 +638,15 @@
             if (event.repeat) return;
             if (event.key === "Escape" && (options.onDismiss || options.onContinue)) { event.preventDefault(); dismissDialog(); }
             else if (event.key === "Tab" && model.paused && ["scene", "choice", "end"].includes(model.step.type)) {
-                const buttons = Array.from(dialog.querySelectorAll("button")).filter(button => !button.hidden && !button.closest("[hidden]"))
-                    .sort((a, b) => Number(a.hasAttribute("data-story-dismiss")) - Number(b.hasAttribute("data-story-dismiss")));
+                const buttons = !cinematic.hidden
+                    ? (cinematicStart.hidden ? [] : [cinematicStart])
+                    : Array.from(dialog.querySelectorAll("button")).filter(button => !button.hidden && !button.closest("[hidden]"))
+                        .sort((a, b) => Number(a.hasAttribute("data-story-dismiss")) - Number(b.hasAttribute("data-story-dismiss")));
                 const index = buttons.indexOf(doc.activeElement);
                 const next = event.shiftKey ? (index <= 0 ? buttons.length - 1 : index - 1) : (index + 1) % buttons.length;
                 event.preventDefault();
                 if (buttons.length) buttons[next].focus();
+                else if (!cinematic.hidden) cinematic.focus({ preventScroll: true });
                 else dialog.focus({ preventScroll: true });
             } else if ((event.key === "Enter" || event.key === " ") && doc.activeElement === dialog && model.step.type !== "choice" && !model.step.pause_game) {
                 event.preventDefault(); continueButton.click();
@@ -590,6 +670,7 @@
                 root.style.removeProperty("--story-portrait-size");
                 root.removeEventListener("click", click); root.removeEventListener("keydown", keys);
                 doc.removeEventListener("click", outsideClick, true);
+                doc.removeEventListener("visibilitychange", clearHoldWhenHidden);
                 ["pointerdown", "pointerup", "touchstart", "touchend", "wheel"].forEach(type => root.removeEventListener(type, stop));
                 root.replaceChildren(); root.classList.remove("sow-story", "is-modal"); root.hidden = true;
             }

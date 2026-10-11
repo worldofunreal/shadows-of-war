@@ -1137,6 +1137,324 @@ test("settings panel keeps only useful controls and real account state", () => {
     assert.doesNotMatch(lobbiesSource, /lobbies\.connecting_server/);
 });
 
+test("Opus theme pauses for loaders, restarts at menu/game boundaries, and recovers blocked autoplay", async () => {
+    const start = shellSource.indexOf("    var menuMusic = {");
+    const end = shellSource.indexOf("    function renderTopbar()", start);
+    assert.ok(start >= 0 && end > start, "shared shell has no menu music lifecycle");
+
+    function createHarness(assetsUrl = "https://cdn.test/assets/", cinematicPrompt = false) {
+        const audios = [];
+        const mediaMetadata = [];
+        const frames = new Map();
+        const logs = [];
+        const windowListeners = new Map();
+        const documentListeners = new Map();
+        const body = { children: [], appendChild(element) { this.children.push(element); element.parentNode = this; return element; } };
+        const cinematicButton = cinematicPrompt ? { hidden: false } : null;
+        const storyRoot = { hidden: false, querySelector() { return cinematicButton; } };
+        let frameId = 0;
+        class FakeAudio {
+            constructor() {
+                this.listeners = {};
+                this.paused = true;
+                this.currentTime = 0;
+                this.duration = 240;
+                this.volume = 1;
+                this.preload = "auto";
+                this.loop = false;
+                this.playCalls = 0;
+                this.pauseCalls = 0;
+                this.loadCalls = 0;
+                this.nextPlayError = null;
+                this.error = null;
+                audios.push(this);
+            }
+            addEventListener(type, callback) { (this.listeners[type] ||= []).push(callback); }
+            dispatch(type) { (this.listeners[type] || []).forEach(callback => callback()); }
+            play() {
+                this.playCalls += 1;
+                if (this.nextPlayError) {
+                    const error = this.nextPlayError;
+                    this.nextPlayError = null;
+                    return Promise.reject(error);
+                }
+                this.paused = false;
+                return Promise.resolve();
+            }
+            pause() { this.pauseCalls += 1; this.paused = true; }
+            load() { this.loadCalls += 1; }
+            set src(value) { this._src = value; }
+            get src() { return this._src; }
+        }
+        class FakeMediaMetadata {
+            constructor(value) { Object.assign(this, value); mediaMetadata.push(this); }
+        }
+        const mediaSession = { metadata: null };
+        const window = {
+            Audio: FakeAudio,
+            MediaMetadata: FakeMediaMetadata,
+            URL,
+            navigator: { mediaSession },
+            SOW_ASSETS_URL: assetsUrl,
+            SOW_BUILD_TS: "build-42",
+            SOW_t: key => key,
+            addEventListener(type, callback, options) {
+                (windowListeners.get(type) || windowListeners.set(type, []).get(type)).push({ callback, once: Boolean(options && options.once) });
+            },
+            dispatchEvent(event) {
+                const listeners = windowListeners.get(event.type) || [];
+                listeners.slice().forEach(listener => {
+                    listener.callback(event);
+                    if (listener.once) listeners.splice(listeners.indexOf(listener), 1);
+                });
+            },
+            requestAnimationFrame(callback) { const id = ++frameId; frames.set(id, callback); return id; },
+            cancelAnimationFrame(id) { frames.delete(id); }
+        };
+        const document = {
+            body,
+            baseURI: "https://cdn.test/play/",
+            getElementById(id) { return id === "sow-story" ? storyRoot : null; },
+            querySelector(selector) {
+                return selector === 'meta[name="sow-media-artwork"]'
+                    ? { content: "../icon-192.png" }
+                    : null;
+            },
+            createElement(tagName) {
+                return {
+                    tagName,
+                    attributes: {},
+                    hidden: false,
+                    setAttribute(name, value) { this.attributes[name] = value; },
+                    closest(selector) {
+                        if (selector === "[data-sow-music-unlock]" && this.attributes["data-sow-music-unlock"] != null) return this;
+                        if (selector === "#sow-story [data-story-start]" && this.attributes["data-story-start"] != null) return this;
+                        return null;
+                    }
+                };
+            },
+            addEventListener(type, callback, capture) {
+                (documentListeners.get(type) || documentListeners.set(type, []).get(type)).push({ callback, capture: Boolean(capture) });
+            },
+            dispatchClick(target) {
+                (documentListeners.get("click") || []).filter(listener => listener.capture)
+                    .forEach(listener => listener.callback({ target }));
+            }
+        };
+        const context = {
+            window,
+            document,
+            console: {
+                error: (...args) => logs.push(["error", ...args]),
+                warn: (...args) => logs.push(["warn", ...args])
+            }
+        };
+        vm.runInNewContext(shellSource.slice(start, end) +
+            "this.musicApi = { syncMenuMusic, menuMusic, menuMusicFinishLoaderCycle, menuMusicSetCinematicActive };", context);
+        return {
+            api: context.musicApi,
+            audios,
+            logs,
+            mediaMetadata,
+            mediaSession,
+            window,
+            document,
+            frame(timestamp) {
+                const next = frames.entries().next().value;
+                assert.ok(next, "expected a scheduled music fade frame");
+                frames.delete(next[0]);
+                next[1](timestamp);
+            }
+        };
+    }
+    const flushPlay = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+    const state = (phase, volume = 0.8, muted = false, loader_job = "Boot", loader_cycle_id = 0, waiting = false) => ({
+        phase, loader_job, loader_cycle_id, waiting, settings: { music_volume: volume, mute_all: muted }
+    });
+
+    const h = createHarness();
+    h.api.syncMenuMusic(state("Playing", 0.8, false, "EnterGame", 1), false);
+    assert.equal(h.audios.length, 2, "both routes prepare the existing loop player during the loader");
+    const [first, second] = h.audios;
+    assert.equal(first.src, "https://cdn.test/assets/gameplay/music/shadows-of-war.webm?v=build-42");
+    assert.equal(second.src, first.src, "both decks use Opus");
+    assert.equal(first.preload, "auto", "music begins loading before the loader ends");
+    assert.equal(second.preload, "none", "the loop's second deck does not preload a duplicate copy");
+    assert.equal(first.loadCalls, 1);
+    assert.equal(second.loadCalls, 0);
+    assert.equal(first.playCalls, 0, "music waits until the initial loader finishes");
+    h.api.menuMusicSetCinematicActive(true);
+    h.window.dispatchEvent({ type: "sow:loader-ready" });
+    await flushPlay();
+    assert.equal(first.paused, true, "an opening tutorial cinematic keeps music silent after the loader");
+    assert.equal(first.playCalls, 0, "the theme does not start underneath the cinematic");
+    h.api.menuMusicSetCinematicActive(false);
+    await flushPlay();
+    assert.equal(first.paused, false, "the theme starts when the tutorial cinematic ends");
+    assert.equal(first.playCalls, 1);
+    assert.equal(first.volume, 0.8);
+    assert.equal(h.mediaMetadata.length, 1, "the existing player publishes metadata when playback starts");
+    assert.equal(h.mediaMetadata[0].title, "Shadows of War");
+    assert.deepEqual(Array.from(h.mediaMetadata[0].artwork, art => ({
+        src: art.src,
+        sizes: art.sizes,
+        type: art.type
+    })), [{ src: "https://cdn.test/icon-192.png", sizes: "192x192", type: "image/png" }]);
+    assert.equal(h.mediaSession.metadata, h.mediaMetadata[0]);
+
+    first.currentTime = 55;
+    h.api.menuMusicSetCinematicActive(true);
+    assert.equal(first.paused, true, "a later cinematic pauses the current theme");
+    h.api.menuMusicSetCinematicActive(false);
+    await flushPlay();
+    assert.equal(first.currentTime, 55, "the theme resumes where it paused after a later cinematic");
+    h.api.syncMenuMusic(state("Splash", 0.8, false, "Boot", 1), false);
+    h.api.syncMenuMusic(state("Playing", 0.8, false, "Boot", 1), false);
+    await flushPlay();
+    assert.equal(first.currentTime, 55, "menu, tutorial, and gameplay state changes keep the current position");
+    assert.equal(first.paused, false, "playable phases keep the theme running");
+
+    first.currentTime = 237.01;
+    first.dispatch("timeupdate");
+    await flushPlay();
+    assert.ok(h.api.menuMusic.crossfade, "the existing loop crossfade starts near the track end");
+    h.api.syncMenuMusic(state("Playing", 0.8, false, "EnterGame", 2), false);
+    assert.equal(h.api.menuMusic.crossfade, null, "entering a loader cancels an in-progress loop crossfade");
+    assert.equal(first.paused, true, "the active deck pauses as the game loader begins");
+    assert.equal(second.paused, true, "the incoming crossfade deck also pauses");
+    first.dispatch("timeupdate");
+    assert.equal(h.api.menuMusic.crossfade, null, "late media events cannot restart the loop during a loader");
+    assert.equal(h.api.menuMusicFinishLoaderCycle(2), true);
+    await flushPlay();
+    assert.equal(first.currentTime, 0, "a new game starts the theme from its opening");
+    assert.equal(second.currentTime, 0, "both decks reset at a game boundary");
+    assert.equal(first.paused, false, "the theme resumes after the game loader closes");
+    assert.equal(second.paused, true, "only one deck resumes after the loader");
+
+    h.api.syncMenuMusic(state("MainMenu", 0.8, false, "ExitGame", 3), false);
+    assert.equal(first.paused, true, "the return-to-menu loader is silent");
+    assert.equal(h.api.menuMusicFinishLoaderCycle(3), true);
+    await flushPlay();
+    assert.equal(first.currentTime, 0, "returning to the menu restarts the theme");
+    assert.equal(first.paused, false);
+
+    h.api.syncMenuMusic(state("MainMenu", 0.8, false, "Boot", 3, true), false);
+    first.currentTime = 37;
+    h.api.syncMenuMusic(state("MainMenu", 0.8, false, "Boot", 3, false), false);
+    await flushPlay();
+    assert.equal(first.currentTime, 0, "leaving a lobby without a loader restarts the theme");
+    assert.equal(first.paused, false);
+
+    first.currentTime = 23;
+    assert.equal(h.api.menuMusicFinishLoaderCycle(2), false, "an old loader event cannot reset the current track");
+    assert.equal(h.api.menuMusicFinishLoaderCycle(3), false, "a duplicate completion cannot reset the current track");
+    assert.equal(first.currentTime, 23);
+
+    const returning = createHarness();
+    returning.api.syncMenuMusic(state("MainMenu"), false);
+    assert.equal(returning.api.menuMusic.decks[0].playCalls, 0, "Boot stays silent while its loader is visible");
+    returning.window.dispatchEvent({ type: "sow:loader-ready" });
+    await flushPlay();
+    assert.equal(returning.api.menuMusic.decks[0].paused, false, "a returning account starts music on the menu route");
+
+    h.api.syncMenuMusic(state("MainMenu", 0.3), true, 0.3);
+    assert.equal(first.volume, 0.3, "the slider changes music gain");
+    h.api.syncMenuMusic(state("MainMenu", 0.3, true), false);
+    assert.equal(first.volume, 0, "global mute silences music");
+    h.api.syncMenuMusic(state("MainMenu", 0.3, false), false);
+    assert.equal(first.volume, 0.3, "unmute restores the music slider level");
+
+    first.duration = 240;
+    first.currentTime = 237.01;
+    first.dispatch("timeupdate");
+    await flushPlay();
+    h.frame(2000);
+    h.frame(3500);
+    assert.ok(Math.abs(first.volume - 0.15) < 0.001 && Math.abs(second.volume - 0.15) < 0.001,
+        "the loop crossfade reaches an even mix halfway through three seconds");
+    h.frame(5000);
+    assert.equal(h.api.menuMusic.active, 1);
+    assert.equal(first.paused, true);
+    assert.equal(first.currentTime, 0);
+
+    const blocked = createHarness();
+    blocked.api.syncMenuMusic(state("MainMenu"), false);
+    blocked.audios[0].nextPlayError = Object.assign(new Error("gesture required"), { name: "NotAllowedError" });
+    blocked.window.dispatchEvent({ type: "sow:loader-ready" });
+    await flushPlay();
+    const unlockButton = blocked.api.menuMusic.unlockButton;
+    assert.ok(unlockButton && !unlockButton.hidden, "blocked autoplay shows the cinematic-style prompt on the menu");
+    assert.equal(unlockButton.textContent, "tutorial.cinematic_tap_to_play");
+    assert.equal(unlockButton.attributes["data-sow-music-unlock"], "");
+    blocked.document.dispatchClick(unlockButton);
+    await flushPlay();
+    assert.equal(blocked.api.menuMusic.decks[0].paused, false, "clicking the prompt starts the theme");
+    assert.equal(unlockButton.hidden, true, "the prompt disappears once playback starts");
+
+    const cinematic = createHarness("https://cdn.test/assets/", true);
+    cinematic.api.syncMenuMusic(state("Playing", 0.8, false, "EnterGame"), false);
+    cinematic.audios[0].nextPlayError = Object.assign(new Error("gesture required"), { name: "NotAllowedError" });
+    cinematic.window.dispatchEvent({ type: "sow:loader-ready" });
+    await flushPlay();
+    assert.equal(cinematic.api.menuMusic.unlockButton, null, "an existing cinematic prompt prevents a duplicate control");
+    const cinematicStart = {
+        closest(selector) { return selector === "#sow-story [data-story-start]" ? this : null; }
+    };
+    cinematic.document.dispatchClick(cinematicStart);
+    await flushPlay();
+    assert.equal(cinematic.api.menuMusic.decks[0].paused, false, "the cinematic's click also unlocks the theme");
+
+    const unsupported = createHarness();
+    unsupported.api.syncMenuMusic(state("MainMenu"), true);
+    await flushPlay();
+    const failedOpusDeck = unsupported.api.menuMusic.decks[0];
+    failedOpusDeck.dispatch("error");
+    assert.equal(failedOpusDeck.src, "https://cdn.test/assets/gameplay/music/shadows-of-war.webm?v=build-42",
+        "an unsupported Opus file gets no alternate format");
+    assert.ok(unsupported.logs.some(entry => entry[0] === "error"), "Opus failure is visible in the console");
+    assert.doesNotMatch(shellSource, /shadows-of-war\.mp3|menuMusicSwitchToMp3|canPlayType/,
+        "the player has no codec fallback");
+
+    const withoutMediaSession = createHarness();
+    delete withoutMediaSession.window.navigator;
+    withoutMediaSession.api.syncMenuMusic(state("MainMenu"), true);
+    withoutMediaSession.window.dispatchEvent({ type: "sow:loader-ready" });
+    await flushPlay();
+    assert.equal(withoutMediaSession.api.menuMusic.decks[0].paused, false,
+        "missing platform metadata support does not block music playback");
+
+    const native = createHarness("../assets");
+    native.api.syncMenuMusic(state("MainMenu"), false);
+    assert.equal(native.api.menuMusic.decks[0].src, "../assets/gameplay/music/shadows-of-war.webm?v=build-42",
+        "Tauri resolves the same music through its local SOW_ASSETS_URL");
+    assert.match(shellSource, /addEventListener\("sow:loader-ready", menuMusicStartAtLoaderEnd, \{ once: true \}\)/);
+    assert.match(shellSource, /window\.addEventListener\("sow:loader-cycle-ready", function \(event\)[\s\S]*?menuMusicFinishLoaderCycle\(cycleId\)/,
+        "the existing loader completion event releases the paused theme once per cycle");
+    assert.doesNotMatch(shellSource, /menuMusicPauseForGame|menuMusic\.inMenu|menuMusic\.fade/,
+        "music is not tied to a menu-only playback mode");
+    assert.match(storyCss, /\.sow-menu__music-unlock\s*\{\s*position:\s*fixed;\s*z-index:/);
+});
+
+test("music volume no longer controls SFX and music assets reach every shared-shell package", () => {
+    const musicCommand = webMenu.match(/WebMenuCommand::SetMusicVolume \{ value \} => \{[\s\S]*?\n                \}/);
+    assert.ok(musicCommand);
+    assert.match(musicCommand[0], /settings_state\.music_volume = volume/);
+    assert.doesNotMatch(musicCommand[0], /set_master_volume/);
+    assert.match(webMenu, /WebMenuCommand::SetMute \{ value \} => \{[\s\S]*set_master_volume\(if value \{ 0\.0 \} else \{ 0\.8 \}\)/);
+    assert.match(shellSource, /syncMenuMusic\(state, false\)/);
+    assert.match(shellSource, /syncMenuMusic\(state, true\)/);
+    assert.match(siteDistSource, /copy_dir\(&src\.join\("gameplay\/music"\), &dst\.join\("gameplay\/music"\)\)/);
+    assert.match(siteDistSource, /assets_gameplay\.join\("music"\)/);
+    assert.equal((siteDistSource.match(/"assets\/gameplay\/music\/shadows-of-war\.webm"/g) || []).length, 4,
+        "web, Poki, Jest, and native layout checks require the theme assets");
+    assert.match(siteDistSource, /paths\.assets_gameplay\.join\("music"\)/,
+        "native package fingerprint and copy include music assets");
+    assert.doesNotMatch(siteDistSource, /shadows-of-war\.mp3/,
+        "no package requires an MP3 duplicate");
+    assert.match(prodDistSource, /&paths\.assets_gameplay,/,
+        "the web cache fingerprint includes gameplay music");
+});
+
 test("hero purchase stays server-backed, direct, and visually honest", () => {
     assert.match(storeSource, /var leaderActions = !offer \|\| offer\.owned \? ""/);
     assert.doesNotMatch(storeSource, /offer\.free_rotation \|\| offer\.available/);
@@ -1302,6 +1620,7 @@ test("campaign runtime shares the JSON interpreter and cinematic view", () => {
     assert.match(tutorial, /SOWCampaign\.validate/);
     assert.match(tutorial, /SOWCampaign\.create/);
     assert.match(tutorial, /SOWCampaignView\.mount/);
+    assert.match(tutorial, /onCinematicChange: function \(active\)[\s\S]*?SOW_menu_music_cinematic\(active\)/);
     assert.match(tutorial, /start_campaign_episode/);
     assert.match(tutorial, /set_tutorial_paused/);
     assert.match(tutorial, /complete_campaign_episode/);
@@ -1322,6 +1641,9 @@ test("campaign episode cards use leader portraits and emphasize the next playabl
     assert.match(lobbiesSource, /asset\("gameplay\/avatars\/" \+ \(episode\.id === "boudica" \? "boudica" : "lady_six_sky"\) \+ "\.webp"\)/);
     assert.match(lobbiesSource, /sow-campaign__map-art[\s\S]*?sow-campaign__leader-art/);
     assert.match(lobbiesSource, /isNext \? " is-next"/);
+    assert.match(lobbiesSource, /var watch = campaignCinematicAvailability\[episode\.id\]/);
+    assert.match(lobbiesSource, /function discoverCampaignCinematics\(episodes\)[\s\S]*?definition\.entry[\s\S]*?video_src/);
+    assert.match(lobbiesSource, /data-command='watch_campaign_cinematic'/);
     assert.match(campaignCss, /\.sow-campaign__episode-art img[\s\S]*?object-fit: cover/);
     assert.match(campaignCss, /\.sow-campaign__map-art[\s\S]*?brightness\(\.58\)/);
     assert.match(campaignCss, /\.sow-campaign__leader-art[\s\S]*?border-radius: 50%/);
@@ -1337,10 +1659,20 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
     assert.deepEqual(episodeIds, ["boudica", "six_sky_ep1", "six_sky_ep2", "six_sky_ep3"]);
     const expected = { boudica: ["eastanglia", "boudica"], six_sky_ep1: ["northamerica", "lady_six_sky"], six_sky_ep2: ["northamerica", "lady_six_sky"], six_sky_ep3: ["northamerica", "lady_six_sky"] };
     const campaignDir = path.join(shell, "../../assets/campaign");
+    const cinematicEpisodes = [];
     for (const episodeId of episodeIds) {
         const roster = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".json"), "utf8"));
         const definition = JSON.parse(fs.readFileSync(path.join(campaignDir, episodeId + ".triggers.json"), "utf8"));
         assert.equal(definition.episode_id, episodeId);
+        const opening = definition.steps.find(step => step.id === definition.entry);
+        if (opening && opening.video_src) {
+            cinematicEpisodes.push(episodeId);
+            assert.equal(opening.type, "scene", `${episodeId} opening cinematic is a scene`);
+            assert.equal(opening.presentation, "cinematic", `${episodeId} opening cinematic uses the shared cinematic presentation`);
+            assert.ok(opening.video_src.startsWith(`/assets/campaign/${episodeId}/`), `${episodeId} cinematic stays in its asset folder`);
+            const mediaPath = path.join(shell, "../..", opening.video_src.replace(/^\/assets\//, "assets/"));
+            assert.ok(fs.existsSync(mediaPath), `${episodeId} video asset exists`);
+        }
         if (episodeId === "boudica") {
             const ratioOverrides = definition.steps.filter(step => Object.hasOwn(step, "attack_ratio_on_enter"))
                 .map(step => ({ id: step.id, ratio: step.attack_ratio_on_enter }));
@@ -1359,6 +1691,10 @@ test("campaign card map and leader art match every Rust episode and its JSON ass
             assert.match(faction.color, /^#[0-9a-f]{6}$/i, `${episodeId}/${faction.name}: map color`);
         }
     }
+    assert.deepEqual(cinematicEpisodes, ["boudica"]);
+    const watchFlow = tutorial.slice(tutorial.indexOf("function watchCampaignCinematic("), tutorial.indexOf("function showError(", tutorial.indexOf("function watchCampaignCinematic(")));
+    assert.match(watchFlow, /SOWCampaign\.create\(data\.definition, data\.definition\.entry, data\.roster\)/);
+    assert.doesNotMatch(watchFlow, /send\("start_campaign_episode"/);
 });
 
 test("authored campaign files validate through the shared runtime schema", () => {
@@ -1930,17 +2266,155 @@ test("campaign cinematic steps reuse the shared editor/game player and validate 
     }
     assert.ok(campaignEditor.includes("Local cinematic video"));
     assert.ok(campaignEditor.includes('"/assets/campaign/" + state.definition.episode_id'));
-    assert.ok(campaignView.includes('<video playsinline controls preload="metadata"></video>'));
-    assert.ok(campaignView.includes("data-story-play"));
-    assert.ok(campaignView.includes("data-story-skip"));
+    assert.ok(campaignView.includes('<video playsinline preload="auto"></video>'));
+    assert.doesNotMatch(campaignView, /<video[^>]*\bmuted\b/i, "cinematic audio starts enabled by default");
+    assert.ok(campaignView.indexOf('<div class="sow-story__cinematic"') < campaignView.indexOf('<article class="sow-story__dialog"'), "cinematic is a root overlay, not dialog content");
+    assert.match(storyCss, /\.sow-story\.is-cinematic \.sow-story__cinematic \{[^}]*inset: 0/);
+    assert.doesNotMatch(storyCss, /\.sow-story\.is-cinematic \.sow-story__dialog/);
+    assert.ok(campaignView.includes("data-story-start"));
+    assert.ok(campaignView.includes("data-story-hold"));
+    assert.doesNotMatch(campaignView, /<video[^>]*\bcontrols\b/i);
     assert.ok(campaignView.includes("function failCinematic()"));
     assert.ok(campaignView.includes("cinematicVideo.play()"));
+    assert.match(campaignView, /setTimeout\(\(\) => \{[\s\S]*?\}, 1250\)/);
     assert.doesNotMatch(campaignView, /<video[^>]*autoplay/i);
+    assert.match(campaignEditor, /autoPlayCinematic: false/);
+    assert.match(lobbiesSource, /definition\.steps[\s\S]*?definition\.entry[\s\S]*?video_src/);
+    assert.match(lobbiesSource, /data-command='watch_campaign_cinematic'/);
+    assert.match(shellSource, /command === "watch_campaign_cinematic"[\s\S]*?SOW_watchCampaignCinematic/);
+    assert.match(tutorial, /window\.SOW_watchCampaignCinematic = watchCampaignCinematic/);
+    const localeRoot = path.join(shell, "../../sow-i18n/strings");
+    for (const locale of fs.readdirSync(localeRoot)) {
+        const catalog = path.join(localeRoot, locale, "web.toml");
+        if (!fs.existsSync(catalog)) continue;
+        const source = fs.readFileSync(catalog, "utf8");
+        for (const key of ["watch_cinematic", "hold_to_skip", "cinematic_tap_to_play"]) {
+            assert.match(source, new RegExp("^" + key + ' = ".+"$', "m"), `${locale} is missing ${key}`);
+        }
+    }
     assert.ok(campaignEditorServer.includes('".mp4": "video/mp4"'));
     assert.ok(campaignEditorServer.includes('".webm": "video/webm"'));
     assert.ok(campaignEditorServer.includes('"Accept-Ranges": "bytes"'));
     assert.ok(campaignEditorServer.includes("createReadStream(file, { start, end })"));
 
+});
+
+test("shared cinematic handles autoplay blocking, canceled holds, completed holds, and Escape", async () => {
+    const timers = new Map(); let timerId = 0; let playCalls = 0; let continued = 0; const cinematicChanges = [];
+    class Element {
+        constructor(ownerDocument, tagName) {
+            this.ownerDocument = ownerDocument; this.tagName = tagName; this.listeners = {}; this.queries = new Map();
+            this.children = []; this.attributes = {}; this.dataset = {}; this.hidden = false; this.textContent = "";
+            this.style = { setProperty() {}, removeProperty(name) { delete this[name]; }, getPropertyValue() { return ""; } };
+            const classes = new Set();
+            this.classList = {
+                add: (...values) => values.forEach(value => classes.add(value)),
+                remove: (...values) => values.forEach(value => classes.delete(value)),
+                toggle: (value, force) => force === undefined ? (classes.has(value) ? classes.delete(value) : classes.add(value)) : (force ? classes.add(value) : classes.delete(value)),
+                contains: value => classes.has(value)
+            };
+            this.clientWidth = 800; this.clientHeight = 600; this.scrollHeight = 20; this.isConnected = true;
+        }
+        addEventListener(type, listener, options) { (this.listeners[type] ||= []).push({ listener, once: Boolean(options && options.once) }); }
+        removeEventListener(type, listener) { this.listeners[type] = (this.listeners[type] || []).filter(item => item.listener !== listener); }
+        dispatch(type, extra = {}) {
+            const event = Object.assign({ type, target: this, timeStamp: 1000, stopPropagation() {}, preventDefault() {} }, extra);
+            const listeners = this.listeners[type] || [];
+            this.listeners[type] = listeners.filter(item => !item.once);
+            listeners.forEach(item => item.listener(event));
+        }
+        setAttribute(name, value) { this.attributes[name] = String(value); }
+        getAttribute(name) { return this.attributes[name] || null; }
+        hasAttribute(name) { return Object.hasOwn(this.attributes, name); }
+        removeAttribute(name) { delete this.attributes[name]; }
+        querySelector(selector) {
+            if (!this.queries.has(selector)) this.queries.set(selector, new Element(this.ownerDocument, /img$/.test(selector) ? "img" : selector === "video" ? "video" : selector === "[data-story-start]" ? "button" : "div"));
+            return this.queries.get(selector);
+        }
+        querySelectorAll() { return []; }
+        replaceChildren(...children) { this.children = children; }
+        appendChild(child) { this.children.push(child); return child; }
+        contains(child) { return this.children.includes(child) || [...this.queries.values()].includes(child); }
+        closest(selector) { return selector.includes("button") && this.tagName === "button" ? this : null; }
+        getBoundingClientRect() { return { width: 100, height: 40 }; }
+        focus() { this.ownerDocument.activeElement = this; }
+        pause() {}
+        load() {}
+        click() {}
+    }
+    const doc = {
+        hidden: false,
+        documentElement: { dir: "ltr", dataset: { localeScript: "latin" } },
+        defaultView: { matchMedia: () => ({ matches: false }), performance: { now: () => 1 }, navigator: {} },
+        createElement(tagName) { return new Element(this, tagName); },
+        addEventListener() {}, removeEventListener() {}
+    };
+    doc.defaultView.getComputedStyle = () => ({ marginBottom: "0px" });
+    const root = new Element(doc, "div"); root.ownerDocument = doc; root.hidden = true;
+    const sandbox = {
+        console,
+        setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
+        clearTimeout(id) { timers.delete(id); }
+    };
+    vm.runInNewContext(campaignView, sandbox, { filename: "sow-campaign-view.js" });
+    const view = sandbox.SOWCampaignView.mount(root, {
+        asset: value => "/" + value,
+        translate: key => key,
+        roster: { factions: [] },
+        onContinue() { continued++; },
+        onDismiss() { continued++; },
+        onCinematicChange(active) { cinematicChanges.push(active); }
+    });
+    const video = root.querySelector(".sow-story__cinematic").querySelector("video");
+    video.play = () => ++playCalls === 1
+        ? Promise.reject(Object.assign(new Error("gesture required"), { name: "NotAllowedError" }))
+        : Promise.resolve();
+    const step = { id: "opening", type: "scene", presentation: "cinematic", video_src: "/assets/campaign/cinematic_test/opening.webm", title_key: "opening_title", body_key: "opening_body" };
+    const definition = { episode_id: "cinematic_test", speakers: {}, steps: [step] };
+    view.render({ definition, step, line: step, paused: true, done: false, choices: [], progress: { target: 0, current: 0 }, state: { line: 0 } }, {});
+    await Promise.resolve(); await Promise.resolve();
+    const start = root.querySelector("[data-story-start]");
+    const dialog = root.querySelector(".sow-story__dialog");
+    const cinematic = root.querySelector(".sow-story__cinematic");
+    assert.equal(playCalls, 1, "a cinematic tries audible playback when its scene opens");
+    assert.deepEqual(cinematicChanges, [true], "music is paused as soon as the cinematic is presented");
+    assert.equal(start.hidden, false, "a browser autoplay rejection exposes the one-time start prompt");
+    assert.equal(dialog.hidden, true, "the cinematic hides the dialogue card while playing");
+    assert.match(start.textContent, /cinematic_tap_to_play/);
+
+    start.setAttribute("data-story-start", "");
+    root.dispatch("click", { target: start, timeStamp: 1000 });
+    await Promise.resolve();
+    assert.equal(playCalls, 2, "the prompt starts playback from a user gesture");
+    video.dispatch("playing");
+    assert.equal(cinematic.hidden, false, "the fullscreen overlay remains visible during playback");
+    cinematic.dispatch("pointerdown", { pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0 });
+    assert.equal(cinematic.classList.contains("is-holding"), true, "desktop press begins the skip progress");
+    cinematic.dispatch("pointerup", { pointerId: 1, pointerType: "mouse" });
+    assert.equal(cinematic.classList.contains("is-holding"), false, "a short desktop press cancels");
+    assert.equal([...timers.values()].some(timer => timer.delay === 1250), false);
+    assert.equal(continued, 0);
+
+    cinematic.dispatch("pointerdown", { pointerId: 2, pointerType: "touch", isPrimary: true, button: 0 });
+    const progressTimer = [...timers.entries()].find(([, timer]) => timer.delay === 16);
+    if (progressTimer) { timers.delete(progressTimer[0]); progressTimer[1].callback(); }
+    assert.equal(root.querySelector("[data-story-hold]").querySelector("b").style.transform, "scaleX(1)");
+    const holdTimer = [...timers.entries()].find(([, timer]) => timer.delay === 1250);
+    assert.ok(holdTimer, "mobile hold uses the same 1.25-second threshold");
+    timers.delete(holdTimer[0]); holdTimer[1].callback();
+    assert.equal(continued, 1, "a completed touch hold continues the scene");
+
+    root.dispatch("keydown", { key: "Escape", repeat: false });
+    assert.equal(continued, 2, "Escape continues immediately without waiting for the hold timer");
+    video.dispatch("ended");
+    assert.deepEqual(cinematicChanges, [true, false], "music is released when the video ends");
+    assert.equal(cinematic.hidden, true, "the video overlay closes after playback ends");
+    assert.equal(dialog.hidden, false, "the authored scene dialogue appears after the cinematic");
+    video.dispatch("error");
+    assert.equal(cinematic.hidden, true, "a failed video load falls back to the authored scene dialog");
+    assert.equal(cinematic.classList.contains("is-cinematic"), false);
+    assert.equal(root.querySelector(".sow-story__footer").hidden, false, "the fallback keeps a way to continue");
+    view.destroy();
 });
 
 test("contact responses wait behind an open campaign scene", () => {
@@ -5518,7 +5992,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const campaignSource = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const requested = [
-        "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade",
+        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade",
         "boudica_return_lobby"
     ];
     const uiSteps = definition.steps.filter(step => step.guide && step.guide.kind === "ui").map(step => step.id).sort();

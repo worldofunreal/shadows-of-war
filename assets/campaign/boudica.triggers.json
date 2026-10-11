@@ -154,6 +154,7 @@
       "body_key": "tutorial.campaign_boudica_boudica_council_body",
       "speaker": "boudica",
       "presentation": "cinematic",
+      "video_src": "/assets/campaign/boudica/intro.webm",
       "attack_ratio_on_enter": 0.25,
       "next": "boudica_council_decision"
     },

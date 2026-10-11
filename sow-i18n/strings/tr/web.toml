@@ -93,6 +93,9 @@ copy_unavailable = "KOPYALAMA KULLANILAMIYOR"
 
 [tutorial]
 skip_cinematic = "SAHNEYİ ATLA"
+watch_cinematic = "SİNEMATİĞİ İZLE"
+hold_to_skip = "ATLAMAK İÇİN BASILI TUT"
+cinematic_tap_to_play = "Başlamak için dokun veya tıkla"
 objective_details = "Hedef ayrıntıları"
 continue = "DEVAM ET"
 complete = "COMPAIGN"

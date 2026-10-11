@@ -238,6 +238,7 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
     }
     copy_dir(&src.join("gameplay/avatars"), &dst.join("gameplay/avatars"))?;
     copy_dir(&src.join("gameplay/buildings"), &dst.join("gameplay/buildings"))?;
+    copy_dir(&src.join("gameplay/music"), &dst.join("gameplay/music"))?;
     copy_dir(
         &src.join("gameplay/currency"),
         &dst.join("gameplay/currency"),
@@ -915,6 +916,14 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             },
         )
         .replace(
+            "content=\"./icon-192.png\"",
+            if portal {
+                "content=\"icon-192.png\""
+            } else {
+                "content=\"../icon-192.png\""
+            },
+        )
+        .replace(
             "href=\"./favicon.ico\"",
             if portal {
                 "href=\"favicon.ico\""
@@ -994,6 +1003,16 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         ] {
             html = strip_marked_section(&html, begin, end)?;
         }
+    }
+    let media_artwork_reference = if portal {
+        "name=\"sow-media-artwork\" content=\"icon-192.png\""
+    } else {
+        "name=\"sow-media-artwork\" content=\"../icon-192.png\""
+    };
+    if html.matches("name=\"sow-media-artwork\"").count() != 1
+        || !html.contains(media_artwork_reference)
+    {
+        bail!("index.html has an invalid game music artwork path");
     }
     let index = if portal {
         out.join("index.html")
@@ -1238,6 +1257,12 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
         paths.assets_shell.join("brand/sow.svg"),
         out.join("sow.svg"),
     )?;
+    if matches!(target, WebTarget::CrazyGames | WebTarget::Poki | WebTarget::Jest) {
+        fs::copy(
+            paths.assets_site.join("icons/icon-192.png"),
+            out.join("icon-192.png"),
+        )?;
+    }
     if paths.assets_shell.join("brand/sow-long.svg").is_file() {
         fs::copy(
             paths.assets_shell.join("brand/sow-long.svg"),
@@ -2130,6 +2155,7 @@ fn verify_layout(dir: &Path) -> Result<()> {
         "manifest.webmanifest",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
+        "assets/gameplay/music/shadows-of-war.webm",
         "maps/NOTICE",
         "icon-192.png",
         "icon-512.png",
@@ -2144,6 +2170,9 @@ fn verify_layout(dir: &Path) -> Result<()> {
         bail!("webroot must not contain admin/ (dashboard was removed)");
     }
     let play_html = fs::read_to_string(dir.join("play/index.html"))?;
+    if !play_html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\"") {
+        bail!("web game page has no game music artwork reference");
+    }
     if !play_html.contains("window.SOW_BUILDING_ART =")
         || !play_html.contains("gameplay/buildings/atlas.webp")
     {
@@ -2337,6 +2366,7 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         "sow_client.js",
         "sow_client_bg.wasm",
         "sow.svg",
+        "icon-192.png",
         "loader.js",
         "sw.js",
         "game-manifest.json",
@@ -2357,6 +2387,9 @@ fn verify_cg_layout(dir: &Path) -> Result<()> {
         }
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
+    if !html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\"") {
+        bail!("crazygames index.html has no game music artwork reference");
+    }
     if html.contains("analytics.js") || html.contains("/api/event") {
         bail!("crazygames bundle must not include first-party analytics");
     }
@@ -2391,6 +2424,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "sow_client.js",
         "sow_client_bg.wasm",
         "sow.svg",
+        "icon-192.png",
         "loader.js",
         "game-manifest.json",
         "manifest.webmanifest",
@@ -2411,6 +2445,7 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
         "assets/campaign/boudica.triggers.json",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
+        "assets/gameplay/music/shadows-of-war.webm",
         "maps/catalog.bin",
         "maps/NOTICE",
         "maps/world/map.bin.br",
@@ -2436,6 +2471,9 @@ fn verify_poki_layout(dir: &Path) -> Result<()> {
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
     let loader = fs::read_to_string(dir.join("loader.js"))?;
+    if !html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\"") {
+        bail!("poki index.html has no game music artwork reference");
+    }
     if html.contains("analytics.js") || html.contains("/api/event") {
         bail!("poki bundle must not include first-party analytics");
     }
@@ -2593,6 +2631,10 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
     copy_dir(
         &paths.assets_gameplay.join("buildings"),
         &assets.join("gameplay/buildings"),
+    )?;
+    copy_dir(
+        &paths.assets_gameplay.join("music"),
+        &assets.join("gameplay/music"),
     )?;
     copy_dir(
         &paths.root.join("assets/campaign"),
@@ -2773,6 +2815,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.join("currency"),
         paths.assets_gameplay.join("store"),
         paths.assets_gameplay.join("buildings"),
+        paths.assets_gameplay.join("music"),
         paths.root.join("assets/campaign"),
         paths.assets_site.join("media"),
         paths.assets_site.join("icons"),
@@ -2811,7 +2854,8 @@ fn package_native_web(
             .join("assets/shell/loader/sow-splash-desktop.webp")
             .is_file()
         && out.join("assets/gameplay/buildings/atlas.webp").is_file()
-        && out.join("assets/gameplay/buildings/atlas.json").is_file();
+        && out.join("assets/gameplay/buildings/atlas.json").is_file()
+        && out.join("assets/gameplay/music/shadows-of-war.webm").is_file();
 
     if !static_ready {
         if out.exists() {
@@ -2821,7 +2865,7 @@ fn package_native_web(
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
-        for name in ["avatars", "skins", "currency", "store", "buildings"] {
+        for name in ["avatars", "skins", "currency", "store", "buildings", "music"] {
             copy_dir(
                 &paths.assets_gameplay.join(name),
                 &assets.join("gameplay").join(name),
@@ -3138,6 +3182,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "sow_client.js",
         "sow_client_bg.wasm",
         "sow.svg",
+        "icon-192.png",
         "loader.js",
         "game-manifest.json",
         "manifest.webmanifest",
@@ -3158,6 +3203,7 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
         "assets/campaign/boudica.triggers.json",
         "assets/gameplay/buildings/atlas.webp",
         "assets/gameplay/buildings/atlas.json",
+        "assets/gameplay/music/shadows-of-war.webm",
         "maps/catalog.bin",
         "maps/NOTICE",
         "maps/world/map.bin.br",
@@ -3185,6 +3231,9 @@ fn verify_jest_layout(dir: &Path) -> Result<()> {
     }
     let html = fs::read_to_string(dir.join("index.html"))?;
     let loader = fs::read_to_string(dir.join("loader.js"))?;
+    if !html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\"") {
+        bail!("jest index.html has no game music artwork reference");
+    }
     if html.contains("analytics.js") || html.contains("/api/event") {
         bail!("jest bundle must not include first-party analytics");
     }
@@ -4298,6 +4347,7 @@ mod tests {
         assert!(html.contains("SOW_onStateUpdate"));
         assert!(html.contains("sow-hud__dock"));
         assert!(html.contains("../analytics.js?v=test"));
+        assert!(html.contains("name=\"sow-media-artwork\" content=\"../icon-192.png\""));
         Ok(())
     }
 
@@ -4319,6 +4369,7 @@ mod tests {
         )?;
         let html = fs::read_to_string(out.path().join("index.html"))?;
         assert!(!html.contains("analytics.js"));
+        assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
         assert!(html.contains("href=\"fonts/fonts.css\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.poki.js"));
@@ -4356,6 +4407,7 @@ mod tests {
         )?;
         let html = fs::read_to_string(out.path().join("index.html"))?;
         assert!(!html.contains("analytics.js"));
+        assert!(html.contains("name=\"sow-media-artwork\" content=\"icon-192.png\""));
         assert!(html.contains("href=\"fonts/fonts.css\""));
         assert!(html.contains("./assets/shell/loader/loader_empty.webp"));
         assert!(html.contains("main_menu.jest.js"));

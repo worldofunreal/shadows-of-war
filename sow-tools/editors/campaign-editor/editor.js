@@ -1574,6 +1574,7 @@
         state.machine.jump(start, context.facts, context.choices);
         if (!state.renderer) state.renderer = window.SOWCampaignView.mount($("#previewRoot"), {
             translate: function (key) { return translated(key, state.previewLanguage); }, asset: asset,
+            autoPlayCinematic: false,
             roster: function () { return state.roster; },
             onContinue: function () { var step = state.machine.view().step; state.machine.advance(null, step.id); paintPreview(); },
             onChoice: function (choice) { var step = state.machine.view().step; state.machine.advance(choice, step.id); paintPreview(); },

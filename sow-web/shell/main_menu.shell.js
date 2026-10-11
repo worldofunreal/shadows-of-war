@@ -40,6 +40,367 @@
     var progressionAnimationFrame = 0;
     var progressionAnimationTarget = null;
 
+    var menuMusic = {
+        decks: null,
+        active: 0,
+        state: null,
+        activated: false,
+        completedCycleId: -1,
+        playBlocked: false,
+        blockedDeck: null,
+        unlockButton: null,
+        pendingVolume: null,
+        crossfade: null,
+        cinematicActive: false,
+        mediaMetadataSet: false,
+        frame: 0
+    };
+
+    function menuMusicVolume() {
+        var settings = menuMusic.state && menuMusic.state.settings || {};
+        var raw = menuMusic.pendingVolume == null
+            ? (settings.music_volume == null ? 0.8 : settings.music_volume)
+            : menuMusic.pendingVolume;
+        var value = Number(raw);
+        return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.8;
+    }
+
+    function menuMusicMuted() {
+        return Boolean(menuMusic.state && menuMusic.state.settings && menuMusic.state.settings.mute_all);
+    }
+
+    function menuMusicAssetUrl() {
+        var base = String(window.SOW_ASSETS_URL || "").replace(/\/$/, "");
+        if (!base) {
+            console.error("[SOW MUSIC] SOW_ASSETS_URL is missing; theme cannot load.");
+            return null;
+        }
+        var url = base + "/gameplay/music/shadows-of-war.webm";
+        var version = String(window.SOW_BUILD_TS || "");
+        if (version === "__BUILD_TS__") version = "";
+        return version ? url + "?v=" + encodeURIComponent(version) : url;
+    }
+
+    function menuMusicSetVolumes(mixes, fade) {
+        if (!menuMusic.decks) return;
+        var base = menuMusicMuted() ? 0 : menuMusicVolume();
+        var factor = fade == null ? 1 : fade;
+        menuMusic.decks.forEach(function (deck, index) {
+            deck.volume = base * (mixes[index] || 0) * factor;
+        });
+    }
+
+    function menuMusicCancelFrame() {
+        if (menuMusic.frame) window.cancelAnimationFrame(menuMusic.frame);
+        menuMusic.frame = 0;
+    }
+
+    function menuMusicLoaderActive(state) {
+        return state && (state.loader_job === "Boot" || state.loader_job === "EnterGame" || state.loader_job === "ExitGame") &&
+            (!Number.isSafeInteger(state.loader_cycle_id) || state.loader_cycle_id > menuMusic.completedCycleId);
+    }
+
+    function menuMusicPausePlayback() {
+        menuMusicCancelFrame();
+        menuMusic.crossfade = null;
+        if (!menuMusic.decks) return;
+        menuMusic.decks.forEach(function (deck) { deck.pause(); });
+        menuMusicSetVolumes(menuMusicMixes());
+    }
+
+    function menuMusicReset() {
+        menuMusicPausePlayback();
+        menuMusic.active = 0;
+        if (menuMusic.decks) {
+            menuMusic.decks.forEach(function (deck) {
+                try { deck.currentTime = 0; } catch (_) {}
+            });
+            menuMusicSetVolumes(menuMusicMixes());
+        }
+    }
+
+    function menuMusicFinishLoaderCycle(cycleId) {
+        var currentState = menuMusic.state;
+        if (!Number.isSafeInteger(cycleId) || cycleId <= menuMusic.completedCycleId || !currentState ||
+            currentState.loader_cycle_id !== cycleId ||
+            (currentState.loader_job !== "Boot" && currentState.loader_job !== "EnterGame" &&
+                currentState.loader_job !== "ExitGame")) return false;
+        menuMusic.completedCycleId = cycleId;
+        menuMusicReset();
+        syncMenuMusic(currentState, false);
+        return true;
+    }
+
+    function menuMusicResetOnMenuReturn(previousState, nextState) {
+        if (!previousState || nextState.phase !== "MainMenu") return false;
+        var returnedFromGame = previousState.phase !== "MainMenu";
+        var leftLobby = previousState.phase === "MainMenu" && previousState.waiting && !nextState.waiting;
+        return (returnedFromGame || leftLobby) &&
+            nextState.loader_job !== "EnterGame" && nextState.loader_job !== "ExitGame";
+    }
+
+    function menuMusicMixes() {
+        if (!menuMusic.crossfade) return menuMusic.active === 0 ? [1, 0] : [0, 1];
+        var progress = menuMusic.crossfade.progress;
+        var mixes = [0, 0];
+        mixes[menuMusic.crossfade.outgoing] = 1 - progress;
+        mixes[menuMusic.crossfade.incoming] = progress;
+        return mixes;
+    }
+
+    function menuMusicFinishCrossfade() {
+        if (!menuMusic.crossfade) return;
+        menuMusicCancelFrame();
+        var outgoing = menuMusic.crossfade.outgoing;
+        menuMusic.active = menuMusic.crossfade.incoming;
+        menuMusic.crossfade = null;
+        menuMusic.decks[outgoing].pause();
+        try { menuMusic.decks[outgoing].currentTime = 0; } catch (_) {}
+        menuMusicSetVolumes(menuMusicMixes());
+    }
+
+    function menuMusicScheduleCrossfade() {
+        if (!menuMusic.crossfade || menuMusic.frame) return;
+        menuMusic.frame = window.requestAnimationFrame(function (timestamp) {
+            menuMusic.frame = 0;
+            if (!menuMusic.crossfade) return;
+            if (menuMusic.crossfade.startedAt == null) menuMusic.crossfade.startedAt = timestamp;
+            menuMusic.crossfade.progress = Math.min(1, Math.max(0,
+                (timestamp - menuMusic.crossfade.startedAt) / 3000));
+            menuMusicSetVolumes(menuMusicMixes());
+            if (menuMusic.crossfade.progress >= 1) menuMusicFinishCrossfade();
+            else menuMusicScheduleCrossfade();
+        });
+    }
+
+    function menuMusicHasCinematicPrompt() {
+        var storyRoot = document.getElementById("sow-story");
+        var prompt = storyRoot && storyRoot.querySelector("[data-story-start]");
+        return Boolean(prompt && !prompt.hidden && !storyRoot.hidden);
+    }
+
+    function menuMusicHideUnlockPrompt() {
+        if (menuMusic.unlockButton) menuMusic.unlockButton.hidden = true;
+    }
+
+    function menuMusicShowUnlockPrompt() {
+        if (menuMusicHasCinematicPrompt()) {
+            menuMusicHideUnlockPrompt();
+            return;
+        }
+        if (!menuMusic.unlockButton) {
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = "sow-story__cinematic-start sow-menu__music-unlock";
+            button.setAttribute("data-sow-music-unlock", "");
+            document.body.appendChild(button);
+            menuMusic.unlockButton = button;
+        }
+        var label = typeof window.SOW_t === "function"
+            ? window.SOW_t("tutorial.cinematic_tap_to_play")
+            : "Tap or click to start";
+        menuMusic.unlockButton.textContent = label;
+        menuMusic.unlockButton.setAttribute("aria-label", label);
+        menuMusic.unlockButton.hidden = false;
+    }
+
+    function menuMusicPlaybackFailed(error, index) {
+        if (error && error.name === "NotAllowedError") {
+            menuMusic.playBlocked = true;
+            menuMusic.blockedDeck = index;
+            menuMusicShowUnlockPrompt();
+            return true;
+        }
+        console.error("[SOW MUSIC] Opus playback failed:", error);
+        return false;
+    }
+
+    function menuMusicSetMediaMetadata() {
+        var mediaSession = window.navigator && window.navigator.mediaSession;
+        if (menuMusic.mediaMetadataSet || !mediaSession || typeof window.MediaMetadata !== "function") return;
+        var artworkMeta = document.querySelector('meta[name="sow-media-artwork"]');
+        if (!artworkMeta || !artworkMeta.content) return;
+        try {
+            mediaSession.metadata = new window.MediaMetadata({
+                title: "Shadows of War",
+                artwork: [{
+                    src: new window.URL(artworkMeta.content, document.baseURI).href,
+                    sizes: "192x192",
+                    type: "image/png"
+                }]
+            });
+            menuMusic.mediaMetadataSet = true;
+        } catch (error) {
+            console.warn("[SOW MUSIC] could not set player metadata:", error);
+        }
+    }
+
+    function menuMusicPlayDeck(index, userGesture) {
+        var deck = menuMusic.decks && menuMusic.decks[index];
+        if (!deck || !menuMusic.activated || menuMusicLoaderActive(menuMusic.state) ||
+            menuMusicMuted() || menuMusicVolume() <= 0) return false;
+        if (userGesture) {
+            menuMusic.playBlocked = false;
+            menuMusic.blockedDeck = null;
+        }
+        if (menuMusic.playBlocked && !userGesture) return false;
+        if (!deck.paused) return true;
+        try {
+            var result = deck.play();
+            var started = function () {
+                menuMusic.playBlocked = false;
+                menuMusic.blockedDeck = null;
+                menuMusicSetMediaMetadata();
+                menuMusicHideUnlockPrompt();
+                if (menuMusic.crossfade && menuMusic.crossfade.incoming === index) menuMusicScheduleCrossfade();
+            };
+            if (result && typeof result.then === "function") {
+                result.then(started).catch(function (error) {
+                    var blocked = menuMusicPlaybackFailed(error, index);
+                    if (!blocked && menuMusic.crossfade && menuMusic.crossfade.incoming === index) {
+                        menuMusic.crossfade = null;
+                        menuMusicSetVolumes(menuMusicMixes());
+                    }
+                });
+            } else {
+                started();
+            }
+            return true;
+        } catch (error) {
+            var blocked = menuMusicPlaybackFailed(error, index);
+            if (!blocked && menuMusic.crossfade && menuMusic.crossfade.incoming === index) {
+                menuMusic.crossfade = null;
+                menuMusicSetVolumes(menuMusicMixes());
+            }
+            return false;
+        }
+    }
+
+    function menuMusicBeginCrossfade() {
+        if (!menuMusic.decks || menuMusic.crossfade || menuMusicLoaderActive(menuMusic.state)) return;
+        var incoming = 1 - menuMusic.active;
+        try { menuMusic.decks[incoming].currentTime = 0; } catch (_) {}
+        menuMusic.crossfade = {
+            outgoing: menuMusic.active,
+            incoming: incoming,
+            progress: 0,
+            startedAt: null
+        };
+        menuMusicSetVolumes(menuMusicMixes());
+        if (!menuMusicPlayDeck(incoming, false)) menuMusic.crossfade = null;
+    }
+
+    function menuMusicCreatePlayer() {
+        try {
+            var url = menuMusicAssetUrl();
+            if (!url) return false;
+            menuMusic.decks = [new window.Audio(), new window.Audio()];
+            menuMusic.decks.forEach(function (deck, index) {
+                deck.preload = index === menuMusic.active ? "auto" : "none";
+                deck.loop = false;
+                deck.volume = 0;
+                deck.addEventListener("error", function () {
+                    console.error("[SOW MUSIC] Opus theme failed to load:", deck.error || "media error");
+                });
+                deck.addEventListener("timeupdate", function () {
+                    if (index !== menuMusic.active || menuMusic.crossfade || menuMusicLoaderActive(menuMusic.state)) return;
+                    if (Number.isFinite(deck.duration) && deck.duration > 3.1 && deck.currentTime >= deck.duration - 3) {
+                        menuMusicBeginCrossfade();
+                    }
+                });
+                deck.addEventListener("ended", function () {
+                    if (index !== menuMusic.active || menuMusicLoaderActive(menuMusic.state)) return;
+                    if (menuMusic.crossfade && menuMusic.crossfade.outgoing === index) {
+                        menuMusicFinishCrossfade();
+                        return;
+                    }
+                    console.warn("[SOW MUSIC] loop crossfade missed the track end; restarting at the opening.");
+                    menuMusic.active = 1 - index;
+                    try { menuMusic.decks[menuMusic.active].currentTime = 0; } catch (_) {}
+                    menuMusicSetVolumes(menuMusicMixes());
+                    menuMusicPlayDeck(menuMusic.active, false);
+                });
+                deck.src = url;
+                if (index === menuMusic.active) deck.load();
+            });
+            return true;
+        } catch (error) {
+            console.error("[SOW MUSIC] could not create the WebView audio player:", error);
+            return false;
+        }
+    }
+
+    function syncMenuMusic(nextState, userGesture, volumeOverride) {
+        if (!nextState) return;
+        var previousState = menuMusic.state;
+        menuMusic.state = nextState;
+        var reportedVolume = nextState.settings && Number(nextState.settings.music_volume);
+        if (volumeOverride != null && Number.isFinite(Number(volumeOverride))) {
+            menuMusic.pendingVolume = Math.max(0, Math.min(1, Number(volumeOverride)));
+        } else if (menuMusic.pendingVolume != null && Number.isFinite(reportedVolume) &&
+            Math.abs(reportedVolume - menuMusic.pendingVolume) < 0.001) {
+            menuMusic.pendingVolume = null;
+        }
+        if (userGesture) {
+            menuMusic.activated = true;
+            menuMusic.playBlocked = false;
+        }
+        if (menuMusicLoaderActive(nextState)) {
+            menuMusicPausePlayback();
+            return;
+        }
+        if (menuMusic.cinematicActive) {
+            menuMusicPausePlayback();
+            return;
+        }
+        if (menuMusicResetOnMenuReturn(previousState, nextState)) menuMusicReset();
+        if (menuMusicMuted() || menuMusicVolume() <= 0) {
+            menuMusic.playBlocked = false;
+            menuMusic.blockedDeck = null;
+            menuMusicHideUnlockPrompt();
+            menuMusicSetVolumes(menuMusicMixes());
+            return;
+        }
+        if (!menuMusic.activated) return;
+        if (!menuMusic.decks && !menuMusicCreatePlayer()) return;
+        menuMusicSetVolumes(menuMusicMixes());
+        var nextDeck = menuMusic.crossfade ? menuMusic.crossfade.incoming
+            : menuMusic.blockedDeck == null ? menuMusic.active : menuMusic.blockedDeck;
+        menuMusicPlayDeck(nextDeck, Boolean(userGesture));
+    }
+
+    function menuMusicSetCinematicActive(active) {
+        active = Boolean(active);
+        if (menuMusic.cinematicActive === active) return;
+        menuMusic.cinematicActive = active;
+        if (active) menuMusicPausePlayback();
+        else if (menuMusic.state) syncMenuMusic(menuMusic.state, false);
+    }
+
+    window.SOW_menu_music_cinematic = menuMusicSetCinematicActive;
+
+    function menuMusicStartAtLoaderEnd() {
+        menuMusic.activated = true;
+        if (menuMusic.state && Number.isSafeInteger(menuMusic.state.loader_cycle_id)) {
+            menuMusic.completedCycleId = Math.max(menuMusic.completedCycleId, menuMusic.state.loader_cycle_id);
+        }
+        if (menuMusic.state) syncMenuMusic(menuMusic.state, false);
+    }
+
+    function menuMusicUnlockFromClick(event) {
+        if (!menuMusic.playBlocked || !event.target || typeof event.target.closest !== "function") return;
+        if (!event.target.closest("[data-sow-music-unlock]") &&
+            !event.target.closest("#sow-story [data-story-start]")) return;
+        syncMenuMusic(menuMusic.state, true);
+    }
+
+    menuMusicCreatePlayer();
+    window.addEventListener("sow:loader-ready", menuMusicStartAtLoaderEnd, { once: true });
+    document.addEventListener("click", menuMusicUnlockFromClick, true);
+    window.addEventListener("sow:locale-change", function () {
+        if (menuMusic.unlockButton && !menuMusic.unlockButton.hidden) menuMusicShowUnlockPrompt();
+    });
+
     function renderTopbar() {
         var leader = leaderById(state.selected_leader);
         var name = state.player_name || SOW_t("menu.anonymous");
@@ -1108,6 +1469,7 @@
     }
 
     root.addEventListener("click", function (event) {
+        if (state && state.phase === "MainMenu") syncMenuMusic(state, true);
         var purchaseOverlay = event.target.closest("[data-menu-overlay='purchase']");
         if (purchaseOverlay && event.target === purchaseOverlay) {
             if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
@@ -1164,6 +1526,13 @@
         if (command === "close_campaign") {
             campaignOpen = false;
             render();
+            return;
+        }
+        if (command === "watch_campaign_cinematic") {
+            var cinematicEpisodeId = target.dataset.episodeId;
+            if (cinematicEpisodeId && typeof window.SOW_watchCampaignCinematic === "function") {
+                window.SOW_watchCampaignCinematic(cinematicEpisodeId);
+            }
             return;
         }
         if (command === "start_campaign_episode") {
@@ -2012,6 +2381,7 @@
         if (input.dataset && input.dataset.setting === "music_volume") {
             var musicValBadge = root.querySelector("[data-val-for='music_vol']");
             if (musicValBadge) musicValBadge.textContent = Math.round(Number(input.value) * 100) + "%";
+            if (state && state.phase === "MainMenu") syncMenuMusic(state, true, Number(input.value));
         }
         if (input.name === "password" && input.closest("form[data-form='password']")) {
             passwordDraft = input.value;
@@ -2108,10 +2478,12 @@
         var cycleId = event && event.detail && event.detail.cycle_id;
         if (!Number.isSafeInteger(cycleId) || cycleId < latestLoaderCycleId || cycleId < completedLoaderCycleId) return;
         completedLoaderCycleId = cycleId;
+        menuMusicFinishLoaderCycle(cycleId);
         if (!state || state.phase !== "MainMenu" || state.loader_job !== "ExitGame" || state.loader_cycle_id !== cycleId) return;
 
         var replayExitIntro = pendingExitScreenIntro;
         state = normalizeCompletedExitState(state);
+        syncMenuMusic(state, false);
         exitMenuAssetsCycleId = null;
         exitMenuAssetsPending = false;
         exitMenuAssetsReady = false;
@@ -2155,6 +2527,7 @@
         if (!Number.isSafeInteger(state.loader_cycle_id) || state.loader_cycle_id < latestLoaderCycleId) return;
         latestLoaderCycleId = state.loader_cycle_id;
         state = normalizeCompletedExitState(state);
+        syncMenuMusic(state, false);
         var accountId = state.account_id || "";
         if (rewardAnimationAccount !== accountId) {
             rewardAnimationAccount = accountId;

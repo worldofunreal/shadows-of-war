@@ -6,6 +6,13 @@
     root.id = "sow-story";
     root.hidden = true;
     document.body.appendChild(root);
+    var cinematicPreviewRoot = document.createElement("div");
+    cinematicPreviewRoot.id = "sow-campaign-cinematic-preview";
+    cinematicPreviewRoot.className = "sow-story--menu-preview";
+    cinematicPreviewRoot.hidden = true;
+    document.body.appendChild(cinematicPreviewRoot);
+    var cinematicPreviewView = null;
+    var cinematicPreviewGeneration = 0;
     var pendingMenuGuide = null;
     var HOVER_TARGET_RADIUS = 72;
 
@@ -274,6 +281,53 @@
         return request;
     }
 
+    function closeCampaignCinematic() {
+        cinematicPreviewGeneration++;
+        if (cinematicPreviewView) cinematicPreviewView.destroy();
+        cinematicPreviewView = null;
+        cinematicPreviewRoot.hidden = true;
+        cinematicPreviewRoot.classList.remove("sow-story--menu-preview");
+    }
+
+    function watchCampaignCinematic(episodeId) {
+        episodeId = String(episodeId || "");
+        if (!/^[a-z][a-z0-9_]{0,63}$/.test(episodeId)) return;
+        if (cinematicPreviewView) cinematicPreviewView.destroy();
+        cinematicPreviewView = null;
+        var generation = ++cinematicPreviewGeneration;
+        cinematicPreviewRoot.classList.add("sow-story--menu-preview");
+        cinematicPreviewRoot.hidden = true;
+        loadEpisode(episodeId).then(function (data) {
+            if (generation !== cinematicPreviewGeneration) return;
+            var entry = (data.definition.steps || []).find(function (step) { return step.id === data.definition.entry; });
+            if (!entry || entry.type !== "scene" || entry.presentation !== "cinematic" || !entry.video_src) {
+                throw new Error("This episode has no opening cinematic.");
+            }
+            var translate = function (key) {
+                var value = typeof window.SOW_t === "function" ? window.SOW_t(key) : "[" + key + "]";
+                if (!value || value === "[" + key + "]") return key;
+                return window.SOWCampaign.replaceFactionStoryNames(value, data.definition, data.roster);
+            };
+            cinematicPreviewView = window.SOWCampaignView.mount(cinematicPreviewRoot, {
+                translate: translate,
+                asset: asset,
+                roster: function () { return data.roster; },
+                onContinue: closeCampaignCinematic,
+                onDismiss: closeCampaignCinematic
+            });
+            var machine = window.SOWCampaign.create(data.definition, data.definition.entry, data.roster);
+            cinematicPreviewView.render(machine.view(), {
+                direction: document.documentElement.dir || "ltr",
+                localeScript: document.documentElement.dataset.localeScript || "latin",
+                reducedMotion: Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+            });
+        }).catch(function (error) {
+            if (generation !== cinematicPreviewGeneration) return;
+            console.error("[SOW CAMPAIGN CINEMATIC]", error);
+            closeCampaignCinematic();
+        });
+    }
+
     function showError(error, episodeId, retryAction, dismissAction) {
         console.error("[SOW CAMPAIGN]", error);
         if (runtime.latestHud && runtime.latestHud.tutorial && runtime.latestHud.tutorial.active) {
@@ -325,6 +379,11 @@
             onContinue: continueScene,
             onChoice: choose,
             onFocus: focusMarker,
+            onCinematicChange: function (active) {
+                if (typeof window.SOW_menu_music_cinematic === "function") {
+                    window.SOW_menu_music_cinematic(active);
+                }
+            },
             onDismiss: runtime.menuGuide
                 ? (runtime.definition.menu_guide.dismissible === false ? null : dismissMenuGuide)
                 : null
@@ -1012,6 +1071,7 @@
     ["click", "input", "change"].forEach(function (type) { document.addEventListener(type, recordUiAction, true); });
 
     window.SOW_startCampaignEpisode = function (episodeId) { startEpisode(episodeId, false); };
+    window.SOW_watchCampaignCinematic = watchCampaignCinematic;
     window.SOW_tutorial_exit_context = tutorialExitContext;
     window.SOW_tutorial_menu_state_update = function (state) {
         var phase = state && state.phase;

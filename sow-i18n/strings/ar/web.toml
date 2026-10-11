@@ -93,6 +93,9 @@ copy_unavailable = "النسخ غير متاح"
 
 [tutorial]
 skip_cinematic = "إغلاق المشهد"
+watch_cinematic = "مشاهدة المشهد السينمائي"
+hold_to_skip = "اضغط مطولًا للتخطي"
+cinematic_tap_to_play = "المس أو انقر لبدء التشغيل"
 objective_details = "تفاصيل الهدف"
 continue = "CONTINU"
 complete = "إكمال الحملة"

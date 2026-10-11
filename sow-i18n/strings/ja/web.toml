@@ -93,6 +93,9 @@ copy_unavailable = "コピーできません"
 
 [tutorial]
 skip_cinematic = "シネマティックをスキップ"
+watch_cinematic = "シネマティックを見る"
+hold_to_skip = "長押ししてスキップ"
+cinematic_tap_to_play = "タップまたはクリックして再生"
 objective_details = "目標の詳細"
 continue = "コンセプト"
 complete = "キャンペーンを完了"

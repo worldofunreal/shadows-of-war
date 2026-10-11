@@ -902,19 +902,11 @@ impl SowApp {
                 }
                 WebMenuCommand::SetMute { value } => {
                     self.ui.app.settings_state.mute_all = value;
-                    let volume = if value {
-                        0.0
-                    } else {
-                        self.ui.app.settings_state.music_volume
-                    };
-                    sow_audio::set_master_volume(volume);
+                    sow_audio::set_master_volume(if value { 0.0 } else { 0.8 });
                 }
                 WebMenuCommand::SetMusicVolume { value } => {
                     let volume = value.clamp(0.0, 1.0);
                     self.ui.app.settings_state.music_volume = volume;
-                    if !self.ui.app.settings_state.mute_all {
-                        sow_audio::set_master_volume(volume);
-                    }
                 }
                 WebMenuCommand::SetReducedMotion { value } => {
                     self.ui.app.settings_state.reduced_motion = value;

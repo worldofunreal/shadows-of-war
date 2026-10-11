@@ -93,6 +93,9 @@ copy_unavailable = "MAHIRAP NA NAHIRAPAN"
 
 [tutorial]
 skip_cinematic = "Laktawan ang eksena"
+watch_cinematic = "PANOORIN ANG CINEMATIC"
+hold_to_skip = "PINDUTIN AT HAWAKAN PARA LUMAKTAW"
+cinematic_tap_to_play = "I-tap o i-click para magsimula"
 objective_details = "Mga detalye ng layunin"
 continue = "PAGHAHAHANAP"
 complete = "KUMPLETUHIN ANG KAMPANYA"

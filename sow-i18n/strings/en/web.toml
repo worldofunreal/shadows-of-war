@@ -94,6 +94,9 @@ copy_unavailable = "COPY UNAVAILABLE"
 
 [tutorial]
 skip_cinematic = "SKIP CINEMATIC"
+watch_cinematic = "WATCH CINEMATIC"
+hold_to_skip = "HOLD TO SKIP"
+cinematic_tap_to_play = "Tap or click to start"
 objective_details = "Objective details"
 continue = "CONTINUE"
 complete = "COMPLETE CAMPAIGN"

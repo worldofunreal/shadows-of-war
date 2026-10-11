@@ -93,6 +93,9 @@ copy_unavailable = "SALIN TIDAK TERSEDIA"
 
 [tutorial]
 skip_cinematic = "Lewati sinematik"
+watch_cinematic = "TONTON SINEMATIK"
+hold_to_skip = "TAHAN UNTUK LEWATI"
+cinematic_tap_to_play = "Ketuk atau klik untuk memulai"
 objective_details = "Detail tujuan"
 continue = "Lanjutkan"
 complete = "SELESAIKAN KAMPANYE"

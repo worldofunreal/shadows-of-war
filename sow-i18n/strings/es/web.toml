@@ -94,6 +94,9 @@ copy_unavailable = "COPIA NO DISPONIBLE"
 
 [tutorial]
 skip_cinematic = "OMITIR CINEMÁTICA"
+watch_cinematic = "VER CINEMÁTICA"
+hold_to_skip = "MANTÉN PRESIONADO PARA OMITIR"
+cinematic_tap_to_play = "Toca o haz clic para iniciar"
 objective_details = "Detalles del objetivo"
 continue = "CONTINUACIÓN"
 complete = "COMPLETAR CAMPAÑA"

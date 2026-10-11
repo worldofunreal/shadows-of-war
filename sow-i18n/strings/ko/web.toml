@@ -93,6 +93,9 @@ copy_unavailable = "복사할 수 없음"
 
 [tutorial]
 skip_cinematic = "시네마틱 건너뛰기"
+watch_cinematic = "시네마틱 보기"
+hold_to_skip = "길게 눌러 건너뛰기"
+cinematic_tap_to_play = "탭하거나 클릭해 시작"
 objective_details = "목표 세부 정보"
 continue = "- 연혁"
 complete = "캠페인 완료"

@@ -93,6 +93,9 @@ copy_unavailable = "无法复制"
 
 [tutorial]
 skip_cinematic = "跳过过场动画"
+watch_cinematic = "观看过场动画"
+hold_to_skip = "长按以跳过"
+cinematic_tap_to_play = "点按或点击以开始播放"
 objective_details = "目标详情"
 continue = "继续"
 complete = "完成战役"

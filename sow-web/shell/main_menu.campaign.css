@@ -228,11 +228,25 @@
 }
 
 .sow-campaign__play {
-    margin-top: auto;
     width: fit-content;
     min-width: min(190px, 100%);
     padding-block: 8px;
     font-size: 10px;
+}
+
+.sow-campaign__episode-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    margin-top: auto;
+}
+
+.sow-campaign__episode-actions .sow-campaign__play,
+.sow-campaign__watch {
+    width: fit-content;
+    min-width: min(170px, 100%);
+    margin: 0;
 }
 
 .sow-campaign__play:disabled {
@@ -316,4 +330,7 @@
         min-height: 40px;
         min-width: min(170px, 100%);
     }
+
+    .sow-campaign__episode-actions { gap: 6px; }
+    .sow-campaign__episode-actions :is(.sow-campaign__play, .sow-campaign__watch) { min-height: 40px; min-width: min(170px, 100%); }
 }
