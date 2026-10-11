@@ -190,6 +190,7 @@
         transfer_troops: "#sow-hud-transfer-troops",
         transfer_send: '#sow-hud-transfer [data-command="send_resources"]',
         transfer_request: '#sow-hud-transfer [data-command="request_resources"]',
+        map_menu_open: '#sow-hud-map-menu',
         map_spawn: '#sow-hud [data-map-action="spawn"]',
         map_attack: '#sow-hud [data-map-action="attack"]',
         map_transfer: '#sow-hud [data-map-action="transfer"]',
@@ -778,6 +779,7 @@
                         if (!trigger.target || (trigger.target !== "player" && roster && !rosterFactions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose the player or an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
+                        if (trigger.action === "map_menu_open" && !(step.marker && step.marker.target)) issue(step, "marker", "Choose whose map menu must open.");
                     } else if (trigger.type === "building_selected") {
                         if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
                     } else if (trigger.type === "structure_upgrade") {

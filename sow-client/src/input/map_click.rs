@@ -305,7 +305,7 @@ impl SowApp {
                 return;
             }
         }
-        self.primary_target(tile_idx);
+        self.primary_target(tile_idx, x, y);
     }
 
     fn try_tutorial_campaign_nameplate_attack(&mut self, x: f64, y: f64) -> bool {
@@ -1188,7 +1188,7 @@ impl SowApp {
         true
     }
 
-    fn primary_target(&mut self, tile_idx: u32) {
+    fn primary_target(&mut self, tile_idx: u32, x: f64, y: f64) {
         let Some(target) = self.map_target(tile_idx) else {
             return;
         };
@@ -1202,7 +1202,7 @@ impl SowApp {
             return;
         }
         if target.is_friendly() {
-            self.open_transfer_from_tile(tile_idx);
+            self.open_map_context_menu(x, y);
         } else {
             self.attack_from_tile(tile_idx);
         }
@@ -1693,15 +1693,16 @@ mod tests {
         shares_land_border,
     };
     use sow_core::bitset::DenseBitSet;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn tap_and_hold_are_distinct_and_drag_cancels_both() {
         assert!(is_quick_tap(TOUCH_HOLD_MS - 1, 0.0));
         assert!(!is_quick_tap(TOUCH_HOLD_MS, 0.0));
         assert!(!is_quick_tap(1, 401.0));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn land_border_is_required_for_a_click_attack() {
         let owners = [1, 2, 0, 0];
         let terrain = [0x80, 0x80, 0x80, 0x80];
@@ -1736,7 +1737,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn neutral_land_is_a_valid_attack_target() {
         let neutral = MapTarget {
             owner: 0,
@@ -1759,14 +1760,14 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn attack_amount_must_meet_the_configured_minimum() {
         assert!(!attack_troops_meet_minimum(0.5, 1.0));
         assert!(attack_troops_meet_minimum(1.0, 1.0));
         assert!(!attack_troops_meet_minimum(f64::NAN, 1.0));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn map_menu_keeps_actions_on_the_rust_route() {
         let enemy = MapTarget {
             owner: 2,
@@ -1868,6 +1869,7 @@ mod tests {
                 MapMenuAction::BuildFactory,
                 MapMenuAction::BuildPort,
                 MapMenuAction::BuildBunker,
+                MapMenuAction::BuildFarm,
             ]
         );
 
@@ -1877,7 +1879,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn lower_alliance_action_only_requests_or_accepts() {
         use sow_core::protocol::GameplayIntent;
 

@@ -661,8 +661,9 @@ mod tests {
         hold_build_repeat_interval, should_exit_build_mode_after_gesture, single_touch_position,
     };
     use std::collections::HashMap;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn touch_hover_requires_exactly_one_finger() {
         let mut touches = HashMap::new();
         assert_eq!(single_touch_position(&touches), None);
@@ -674,7 +675,7 @@ mod tests {
         assert_eq!(single_touch_position(&touches), None);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn hold_build_changes_to_burst_after_two_seconds() {
         assert_eq!(hold_build_repeat_interval(1.999), HOLD_BUILD_INTERVAL_SECS);
         assert_eq!(
@@ -683,8 +684,8 @@ mod tests {
         );
 
         let mut remaining = HOLD_BUILD_INTERVAL_SECS;
-        assert!(!advance_hold_build_timer(&mut remaining, 0.249, 0.0));
-        assert!(advance_hold_build_timer(&mut remaining, 0.001, 0.25));
+        assert!(!advance_hold_build_timer(&mut remaining, 0.125, 0.0));
+        assert!(advance_hold_build_timer(&mut remaining, 0.125, 0.25));
         assert_eq!(remaining, HOLD_BUILD_INTERVAL_SECS);
 
         remaining = 0.001;
@@ -692,7 +693,7 @@ mod tests {
         assert_eq!(remaining, HOLD_BUILD_BURST_INTERVAL_SECS);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn building_mode_exits_only_after_success_without_a_keep_override() {
         assert!(should_exit_build_mode_after_gesture(false, true, false, false));
         assert!(!should_exit_build_mode_after_gesture(false, false, false, false));

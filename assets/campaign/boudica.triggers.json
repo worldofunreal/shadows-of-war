@@ -475,7 +475,7 @@
       "pause_game": true,
       "trigger": {
         "type": "ui",
-        "action": "map_transfer",
+        "action": "map_menu_open",
         "scope": "step"
       },
       "marker": {
@@ -484,6 +484,28 @@
       "guide": {
         "kind": "world",
         "target": "player",
+        "gesture": "tap"
+      },
+      "next": "boudica_transfer_choose"
+    },
+    {
+      "id": "boudica_transfer_choose",
+      "type": "guide",
+      "title_key": "tutorial.campaign_boudica_boudica_transfer_choose_title",
+      "hint_key": "tutorial.campaign_boudica_boudica_transfer_choose_hint",
+      "speaker": "boudica",
+      "pause_game": true,
+      "trigger": {
+        "type": "ui",
+        "action": "map_transfer",
+        "scope": "step"
+      },
+      "marker": {
+        "target": "trinovantes"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "map_transfer",
         "gesture": "tap"
       },
       "next": "boudica_transfer_send"
@@ -1273,6 +1295,10 @@
     },
     "boudica_transfer_target": {
       "x": 630,
+      "y": 640
+    },
+    "boudica_transfer_choose": {
+      "x": 910,
       "y": 640
     },
     "boudica_transfer_send": {

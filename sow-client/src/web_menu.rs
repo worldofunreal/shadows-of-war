@@ -3177,6 +3177,12 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
         .input
         .map_context_menu
         .map(|menu| {
+            let target_player_id = app
+                .gfx
+                .map_renderer
+                .as_ref()
+                .and_then(|renderer| renderer.owners.get(menu.tile_idx as usize).copied())
+                .unwrap_or(0);
             let alliance_state = app
                 .map_menu_alliance_state(menu.tile_idx)
                 .map(sow_core::diplomacy::AllianceActionState::as_str);
@@ -3220,6 +3226,7 @@ fn build_hud_payload(app: &mut SowApp, include_leaderboard: bool) -> serde_json:
                 "x": menu.x / screen_scale,
                 "y": menu.y / screen_scale,
                 "tile_idx": menu.tile_idx,
+                "target_player_id": target_player_id,
                 "session": menu.session,
                 "actions": actions,
                 "items": items,
