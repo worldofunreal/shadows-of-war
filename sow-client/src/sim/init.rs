@@ -21,7 +21,6 @@ impl SowApp {
         let geo_bounds = opts.geo_bounds;
         let map_rosters = opts.map_rosters;
         let num_land_tiles = opts.num_land_tiles;
-        self.exit_reward_preview = None;
         self.reset_progress_session();
         self.sim.config = (*config).clone();
         let map_w = config.map_width;

@@ -80,6 +80,21 @@ pub fn resolve_fleet_route(
         target_border,
     )?;
 
+    resolve_fleet_route_between_shores(map, path_scratch, src, landing)
+}
+
+/// Route between already validated shores. AI scans can bound candidate work,
+/// then share the exact same water pathfinder as ordinary fleet launches.
+pub(crate) fn resolve_fleet_route_between_shores(
+    map: &GameMap,
+    path_scratch: &mut WaterPathfinderScratch,
+    src: u32,
+    landing: u32,
+) -> Result<FleetRoute, FleetLaunchError> {
+    let area = map.width.saturating_mul(map.height);
+    if src >= area || landing >= area {
+        return Err(FleetLaunchError::InvalidTile);
+    }
     let path = path_scratch
         .astar
         .find_path(map, &[src], landing)
@@ -594,7 +609,9 @@ mod movement_tests {
             config.per_tick(TRANSPORT_BASE_SPEED_TILES_PER_SECOND),
             config.tick_rate_ms,
         );
-        let eta = fleet.remaining_eta_seconds().expect("moving transport has an ETA");
+        let eta = fleet
+            .remaining_eta_seconds()
+            .expect("moving transport has an ETA");
 
         assert!((eta - (10.0 / 4.5)).abs() < 1e-5);
     }

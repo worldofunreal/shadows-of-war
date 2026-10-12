@@ -1171,11 +1171,20 @@ mod name_tests {
             multiplayer_frequency: 1,
             default_roster: Some("historical".into()),
             roster_presets: vec![
-                sow_core::map_file::MapRosterMeta { id: "historical".into(), name: "Historical".into() },
-                sow_core::map_file::MapRosterMeta { id: "modern".into(), name: "Modern".into() },
+                sow_core::map_file::MapRosterMeta {
+                    id: "historical".into(),
+                    name: "Historical".into(),
+                },
+                sow_core::map_file::MapRosterMeta {
+                    id: "modern".into(),
+                    name: "Modern".into(),
+                },
             ],
         };
-        let mut config = GameConfig { map_roster_preset: Some("modern".into()), ..Default::default() };
+        let mut config = GameConfig {
+            map_roster_preset: Some("modern".into()),
+            ..Default::default()
+        };
         normalize_map_roster(&mut config, Some(&entry));
         assert_eq!(config.map_roster_preset.as_deref(), Some("modern"));
 

@@ -134,10 +134,6 @@ enum WebMenuCommand {
         account_id: String,
         receipt_ids: Vec<String>,
     },
-    AcknowledgeRewardPresentation {
-        account_id: String,
-        receipt_id: String,
-    },
     OpenBrowser,
     OpenCreate,
     CloseOverlay,
@@ -226,10 +222,26 @@ enum WebMenuCommand {
     ToggleLeaderboard,
     ToggleDevSidebar,
     SetDevConfig {
-        field: WebDevConfigField,
-        value: f32,
+        field: String,
+        value: serde_json::Value,
     },
-    ResetDevConfig,
+    SetDevVfxPreview {
+        #[serde(default)]
+        target: Option<u8>,
+        #[serde(default)]
+        phase: Option<f32>,
+        #[serde(default)]
+        paused: Option<bool>,
+        #[serde(default)]
+        repeat: Option<bool>,
+    },
+    ReplayDevVfxPreview,
+    ResetDevConfig {
+        #[serde(default)]
+        section: Option<String>,
+        #[serde(default)]
+        field: Option<String>,
+    },
     DevVfxAll {
         on: bool,
     },
@@ -261,38 +273,58 @@ enum WebMenuCommand {
     },
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum WebDevConfigField {
-    Thickness,
-    Darkness,
-    ShoreThickness,
-    ShoreDarkness,
-    ConquestDuration,
-    TerritoryOpacity,
-    BlendMode,
-    FontSizeScale,
-    FontFaceDilate,
-    FontOutlineThickness,
-    FontShadowY,
-    FontUnderlaySoftness,
-    FontCharSpacing,
-    VfxConquer,
-    VfxBorderBreathe,
-    VfxEnergyFlow,
-    VfxHeartbeat,
-    VfxWarFog,
-    FogOfWar,
-    VfxFallout,
-    VfxAmbientGrade,
-    VfxHoloGrid,
-    VfxMoverTrails,
-    VfxClickMarkers,
-    VfxAttackBadges,
-    VfxWorldBuildings,
-    VfxBotAvatars,
-    VfxNameplateNames,
-    VfxNameplateTroops,
+#[cfg(any(feature = "dev", debug_assertions))]
+fn decode_dev_config_value(field: &str, raw: &serde_json::Value) -> Option<[f32; 4]> {
+    use sow_render::shader_params::{self, ParamKind};
+    let def = shader_params::definition(field)?;
+    let mut values = [0.0; 4];
+    match def.kind {
+        ParamKind::Bool => {
+            values[0] = if raw.as_bool()? { 1.0 } else { 0.0 };
+        }
+        ParamKind::Number | ParamKind::Select => {
+            let value = raw.as_f64()? as f32;
+            if !value.is_finite() {
+                return None;
+            }
+            values[0] = if def.kind == ParamKind::Select {
+                def.options
+                    .iter()
+                    .min_by(|a, b| (a.value - value).abs().total_cmp(&(b.value - value).abs()))?
+                    .value
+            } else {
+                value
+            };
+        }
+        ParamKind::Color | ParamKind::Vector => {
+            let input = raw.as_array()?;
+            if input.len() < 3 {
+                return None;
+            }
+            for i in 0..3 {
+                let value = input[i].as_f64()? as f32;
+                if !value.is_finite() {
+                    return None;
+                }
+                values[i] = value;
+            }
+            values[3] = if def.kind == ParamKind::Color {
+                input
+                    .get(3)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(1.0) as f32
+            } else {
+                0.0
+            };
+            if !values[3].is_finite() {
+                return None;
+            }
+            if def.kind == ParamKind::Color {
+                values[3] = values[3].clamp(0.0, 1.0);
+            }
+        }
+    }
+    Some(values)
 }
 
 thread_local! {
@@ -324,7 +356,7 @@ thread_local! {
 
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct HudPublishKey {
     fps: u32,
     ping_ms: Option<u32>,
@@ -352,7 +384,8 @@ struct HudPublishKey {
     campaign_session_id: u32,
     campaign_unlock_revision: u64,
     dev_sidebar_open: bool,
-    dev_config: [u32; 29],
+    dev_config: Vec<u32>,
+    dev_preview: Option<(u8, u8, bool, bool, bool)>,
     inbox_open: bool,
     transfer_target: Option<u16>,
     betrayal_open: bool,
@@ -655,10 +688,7 @@ impl SowApp {
                         && self.net.is_offline
                         && let Some(engine) = self.sim.engine.as_mut()
                         && engine.state.config.tutorial
-                        && !engine.set_campaign_attack_permission(
-                            &faction_id,
-                            can_attack_player,
-                        )
+                        && !engine.set_campaign_attack_permission(&faction_id, can_attack_player)
                     {
                         log::warn!(
                             "[CAMPAIGN] attack permission target is missing or not an enemy: {faction_id}"
@@ -835,18 +865,6 @@ impl SowApp {
                 } => {
                     if self.progress_account_id.as_deref() == Some(account_id.as_str()) {
                         self.acknowledge_reward_receipts(receipt_ids);
-                    }
-                }
-                WebMenuCommand::AcknowledgeRewardPresentation {
-                    account_id,
-                    receipt_id,
-                } => {
-                    if self.progress_account_id.as_deref() == Some(account_id.as_str())
-                        && self.exit_reward_preview.as_ref().is_some_and(|preview| {
-                            preview.account_id == account_id && preview.receipt_id == receipt_id
-                        })
-                    {
-                        self.exit_reward_preview = None;
                     }
                 }
                 WebMenuCommand::OpenBrowser => {
@@ -1139,92 +1157,52 @@ impl SowApp {
                 WebMenuCommand::SetDevConfig { field, value } => {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
-                        if self.ui.show_dev_sidebar && value.is_finite() {
-                            crate::theme::dev_config::DevConfig::update(|config| match field {
-                                WebDevConfigField::Thickness => {
-                                    config.thickness = value.clamp(0.0, 1.0)
-                                }
-                                WebDevConfigField::Darkness => {
-                                    config.darkness = value.clamp(0.0, 1.0)
-                                }
-                                WebDevConfigField::ShoreThickness => {
-                                    config.shore_thickness = value.clamp(0.0, 1.0)
-                                }
-                                WebDevConfigField::ShoreDarkness => {
-                                    config.shore_darkness = value.clamp(0.0, 1.0)
-                                }
-                                WebDevConfigField::ConquestDuration => {
-                                    config.conquest_duration = value.clamp(0.1, 10.0)
-                                }
-                                WebDevConfigField::TerritoryOpacity => {
-                                    config.territory_opacity = value.clamp(0.0, 1.0)
-                                }
-                                WebDevConfigField::BlendMode => {
-                                    config.blend_mode = value.clamp(0.0, 3.0)
-                                }
-                                WebDevConfigField::FontSizeScale => {
-                                    config.font_size_scale = value.clamp(0.5, 2.5)
-                                }
-                                WebDevConfigField::FontFaceDilate => {
-                                    config.font_face_dilate = value.clamp(-1.0, 2.0)
-                                }
-                                WebDevConfigField::FontOutlineThickness => {
-                                    config.font_outline_thickness = value.clamp(0.0, 3.0)
-                                }
-                                WebDevConfigField::FontShadowY => {
-                                    config.font_shadow_y = value.clamp(0.0, 5.0)
-                                }
-                                WebDevConfigField::FontUnderlaySoftness => {
-                                    config.font_underlay_softness = value.clamp(0.0, 2.0)
-                                }
-                                WebDevConfigField::FontCharSpacing => {
-                                    config.font_char_spacing = value.clamp(0.8, 1.8)
-                                }
-                                WebDevConfigField::VfxConquer => config.vfx_conquer = value != 0.0,
-                                WebDevConfigField::VfxBorderBreathe => {
-                                    config.vfx_border_breathe = value != 0.0
-                                }
-                                WebDevConfigField::VfxEnergyFlow => {
-                                    config.vfx_energy_flow = value != 0.0
-                                }
-                                WebDevConfigField::VfxHeartbeat => {
-                                    config.vfx_heartbeat = value != 0.0
-                                }
-                                WebDevConfigField::VfxWarFog => config.vfx_war_fog = value != 0.0,
-                                WebDevConfigField::FogOfWar => config.fog_of_war = value != 0.0,
-                                WebDevConfigField::VfxFallout => config.vfx_fallout = value != 0.0,
-                                WebDevConfigField::VfxAmbientGrade => {
-                                    config.vfx_ambient_grade = value != 0.0
-                                }
-                                WebDevConfigField::VfxHoloGrid => {
-                                    config.vfx_holo_grid = value != 0.0
-                                }
-                                WebDevConfigField::VfxMoverTrails => {
-                                    config.vfx_mover_trails = value != 0.0
-                                }
-                                WebDevConfigField::VfxClickMarkers => {
-                                    config.vfx_click_markers = value != 0.0
-                                }
-                                WebDevConfigField::VfxAttackBadges => {
-                                    config.vfx_attack_badges = value != 0.0
-                                }
-                                WebDevConfigField::VfxWorldBuildings => {
-                                    config.vfx_world_buildings = value != 0.0
-                                }
-                                WebDevConfigField::VfxBotAvatars => {
-                                    config.vfx_bot_avatars = value != 0.0
-                                }
-                                WebDevConfigField::VfxNameplateNames => {
-                                    config.vfx_nameplate_names = value != 0.0
-                                }
-                                WebDevConfigField::VfxNameplateTroops => {
-                                    config.vfx_nameplate_troops = value != 0.0
-                                }
+                        if self.ui.show_dev_sidebar
+                            && let Some(value) = decode_dev_config_value(&field, &value)
+                        {
+                            crate::theme::dev_config::DevConfig::update(|config| {
+                                config.assign(&field, value);
                             });
                         }
                     }
                     #[cfg(not(any(feature = "dev", debug_assertions)))]
                     let _ = (field, value);
+                }
+                WebMenuCommand::SetDevVfxPreview {
+                    target,
+                    phase,
+                    paused,
+                    repeat,
+                } => {
+                    #[cfg(any(feature = "dev", debug_assertions))]
+                    {
+                        if self.ui.show_dev_sidebar {
+                            let now = Instant::now();
+                            let config = crate::theme::dev_config::DevConfig::get();
+                            let duration = self.ui.dev_vfx_preview.duration(&config);
+                            self.ui.dev_vfx_preview.advance(now, duration);
+                            if let Some(target) = target {
+                                self.ui.dev_vfx_preview.set_target(target, now);
+                            }
+                            if let Some(phase) = phase {
+                                self.ui.dev_vfx_preview.set_phase(phase, now);
+                            }
+                            if let Some(repeat) = repeat {
+                                self.ui.dev_vfx_preview.repeat = repeat;
+                            }
+                            if let Some(paused) = paused {
+                                self.ui.dev_vfx_preview.set_paused(paused, now);
+                            }
+                        }
+                    }
+                    #[cfg(not(any(feature = "dev", debug_assertions)))]
+                    let _ = (target, phase, paused, repeat);
+                }
+                WebMenuCommand::ReplayDevVfxPreview => {
+                    #[cfg(any(feature = "dev", debug_assertions))]
+                    if self.ui.show_dev_sidebar {
+                        self.ui.dev_vfx_preview.replay(Instant::now());
+                    }
                 }
                 WebMenuCommand::DevVfxAll { on } => {
                     #[cfg(any(feature = "dev", debug_assertions))]
@@ -1238,7 +1216,10 @@ impl SowApp {
                             config.fog_of_war = on;
                             config.vfx_fallout = on;
                             config.vfx_ambient_grade = on;
+                            config.vfx_screen_vignette = on;
                             config.vfx_holo_grid = on;
+                            config.vfx_movers = on;
+                            config.vfx_tutorial_highlight = on;
                             config.vfx_mover_trails = on;
                             config.vfx_click_markers = on;
                             config.vfx_attack_badges = on;
@@ -1246,18 +1227,40 @@ impl SowApp {
                             config.vfx_bot_avatars = on;
                             config.vfx_nameplate_names = on;
                             config.vfx_nameplate_troops = on;
+                            for param in sow_render::shader_params::PARAMS.iter().filter(|param| {
+                                param.kind == sow_render::shader_params::ParamKind::Bool
+                            }) {
+                                config
+                                    .assign(param.id, [if on { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0]);
+                            }
                         });
                     }
                     #[cfg(not(any(feature = "dev", debug_assertions)))]
                     let _ = on;
                 }
-                WebMenuCommand::ResetDevConfig => {
+                WebMenuCommand::ResetDevConfig { section, field } => {
                     #[cfg(any(feature = "dev", debug_assertions))]
                     {
-                        crate::theme::dev_config::DevConfig::set(
-                            crate::theme::dev_config::DevConfig::default(),
-                        );
+                        if let Some(field) = field
+                            .filter(|field| sow_render::shader_params::definition(field).is_some())
+                        {
+                            crate::theme::dev_config::DevConfig::update(|config| {
+                                config.reset_field(&field);
+                            });
+                        } else if let Some(section) =
+                            section.filter(|section| !section.is_empty() && section != "all")
+                        {
+                            crate::theme::dev_config::DevConfig::update(|config| {
+                                config.reset_section(&section);
+                            });
+                        } else {
+                            crate::theme::dev_config::DevConfig::set(
+                                crate::theme::dev_config::DevConfig::default(),
+                            );
+                        }
                     }
+                    #[cfg(not(any(feature = "dev", debug_assertions)))]
+                    let _ = (section, field);
                 }
                 WebMenuCommand::SetShowDevTools { value } => {
                     self.ui.app.settings_state.show_dev_tools = value;
@@ -1355,8 +1358,7 @@ fn combat_operations_snapshot_tick(
             || (attack.owner_id != my_player_id && attack.target_owner == my_player_id)
     });
     let has_outgoing_transport = snapshot.fleets.iter().any(|fleet| {
-        fleet.unit_type == sow_core::game::UnitType::TransportShip
-            && fleet.owner_id == my_player_id
+        fleet.unit_type == sow_core::game::UnitType::TransportShip && fleet.owner_id == my_player_id
     });
     let has_incoming_transport = engine.is_some_and(|engine| {
         engine.fleets.iter().any(|fleet| {
@@ -1364,8 +1366,7 @@ fn combat_operations_snapshot_tick(
                 && fleet.owner_id != my_player_id
                 && fleet.target_owner == my_player_id
                 && snapshot.fleets.iter().any(|item| {
-                    item.id == fleet.id
-                        && item.unit_type == sow_core::game::UnitType::TransportShip
+                    item.id == fleet.id && item.unit_type == sow_core::game::UnitType::TransportShip
                 })
         })
     });
@@ -1383,6 +1384,16 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
     let tutorial_active = app.ui.tutorial_active && app.net.is_offline;
     let map_menu = app.input.map_context_menu;
     let (dev_sidebar_open, dev_config_key) = dev_config_key(app);
+    let dev_preview = dev_sidebar_open.then(|| {
+        let preview = &app.ui.dev_vfx_preview;
+        (
+            preview.target,
+            (preview.phase.clamp(0.0, 1.0) * 100.0).round() as u8,
+            preview.paused,
+            preview.repeat,
+            preview.active,
+        )
+    });
     let snapshot_tick = app
         .sim
         .current_snapshot
@@ -1508,6 +1519,7 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
         )),
         dev_sidebar_open,
         dev_config: dev_config_key,
+        dev_preview,
         snapshot_tick: if cold_open { snapshot_tick } else { 0 },
         combat_operations_tick,
         hovered_tile,
@@ -1519,56 +1531,17 @@ fn hud_publish_key(app: &SowApp) -> HudPublishKey {
 }
 
 #[cfg(any(feature = "dev", debug_assertions))]
-fn dev_config_key(app: &SowApp) -> (bool, [u32; 29]) {
+fn dev_config_key(app: &SowApp) -> (bool, Vec<u32>) {
     if !app.ui.show_dev_sidebar {
-        return (false, [0; 29]);
+        return (false, Vec::new());
     }
     let config = crate::theme::dev_config::DevConfig::get();
-    let mut key = [0u32; 29];
-    key[..13].copy_from_slice(&[
-        config.thickness.to_bits(),
-        config.darkness.to_bits(),
-        config.shore_thickness.to_bits(),
-        config.shore_darkness.to_bits(),
-        config.conquest_duration.to_bits(),
-        config.territory_opacity.to_bits(),
-        config.blend_mode.to_bits(),
-        config.font_size_scale.to_bits(),
-        config.font_face_dilate.to_bits(),
-        config.font_outline_thickness.to_bits(),
-        config.font_shadow_y.to_bits(),
-        config.font_underlay_softness.to_bits(),
-        config.font_char_spacing.to_bits(),
-    ]);
-    for (index, value) in [
-        config.vfx_conquer,
-        config.vfx_border_breathe,
-        config.vfx_energy_flow,
-        config.vfx_heartbeat,
-        config.vfx_war_fog,
-        config.fog_of_war,
-        config.vfx_fallout,
-        config.vfx_ambient_grade,
-        config.vfx_holo_grid,
-        config.vfx_mover_trails,
-        config.vfx_click_markers,
-        config.vfx_attack_badges,
-        config.vfx_world_buildings,
-        config.vfx_bot_avatars,
-        config.vfx_nameplate_names,
-        config.vfx_nameplate_troops,
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        key[13 + index] = u32::from(value);
-    }
-    (true, key)
+    (true, config.fingerprint())
 }
 
 #[cfg(not(any(feature = "dev", debug_assertions)))]
-fn dev_config_key(_app: &SowApp) -> (bool, [u32; 29]) {
-    (false, [0; 29])
+fn dev_config_key(_app: &SowApp) -> (bool, Vec<u32>) {
+    (false, Vec::new())
 }
 
 #[cfg(any(feature = "dev", debug_assertions))]
@@ -1578,40 +1551,62 @@ fn dev_tools_payload(app: &SowApp) -> serde_json::Value {
         "open": open,
     });
     if open {
+        use sow_render::shader_params::{self, ParamKind};
         let config = crate::theme::dev_config::DevConfig::get();
-        payload["config"] = serde_json::json!({
-            "thickness": config.thickness,
-            "darkness": config.darkness,
-            "shore_thickness": config.shore_thickness,
-            "shore_darkness": config.shore_darkness,
-            "conquest_duration": config.conquest_duration,
-            "territory_opacity": config.territory_opacity,
-            "blend_mode": config.blend_mode,
-            "font_size_scale": config.font_size_scale,
-            "font_face_dilate": config.font_face_dilate,
-            "font_outline_thickness": config.font_outline_thickness,
-            "font_shadow_y": config.font_shadow_y,
-            "font_underlay_softness": config.font_underlay_softness,
-            "font_char_spacing": config.font_char_spacing,
-            "vfx_conquer": config.vfx_conquer,
-            "vfx_border_breathe": config.vfx_border_breathe,
-            "vfx_energy_flow": config.vfx_energy_flow,
-            "vfx_heartbeat": config.vfx_heartbeat,
-            "vfx_war_fog": config.vfx_war_fog,
-            "fog_of_war": config.fog_of_war,
-            "vfx_fallout": config.vfx_fallout,
-            "vfx_ambient_grade": config.vfx_ambient_grade,
-            "vfx_holo_grid": config.vfx_holo_grid,
-            "vfx_mover_trails": config.vfx_mover_trails,
-            "vfx_click_markers": config.vfx_click_markers,
-            "vfx_attack_badges": config.vfx_attack_badges,
-            "vfx_world_buildings": config.vfx_world_buildings,
-            "vfx_bot_avatars": config.vfx_bot_avatars,
-            "vfx_nameplate_names": config.vfx_nameplate_names,
-            "vfx_nameplate_troops": config.vfx_nameplate_troops,
+        let defaults = crate::theme::dev_config::DevConfig::default();
+        let mut values = serde_json::Map::new();
+        let schema = shader_params::PARAMS
+            .iter()
+            .map(|param| {
+                let value = config.value(param.id);
+                values.insert(param.id.to_owned(), setting_value(param.kind, value));
+                serde_json::json!({
+                    "id": param.id,
+                    "label": param.label,
+                    "section": param.section,
+                    "kind": match param.kind {
+                        ParamKind::Number => "number",
+                        ParamKind::Bool => "bool",
+                        ParamKind::Color => "color",
+                        ParamKind::Vector => "vector",
+                        ParamKind::Select => "select",
+                    },
+                    "unit": param.unit,
+                    "min": param.min,
+                    "max": param.max,
+                    "step": param.step,
+                    "default": setting_value(param.kind, defaults.value(param.id)),
+                    "options": param.options.iter().map(|option| serde_json::json!({
+                        "label": option.label,
+                        "value": option.value,
+                    })).collect::<Vec<_>>(),
+                })
+            })
+            .collect::<Vec<_>>();
+        payload["config"] = serde_json::Value::Object(values);
+        payload["schema"] = serde_json::Value::Array(schema);
+        let preview = &app.ui.dev_vfx_preview;
+        payload["preview"] = serde_json::json!({
+            "target": preview.target,
+            "phase": preview.phase,
+            "paused": preview.paused,
+            "repeat": preview.repeat,
+            "active": preview.active,
+            "playing": preview.playing,
         });
     }
     payload
+}
+
+#[cfg(any(feature = "dev", debug_assertions))]
+fn setting_value(kind: sow_render::shader_params::ParamKind, value: [f32; 4]) -> serde_json::Value {
+    use sow_render::shader_params::ParamKind;
+    match kind {
+        ParamKind::Bool => serde_json::json!(value[0] != 0.0),
+        ParamKind::Number | ParamKind::Select => serde_json::json!(value[0]),
+        ParamKind::Color => serde_json::json!(value),
+        ParamKind::Vector => serde_json::json!([value[0], value[1], value[2]]),
+    }
 }
 
 #[cfg(not(any(feature = "dev", debug_assertions)))]
@@ -3040,9 +3035,12 @@ fn build_combat_operations_payload(
         .map(|fleet| (fleet.id, fleet))
         .collect();
     let player_identity = |player_id: u16| {
-        players
-            .get(&player_id)
-            .map(|player| (player.name.as_str(), sow_core::player::avatar_identity(player)))
+        players.get(&player_id).map(|player| {
+            (
+                player.name.as_str(),
+                sow_core::player::avatar_identity(player),
+            )
+        })
     };
     let mut operations = Vec::new();
 
@@ -3655,7 +3653,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let hud_key = hud_publish_key(app);
         let hud_changed = LAST_HUD_KEY.with(|last| {
             let mut last = last.borrow_mut();
-            if *last == Some(hud_key) {
+            if last.as_ref() == Some(&hud_key) {
                 false
             } else {
                 *last = Some(hud_key);
@@ -3824,20 +3822,6 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "laurels": progress.laurels,
             "gems": progress.gems,
             "reward_receipts": progress.reward_receipts.values().collect::<Vec<_>>(),
-            "exit_reward_preview": app.exit_reward_preview.as_ref().map(|preview| {
-                serde_json::json!({
-                    "receipt_id": preview.receipt_id,
-                    "account_id": preview.account_id,
-                    "xp": preview.reward.xp,
-                    "leader_xp": preview.reward.leader_xp,
-                    "crowns": preview.reward.crowns,
-                    "laurels": preview.reward.laurels,
-                    "base_xp": preview.base_xp,
-                    "base_level": preview.base_level,
-                    "base_crowns": preview.base_crowns,
-                    "base_laurels": preview.base_laurels,
-                })
-            }),
             "achievements": progress.unlocked_achievements,
             "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,
@@ -3950,10 +3934,34 @@ mod tests {
             deaths: 0,
             assists: 0,
             boats_in_use: 0,
-            boat_capacity: 1,
+            boat_capacity: 3,
             nuke_available: false,
             nuke_cooldown_ticks: 0,
         }
+    }
+
+    #[test]
+    fn dev_numeric_inputs_can_extend_past_slider_ranges() {
+        assert_eq!(
+            decode_dev_config_value("water.depth_cap", &serde_json::json!(64.0)).unwrap()[0],
+            64.0
+        );
+        assert_eq!(
+            decode_dev_config_value(
+                "lighting.direction",
+                &serde_json::json!([8.0, -8.0, 3.0])
+            )
+            .unwrap(),
+            [8.0, -8.0, 3.0, 0.0]
+        );
+        assert_eq!(
+            decode_dev_config_value(
+                "lighting.specular.color",
+                &serde_json::json!([8.0, 2.0, 1.0, 3.0])
+            )
+            .unwrap(),
+            [8.0, 2.0, 1.0, 1.0]
+        );
     }
 
     #[test]
@@ -4251,10 +4259,16 @@ mod tests {
             front_cx: 4.0,
             front_cy: 3.0,
         });
-        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), snapshot.tick);
+        assert_eq!(
+            combat_operations_snapshot_tick(&snapshot, 1, None),
+            snapshot.tick
+        );
 
         snapshot.tick += 1;
-        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, None), snapshot.tick);
+        assert_eq!(
+            combat_operations_snapshot_tick(&snapshot, 1, None),
+            snapshot.tick
+        );
 
         snapshot.attacks.clear();
         snapshot.attacks.push(AttackSnapshot {
@@ -4308,7 +4322,11 @@ mod tests {
         assert_eq!(human_avatar["slug"], "caesar");
         let bot_avatar = &operations.iter().find(|row| row["id"] == 3).unwrap()["avatar"];
         assert_eq!(bot_avatar["kind"], "emblem");
-        assert!(bot_avatar["symbol"].as_str().is_some_and(|symbol| !symbol.is_empty()));
+        assert!(
+            bot_avatar["symbol"]
+                .as_str()
+                .is_some_and(|symbol| !symbol.is_empty())
+        );
         assert_eq!(
             operations.iter().find(|row| row["id"] == 4).unwrap()["avatar"]["kind"],
             "emblem"
@@ -4400,7 +4418,10 @@ mod tests {
         assert_eq!(operations[1]["id"], 10);
         assert_eq!(operations[1]["neutral"], true);
         snapshot.fleets.clear();
-        assert_eq!(combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)), 0);
+        assert_eq!(
+            combat_operations_snapshot_tick(&snapshot, 1, Some(&engine)),
+            0
+        );
     }
 
     #[test]

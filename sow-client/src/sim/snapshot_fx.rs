@@ -244,14 +244,12 @@ impl SowApp {
                     .unwrap_or(true);
 
                 if should_flash || being_attacked_triggered {
-                    // Compose intensity: 1.0 base + 0.2 per attacker, clamped between 1.0 and 1.5
-                    let intensity = (1.0 + (unique_attackers as f32 - 1.0) * 0.2).clamp(1.0, 1.5);
                     self.ui
                         .border_flashes
                         .push(crate::app::BorderFlashInstance {
                             player_id: my_id,
                             start_time: now,
-                            max_intensity: intensity,
+                            attacker_count: unique_attackers as u32,
                         });
                     self.ui.last_player_attack_flash_time.insert(my_id, now);
                 }
@@ -426,7 +424,7 @@ mod nuke_alert_tests {
             deaths: 0,
             assists: 0,
             boats_in_use: 0,
-            boat_capacity: 1,
+            boat_capacity: 3,
             nuke_available: false,
             nuke_cooldown_ticks: 0,
         }

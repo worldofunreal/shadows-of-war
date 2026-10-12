@@ -61,7 +61,9 @@ async fn player_db_reuses_one_connection_for_many_operations() {
     }
 
     let after = total_connections_received(&url).await;
-    let opened_for_operations = after.saturating_sub(before).saturating_sub(PROBE_CONNECTIONS);
+    let opened_for_operations = after
+        .saturating_sub(before)
+        .saturating_sub(PROBE_CONNECTIONS);
 
     assert_eq!(
         opened_for_operations, 1,

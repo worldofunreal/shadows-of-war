@@ -355,7 +355,9 @@ impl SowApp {
                         self.fetch_cloud_progress();
                         continue;
                     }
-                    if !self.pending_reward_receipt_ids.is_empty() {
+                    if !self.pending_reward_receipt_ids.is_empty()
+                        || self.exit_reward_wait.is_some()
+                    {
                         log::warn!(
                             "[rewards] profile refresh id={request_id} failed status={status:?}; keeping retry window"
                         );

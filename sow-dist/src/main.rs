@@ -96,7 +96,10 @@ struct SourceIdentity {
 
 fn source_identity(paths: &Paths) -> Result<SourceIdentity> {
     let root = paths.root.to_str().context("workspace path is not UTF-8")?;
-    let sha = output("git", &["-C", root, "rev-parse", "--verify", "HEAD^{commit}"])?;
+    let sha = output(
+        "git",
+        &["-C", root, "rev-parse", "--verify", "HEAD^{commit}"],
+    )?;
     if sha.len() != 40 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         bail!("source revision is not a full Git commit SHA");
     }
@@ -237,7 +240,10 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         )?;
     }
     copy_dir(&src.join("gameplay/avatars"), &dst.join("gameplay/avatars"))?;
-    copy_dir(&src.join("gameplay/buildings"), &dst.join("gameplay/buildings"))?;
+    copy_dir(
+        &src.join("gameplay/buildings"),
+        &dst.join("gameplay/buildings"),
+    )?;
     copy_dir(&src.join("gameplay/music"), &dst.join("gameplay/music"))?;
     copy_dir(
         &src.join("gameplay/currency"),
@@ -749,8 +755,8 @@ fn validate_quoted_catalog_keys(
     catalog: &serde_json::Value,
 ) -> Result<()> {
     const DOMAINS: [&str; 10] = [
-        "menu", "auth", "lobbies", "heroes", "profile", "store", "hud", "endgame",
-        "tutorial", "site",
+        "menu", "auth", "lobbies", "heroes", "profile", "store", "hud", "endgame", "tutorial",
+        "site",
     ];
     for domain in DOMAINS {
         for quote in ['"', '\''] {
@@ -1110,7 +1116,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
         "{building_manifest_js}{}",
         read_shell_bundle(&paths.shell, "main_menu.js", &menu_parts)?
     )
-        .replace("</script>", "<\\/script>");
+    .replace("</script>", "<\\/script>");
     if poki || jest {
         menu_js = strip_marked_section(
             &menu_js,
@@ -1219,13 +1225,15 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             .replace("<meta property=\"twitter:image\" content=\"https://shadowsofwar.io/assets/shell/loader/sow-splash-desktop.webp\">", "")
             .replace("<link rel=\"canonical\" href=\"https://shadowsofwar.io/play/\">", "");
     } else if cg {
-        fh = fh.replace(
-            "href=\"/fonts/fonts.css\"",
-            "href=\"https://shadowsofwar.io/fonts/fonts.css\"",
-        ).replace(
-            "    <link rel=\"manifest\" href=\"/manifest.webmanifest\">\n",
-            "",
-        );
+        fh = fh
+            .replace(
+                "href=\"/fonts/fonts.css\"",
+                "href=\"https://shadowsofwar.io/fonts/fonts.css\"",
+            )
+            .replace(
+                "    <link rel=\"manifest\" href=\"/manifest.webmanifest\">\n",
+                "",
+            );
     }
     fs::write(&index, fh)?;
     Ok(())
@@ -1257,7 +1265,10 @@ fn copy_shell(paths: &Paths, out: &Path, target: WebTarget) -> Result<()> {
         paths.assets_shell.join("brand/sow.svg"),
         out.join("sow.svg"),
     )?;
-    if matches!(target, WebTarget::CrazyGames | WebTarget::Poki | WebTarget::Jest) {
+    if matches!(
+        target,
+        WebTarget::CrazyGames | WebTarget::Poki | WebTarget::Jest
+    ) {
         fs::copy(
             paths.assets_site.join("icons/icon-192.png"),
             out.join("icon-192.png"),
@@ -1385,9 +1396,7 @@ fn placeholder_names(value: &str) -> Result<Vec<String>> {
             }
             (Some(open), _) => {
                 let after_open = &remainder[open + 1..];
-                let end = after_open
-                    .find('}')
-                    .context("unterminated placeholder")?;
+                let end = after_open.find('}').context("unterminated placeholder")?;
                 let name = after_open[..end].trim();
                 if name.is_empty()
                     || !name
@@ -1445,9 +1454,11 @@ fn is_locked_campaign_translation_key(key: &str, approved_episodes: &[&str]) -> 
 
 fn is_non_english_catalog_path(path: &str) -> bool {
     let locale = path.split('.').next().unwrap_or(path);
-    sow_i18n::Language::registry().iter().any(|(_, code, _, _)| {
-        code.eq_ignore_ascii_case(locale) && !code.eq_ignore_ascii_case("en")
-    })
+    sow_i18n::Language::registry()
+        .iter()
+        .any(|(_, code, _, _)| {
+            code.eq_ignore_ascii_case(locale) && !code.eq_ignore_ascii_case("en")
+        })
 }
 
 fn validate_web_node(
@@ -1470,24 +1481,36 @@ fn validate_web_node(
                         && is_locked_campaign_translation_key(
                             key,
                             APPROVED_CAMPAIGN_TRANSLATION_EPISODES,
-                        ) => continue,
+                        ) =>
+                    {
+                        continue;
+                    }
                     None if path.ends_with(".tutorial")
                         && key.starts_with("campaign_")
-                        && is_non_english_catalog_path(path) => continue,
+                        && is_non_english_catalog_path(path) =>
+                    {
+                        continue;
+                    }
                     None if path.ends_with(".site")
                         && web_key_is_intentionally_english(catalog_key)
                         && !path
                             .split('.')
                             .next()
                             .unwrap_or("en")
-                            .eq_ignore_ascii_case("en") => continue,
+                            .eq_ignore_ascii_case("en") =>
+                    {
+                        continue;
+                    }
                     None if path.ends_with(".menu")
                         && web_key_is_intentionally_english(catalog_key)
                         && !path
                             .split('.')
                             .next()
                             .unwrap_or("en")
-                            .eq_ignore_ascii_case("en") => continue,
+                            .eq_ignore_ascii_case("en") =>
+                    {
+                        continue;
+                    }
                     None => bail!("web catalog missing key {child_path}"),
                 };
                 validate_web_node(&child_path, expected_value, actual_value)?;
@@ -1521,7 +1544,8 @@ fn validate_web_node(
             if actual.trim().is_empty() {
                 bail!("web catalog has an empty value at {path}");
             }
-            if placeholder_names(expected).with_context(|| format!("invalid placeholder at {path}"))?
+            if placeholder_names(expected)
+                .with_context(|| format!("invalid placeholder at {path}"))?
                 != placeholder_names(actual)
                     .with_context(|| format!("invalid placeholder at {path}"))?
             {
@@ -1626,7 +1650,10 @@ fn validate_leader_display_names(catalog: &serde_json::Value) -> Result<()> {
         let value = web_catalog_value(catalog, &key)
             .and_then(serde_json::Value::as_str)
             .with_context(|| format!("dynamic localization key is missing: {key}"))?;
-        if [" / ", " · ", " | "].iter().any(|separator| value.contains(separator)) {
+        if [" / ", " · ", " | "]
+            .iter()
+            .any(|separator| value.contains(separator))
+        {
             bail!("leader display name contains a compound separator: {key}");
         }
     }
@@ -2011,7 +2038,9 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
                     .join(format!("{avatar}.webp"))
                     .is_file()
                 {
-                    bail!("campaign speaker avatar is invalid or missing: {episode_id}.{speaker}: {avatar}");
+                    bail!(
+                        "campaign speaker avatar is invalid or missing: {episode_id}.{speaker}: {avatar}"
+                    );
                 }
             }
         }
@@ -2246,9 +2275,7 @@ fn html_attribute_value<'a>(tag: &'a str, wanted: &str) -> Option<&'a str> {
             value
         } else {
             let value_start = index;
-            while index < bytes.len()
-                && !bytes[index].is_ascii_whitespace()
-                && bytes[index] != b'>'
+            while index < bytes.len() && !bytes[index].is_ascii_whitespace() && bytes[index] != b'>'
             {
                 index += 1;
             }
@@ -2299,9 +2326,7 @@ fn verify_cg_local_resources(dir: &Path, html: &str) -> Result<()> {
         let name = tag[1..name_end].to_ascii_lowercase();
         let attributes: &[&str] = match name.as_str() {
             "link" => &["href"],
-            "script" | "img" | "iframe" | "embed" | "source" | "audio" | "track" => {
-                &["src"]
-            }
+            "script" | "img" | "iframe" | "embed" | "source" | "audio" | "track" => &["src"],
             "video" => &["src", "poster"],
             "object" => &["data"],
             _ => &[],
@@ -2855,7 +2880,9 @@ fn package_native_web(
             .is_file()
         && out.join("assets/gameplay/buildings/atlas.webp").is_file()
         && out.join("assets/gameplay/buildings/atlas.json").is_file()
-        && out.join("assets/gameplay/music/shadows-of-war.webm").is_file();
+        && out
+            .join("assets/gameplay/music/shadows-of-war.webm")
+            .is_file();
 
     if !static_ready {
         if out.exists() {
@@ -2865,7 +2892,14 @@ fn package_native_web(
         fs::create_dir_all(out)?;
         let assets = out.join("assets");
         copy_dir(&paths.assets_shell, &assets.join("shell"))?;
-        for name in ["avatars", "skins", "currency", "store", "buildings", "music"] {
+        for name in [
+            "avatars",
+            "skins",
+            "currency",
+            "store",
+            "buildings",
+            "music",
+        ] {
             copy_dir(
                 &paths.assets_gameplay.join(name),
                 &assets.join("gameplay").join(name),
@@ -3122,7 +3156,14 @@ fn package_poki(
         fs::remove_file(poki_source)?;
     }
     export_locales(out)?;
-    write_manifest(paths, out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    write_manifest(
+        paths,
+        out,
+        version,
+        "sow_client.js",
+        "sow_client_bg.wasm",
+        &jh,
+    )?;
     build_index(
         paths,
         out,
@@ -3408,7 +3449,14 @@ fn package_jest(
         }
     }
     export_locales(out)?;
-    write_manifest(paths, out, version, "sow_client.js", "sow_client_bg.wasm", &jh)?;
+    write_manifest(
+        paths,
+        out,
+        version,
+        "sow_client.js",
+        "sow_client_bg.wasm",
+        &jh,
+    )?;
     build_index(
         paths,
         out,
@@ -4602,8 +4650,14 @@ mod tests {
             "lobbies": {}
         });
         assert!(validate_web_node("es", &expected, &generic_campaign_copy).is_ok());
-        assert!(is_locked_campaign_translation_key("campaign_future_title", &[]));
-        assert!(is_locked_campaign_translation_key("boudica_rise_title", &[]));
+        assert!(is_locked_campaign_translation_key(
+            "campaign_future_title",
+            &[]
+        ));
+        assert!(is_locked_campaign_translation_key(
+            "boudica_rise_title",
+            &[]
+        ));
         assert!(!is_locked_campaign_translation_key(
             "campaign_boudica_title",
             &["boudica"]
@@ -4623,7 +4677,8 @@ mod tests {
                 "analytics_body": "Usamos la actividad del sitio y del juego para mejorar Shadows of War. Solo se activa si la permites.",
             }
         });
-        let missing = serde_json::json!({ "site": { "analytics_body": "La analítica queda apagada." } });
+        let missing =
+            serde_json::json!({ "site": { "analytics_body": "La analítica queda apagada." } });
 
         assert!(validate_web_node("es", &expected, &localized).is_ok());
         assert!(validate_web_node("fr", &expected, &missing).is_err());
@@ -4633,18 +4688,13 @@ mod tests {
     #[test]
     fn source_localization_audit_catches_unknown_quoted_keys() -> Result<()> {
         let catalog = serde_json::to_value(&sow_i18n::web(sow_i18n::Language::English))?;
-        assert!(validate_quoted_catalog_keys(
-            "const key = 'profile.spam';",
-            "test",
-            &catalog
-        )
-        .is_ok());
-        assert!(validate_quoted_catalog_keys(
-            "const key = 'profile.not_real';",
-            "test",
-            &catalog
-        )
-        .is_err());
+        assert!(
+            validate_quoted_catalog_keys("const key = 'profile.spam';", "test", &catalog).is_ok()
+        );
+        assert!(
+            validate_quoted_catalog_keys("const key = 'profile.not_real';", "test", &catalog)
+                .is_err()
+        );
         assert!(validate_quoted_catalog_keys("const key = 'tutorial.';", "test", &catalog).is_ok());
         Ok(())
     }

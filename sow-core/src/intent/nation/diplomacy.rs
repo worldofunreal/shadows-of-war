@@ -161,7 +161,8 @@ impl SowEngine {
                                 .bot_rng
                                 .next_int(0, 100)
                         };
-                        let accept = match (self.state.player(bot_id), self.state.player(proposer)) {
+                        let accept = match (self.state.player(bot_id), self.state.player(proposer))
+                        {
                             (Some(p_me), Some(p_prop))
                                 if !should_reject_traitor_request(p_prop, tick, traitor_roll) =>
                             {
@@ -435,16 +436,16 @@ impl SowEngine {
                 5
             };
 
-            let mut rng = is_ghost.then(|| {
-                ghost_alliance_rng(self.state.seed, bot_id, bot_id, self.state.tick)
-            });
+            let mut rng = is_ghost
+                .then(|| ghost_alliance_rng(self.state.seed, bot_id, bot_id, self.state.tick));
             let start_index = rng
                 .as_mut()
                 .map(|rng| rng.next_int(0, neighbor_players.len() as i32) as usize)
                 .unwrap_or(0);
 
             for visit_index in 0..neighbor_players.len() {
-                let neighbor = neighbor_players[(start_index + visit_index) % neighbor_players.len()];
+                let neighbor =
+                    neighbor_players[(start_index + visit_index) % neighbor_players.len()];
                 let (neigh_alive, neigh_troops, neigh_tile_count) =
                     match self.state.player(neighbor) {
                         Some(pn) => (pn.alive, pn.troops, pn.tile_count),

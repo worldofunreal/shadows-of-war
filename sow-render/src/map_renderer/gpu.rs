@@ -160,9 +160,10 @@ impl MapRenderer {
         });
 
         // --- Shader & pipeline ---
-        let source = include_str!("../shaders/map.wgsl");
+        let source =
+            crate::shader_params::prepare_shader("MAP_", include_str!("../shaders/map.wgsl"));
         let shader = context.create_shader(gpu::ShaderDesc {
-            source,
+            source: &source,
             naga_module: None,
         });
         assert_eq!(

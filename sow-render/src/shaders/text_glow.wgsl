@@ -1,6 +1,7 @@
 struct TextGlobals {
     screen_size: vec2<f32>,
     _pad: vec2<f32>,
+    shader_params: array<vec4<f32>, 512>,
 }
 
 struct TextInstance {
@@ -42,6 +43,7 @@ struct VertexOutput {
     @location(8) kind: f32,
     @location(9) local_uv: vec2<f32>,
     @location(10) content_rect: vec4<f32>,
+    @location(11) quad_size: vec2<f32>,
 }
 
 @vertex
@@ -57,7 +59,14 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: TextInstance) -> VertexOutput {
     );
     let local = corners[vi];
 
-    let screen = inst.screen_pos + local * inst.size;
+    var instance_scale = 1.0;
+    if inst.kind > 0.5 && inst.kind < 1.5 { instance_scale = globals.shader_params[__TEXT_EMOJI_SIZE__].x; }
+    if inst.kind > 1.5 && inst.kind < 2.5 { instance_scale = globals.shader_params[__TEXT_DISC_SCALE__].x; }
+    if inst.kind > 3.5 && inst.kind < 4.5 { instance_scale = globals.shader_params[__TEXT_AVATAR_SIZE__].x; }
+    if inst.kind > 10.5 && inst.kind < 11.5 { instance_scale = globals.shader_params[__TEXT_BUILDING_SIZE__].x; }
+    if inst.kind > 11.5 { instance_scale = globals.shader_params[__TEXT_STATUS_SIZE__].x; }
+    let center = inst.screen_pos + inst.size * 0.5;
+    let screen = center + (inst.screen_pos + local * inst.size - center) * instance_scale;
     let ndc = vec2<f32>(
         screen.x / globals.screen_size.x * 2.0 - 1.0,
         1.0 - screen.y / globals.screen_size.y * 2.0,
@@ -75,6 +84,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: TextInstance) -> VertexOutput {
     out.kind = inst.kind;
     out.local_uv = local;
     out.content_rect = inst.content_rect;
+    out.quad_size = inst.size * instance_scale;
     return out;
 }
 
@@ -118,20 +128,20 @@ fn shade_shape(in: VertexOutput) -> vec4<f32> {
     let shape_uv = (in.local_uv - in.content_rect.xy) / shape_span;
     let p = shape_uv - vec2<f32>(0.5, 0.5);
     let dist = length(p);
-    let aa = max(fwidth(dist), 1e-5);
+    let aa = max(fwidth(dist) * globals.shader_params[__TEXT_SHAPE_AA__].x, 1e-5);
 
     if (in.kind > 2.5) {
         // Ring: outer edge at uv radius 0.5, drawn inward by `outline_thickness` px.
-        let tw = max(in.outline_thickness * fwidth(shape_uv).x, aa);
+        let tw = max(in.outline_thickness * globals.shader_params[__TEXT_RING_WIDTH__].x * globals.shader_params[__TEXT_SHAPE_STROKE__].x * fwidth(shape_uv).x, aa);
         let outer = 1.0 - smoothstep(0.5 - aa, 0.5, dist);
         let inner = 1.0 - smoothstep(0.5 - tw - aa, 0.5 - tw, dist);
-        let a = clamp(outer - inner, 0.0, 1.0) * in.color.a;
-        return vec4<f32>(in.color.rgb, a);
+        let a = clamp(outer - inner, 0.0, 1.0) * in.color.a * globals.shader_params[__TEXT_SHAPE_FILL_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
+        return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb, a);
     }
 
     // Disc: filled circle.
-    let a = (1.0 - smoothstep(0.5 - aa, 0.5, dist)) * in.color.a;
-    return vec4<f32>(in.color.rgb, a);
+    let a = (1.0 - smoothstep(0.5 - aa, 0.5, dist)) * in.color.a * globals.shader_params[__TEXT_SHAPE_FILL_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
+    return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_FILL_TINT__].rgb, a);
 }
 
 // Progress arc (KIND_ARC). The CPU packs rotation phase in uv_rect.y and sweep in uv_rect.z.
@@ -141,8 +151,8 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
     let shape_uv = (in.local_uv - in.content_rect.xy) / shape_span;
     let p = shape_uv - vec2<f32>(0.5, 0.5);
     let dist = length(p);
-    let aa = max(fwidth(dist), 1e-5);
-    let tw = max(in.outline_thickness * fwidth(shape_uv).x, aa);
+    let aa = max(fwidth(dist) * globals.shader_params[__TEXT_SHAPE_AA__].x, 1e-5);
+    let tw = max(in.outline_thickness * globals.shader_params[__TEXT_ARC_WIDTH__].x * globals.shader_params[__TEXT_SHAPE_STROKE__].x * fwidth(shape_uv).x, aa);
     let outer = 1.0 - smoothstep(0.5 - aa, 0.5, dist);
     let inner = 1.0 - smoothstep(0.5 - tw - aa, 0.5 - tw, dist);
     let ring_alpha = clamp(outer - inner, 0.0, 1.0);
@@ -157,10 +167,10 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
     let progress = clamp(in.uv_rect.z, 0.0, 1.0);
     var arc_alpha = 1.0;
     if (progress < 1.0) {
-        let angular_aa = max(fwidth(normalized_angle), 1e-5);
+        let angular_aa = max(fwidth(normalized_angle) * globals.shader_params[__TEXT_ARC_PROGRESS_AA__].x, 1e-5);
         arc_alpha = 1.0 - smoothstep(progress, progress + angular_aa, rotated_angle);
     }
-    return vec4<f32>(in.color.rgb, ring_alpha * arc_alpha * in.color.a);
+    return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb, ring_alpha * arc_alpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
 // Rounded-square image sprite (KIND_SPRITE) sampled from the avatar atlas. `face_dilate`
@@ -168,11 +178,11 @@ fn shade_arc(in: VertexOutput) -> vec4<f32> {
 fn shade_sprite(in: VertexOutput) -> vec4<f32> {
     let span = max(in.uv_rect.zw - in.uv_rect.xy, vec2<f32>(1e-6));
     let local = (in.uv - in.uv_rect.xy) / span;
-    let d = rounded_rect_distance(local, in.face_dilate);
+    let d = rounded_rect_distance(local, globals.shader_params[__TEXT_AVATAR_CORNER__].x);
     let aa = max(fwidth(d), 1e-5);
     let mask = 1.0 - smoothstep(-aa, aa, d);
     let tex = textureSample(avatar_atlas, avatar_sampler, clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw));
-    return vec4<f32>(tex.rgb * in.color.rgb, tex.a * mask * in.color.a);
+    return vec4<f32>(tex.rgb * in.color.rgb * globals.shader_params[__TEXT_AVATAR_TINT__].rgb, tex.a * mask * in.color.a * globals.shader_params[__TEXT_AVATAR_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
 fn shade_building_sprite(in: VertexOutput) -> vec4<f32> {
@@ -181,7 +191,7 @@ fn shade_building_sprite(in: VertexOutput) -> vec4<f32> {
         building_sampler,
         clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw),
     );
-    return vec4<f32>(tex.rgb * in.color.rgb, tex.a * in.color.a);
+    return vec4<f32>(tex.rgb * in.color.rgb * globals.shader_params[__TEXT_BUILDING_TINT__].rgb, tex.a * in.color.a * globals.shader_params[__TEXT_BUILDING_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
 fn shade_status_sprite(in: VertexOutput) -> vec4<f32> {
@@ -190,7 +200,7 @@ fn shade_status_sprite(in: VertexOutput) -> vec4<f32> {
         status_sampler,
         clamp(in.uv, in.uv_rect.xy, in.uv_rect.zw),
     );
-    return vec4<f32>(tex.rgb * in.color.rgb, tex.a * in.color.a);
+    return vec4<f32>(tex.rgb * in.color.rgb * globals.shader_params[__TEXT_STATUS_TINT__].rgb, tex.a * in.color.a * globals.shader_params[__TEXT_STATUS_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
 // Anti-aliased filled rectangle (KIND_RECT). `uv_rect` is unused; `in.uv` is the local
@@ -200,22 +210,22 @@ fn shade_rect(in: VertexOutput) -> vec4<f32> {
     let aa = max(fwidth(in.uv), vec2<f32>(1e-5));
     let x_alpha = smoothstep(0.0, aa.x, in.uv.x) * (1.0 - smoothstep(1.0 - aa.x, 1.0, in.uv.x));
     let y_alpha = smoothstep(0.0, aa.y, in.uv.y) * (1.0 - smoothstep(1.0 - aa.y, 1.0, in.uv.y));
-    let alpha = x_alpha * y_alpha * in.color.a;
-    return vec4<f32>(in.color.rgb, alpha);
+    let alpha = x_alpha * y_alpha * in.color.a * globals.shader_params[__TEXT_RECT_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
+    return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_FILL_TINT__].rgb, alpha);
 }
 
 fn shade_rounded_rect(in: VertexOutput) -> vec4<f32> {
-    let dist = rounded_rect_distance(in.local_uv, in.face_dilate);
+    let dist = rounded_rect_distance(in.local_uv, in.face_dilate * globals.shader_params[__TEXT_ROUNDED_RADIUS__].x);
     let aa = max(fwidth(dist), 1e-5);
     let outer = 1.0 - smoothstep(-aa, aa, dist);
-    let border_width = max(in.outline_thickness, 0.0);
+    let border_width = max(in.outline_thickness * globals.shader_params[__TEXT_ROUNDED_STROKE__].x * globals.shader_params[__TEXT_SHAPE_STROKE__].x, 0.0);
     let inner = 1.0 - smoothstep(-aa, aa, dist + border_width);
     let edge = max(outer - inner, 0.0);
-    let alpha = in.color.a * inner + in.outline_color.a * edge;
+    let alpha = in.color.a * inner + in.outline_color.a * edge * globals.shader_params[__TEXT_OPACITY__].x;
     if (alpha <= 1e-5) {
         return vec4<f32>(0.0);
     }
-    let rgb = (in.color.rgb * in.color.a * inner + in.outline_color.rgb * in.outline_color.a * edge) / alpha;
+    let rgb = (in.color.rgb * globals.shader_params[__TEXT_SHAPE_FILL_TINT__].rgb * in.color.a * inner + in.outline_color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb * in.outline_color.a * edge) / alpha;
     return vec4<f32>(rgb, alpha);
 }
 
@@ -229,7 +239,7 @@ fn shade_triangle(in: VertexOutput) -> vec4<f32> {
     let signed_distance = min(horizontal, vertical);
     let aa = max(fwidth(signed_distance), 1e-5);
     let alpha = 1.0 - smoothstep(-aa, aa, -signed_distance);
-    return vec4<f32>(in.color.rgb, alpha * in.color.a);
+    return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_FILL_TINT__].rgb, alpha * in.color.a * globals.shader_params[__TEXT_TRIANGLE_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
 // Anti-aliased diagonal cross (KIND_CROSS). The content rectangle excludes the
@@ -241,9 +251,9 @@ fn shade_cross(in: VertexOutput) -> vec4<f32> {
     let distance_to_line = min(abs(p.y - p.x), abs(p.y + p.x));
     let aa = max(fwidth(distance_to_line), 1e-5);
     let pixel = max(fwidth(shape_uv).x, fwidth(shape_uv).y);
-    let width = max(in.outline_thickness * pixel * 0.7, aa);
+    let width = max(in.outline_thickness * globals.shader_params[__TEXT_CROSS_WIDTH__].x * globals.shader_params[__TEXT_SHAPE_STROKE__].x * pixel * 0.7, aa);
     let alpha = 1.0 - smoothstep(width, width + aa, distance_to_line);
-    return vec4<f32>(in.color.rgb, alpha * in.color.a);
+    return vec4<f32>(in.color.rgb * globals.shader_params[__TEXT_SHAPE_STROKE_TINT__].rgb, alpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x);
 }
 
 fn shade_text(in: VertexOutput) -> vec4<f32> {
@@ -281,15 +291,20 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
         let content_span = max(in.content_rect.zw - in.content_rect.xy, vec2<f32>(1e-6));
         let content_local = (in.local_uv - in.content_rect.xy) / content_span;
         let emoji_uv = mix(lo, hi, content_local);
+        let content_diameter = min(in.quad_size.x * content_span.x, in.quad_size.y * content_span.y);
+        let reference_diameter = max(in.face_dilate, 1.0);
+        let outline_scale = clamp(max(content_diameter / reference_diameter, globals.shader_params[__TEXT_EMOJI_MIN_OUTLINE__].x), 0.0, 1.0);
 
         let fw = fwidth(emoji_uv);
         var ow = vec2<f32>(0.0);
-        if (in.outline_thickness > 0.0) {
-            ow = max(fw * in.outline_thickness, span * 0.01);
+        let outline_control = globals.shader_params[__TEXT_EMOJI_OUTLINE_SCALE__].x;
+        if (in.outline_thickness > 0.0 && outline_scale > 0.0 && outline_control > 0.0) {
+            ow = max(fw * in.outline_thickness * outline_scale * outline_control, span * (0.01 * outline_control));
         }
         var so = 0.0;
-        if (in.underlay_offset_y > 0.0) {
-            so = max(fw.y * in.underlay_offset_y, span.y * 0.01);
+        let shadow_control = globals.shader_params[__TEXT_EMOJI_SHADOW_SCALE__].x;
+        if (in.underlay_offset_y > 0.0 && outline_scale > 0.0 && shadow_control > 0.0) {
+            so = max(fw.y * in.underlay_offset_y * outline_scale * shadow_control, span.y * (0.01 * shadow_control));
         }
 
         let center = sample_emoji(emoji_uv, lo, hi);
@@ -305,8 +320,8 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
 
         let shadow_a = sample_emoji(emoji_uv - vec2<f32>(0.0, so), lo, hi).a;
 
-        let fill_a = center.a * in.color.a;
-        let dark_a = max(ring, shadow_a) * in.outline_color.a;
+        let fill_a = center.a * in.color.a * globals.shader_params[__TEXT_EMOJI_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
+        let dark_a = max(ring, shadow_a) * in.outline_color.a * globals.shader_params[__TEXT_EMOJI_OPACITY__].x * globals.shader_params[__TEXT_OPACITY__].x;
         let out_a = max(fill_a, dark_a);
         if (out_a <= 0.001) {
             // Transparent (not `discard`): keeps this a plain helper so the
@@ -314,7 +329,8 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
             return vec4<f32>(0.0);
         }
         let fill_ratio = fill_a / max(out_a, 0.0001);
-        let rgb = mix(in.outline_color.rgb, center.rgb, fill_ratio);
+        let outline_tint = globals.shader_params[__TEXT_EMOJI_TINT__].rgb * globals.shader_params[__TEXT_EMOJI_OUTLINE_TINT__].rgb;
+        let rgb = mix(in.outline_color.rgb * outline_tint, center.rgb * in.color.rgb * globals.shader_params[__TEXT_EMOJI_TINT__].rgb, fill_ratio);
         return vec4<f32>(rgb, out_a);
     }
 
@@ -327,23 +343,23 @@ fn shade_text(in: VertexOutput) -> vec4<f32> {
 
     let msd_c = sample_atlas(in.uv, in.uv_rect);
     let sd_c = median(msd_c.r, msd_c.g, msd_c.b);
-    let centerDist = screenPxRange * (sd_c - 0.5) + in.face_dilate;
+    let centerDist = screenPxRange * (sd_c - 0.5) + in.face_dilate * globals.shader_params[__TEXT_SDF_FILL_GAIN__].x;
 
     let fillAlpha = clamp(centerDist + 0.5, 0.0, 1.0);
-    let outlineAlpha = clamp(in.outline_thickness + centerDist + 0.5, 0.0, 1.0) * (1.0 - fillAlpha);
+    let outlineAlpha = clamp(in.outline_thickness * globals.shader_params[__TEXT_SDF_OUTLINE_GAIN__].x + centerDist + 0.5, 0.0, 1.0) * (1.0 - fillAlpha);
 
-    let shadowUv = in.uv - uv_dy * in.underlay_offset_y;
+    let shadowUv = in.uv - uv_dy * in.underlay_offset_y * globals.shader_params[__TEXT_SHADOW_OFFSET_SCALE__].x;
     let msd_s = sample_atlas(shadowUv, in.uv_rect);
     let sd_s = median(msd_s.r, msd_s.g, msd_s.b);
     let shadowDist = screenPxRange * (sd_s - 0.5);
-    let softness = max(in.underlay_softness * screenPxRange, 0.001);
-    let shadowAlpha = clamp((shadowDist + 0.5) / (1.0 + softness), 0.0, 1.0);
+    let softness = max(in.underlay_softness * globals.shader_params[__TEXT_SHADOW_SOFTNESS_SCALE__].x * screenPxRange, 0.001);
+    let shadowAlpha = clamp((shadowDist + 0.5) / (1.0 + softness), 0.0, 1.0) * globals.shader_params[__TEXT_SHADOW_GAIN__].x;
 
-    let fill_a = fillAlpha * in.color.a;
-    let black_a = max(outlineAlpha, shadowAlpha) * in.outline_color.a;
+    let fill_a = fillAlpha * in.color.a * globals.shader_params[__TEXT_OPACITY__].x;
+    let black_a = max(outlineAlpha, shadowAlpha) * in.outline_color.a * globals.shader_params[__TEXT_OPACITY__].x;
     let final_a = max(fill_a, black_a);
     let fill_ratio = fill_a / max(final_a, 0.0001);
-    let final_rgb = mix(in.outline_color.rgb, in.color.rgb, fill_ratio);
+    let final_rgb = mix(in.outline_color.rgb * globals.shader_params[__TEXT_OUTLINE_TINT__].rgb, in.color.rgb * globals.shader_params[__TEXT_FILL_TINT__].rgb, fill_ratio);
 
     return vec4<f32>(final_rgb, final_a);
 }
@@ -359,5 +375,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_main_srgb(in: VertexOutput) -> @location(0) vec4<f32> {
     let c = shade_text(in);
-    return vec4<f32>(pow(c.rgb, vec3<f32>(1.0 / 2.2)), c.a);
+    return vec4<f32>(pow(max(c.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), c.a);
 }

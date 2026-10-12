@@ -1005,11 +1005,7 @@
             root.hidden = true;
         } else if (runtime.machine) {
             if (runtime.latestHud) update(runtime.latestHud);
-            else {
-                var model = runtime.machine.view();
-                syncTutorialPause(model);
-                runtime.view.render(model, renderContext(model.step, null, null, model));
-            }
+            else if (runtime.menuGuide) updateMenuGuide();
         }
     }
 

@@ -119,8 +119,8 @@ fn pixel_cell(source: &RgbaImage) -> Result<RgbaImage, Box<dyn Error + Send + Sy
     )
     .to_image();
     let max_side = CELL_PX - GUTTER_PX * 2 - ART_MARGIN_PX * 2;
-    let scale = (max_side as f32 / cropped.width() as f32)
-        .min(max_side as f32 / cropped.height() as f32);
+    let scale =
+        (max_side as f32 / cropped.width() as f32).min(max_side as f32 / cropped.height() as f32);
     let width = ((cropped.width() as f32 * scale).round() as u32).clamp(1, max_side);
     let height = ((cropped.height() as f32 * scale).round() as u32).clamp(1, max_side);
     let resized = image::imageops::resize(&cropped, width, height, FilterType::Lanczos3);

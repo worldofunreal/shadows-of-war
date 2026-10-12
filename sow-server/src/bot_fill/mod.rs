@@ -125,10 +125,8 @@ impl BotPool {
         let mut out: Vec<BotPoolEntry> = Vec::with_capacity(count);
         for &i in &idx {
             let e = &self.entries[i];
-            // Dedup by display name within this draw. Different account_ids
-            // may share a display name (the shared pool cycles 1000 names
-            // across 10k accounts); within one lobby that would be visually
-            // ambiguous, so we skip duplicates.
+            // The persistent account pool can be larger than the curated name
+            // list and therefore reuse names. Keep each lobby visually unique.
             if !seen_names.insert(e.display_name.as_str()) {
                 continue;
             }

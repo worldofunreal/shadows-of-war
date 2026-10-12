@@ -109,7 +109,7 @@ source = "google_fonts"
 license = "SIL Open Font License 1.1"
 license_doc = "sow-web/site/fonts/OFL.txt"
 files = ["WorkSans-Black.ttf", "WorkSans-Regular.ttf", "msdf-atlas.png", "msdf-atlas.json"]
-notes = "Compile-time gameplay renderer/UI assets."
+notes = "Compile-time nameplate atlas generated from Work Sans plus the regional Noto Arabic/CJK faces listed in site_fonts."
 
 [gameplay_emoji]
 path = "assets/gameplay/emoji/"
@@ -134,3 +134,10 @@ notes = "Compile-time campaign data and native editor override."
 path = "assets/editor/"
 source = "original"
 notes = "Authoring sources for developer tools; never shipped as public web assets."
+[artwork_research_wikimedia_emblems]
+path = "artwork-research/wikimedia-emblems/"
+source = "Wikimedia Commons"
+license = "Per-file; see docs/legal/WIKIMEDIA-EMBLEMS.md and attribution.csv"
+runtime = false
+files = ["README.md", "targets.csv", "bot-identity-audit.csv", "bot-source-review.csv", "commons-search-results.csv", "selected-candidates.csv", "commission-needed.csv", "commons-review-needed.csv", "historical-review-needed.csv", "legal-review-needed.csv", "attribution.csv", "download-manifest.csv", "file-metadata.json", "originals/", "square-256/", "bot-candidate-raster/", "bot-candidate-square-256/"]
+notes = "Research only, not loaded by the game. File-specific creator, license, source page, and Commons restrictions are recorded per candidate. Bot raster files are official Commons thumbnails; square WebP previews preserve aspect ratio."

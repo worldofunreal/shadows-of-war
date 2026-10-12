@@ -1,5 +1,5 @@
-use crate::engine::SowEngine;
 use crate::building::DefenseGrid;
+use crate::engine::SowEngine;
 use crate::execution::{AttackExecution, PrioritizedTile};
 use crate::game::GameState;
 use crate::map::TerrainType;
@@ -333,13 +333,13 @@ impl SowEngine {
 #[cfg(test)]
 mod tests {
     use super::{build_attack_frontier, spawn_or_merge_attack_for_fleet_arrival_pure};
-    use crate::building::{Building, DefenseGrid, DEFENSE_GRID_CELL_SIZE};
+    use crate::building::{Building, DEFENSE_GRID_CELL_SIZE, DefenseGrid};
     use crate::game::{BuildingKind, GamePhase, GameState};
     use crate::game_config::GameConfig;
     use crate::map::MapTile;
     use crate::player::Player;
-    use crate::water_components::WaterComponents;
     use crate::rng::NextIntExt;
+    use crate::water_components::WaterComponents;
     use wyrand::WyRand;
 
     #[test]
@@ -373,22 +373,17 @@ mod tests {
         let border = game.player(1).unwrap().border_tiles.clone();
         let mut rng = WyRand::new(91);
         let mut sequence = 0;
-        let frontier = build_attack_frontier(
-            &game,
-            &grid,
-            1,
-            2,
-            &border,
-            &mut rng,
-            &mut sequence,
-        );
+        let frontier = build_attack_frontier(&game, &grid, 1, 2, &border, &mut rng, &mut sequence);
         assert_eq!(frontier.len(), 1);
 
         let influence = grid.influence(3, 3, width, 2, 1, game.seed, &game.config);
         let mut base_rng = WyRand::new(91);
         let random = base_rng.next_int(0, 7) as i64;
         let expected_base = (random + 10) * 4 + (game.tick as i64 * 4);
-        assert_eq!(frontier.peek().unwrap().priority, expected_base + influence.priority_bonus as i64);
+        assert_eq!(
+            frontier.peek().unwrap().priority,
+            expected_base + influence.priority_bonus as i64
+        );
     }
 
     #[test]
@@ -445,6 +440,9 @@ mod tests {
             engine.state.seed,
             &engine.state.config,
         );
-        assert_eq!(tile.priority, base_priority + influence.priority_bonus as i64);
+        assert_eq!(
+            tile.priority,
+            base_priority + influence.priority_bonus as i64
+        );
     }
 }

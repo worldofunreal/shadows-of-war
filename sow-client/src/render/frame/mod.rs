@@ -4,12 +4,13 @@ use blade_graphics as gpu;
 
 mod ui;
 
-const ATTACK_THREAT_MAX_TROOPS: f32 = 1_000.0;
-const ATTACK_THREAT_MAX_RADIUS: f32 = 100.0;
-
 #[inline]
-fn attack_threat_radius(troops: f32) -> f32 {
-    (troops / ATTACK_THREAT_MAX_TROOPS).clamp(0.0, 1.0) * ATTACK_THREAT_MAX_RADIUS
+fn attack_threat_radius(troops: f32, troop_cap: f32, max_radius: f32) -> f32 {
+    if troop_cap <= 0.0 || max_radius <= 0.0 {
+        0.0
+    } else {
+        (troops / troop_cap).clamp(0.0, 1.0) * max_radius
+    }
 }
 
 impl SowApp {
@@ -185,6 +186,31 @@ impl SowApp {
                     let territory_opacity = dev.territory_opacity;
                     let blend_mode = dev.blend_mode;
                     let conquest_duration = dev.conquest_duration;
+                    let threat_troop_cap = dev.value("threat.troop_cap")[0];
+                    let threat_max_radius = dev.value("threat.max_radius")[0];
+                    let current_time = web_time::Instant::now();
+                    let preview_duration = self.ui.dev_vfx_preview.duration(&dev);
+                    let preview_phase = self.ui.dev_vfx_preview.advance(current_time, preview_duration);
+                    let preview_effect = if self.ui.dev_vfx_preview.active {
+                        self.ui.dev_vfx_preview.target
+                    } else {
+                        0
+                    };
+                    let preview_time = preview_phase * preview_duration.max(0.0);
+                    let preview_player_id = self.sim.my_player_id.unwrap_or(0);
+                    let preview_player = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                        snapshot.players.iter().find(|player| {
+                            player.id == preview_player_id && player.alive && player.tile_count > 0
+                        }).map(|player| (player.id, player.centroid_x, player.centroid_y))
+                    });
+                    let preview_partner = self.sim.current_snapshot.as_ref().and_then(|snapshot| {
+                        snapshot.players.iter().find(|player| {
+                            player.id != preview_player_id && player.alive && player.tile_count > 0
+                        }).map(|player| (player.id, player.centroid_x, player.centroid_y))
+                    });
+                    let preview_center = preview_player
+                        .map(|(_, x, y)| [x, y])
+                        .unwrap_or([self.sim.map_w as f32 * 0.5, self.sim.map_h as f32 * 0.5]);
 
                     let dirty = self
                         .sim
@@ -237,7 +263,7 @@ impl SowApp {
                         }
                     }
 
-                    let mut threat_slots = [[0.0f32; 4]; 8];
+                    let mut threat_slots = [[0.0f32; 4]; 9];
                     if let Some(snap) = &self.sim.current_snapshot {
                         let my_id = self.sim.my_player_id.unwrap_or(0);
                         let mut slot = 0usize;
@@ -253,7 +279,11 @@ impl SowApp {
                             if attack.front_cx == 0.0 && attack.front_cy == 0.0 {
                                 continue;
                             }
-                            let radius = attack_threat_radius(attack.troops as f32);
+                            let radius = attack_threat_radius(
+                                attack.troops as f32,
+                                threat_troop_cap,
+                                threat_max_radius,
+                            );
                             threat_slots[slot] = [
                                 attack.front_cx,
                                 attack.front_cy,
@@ -262,6 +292,30 @@ impl SowApp {
                             ];
                             slot += 1;
                         }
+                    }
+                    if preview_player_id > 0
+                        && matches!(
+                            preview_effect,
+                            crate::app::DevVfxPreview::EXPANSION
+                                | crate::app::DevVfxPreview::COMBAT_HAZE
+                        )
+                    {
+                        let target_id = if preview_effect == crate::app::DevVfxPreview::EXPANSION {
+                            0
+                        } else {
+                            preview_player_id
+                        };
+                        let attacker_id = if preview_effect == crate::app::DevVfxPreview::EXPANSION {
+                            preview_player_id
+                        } else {
+                            preview_partner.map(|(id, _, _)| id).unwrap_or(preview_player_id)
+                        };
+                        threat_slots[8] = [
+                            preview_center[0],
+                            preview_center[1],
+                            attack_threat_radius(100.0, threat_troop_cap, threat_max_radius),
+                            target_id as f32 * 1024.0 + attacker_id as f32,
+                        ];
                     }
 
                     let mut hover_hex = [0.0f32, 0.0f32];
@@ -337,14 +391,13 @@ impl SowApp {
                         }
                     }
 
-                    let current_time = web_time::Instant::now();
-                    let mut fallout_slots = [[0.0f32; 4]; 8];
+                    let mut fallout_slots = [[0.0f32; 4]; 9];
                     {
                         let mut slot = 0usize;
+                        let duration = dev.value("nuke.zone.duration")[0];
                         self.ui.fallout_zones.retain(|fz| {
                             let elapsed = current_time.duration_since(fz.start_time).as_secs_f32();
-                            let duration = 5.0;
-                            if elapsed >= duration {
+                            if duration <= 0.0 || elapsed >= duration {
                                 return false;
                             }
                             if slot < 8 {
@@ -355,13 +408,25 @@ impl SowApp {
                             true
                         });
                     }
+                    if preview_effect == crate::app::DevVfxPreview::NUCLEAR {
+                        fallout_slots[8] = [
+                            preview_center[0],
+                            preview_center[1],
+                            sow_core::game::nuke_inner_radius(1) as f32,
+                            1.0 - preview_phase,
+                        ];
+                    }
 
-                    let mut alliance_celebration_slots = [[0.0f32; 4]; 16];
+                    let mut alliance_celebration_slots = [[0.0f32; 4]; 18];
                     let snapshot = self.sim.current_snapshot.as_ref();
                     let mut slot = 0usize;
+                    let alliance_duration = dev.value("alliance.duration")[0];
                     self.ui.alliance_celebrations.retain(|effect| {
-                        let Some(age) =
-                            crate::app::alliance_celebration_age(effect.start_time, current_time)
+                        let Some(age) = crate::app::alliance_celebration_age(
+                            effect.start_time,
+                            current_time,
+                            alliance_duration,
+                        )
                         else {
                             return false;
                         };
@@ -385,9 +450,27 @@ impl SowApp {
                         slot += 1;
                         true
                     });
+                    if preview_effect == crate::app::DevVfxPreview::ALLIANCE
+                        && let Some((first_id, first_x, first_y)) = preview_player
+                    {
+                        alliance_celebration_slots[16] = [
+                            first_id as f32,
+                            first_x,
+                            first_y,
+                            preview_time,
+                        ];
+                        if let Some((second_id, second_x, second_y)) = preview_partner {
+                            alliance_celebration_slots[17] = [
+                                second_id as f32,
+                                second_x,
+                                second_y,
+                                preview_time,
+                            ];
+                        }
+                    }
 
                     // ── Dialog Terms Border Highlight ──
-                    let dialog_border = match (&self.ui.dialog_border_highlight, snapshot) {
+                    let mut dialog_border = match (&self.ui.dialog_border_highlight, snapshot) {
                         (Some(effect), Some(snapshot))
                             if snapshot
                                 .players
@@ -403,17 +486,28 @@ impl SowApp {
                         }
                         _ => [0.0f32; 4],
                     };
+                    if preview_effect == crate::app::DevVfxPreview::DIALOG && preview_player_id > 0 {
+                        dialog_border = [preview_player_id as f32, preview_time, 0.0, 0.0];
+                    }
 
                     // ── Attack Border Flash ──
                     let (attack_flash_target, attack_flash_t) = {
                         self.ui.border_flash_intensities.clear();
                         let intensities = &mut self.ui.border_flash_intensities;
+                        let duration = dev.value("attack.flash.duration")[0];
+                        let base = dev.value("attack.flash.base")[0];
+                        let per_attacker = dev.value("attack.flash.per_attacker")[0];
+                        let max_intensity = dev.value("attack.flash.max")[0].max(0.0);
                         self.ui.border_flashes.retain(|flash| {
                             let elapsed =
                                 current_time.duration_since(flash.start_time).as_secs_f32();
-                            if let Some(t) = crate::app::easeout_flash(elapsed) {
+                            if let Some(t) = crate::app::easeout_flash_with_duration(elapsed, duration) {
+                                let intensity = (base
+                                    + flash.attacker_count.saturating_sub(1) as f32 * per_attacker)
+                                    .max(0.0)
+                                    .min(max_intensity);
                                 let entry = intensities.entry(flash.player_id).or_insert(0.0);
-                                *entry += t * flash.max_intensity;
+                                *entry += t * intensity;
                                 true
                             } else {
                                 false
@@ -425,8 +519,15 @@ impl SowApp {
                             .max_by(|a, b| {
                                 a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
                             })
-                            .map(|(&id, &t)| (id as f32, t.min(1.5)))
+                            .map(|(&id, &t)| (id as f32, t.min(max_intensity)))
                             .unwrap_or((0.0, 0.0))
+                    };
+                    let (attack_flash_target, attack_flash_t) = if preview_effect == crate::app::DevVfxPreview::ATTACK_FLASH
+                        && preview_player_id > 0
+                    {
+                        (preview_player_id as f32, (1.0 - preview_phase).powi(2))
+                    } else {
+                        (attack_flash_target, attack_flash_t)
                     };
 
                     // ── Viewport Alert Vignette ──
@@ -450,35 +551,53 @@ impl SowApp {
                         self.ui.viewport_alert = None;
                     }
 
-                    let (alert_color, alert_intensity) = if let Some(ref alert) =
+                    let (mut alert_color, mut alert_intensity) = if let Some(ref alert) =
                         self.ui.viewport_alert
                     {
                         let kind = alert.kind;
                         let elapsed = current_time.duration_since(alert.start_time).as_secs_f32();
+                        let duration = dev.value("alert.duration")[0];
                         let persistent = kind == crate::app::ViewportAlertKind::UnderAttack
                             || kind == crate::app::ViewportAlertKind::Victory
                             || kind == crate::app::ViewportAlertKind::Defeat;
 
                         let intensity = if persistent {
-                            (elapsed / crate::app::FLASH_DURATION).min(1.0)
+                            if duration <= 0.0 { 1.0 } else { (elapsed / duration).min(1.0) }
                         } else {
-                            crate::app::easeout_flash(elapsed).unwrap_or(0.0)
+                            crate::app::easeout_flash_with_duration(elapsed, duration).unwrap_or(0.0)
                         };
 
-                        let color = match kind {
-                            crate::app::ViewportAlertKind::UnderAttack => [1.0, 0.05, 0.05, 0.55],
-                            crate::app::ViewportAlertKind::Victory => [0.1, 0.9, 0.25, 0.45],
-                            crate::app::ViewportAlertKind::Defeat => [0.25, 0.25, 0.3, 0.5],
-                            crate::app::ViewportAlertKind::ConquerPlayer => [0.95, 0.8, 0.0, 0.5],
-                            crate::app::ViewportAlertKind::AllianceRequest => [0.0, 0.8, 0.8, 0.4],
-                            crate::app::ViewportAlertKind::Betrayal => [0.6, 0.0, 0.8, 0.65],
+                        let color_id = match kind {
+                            crate::app::ViewportAlertKind::UnderAttack => {
+                                "alert.under_attack.color"
+                            }
+                            crate::app::ViewportAlertKind::Victory => "alert.victory.color",
+                            crate::app::ViewportAlertKind::Defeat => "alert.defeat.color",
+                            crate::app::ViewportAlertKind::ConquerPlayer => "alert.conquer.color",
+                            crate::app::ViewportAlertKind::AllianceRequest => {
+                                "alert.alliance.color"
+                            }
+                            crate::app::ViewportAlertKind::Betrayal => "alert.betrayal.color",
                         };
+                        let mut color = dev.value(color_id);
+                        let tint = dev.value("alert.color");
+                        for channel in 0..4 {
+                            color[channel] *= tint[channel];
+                        }
                         (color, intensity)
                     } else {
                         ([0.0f32; 4], 0.0f32)
                     };
+                    if preview_effect == crate::app::DevVfxPreview::ALERT {
+                        alert_color = dev.value("alert.under_attack.color");
+                        let tint = dev.value("alert.color");
+                        for channel in 0..4 {
+                            alert_color[channel] *= tint[channel];
+                        }
+                        alert_intensity = 1.0 - preview_phase;
+                    }
                     // Clear expired one-shot alerts
-                    if alert_intensity <= 0.0 {
+                    if preview_effect != crate::app::DevVfxPreview::ALERT && alert_intensity <= 0.0 {
                         self.ui.viewport_alert = None;
                     }
 
@@ -513,7 +632,9 @@ impl SowApp {
                         attack_flash_t,
                         alert_intensity,
                         fog_of_war: if dev.fog_of_war { 1.0 } else { 0.0 },
-                        tutorial_target_player: if self.ui.tutorial_active {
+                        tutorial_target_player: if self.ui.tutorial_active
+                            && dev.vfx_tutorial_highlight
+                        {
                             self.ui.tutorial_marker_player_id.unwrap_or(0) as f32
                         } else {
                             0.0
@@ -525,6 +646,11 @@ impl SowApp {
                         } else {
                             [0.0; 4]
                         },
+                        effect_vignette: if dev.vfx_screen_vignette { 1.0 } else { 0.0 },
+                        preview_effect: preview_effect as f32,
+                        preview_phase,
+                        preview_time,
+                        shader_params: dev.shader_params,
                     };
                     let colors_struct = crate::render::gpu::PlayerColors {
                         colors: player_colors,
@@ -553,7 +679,7 @@ impl SowApp {
                     }
 
                     // ── GPU-instanced movers (boats, nukes, SAM) ─────────────
-                    if dev.vfx_mover_trails {
+                    if dev.vfx_movers || dev.vfx_mover_trails {
                         if self.gfx.mover_renderer.is_none() {
                             let surface_format = s.info().format;
                             self.gfx.mover_renderer = Some(crate::render::gpu::MoverRenderer::new(
@@ -579,6 +705,9 @@ impl SowApp {
                                 screen_w: self.input.screen_w,
                                 screen_h: self.input.screen_h,
                                 linear_alpha,
+                                shader_params: &dev.shader_params,
+                                sprites_enabled: dev.vfx_movers,
+                                trails_enabled: dev.vfx_mover_trails,
                             };
                             self.ui.mover_scene.on_snapshot(
                                 snap,
@@ -587,6 +716,7 @@ impl SowApp {
                                 dev.fog_of_war,
                                 self.sim.my_player_id.unwrap_or(0),
                                 &self.sim.fog_visible,
+                                &dev.shader_params,
                             );
                             self.ui.mover_scene.pack_gpu(&pack, mover_r);
                             let mover_globals = crate::render::gpu::MoverGlobals {
@@ -596,6 +726,7 @@ impl SowApp {
                                 screen_size: [self.input.screen_w, self.input.screen_h],
                                 trail_count: 0,
                                 _pad: 0.0,
+                                shader_params: dev.shader_params,
                             };
                             mover_r.draw(
                                 &mut render_ctx.command_encoder,
@@ -640,12 +771,14 @@ mod tests {
 
     #[test]
     fn attack_threat_radius_reaches_full_radius_at_one_thousand_troops() {
-        assert_eq!(attack_threat_radius(0.0), 0.0);
-        assert_eq!(attack_threat_radius(100.0), 10.0);
-        assert_eq!(attack_threat_radius(1_000.0), 100.0);
-        assert_eq!(attack_threat_radius(10_000.0), 100.0);
-        assert_eq!(attack_threat_radius(50_000.0), 100.0);
-        assert_eq!(attack_threat_radius(100_000.0), 100.0);
-        assert_eq!(attack_threat_radius(150_000.0), 100.0);
+        assert_eq!(attack_threat_radius(0.0, 1_000.0, 100.0), 0.0);
+        assert_eq!(attack_threat_radius(100.0, 1_000.0, 100.0), 10.0);
+        assert_eq!(attack_threat_radius(1_000.0, 1_000.0, 100.0), 100.0);
+        assert_eq!(attack_threat_radius(10_000.0, 1_000.0, 100.0), 100.0);
+        assert_eq!(attack_threat_radius(50_000.0, 1_000.0, 100.0), 100.0);
+        assert_eq!(attack_threat_radius(100_000.0, 1_000.0, 100.0), 100.0);
+        assert_eq!(attack_threat_radius(150_000.0, 1_000.0, 100.0), 100.0);
+        assert_eq!(attack_threat_radius(100.0, 0.0, 100.0), 0.0);
+        assert_eq!(attack_threat_radius(100.0, 1000.0, 0.0), 0.0);
     }
 }

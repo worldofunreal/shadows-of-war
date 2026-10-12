@@ -269,7 +269,10 @@ impl SowEngine {
             }
 
             if held_target == Some(owner_here)
-                && self.state.player(owner_here).is_some_and(|target| target.tile_count <= 1)
+                && self
+                    .state
+                    .player(owner_here)
+                    .is_some_and(|target| target.tile_count <= 1)
             {
                 refund_fleet_troops_to_player(&mut self.state, fleet.owner_id, fleet.troops);
                 to_remove.push(i);
@@ -485,7 +488,10 @@ mod tests {
 
                 let eliminated = !same_team;
                 assert_eq!(engine.state.map.owner_id(2, 1), 1);
-                assert_eq!(engine.state.map.owner_id(2, 2), if eliminated { 1 } else { 2 });
+                assert_eq!(
+                    engine.state.map.owner_id(2, 2),
+                    if eliminated { 1 } else { 2 }
+                );
                 let attacker = engine.state.player(1).unwrap();
                 let victim = engine.state.player(2).unwrap();
                 assert_eq!(victim.alive, !eliminated);

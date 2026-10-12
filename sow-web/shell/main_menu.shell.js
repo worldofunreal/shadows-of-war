@@ -33,7 +33,6 @@
     var rewardAckTimes = Object.create(null);
     var rewardAnimationToken = 0;
     var activeRewardStage = null;
-    var rewardOptimisticPreview = null;
     var rewardPresentationReady = false;
     var menuGuideReturnPending = false;
     var displayedProgression = null;
@@ -586,7 +585,7 @@
                             "</div>" +
                             "<label class='sow-menu__form-field'>" +
                                 "<span>" + esc(SOW_t("menu.show_fps_ping")) + "</span>" +
-                                "<input class='sow-menu__field' type='checkbox' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping !== false ? " checked" : "") + ">" +
+                                "<input class='sow-menu__field' type='checkbox' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping === true ? " checked" : "") + ">" +
                             "</label>" +
                             (settings.show_dev_tools_available ? "<label class='sow-menu__form-field'>" +
                                 "<span>" + esc(SOW_t("menu.show_dev_tools")) + "</span>" +
@@ -1004,12 +1003,11 @@
 
     function pendingRewardReceipts() {
         return (state && state.reward_receipts || []).filter(function (receipt) {
-            return receipt && receipt.id && receipt.status !== "presented" && !receipt.presented_at;
+            var tutorialApplied = receipt && receipt.id === "tutorial" && receipt.match_id === "tutorial" &&
+                receipt.status === "applied";
+            return receipt && receipt.id && receipt.status !== "presented" && !receipt.presented_at &&
+                (tutorialApplied || receipt.verification_status === "verified" || receipt.verification_status === "rejected");
         });
-    }
-
-    function findRewardReceipt(id) {
-        return (state && state.reward_receipts || []).find(function (receipt) { return receipt && receipt.id === id; });
     }
 
     function reducedRewardMotion() {
@@ -1057,19 +1055,11 @@
             canonical.crowns = Math.max(0, canonical.crowns - totals.crowns);
             canonical.laurels = Math.max(0, canonical.laurels - totals.laurels);
             canonical.level = Math.floor(canonical.xp / 100) + 1;
-        } else {
-            var preview = state && state.exit_reward_preview;
-            if (preview && preview.account_id === state.account_id && !rewardAnimationShown.has(preview.receipt_id)) {
-                canonical.xp = Math.max(0, Number(preview.base_xp) || 0);
-                canonical.level = Math.max(1, Number(preview.base_level) || 1);
-                canonical.crowns = Math.max(0, Number(preview.base_crowns) || 0);
-                canonical.laurels = Math.max(0, Number(preview.base_laurels) || 0);
-            }
         }
         writeProgression(canonical);
     }
 
-    function animateProgressionTo(target, duration, token) {
+    function animateProgressionTo(target, duration, token, levelOverride) {
         var from = Object.assign({}, displayedProgression || progressionFromState());
         if (reducedRewardMotion() || duration <= 0) {
             writeProgression(target);
@@ -1098,7 +1088,7 @@
                 var currentXp = from.xp + (target.xp - from.xp) * eased;
                 writeProgression({
                     xp: currentXp,
-                    level: Math.floor(currentXp / 100) + 1,
+                    level: levelOverride == null ? Math.floor(currentXp / 100) + 1 : levelOverride,
                     crowns: from.crowns + (target.crowns - from.crowns) * eased,
                     laurels: from.laurels + (target.laurels - from.laurels) * eased,
                     gems: from.gems + (target.gems - from.gems) * eased
@@ -1156,19 +1146,21 @@
             card.className = "sow-menu__reward-card sow-menu__reward-card--" + stage.kind;
             card.style.animationDelay = (120 + index * 140) + "ms";
             card.setAttribute("role", "group");
-            card.setAttribute("aria-label", stage.amount + " " + SOW_t(stage.kind === "xp" ? "menu.xp" : stage.kind === "crowns" ? "store.crowns" : "store.laurels"));
+            var levelLabel = stage.kind === "level" ? SOW_t("profile.level", { level: stage.level }) : null;
+            card.setAttribute("aria-label", levelLabel || stage.amount + " " + SOW_t(stage.kind === "xp" ? "menu.xp" : stage.kind === "crowns" ? "store.crowns" : "store.laurels"));
             var medallion = document.createElement("span");
             medallion.className = "sow-menu__reward-medallion";
             medallion.setAttribute("aria-hidden", "true");
-            var emblem = document.createElement(stage.kind === "xp" ? "span" : "img");
+            var emblem = document.createElement(stage.kind === "xp" || stage.kind === "level" ? "span" : "img");
             emblem.className = "sow-menu__reward-emblem";
             if (stage.kind === "xp") emblem.textContent = "XP";
+            else if (stage.kind === "level") emblem.textContent = "↑";
             else emblem.src = currencyAsset(stage.kind === "crowns" ? "crown" : "laurel");
             medallion.appendChild(emblem);
             var amount = document.createElement("strong");
             amount.className = "sow-menu__reward-amount";
             amount.setAttribute("aria-hidden", "true");
-            amount.textContent = "+0";
+            amount.textContent = levelLabel || "+0";
             card.appendChild(medallion);
             card.appendChild(amount);
             cards.appendChild(card);
@@ -1207,7 +1199,9 @@
                 var elapsed = now - start;
                 items.forEach(function (item, index) {
                     var t = Math.max(0, Math.min(1, (elapsed - 300 - index * 140) / 650));
-                    var value = "+" + Math.round(item.stage.amount * (1 - Math.pow(1 - t, 3)));
+                    var value = item.stage.kind === "level"
+                        ? SOW_t("profile.level", { level: item.stage.level })
+                        : "+" + Math.round(item.stage.amount * (1 - Math.pow(1 - t, 3)));
                     if (item.amount.textContent !== value) item.amount.textContent = value;
                 });
                 if (elapsed < 1450) requestAnimationFrame(frame);
@@ -1275,7 +1269,7 @@
         }
     }
 
-    function runRewardPresentation(receipts, preview) {
+    function runRewardPresentation(receipts) {
         if (rewardAnimationRunning) return;
         rewardAnimationRunning = true;
         var token = ++rewardAnimationToken;
@@ -1288,19 +1282,20 @@
             return sum;
         }, { xp: 0, crowns: 0, laurels: 0 });
         var canonical = progressionFromState();
-        var target = receipts.length ? canonical : {
-            xp: Math.max(0, Number(preview.base_xp) || 0) + Math.max(0, Number(preview.xp) || 0),
-            level: 1,
-            crowns: Math.max(0, Number(preview.base_crowns) || 0) + Math.max(0, Number(preview.crowns) || 0),
-            laurels: Math.max(0, Number(preview.base_laurels) || 0) + Math.max(0, Number(preview.laurels) || 0),
-            gems: canonical.gems
-        };
-        target.level = Math.floor(target.xp / 100) + 1;
-        if (!receipts.length) {
-            totals = { xp: Number(preview.xp) || 0, crowns: Number(preview.crowns) || 0, laurels: Number(preview.laurels) || 0 };
+        var target = canonical;
+        var startLevel = (displayedProgression || canonical).level;
+        var levelStages = [];
+        for (var level = startLevel + 1; level <= target.level; level++) {
+            levelStages.push({
+                kind: "level",
+                amount: level,
+                level: level,
+                selector: "[data-progression-level-value]"
+            });
         }
         var stages = [
             { kind: "xp", amount: totals.xp, selector: "[data-progression-xp-value]" },
+            ...levelStages,
             { kind: "crowns", amount: totals.crowns, selector: "[data-progression-crowns-value]" },
             { kind: "laurels", amount: totals.laurels, selector: "[data-progression-laurels-value]" }
         ].filter(function (stage) { return stage.amount > 0; });
@@ -1315,19 +1310,9 @@
                 if (document.visibilityState === "visible") maybePresentRewards();
                 return;
             }
-            if (receipts.length) writeProgression(progressionFromState());
-            else {
-                target.gems = progressionFromState().gems;
-                writeProgression(target);
-            }
-            if (receipts.length) {
-                ids.forEach(function (id) { rewardAnimationShown.add(id); });
-                acknowledgeShownReceipts(accountId);
-            } else {
-                rewardAnimationShown.add(preview.receipt_id);
-                rewardOptimisticPreview = { receipt_id: preview.receipt_id, target: target };
-                send("acknowledge_reward_presentation", { account_id: accountId, receipt_id: preview.receipt_id });
-            }
+            writeProgression(progressionFromState());
+            ids.forEach(function (id) { rewardAnimationShown.add(id); });
+            acknowledgeShownReceipts(accountId);
             maybePresentRewards();
         }
 
@@ -1343,7 +1328,7 @@
                 return;
             }
             if (index >= stages.length) {
-                var latest = receipts.length ? progressionFromState() : Object.assign({}, target, { gems: progressionFromState().gems });
+                var latest = progressionFromState();
                 var current = displayedProgression || progressionFromState();
                 var changed = latest.xp !== current.xp || latest.level !== current.level || latest.crowns !== current.crowns ||
                     latest.laurels !== current.laurels || latest.gems !== current.gems;
@@ -1354,18 +1339,28 @@
             var item = items[index];
             var stage = item.stage;
             var nextValues = Object.assign({}, displayedProgression || progressionFromState());
-            var oldLevel = Math.floor(nextValues.xp / 100) + 1;
-            nextValues[stage.kind] = target[stage.kind];
-            nextValues.level = Math.floor(nextValues.xp / 100) + 1;
+            var oldLevel = nextValues.level;
+            if (stage.kind === "level") {
+                nextValues.level = stage.level;
+            } else {
+                nextValues[stage.kind] = target[stage.kind];
+                nextValues.level = stage.kind === "xp" && levelStages.length
+                    ? oldLevel
+                    : Math.floor(nextValues.xp / 100) + 1;
+            }
             flyRewardCard(item, token).then(function (arrived) {
                 if (!arrived) { finish(false); return; }
-                animateProgressionTo(nextValues, 380, token).then(function (shown) {
+                if (stage.kind === "level") {
+                    writeProgression(nextValues);
+                    pulseRewardCounter(stage.selector, true);
+                    window.setTimeout(function () { next(index + 1); }, 250);
+                    return;
+                }
+                var heldLevel = stage.kind === "xp" && levelStages.length ? oldLevel : null;
+                animateProgressionTo(nextValues, 380, token, heldLevel).then(function (shown) {
                     if (!shown) { finish(false); return; }
                     pulseRewardCounter(stage.selector, false);
-                    if (stage.kind === "xp" && nextValues.level > oldLevel) {
-                        pulseRewardCounter("[data-progression-level-value]", true);
-                        window.setTimeout(function () { next(index + 1); }, 250);
-                    } else next(index + 1);
+                    next(index + 1);
                 });
             });
         }
@@ -1378,32 +1373,9 @@
         if (!state || state.phase !== "MainMenu" || root.hidden || document.visibilityState !== "visible" ||
             !rewardPresentationReady || rewardAnimationRunning) return;
         ensureProgressionDisplay();
-        var preview = state.exit_reward_preview;
-        if (rewardOptimisticPreview) {
-            var receipt = findRewardReceipt(rewardOptimisticPreview.receipt_id);
-            if (receipt) {
-                var accountId = state.account_id;
-                rewardAnimationShown.add(receipt.id);
-                rewardOptimisticPreview = null;
-                rewardAnimationRunning = true;
-                var reconcileToken = ++rewardAnimationToken;
-                animateProgressionTo(progressionFromState(), 900, reconcileToken).then(function (shown) {
-                    if (reconcileToken !== rewardAnimationToken || !state || state.account_id !== accountId) return;
-                    rewardAnimationRunning = false;
-                    if (shown) acknowledgeShownReceipts(accountId);
-                    maybePresentRewards();
-                });
-                return;
-            }
-            return;
-        }
-        if (preview && preview.account_id === state.account_id && !rewardAnimationShown.has(preview.receipt_id)) {
-            runRewardPresentation([], preview);
-            return;
-        }
         var pending = pendingRewardReceipts().filter(function (receipt) { return !rewardAnimationShown.has(receipt.id); });
         if (pending.length) {
-            runRewardPresentation(pending, null);
+            runRewardPresentation(pending);
             return;
         }
         acknowledgeShownReceipts(state.account_id);
@@ -1421,11 +1393,8 @@
             writeProgression(progressionFromState());
         }
         var pendingRewards = pendingRewardReceipts().filter(function (receipt) { return !rewardAnimationShown.has(receipt.id); });
-        var activePreview = state.exit_reward_preview &&
-            state.exit_reward_preview.account_id === state.account_id &&
-            !rewardAnimationShown.has(state.exit_reward_preview.receipt_id);
         var holdBundleGems = purchaseModal && purchaseModal.type === "bundle" && !purchaseModal.gemPresented;
-        if (!rewardAnimationRunning && !pendingRewards.length && !rewardOptimisticPreview && !activePreview) {
+        if (!rewardAnimationRunning && !pendingRewards.length) {
             var canonical = progressionFromState();
             var changed = canonical.xp !== displayedProgression.xp || canonical.level !== displayedProgression.level ||
                 canonical.crowns !== displayedProgression.crowns || canonical.laurels !== displayedProgression.laurels || canonical.gems !== displayedProgression.gems;
@@ -1447,7 +1416,7 @@
         var devToolsInput = root.querySelector("[data-setting='show_dev_tools']");
         if (musicInput && document.activeElement !== musicInput) musicInput.value = settings.music_volume == null ? 0.8 : settings.music_volume;
         if (motionInput && document.activeElement !== motionInput) motionInput.value = settings.reduced_motion ? "reduced" : "full";
-        if (fpsPingInput && document.activeElement !== fpsPingInput) fpsPingInput.checked = settings.show_fps_ping !== false;
+        if (fpsPingInput && document.activeElement !== fpsPingInput) fpsPingInput.checked = settings.show_fps_ping === true;
         if (devToolsInput && document.activeElement !== devToolsInput) devToolsInput.checked = Boolean(settings.show_dev_tools);
         if (freeZoomInput && document.activeElement !== freeZoomInput) freeZoomInput.checked = Boolean(settings.free_zoom_out);
         if (stickyBuildingInput && document.activeElement !== stickyBuildingInput) stickyBuildingInput.checked = Boolean(settings.sticky_building_mode);
@@ -2501,9 +2470,8 @@
             if (state && (rewardAnimationRunning || progressionAnimationTarget)) {
                 cancelRewardAnimation();
                 writeProgression(progressionFromState());
-                var preview = state.exit_reward_preview;
                 var unpresentedReceipt = pendingRewardReceipts().some(function (receipt) { return !rewardAnimationShown.has(receipt.id); });
-                if (unpresentedReceipt || (preview && !rewardAnimationShown.has(preview.receipt_id))) displayedProgression = null;
+                if (unpresentedReceipt) displayedProgression = null;
             }
             return;
         }
@@ -2536,7 +2504,6 @@
             rewardAckTimes = Object.create(null);
             if (rewardAckRetryTimer !== null) window.clearTimeout(rewardAckRetryTimer);
             rewardAckRetryTimer = null;
-            rewardOptimisticPreview = null;
             displayedProgression = null;
             rewardPresentationReady = false;
             cancelRewardAnimation();

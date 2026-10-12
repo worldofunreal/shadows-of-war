@@ -1707,7 +1707,10 @@ async fn handle_internal_verify(
             let skin_style = match state.db.selected_skin_style_for_account(&account_id).await {
                 Ok(style) => style,
                 Err(error) => {
-                    error!("[identity] skin resolution failed account={} error={error}", account_hint(Some(&account_id)));
+                    error!(
+                        "[identity] skin resolution failed account={} error={error}",
+                        account_hint(Some(&account_id))
+                    );
                     return (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
@@ -1721,7 +1724,15 @@ async fn handle_internal_verify(
                 "[identity] verify ok provider={provider} account={}",
                 account_hint(Some(&account_id))
             );
-            (StatusCode::OK, Json(VerifyResponse { account_id, leader, skin_style })).into_response()
+            (
+                StatusCode::OK,
+                Json(VerifyResponse {
+                    account_id,
+                    leader,
+                    skin_style,
+                }),
+            )
+                .into_response()
         }
         Err(e) => {
             warn!("[identity] verify failed provider={provider}: {e}");
@@ -1956,9 +1967,9 @@ async fn handle_internal_profile_grant_gems(
         Err(error) => {
             let message = error.to_string();
             let status = match message.as_str() {
-                "invalid account_id" | "gem amount must be greater than zero" | "invalid request_id" => {
-                    StatusCode::BAD_REQUEST
-                }
+                "invalid account_id"
+                | "gem amount must be greater than zero"
+                | "invalid request_id" => StatusCode::BAD_REQUEST,
                 "Account not found" => StatusCode::NOT_FOUND,
                 "account is not a human player"
                 | "request_id already used for a different grant"
@@ -2652,7 +2663,10 @@ fn is_first_party_analytics_origin(headers: &HeaderMap) -> bool {
         .get(header::ORIGIN)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|origin| {
-            matches!(origin, "https://shadowsofwar.io" | "https://www.shadowsofwar.io")
+            matches!(
+                origin,
+                "https://shadowsofwar.io" | "https://www.shadowsofwar.io"
+            )
         })
 }
 
@@ -2795,11 +2809,7 @@ async fn handle_event(
         accepted_events.push(event);
     }
     if accepted_events.is_empty() {
-        return (
-            StatusCode::OK,
-            Json(serde_json::json!({ "accepted": 0 })),
-        )
-            .into_response();
+        return (StatusCode::OK, Json(serde_json::json!({ "accepted": 0 }))).into_response();
     }
 
     let lines = match accepted_events
@@ -2824,15 +2834,21 @@ async fn handle_event(
                 Some(lines) if !lines.is_empty() => match state.legacy_events.lock() {
                     Ok(mut events) => {
                         if let Err(error) = events.append_batch(&lines) {
-                            error!("analytics event archive write failed after counters committed: {error}");
+                            error!(
+                                "analytics event archive write failed after counters committed: {error}"
+                            );
                         }
                     }
                     Err(error) => {
-                        error!("analytics event archive lock failed after counters committed: {error}");
+                        error!(
+                            "analytics event archive lock failed after counters committed: {error}"
+                        );
                     }
                 },
                 Some(_) => {}
-                None => error!("analytics event archive skipped: outcome count mismatch after counters committed"),
+                None => error!(
+                    "analytics event archive skipped: outcome count mismatch after counters committed"
+                ),
             }
             (
                 StatusCode::OK,
@@ -4026,16 +4042,10 @@ async fn handle_match_start(
 
     match state
         .db
-        .register_match_start(
-            &payload.match_id,
-            &payload.player_ids,
-            payload.metadata,
-        )
+        .register_match_start(&payload.match_id, &payload.player_ids, payload.metadata)
         .await
     {
-        Ok(()) => {
-            (StatusCode::OK, Json(serde_json::json!({ "status": "ok" }))).into_response()
-        }
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({ "status": "ok" }))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -4321,12 +4331,10 @@ async fn reject_queued_replay(
         .match_start_record(match_id)?
         .ok_or("trusted match registration unavailable")?;
     if start.replay_status == sow_data::profile::ReplayVerificationStatus::Verified {
-        state
-            .db
-            .finish_replay_verification(
-                match_id,
-                sow_data::profile::ReplayVerificationStatus::Verified,
-            )?;
+        state.db.finish_replay_verification(
+            match_id,
+            sow_data::profile::ReplayVerificationStatus::Verified,
+        )?;
         return Ok(());
     }
     state
@@ -4447,7 +4455,10 @@ async fn verify_queued_replay(state: &AppState, match_id: &str) {
         return;
     }
     if !response.status().is_success() {
-        warn!("replay {match_id} verifier returned HTTP {}", response.status());
+        warn!(
+            "replay {match_id} verifier returned HTTP {}",
+            response.status()
+        );
         return;
     }
     let result = match response

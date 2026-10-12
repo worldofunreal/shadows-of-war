@@ -2,32 +2,82 @@ use crate::engine::SowEngine;
 use crate::warp_fleet::WarpFleet;
 use crate::warp_fleet::{FleetRoute, resolve_fleet_route};
 
+fn visit_used_military_boat_slots(
+    fleets: &[WarpFleet],
+    buildings: &[crate::building::Building],
+    port_queues: &std::collections::HashMap<
+        u64,
+        std::collections::VecDeque<crate::game::ShipProduction>,
+    >,
+    mut visit: impl FnMut(u16, u32),
+) {
+    for fleet in fleets {
+        if fleet.troops > 0.0 && fleet.unit_type.uses_military_capacity() {
+            visit(fleet.owner_id, 1);
+        }
+    }
+    for building in buildings
+        .iter()
+        .filter(|building| building.kind == crate::game::BuildingKind::Port)
+    {
+        if let Some(queue) = port_queues.get(&building.id) {
+            let count = queue
+                .iter()
+                .filter(|production| production.kind.uses_military_capacity())
+                .count() as u32;
+            if count > 0 {
+                visit(building.owner_id, count);
+            }
+        }
+    }
+}
+
 impl SowEngine {
     pub(crate) fn boat_slots_used(&self, player_id: u16) -> u32 {
-        let active = self
-            .fleets
-            .iter()
-            .filter(|fleet| {
-                fleet.owner_id == player_id
-                    && fleet.troops > 0.0
-                    && fleet.unit_type.uses_military_capacity()
-            })
-            .count() as u32;
-        let queued = self
-            .buildings
-            .iter()
-            .filter(|building| {
-                building.owner_id == player_id && building.kind == crate::game::BuildingKind::Port
-            })
-            .filter_map(|building| self.port_queues.get(&building.id))
-            .map(|queue| {
-                queue
-                    .iter()
-                    .filter(|production| production.kind.uses_military_capacity())
-                    .count() as u32
-            })
-            .sum::<u32>();
-        active.saturating_add(queued)
+        let mut used = 0u32;
+        visit_used_military_boat_slots(
+            &self.fleets,
+            &self.buildings,
+            &self.port_queues,
+            |owner, count| {
+                if owner == player_id {
+                    used = used.saturating_add(count);
+                }
+            },
+        );
+        used
+    }
+
+    pub(crate) fn boat_slots_used_by_player(&self) -> Vec<u32> {
+        let mut used = vec![0u32; self.state.player_lookup.len()];
+        visit_used_military_boat_slots(
+            &self.fleets,
+            &self.buildings,
+            &self.port_queues,
+            |owner, count| {
+                if let Some(slots) = used.get_mut(owner as usize) {
+                    *slots = slots.saturating_add(count);
+                }
+            },
+        );
+        used
+    }
+
+    pub(crate) fn refresh_bot_naval_slots_used(&mut self) {
+        self.bot_naval_slots_used
+            .resize(self.state.player_lookup.len(), 0);
+        self.bot_naval_slots_used.fill(0);
+        let slots = &mut self.bot_naval_slots_used;
+        visit_used_military_boat_slots(
+            &self.fleets,
+            &self.buildings,
+            &self.port_queues,
+            |owner, count| {
+                if let Some(slots) = slots.get_mut(owner as usize) {
+                    *slots = slots.saturating_add(count);
+                }
+            },
+        );
     }
 
     pub(super) fn apply_launch_fleet_intent(
@@ -46,7 +96,14 @@ impl SowEngine {
         troops: Option<f64>,
         route: crate::warp_fleet::FleetRoute,
     ) {
-        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, Some(route), false, false);
+        self.apply_launch_fleet_intent_inner(
+            player_id,
+            target_tile,
+            troops,
+            Some(route),
+            false,
+            false,
+        );
     }
 
     pub(crate) fn apply_campaign_assault_fleet_with_route(
@@ -56,7 +113,14 @@ impl SowEngine {
         troops: Option<f64>,
         route: crate::warp_fleet::FleetRoute,
     ) {
-        self.apply_launch_fleet_intent_inner(player_id, target_tile, troops, Some(route), true, true);
+        self.apply_launch_fleet_intent_inner(
+            player_id,
+            target_tile,
+            troops,
+            Some(route),
+            true,
+            true,
+        );
     }
 
     fn apply_launch_fleet_intent_inner(

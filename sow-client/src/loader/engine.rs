@@ -263,7 +263,12 @@ impl SowApp {
 
                         let hero_ready = true;
                         let lobby_snapshot_ready = self.web_exit_lobbies_ready;
-                        if self.net.client.is_some() && hero_ready && lobby_snapshot_ready {
+                        let reward_receipt_ready = self.exit_reward_wait.is_none();
+                        if self.net.client.is_some()
+                            && hero_ready
+                            && lobby_snapshot_ready
+                            && reward_receipt_ready
+                        {
                             log::info!(
                                 "Exit game splash: menu dependencies ready, transitioning to main menu"
                             );

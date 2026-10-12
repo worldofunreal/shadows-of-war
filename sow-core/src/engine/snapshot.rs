@@ -14,28 +14,11 @@ impl SowEngine {
                 .collect()
         };
         self.state.map.dirty_tiles = dirty_indices;
+        self.refresh_building_aggregates();
 
         let proposed = &self.alliances_proposed;
         let proposed_resources = &self.resource_requests_proposed;
-        let mut boats_in_use = std::collections::HashMap::<u16, u32>::new();
-        for fleet in &self.fleets {
-            if fleet.troops > 0.0 && fleet.unit_type.uses_military_capacity() {
-                *boats_in_use.entry(fleet.owner_id).or_default() += 1;
-            }
-        }
-        for building in self
-            .buildings
-            .iter()
-            .filter(|building| building.kind == crate::game::BuildingKind::Port)
-        {
-            if let Some(queue) = self.port_queues.get(&building.id) {
-                *boats_in_use.entry(building.owner_id).or_default() += queue
-                    .iter()
-                    .filter(|production| production.kind.uses_military_capacity())
-                    .count()
-                    as u32;
-            }
-        }
+        let boats_in_use = self.boat_slots_used_by_player();
         let players = self
             .state
             .players
@@ -107,8 +90,12 @@ impl SowEngine {
                     kills: p.kills,
                     deaths: p.deaths,
                     assists: p.assists,
-                    boats_in_use: boats_in_use.get(&p.id).copied().unwrap_or_default(),
-                    boat_capacity: crate::building::player_fleet_capacity(&self.buildings, p.id),
+                    boats_in_use: boats_in_use.get(p.id as usize).copied().unwrap_or_default(),
+                    boat_capacity: crate::building::cost::player_fleet_capacity_from_port_levels(
+                        self.building_aggregates
+                            .get(p.id as usize)
+                            .map_or(0, |aggregate| aggregate.port_levels),
+                    ),
                     nuke_available: p.alive
                         && p.gold >= self.state.config.nuke_cost
                         && self.buildings.iter().any(|building| {

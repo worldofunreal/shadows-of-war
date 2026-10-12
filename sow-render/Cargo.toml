@@ -17,6 +17,8 @@ log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 image = { workspace = true }
+rustybuzz = "0.20"
+unicode-bidi = "0.3"
 
 [dev-dependencies]
 # Exact same naga blade uses at runtime (incl. the web build) so the

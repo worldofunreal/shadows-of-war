@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use std::error::Error;
 use std::path::PathBuf;
 
-mod emoji_atlas;
 mod building_atlas;
+mod emoji_atlas;
 mod exporter;
 mod image_map;
 mod map_audit;

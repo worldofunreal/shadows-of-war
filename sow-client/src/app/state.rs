@@ -363,7 +363,6 @@ pub struct TransportImpact {
 
 pub const MAX_TRANSPORT_IMPACTS: usize = 256;
 pub const MAX_ALLIANCE_CELEBRATIONS: usize = 8;
-pub const ALLIANCE_CELEBRATION_DURATION: f32 = 1.6;
 
 pub struct AllianceCelebration {
     pub player_ids: [u16; 2],
@@ -398,9 +397,10 @@ fn queue_alliance_celebration(
 pub(crate) fn alliance_celebration_age(
     start_time: web_time::Instant,
     now: web_time::Instant,
+    duration: f32,
 ) -> Option<f32> {
     let elapsed = now.duration_since(start_time).as_secs_f32();
-    (elapsed < ALLIANCE_CELEBRATION_DURATION).then_some(elapsed / ALLIANCE_CELEBRATION_DURATION)
+    (duration > 0.0 && elapsed < duration).then_some(elapsed / duration)
 }
 
 /// Entity requesting terms in the open tutorial dialog: its territory border
@@ -408,6 +408,109 @@ pub(crate) fn alliance_celebration_age(
 pub struct DialogBorderHighlight {
     pub player_id: u16,
     pub start_time: web_time::Instant,
+}
+
+pub struct DevVfxPreview {
+    pub target: u8,
+    pub phase: f32,
+    pub paused: bool,
+    pub repeat: bool,
+    pub active: bool,
+    pub playing: bool,
+    last_update: web_time::Instant,
+}
+
+impl DevVfxPreview {
+    pub const ATTACK_FLASH: u8 = 1;
+    pub const CONQUEST: u8 = 2;
+    pub const ALLIANCE: u8 = 3;
+    pub const EXPANSION: u8 = 4;
+    pub const COMBAT_HAZE: u8 = 5;
+    pub const NUCLEAR: u8 = 6;
+    pub const DIALOG: u8 = 7;
+    pub const ALERT: u8 = 8;
+
+    pub fn new(now: web_time::Instant) -> Self {
+        Self {
+            target: Self::ATTACK_FLASH,
+            phase: 0.0,
+            paused: true,
+            repeat: true,
+            active: false,
+            playing: false,
+            last_update: now,
+        }
+    }
+
+    pub fn duration(&self, config: &crate::theme::dev_config::DevConfig) -> f32 {
+        match self.target {
+            Self::ATTACK_FLASH => config.value("attack.flash.duration")[0],
+            Self::CONQUEST => config.conquest_duration,
+            Self::ALLIANCE => config.value("alliance.duration")[0],
+            Self::NUCLEAR => config.value("nuke.zone.duration")[0],
+            Self::ALERT => config.value("alert.duration")[0],
+            _ => 3.0,
+        }
+    }
+
+    pub fn advance(&mut self, now: web_time::Instant, duration: f32) -> f32 {
+        let elapsed = now.duration_since(self.last_update).as_secs_f32();
+        self.last_update = now;
+        if self.active && self.playing && !self.paused {
+            if duration <= 0.0 {
+                self.phase = 1.0;
+                self.playing = false;
+                self.paused = true;
+            } else {
+                self.phase += elapsed / duration;
+                if self.phase >= 1.0 {
+                    if self.repeat {
+                        self.phase = self.phase.fract();
+                    } else {
+                        self.phase = 1.0;
+                        self.playing = false;
+                        self.paused = true;
+                    }
+                }
+            }
+        }
+        self.phase
+    }
+
+    pub fn set_target(&mut self, target: u8, now: web_time::Instant) {
+        if (Self::ATTACK_FLASH..=Self::ALERT).contains(&target) {
+            self.target = target;
+            self.phase = 0.0;
+            self.active = false;
+            self.playing = false;
+            self.paused = true;
+            self.last_update = now;
+        }
+    }
+
+    pub fn set_phase(&mut self, phase: f32, now: web_time::Instant) {
+        if phase.is_finite() {
+            self.phase = phase.clamp(0.0, 1.0);
+            self.active = true;
+            self.playing = false;
+            self.paused = true;
+            self.last_update = now;
+        }
+    }
+
+    pub fn set_paused(&mut self, paused: bool, now: web_time::Instant) {
+        self.paused = paused;
+        self.playing = self.active && !paused;
+        self.last_update = now;
+    }
+
+    pub fn replay(&mut self, now: web_time::Instant) {
+        self.phase = 0.0;
+        self.active = true;
+        self.playing = true;
+        self.paused = false;
+        self.last_update = now;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -441,6 +544,7 @@ pub struct UiState {
     pub leaderboard_publish_pending: bool,
     pub leaderboard_publish_revision: u64,
     pub show_dev_sidebar: bool,
+    pub dev_vfx_preview: DevVfxPreview,
     pub update_available: bool,
     pub is_spectating: bool,
     /// Cached once per turn from the snapshot: true when my player is dead or otherwise observing.
@@ -485,7 +589,7 @@ pub struct UiState {
 pub struct BorderFlashInstance {
     pub player_id: u16,
     pub start_time: web_time::Instant,
-    pub max_intensity: f32,
+    pub attacker_count: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -509,10 +613,14 @@ pub const FLASH_DURATION: f32 = 1.0;
 /// Ease-out quadratic: returns 1→0 over `FLASH_DURATION`, or `None` if expired.
 #[inline]
 pub fn easeout_flash(elapsed: f32) -> Option<f32> {
-    if elapsed >= FLASH_DURATION {
+    easeout_flash_with_duration(elapsed, FLASH_DURATION)
+}
+
+pub fn easeout_flash_with_duration(elapsed: f32, duration: f32) -> Option<f32> {
+    if duration <= 0.0 || elapsed >= duration {
         None
     } else {
-        let t = 1.0 - elapsed / FLASH_DURATION;
+        let t = 1.0 - elapsed / duration;
         Some(t * t)
     }
 }
@@ -556,8 +664,7 @@ impl UiState {
 #[cfg(test)]
 mod alliance_celebration_tests {
     use super::{
-        ALLIANCE_CELEBRATION_DURATION, MAX_ALLIANCE_CELEBRATIONS, alliance_celebration_age,
-        queue_alliance_celebration,
+        MAX_ALLIANCE_CELEBRATIONS, alliance_celebration_age, queue_alliance_celebration,
     };
     use std::collections::VecDeque;
     use web_time::{Duration, Instant};
@@ -590,14 +697,46 @@ mod alliance_celebration_tests {
     #[test]
     fn celebrations_expire_after_the_configured_duration() {
         let start = Instant::now();
-        assert!(alliance_celebration_age(start, start + Duration::from_millis(1599)).is_some());
+        let duration = sow_render::shader_params::definition("alliance.duration")
+            .unwrap()
+            .default[0];
+        assert!(
+            alliance_celebration_age(start, start + Duration::from_millis(1599), duration)
+                .is_some()
+        );
         assert_eq!(
-            alliance_celebration_age(
-                start,
-                start + Duration::from_secs_f32(ALLIANCE_CELEBRATION_DURATION)
-            ),
+            alliance_celebration_age(start, start + Duration::from_secs_f32(duration), duration),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod dev_vfx_preview_tests {
+    use super::DevVfxPreview;
+    use web_time::{Duration, Instant};
+
+    #[test]
+    fn replay_pause_scrub_and_repeat_use_one_normalized_timeline() {
+        let start = Instant::now();
+        let mut preview = DevVfxPreview::new(start);
+        preview.replay(start);
+        assert_eq!(preview.advance(start + Duration::from_millis(250), 1.0), 0.25);
+
+        preview.set_paused(true, start + Duration::from_millis(250));
+        assert_eq!(preview.advance(start + Duration::from_secs(1), 1.0), 0.25);
+
+        preview.set_phase(0.4, start + Duration::from_secs(1));
+        assert_eq!(preview.advance(start + Duration::from_secs(2), 1.0), 0.4);
+
+        preview.replay(start + Duration::from_secs(2));
+        assert!((preview.advance(start + Duration::from_millis(3250), 1.0) - 0.25).abs() < 0.001);
+
+        preview.repeat = false;
+        preview.replay(start + Duration::from_millis(3250));
+        assert_eq!(preview.advance(start + Duration::from_millis(4250), 1.0), 1.0);
+        assert!(preview.paused);
+        assert!(!preview.playing);
     }
 }
 
@@ -679,14 +818,10 @@ pub struct TaskState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExitRewardPreview {
-    pub receipt_id: String,
-    pub account_id: String,
-    pub reward: sow_data::rewards::MatchReward,
-    pub base_xp: u32,
-    pub base_level: u32,
-    pub base_crowns: u64,
-    pub base_laurels: u64,
+pub(crate) struct ExitRewardWait {
+    pub account_id: Option<String>,
+    pub receipt_id: Option<String>,
+    pub requires_verification: bool,
 }
 
 pub struct SowApp {
@@ -707,8 +842,8 @@ pub struct SowApp {
     /// Set when Blade/Vulkan init fails; event loop exits on next tick.
     pub gpu_init_failed: bool,
     pub progress: crate::player_progress::PlayerProgress,
-    /// Temporary UI estimate only; never applied to `progress` or purchases.
-    pub exit_reward_preview: Option<ExitRewardPreview>,
+    /// The ExitGame loader stays up until this account's server receipt is ready.
+    pub(crate) exit_reward_wait: Option<ExitRewardWait>,
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,
     pub progress_provider: String,

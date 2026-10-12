@@ -112,21 +112,23 @@ mod tests {
             if legacy {
                 // The old capture path queried the same tile for cost and losses.
                 checksum = checksum.wrapping_add(legacy_priority_bonus(
-                    legacy_grid, x, y, 512, target_owner, config,
-                ) as u64);
-                checksum = checksum.wrapping_add(legacy_priority_bonus(
-                    legacy_grid, x, y, 512, target_owner, config,
-                ) as u64);
-            } else {
-                let defense = grid.influence(
+                    legacy_grid,
                     x,
                     y,
                     512,
                     target_owner,
-                    attacker_id,
-                    7,
                     config,
-                );
+                ) as u64);
+                checksum = checksum.wrapping_add(legacy_priority_bonus(
+                    legacy_grid,
+                    x,
+                    y,
+                    512,
+                    target_owner,
+                    config,
+                ) as u64);
+            } else {
+                let defense = grid.influence(x, y, 512, target_owner, attacker_id, 7, config);
                 checksum = checksum.wrapping_add(std::hint::black_box(
                     defense.capture_multiplier.to_bits()
                         ^ defense.attacker_loss_multiplier.to_bits(),
@@ -139,15 +141,7 @@ mod tests {
                 let bonus = if legacy {
                     legacy_priority_bonus(legacy_grid, nx, ny, 512, target_owner, config) as u64
                 } else {
-                    grid.priority_bonus(
-                        nx,
-                        ny,
-                        512,
-                        target_owner,
-                        attacker_id,
-                        7,
-                        config,
-                    ) as u64
+                    grid.priority_bonus(nx, ny, 512, target_owner, attacker_id, 7, config) as u64
                 };
                 checksum = checksum.wrapping_add(std::hint::black_box(bonus));
             }
@@ -210,13 +204,7 @@ mod tests {
         let config = crate::game_config::GameConfig::default();
         let legacy_grid = legacy_defense_grid(&buildings, 512, 512, DEFENSE_GRID_CELL_SIZE);
         let mut grid = DefenseGrid::default();
-        grid.rebuild(
-            &buildings,
-            512,
-            512,
-            DEFENSE_GRID_CELL_SIZE,
-            &config,
-        );
+        grid.rebuild(&buildings, 512, 512, DEFENSE_GRID_CELL_SIZE, &config);
         let attacks = (0..attack_count)
             .map(|i| {
                 let attacker_id = 1 + (i % 255) as u16;
@@ -284,7 +272,10 @@ mod tests {
         assert!(city.contains(10, 10));
         assert!(!city.contains(12, 10));
         for kind in BuildingKind::ALL {
-            assert!(city.intersects(BuildingFootprint::at(kind, 8, 8)), "{kind:?}");
+            assert!(
+                city.intersects(BuildingFootprint::at(kind, 8, 8)),
+                "{kind:?}"
+            );
         }
     }
 
@@ -294,8 +285,14 @@ mod tests {
             assert_eq!(minimum_building_spacing(BuildingKind::City, kind), 6);
             assert_eq!(minimum_building_spacing(kind, BuildingKind::City), 6);
         }
-        for a in BuildingKind::ALL.into_iter().filter(|kind| *kind != BuildingKind::City) {
-            for b in BuildingKind::ALL.into_iter().filter(|kind| *kind != BuildingKind::City) {
+        for a in BuildingKind::ALL
+            .into_iter()
+            .filter(|kind| *kind != BuildingKind::City)
+        {
+            for b in BuildingKind::ALL
+                .into_iter()
+                .filter(|kind| *kind != BuildingKind::City)
+            {
                 assert_eq!(minimum_building_spacing(a, b), 4);
             }
         }
@@ -586,16 +583,8 @@ mod tests {
 
         let edge_multipliers: Vec<_> = (2..=256)
             .map(|target_owner| {
-                grid.influence(
-                    center_x + 19,
-                    center_y,
-                    width,
-                    target_owner,
-                    1,
-                    1234,
-                    &cfg,
-                )
-                .capture_multiplier
+                grid.influence(center_x + 19, center_y, width, target_owner, 1, 1234, &cfg)
+                    .capture_multiplier
             })
             .collect();
         assert!(edge_multipliers.iter().all(|m| (1.0..=1.6).contains(m)));
@@ -607,15 +596,7 @@ mod tests {
         let mut max_multiplier = f64::MIN;
         for attack in 0..1_000 {
             let target_owner = 2 + (attack % 255) as u16;
-            let influence = grid.influence(
-                center_x,
-                center_y,
-                width,
-                target_owner,
-                1,
-                1234,
-                &cfg,
-            );
+            let influence = grid.influence(center_x, center_y, width, target_owner, 1, 1234, &cfg);
             assert!((1.0..=4.0).contains(&influence.capture_multiplier));
             assert!(influence.priority_bonus > 0.0);
             min_multiplier = min_multiplier.min(influence.capture_multiplier);

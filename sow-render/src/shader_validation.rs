@@ -3,11 +3,6 @@
 //! runtime. These tests run it under `cargo test` so a broken shader fails
 //! the build instead of the running game.
 
-const MAP_SHADER: &str = include_str!("shaders/map.wgsl");
-const TEXT_SHADER: &str = include_str!("shaders/text_glow.wgsl");
-const MOVER_SPRITES_SHADER: &str = include_str!("shaders/mover_sprites.wgsl");
-const MOVER_TRAILS_SHADER: &str = include_str!("shaders/mover_trails.wgsl");
-
 fn parse_and_validate(source: &str) -> naga::Module {
     let module = naga::front::wgsl::parse_str(source).unwrap_or_else(|error| {
         panic!(
@@ -42,13 +37,16 @@ fn assert_struct_size(module: &naga::Module, struct_name: &str, expected: usize)
 
 #[test]
 fn map_shader_parses_and_matches_globals_layout() {
-    let module = parse_and_validate(MAP_SHADER);
+    let source = crate::shader_params::prepare_shader("MAP_", include_str!("shaders/map.wgsl"));
+    let module = parse_and_validate(&source);
     assert_struct_size(&module, "Globals", std::mem::size_of::<crate::MapGlobals>());
 }
 
 #[test]
 fn text_shader_parses_and_matches_globals_layout() {
-    let module = parse_and_validate(TEXT_SHADER);
+    let source =
+        crate::shader_params::prepare_shader("TEXT_", include_str!("shaders/text_glow.wgsl"));
+    let module = parse_and_validate(&source);
     assert_struct_size(
         &module,
         "TextGlobals",
@@ -58,13 +56,17 @@ fn text_shader_parses_and_matches_globals_layout() {
 
 #[test]
 fn mover_shaders_parse_and_match_globals_layout() {
-    let sprites = parse_and_validate(MOVER_SPRITES_SHADER);
+    let sprite_source =
+        crate::shader_params::prepare_shader("MOVER_", include_str!("shaders/mover_sprites.wgsl"));
+    let sprites = parse_and_validate(&sprite_source);
     assert_struct_size(
         &sprites,
         "MoverGlobals",
         std::mem::size_of::<crate::MoverGlobals>(),
     );
-    let trails = parse_and_validate(MOVER_TRAILS_SHADER);
+    let trail_source =
+        crate::shader_params::prepare_shader("MOVER_", include_str!("shaders/mover_trails.wgsl"));
+    let trails = parse_and_validate(&trail_source);
     assert_struct_size(
         &trails,
         "MoverGlobals",

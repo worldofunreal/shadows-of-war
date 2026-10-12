@@ -590,8 +590,7 @@ impl SowApp {
     fn finish_build_pointer_gesture(&mut self) -> Option<MapPointerStart> {
         let start = self.input.map_pointer_start.take();
         let held_mobile = start.as_ref().is_some_and(|start| {
-            start.is_touch
-                && start.started_at.elapsed().as_secs_f32() >= HOLD_BUILD_INTERVAL_SECS
+            start.is_touch && start.started_at.elapsed().as_secs_f32() >= HOLD_BUILD_INTERVAL_SECS
         });
         let should_exit = should_exit_build_mode_after_gesture(
             self.ui.app.settings_state.sticky_building_mode,
@@ -695,10 +694,20 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn building_mode_exits_only_after_success_without_a_keep_override() {
-        assert!(should_exit_build_mode_after_gesture(false, true, false, false));
-        assert!(!should_exit_build_mode_after_gesture(false, false, false, false));
-        assert!(!should_exit_build_mode_after_gesture(true, true, false, false));
-        assert!(!should_exit_build_mode_after_gesture(false, true, true, false));
-        assert!(!should_exit_build_mode_after_gesture(false, true, false, true));
+        assert!(should_exit_build_mode_after_gesture(
+            false, true, false, false
+        ));
+        assert!(!should_exit_build_mode_after_gesture(
+            false, false, false, false
+        ));
+        assert!(!should_exit_build_mode_after_gesture(
+            true, true, false, false
+        ));
+        assert!(!should_exit_build_mode_after_gesture(
+            false, true, true, false
+        ));
+        assert!(!should_exit_build_mode_after_gesture(
+            false, true, false, true
+        ));
     }
 }

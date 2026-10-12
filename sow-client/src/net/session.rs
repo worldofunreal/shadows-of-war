@@ -201,18 +201,18 @@ impl SowApp {
         let reward_match_id = (was_playing && !self.net.is_offline)
             .then(|| self.sim.my_lobby_id)
             .flatten();
+        let tutorial_reward_id = (was_playing
+            && was_offline
+            && self.ui.tutorial_active
+            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
+            && self.pending_reward_receipt_ids.contains("tutorial"))
+        .then(|| "tutorial".to_string());
         let exit_leader = self.ui.app.splash_state.loader_leader;
         if was_playing {
             if !self.progress_match_recorded {
                 crate::store_portals::track_product_event("match_exit");
             }
             crate::store_portals::gameplay_stop();
-            if !was_offline && let Some(match_id) = reward_match_id {
-                self.capture_online_reward_preview(
-                    match_id,
-                    exit_leader.unwrap_or(self.ui.app.main_menu_state.selected_leader),
-                );
-            }
         }
         crate::store_portals::left_room();
         self.net.is_offline = false;
@@ -248,14 +248,15 @@ impl SowApp {
         self.ui.endgame_cache = None;
         self.reset_progress_session();
 
-        if was_playing
-            && self.progress_account_id.is_some()
-            && crate::store_portals::should_fetch_cloud_profile()
-        {
-            if let Some(match_id) = reward_match_id {
-                self.begin_reward_profile_sync(match_id);
-            } else {
-                self.fetch_cloud_progress();
+        if was_playing && crate::store_portals::should_fetch_cloud_profile() {
+            if !was_offline {
+                self.begin_reward_profile_sync(reward_match_id.map(|id| id.to_string()), true);
+            } else if self.progress_account_id.is_some() {
+                if let Some(receipt_id) = tutorial_reward_id {
+                    self.begin_reward_profile_sync(Some(receipt_id), false);
+                } else {
+                    self.fetch_cloud_progress();
+                }
             }
         }
     }

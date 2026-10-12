@@ -166,7 +166,7 @@ impl SowApp {
                     .push(crate::app::BorderFlashInstance {
                         player_id: attack.target_owner,
                         start_time: now,
-                        max_intensity: 1.0,
+                        attacker_count: 1,
                     });
                 record_attack_launch_notice(
                     &mut self.ui.attack_launch_notices,

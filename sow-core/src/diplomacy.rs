@@ -26,8 +26,7 @@ pub const ALLIANCE_DURATION_TICKS: u32 = 2400;
 /// Campaign alliances have no timer and are permanent; only timed alliances renew.
 #[inline]
 pub fn alliance_can_renew(is_allied: bool, remaining_ticks: Option<u32>) -> bool {
-    is_allied
-        && remaining_ticks.is_some_and(|ticks| ticks <= ALLIANCE_RENEWAL_WINDOW_TICKS)
+    is_allied && remaining_ticks.is_some_and(|ticks| ticks <= ALLIANCE_RENEWAL_WINDOW_TICKS)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -234,8 +233,14 @@ mod tests {
     #[test]
     fn only_timed_alliances_can_renew() {
         assert!(!alliance_can_renew(true, None));
-        assert!(alliance_can_renew(true, Some(ALLIANCE_RENEWAL_WINDOW_TICKS)));
-        assert!(!alliance_can_renew(true, Some(ALLIANCE_RENEWAL_WINDOW_TICKS + 1)));
+        assert!(alliance_can_renew(
+            true,
+            Some(ALLIANCE_RENEWAL_WINDOW_TICKS)
+        ));
+        assert!(!alliance_can_renew(
+            true,
+            Some(ALLIANCE_RENEWAL_WINDOW_TICKS + 1)
+        ));
         assert!(!alliance_can_renew(false, Some(0)));
     }
 

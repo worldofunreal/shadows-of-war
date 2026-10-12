@@ -31,7 +31,7 @@ pub(super) struct BotDecision {
 // Food chain (per design):
 //   Ghost/Human = TOP    (the goats; pro teammate / the player)
 //   Nation      = NEXT   (mid-game food)
-//   Tribe       = LOWEST (early-game food; passive vs players on Vanilla)
+//   Tribe       = LOWEST (early-game food; no player initiation on Vanilla)
 // ──────────────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -65,8 +65,8 @@ pub(super) struct BotAiProfile {
     pub(super) reserve_ratio: f64,
     pub(super) expand_ratio: f64,
     pub(super) refuse_human_chance: i32,
-    /// Tribe-only: on `Vanilla` (default MP) tribes do not target players;
-    /// on `Terminator` they can hunt.
+    /// Tribe-only: Vanilla permits neutral growth and self-defense only;
+    /// Terminator also permits player hunting.
     pub(super) attacks_players: bool,
 }
 
@@ -89,7 +89,7 @@ impl BotAiProfile {
         attacks_players: true,
     };
 
-    /// Tribe = passive food on `Vanilla`, hunters on `Terminator`.
+    /// Tribe = passive food except self-defense on `Vanilla`, hunters on `Terminator`.
     fn tribe(difficulty: BotDifficulty) -> BotAiProfile {
         match difficulty {
             BotDifficulty::Vanilla => BotAiProfile {

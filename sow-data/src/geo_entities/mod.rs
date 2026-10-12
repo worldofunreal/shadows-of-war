@@ -204,7 +204,10 @@ mod tests {
 
     #[test]
     fn atlas_territory_color_accepts_hex_and_keeps_missing_colors_unset() {
-        assert_eq!(parse_territory_color("#ff8000"), Some([1.0, 128.0 / 255.0, 0.0]));
+        assert_eq!(
+            parse_territory_color("#ff8000"),
+            Some([1.0, 128.0 / 255.0, 0.0])
+        );
         assert_eq!(parse_territory_color("#12xz00"), None);
         assert_eq!(parse_territory_color("#fff"), None);
     }

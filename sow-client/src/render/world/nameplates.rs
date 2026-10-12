@@ -725,10 +725,7 @@ fn compute_nameplate_layout(
 ) -> NameplateLayout {
     let metrics = NameplateMetrics::compute(scaled_size, style, show_bot_avatars);
     let outline = crate::render::dev_emoji_outline(dev, sf, [0.0, 0.0, 0.0, 0.9]);
-    let badge_padding = outline
-        .scaled_for_emoji(metrics.badge_size() * sf)
-        .effect_padding()
-        / sf;
+    let badge_padding = outline.effect_padding() / sf;
     NameplateLayout::compute(
         center,
         metrics,

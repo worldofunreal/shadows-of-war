@@ -4,7 +4,7 @@
 //! Names are filtered before they are stored or broadcast. The list is kept
 //! in code so the policy version is part of every server build.
 
-pub const POLICY_VERSION: u32 = 1;
+pub const POLICY_VERSION: u32 = 2;
 pub const MAX_CHARS: usize = 16;
 
 const BLOCKED_TERMS: &[&str] = &[
@@ -101,8 +101,13 @@ pub fn is_allowed(value: &str) -> bool {
     if value.chars().any(is_disallowed_invisible) {
         return false;
     }
+    // Keep the existing ASCII folding for moderation, but allow letters and
+    // numbers from scripts that do not transliterate into ASCII.
+    if !value.chars().any(char::is_alphanumeric) {
+        return false;
+    }
     let key = filter_key(value);
-    !key.is_empty() && !BLOCKED_TERMS.iter().any(|term| key.contains(term))
+    !BLOCKED_TERMS.iter().any(|term| key.contains(term))
 }
 
 #[cfg(test)]
@@ -136,5 +141,14 @@ mod tests {
     fn filters_uppercase_accented_variants() {
         assert!(!is_allowed("PÜTÀ"));
         assert_eq!(filter_key("ÇAÑÓN"), "canon");
+    }
+
+    #[test]
+    fn permits_supported_non_latin_name_scripts_without_weakening_ascii_moderation() {
+        for name in ["アカツキ", "푸른늑대", "苍狼", "نور القمر"] {
+            assert!(is_allowed(name), "rejected supported script: {name}");
+        }
+        assert!(!is_allowed("fuck苍狼"));
+        assert!(!is_allowed("---"));
     }
 }

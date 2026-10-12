@@ -5,6 +5,7 @@ struct MoverGlobals {
     screen_size: vec2<f32>,
     trail_count: u32,
     _pad: f32,
+    shader_params: array<vec4<f32>, 512>,
 }
 
 // Per-instance attributes (instanced vertex buffer, divisor = 1).
@@ -39,7 +40,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, seg: TrailSegment) -> TrailVertexOutp
     let len = length(dir);
     let tangent = select(vec2(1.0, 0.0), dir / len, len > 0.0001);
     let normal = vec2(-tangent.y, tangent.x);
-    let half_w = seg.width * 0.5;
+    let half_w = seg.width * globals.shader_params[__MOVER_TRAIL_WIDTH__].x * 0.5;
 
     // (corner across width, position along segment): two triangles.
     let corners = array<vec2<f32>, 6>(
@@ -53,7 +54,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, seg: TrailSegment) -> TrailVertexOutp
     let corner = corners[vi];
     let world = mix(seg.p0, seg.p1, corner.y) + normal * half_w * corner.x / globals.zoom;
     out.clip_position = world_to_clip(world);
-    out.color = seg.color;
+    out.color = seg.color * globals.shader_params[__MOVER_TRAIL_TINT__] * vec4<f32>(1.0, 1.0, 1.0, globals.shader_params[__MOVER_TRAIL_OPACITY__].x);
     return out;
 }
 
@@ -67,5 +68,5 @@ fn fs_main(in: TrailVertexOutput) -> @location(0) vec4<f32> {
 // pipeline creation — same contract as map.wgsl. Alpha stays linear.
 @fragment
 fn fs_main_srgb(in: TrailVertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(pow(in.color.rgb, vec3<f32>(1.0 / 2.2)), in.color.a);
+    return vec4<f32>(pow(max(in.color.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), in.color.a);
 }

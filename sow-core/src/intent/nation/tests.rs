@@ -92,6 +92,33 @@ mod bot_iq_alliance_tests {
         decisions
     }
 
+    fn run_vanilla_tribe_attack(
+        engine: &mut SowEngine,
+        neighbors: &[u16],
+        has_neutral: bool,
+        is_under_attack: bool,
+    ) -> Vec<crate::intent::nation::profile::BotDecision> {
+        let slot = AiSlot {
+            bot_id: 1,
+            tier: AiTier::Tribe,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack,
+            ghost_retaliation: None,
+            profile: ai_profile_for(AiTier::Tribe, BotDifficulty::Vanilla),
+        };
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (1, 60),
+            (10.0, 10.0),
+            neighbors,
+            has_neutral,
+            &mut decisions,
+        );
+        decisions
+    }
+
     fn attack_targets(decisions: &[crate::intent::nation::profile::BotDecision]) -> Vec<u16> {
         decisions
             .iter()
@@ -416,6 +443,280 @@ mod bot_iq_alliance_tests {
         engine.ai_attack_index[1].push(0);
         let defense = run_nation_attack(&mut engine, &[2], false);
         assert_eq!(attack_targets(&defense), vec![2]);
+    }
+
+    #[test]
+    fn vanilla_tribe_never_initiates_against_humans_but_defends_when_attacked() {
+        let mut engine = test_engine_two_players(43);
+        engine.state.player_mut(1).unwrap().iq = 60;
+        engine.state.player_mut(2).unwrap().player_type = PlayerType::Human;
+
+        let idle = run_vanilla_tribe_attack(&mut engine, &[2], false, false);
+        assert!(attack_targets(&idle).is_empty());
+
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 1,
+            owner_id: 2,
+            target_owner: 1,
+            created_tick: 0,
+            troops: 500.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(43),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+
+        let defense = run_vanilla_tribe_attack(&mut engine, &[2], false, true);
+        assert_eq!(attack_targets(&defense), vec![2]);
+    }
+
+    fn naval_target_decision(
+        tier: AiTier,
+        target_type: PlayerType,
+        target_troops: f64,
+    ) -> (SowEngine, Vec<crate::intent::nation::profile::BotDecision>) {
+        use crate::game::{GamePhase, GameState};
+        use crate::map::MapTile;
+
+        let config = crate::game_config::GameConfig::default();
+        let mut state = GameState::new(45, 3, 1, config.clone());
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x20));
+        let mut actor = match tier {
+            AiTier::Ghost => Player::new_human(1, "Ghost".into(), [0.1, 0.8, 0.3], &config),
+            AiTier::Nation | AiTier::Tribe => {
+                Player::new_bot(1, "AI".into(), [0.1, 0.8, 0.3], &config)
+            }
+        };
+        actor.player_type = match tier {
+            AiTier::Ghost => PlayerType::Human,
+            AiTier::Nation => PlayerType::Nation,
+            AiTier::Tribe => PlayerType::Bot,
+        };
+        actor.is_ai_controlled = tier == AiTier::Ghost;
+        actor.iq = match tier {
+            AiTier::Ghost => 170,
+            AiTier::Nation => 150,
+            AiTier::Tribe => 60,
+        };
+        actor.troops = 5_000.0;
+        actor.max_troops = 10_000.0;
+        actor.tile_count = 1;
+        actor.border_insert(0);
+        let mut target = if target_type == PlayerType::Human {
+            Player::new_human(2, "Target".into(), [0.9, 0.6, 0.1], &config)
+        } else {
+            Player::new_bot(2, "Target".into(), [0.9, 0.6, 0.1], &config)
+        };
+        target.player_type = target_type;
+        target.troops = target_troops;
+        target.max_troops = target_troops.max(1.0);
+        target.tile_count = 1;
+        target.border_insert(2);
+        state.register_player(actor);
+        state.register_player(target);
+        state.map.terrain[0] = MapTile::from_byte(0x80);
+        state.map.terrain[2] = MapTile::from_byte(0x80);
+        state.map.set_owner_id(0, 0, 1);
+        state.map.set_owner_id(2, 0, 2);
+        state.map.compute_shorelines();
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = SowEngine::new(state, water);
+        engine
+            .bot_naval_slots_used
+            .resize(engine.state.player_lookup.len(), 0);
+        engine
+            .bot_naval_cursors
+            .resize(engine.state.player_lookup.len(), Default::default());
+        let slot = AiSlot {
+            bot_id: 1,
+            tier,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: false,
+            ghost_retaliation: None,
+            profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+        };
+        let actor_iq = engine.state.player(1).unwrap().iq;
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (1, actor_iq),
+            (5.0, 5.0),
+            &[],
+            false,
+            &mut decisions,
+        );
+        (engine, decisions)
+    }
+
+    #[test]
+    fn naval_attack_keeps_the_openfront_strength_gate_without_the_extra_tribe_2x_rule() {
+        let (engine, decisions) = naval_target_decision(AiTier::Ghost, PlayerType::Bot, 600.0);
+        assert!(matches!(
+            decisions.as_slice(),
+            [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet {
+                target_tile: 2,
+                troops: Some(1_000.0),
+            })
+        ));
+        assert_eq!(engine.bot_work.naval_routes_calculated, 1);
+
+        let (engine, decisions) = naval_target_decision(AiTier::Ghost, PlayerType::Bot, 6_000.0);
+        assert!(decisions.is_empty());
+        assert_eq!(engine.bot_work.naval_routes_calculated, 0);
+    }
+
+    #[test]
+    fn nations_do_not_initiate_naval_attacks_against_real_humans() {
+        let (engine, decisions) = naval_target_decision(AiTier::Nation, PlayerType::Human, 1.0);
+        assert!(decisions.is_empty());
+        assert_eq!(engine.bot_work.naval_routes_calculated, 0);
+    }
+
+    fn remote_bot_defense_scenario(
+        tier: AiTier,
+        split_sea: bool,
+    ) -> (SowEngine, Vec<crate::intent::nation::profile::BotDecision>) {
+        use crate::game::{GamePhase, GameState};
+        use crate::map::MapTile;
+
+        const W: u32 = 8;
+        let config = crate::game_config::GameConfig::default();
+        let mut state = GameState::new(44, W, W, config.clone());
+        state.phase = GamePhase::Playing;
+        state.map.terrain.fill(MapTile::from_byte(0x20));
+        if split_sea {
+            for y in 0..W {
+                for x in [3, 4] {
+                    state.map.terrain[(y * W + x) as usize] = MapTile::from_byte(0x80);
+                }
+            }
+            state.map.terrain[(2 * W + 2) as usize] = MapTile::from_byte(0x80);
+        }
+
+        let mut actor = if tier == AiTier::Ghost {
+            Player::new_human(1, "Ghost".into(), [0.1, 0.8, 0.3], &config)
+        } else {
+            Player::new_bot(1, "Tribe".into(), [0.1, 0.8, 0.3], &config)
+        };
+        actor.player_type = match tier {
+            AiTier::Ghost => PlayerType::Human,
+            AiTier::Nation => PlayerType::Nation,
+            AiTier::Tribe => PlayerType::Bot,
+        };
+        actor.is_ai_controlled = tier == AiTier::Ghost;
+        actor.iq = match tier {
+            AiTier::Ghost => 170,
+            AiTier::Nation => 150,
+            AiTier::Tribe => 60,
+        };
+        actor.troops = 5_000.0;
+        actor.max_troops = 10_000.0;
+        actor.tile_count = 1;
+        actor.border_insert(0);
+        let mut human = Player::new_human(2, "Human".into(), [0.2, 0.5, 1.0], &config);
+        human.troops = 1_000.0;
+        human.tile_count = 1;
+        human.border_insert(W * W - 1);
+        state.register_player(actor);
+        state.register_player(human);
+        state.map.terrain[0] = MapTile::from_byte(0x80);
+        state.map.terrain[(W * W - 1) as usize] = MapTile::from_byte(0x80);
+        state.map.set_owner_id(0, 0, 1);
+        state.map.set_owner_id(W - 1, W - 1, 2);
+        state.map.compute_shorelines();
+
+        let water = WaterComponents::compute(&state.map, |_| {});
+        let mut engine = SowEngine::new(state, water);
+        engine.attacks.push(crate::execution::AttackExecution {
+            id: 7,
+            owner_id: 2,
+            target_owner: 1,
+            created_tick: 0,
+            troops: 1_000.0,
+            to_conquer: Default::default(),
+            insert_seq_counter: 0,
+            rng: wyrand::WyRand::new(44),
+            retreating: false,
+        });
+        engine.ai_attack_index = vec![Vec::new(); engine.state.player_lookup.len()];
+        engine.ai_attack_index[1].push(0);
+        engine
+            .bot_naval_slots_used
+            .resize(engine.state.player_lookup.len(), 0);
+        engine
+            .bot_naval_cursors
+            .resize(engine.state.player_lookup.len(), Default::default());
+
+        let retaliation = (tier == AiTier::Ghost).then_some(GhostRetaliation {
+            attack_id: 7,
+            attacker_id: 2,
+            incoming_troops: 1_000.0,
+            ready_tick: 0,
+        });
+        let slot = AiSlot {
+            bot_id: 1,
+            tier,
+            do_attack: true,
+            do_structures: false,
+            is_under_attack: true,
+            ghost_retaliation: retaliation,
+            profile: ai_profile_for(tier, BotDifficulty::Vanilla),
+        };
+        let actor_iq = engine.state.player(1).unwrap().iq;
+        let mut decisions = Vec::new();
+        engine.nation_run_combat_for_slot(
+            &slot,
+            (1, actor_iq),
+            (10.0, 10.0),
+            &[],
+            split_sea,
+            &mut decisions,
+        );
+        (engine, decisions)
+    }
+
+    #[test]
+    fn vanilla_tribe_can_retaliate_across_open_water_without_a_port() {
+        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Tribe, false);
+        assert!(matches!(
+            decisions.as_slice(),
+            [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet {
+                target_tile,
+                troops: Some(1_000.0),
+            } if *target_tile == 63)
+        ));
+        assert_eq!(engine.bot_work.naval_routes_calculated, 1);
+        assert!(engine.bot_work.naval_border_candidates_examined <= 256);
+        assert!(engine.bot_work.shoreline_candidates_examined <= 256);
+    }
+
+    #[test]
+    fn failed_remote_tribe_defense_falls_back_to_neutral_land_not_illegal_land_attack() {
+        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Tribe, true);
+        assert_eq!(attack_targets(&decisions), vec![0]);
+        assert!(
+            !decisions
+                .iter()
+                .any(|decision| matches!(decision.intent, GameplayIntent::LaunchFleet { .. }))
+        );
+        assert_eq!(engine.bot_work.naval_routes_calculated, 0);
+    }
+
+    #[test]
+    fn ghost_retaliation_uses_the_shared_naval_route_without_a_port() {
+        let (engine, decisions) = remote_bot_defense_scenario(AiTier::Ghost, false);
+        assert!(matches!(
+            decisions.as_slice(),
+            [decision] if matches!(&decision.intent, GameplayIntent::LaunchFleet {
+                target_tile: 63,
+                troops: Some(sent),
+            } if (750.0..=1_250.0).contains(sent))
+        ));
+        assert_eq!(engine.bot_work.naval_routes_calculated, 1);
     }
 
     #[test]
@@ -1614,7 +1915,10 @@ mod bot_iq_alliance_tests {
         engine.state.tick += 29;
         engine.update_campaign_assault();
         assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
-        assert_eq!(engine.campaign_assault_targets.get(&1), Some(&vec![2, 3, 4]));
+        assert_eq!(
+            engine.campaign_assault_targets.get(&1),
+            Some(&vec![2, 3, 4])
+        );
         engine.state.tick += 1;
         engine.update_campaign_assault();
         assert_eq!(
@@ -1729,7 +2033,10 @@ mod bot_iq_alliance_tests {
         engine.state.tick += 30;
         engine.update_campaign_assault();
         assert_eq!(engine.campaign_assault.as_ref().unwrap().phase_index, 1);
-        assert!(!engine.attacks.is_empty(), "the next 12-second window releases troops again");
+        assert!(
+            !engine.attacks.is_empty(),
+            "the next 12-second window releases troops again"
+        );
     }
 
     #[test]

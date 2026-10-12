@@ -494,9 +494,7 @@ impl GameState {
             }
         }
         self.map.set_owner_id(x, y, new_owner);
-        if eliminates_old_owner
-            && let Some(eliminated) = eliminated.as_deref_mut()
-        {
+        if eliminates_old_owner && let Some(eliminated) = eliminated.as_deref_mut() {
             eliminated.push((old_owner, x, y));
         }
         if new_owner != 0 {
@@ -583,7 +581,10 @@ mod naval_requirement_tests {
     fn naval_and_nuclear_unlocks_share_the_canonical_levels() {
         assert_eq!(UnitType::TradeShip.required_port_level(), 1);
         assert_eq!(UnitType::Warship.required_port_level(), 2);
-        assert_eq!(NukeKind::AtomBomb.required_city_level(), BuildingKind::City.max_level());
+        assert_eq!(
+            NukeKind::AtomBomb.required_city_level(),
+            BuildingKind::City.max_level()
+        );
     }
 
     #[test]

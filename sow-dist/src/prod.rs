@@ -675,6 +675,23 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "--config",
             "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
             "--lib",
+            "reward_exit_tests",
+        ],
+        Some(&paths.root),
+    )
+    .context("server-confirmed reward exit tests failed")?;
+    run(
+        "cargo",
+        &[
+            "test",
+            "--locked",
+            "-p",
+            "sow-client",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--config",
+            "target.wasm32-unknown-unknown.runner=\"wasm-bindgen-test-runner\"",
+            "--lib",
             "tutorial_camera",
         ],
         Some(&paths.root),

@@ -503,7 +503,7 @@ async fn init_bot_pool() -> Result<(), String> {
         return Err("SOW_BOT_POOL_SIZE must be greater than zero".to_string());
     }
 
-    let name_pool = bot_fill::names::BOT_NAMES;
+    let name_pool = bot_fill::names::BOT_NAMES.as_slice();
     if name_pool.is_empty() {
         return Err("names::BOT_NAMES is empty — cannot seed pool".to_string());
     }
@@ -1647,20 +1647,27 @@ async fn verify_match_replay_handler(
                 Ok(_) => {
                     return axum::response::IntoResponse::into_response((
                         axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                        axum::response::Json(serde_json::json!({"error": "match metadata mismatch"})),
+                        axum::response::Json(
+                            serde_json::json!({"error": "match metadata mismatch"}),
+                        ),
                     ));
                 }
                 Err(error) => {
                     log::error!("replay {match_id} metadata decode failed: {error}");
                     return axum::response::IntoResponse::into_response((
                         axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                        axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
+                        axum::response::Json(
+                            serde_json::json!({"error": "match metadata unavailable"}),
+                        ),
                     ));
                 }
             }
         }
         Ok(response) => {
-            log::warn!("replay {match_id} metadata request returned {}", response.status());
+            log::warn!(
+                "replay {match_id} metadata request returned {}",
+                response.status()
+            );
             return axum::response::IntoResponse::into_response((
                 axum::http::StatusCode::SERVICE_UNAVAILABLE,
                 axum::response::Json(serde_json::json!({"error": "match metadata unavailable"})),
@@ -1709,7 +1716,9 @@ async fn verify_match_replay_handler(
             ))
         }
         Ok(Err(ReplayVerificationError::MissingMap(error))) => {
-            log::warn!("match {match_id} replay map unavailable, will retry after a later release: {error}");
+            log::warn!(
+                "match {match_id} replay map unavailable, will retry after a later release: {error}"
+            );
             axum::response::IntoResponse::into_response((
                 axum::http::StatusCode::SERVICE_UNAVAILABLE,
                 axum::response::Json(serde_json::json!({"error": "replay map unavailable"})),
@@ -1732,16 +1741,22 @@ fn verify_replay(
     maps_root: &Path,
 ) -> Result<sow_data::profile::VerifiedMatchResult, ReplayVerificationError> {
     if replay_bytes.len() > MAX_REPLAY_BYTES {
-        return Err(ReplayVerificationError::Invalid("replay exceeds size limit".to_string()));
+        return Err(ReplayVerificationError::Invalid(
+            "replay exceeds size limit".to_string(),
+        ));
     }
     let turns: Vec<sow_core::protocol::Turn> = bincode::DefaultOptions::new()
         .with_fixint_encoding()
         .with_limit(MAX_REPLAY_BYTES as u64)
         .reject_trailing_bytes()
         .deserialize(replay_bytes)
-        .map_err(|error| ReplayVerificationError::Invalid(format!("replay decode failed: {error}")))?;
+        .map_err(|error| {
+            ReplayVerificationError::Invalid(format!("replay decode failed: {error}"))
+        })?;
     if turns.len() > MAX_REPLAY_TURNS {
-        return Err(ReplayVerificationError::Invalid("replay has too many turns".to_string()));
+        return Err(ReplayVerificationError::Invalid(
+            "replay has too many turns".to_string(),
+        ));
     }
 
     let metadata = &start.metadata;
@@ -1749,13 +1764,13 @@ fn verify_replay(
         .get("seed")
         .and_then(serde_json::Value::as_u64)
         .ok_or_else(|| ReplayVerificationError::Unavailable("trusted seed missing".to_string()))?;
-    let config: GameConfig = serde_json::from_value(
-        metadata
-            .get("config")
-            .cloned()
-            .ok_or_else(|| ReplayVerificationError::Unavailable("trusted config missing".to_string()))?,
-    )
-    .map_err(|error| ReplayVerificationError::Unavailable(format!("trusted config invalid: {error}")))?;
+    let config: GameConfig =
+        serde_json::from_value(metadata.get("config").cloned().ok_or_else(|| {
+            ReplayVerificationError::Unavailable("trusted config missing".to_string())
+        })?)
+        .map_err(|error| {
+            ReplayVerificationError::Unavailable(format!("trusted config invalid: {error}"))
+        })?;
     if config.map_width == 0
         || config.map_height == 0
         || config.map_width > sow_core::maps::MAX_MAP_AXIS
@@ -1765,71 +1780,100 @@ fn verify_replay(
         || !config.tick_rate_ms.is_finite()
         || config.tick_rate_ms <= 0.0
     {
-        return Err(ReplayVerificationError::Unavailable("trusted game settings are invalid".to_string()));
+        return Err(ReplayVerificationError::Unavailable(
+            "trusted game settings are invalid".to_string(),
+        ));
     }
-    let players: Vec<PlayerInfo> = serde_json::from_value(
-        metadata
-            .get("players")
-            .cloned()
-            .ok_or_else(|| ReplayVerificationError::Unavailable("trusted players missing".to_string()))?,
-    )
-    .map_err(|error| ReplayVerificationError::Unavailable(format!("trusted players invalid: {error}")))?;
-    let relay_players: Vec<ReplayStartPlayer> = serde_json::from_value(
-        metadata
-            .get("relay_players")
-            .cloned()
-            .ok_or_else(|| ReplayVerificationError::Unavailable("trusted roster missing".to_string()))?,
-    )
-    .map_err(|error| ReplayVerificationError::Unavailable(format!("trusted roster invalid: {error}")))?;
+    let players: Vec<PlayerInfo> =
+        serde_json::from_value(metadata.get("players").cloned().ok_or_else(|| {
+            ReplayVerificationError::Unavailable("trusted players missing".to_string())
+        })?)
+        .map_err(|error| {
+            ReplayVerificationError::Unavailable(format!("trusted players invalid: {error}"))
+        })?;
+    let relay_players: Vec<ReplayStartPlayer> =
+        serde_json::from_value(metadata.get("relay_players").cloned().ok_or_else(|| {
+            ReplayVerificationError::Unavailable("trusted roster missing".to_string())
+        })?)
+        .map_err(|error| {
+            ReplayVerificationError::Unavailable(format!("trusted roster invalid: {error}"))
+        })?;
     if relay_players.is_empty()
         || relay_players.len() > sow_core::protocol::MAX_MATCH_PARTICIPANTS
         || players.is_empty()
         || players.len() > sow_core::protocol::MAX_MATCH_PARTICIPANTS
     {
-        return Err(ReplayVerificationError::Unavailable("trusted roster is empty".to_string()));
+        return Err(ReplayVerificationError::Unavailable(
+            "trusted roster is empty".to_string(),
+        ));
     }
     let registered_accounts = relay_players
         .iter()
         .filter_map(|player| player.database_account_id.as_deref())
         .collect::<std::collections::BTreeSet<_>>();
-    let expected_accounts = start.player_ids.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
+    let expected_accounts = start
+        .player_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
     if registered_accounts != expected_accounts {
-        return Err(ReplayVerificationError::Unavailable("trusted account roster mismatch".to_string()));
+        return Err(ReplayVerificationError::Unavailable(
+            "trusted account roster mismatch".to_string(),
+        ));
     }
     let mut player_ids = std::collections::BTreeSet::new();
     let mut external_player_ids = std::collections::BTreeSet::new();
     for player in &relay_players {
         if !player_ids.insert(player.player_id) {
-            return Err(ReplayVerificationError::Unavailable("duplicate trusted player id".to_string()));
+            return Err(ReplayVerificationError::Unavailable(
+                "duplicate trusted player id".to_string(),
+            ));
         }
         if !player.is_internal {
             external_player_ids.insert(player.player_id);
         }
     }
-    if players.iter().any(|player| !player_ids.contains(&player.id)) {
-        return Err(ReplayVerificationError::Unavailable("trusted engine roster mismatch".to_string()));
+    if players
+        .iter()
+        .any(|player| !player_ids.contains(&player.id))
+    {
+        return Err(ReplayVerificationError::Unavailable(
+            "trusted engine roster mismatch".to_string(),
+        ));
     }
 
     let map_key = sow_core::maps::map_key(&config.map_name);
     if map_key.is_empty() {
-        return Err(ReplayVerificationError::MissingMap("trusted map name is invalid".to_string()));
+        return Err(ReplayVerificationError::MissingMap(
+            "trusted map name is invalid".to_string(),
+        ));
     }
     let map_dir = maps_root.join(map_key);
     let map_path = map_dir.join("map.bin");
     let compressed_path = map_dir.join("map.bin.br");
-    let map_path = if map_path.is_file() { map_path } else { compressed_path };
+    let map_path = if map_path.is_file() {
+        map_path
+    } else {
+        compressed_path
+    };
     let map_len = std::fs::metadata(&map_path)
         .map_err(|error| ReplayVerificationError::MissingMap(format!("map read failed: {error}")))?
         .len();
     if map_len > 32 * 1024 * 1024 {
-        return Err(ReplayVerificationError::MissingMap("map file exceeds size limit".to_string()));
+        return Err(ReplayVerificationError::MissingMap(
+            "map file exceeds size limit".to_string(),
+        ));
     }
-    let map_bytes = std::fs::read(&map_path)
-        .map_err(|error| ReplayVerificationError::MissingMap(format!("map read failed: {error}")))?;
-    let map_file = sow_core::maps::load_map_from_payload(&map_bytes)
-        .map_err(|error| ReplayVerificationError::MissingMap(format!("map parse failed: {error}")))?;
+    let map_bytes = std::fs::read(&map_path).map_err(|error| {
+        ReplayVerificationError::MissingMap(format!("map read failed: {error}"))
+    })?;
+    let map_file = sow_core::maps::load_map_from_payload(&map_bytes).map_err(|error| {
+        ReplayVerificationError::MissingMap(format!("map parse failed: {error}"))
+    })?;
     if map_file.width != config.map_width || map_file.height != config.map_height {
-        return Err(ReplayVerificationError::MissingMap("map dimensions do not match match config".to_string()));
+        return Err(ReplayVerificationError::MissingMap(
+            "map dimensions do not match match config".to_string(),
+        ));
     }
     let mut engine = sow_core::engine::initialize_match_engine(
         config.clone(),
@@ -1846,18 +1890,26 @@ fn verify_replay(
     let mut total_intents = 0usize;
     for (index, turn) in turns.iter().enumerate() {
         if turn.turn_number != index as u64 {
-            return Err(ReplayVerificationError::Invalid("replay turn sequence is broken".to_string()));
+            return Err(ReplayVerificationError::Invalid(
+                "replay turn sequence is broken".to_string(),
+            ));
         }
         if turn.intents.len() > MAX_REPLAY_INTENTS_PER_TURN {
-            return Err(ReplayVerificationError::Invalid("too many intents in one turn".to_string()));
+            return Err(ReplayVerificationError::Invalid(
+                "too many intents in one turn".to_string(),
+            ));
         }
         total_intents = total_intents.saturating_add(turn.intents.len());
         if total_intents > MAX_REPLAY_INTENTS {
-            return Err(ReplayVerificationError::Invalid("replay has too many intents".to_string()));
+            return Err(ReplayVerificationError::Invalid(
+                "replay has too many intents".to_string(),
+            ));
         }
         if engine.state.phase == sow_core::game::GamePhase::GameOver {
             if !turn.intents.is_empty() {
-                return Err(ReplayVerificationError::Invalid("gameplay continued after game over".to_string()));
+                return Err(ReplayVerificationError::Invalid(
+                    "gameplay continued after game over".to_string(),
+                ));
             }
             continue;
         }
@@ -1866,7 +1918,9 @@ fn verify_replay(
             .iter()
             .any(|intent| !external_player_ids.contains(&intent.player_id))
         {
-            return Err(ReplayVerificationError::Invalid("replay contains an unregistered sender".to_string()));
+            return Err(ReplayVerificationError::Invalid(
+                "replay contains an unregistered sender".to_string(),
+            ));
         }
         engine.apply_intents(&turn.intents);
         engine.tick();
@@ -1882,7 +1936,12 @@ fn verify_replay(
             if !external_player_ids.contains(conqueror_id) {
                 continue;
             }
-            if let Some(victim) = engine.state.players.iter().find(|player| player.id == *player_id) {
+            if let Some(victim) = engine
+                .state
+                .players
+                .iter()
+                .find(|player| player.id == *player_id)
+            {
                 let counts = defeats.entry(*conqueror_id).or_default();
                 match victim.player_type {
                     sow_core::player::PlayerType::Human => counts[0] = counts[0].saturating_add(1),
@@ -1905,10 +1964,19 @@ fn verify_replay(
             .players
             .iter()
             .find(|player| player.id == relay_player.player_id)
-            .ok_or_else(|| ReplayVerificationError::Unavailable("verified player missing from engine".to_string()))?;
-        let counts = defeats.get(&relay_player.player_id).copied().unwrap_or_default();
+            .ok_or_else(|| {
+                ReplayVerificationError::Unavailable(
+                    "verified player missing from engine".to_string(),
+                )
+            })?;
+        let counts = defeats
+            .get(&relay_player.player_id)
+            .copied()
+            .unwrap_or_default();
         let won = match winning_team.as_deref() {
-            Some(team) => relay_player.team.is_some_and(|value| format!("{value:?}") == team),
+            Some(team) => relay_player
+                .team
+                .is_some_and(|value| format!("{value:?}") == team),
             None => winner_player_id == Some(relay_player.player_id),
         };
         participants.push(sow_data::profile::VerifiedMatchParticipant {
@@ -2071,7 +2139,9 @@ async fn admin_analytics_page() -> axum::response::Response {
         .status(axum::http::StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
         .header(axum::http::header::CACHE_CONTROL, "no-store")
-        .body(axum::body::Body::from(include_str!("../assets/admin_analytics.html")))
+        .body(axum::body::Body::from(include_str!(
+            "../assets/admin_analytics.html"
+        )))
         .expect("valid analytics dashboard response")
 }
 
@@ -2104,7 +2174,10 @@ async fn admin_analytics(
     {
         Ok(response) if response.status().is_success() => response,
         Ok(response) => {
-            log::warn!("[ADMIN] analytics source returned HTTP {}", response.status());
+            log::warn!(
+                "[ADMIN] analytics source returned HTTP {}",
+                response.status()
+            );
             return axum::response::IntoResponse::into_response((
                 axum::http::StatusCode::SERVICE_UNAVAILABLE,
                 axum::Json(serde_json::json!({ "error": "Analytics unavailable" })),

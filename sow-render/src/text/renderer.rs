@@ -27,6 +27,8 @@ pub fn building_sprite_uv(kind: sow_core::game::BuildingKind, level: u8) -> Opti
 pub const MAX_TEXT_GLYPHS: usize = 32_768;
 const RING_AA_MARGIN: f32 = 1.5;
 const CROSS_AA_MARGIN: f32 = 1.0;
+const ARABIC_FONT_BYTES: &[u8] =
+    include_bytes!("../../../sow-web/site/fonts/noto-sans-arabic-regular.ttf");
 
 #[inline]
 fn clamp_arc_progress(progress: f32) -> f32 {
@@ -189,7 +191,6 @@ fn emoji_instance(
     outline: OutlineStyle,
     underlay_softness: f32,
 ) -> TextInstanceGpu {
-    let outline = outline.scaled_for_emoji(half_size.max(0.0) * 2.0);
     let (screen_pos, size, content_rect) = emoji_geometry(screen_pos, half_size, outline);
     TextInstanceGpu {
         screen_pos,
@@ -198,7 +199,7 @@ fn emoji_instance(
         content_rect,
         color: tint,
         outline_color: outline.color,
-        face_dilate: 0.0,
+        face_dilate: outline.reference_diameter,
         outline_thickness: outline.thickness,
         underlay_offset_y: outline.shadow_y,
         underlay_softness,
@@ -213,6 +214,20 @@ fn shape_text(
     emoji_scale: f32,
     mut emit: impl FnMut(PreparedTextItem),
 ) -> (f32, bool, usize) {
+    shape_text_inner(atlas, text, char_spacing, emoji_scale, &mut emit)
+}
+
+fn shape_text_inner(
+    atlas: &FontAtlas,
+    text: &str,
+    char_spacing: f32,
+    emoji_scale: f32,
+    emit: &mut dyn FnMut(PreparedTextItem),
+) -> (f32, bool, usize) {
+    if text.chars().any(is_arabic_character) {
+        return shape_bidi_text(atlas, text, char_spacing, emoji_scale, emit);
+    }
+
     let atlas_width = atlas.atlas.common.scale_w.max(1) as f32;
     let atlas_height = atlas.atlas.common.scale_h.max(1) as f32;
     let base = atlas.atlas.common.base as f32;
@@ -281,6 +296,134 @@ fn shape_text(
         }
     }
     (advance, has_emoji, item_count)
+}
+
+fn is_arabic_character(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF
+    )
+}
+
+fn shape_bidi_text(
+    atlas: &FontAtlas,
+    text: &str,
+    char_spacing: f32,
+    emoji_scale: f32,
+    emit: &mut dyn FnMut(PreparedTextItem),
+) -> (f32, bool, usize) {
+    let bidi = unicode_bidi::BidiInfo::new(text, None);
+    let Some(paragraph) = bidi.paragraphs.first() else {
+        return (0.0, false, 0);
+    };
+    let (levels, runs) = bidi.visual_runs(paragraph, 0..text.len());
+    let mut advance = 0.0;
+    let mut has_emoji = false;
+    let mut item_count = 0usize;
+
+    for run in runs {
+        let run_text = &text[run.clone()];
+        if run_text.chars().any(is_arabic_character) {
+            let (run_advance, count) = shape_arabic_run(
+                atlas,
+                run_text,
+                levels[run.start].is_rtl(),
+                char_spacing,
+                emit,
+                advance,
+            );
+            advance += run_advance;
+            item_count = item_count.saturating_add(count);
+        } else {
+            let run_start = advance;
+            let (run_advance, run_has_emoji, count) = shape_text_inner(
+                atlas,
+                run_text,
+                char_spacing,
+                emoji_scale,
+                &mut |mut item| {
+                    item.offset[0] += run_start;
+                    emit(item);
+                },
+            );
+            advance += run_advance;
+            has_emoji |= run_has_emoji;
+            item_count = item_count.saturating_add(count);
+        }
+    }
+    (advance, has_emoji, item_count)
+}
+
+fn shape_arabic_run(
+    atlas: &FontAtlas,
+    text: &str,
+    right_to_left: bool,
+    char_spacing: f32,
+    emit: &mut dyn FnMut(PreparedTextItem),
+    initial_advance: f32,
+) -> (f32, usize) {
+    static FACE: std::sync::OnceLock<rustybuzz::Face<'static>> = std::sync::OnceLock::new();
+    let face = FACE.get_or_init(|| {
+        rustybuzz::Face::from_slice(ARABIC_FONT_BYTES, 0)
+            .expect("Failed to parse embedded Noto Sans Arabic font")
+    });
+    let mut buffer = rustybuzz::UnicodeBuffer::new();
+    buffer.push_str(text);
+    buffer.set_direction(if right_to_left {
+        rustybuzz::Direction::RightToLeft
+    } else {
+        rustybuzz::Direction::LeftToRight
+    });
+    buffer.guess_segment_properties();
+    let shaped = rustybuzz::shape(face, &[], buffer);
+    let infos = shaped.glyph_infos();
+    let positions = shaped.glyph_positions();
+    let font_scale = atlas.atlas.info.size.max(1) as f32 / face.units_per_em().max(1) as f32;
+    let advances: Vec<f32> = positions
+        .iter()
+        .map(|position| {
+            let advance = position.x_advance as f32 * font_scale * char_spacing;
+            if right_to_left {
+                advance.abs()
+            } else {
+                advance
+            }
+        })
+        .collect();
+    let run_advance: f32 = advances.iter().sum();
+    let mut pen_x = if right_to_left {
+        initial_advance + run_advance
+    } else {
+        initial_advance
+    };
+    let atlas_width = atlas.atlas.common.scale_w.max(1) as f32;
+    let atlas_height = atlas.atlas.common.scale_h.max(1) as f32;
+    let base = atlas.atlas.common.base as f32;
+    let mut item_count = 0usize;
+
+    for ((info, position), advance) in infos.iter().zip(positions).zip(advances) {
+        let glyph = atlas.arabic_glyph_map.get(&info.glyph_id);
+        if let Some(glyph) = glyph {
+            emit(PreparedTextItem {
+                kind: PreparedTextKind::Glyph,
+                offset: [
+                    pen_x + glyph.xoffset as f32 + position.x_offset as f32 * font_scale,
+                    -base + glyph.yoffset as f32 - position.y_offset as f32 * font_scale,
+                ],
+                size: [glyph.width as f32, glyph.height as f32],
+                uv_rect: [
+                    glyph.x as f32 / atlas_width,
+                    glyph.y as f32 / atlas_height,
+                    (glyph.x + glyph.width) as f32 / atlas_width,
+                    (glyph.y + glyph.height) as f32 / atlas_height,
+                ],
+            });
+            item_count = item_count.saturating_add(1);
+        }
+        pen_x += if right_to_left { -advance } else { advance };
+    }
+
+    (run_advance, item_count)
 }
 
 fn emit_prepared_text(
@@ -439,9 +582,12 @@ impl TextRenderer {
             "nameplate_status_atlas",
             gpu::TextureFormat::Rgba8UnormSrgb,
         );
-        let shader_source = include_str!("../shaders/text_glow.wgsl");
+        let shader_source = crate::shader_params::prepare_shader(
+            "TEXT_",
+            include_str!("../shaders/text_glow.wgsl"),
+        );
         let shader = context.create_shader(gpu::ShaderDesc {
-            source: shader_source,
+            source: &shader_source,
             naga_module: None,
         });
         assert_eq!(
@@ -1057,6 +1203,7 @@ impl TextRenderer {
         encoder: &mut gpu::CommandEncoder,
         target_view: gpu::TextureView,
         screen_size: [f32; 2],
+        shader_params: &[[f32; 4]; crate::shader_params::PARAM_CAPACITY],
         context: &gpu::Context,
     ) {
         let glyph_count = self.upload_instances.len() as u32;
@@ -1094,6 +1241,7 @@ impl TextRenderer {
         let globals = TextGlobals {
             screen_size,
             _pad: [0.0; 2],
+            shader_params: *shader_params,
         };
 
         let shader_data = TextShaderData {
@@ -1201,6 +1349,90 @@ mod tests {
             line_height: text_measure_height(font_size, 1.4, has_emoji),
             complete: item_count <= MAX_TEXT_GLYPHS,
         }
+    }
+
+    fn unicode_glyph_probe(section: &str, count: usize) -> String {
+        let mut active = false;
+        for line in include_str!("unicode_name_glyphs.txt").lines() {
+            if let Some(name) = line.strip_prefix("# ") {
+                active = name == section;
+            } else if active && !line.is_empty() {
+                return line.chars().take(count).collect();
+            }
+        }
+        panic!("missing Unicode glyph section {section}");
+    }
+
+    #[test]
+    fn gameplay_atlas_covers_unicode_name_glyph_corpus() {
+        let atlas = FontAtlas::load_static();
+        let face = rustybuzz::Face::from_slice(ARABIC_FONT_BYTES, 0).unwrap();
+        let mut section = "";
+
+        for glyphs in include_str!("unicode_name_glyphs.txt").lines() {
+            if let Some(next_section) = glyphs.strip_prefix("# ") {
+                section = next_section;
+                continue;
+            }
+            if glyphs.is_empty() {
+                continue;
+            }
+            if section == "arabic" {
+                let mut buffer = rustybuzz::UnicodeBuffer::new();
+                buffer.push_str(glyphs);
+                buffer.set_direction(rustybuzz::Direction::RightToLeft);
+                buffer.guess_segment_properties();
+                for glyph in rustybuzz::shape(&face, &[], buffer).glyph_infos() {
+                    assert!(
+                        atlas.arabic_glyph_map.contains_key(&glyph.glyph_id),
+                        "Arabic glyph {} missing from Unicode corpus",
+                        glyph.glyph_id
+                    );
+                }
+            } else {
+                for character in glyphs.chars().filter(|character| !character.is_ascii()) {
+                    assert!(
+                        atlas.char_map.contains_key(&character),
+                        "glyph {character:?} missing from Unicode corpus"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gameplay_nameplates_shape_japanese_korean_chinese_and_arabic() {
+        let atlas = FontAtlas::load_static();
+        for section in [
+            "japanese_katakana",
+            "korean_hangul",
+            "chinese_simplified",
+            "arabic",
+        ] {
+            let probe = unicode_glyph_probe(section, 8);
+            let prepared = prepared_test_text(&atlas, &probe, 0.95);
+            assert!(prepared.complete, "incomplete {section} glyph probe");
+            assert!(prepared.instance_count() > 0, "no {section} glyphs");
+            assert!(prepared.advance_width > 0.0, "no {section} text width");
+        }
+
+        let arabic_probe = unicode_glyph_probe("arabic", 8);
+        let arabic = prepared_test_text(&atlas, &arabic_probe, 0.95);
+        assert!(
+            arabic.items.first().unwrap().offset[0] > arabic.items.last().unwrap().offset[0],
+            "Arabic glyphs must be laid out right to left"
+        );
+
+        let arabic_name = prepared_test_text(&atlas, "نار حمراء", 0.95);
+        assert!(arabic_name.complete, "incomplete Arabic nameplate");
+        assert!(
+            arabic_name.instance_count() > 0,
+            "no glyphs for Arabic nameplate"
+        );
+        assert!(
+            arabic_name.advance_width > 0.0,
+            "no Arabic nameplate text width"
+        );
     }
 
     fn paint_test_text(
@@ -1317,7 +1549,7 @@ mod tests {
     }
 
     #[test]
-    fn inline_emoji_uses_the_size_adjusted_outline() {
+    fn inline_emoji_preserves_outline_settings_for_shader_scaling() {
         let outline = OutlineStyle {
             color: [0.0, 0.0, 0.0, 0.8],
             thickness: 2.25,
@@ -1334,29 +1566,9 @@ mod tests {
         );
 
         assert_eq!(instance.outline_color, outline.color);
-        assert!((instance.outline_thickness - 0.9).abs() < 1e-5);
-        assert!((instance.underlay_offset_y - 1.4).abs() < 1e-5);
+        assert_eq!(instance.outline_thickness, outline.thickness);
+        assert_eq!(instance.underlay_offset_y, outline.shadow_y);
         assert_eq!(instance.underlay_softness, 0.25);
-    }
-
-    #[test]
-    fn emoji_outline_scales_down_only_for_small_content() {
-        let outline = OutlineStyle {
-            color: [0.0, 0.0, 0.0, 1.0],
-            thickness: 1.4,
-            shadow_y: 2.0,
-            reference_diameter: OutlineStyle::EMOJI_REFERENCE_DIAMETER,
-        };
-        let close = outline.scaled_for_emoji(32.0);
-        let far = outline.scaled_for_emoji(16.0);
-        let tiny = outline.scaled_for_emoji(12.0);
-
-        assert_eq!(close.thickness, 1.4);
-        assert_eq!(close.shadow_y, 2.0);
-        assert!((far.thickness - 0.7).abs() < 1e-5);
-        assert!((far.shadow_y - 1.0).abs() < 1e-5);
-        assert!((tiny.thickness - 0.56).abs() < 1e-5);
-        assert!((tiny.shadow_y - 0.8).abs() < 1e-5);
     }
 
     #[test]

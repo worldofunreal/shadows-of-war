@@ -47,10 +47,11 @@ impl SowEngine {
                     ];
                     let port_target_count =
                         bot_structure_target_count(BuildingKind::Port, city_equivalent, bot_iq);
-                    let prioritize_ports = city_equivalent >= 3
-                        && agg.count_port < port_target_count;
+                    let prioritize_ports =
+                        city_equivalent >= 3 && agg.count_port < port_target_count;
                     build_order.sort_by(|&a, &b| {
-                        if prioritize_ports && (a == BuildingKind::Port) != (b == BuildingKind::Port)
+                        if prioritize_ports
+                            && (a == BuildingKind::Port) != (b == BuildingKind::Port)
                         {
                             return if a == BuildingKind::Port {
                                 std::cmp::Ordering::Less
@@ -83,12 +84,11 @@ impl SowEngine {
                                 target_count += 3;
                             }
                         }
-                        let total_owned =
-                            agg.count_city
-                                + agg.count_bunker
-                                + agg.count_factory
-                                + agg.count_port
-                                + agg.count_farm;
+                        let total_owned = agg.count_city
+                            + agg.count_bunker
+                            + agg.count_factory
+                            + agg.count_port
+                            + agg.count_farm;
                         let density = total_owned as f32 / player_tile_count.max(1) as f32;
                         let is_density_high = bot_iq >= 110 && density > 1.0 / 600.0;
                         let structure_floor = player_tile_count / 800;
@@ -105,7 +105,9 @@ impl SowEngine {
                                 &self.state.config,
                                 self.campaign_unlocks
                                     .as_ref()
-                                    .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
+                                    .map_or(kind.max_level(), |unlocks| {
+                                        unlocks.building_level(kind)
+                                    }),
                             ) {
                                 if let Some(p_me) = self.state.player_mut(bot_id) {
                                     p_me.iq_points -= build_cost;
@@ -207,18 +209,16 @@ impl SowEngine {
                         }
 
                         // Boxed in: stack on existing (player rules via apply_build_structure_intent)
-                        if let Some(d) =
-                            stack_build_decision(
-                                &self.buildings,
-                                bot_id,
-                                kind,
-                                player_gold,
-                                &self.state.config,
-                                self.campaign_unlocks
-                                    .as_ref()
-                                    .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
-                            )
-                        {
+                        if let Some(d) = stack_build_decision(
+                            &self.buildings,
+                            bot_id,
+                            kind,
+                            player_gold,
+                            &self.state.config,
+                            self.campaign_unlocks
+                                .as_ref()
+                                .map_or(kind.max_level(), |unlocks| unlocks.building_level(kind)),
+                        ) {
                             if let Some(p_me) = self.state.player_mut(bot_id) {
                                 p_me.iq_points -= build_cost;
                             }

@@ -52,15 +52,17 @@ pub fn structure_build_duration_ticks(kind: BuildingKind) -> u32 {
 }
 
 #[inline]
-pub fn structure_upgrade_duration_ticks(
-    kind: BuildingKind,
-    target_level: u8,
-) -> u32 {
+pub fn structure_upgrade_duration_ticks(kind: BuildingKind, target_level: u8) -> u32 {
     crate::building::core::upgrade_duration_ticks(kind, target_level)
 }
 
 pub fn player_fleet_capacity(buildings: &[Building], player_id: u16) -> u32 {
-    1 + player_port_levels(buildings, player_id)
+    player_fleet_capacity_from_port_levels(player_port_levels(buildings, player_id))
+}
+
+#[inline]
+pub fn player_fleet_capacity_from_port_levels(port_levels: u32) -> u32 {
+    3 + port_levels
 }
 
 #[inline]
@@ -86,14 +88,6 @@ pub fn boat_speed_bonus_from_port_levels(port_levels: u32) -> f64 {
     (port_levels as f64 * 0.01).min(0.30)
 }
 
-/// Whether `player_id` owns a finished Port; the AI uses this for naval strategy.
-#[inline]
-pub fn player_has_completed_port(buildings: &[Building], player_id: u16) -> bool {
-    buildings
-        .iter()
-        .any(|b| b.owner_id == player_id && (b.kind == BuildingKind::Port && !b.under_construction))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,22 +105,39 @@ mod tests {
     }
 
     #[test]
-    fn boat_capacity_starts_at_one_and_adds_one_per_finished_port_level() {
-        assert_eq!(player_fleet_capacity(&[], 7), 1);
+    fn boat_capacity_starts_at_three_and_adds_one_per_active_port_level() {
+        assert_eq!(player_fleet_capacity(&[], 7), 3);
         assert_eq!(player_trade_ship_capacity(&[], 7), 0);
 
         let ports: Vec<_> = (0..400).map(|id| port(id, 1, false)).collect();
-        assert_eq!(player_fleet_capacity(&ports, 7), 401);
+        assert_eq!(player_fleet_capacity(&ports, 7), 403);
         assert_eq!(player_trade_ship_capacity(&ports, 7), 400);
         assert_eq!(player_boat_speed_bonus(&ports, 7), 0.30);
 
         let unfinished = [port(1, 1, true)];
-        assert_eq!(player_fleet_capacity(&unfinished, 7), 1);
+        assert_eq!(player_fleet_capacity(&unfinished, 7), 3);
         assert_eq!(player_boat_speed_bonus(&unfinished, 7), 0.0);
 
         let upgrading = [port(2, 4, true)];
-        assert_eq!(player_fleet_capacity(&upgrading, 7), 4);
+        assert_eq!(player_fleet_capacity(&upgrading, 7), 6);
         assert_eq!(player_boat_speed_bonus(&upgrading, 7), 0.03);
+    }
+
+    #[test]
+    fn boat_capacity_tracks_port_completion_upgrade_and_removal() {
+        let mut ports = [port(1, 1, true)];
+        assert_eq!(player_fleet_capacity(&ports, 7), 3);
+
+        ports[0].under_construction = false;
+        assert_eq!(player_fleet_capacity(&ports, 7), 4);
+
+        ports[0].level = 2;
+        ports[0].under_construction = true;
+        assert_eq!(player_fleet_capacity(&ports, 7), 4);
+        ports[0].under_construction = false;
+        assert_eq!(player_fleet_capacity(&ports, 7), 5);
+
+        assert_eq!(player_fleet_capacity(&[], 7), 3);
     }
 
     #[test]
@@ -140,7 +151,11 @@ mod tests {
 
     #[test]
     fn every_building_has_three_upgrades_after_its_foundation() {
-        assert!(BuildingKind::ALL.into_iter().all(|kind| kind.max_level() == 4));
+        assert!(
+            BuildingKind::ALL
+                .into_iter()
+                .all(|kind| kind.max_level() == 4)
+        );
     }
 
     #[test]
@@ -165,13 +180,11 @@ mod tests {
             for target_level in 2..=kind.max_level() {
                 let previous_owned_levels = u32::from(target_level - 1);
                 let placement = structure_build_cost_gold(kind, previous_owned_levels, &cfg);
-                let upgrade = structure_upgrade_cost_gold(
-                    kind,
-                    target_level,
-                    previous_owned_levels,
-                    &cfg,
+                let upgrade =
+                    structure_upgrade_cost_gold(kind, target_level, previous_owned_levels, &cfg);
+                assert!(
+                    (placement / base - 1.1_f64.powi(previous_owned_levels as i32)).abs() < 1e-12
                 );
-                assert!((placement / base - 1.1_f64.powi(previous_owned_levels as i32)).abs() < 1e-12);
                 assert_eq!(upgrade, placement * 0.75);
             }
         }

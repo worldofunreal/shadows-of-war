@@ -13,9 +13,9 @@ pub struct MapGlobals {
     pub shore_thickness: f32,
     pub shore_darkness: f32,
     /// Up to 8 attack threat slots: [front_x, front_y, radius, packed_ids].
-    pub threat_slots: [[f32; 4]; 8],
+    pub threat_slots: [[f32; 4]; 9],
     /// Up to 8 alliance celebrations, two slots per pair: [player_id, center_x, center_y, age].
-    pub alliance_celebration_slots: [[f32; 4]; 16],
+    pub alliance_celebration_slots: [[f32; 4]; 18],
     pub effect_shockwave: f32,
     pub effect_breathe: f32,
     pub effect_energy_flow: f32,
@@ -24,7 +24,7 @@ pub struct MapGlobals {
     pub hover_building_kind: f32,
     pub territory_opacity: f32,
     /// Up to 8 fallout zones: [center_col, center_row, radius, alpha_progress].
-    pub fallout_slots: [[f32; 4]; 8],
+    pub fallout_slots: [[f32; 4]; 9],
     /// Up to 32 nobuild exclusion zones: [center_col, center_row, radius, active].
     pub nobuild_slots: [[f32; 4]; 32],
     pub blend_mode: f32,
@@ -47,6 +47,11 @@ pub struct MapGlobals {
     pub alert_color: [f32; 4],
     /// Entity requesting terms in the open tutorial dialog: [player_id, age_secs, 0, 0].
     pub dialog_border: [f32; 4],
+    pub effect_vignette: f32,
+    pub preview_effect: f32,
+    pub preview_phase: f32,
+    pub preview_time: f32,
+    pub shader_params: [[f32; 4]; crate::shader_params::PARAM_CAPACITY],
 }
 
 #[repr(C)]
@@ -149,24 +154,8 @@ pub(crate) fn fill_terrain_buffer(
 
             let terrain_byte = terrain[src];
             if terrain_byte & 0xa0 == 0x20 {
-                // Ocean RGB occupies the unused normal/noise channels. Build a
-                // visible shore-to-abyss ramp once at upload, without per-fragment math.
-                let depth = (terrain_byte & 0x1f).min(8);
-                let color = if terrain_byte & 0x40 != 0 {
-                    [100, 143, 255] // water side of a shore
-                } else if depth <= 2 {
-                    [78, 151, 208] // shallow
-                } else if depth <= 6 {
-                    [63, 132, 188] // coastal shelf
-                } else if depth <= 12 {
-                    [52, 115, 170] // mid water
-                } else if depth <= 20 {
-                    [43, 97, 151] // deep water
-                } else {
-                    [34, 80, 132] // deep ocean
-                };
                 terrain_slice[dst] = terrain_byte;
-                terrain_slice[dst + 1..dst + 4].copy_from_slice(&color);
+                terrain_slice[dst + 1..dst + 4].fill(128);
                 continue;
             }
             let (dx, dy) = compute_terrain_gradient(x, y, width, height, terrain);
@@ -198,9 +187,9 @@ mod tests {
     use super::fill_terrain_buffer;
 
     #[test]
-    fn water_shore_keeps_water_palette() {
+    fn water_stores_only_depth_and_shore_metadata_for_live_shading() {
         let mut buffer = [0u8; 4];
         fill_terrain_buffer(&[0x60], 1, 1, 4, &mut buffer);
-        assert_eq!(buffer, [0x60, 100, 143, 255]);
+        assert_eq!(buffer, [0x60, 128, 128, 128]);
     }
 }

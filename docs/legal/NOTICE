@@ -28,3 +28,10 @@ The curated glyph atlas is packed by Shadows of War from Twemoji 14.0.2.
 Other assets
 ------------
 Other shipped art uses the terms in LICENSE-ASSETS.
+Wikimedia identity research
+---------------------------
+Candidate flags, coats of arms, portraits, coins, and other identity-linked images
+are cataloged per file in docs/legal/WIKIMEDIA-EMBLEMS.md. They are research assets,
+not game assets. Each file has its own source page, license record, available creator
+credit, and reported restrictions. Title matches and Wikidata file links remain
+identity candidates until checked against the game entity and period.

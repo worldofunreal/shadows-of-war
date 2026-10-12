@@ -9,8 +9,8 @@
 //!   1. Every bot aspires to WIN — expansion/growth never stalls while the
 //!      match is live and legal actions exist (anti-"cómodo").
 //!   2. Tier roles: Ghost = top aggressor/teammate; Nation = mid challenger
-//!      that defends; Tribe on Vanilla = passive food that never initiates
-//!      vs players but still expands into free land.
+//!      that defends; Tribe on Vanilla expands into free land, defends when
+//!      struck, and never initiates against players.
 //!   3. Enclosed ghosts (allies everywhere) break out by sea when a coast
 //!      exists. KNOWN-LIMIT (needs design GO): fully inland enclosed ghosts
 //!      have no legal action and stay idle.
@@ -819,6 +819,8 @@ impl serde::Serialize for S16TracePlayer<'_> {
         use serde::ser::SerializeStruct;
 
         let p = self.0;
+        let mut alliances = p.alliances.iter().copied().collect::<Vec<_>>();
+        alliances.sort_unstable();
         let mut state = serializer.serialize_struct("Player", 34)?;
         macro_rules! field {
             ($name:ident) => {
@@ -844,7 +846,7 @@ impl serde::Serialize for S16TracePlayer<'_> {
         field!(team);
         field!(iq);
         field!(iq_points);
-        field!(alliances);
+        state.serialize_field("alliances", &alliances)?;
         field!(alliance_timers);
         field!(disconnected);
         field!(is_ai_controlled);
@@ -1128,21 +1130,23 @@ fn s16_engine_state_bytes(engine: &SowEngine) -> Vec<u8> {
     let trace_buildings: Vec<_> = engine
         .buildings
         .iter()
-        .map(|building| (
-            building.id,
-            building.owner_id,
-            building.tile_idx,
-            building.kind,
-            building.level,
-            building.under_construction,
-            building.ticks_until_complete,
-            0u8,
-            0u8,
-            0u8,
-            0u8,
-            0u8,
-            0u8,
-        ))
+        .map(|building| {
+            (
+                building.id,
+                building.owner_id,
+                building.tile_idx,
+                building.kind,
+                building.level,
+                building.under_construction,
+                building.ticks_until_complete,
+                0u8,
+                0u8,
+                0u8,
+                0u8,
+                0u8,
+                0u8,
+            )
+        })
         .collect();
 
     bincode::serialize(&(
@@ -1475,11 +1479,9 @@ fn s4_nation_defends_when_struck() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// S5 — Team-enclosed coastal ghost breaks out by SEA (portless fleet gate),
-// instead of sitting comfortable behind allied walls.
+// S5 — Team-enclosed coastal ghost sails to an enemy and captures territory.
 // ──────────────────────────────────────────────────────────────────────────
 #[test]
-#[ignore = "water harness incomplete: LaunchFleet is rejected before add_fleet (route/component introspection pending); scenario kept for follow-up"]
 fn s5_enclosed_coastal_ghost_breaks_out_by_sea() {
     const W: u32 = 12;
     let mut game = GameState::new(11, W, W, crate::game_config::GameConfig::default());
@@ -1525,6 +1527,7 @@ fn s5_enclosed_coastal_ghost_breaks_out_by_sea() {
         .push(mk(3, PlayerType::Human, true, 165, 0, 1, blue_team)); // ally wall to ghost's south
     game.players
         .push(mk(2, PlayerType::Nation, false, 150, W - 1, W - 1, None));
+    game.players.last_mut().unwrap().troops = 200.0;
     game.player_lookup = vec![None, Some(0), Some(1), Some(2)];
 
     for idx in 0..(W * W) as usize {
@@ -1541,19 +1544,16 @@ fn s5_enclosed_coastal_ghost_breaks_out_by_sea() {
     game.map.terrain[enemy_home as usize] = crate::map::MapTile::from_byte(0b1000_0000);
     game.map.set_owner_id(W - 1, W - 1, 2);
 
+    game.map.compute_shorelines();
     let water = WaterComponents::compute(&game.map, |_| {});
     let mut engine = SowEngine::new(game, water);
 
     let ghost_start = tiles(&engine, 1);
-    let enemy_start = tiles(&engine, 2);
-    let fleets_before = engine.state.next_fleet_id;
     run_window(&mut engine, WINDOW_TICKS * 3);
 
-    let launched = engine.state.next_fleet_id > fleets_before;
-    let naval_action = launched || !engine.fleets.is_empty() || tiles(&engine, 2) < enemy_start;
     assert!(
-        naval_action || tiles(&engine, 1) > ghost_start,
-        "S5 FAIL: enclosed coastal ghost neither broke out by sea nor advanced"
+        tiles(&engine, 1) > ghost_start,
+        "S5 FAIL: enclosed coastal ghost did not capture territory by sea"
     );
 }
 
@@ -2020,165 +2020,286 @@ fn s10_real_world_lobby_midgame() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// S12 — D1 PROOF: Vanilla tribe fully owning its island (zero neutral
-// adjacent) must cross water to keep eating free land — no port, no war,
-// no statue. OpenFront sendBoatAttackToNearbyTerraNullius parity.
+// S12 — every AI tier can cross water from a fully owned island and capture
+// neutral land without a port.
 // ──────────────────────────────────────────────────────────────────────────
-#[test]
-fn s12_island_tribe_crosses_water_for_neutral() {
-    use crate::water_components::WaterComponents;
-
-    const W: u32 = 20;
-    let mut game = GameState::new(13, W, W, crate::game_config::GameConfig::default());
+fn island_naval_growth_scenario(seed: u64, kind: PlayerType) -> (SowEngine, u32) {
+    const W: u32 = 64;
+    let config = crate::game_config::GameConfig::default();
+    let mut game = GameState::new(seed, W, W, config.clone());
     game.phase = GamePhase::Playing;
     game.config.map_control_win_percentage = 2.0;
-
-    // Ocean everywhere; two islands. Water byte: is_ocean=1 (bit 5) —
-    // compute_shorelines only marks shores against OCEAN, and fleet routes
-    // require shoreline flags on the home coast.
     for idx in 0..(W * W) as usize {
         game.map.terrain[idx] = crate::map::MapTile::from_byte(0b0010_0000); // ocean
     }
-    // Tribe island (0..=3, 0..=3): FULLY owned by the tribe → has_neutral=false.
-    // Free island (14..=19, 14..=19): 36 neutral tiles across the sea.
-    let mut tribe_tiles = 0u32;
-    for y in 0..4u32 {
-        for x in 0..4u32 {
+    for y in 0..2u32 {
+        for x in 0..2u32 {
             let idx = y * W + x;
             game.map.terrain[idx as usize] = crate::map::MapTile::from_byte(0b1000_0000);
             game.map.set_owner_id(x, y, 1);
-            tribe_tiles += 1;
         }
     }
-    for y in 14..20u32 {
-        for x in 14..20u32 {
+    for y in 60..62u32 {
+        for x in 60..62u32 {
             let idx = y * W + x;
             game.map.terrain[idx as usize] = crate::map::MapTile::from_byte(0b1000_0000);
         }
     }
 
-    let mut tribe = Player::new_bot(
-        1,
-        "IslandTribe".into(),
-        [0.1, 0.8, 0.3],
-        &crate::game_config::GameConfig::default(),
-    );
-    tribe.iq = 60;
-    tribe.iq_points = 200.0;
-    tribe.troops = 5_000.0;
-    tribe.max_troops = 10_000.0;
-    tribe.tile_count = tribe_tiles;
-    // Register every island tile as owned/border (scan needs the ring).
-    for y in 0..4u32 {
-        for x in 0..4u32 {
-            tribe.border_insert(y * W + x);
+    let mut actor = if kind == PlayerType::Human {
+        Player::new_human(1, "IslandGhost".into(), [0.1, 0.8, 0.3], &config)
+    } else {
+        Player::new_bot(1, "IslandAI".into(), [0.1, 0.8, 0.3], &config)
+    };
+    actor.player_type = kind;
+    actor.is_ai_controlled = kind == PlayerType::Human;
+    actor.iq = match kind {
+        PlayerType::Human => 170,
+        PlayerType::Nation => 150,
+        PlayerType::Bot => 60,
+    };
+    actor.iq_points = 200.0;
+    actor.troops = 5_000.0;
+    actor.max_troops = 10_000.0;
+    actor.tile_count = 4;
+    for y in 0..2u32 {
+        for x in 0..2u32 {
+            actor.border_insert(y * W + x);
         }
     }
-    game.players.push(tribe);
+    game.players.push(actor);
 
-    // Witness tribe on the free island: keeps the match alive (single-entity
-    // lobbies trigger instant victory) and is a LEGAL Vanilla target (Bot vs
-    // Bot) — exactly how OpenFront tribes interact.
-    let mut witness = Player::new_bot(
-        2,
-        "Witness".into(),
-        [0.9, 0.6, 0.1],
-        &crate::game_config::GameConfig::default(),
-    );
+    let mut witness = Player::new_bot(2, "Witness".into(), [0.9, 0.6, 0.1], &config);
     witness.iq = 50;
-    // Troopless on purpose: an expanding witness would claim every free tile
-    // of the target island and leave the tribe nothing neutral to sail to.
     witness.troops = 0.0;
     witness.max_troops = 0.0;
     witness.max_troops_cap = Some(0.0);
     witness.tile_count = 1;
-    witness.border_insert(14 * W + 14);
+    witness.border_insert(60 * W + 60);
     game.players.push(witness);
     game.player_lookup = vec![None, Some(0), Some(1)];
-    game.map.set_owner_id(14, 14, 2);
-
-    if std::env::var("SOW_LAB_VERBOSE").is_ok() {
-        for y in 0..W {
-            let mut row = String::new();
-            for x in 0..W {
-                let idx = (y * W + x) as usize;
-                let t = if game.map.terrain[idx].is_land() {
-                    "L"
-                } else {
-                    "~"
-                };
-                let o = game.map.owner_id(x, y);
-                row.push_str(&format!("{t}{o:<2}"));
-            }
-            eprintln!("GRID y={y}: {row}");
-        }
-    }
-
-    game.map.compute_shorelines(); // fixture maps lack the baked shoreline bit
-
+    game.map.set_owner_id(60, 60, 2);
+    game.map.compute_shorelines();
     let water = WaterComponents::compute(&game.map, |_| {});
+    (SowEngine::new(game, water), 4)
+}
 
-    if std::env::var("SOW_LAB_VERBOSE").is_ok() {
-        eprintln!("S12 GRID (t=0):");
-        for y in 0..W {
-            let mut row = String::new();
-            for x in 0..W {
-                let idx = (y * W + x) as usize;
-                let t = if game.map.terrain[idx].is_land() {
-                    "L"
-                } else {
-                    "~"
-                };
-                let o = game.map.owner_id(x, y);
-                row.push_str(&format!("{t}{o:<2}"));
+#[test]
+fn s12_tribes_nations_and_ghosts_cross_water_for_neutral_land() {
+    for (seed, kind) in [
+        (13, PlayerType::Bot),
+        (14, PlayerType::Nation),
+        (15, PlayerType::Human),
+    ] {
+        let (mut engine, starting_tiles) = island_naval_growth_scenario(seed, kind);
+        for _ in 0..2500 {
+            engine.tick();
+            if tiles(&engine, 1) > starting_tiles {
+                break;
             }
-            eprintln!("GRID y={y}: {row}");
         }
-    }
-    let mut engine = SowEngine::new(game, water);
-
-    // Shoreline probe: which border tiles would player_water_components accept?
-    for raw in engine.state.player(1).unwrap().border_tiles.ones() {
-        let idx = raw as usize;
-        let t = &engine.state.map.terrain[idx];
-        let owner = engine.state.map.owner_id(idx as u32 % W, idx as u32 / W);
-        eprintln!(
-            "SHORE idx={raw} owner={owner} land={} shoreline={}",
-            t.is_land(),
-            t.is_shoreline()
+        assert!(
+            tiles(&engine, 1) > starting_tiles,
+            "S12 FAIL: {kind:?} did not capture neutral land across water"
         );
     }
+}
+
+#[test]
+fn naval_island_capture_replays_identically_for_same_seed() {
+    fn play(seed: u64) -> (u64, u32, u32, u16, u32, f64, Vec<u32>) {
+        let (mut engine, starting_tiles) = island_naval_growth_scenario(seed, PlayerType::Human);
+        let mut launched = None;
+        for _ in 0..2500 {
+            engine.tick();
+            if launched.is_none() {
+                launched = engine
+                    .fleets
+                    .iter()
+                    .find(|fleet| fleet.owner_id == 1)
+                    .map(|fleet| {
+                        (
+                            fleet.target_owner,
+                            fleet.dst_tile,
+                            fleet.troops,
+                            fleet.path.as_ref().clone(),
+                        )
+                    });
+            }
+            let owned = tiles(&engine, 1);
+            if owned > starting_tiles {
+                let (target_owner, target_tile, troops, path) =
+                    launched.expect("capture must follow a naval launch");
+                return (
+                    engine.state.tick,
+                    owned,
+                    target_tile,
+                    target_owner,
+                    path.len() as u32,
+                    troops,
+                    path,
+                );
+            }
+        }
+        panic!("naval determinism scenario failed to capture its distant island");
+    }
+
+    assert_eq!(play(73), play(73));
+}
+
+#[test]
+fn naval_full_quota_skips_route_then_uses_released_slot() {
+    let (mut engine, _) = island_naval_growth_scenario(31, PlayerType::Human);
+    engine.state.players.pop();
+    engine.state.player_lookup.truncate(2);
+    engine.state.map.set_owner_id(60, 60, 0);
+    for id in 0..2 {
+        engine.fleets.push(crate::warp_fleet::WarpFleet::new(
+            100 + id,
+            1,
+            2,
+            crate::game::UnitType::TransportShip,
+            100.0,
+            (0, 0),
+            Vec::new(),
+        ));
+    }
+    let port_id = 900;
+    engine.buildings.push(crate::building::Building {
+        id: port_id,
+        owner_id: 1,
+        tile_idx: 0,
+        kind: crate::game::BuildingKind::Port,
+        level: 1,
+        under_construction: true,
+        ticks_until_complete: 10,
+    });
+    engine.port_queues.insert(
+        port_id,
+        std::collections::VecDeque::from([
+            crate::game::ShipProduction {
+                kind: crate::game::UnitType::Warship,
+                ticks_until_complete: 10,
+            },
+            crate::game::ShipProduction {
+                kind: crate::game::UnitType::TradeShip,
+                ticks_until_complete: 10,
+            },
+        ]),
+    );
 
     let fleet_before = engine.state.next_fleet_id;
-    for t in 0..2500u64 {
-        engine.tick();
-        if t % 100 == 0 || t < 5 {
-            let alive: Vec<u16> = engine
-                .state
-                .players
-                .iter()
-                .filter(|p| p.alive && p.tile_count > 0)
-                .map(|p| p.id)
-                .collect();
-            eprintln!(
-                "S12TRACE t={t} phase={:?} winner={:?} alive={alive:?} t1={} t2={}",
-                engine.state.phase,
-                engine.state.winner,
-                tiles(&engine, 1),
-                tiles(&engine, 2)
-            );
+    let mut routes_at_capacity = 0;
+    for tick in 0..200 {
+        engine.state.tick = tick;
+        engine.execute_ai_think();
+        routes_at_capacity += engine.bot_work.naval_routes_calculated;
+        assert!(engine.bot_work.naval_routes_calculated <= 1);
+        assert!(engine.bot_work.naval_border_candidates_examined <= 256);
+        assert!(engine.bot_work.shoreline_candidates_examined <= 256);
+    }
+    assert_eq!(engine.state.next_fleet_id, fleet_before);
+    assert_eq!(routes_at_capacity, 0);
+
+    engine.port_queues.get_mut(&port_id).unwrap().pop_front();
+    let mut routes_after_release = 0;
+    for tick in 200..400 {
+        engine.state.tick = tick;
+        engine.execute_ai_think();
+        routes_after_release += engine.bot_work.naval_routes_calculated;
+        assert!(engine.bot_work.naval_routes_calculated <= 1);
+        assert!(engine.bot_work.naval_border_candidates_examined <= 256);
+        assert!(engine.bot_work.shoreline_candidates_examined <= 256);
+        if engine.state.next_fleet_id > fleet_before {
+            break;
+        }
+    }
+    assert!(engine.state.next_fleet_id > fleet_before);
+    assert!(routes_after_release > 0);
+}
+
+#[test]
+fn naval_search_skips_weaker_target_on_unreachable_water() {
+    const W: u32 = 32;
+    let config = crate::game_config::GameConfig::default();
+    let mut game = GameState::new(41, W, W, config.clone());
+    game.phase = GamePhase::Playing;
+    game.config.map_control_win_percentage = 2.0;
+    for tile in &mut game.map.terrain {
+        *tile = crate::map::MapTile::from_byte(0b0010_0000);
+    }
+
+    let mut ghost = Player::new_human(1, "Ghost".into(), [0.1, 0.8, 0.3], &config);
+    ghost.is_ai_controlled = true;
+    ghost.iq = 170;
+    ghost.troops = 5_000.0;
+    ghost.max_troops = 10_000.0;
+    ghost.tile_count = 16;
+    for y in 0..4u32 {
+        for x in 0..4u32 {
+            let tile = y * W + x;
+            game.map.terrain[tile as usize] = crate::map::MapTile::from_byte(0b1000_0000);
+            game.map.set_owner_id(x, y, 1);
+            ghost.border_insert(tile);
         }
     }
 
-    let crossed = tiles(&engine, 1) > tribe_tiles;
-    assert!(
-        engine.state.next_fleet_id > fleet_before || crossed,
-        "S12 FAIL: island tribe never launched an expansion boat"
-    );
-    assert!(
-        crossed,
-        "S12 FAIL: boat launched but tribe never claimed free land across water"
-    );
+    let mut weak = Player::new_bot(2, "Lake".into(), [0.9, 0.6, 0.1], &config);
+    weak.troops = 1.0;
+    weak.max_troops = 10.0;
+    weak.tile_count = 1;
+    let lake_tile = 15 * W + 15;
+    game.map.terrain[lake_tile as usize] = crate::map::MapTile::from_byte(0b1000_0000);
+    game.map.set_owner_id(15, 15, 2);
+    weak.border_insert(lake_tile);
+
+    let mut reachable = Player::new_bot(3, "Coastal".into(), [0.9, 0.6, 0.1], &config);
+    reachable.troops = 1_000.0;
+    reachable.max_troops = 2_000.0;
+    for x in 10..=22 {
+        for y in [10, 22] {
+            let tile = y * W + x;
+            game.map.terrain[tile as usize] = crate::map::MapTile::from_byte(0b1000_0000);
+            game.map.set_owner_id(x, y, 3);
+            reachable.border_insert(tile);
+        }
+    }
+    for y in 11..22 {
+        for x in [10, 22] {
+            let tile = y * W + x;
+            game.map.terrain[tile as usize] = crate::map::MapTile::from_byte(0b1000_0000);
+            game.map.set_owner_id(x, y, 3);
+            reachable.border_insert(tile);
+        }
+    }
+    reachable.tile_count = reachable.border_tiles.count_ones() as u32;
+    game.players.extend([ghost, weak, reachable]);
+    game.player_lookup = vec![None, Some(0), Some(1), Some(2)];
+    game.map.compute_shorelines();
+    let water = WaterComponents::compute(&game.map, |_| {});
+    let source_component = water.component_of(1);
+    let weak_component = water.component_of(lake_tile);
+    assert_ne!(source_component, weak_component);
+    let mut engine = SowEngine::new(game, water);
+
+    let fleet_before = engine.state.next_fleet_id;
+    for tick in 0..200 {
+        engine.state.tick = tick;
+        engine.execute_ai_think();
+        assert!(engine.bot_work.naval_routes_calculated <= 1);
+        assert!(engine.bot_work.naval_border_candidates_examined <= 256);
+        assert!(engine.bot_work.shoreline_candidates_examined <= 256);
+        if engine.state.next_fleet_id > fleet_before {
+            break;
+        }
+    }
+    let fleet = engine
+        .fleets
+        .iter()
+        .find(|fleet| fleet.owner_id == 1)
+        .expect("the ghost should sail to a reachable player");
+    assert_eq!(fleet.target_owner, 3);
+    assert_eq!(fleet.troops, 1_000.0);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -2495,16 +2616,19 @@ fn s16_checkpoint_decision_and_state_reference() {
         s16_trace_hash_bytes(&mut hash, &tick_trace);
         checkpoints.push((ticks, hash));
     }
+    // Vanilla tribes now answer incoming player attacks, changing the
+    // deterministic simulation trace while the early/long-horizon contracts
+    // continue to verify expansion and sustained wars independently.
     const REFERENCE: &[(u64, u64)] = &[
-        (250, 0x863d_9790_211e_8874),
-        (500, 0x5214_17f5_13e9_45e6),
-        (750, 0x3506_b59a_c8d3_e8e3),
-        (1000, 0x91f9_d659_dc11_f5d7),
-        (1250, 0x0db0_7bac_1fca_6ce7),
-        (1500, 0xc7b6_f7f2_3775_fbec),
-        (1750, 0xee92_613c_dfac_fe1d),
-        (2000, 0xe3b7_5587_88db_c6ae),
-        (2102, 0x1ecd_d18d_ddb4_d749),
+        (250, 0x4409_b4c8_0a48_0368),
+        (500, 0x9e9c_e068_253e_967e),
+        (750, 0xdd1f_12a4_eb08_9feb),
+        (1000, 0xc2a3_5472_3ccb_aaf6),
+        (1250, 0xf51e_0fb9_1eb3_e327),
+        (1500, 0x9751_0846_e4fc_5d3f),
+        (1750, 0xb7ba_df15_70a9_2224),
+        (2000, 0x6ce7_d490_d100_2250),
+        (2102, 0x9d44_5bdf_ede8_7ff2),
     ];
     assert_eq!(
         checkpoints, REFERENCE,

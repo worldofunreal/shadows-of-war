@@ -196,6 +196,7 @@ impl SowApp {
                 &mut render_ctx.command_encoder,
                 frame.texture_view(),
                 [self.input.screen_w, self.input.screen_h],
+                &crate::theme::dev_config::DevConfig::get().shader_params,
                 &render_ctx.context,
             );
         }

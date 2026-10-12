@@ -380,8 +380,13 @@ html[dir="rtl"] #sow-menu :where(input, button, [role="button"], [role="option"]
     animation: sow-reward-card-reveal 760ms cubic-bezier(.22, 1.35, .36, 1) both;
 }
 
-.sow-menu__reward-card--crowns { --reward-color: #ffd36a; --reward-glow: rgba(255, 211, 106, .48); }
+.sow-menu__reward-card--crowns,
+.sow-menu__reward-card--level { --reward-color: #ffd36a; --reward-glow: rgba(255, 211, 106, .48); }
 .sow-menu__reward-card--laurels { --reward-color: #d9b5ff; --reward-glow: rgba(192, 132, 252, .5); }
+.sow-menu__reward-card--level .sow-menu__reward-amount {
+    font-size: clamp(22px, 2.8vw, 38px);
+    white-space: nowrap;
+}
 
 .sow-menu__reward-medallion {
     position: relative;

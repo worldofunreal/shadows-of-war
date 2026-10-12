@@ -135,9 +135,11 @@ impl AnalyticsEvent {
                 return Err("invalid string field");
             }
         }
-        if self.device_class.as_deref().is_some_and(|value| {
-            !matches!(value, "mobile" | "tablet" | "desktop" | "unknown")
-        }) {
+        if self
+            .device_class
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "mobile" | "tablet" | "desktop" | "unknown"))
+        {
             return Err("invalid device_class");
         }
         if let Some(props) = &self.props {
@@ -209,10 +211,7 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
                 .get("step_index")
                 .and_then(serde_json::Value::as_u64)
                 .is_some_and(|index| index < 512)
-            && props
-                .get("action")
-                .and_then(serde_json::Value::as_str)
-                == Some("fail");
+            && props.get("action").and_then(serde_json::Value::as_str) == Some("fail");
     }
     if matches!(name, "tutorial_start" | "campaign_episode_complete") {
         return props.len() == 1
@@ -221,7 +220,9 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(is_episode_id);
     }
-    if props.len() != 1 { return false; }
+    if props.len() != 1 {
+        return false;
+    }
     let (key, value) = props.iter().next().expect("one property checked");
     match (name, key.as_str(), value.as_str()) {
         ("load_stage", "stage", Some(value)) => matches!(
@@ -240,20 +241,28 @@ fn valid_props(name: &str, props: &serde_json::Value) -> bool {
 
 fn is_episode_id(value: &str) -> bool {
     value.len() <= 64
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit() && index > 0
+                || byte == b'_' && index > 0
+        })
         && value
-            .bytes()
-            .enumerate()
-            .all(|(index, byte)| byte.is_ascii_lowercase() || byte.is_ascii_digit() && index > 0 || byte == b'_' && index > 0)
-        && value.as_bytes().first().is_some_and(|byte| byte.is_ascii_lowercase())
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
 }
 
 fn is_step_id(value: &str) -> bool {
     value.len() <= 96
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit() && index > 0
+                || matches!(byte, b'_' | b'-') && index > 0
+        })
         && value
-            .bytes()
-            .enumerate()
-            .all(|(index, byte)| byte.is_ascii_lowercase() || byte.is_ascii_digit() && index > 0 || matches!(byte, b'_' | b'-') && index > 0)
-        && value.as_bytes().first().is_some_and(|byte| byte.is_ascii_lowercase())
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
         && !matches!(value, "constructor" | "prototype" | "__proto__")
 }
 
@@ -460,9 +469,7 @@ fn scrub_event_file(
         if removed == 0 {
             return Ok((removed, false));
         }
-        let output = output
-            .into_inner()
-            .map_err(|error| error.into_error())?;
+        let output = output.into_inner().map_err(|error| error.into_error())?;
         output.sync_all()?;
         std::fs::set_permissions(&temp_path, metadata.permissions())?;
         std::fs::rename(&temp_path, path)?;

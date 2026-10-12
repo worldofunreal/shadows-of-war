@@ -1,13 +1,55 @@
-use super::state::SowApp;
+use super::state::{ExitRewardWait, SowApp};
 use web_time::{Duration, Instant};
 
 const REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
+const EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
 fn account_hint(account_id: Option<&str>) -> String {
     account_id
         .map(|id| id.chars().take(8).collect::<String>())
         .filter(|id| !id.is_empty())
         .unwrap_or_else(|| "none".to_string())
+}
+
+fn apply_exit_reward_profile(
+    wait: &mut Option<ExitRewardWait>,
+    account_id: &str,
+    cloud: &crate::player_progress::PlayerProgress,
+) -> bool {
+    let ready = wait.as_mut().is_some_and(|wait| {
+        if wait.account_id.is_none() {
+            wait.account_id = Some(account_id.to_string());
+        }
+        wait.account_id.as_deref() == Some(account_id)
+            && wait.receipt_id.as_deref().is_some_and(|receipt_id| {
+                cloud
+                    .reward_receipts
+                    .get(receipt_id)
+                    .is_some_and(|receipt| {
+                        receipt.id.as_str() == receipt_id
+                            && receipt.match_id.as_str() == receipt_id
+                            && if wait.requires_verification {
+                                matches!(
+                                    receipt.verification_status,
+                                    Some(
+                                        sow_data::profile::ReplayVerificationStatus::Verified
+                                            | sow_data::profile::ReplayVerificationStatus::Rejected
+                                    )
+                                )
+                            } else {
+                                matches!(
+                                    receipt.status,
+                                    sow_data::profile::RewardSettlementStatus::Applied
+                                        | sow_data::profile::RewardSettlementStatus::Presented
+                                )
+                            }
+                    })
+            })
+    });
+    if ready {
+        *wait = None;
+    }
+    ready
 }
 
 fn fetch_anonymous_profile_request(
@@ -282,17 +324,42 @@ impl SowApp {
         }
     }
 
-    pub(crate) fn begin_reward_profile_sync(&mut self, receipt_id: impl ToString) {
-        self.track_reward_receipt_sync(receipt_id.to_string());
+    fn reward_profile_retry_interval(&self) -> Duration {
+        if self.exit_reward_wait.is_some() {
+            EXIT_REWARD_PROFILE_RETRY_INTERVAL
+        } else {
+            REWARD_PROFILE_RETRY_INTERVAL
+        }
+    }
+
+    pub(crate) fn begin_reward_profile_sync(
+        &mut self,
+        receipt_id: Option<String>,
+        requires_verification: bool,
+    ) {
+        self.exit_reward_wait = Some(ExitRewardWait {
+            account_id: self.progress_account_id.clone(),
+            receipt_id: receipt_id.clone(),
+            requires_verification,
+        });
+        if let Some(receipt_id) = receipt_id {
+            self.track_reward_receipt_sync(receipt_id);
+        }
         self.reward_profile_retry_at = Some(Instant::now());
         self.fetch_cloud_progress();
     }
 
     pub(crate) fn poll_reward_profile_sync(&mut self, now: Instant) {
-        if self.pending_reward_receipt_ids.is_empty() {
+        if self.pending_reward_receipt_ids.is_empty() && self.exit_reward_wait.is_none() {
             return;
         }
-        if self.ui.app.phase != crate::ClientPhase::MainMenu {
+        let waiting_in_exit_loader = self.exit_reward_wait.is_some()
+            && self.ui.app.phase == crate::ClientPhase::Splash
+            && matches!(
+                self.ui.app.splash_state.job,
+                crate::ui::loading_screen::SplashJob::ExitGame
+            );
+        if self.ui.app.phase != crate::ClientPhase::MainMenu && !waiting_in_exit_loader {
             return;
         }
         #[cfg(target_arch = "wasm32")]
@@ -307,13 +374,14 @@ impl SowApp {
         {
             return;
         }
-        self.reward_profile_retry_at = Some(now + REWARD_PROFILE_RETRY_INTERVAL);
+        self.reward_profile_retry_at = Some(now + self.reward_profile_retry_interval());
         self.fetch_cloud_progress();
     }
 
     pub(crate) fn schedule_reward_profile_retry(&mut self) {
-        if !self.pending_reward_receipt_ids.is_empty() {
-            self.reward_profile_retry_at = Some(Instant::now() + REWARD_PROFILE_RETRY_INTERVAL);
+        if !self.pending_reward_receipt_ids.is_empty() || self.exit_reward_wait.is_some() {
+            self.reward_profile_retry_at =
+                Some(Instant::now() + self.reward_profile_retry_interval());
         }
     }
 
@@ -635,6 +703,7 @@ impl SowApp {
         display_name: String,
         provider: String,
     ) {
+        apply_exit_reward_profile(&mut self.exit_reward_wait, &account_id, &cloud);
         let cloud_preferred_leader = cloud.preferred_leader.clone();
         let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
         let account_switch = account_changed && self.progress_account_id.is_some();
@@ -643,7 +712,6 @@ impl SowApp {
             && self.progress.intro_completed.unwrap_or(false)
             && !cloud_intro_completed;
         if account_changed {
-            self.exit_reward_preview = None;
             self.progress.reward_receipts.clear();
             self.progress.unlocked_achievements.clear();
         }
@@ -726,6 +794,15 @@ impl SowApp {
         for receipt_id in &ready_receipts {
             self.pending_reward_receipt_ids.remove(receipt_id);
         }
+        if let Some(wait) = &self.exit_reward_wait
+            && wait
+                .account_id
+                .as_deref()
+                .is_none_or(|expected| expected == account_id.as_str())
+            && let Some(receipt_id) = wait.receipt_id.as_ref()
+        {
+            self.pending_reward_receipt_ids.insert(receipt_id.clone());
+        }
         for receipt in self.progress.reward_receipts.values() {
             if receipt.verification_status
                 == Some(sow_data::profile::ReplayVerificationStatus::Pending)
@@ -740,10 +817,11 @@ impl SowApp {
         if !ready_receipts.is_empty() {
             log::info!("[rewards] receipt is visible in the main-menu profile");
         }
-        if self.pending_reward_receipt_ids.is_empty() {
+        if self.pending_reward_receipt_ids.is_empty() && self.exit_reward_wait.is_none() {
             self.reward_profile_retry_at = None;
         } else {
-            self.reward_profile_retry_at = Some(Instant::now() + REWARD_PROFILE_RETRY_INTERVAL);
+            self.reward_profile_retry_at =
+                Some(Instant::now() + self.reward_profile_retry_interval());
         }
         self.sync_wou_collectibles();
     }
@@ -1281,5 +1359,139 @@ impl SowApp {
                 });
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod reward_exit_tests {
+    use super::apply_exit_reward_profile;
+    use crate::app::state::ExitRewardWait;
+    use crate::player_progress::PlayerProgress;
+    use sow_data::profile::{ReplayVerificationStatus, RewardReceipt, RewardSettlementStatus};
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn wait(receipt_id: &str, requires_verification: bool) -> Option<ExitRewardWait> {
+        Some(ExitRewardWait {
+            account_id: Some("account-a".to_string()),
+            receipt_id: Some(receipt_id.to_string()),
+            requires_verification,
+        })
+    }
+
+    fn profile_with(
+        receipt_id: &str,
+        verification_status: Option<ReplayVerificationStatus>,
+        status: RewardSettlementStatus,
+    ) -> PlayerProgress {
+        let mut profile = PlayerProgress::default();
+        profile.reward_receipts.insert(
+            receipt_id.to_string(),
+            RewardReceipt {
+                id: receipt_id.to_string(),
+                match_id: receipt_id.to_string(),
+                verification_status,
+                status,
+                ..Default::default()
+            },
+        );
+        profile
+    }
+
+    #[wasm_bindgen_test]
+    fn exit_wait_stays_until_the_exact_account_match_is_final() {
+        let mut expected = wait("match-a", true);
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &PlayerProgress::default()
+        ));
+        assert!(expected.is_some());
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-b",
+            &profile_with(
+                "match-a",
+                Some(ReplayVerificationStatus::Verified),
+                RewardSettlementStatus::Applied,
+            )
+        ));
+        assert!(expected.is_some());
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &profile_with(
+                "match-a",
+                Some(ReplayVerificationStatus::Pending),
+                RewardSettlementStatus::Applied,
+            )
+        ));
+        assert!(expected.is_some());
+        assert!(apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &profile_with(
+                "match-a",
+                Some(ReplayVerificationStatus::Verified),
+                RewardSettlementStatus::Applied,
+            )
+        ));
+        assert!(expected.is_none());
+
+        let mut rejected = wait("match-a", true);
+        assert!(apply_exit_reward_profile(
+            &mut rejected,
+            "account-a",
+            &profile_with(
+                "match-a",
+                Some(ReplayVerificationStatus::Rejected),
+                RewardSettlementStatus::Applied,
+            )
+        ));
+        assert!(rejected.is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn another_match_receipt_cannot_release_the_exit_loader() {
+        let profile = profile_with(
+            "match-a",
+            Some(ReplayVerificationStatus::Verified),
+            RewardSettlementStatus::Applied,
+        );
+        let mut expected = wait("match-b", true);
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &profile
+        ));
+        assert!(expected.is_some());
+    }
+
+    #[wasm_bindgen_test]
+    fn tutorial_exit_waits_for_its_applied_server_receipt() {
+        let mut expected = wait("tutorial", false);
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &PlayerProgress::default()
+        ));
+        assert!(expected.is_some());
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-b",
+            &profile_with("tutorial", None, RewardSettlementStatus::Applied,)
+        ));
+        assert!(expected.is_some());
+        assert!(!apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &profile_with("tutorial", None, RewardSettlementStatus::Pending,)
+        ));
+        assert!(expected.is_some());
+        assert!(apply_exit_reward_profile(
+            &mut expected,
+            "account-a",
+            &profile_with("tutorial", None, RewardSettlementStatus::Applied,)
+        ));
+        assert!(expected.is_none());
     }
 }

@@ -1,4 +1,6 @@
-use crate::building::{Building, BuildingAggregate, BuildingGrid, DefenseGrid};
+use crate::building::{
+    Building, BuildingAggregate, BuildingGrid, DefenseGrid, aggregate_buildings_per_player,
+};
 use crate::diplomacy::{
     ALLIANCE_REQUEST_COOLDOWN_TICKS, ALLIANCE_REQUEST_TTL_TICKS, AllianceProposal,
     BETRAYAL_COOLDOWN_TICKS,
@@ -316,10 +318,12 @@ pub(crate) struct BotWorkCounters {
     pub placement_candidates_examined: u64,
     #[cfg(feature = "ai-metrics")]
     pub placement_building_checks: u64,
-    #[cfg(feature = "ai-metrics")]
+    #[cfg(any(test, feature = "ai-metrics"))]
     pub naval_routes_calculated: u64,
-    #[cfg(feature = "ai-metrics")]
+    #[cfg(any(test, feature = "ai-metrics"))]
     pub shoreline_candidates_examined: u64,
+    #[cfg(any(test, feature = "ai-metrics"))]
+    pub naval_border_candidates_examined: u64,
     #[cfg(feature = "ai-metrics")]
     pub attack_entries_scanned_last_update: u64,
     #[cfg(feature = "ai-metrics")]
@@ -332,6 +336,20 @@ pub(crate) struct BotWorkCounters {
     pub nuke_sam_checks: u64,
     #[cfg(feature = "ai-metrics")]
     pub nuke_history_lookups: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct BotNavalCursor {
+    pub source_cursor: u32,
+    pub next_component: usize,
+    pub components: Vec<BotNavalComponentCursor>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct BotNavalComponentCursor {
+    pub water_component: u32,
+    pub source_tile: u32,
+    pub shoreline_cursor: usize,
 }
 
 #[derive(Clone)]
@@ -401,12 +419,31 @@ pub struct SowEngine {
     pub(crate) bot_crown_leader: Option<u16>,
     pub(crate) ai_attack_index: Vec<Vec<usize>>,
     pub(crate) ai_attack_index_dirty: bool,
+    pub(crate) bot_naval_cursors: Vec<BotNavalCursor>,
+    pub(crate) bot_naval_shore_sample: Vec<u32>,
+    pub(crate) bot_naval_slots_used: Vec<u32>,
     pub(crate) bot_work: BotWorkCounters,
     #[cfg(test)]
     pub(crate) test_last_ai_intents: Vec<crate::protocol::StampedIntent>,
 }
 
 impl SowEngine {
+    pub(crate) fn refresh_building_aggregates(&mut self) {
+        if !self.building_aggregates_dirty {
+            return;
+        }
+        let max_pid = self
+            .state
+            .players
+            .iter()
+            .map(|player| player.id as usize)
+            .max()
+            .unwrap_or(0);
+        self.building_aggregates =
+            aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
+        self.building_aggregates_dirty = false;
+    }
+
     pub fn new(mut state: GameState, water: WaterComponents) -> Self {
         let campaign_unlocks = state
             .config
@@ -478,6 +515,9 @@ impl SowEngine {
             bot_crown_leader: None,
             ai_attack_index: Vec::new(),
             ai_attack_index_dirty: true,
+            bot_naval_cursors: Vec::new(),
+            bot_naval_shore_sample: Vec::with_capacity(256),
+            bot_naval_slots_used: Vec::new(),
             bot_work: BotWorkCounters::default(),
             #[cfg(test)]
             test_last_ai_intents: Vec::new(),

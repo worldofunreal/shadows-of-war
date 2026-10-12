@@ -5,6 +5,7 @@ struct MoverGlobals {
     screen_size: vec2<f32>,
     trail_count: u32,
     _pad: f32,
+    shader_params: array<vec4<f32>, 512>,
 }
 
 // Per-instance attributes (instanced vertex buffer, divisor = 1).
@@ -49,20 +50,20 @@ fn vs_main(@builtin(vertex_index) vi: u32, inst: MoverInstance) -> SpriteVertexO
         vec2(-0.5, 0.5),
     );
     let local = corners[vi];
-    let c = cos(inst.rotation);
-    let s = sin(inst.rotation);
+    let c = cos(inst.rotation * globals.shader_params[__MOVER_ROTATION_SCALE__].x);
+    let s = sin(inst.rotation * globals.shader_params[__MOVER_ROTATION_SCALE__].x);
     let rotated = vec2(
         local.x * c - local.y * s,
         local.x * s + local.y * c,
     );
-    let size_screen = inst.size * globals.zoom;
+    let size_screen = inst.size * globals.zoom * globals.shader_params[__MOVER_SPRITE_SCALE__].x;
     let offset = rotated * size_screen;
     let world = inst.world_pos
         + vec2(offset.x / globals.zoom, (offset.y - inst.height * globals.zoom) / globals.zoom);
     out.clip_position = world_to_clip(world);
     let uv_local = local + vec2(0.5, 0.5);
     out.uv = mix(inst.uv_rect.xy, inst.uv_rect.zw, uv_local);
-    out.color = inst.color;
+    out.color = inst.color * globals.shader_params[__MOVER_SPRITE_TINT__] * vec4<f32>(1.0, 1.0, 1.0, globals.shader_params[__MOVER_SPRITE_OPACITY__].x);
     return out;
 }
 
@@ -79,6 +80,6 @@ fn fs_main(in: SpriteVertexOutput) -> @location(0) vec4<f32> {
 fn fs_main_srgb(in: SpriteVertexOutput) -> @location(0) vec4<f32> {
     let tex = textureSample(sprite_atlas, sprite_sampler, in.uv);
     let c = tex * in.color;
-    return vec4<f32>(pow(c.rgb, vec3<f32>(1.0 / 2.2)), c.a);
+    return vec4<f32>(pow(max(c.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), c.a);
 }
 

@@ -6,6 +6,8 @@ pub struct MsdfChar {
     pub id: u32,
     pub index: u32,
     pub char: String,
+    #[serde(default, rename = "glyphId")]
+    pub glyph_id: Option<u32>,
     pub width: u32,
     pub height: u32,
     pub xoffset: i32,
@@ -62,6 +64,7 @@ pub struct MsdfAtlas {
 pub struct FontAtlas {
     pub atlas: MsdfAtlas,
     pub char_map: HashMap<char, MsdfChar>,
+    pub arabic_glyph_map: HashMap<u32, MsdfChar>,
     pub kerning_map: HashMap<(char, char), i32>,
 }
 
@@ -71,9 +74,13 @@ impl FontAtlas {
         let atlas: MsdfAtlas =
             serde_json::from_str(json_str).expect("Failed to parse MSDF atlas JSON");
         let mut char_map = HashMap::new();
+        let mut arabic_glyph_map = HashMap::new();
         for c in &atlas.chars {
             if let Some(first_char) = c.char.chars().next() {
                 char_map.insert(first_char, c.clone());
+            }
+            if let Some(glyph_id) = c.glyph_id {
+                arabic_glyph_map.insert(glyph_id, c.clone());
             }
         }
         let mut kerning_map = HashMap::new();
@@ -90,6 +97,7 @@ impl FontAtlas {
         Self {
             atlas,
             char_map,
+            arabic_glyph_map,
             kerning_map,
         }
     }

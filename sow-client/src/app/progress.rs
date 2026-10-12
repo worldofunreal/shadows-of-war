@@ -1,48 +1,8 @@
-use super::state::{ExitRewardPreview, SowApp};
+use super::state::SowApp;
 
 impl SowApp {
-    fn store_exit_reward_preview(
-        &mut self,
-        receipt_id: impl Into<String>,
-        reward: sow_data::rewards::MatchReward,
-    ) {
-        let Some(account_id) = self.progress_account_id.clone() else {
-            return;
-        };
-        self.exit_reward_preview = Some(ExitRewardPreview {
-            receipt_id: receipt_id.into(),
-            account_id,
-            reward,
-            base_xp: self.progress.xp,
-            base_level: self.progress.level.max(1),
-            base_crowns: self.progress.crowns,
-            base_laurels: self.progress.laurels,
-        });
-    }
-
-    pub(crate) fn capture_online_reward_preview(
-        &mut self,
-        match_id: u64,
-        leader: sow_core::player::Leader,
-    ) {
-        let mut reward = sow_data::rewards::calculate(sow_data::rewards::RewardInput::default());
-        reward.laurels = self.progress.preview_participation_laurels(leader, reward);
-        self.store_exit_reward_preview(match_id.to_string(), reward);
-    }
-
-    pub(crate) fn capture_tutorial_reward_preview(&mut self) {
-        self.store_exit_reward_preview(
-            "tutorial",
-            sow_data::rewards::calculate(sow_data::rewards::RewardInput {
-                tutorial: true,
-                ..Default::default()
-            }),
-        );
-    }
-
     pub(crate) fn complete_boudica_tutorial(&mut self) {
         if self.progress.mark_tutorial_completed() {
-            self.capture_tutorial_reward_preview();
             self.save_local_progress();
             self.persist_tutorial_completion();
         }

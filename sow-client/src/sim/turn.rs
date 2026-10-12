@@ -336,9 +336,7 @@ impl SowApp {
                 return;
             };
             let neutral_attack_troops_before = match &intent {
-                sow_core::protocol::GameplayIntent::Attack(attack)
-                    if attack.target_owner == 0 =>
-                {
+                sow_core::protocol::GameplayIntent::Attack(attack) if attack.target_owner == 0 => {
                     Some(
                         engine
                             .attacks
@@ -360,9 +358,7 @@ impl SowApp {
                 let after = engine
                     .attacks
                     .iter()
-                    .filter(|execution| {
-                        execution.owner_id == my_id && execution.target_owner == 0
-                    })
+                    .filter(|execution| execution.owner_id == my_id && execution.target_owner == 0)
                     .map(|execution| execution.troops)
                     .sum::<f64>();
                 if after > before {
@@ -395,28 +391,31 @@ impl SowApp {
             let Some(e) = self.sim.engine.as_mut() else {
                 return;
             };
-            let local_spawn_targets = if matches!(e.state.phase, sow_core::game::GamePhase::Spawning { .. }) {
-                turn.intents
-                    .iter()
-                    .rev()
-                    .filter_map(|stamped| {
-                        if stamped.player_id != my_id {
-                            return None;
-                        }
-                        let sow_core::protocol::GameplayIntent::Spawn { x, y } = &stamped.intent else {
-                            return None;
-                        };
-                        let map = &e.state.map;
-                        (*x < map.width
-                            && *y < map.height
-                            && map.owner_id(*x, *y) == 0
-                            && map.terrain[map.ref_id(*x, *y)].is_land())
+            let local_spawn_targets =
+                if matches!(e.state.phase, sow_core::game::GamePhase::Spawning { .. }) {
+                    turn.intents
+                        .iter()
+                        .rev()
+                        .filter_map(|stamped| {
+                            if stamped.player_id != my_id {
+                                return None;
+                            }
+                            let sow_core::protocol::GameplayIntent::Spawn { x, y } =
+                                &stamped.intent
+                            else {
+                                return None;
+                            };
+                            let map = &e.state.map;
+                            (*x < map.width
+                                && *y < map.height
+                                && map.owner_id(*x, *y) == 0
+                                && map.terrain[map.ref_id(*x, *y)].is_land())
                             .then_some((*x, *y))
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
             e.apply_intents(&turn.intents);
             let local_spawn_target = local_spawn_targets
                 .into_iter()
@@ -600,8 +599,14 @@ mod tests {
 
         assert_eq!(accepted.state.player(1).unwrap().gold, sender_gold - 25.0);
         assert_eq!(accepted.state.player(2).unwrap().gold, receiver_gold + 25.0);
-        assert_eq!(accepted.state.player(1).unwrap().troops, sender_troops - 10.0);
-        assert_eq!(accepted.state.player(2).unwrap().troops, receiver_troops + 10.0);
+        assert_eq!(
+            accepted.state.player(1).unwrap().troops,
+            sender_troops - 10.0
+        );
+        assert_eq!(
+            accepted.state.player(2).unwrap().troops,
+            receiver_troops + 10.0
+        );
         assert_eq!(snapshot.resource_transfers.len(), 1);
         assert_eq!(snapshot.resource_transfers[0].sender_id, 1);
         assert_eq!(snapshot.resource_transfers[0].receiver_id, 2);

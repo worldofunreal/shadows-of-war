@@ -4,15 +4,11 @@ use sow_core::protocol::{FleetSnapshot, ProjectileSnapshot, SimSnapshot};
 use std::collections::{HashMap, HashSet};
 
 const TRAIL_CAP: usize = 32;
-const NUKE_ARC_PEAK: f32 = 4.0;
 const NUKE_ARC_MIN_HEIGHT: f32 = 50.0;
 const NUKE_ARC_SAMPLES: usize = 128;
 const NUKE_CURVE_MIN_SAMPLES: usize = 64;
 const NUKE_CURVE_MAX_SAMPLES: usize = 4096;
-const MIN_PROJECTILE_SCREEN_PX: f32 = 11.0;
 const MIN_TRANSPORT_SCREEN_PX: f32 = 12.0;
-const PROJECTILE_TRAIL_WIDTH_MIN: f32 = 3.0;
-const PROJECTILE_TRAIL_WIDTH_MAX: f32 = 10.0;
 
 #[inline]
 pub fn world_to_tile(wx: f32, wy: f32) -> (i32, i32) {
@@ -38,8 +34,8 @@ fn flight_progress(path_len: usize, path_index: f32) -> f32 {
 }
 
 #[inline]
-fn nuke_arc_height(progress: f32) -> f32 {
-    NUKE_ARC_PEAK * progress * (1.0 - progress)
+fn nuke_arc_height(progress: f32, peak: f32) -> f32 {
+    peak * progress * (1.0 - progress)
 }
 
 #[inline]
@@ -89,10 +85,22 @@ fn sampled_path_at(path: &[[f32; 2]], index_f: f32) -> [f32; 2] {
 struct NukeArcPath {
     points: Vec<[f32; 2]>,
     bounds: [f32; 4], // min x, min y, max x, max y
+    src_tile: u32,
+    dst_tile: u32,
+    map_w: u32,
+    map_h: u32,
 }
 
 impl NukeArcPath {
-    fn new(src_tile: u32, dst_tile: u32, map_w: u32, map_h: u32) -> Self {
+    fn new(
+        src_tile: u32,
+        dst_tile: u32,
+        map_w: u32,
+        map_h: u32,
+        min_height: f32,
+        curve_min: usize,
+        curve_max: usize,
+    ) -> Self {
         let start = tile_to_world(src_tile, map_w);
         let end = tile_to_world(dst_tile, map_w);
         let dx = end.0 - start.0;
@@ -102,9 +110,13 @@ impl NukeArcPath {
             return Self {
                 points: vec![[start.0, start.1]],
                 bounds: [start.0, start.1, start.0, start.1],
+                src_tile,
+                dst_tile,
+                map_w,
+                map_h,
             };
         }
-        let height = (distance / 3.0).max(NUKE_ARC_MIN_HEIGHT);
+        let height = (distance / 3.0).max(min_height);
         let min_y = 0.5;
         let max_y = (map_h.max(1) as f32 - 0.5).max(min_y);
         let controls = [
@@ -121,8 +133,7 @@ impl NukeArcPath {
         ];
 
         // Approximate the curve, then resample it at equal world-space distances.
-        let raw_steps = ((distance * 2.0).ceil() as usize)
-            .clamp(NUKE_CURVE_MIN_SAMPLES, NUKE_CURVE_MAX_SAMPLES);
+        let raw_steps = ((distance * 2.0).ceil() as usize).clamp(curve_min, curve_max);
         let mut raw_points = Vec::with_capacity(raw_steps + 1);
         let mut cumulative = Vec::with_capacity(raw_steps + 1);
         raw_points.push(bezier_point(controls, 0.0));
@@ -166,7 +177,26 @@ impl NukeArcPath {
             bounds[2] = bounds[2].max(point[0]);
             bounds[3] = bounds[3].max(point[1]);
         }
-        Self { points, bounds }
+        Self {
+            points,
+            bounds,
+            src_tile,
+            dst_tile,
+            map_w,
+            map_h,
+        }
+    }
+
+    fn rebuild(&mut self, min_height: f32, curve_min: usize, curve_max: usize) {
+        *self = Self::new(
+            self.src_tile,
+            self.dst_tile,
+            self.map_w,
+            self.map_h,
+            min_height,
+            curve_min,
+            curve_max,
+        );
     }
 
     #[inline]
@@ -181,29 +211,20 @@ impl NukeArcPath {
     }
 }
 
-fn sample_nuke_arc(path: &NukeArcPath, progress: f32, out: &mut Vec<[f32; 2]>) {
+fn sample_nuke_arc(path: &NukeArcPath, progress: f32, samples: usize, out: &mut Vec<[f32; 2]>) {
     out.clear();
     if path.points.len() <= 1 || progress <= 0.0 {
         return;
     }
-    for s in 0..=NUKE_ARC_SAMPLES {
-        out.push(path.point_at(progress * s as f32 / NUKE_ARC_SAMPLES as f32));
+    let samples = samples.clamp(8, 512);
+    for s in 0..=samples {
+        out.push(path.point_at(progress * s as f32 / samples as f32));
     }
-}
-
-#[inline]
-fn screen_margin() -> f32 {
-    64.0
 }
 
 #[inline]
 fn in_viewport(sx: f32, sy: f32, min_sx: f32, min_sy: f32, max_sx: f32, max_sy: f32) -> bool {
     sx >= min_sx && sx <= max_sx && sy >= min_sy && sy <= max_sy
-}
-
-#[inline]
-fn projectile_trail_width(zoom: f32) -> f32 {
-    (zoom * 0.5 + 2.0).clamp(PROJECTILE_TRAIL_WIDTH_MIN, PROJECTILE_TRAIL_WIDTH_MAX)
 }
 
 #[derive(Clone, Copy)]
@@ -233,16 +254,20 @@ pub struct MoverScene {
     nuke_arcs: HashMap<u64, NukeArcPath>,
     player_colors: HashMap<u16, [f32; 3]>,
     last_snap_tick: u64,
+    last_curve_tuning: [u32; 3],
     map_w: u32,
 }
 
-pub struct MoverPackParams {
+pub struct MoverPackParams<'a> {
     pub camera_x: f32,
     pub camera_y: f32,
     pub camera_zoom: f32,
     pub screen_w: f32,
     pub screen_h: f32,
     pub linear_alpha: f32,
+    pub shader_params: &'a [[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
+    pub sprites_enabled: bool,
+    pub trails_enabled: bool,
 }
 
 impl MoverScene {
@@ -251,11 +276,12 @@ impl MoverScene {
             id_to_idx: HashMap::new(),
             slots: Vec::new(),
             trail_points: Vec::new(),
-            arc_scratch: Vec::with_capacity(NUKE_ARC_SAMPLES + 1),
+            arc_scratch: Vec::with_capacity(513),
             arc_paths: HashMap::new(),
             nuke_arcs: HashMap::new(),
             player_colors: HashMap::new(),
             last_snap_tick: u64::MAX,
+            last_curve_tuning: [0; 3],
             map_w: 1,
         }
     }
@@ -268,11 +294,38 @@ impl MoverScene {
         fog_of_war_enabled: bool,
         my_id: u16,
         fog_visible: &sow_core::bitset::DenseBitSet,
+        shader_params: &[[f32; 4]; sow_render::shader_params::PARAM_CAPACITY],
     ) {
+        let setting = |id: &str, fallback: f32| {
+            sow_render::shader_params::shader_slot(id)
+                .map(|slot| shader_params[slot][0])
+                .unwrap_or(fallback)
+        };
+        let min_height = setting("mover.nuke.arc_height", NUKE_ARC_MIN_HEIGHT);
+        let curve_min = setting(
+            "mover.nuke.curve_min_samples",
+            NUKE_CURVE_MIN_SAMPLES as f32,
+        )
+        .round()
+        .clamp(8.0, 8192.0) as usize;
+        let curve_max = setting(
+            "mover.nuke.curve_max_samples",
+            NUKE_CURVE_MAX_SAMPLES as f32,
+        )
+        .round()
+        .clamp(curve_min as f32, 8192.0) as usize;
+        let curve_tuning = [min_height.to_bits(), curve_min as u32, curve_max as u32];
+        if curve_tuning != self.last_curve_tuning {
+            for path in self.nuke_arcs.values_mut() {
+                path.rebuild(min_height, curve_min, curve_max);
+            }
+            self.last_curve_tuning = curve_tuning;
+        }
         if snap.tick == self.last_snap_tick {
             return;
         }
         self.last_snap_tick = snap.tick;
+        self.last_curve_tuning = curve_tuning;
         self.map_w = map_w.max(1);
         self.trail_points.clear();
         self.player_colors.clear();
@@ -305,7 +358,7 @@ impl MoverScene {
             if is_visible {
                 let key = proj.id | (1u64 << 63);
                 alive.insert(key);
-                self.ingest_projectile(proj, map_w, map_h);
+                self.ingest_projectile(proj, map_w, map_h, min_height, curve_min, curve_max);
             }
         }
 
@@ -427,7 +480,15 @@ impl MoverScene {
         self.upsert_slot(fleet.id, entry);
     }
 
-    fn ingest_projectile(&mut self, proj: &ProjectileSnapshot, map_w: u32, map_h: u32) {
+    fn ingest_projectile(
+        &mut self,
+        proj: &ProjectileSnapshot,
+        map_w: u32,
+        map_h: u32,
+        min_height: f32,
+        curve_min: usize,
+        curve_max: usize,
+    ) {
         let cursor = proj.path_cursor.min(proj.path.len().saturating_sub(1));
         let prev_idx = cursor.saturating_sub(proj.steps_per_tick as usize);
         let (curr_x, curr_y) = tile_to_world(proj.path[cursor], map_w);
@@ -456,9 +517,17 @@ impl MoverScene {
         let is_nuke = matches!(proj.kind, ProjectileKind::Nuke { .. });
         let key = proj.id | (1u64 << 63);
         if is_nuke {
-            self.nuke_arcs
-                .entry(key)
-                .or_insert_with(|| NukeArcPath::new(proj.src_tile, proj.dst_tile, map_w, map_h));
+            self.nuke_arcs.entry(key).or_insert_with(|| {
+                NukeArcPath::new(
+                    proj.src_tile,
+                    proj.dst_tile,
+                    map_w,
+                    map_h,
+                    min_height,
+                    curve_min,
+                    curve_max,
+                )
+            });
         } else {
             self.arc_paths.insert(key, proj.path.clone());
         }
@@ -521,15 +590,21 @@ impl MoverScene {
         width: f32,
         color: [f32; 4],
         fade_tail: bool,
+        trail_length: f32,
+        tail_fade: f32,
     ) {
-        if points.is_empty() {
+        if points.is_empty() || trail_length <= 0.0 {
             return;
         }
+        let count = ((points.len() as f32 * trail_length.clamp(0.0, 1.0)).ceil() as usize)
+            .clamp(1, points.len());
+        let points = &points[points.len() - count..];
         let mut prev = points[0];
         for (i, pt) in points[1..].iter().enumerate() {
             let mut segment_color = color;
             if fade_tail {
-                segment_color[3] *= (i + 1) as f32 / points.len() as f32;
+                let fade = (i + 1) as f32 / points.len() as f32;
+                segment_color[3] = (segment_color[3] * (1.0 + (fade - 1.0) * tail_fade)).max(0.0);
             }
             renderer.push_trail_segment(TrailSegmentGpu {
                 p0: prev,
@@ -551,7 +626,7 @@ impl MoverScene {
         &self,
         points: &[[f32; 2]],
         head: [f32; 2],
-        params: &MoverPackParams,
+        params: &MoverPackParams<'_>,
         bounds: (f32, f32, f32, f32),
     ) -> bool {
         let (min_sx, min_sy, max_sx, max_sy) = bounds;
@@ -569,15 +644,51 @@ impl MoverScene {
 
     pub fn pack_gpu(
         &mut self,
-        params: &MoverPackParams,
+        params: &MoverPackParams<'_>,
         renderer: &mut crate::render::gpu::MoverRenderer,
     ) {
+        let setting = |id: &str, fallback: f32| {
+            sow_render::shader_params::shader_slot(id)
+                .map(|slot| params.shader_params[slot][0])
+                .unwrap_or(fallback)
+        };
+        let margin = setting("mover.viewport_margin", 64.0);
+        let sprite_uniform_scale = setting("mover.sprite.scale", 1.0);
+        let trail_length = setting("mover.trail.length", 1.0);
+        let tail_fade = setting("mover.trail.fade", 1.0);
+        let fleet_trail_gain = setting("mover.trail.fleet_width", 0.4);
+        let fleet_trail_min = setting("mover.trail.fleet_min", 1.0);
+        let fleet_trail_max = setting("mover.trail.fleet_max", 6.0);
+        let projectile_trail_zoom = setting("mover.trail.projectile_zoom", 0.5);
+        let projectile_trail_base = setting("mover.trail.projectile_base", 2.0);
+        let projectile_trail_min = setting("mover.trail.projectile_min", 3.0);
+        let projectile_trail_max = setting("mover.trail.projectile_max", 10.0);
+        let (fleet_trail_min, fleet_trail_max) = (
+            fleet_trail_min.min(fleet_trail_max),
+            fleet_trail_min.max(fleet_trail_max),
+        );
+        let (projectile_trail_min, projectile_trail_max) = (
+            projectile_trail_min.min(projectile_trail_max),
+            projectile_trail_min.max(projectile_trail_max),
+        );
+        let arc_samples = setting("mover.nuke.arc_samples", NUKE_ARC_SAMPLES as f32)
+            .round()
+            .clamp(8.0, 512.0) as usize;
+        let arc_peak = setting("mover.nuke.arc_peak", 4.0);
+        let height_scale = setting("mover.height_scale", 0.5);
+        let height_limit = setting("mover.height_limit", 2.0);
+        let min_transport_px = setting("mover.transport.minimum_px", MIN_TRANSPORT_SCREEN_PX);
+        let min_trade_ship_px = setting("mover.trade_ship.minimum_px", 0.0);
+        let min_warship_px = setting("mover.warship.minimum_px", 0.0);
+        let min_nuke_px = setting("mover.nuke.minimum_px", 11.0);
+        let min_sam_px = setting("mover.sam.minimum_px", 11.0);
+        let transport_scale = setting("mover.transport.scale", 1.0);
+        let trade_ship_scale = setting("mover.trade_ship.scale", 1.0);
+        let warship_scale = setting("mover.warship.scale", 1.0);
+        let projectile_scale = setting("mover.projectile.scale", 1.0);
+        let nuke_scale = setting("mover.nuke.scale", 1.0);
+        let sam_scale = setting("mover.sam.scale", 1.0);
         renderer.begin_frame();
-        let margin = screen_margin();
-        let min_sx = -margin;
-        let min_sy = -margin;
-        let max_sx = params.screen_w + margin;
-        let max_sy = params.screen_h + margin;
         let mut arc_scratch = std::mem::take(&mut self.arc_scratch);
 
         for (id, &idx) in &self.id_to_idx {
@@ -619,37 +730,75 @@ impl MoverScene {
             let height = if slot.is_fleet {
                 0.0
             } else {
-                nuke_arc_height(progress)
+                nuke_arc_height(progress, arc_peak)
             };
             let world_pos = [wx, wy];
 
+            let scale = if slot.is_fleet {
+                1.0
+            } else {
+                (1.0 + height * height_scale).min(height_limit)
+            };
+            let class_scale = match slot.sprite {
+                MoverSpriteId::TransportShip => transport_scale,
+                MoverSpriteId::TradeShip => trade_ship_scale,
+                MoverSpriteId::Warship => warship_scale,
+                MoverSpriteId::AtomBomb => projectile_scale * nuke_scale,
+                MoverSpriteId::SamMissile => projectile_scale * sam_scale,
+            };
+            let mut sprite_size = slot.size * scale * class_scale;
+            let minimum_screen_size = match slot.sprite {
+                MoverSpriteId::TransportShip => min_transport_px,
+                MoverSpriteId::TradeShip => min_trade_ship_px,
+                MoverSpriteId::Warship => min_warship_px,
+                MoverSpriteId::AtomBomb => min_nuke_px,
+                MoverSpriteId::SamMissile => min_sam_px,
+            };
+            if minimum_screen_size > 0.0 && sprite_size * params.camera_zoom < minimum_screen_size {
+                sprite_size = minimum_screen_size / params.camera_zoom;
+            }
+
             let sx = params.camera_x + wx * params.camera_zoom;
             let sy = params.camera_y + world_pos[1] * params.camera_zoom;
-            let sprite_visible = in_viewport(sx, sy, min_sx, min_sy, max_sx, max_sy);
+            let sprite_margin = margin
+                + (sprite_size * params.camera_zoom * sprite_uniform_scale).abs()
+                    * std::f32::consts::FRAC_1_SQRT_2;
+            let sprite_visible = in_viewport(
+                sx,
+                sy,
+                -sprite_margin,
+                -sprite_margin,
+                params.screen_w + sprite_margin,
+                params.screen_h + sprite_margin,
+            );
 
             let trail_width = if slot.is_fleet {
-                (params.camera_zoom * 0.4).clamp(1.0, 6.0)
+                (params.camera_zoom * fleet_trail_gain).clamp(fleet_trail_min, fleet_trail_max)
             } else {
-                projectile_trail_width(params.camera_zoom)
+                (params.camera_zoom * projectile_trail_zoom + projectile_trail_base)
+                    .clamp(projectile_trail_min, projectile_trail_max)
             };
+            let trail_margin = margin + trail_width.abs() * 0.5;
+            let trail_bounds = (
+                -trail_margin,
+                -trail_margin,
+                params.screen_w + trail_margin,
+                params.screen_h + trail_margin,
+            );
 
-            if slot.arc_trail {
+            if params.trails_enabled && slot.arc_trail {
                 if let Some(path) = self.nuke_arcs.get(id) {
                     let bounds = path.bounds;
-                    let arc_visible = params.camera_x + bounds[2] * params.camera_zoom >= -margin
+                    let arc_visible = params.camera_x + bounds[2] * params.camera_zoom
+                        >= -trail_margin
                         && params.camera_x + bounds[0] * params.camera_zoom
-                            <= params.screen_w + margin
-                        && params.camera_y + bounds[3] * params.camera_zoom >= -margin
+                            <= params.screen_w + trail_margin
+                        && params.camera_y + bounds[3] * params.camera_zoom >= -trail_margin
                         && params.camera_y + bounds[1] * params.camera_zoom
-                            <= params.screen_h + margin;
+                            <= params.screen_h + trail_margin;
                     if arc_visible {
-                        sample_nuke_arc(path, progress, &mut arc_scratch);
-                        if self.arc_visible(
-                            &arc_scratch,
-                            world_pos,
-                            params,
-                            (min_sx, min_sy, max_sx, max_sy),
-                        ) {
+                        sample_nuke_arc(path, progress, arc_samples, &mut arc_scratch);
+                        if self.arc_visible(&arc_scratch, world_pos, params, trail_bounds) {
                             self.push_trail_segments(
                                 renderer,
                                 &arc_scratch,
@@ -657,20 +806,17 @@ impl MoverScene {
                                 trail_width,
                                 slot.trail_color,
                                 false,
+                                trail_length,
+                                tail_fade,
                             );
                         }
                     }
                 }
-            } else if slot.trail_len > 0 {
+            } else if params.trails_enabled && slot.trail_len > 0 {
                 let start = slot.trail_start as usize;
                 let end = start + slot.trail_len as usize;
                 let trail_points = &self.trail_points[start..end];
-                if self.arc_visible(
-                    trail_points,
-                    world_pos,
-                    params,
-                    (min_sx, min_sy, max_sx, max_sy),
-                ) {
+                if self.arc_visible(trail_points, world_pos, params, trail_bounds) {
                     self.push_trail_segments(
                         renderer,
                         trail_points,
@@ -678,11 +824,13 @@ impl MoverScene {
                         trail_width,
                         slot.trail_color,
                         slot.is_fleet,
+                        trail_length,
+                        tail_fade,
                     );
                 }
             }
 
-            if !sprite_visible {
+            if !params.sprites_enabled || !sprite_visible {
                 continue;
             }
 
@@ -714,25 +862,6 @@ impl MoverScene {
                 0.0
             };
 
-            let scale = if slot.is_fleet {
-                1.0
-            } else {
-                (1.0 + height * 0.5).min(2.0)
-            };
-
-            let mut sprite_size = slot.size * scale;
-            if slot.is_fleet && slot.sprite == MoverSpriteId::TransportShip {
-                let screen_size = sprite_size * params.camera_zoom;
-                if screen_size < MIN_TRANSPORT_SCREEN_PX {
-                    sprite_size = MIN_TRANSPORT_SCREEN_PX / params.camera_zoom;
-                }
-            } else if !slot.is_fleet {
-                let screen_size = sprite_size * params.camera_zoom;
-                if screen_size < MIN_PROJECTILE_SCREEN_PX {
-                    sprite_size = MIN_PROJECTILE_SCREEN_PX / params.camera_zoom;
-                }
-            }
-
             renderer.push_sprite(MoverInstanceGpu {
                 world_pos: [wx, wy],
                 size: sprite_size,
@@ -754,12 +883,28 @@ impl Default for MoverScene {
 
 #[cfg(test)]
 mod tests {
-    use super::NukeArcPath;
+    use super::{NUKE_ARC_MIN_HEIGHT, NUKE_CURVE_MAX_SAMPLES, NUKE_CURVE_MIN_SAMPLES, NukeArcPath};
 
     #[test]
     fn nuke_arc_is_distance_spaced_bounded_and_distance_scaled() {
-        let short = NukeArcPath::new(100 * 256 + 20, 100 * 256 + 40, 256, 256);
-        let long = NukeArcPath::new(100 * 256 + 20, 100 * 256 + 220, 256, 256);
+        let short = NukeArcPath::new(
+            100 * 256 + 20,
+            100 * 256 + 40,
+            256,
+            256,
+            NUKE_ARC_MIN_HEIGHT,
+            NUKE_CURVE_MIN_SAMPLES,
+            NUKE_CURVE_MAX_SAMPLES,
+        );
+        let long = NukeArcPath::new(
+            100 * 256 + 20,
+            100 * 256 + 220,
+            256,
+            256,
+            NUKE_ARC_MIN_HEIGHT,
+            NUKE_CURVE_MIN_SAMPLES,
+            NUKE_CURVE_MAX_SAMPLES,
+        );
 
         let start = short.point_at(0.0);
         let end = short.point_at(1.0);

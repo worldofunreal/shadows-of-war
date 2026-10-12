@@ -267,6 +267,7 @@ impl SowApp {
                 leaderboard_publish_pending: false,
                 leaderboard_publish_revision: 0,
                 show_dev_sidebar: false,
+                dev_vfx_preview: crate::app::DevVfxPreview::new(web_time::Instant::now()),
                 update_available: false,
                 is_spectating: false,
                 observing: false,
@@ -334,7 +335,7 @@ impl SowApp {
             web_exit_lobbies_ready: false,
             gpu_init_failed: false,
             progress: crate::player_progress::PlayerProgress::default(),
-            exit_reward_preview: None,
+            exit_reward_wait: None,
             progress_account_id: stored_account_id,
             profile_account_id: None,
             progress_provider: if has_stored_account {

@@ -33,12 +33,12 @@ use rustls::{Certificate, PrivateKey, ServerConfig};
 use sha2::{Digest, Sha256};
 use sow_core::game_config::{BotDifficulty, GameConfig};
 use sow_core::player::Leader;
-use sow_core::spawn_rate_limit::SpawnIntentRateLimit;
 use sow_core::protocol::{
     ClientMessage, GameplayIntent, LobbyInfo, LobbyKind, LobbyPlayerSyncState,
     ServerLobbiesBroadcastMessage, ServerLobbyClosedMessage, ServerMessage, ServerTurnMessage,
     StampedIntent, Team, Turn,
 };
+use sow_core::spawn_rate_limit::SpawnIntentRateLimit;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CString;
 use std::io::BufReader;
@@ -3001,12 +3001,12 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 #[cfg(test)]
 mod dispatcher_tests {
     use super::{
-        AdmissionState, IpAdmissionState, MatchTracker, RelayAdmissionPolicy, admit_gameplay_intent,
-        deployment_end_tick, ticket_matches,
+        AdmissionState, IpAdmissionState, MatchTracker, RelayAdmissionPolicy,
+        admit_gameplay_intent, deployment_end_tick, ticket_matches,
     };
+    use sha2::{Digest, Sha256};
     use sow_core::game_config::GameConfig;
     use sow_core::protocol::GameplayIntent;
-    use sha2::{Digest, Sha256};
     use std::collections::{HashMap, HashSet};
     use std::net::SocketAddr;
     use std::sync::Arc;
@@ -3054,7 +3054,14 @@ mod dispatcher_tests {
         let spawn = GameplayIntent::Spawn { x: 1, y: 1 };
         let mut limits = HashMap::new();
         for _ in 0..10 {
-            assert!(admit_gameplay_intent(1, &spawn, 0, 100.0, end_tick, &mut limits));
+            assert!(admit_gameplay_intent(
+                1,
+                &spawn,
+                0,
+                100.0,
+                end_tick,
+                &mut limits
+            ));
         }
         assert!(!admit_gameplay_intent(
             1,

@@ -40,4 +40,5 @@ futures-util = { workspace = true }
 rand = { workspace = true }
 brotli = { workspace = true }
 ab_glyph = "0.2"
+rustybuzz = "0.20"
 ctrlc = "3.4"

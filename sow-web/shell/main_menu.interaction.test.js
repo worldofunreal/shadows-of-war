@@ -31,6 +31,7 @@ const webCatalogEn = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en
 const campaignEngine = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
 const campaignView = fs.readFileSync(path.join(shell, "sow-campaign-view.js"), "utf8");
 const storyCss = fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
+const boudicaTriggers = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
 const campaignEditor = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.js"), "utf8");
 const localeRuntime = fs.readFileSync(path.join(shell, "sow-i18n.js"), "utf8");
 const campaignEditorServer = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/server.mjs"), "utf8");
@@ -433,7 +434,11 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.doesNotMatch(hud, /sow-hud-endgame-(xp|leader-xp|crowns|laurels|rewards)/);
     assert.doesNotMatch(sessionSource, /submit_online_stats_on_exit/);
     assert.doesNotMatch(progressSource, /submit_online_stats|SubmitMatchReport|SubmitStatsWithLeader/);
-    assert.match(progressSource, /capture_online_reward_preview[\s\S]*RewardInput::default\(\)[\s\S]*preview_participation_laurels/);
+    assert.doesNotMatch(progressSource, /capture_online_reward_preview|preview_participation_laurels/);
+    assert.doesNotMatch(progressSource, /capture_tutorial_reward_preview|store_exit_reward_preview/);
+    assert.match(sessionSource, /pending_reward_receipt_ids\.contains\("tutorial"\)[\s\S]*begin_reward_profile_sync\(Some\(receipt_id\), false\)/);
+    assert.doesNotMatch(shellSource, /priorTarget|preview\["base_"/);
+    assert.match(sessionSource, /begin_reward_profile_sync\(reward_match_id\.map\(\|id\| id\.to_string\(\)\), true\)/);
     assert.doesNotMatch(progressSource, /reward_cache/);
     assert.match(dataDbSource, /pub async fn record_match_participation/);
     assert.match(dataDbSource, /reward_receipts\.contains_key/);
@@ -441,23 +446,28 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.match(shellSource, /sow:loader-cycle-ready/);
     assert.match(shellSource, /runRewardPresentation/);
     assert.match(shellSource, /createRewardStage\(stages/);
+    assert.match(shellSource, /for \(var level = startLevel \+ 1; level <= target\.level; level\+\+\)/);
+    assert.match(shellSource, /kind: "level",[\s\S]*selector: "\[data-progression-level-value\]"/);
+    assert.match(shellSource, /SOW_t\("profile\.level", \{ level: stage\.level \}\)/);
+    assert.match(shellSource, /stage\.kind === "xp" && levelStages\.length[\s\S]*animateProgressionTo\(nextValues, 380, token, heldLevel\)/);
     assert.match(shellSource, /layer\.addEventListener\("click", function \(event\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*skip\(\);\s*\}\);/);
     assert.match(shellSource, /createRewardStage\(stages, function \(\) \{ finish\(true\); \}\)/);
     assert.match(shellSource, /revealRewardAmounts\(items, token\)/);
-    assert.match(shellSource, /flyRewardCard\(item, token\)\.then[\s\S]*animateProgressionTo\(nextValues, 380, token\)/);
+    assert.match(shellSource, /flyRewardCard\(item, token\)\.then[\s\S]*animateProgressionTo\(nextValues, 380, token(?:, heldLevel)?\)/);
     assert.match(shellSource, /2 \* inverse \* t \* controlX \+ t \* t \* dx/);
     assert.match(shellSource, /gems: from\.gems \+ \(target\.gems - from\.gems\) \* eased/);
     assert.doesNotMatch(shellSource, /writeProgression\(Object\.assign\(\{\}, displayedProgression, \{ gems: Number\(state\.gems\)/);
     assert.match(shellSource, /function pulseRewardCounter\(selector, levelUp\)/);
     assert.match(menuCss["main_menu.base.css"], /\.sow-menu__reward-stage/);
     assert.match(menuCss["main_menu.base.css"], /sow-reward-card-reveal/);
+    assert.match(menuCss["main_menu.base.css"], /sow-menu__reward-card--level/);
     assert.match(menuCss["main_menu.base.css"], /sow-reward-value-impact/);
     assert.match(shellSource, /acknowledge_reward_receipts/);
-    assert.match(shellSource, /acknowledge_reward_presentation/);
     assert.match(shellSource, /send\("acknowledge_reward_receipts", \{ account_id: accountId, receipt_ids: ids \}\)/);
-    assert.match(shellSource, /send\("acknowledge_reward_presentation", \{ account_id: accountId, receipt_id: preview\.receipt_id \}\)/);
+    assert.match(shellSource, /receipt\.id === "tutorial"[\s\S]*receipt\.status === "applied"/);
+    assert.doesNotMatch(shellSource, /exit_reward_preview|acknowledge_reward_presentation/);
     assert.match(webMenu, /AcknowledgeRewardReceipts \{[\s\S]*account_id,[\s\S]*receipt_ids,[\s\S]*progress_account_id\.as_deref\(\) == Some\(account_id\.as_str\(\)\)/);
-    assert.match(webMenu, /AcknowledgeRewardPresentation \{[\s\S]*account_id,[\s\S]*receipt_id,[\s\S]*progress_account_id\.as_deref\(\) == Some\(account_id\.as_str\(\)\)/);
+    assert.doesNotMatch(webMenu, /AcknowledgeRewardPresentation|exit_reward_preview/);
     assert.match(shellSource, /if \(!shown\) \{\s*writeProgression\(progressionFromState\(\)\);\s*if \(document\.visibilityState === "visible"\) maybePresentRewards\(\);/);
     assert.doesNotMatch(relaySource, /record_client_stats|record_match_report|SubmitStatsWithLeader|SubmitMatchReport/);
     assert.match(serverSource, /SubmitStatsWithLeader \{ \.\. \}[\s\S]*SubmitMatchReport \{ \.\. \} => \{\}/);
@@ -468,6 +478,22 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     // "heroes featured art follows the panel shape, not the device name".
 });
 
+test("tutorial rewards and level animations finish before the lobby follow-up", () => {
+    assert.equal(boudicaTriggers.menu_guide.entry, "boudica_return_lobby");
+    const lobbyGuide = boudicaTriggers.steps.find((step) => step.id === boudicaTriggers.menu_guide.entry);
+    assert.equal(lobbyGuide.guide.target, "menu_lobby");
+    assert.match(tutorial, /pendingMenuGuide = \{ episodeId: runtime\.episodeId \}/);
+    assert.match(tutorial, /window\.addEventListener\("sow:campaign-menu-guide-ready", startMenuGuide\)/);
+
+    const start = shellSource.indexOf("    function maybePresentRewards()");
+    const end = shellSource.indexOf("    function updateDynamic()", start);
+    assert.ok(start >= 0 && end > start);
+    const presentationGate = shellSource.slice(start, end);
+    assert.match(presentationGate,
+        /if \(pending\.length\) \{\s*runRewardPresentation\(pending\);\s*return;\s*\}[\s\S]*if \(menuGuideReturnPending\) \{[\s\S]*dispatchEvent\(new CustomEvent\("sow:campaign-menu-guide-ready"\)\)/);
+    assert.match(shellSource, /ids\.forEach\(function \(id\) \{ rewardAnimationShown\.add\(id\); \}\)[\s\S]*maybePresentRewards\(\);/);
+});
+
 test("participation receipt stays synced until replay verification resolves", () => {
     assert.match(dataDbSource, /pub async fn mark_match_reward_verification_status/);
     assert.match(dataDbSource, /receipt\.verification_status = Some\(ReplayVerificationStatus::Verified\)/);
@@ -476,6 +502,17 @@ test("participation receipt stays synced until replay verification resolves", ()
     assert.match(accountSource, /receipt\.verification_status\s*!=\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
     assert.match(accountSource, /receipt\.verification_status\s*==\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
     assert.match(coreSource, /receipt\.verification_status/);
+    assert.match(accountSource, /fn apply_exit_reward_profile[\s\S]*wait\.account_id[\s\S]*wait\.receipt_id[\s\S]*wait\.requires_verification[\s\S]*ReplayVerificationStatus::Verified[\s\S]*ReplayVerificationStatus::Rejected[\s\S]*RewardSettlementStatus::Applied[\s\S]*RewardSettlementStatus::Presented[\s\S]*\*wait = None/);
+    assert.match(accountSource, /tutorial_exit_waits_for_its_applied_server_receipt/);
+    assert.match(accountSource, /EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs\(2\)/);
+    assert.match(accountSource, /waiting_in_exit_loader[\s\S]*SplashJob::ExitGame/);
+    assert.match(accountSource, /self\.pending_reward_receipt_ids\.is_empty\(\) && self\.exit_reward_wait\.is_none\(\)/);
+    assert.match(assetSource, /!self\.pending_reward_receipt_ids\.is_empty\(\)[\s\S]*self\.exit_reward_wait\.is_some\(\)/);
+    const engineLoaderSource = fs.readFileSync(path.join(shell, "../../sow-client/src/loader/engine.rs"), "utf8");
+    assert.match(engineLoaderSource, /reward_receipt_ready = self\.exit_reward_wait\.is_none\(\)[\s\S]*&& reward_receipt_ready/);
+    assert.match(shellSource, /receipt\.verification_status === "verified" \|\| receipt\.verification_status === "rejected"/);
+    assert.match(shellSource, /pendingRewardReceipts\(\)\.filter\(function \(receipt\) \{ return !rewardAnimationShown\.has\(receipt\.id\); \}\)/);
+    assert.match(shellSource, /ids\.forEach\(function \(id\) \{ rewardAnimationShown\.add\(id\); \}\)/);
 });
 
 test("missing replay maps warn instead of erroring and bad finalizes never retry", () => {
@@ -2441,20 +2478,32 @@ test("contact responses wait behind an open campaign scene", () => {
     assert.equal(machine.update(facts, {}).step.id, "objective");
     assert.equal(machine.view().reaction, undefined, "the contact response is shown only once");
 });
-test("gameplay chrome: vertical right panel with FPS at top, exit first, desktop notices follow the active quest stack", () => {
+test("gameplay chrome keeps dev tools and separate FPS/ping rows at the bottom of the top-right panel", () => {
     const statusRight = hud.slice(hud.indexOf("sow-hud__status-right"), hud.indexOf("</header>"));
-    assert.ok(statusRight.includes("sow-hud-fps"), "FPS stays in the top-right menu");
     const exitAt = statusRight.indexOf("prompt_surrender");
+    const settingsAt = statusRight.indexOf("toggle_settings");
+    const inboxAt = statusRight.indexOf("toggle_inbox");
+    const rankingsAt = statusRight.indexOf("toggle_leaderboard");
+    const devAt = statusRight.indexOf("sow-hud-dev-btn");
+    const fpsAt = statusRight.indexOf("sow-hud-fps");
+    const pingAt = statusRight.indexOf("sow-hud-ping");
     assert.ok(exitAt > 0 && exitAt < statusRight.indexOf("toggle_settings")
         && exitAt < statusRight.indexOf("toggle_inbox")
         && exitAt < statusRight.indexOf("toggle_leaderboard"),
         "exit stays first in the vertical panel");
-    const goldAt = hud.indexOf('id="sow-hud-nameplate-gold"');
-    const fpsAt = hud.indexOf('class="sow-hud__fps"');
-    assert.ok(goldAt >= 0 && fpsAt >= 0, "resources stay in the player plate and FPS stays top-right");
+    assert.ok(settingsAt > exitAt && inboxAt > settingsAt && rankingsAt > inboxAt);
+    assert.ok(devAt > rankingsAt && fpsAt > devAt && pingAt > fpsAt,
+        "dev tools, FPS, and ping stay after the exit and navigation controls");
+    assert.match(statusRight, /class="sow-hud__diagnostics"[\s\S]*sow-hud-dev-btn[\s\S]*sow-hud-fps[\s\S]*sow-hud-ping/,
+        "FPS and ping remain separate rows in the shared toolbar panel");
+    assert.doesNotMatch(hud, /sow-hud__status-metrics|sow-hud__diagnostics-button/,
+        "there is no separate bottom-right diagnostics panel");
+    assert.match(hud, /hudDevLayer\.appendChild\(hudRoot\.querySelector\("#sow-hud-dev-sidebar"\)\)/,
+        "only the expandable Dev Tools panel is lifted above the quest layer");
+    assert.match(hudCss, /#sow-hud-dev-layer \{[^}]*z-index: 220/);
+    assert.match(hudCss, /\.sow-hud__diagnostics \{[^}]*flex-direction: column/);
     assert.doesNotMatch(hud, /sow-hud-resource-row|sow-hud-res-rate|sow-hud-res-gold|sow-hud-troop-fill/);
     assert.match(hudCss, /\.sow-hud__status-right \{[^}]*flex-direction: column/);
-    assert.match(hudCss, /\.sow-hud__status-left:not\(:has\(> :not\(\.hidden\)\)\)/);
     assert.match(hudCss, /@media \(min-width: 721px\) \{\s*\.sow-hud__notifications \{[^}]*top: var\(--sow-hud-notifications-top, var\(--sow-hud-top-edge\)\);[^}]*inset-inline-start: var\(--sow-hud-notifications-inline-start, max\(16px, var\(--sow-sal\)\)\);[^}]*transform: none;/);
     const desktopRules = [...hudCss.matchAll(/@media \(min-width: 721px\) \{([^}]*)\}/g)];
     assert.ok(desktopRules.some(([, rules]) => rules.includes("sow-hud__notifications")));
@@ -2482,7 +2531,7 @@ test("gameplay chrome: vertical right panel with FPS at top, exit first, desktop
 
 test("FPS/ping and developer tools settings reach the shared HUD and persist locally", () => {
     assert.match(settingsStateSource, /pub show_fps_ping: bool/);
-    assert.match(settingsStateSource, /show_fps_ping: true/);
+    assert.match(settingsStateSource, /show_fps_ping: false/);
     assert.match(settingsStateSource, /sow_settings_v1_show_fps_ping/);
     assert.match(settingsStateSource, /sow_settings_v1_show_dev_tools/);
     assert.match(settingsStateSource, /get_item\(Self::SHOW_FPS_PING_KEY\)/);
@@ -2505,17 +2554,62 @@ test("FPS/ping and developer tools settings reach the shared HUD and persist loc
     assert.match(hud, /SOW_t\("hud\.show_fps_ping"\)/);
     assert.match(hud, /data-hud-setting="show_fps_ping"/);
     assert.match(hud, /hudState\.settings && hudState\.settings\.show_dev_tools_available/);
-    assert.match(hud, /hudRefs\.devBtn\.classList\.toggle\("hidden", !settings\.show_dev_tools_available\)/);
-    assert.match(hud, /hudRefs\.devSidebar\.classList\.toggle\("hidden", !devSidebarOpen\)/);
+    assert.match(hud, /var showDevTools = settings\.show_dev_tools_available && settings\.show_dev_tools/);
+    assert.match(hud, /hudRefs\.devBtn\.classList\.toggle\("hidden", !showDevTools\)/);
+    assert.match(hud, /hudRefs\.devSidebar\.classList\.toggle\("hidden", !showDevTools \|\| !devSidebarOpen\)/);
     assert.match(hud, /devSidebarOpen = hudState\.hud\.dev_tools\.open/);
     assert.match(hud, /set_show_fps_ping/);
     assert.match(hud, /if \(input\.checked\) \{\s*setHudPanel\(null\);\s*renderHud\(\);/);
-    assert.match(hud, /hudRefs\.fps\.hidden = settings\.show_fps_ping === false/);
+    assert.match(hud, /hudRefs\.fps\.hidden = settings\.show_fps_ping !== true/);
+    assert.match(hud, /hudRefs\.ping\.hidden = !hasPing/);
     assert.doesNotMatch(hudCss, /sow-hud__fps\s*\{\s*display:\s*none/);
     for (const locale of fs.readdirSync(path.join(shell, "../../sow-i18n/strings"))) {
         const catalog = fs.readFileSync(path.join(shell, `../../sow-i18n/strings/${locale}/web.toml`), "utf8");
         assert.equal((catalog.match(/^show_fps_ping\s*=/gm) || []).length, 2, `${locale} has menu and HUD labels`);
     }
+});
+
+test("Dev Tools expose live shader tuning, extended numeric values, resets, and effect preview", () => {
+    const shaderParams = fs.readFileSync(path.join(shell, "../../sow-render/src/shader_params.rs"), "utf8");
+    assert.match(shaderParams, /"water\.depth_scale"/);
+    assert.match(shaderParams, /"water\.shore_fade_width"/);
+    assert.match(shaderParams, /"water\.shore_strength"/);
+    assert.match(shaderParams, /"vfx\.alerts"/);
+    assert.match(shaderParams, /"border\.contested\.brightness"/);
+    assert.match(shaderParams, /"alert\.edge_softness"/);
+    assert.match(shaderParams, /"threat\.troop_cap"/);
+    assert.match(shaderParams, /"threat\.max_radius"/);
+    assert.match(shaderParams, /"territory\.skin\.stripe\.enabled"/);
+    assert.match(shaderParams, /"territory\.skin\.grid\.enabled"/);
+    assert.match(shaderParams, /"territory\.skin\.diamond\.enabled"/);
+    assert.match(shaderParams, /"expansion\.local\.reach_scale"/);
+    assert.match(shaderParams, /"expansion\.other\.reach_scale"/);
+    assert.match(shaderParams, /"combat\.pvp\.reach_scale"/);
+    assert.match(shaderParams, /"mover\.transport\.minimum_px"/);
+    assert.match(shaderParams, /"mover\.trade_ship\.minimum_px"/);
+    assert.match(shaderParams, /"mover\.warship\.minimum_px"/);
+    assert.match(shaderParams, /"mover\.nuke\.minimum_px"/);
+    assert.match(shaderParams, /"mover\.sam\.minimum_px"/);
+    assert.match(hud, /range\.min = String\(value < rangeMin \? value - margin : rangeMin\)/);
+    assert.match(hud, /range\.max = String\(value > rangeMax \? value \+ margin : rangeMax\)/);
+    assert.match(hud, /data-dev-min="' \+ def\.min \+ '" data-dev-max="' \+ def\.max/);
+    assert.match(hud, /if \(range && !editingControl\)[\s\S]*var min = Number\(range\.dataset\.devMin\)[\s\S]*range\.min = String\(value < min \? value - margin : min\)/);
+    assert.match(hud, /Now " \+ format\(current\) \+ " · Default " \+ format\(def\.default\)/);
+    assert.match(hud, /data-dev-field="' \+ id/);
+    assert.match(hud, /Reset all shader settings/);
+    assert.match(hud, /data-dev-preview="phase"/);
+    assert.match(hud, /data-dev-preview="target"/);
+    assert.match(hud, /hudDevLayer\.addEventListener\("change"[\s\S]*?set_dev_vfx_preview/);
+    assert.match(webMenu, /decode_dev_config_value[\s\S]*?if !value\.is_finite\(\)/);
+    assert.match(webMenu, /WebMenuCommand::SetDevVfxPreview/);
+    assert.match(webMenu, /field: Option<String>/);
+    assert.match(appStateSource, /pub struct DevVfxPreview/);
+    assert.match(frameSource, /preview_time/);
+    assert.match(mapShader, /globals\.preview_effect == 8\.0/);
+    assert.match(mapShader, /__MAP_EXPANSION_LOCAL_REACH_SCALE__/);
+    assert.match(mapShader, /__MAP_EXPANSION_OTHER_REACH_SCALE__/);
+    assert.match(mapShader, /__MAP_COMBAT_PVP_REACH_SCALE__/);
+    assert.match(mapShader, /fn ocean_shore_edge\([\s\S]*get_cell_terrain\(get_hex_neighbor\(cell_hex, i\)\)[\s\S]*MAP_WATER_SHORE_STRENGTH/);
 });
 
 test("compact HUD density follows the available horizontal frame and restores full size", () => {
@@ -5186,7 +5280,11 @@ test("building mode upgrades same-kind targets, marks them, and has a cancel con
     assert.match(buildBody, /return true;\s*\}\s*let target_res = self\.resolve_building_target/);
     assert.match(frameSource, /nobuild_slots\[slot\]\s*=\s*\[[\s\S]*?0\.0,[\s\S]*?2\.0/);
     assert.match(mapShader, /active_flag > 1\.0 && b_dist == 0[\s\S]*?is_upgrade_target = true/);
-    assert.match(mapShader, /overlay_color = vec3<f32>\(1\.0, 0\.72, 0\.16\)/);
+    assert.match(mapShader, /overlay_color = globals\.shader_params\[__MAP_BUILD_UPGRADE_COLOR__\]\.rgb/);
+    const shaderParams = fs.readFileSync(path.join(shell, "../../sow-render/src/shader_params.rs"), "utf8");
+    const upgradeColorParamStart = shaderParams.indexOf('"placement.upgrade.color"');
+    assert.ok(upgradeColorParamStart >= 0);
+    assert.match(shaderParams.slice(upgradeColorParamStart, upgradeColorParamStart + 160), /\[1\.0, 0\.72, 0\.16\]/);
     assert.match(hud, /data-command="cancel_building_mode"/);
     assert.match(hud, /if \(selectedBuilding\) send\("select_building", \{ kind: selectedBuilding \}\)/);
     assert.match(hud, /buildingCancel\.hidden = !hud\.selected_building/);
@@ -5309,7 +5407,8 @@ test("campaign hides unavailable actions instead of rendering lock-label UI", ()
 });
 
 test("building upgrade sends the selected card identity instead of the radial menu", () => {
-    const start = hud.indexOf('hudRoot.addEventListener("click", function (event) {');
+    const handler = hud.indexOf("function handleHudClick(event) {");
+    const start = hud.indexOf("            var mapButton = event.target.closest(\"[data-map-action]\");", handler);
     const end = hud.indexOf('            var btn = event.target.closest("[data-command]");', start);
     const calls = [];
     const card = { dataset: { session: "12", tileIdx: "240" } };
@@ -5318,7 +5417,7 @@ test("building upgrade sends the selected card identity instead of the radial me
         getAttribute() { return null; },
         closest(selector) { return selector === ".sow-hud__building-card" ? card : null; }
     };
-    const click = vm.runInNewContext("(" + hud.slice(start + 'hudRoot.addEventListener("click", '.length, end) + "})", {
+    const click = vm.runInNewContext("(function (event) {" + hud.slice(start, end) + "})", {
         hudRefs: { mapMenu: { dataset: { session: "3", tileIdx: "99" } } },
         send: (command, payload) => calls.push({ command, payload })
     });
@@ -5824,7 +5923,7 @@ test("tutorial camera anchors and paused build guides publish current map coordi
     const hudKeyEnd = webMenu.indexOf("\n#[cfg", hudKeyStart);
     const hudKey = webMenu.slice(hudKeyStart, hudKeyEnd);
     assert.match(hudKey, /tutorial_camera_viewport: tutorial_active\.then_some\(\([\s\S]*?camera_x\.to_bits\(\)[\s\S]*?camera_y\.to_bits\(\)/);
-    assert.match(webMenu, /LAST_HUD_KEY\.with\([\s\S]*?if \*last == Some\(hud_key\)/);
+    assert.match(webMenu, /LAST_HUD_KEY\.with\([\s\S]*?last\.as_ref\(\) == Some\(&hud_key\)/);
     const guideStart = webMenu.indexOf("fn tutorial_guide_tiles(");
     const guideEnd = webMenu.indexOf("\nfn tutorial_payload(", guideStart);
     const guide = webMenu.slice(guideStart, guideEnd);
@@ -6113,7 +6212,7 @@ test("terms dialog smoothly focuses the requesting entity without changing zoom"
     assert.match(tutorial, /send\("set_dialog_border_highlight", \{ player_id: highlightId \}\)/);
     assert.match(tutorial, /send\("set_dialog_border_highlight", \{ player_id: null \}\)/);
     assert.match(appStateSource, /pub struct DialogBorderHighlight \{[\s\S]*?pub player_id: u16,[\s\S]*?pub start_time: web_time::Instant,/);
-    assert.match(frameSource, /let dialog_border = match \(&self\.ui\.dialog_border_highlight, snapshot\)/);
+    assert.match(frameSource, /let (?:mut )?dialog_border = match \(&self\.ui\.dialog_border_highlight, snapshot\)/);
     assert.match(mapShader, /fn dialog_border_glow_color\(world_pos: vec2<f32>, age: f32\)/);
     assert.match(mapShader, /dialog_border\.x > 0\.0 && owner_id == u32\(globals\.dialog_border\.x\)/);
 });

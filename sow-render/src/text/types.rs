@@ -2,7 +2,6 @@ use blade_graphics as gpu;
 use bytemuck::{Pod, Zeroable};
 
 const DEFAULT_EMOJI_REFERENCE_DIAMETER: f32 = 32.0;
-const MIN_EMOJI_OUTLINE_SCALE: f32 = 0.4;
 
 fn default_emoji_reference_diameter() -> f32 {
     DEFAULT_EMOJI_REFERENCE_DIAMETER
@@ -13,6 +12,7 @@ fn default_emoji_reference_diameter() -> f32 {
 pub struct TextGlobals {
     pub screen_size: [f32; 2],
     pub _pad: [f32; 2],
+    pub shader_params: [[f32; 4]; crate::shader_params::PARAM_CAPACITY],
 }
 
 /// One outline/shadow contract shared by glyph and RGBA-emoji instances.
@@ -42,21 +42,6 @@ impl OutlineStyle {
         shadow_y: 1.5,
         reference_diameter: Self::EMOJI_REFERENCE_DIAMETER,
     };
-
-    /// Reduce emoji effects with the content while preserving a readable minimum.
-    #[inline]
-    pub fn scaled_for_emoji(self, content_diameter: f32) -> Self {
-        if self.reference_diameter <= 0.0 {
-            return self;
-        }
-        let scale = (content_diameter.max(0.0) / self.reference_diameter)
-            .clamp(MIN_EMOJI_OUTLINE_SCALE, 1.0);
-        Self {
-            thickness: self.thickness * scale,
-            shadow_y: self.shadow_y * scale,
-            ..self
-        }
-    }
 
     /// Screen-space room required outside the logical emoji bounds.
     #[inline]

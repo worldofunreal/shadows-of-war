@@ -16,6 +16,7 @@ pub struct MoverGlobals {
     pub screen_size: [f32; 2],
     pub trail_count: u32,
     pub _pad: f32,
+    pub shader_params: [[f32; 4]; crate::shader_params::PARAM_CAPACITY],
 }
 
 /// One mover sprite. Uploaded as a single instance into an instanced vertex
@@ -70,9 +71,12 @@ impl MoverRenderer {
     pub fn new(context: &gpu::Context, surface_format: gpu::TextureFormat) -> Self {
         let atlas = SpriteAtlas::new(context);
 
-        let sprite_source = include_str!("shaders/mover_sprites.wgsl");
+        let sprite_source = crate::shader_params::prepare_shader(
+            "MOVER_",
+            include_str!("shaders/mover_sprites.wgsl"),
+        );
         let sprite_shader = context.create_shader(gpu::ShaderDesc {
-            source: sprite_source,
+            source: &sprite_source,
             naga_module: None,
         });
         assert_eq!(
@@ -80,9 +84,12 @@ impl MoverRenderer {
             sprite_shader.get_struct_size("MoverGlobals") as usize,
         );
 
-        let trail_source = include_str!("shaders/mover_trails.wgsl");
+        let trail_source = crate::shader_params::prepare_shader(
+            "MOVER_",
+            include_str!("shaders/mover_trails.wgsl"),
+        );
         let trail_shader = context.create_shader(gpu::ShaderDesc {
-            source: trail_source,
+            source: &trail_source,
             naga_module: None,
         });
         assert_eq!(

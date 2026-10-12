@@ -2,6 +2,7 @@ pub mod context;
 pub mod map_renderer;
 pub mod mover_renderer;
 pub mod nameplate;
+pub mod shader_params;
 pub mod sprite_atlas;
 pub mod text;
 

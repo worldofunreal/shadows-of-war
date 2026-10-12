@@ -87,9 +87,10 @@ impl SowEngine {
                             (spawn_tile, spawn_tile),
                             vec![],
                         );
-                        fleet.set_speed_bonus_percent(
-                            crate::building::player_boat_speed_bonus(&self.buildings, owner_id),
-                        );
+                        fleet.set_speed_bonus_percent(crate::building::player_boat_speed_bonus(
+                            &self.buildings,
+                            owner_id,
+                        ));
                         new_fleets.push(fleet);
                     }
                 }
@@ -150,11 +151,12 @@ impl SowEngine {
                 continue;
             }
 
-            let route_is_current = ports.iter().any(|port| {
-                port.owner_id == fleet.owner_id && port.tile_idx == fleet.src_tile
-            }) && ports.iter().any(|port| {
-                port.tile_idx == fleet.dst_tile && port.owner_id != fleet.owner_id
-            });
+            let route_is_current = ports
+                .iter()
+                .any(|port| port.owner_id == fleet.owner_id && port.tile_idx == fleet.src_tile)
+                && ports
+                    .iter()
+                    .any(|port| port.tile_idx == fleet.dst_tile && port.owner_id != fleet.owner_id);
             let arrived = (fleet.path.is_empty() && fleet.path_cursor > 0)
                 || (!fleet.path.is_empty() && fleet.path_cursor >= fleet.path.len());
             if fleet.path.is_empty() || arrived || !route_is_current {
@@ -301,11 +303,7 @@ fn find_trade_route(
             let path = route_cache
                 .entry((source.id, destination.id))
                 .or_insert_with(|| {
-                    crate::sea_lane::route_through_lanes(
-                        sea_lanes,
-                        source.id,
-                        destination.id,
-                    )
+                    crate::sea_lane::route_through_lanes(sea_lanes, source.id, destination.id)
                 })
                 .clone();
             let Some(path) = path else {
@@ -315,7 +313,10 @@ fn find_trade_route(
                 continue;
             }
             let distance = path.len();
-            if best.as_ref().is_some_and(|(best_distance, _)| *best_distance <= distance) {
+            if best
+                .as_ref()
+                .is_some_and(|(best_distance, _)| *best_distance <= distance)
+            {
                 continue;
             }
             best = Some((
@@ -383,17 +384,19 @@ mod tests {
     }
 
     fn lane(id: u64, a: u64, b: u64, path: &[u32]) -> SeaLane {
-        SeaLane { id, port_a_id: a, port_b_id: b, path: path.to_vec() }
+        SeaLane {
+            id,
+            port_a_id: a,
+            port_b_id: b,
+            path: path.to_vec(),
+        }
     }
 
     #[test]
     fn passive_trade_ships_spawn_without_manual_purchase_and_choose_another_route() {
         let mut engine = engine_with_ports(
             &[port(1, 1, 10), port(2, 2, 20), port(3, 2, 30)],
-            vec![
-                lane(1, 1, 2, &[100, 101]),
-                lane(2, 1, 3, &[110, 111, 112]),
-            ],
+            vec![lane(1, 1, 2, &[100, 101]), lane(2, 1, 3, &[110, 111, 112])],
         );
 
         engine.execute_trade_ships();
@@ -413,10 +416,7 @@ mod tests {
     fn passive_trade_ships_rehome_after_capture_and_disappear_when_no_route_remains() {
         let mut engine = engine_with_ports(
             &[port(1, 1, 10), port(2, 2, 20), port(3, 2, 30)],
-            vec![
-                lane(1, 1, 2, &[100, 101]),
-                lane(2, 1, 3, &[110, 111]),
-            ],
+            vec![lane(1, 1, 2, &[100, 101]), lane(2, 1, 3, &[110, 111])],
         );
         engine.execute_trade_ships();
         assert_eq!(engine.fleets.len(), 1);

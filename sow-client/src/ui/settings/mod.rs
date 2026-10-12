@@ -61,7 +61,7 @@ impl Default for SettingsState {
             reduced_motion: false,
             free_zoom_out: true,
             sticky_building_mode: false,
-            show_fps_ping: true,
+            show_fps_ping: false,
             show_dev_tools: false,
         }
     }
@@ -75,9 +75,9 @@ mod tests {
     }
 
     #[test]
-    fn fps_ping_is_visible_by_default_and_dev_tools_are_opt_in() {
+    fn fps_ping_and_dev_tools_are_off_by_default() {
         let settings = super::SettingsState::default();
-        assert!(settings.show_fps_ping);
+        assert!(!settings.show_fps_ping);
         assert!(!settings.show_dev_tools);
     }
 }

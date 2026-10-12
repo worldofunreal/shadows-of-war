@@ -1,4 +1,3 @@
-use crate::building::aggregate_buildings_per_player;
 use crate::engine::SowEngine;
 use crate::protocol::StampedIntent;
 use crate::rng::NextIntExt;
@@ -149,8 +148,8 @@ impl SowEngine {
 
             let phase = tick % interval;
             let scheduled_attack = phase == offset;
-            let retaliation_due = ghost_retaliation
-                .is_some_and(|retaliation| retaliation.is_ready_at(tick));
+            let retaliation_due =
+                ghost_retaliation.is_some_and(|retaliation| retaliation.is_ready_at(tick));
             let do_attack = scheduled_attack || retaliation_due;
 
             let do_structures = if p.iq >= 100 {
@@ -226,21 +225,18 @@ impl SowEngine {
             return;
         }
 
-        // ── Pre-compute aggregates if any nation wants to build ─────────────
+        // ── Refresh shared building/boat counts once for this AI update ────
+        let any_attacks = schedule.iter().any(|slot| slot.do_attack);
         if any_structures {
             self.refresh_building_grid();
-            if self.building_aggregates_dirty {
-                let max_pid = self
-                    .state
-                    .players
-                    .iter()
-                    .map(|p| p.id as usize)
-                    .max()
-                    .unwrap_or(0);
-                self.building_aggregates =
-                    aggregate_buildings_per_player(self.buildings.iter().copied(), max_pid);
-                self.building_aggregates_dirty = false;
-            }
+        }
+        if any_structures || any_attacks {
+            self.refresh_building_aggregates();
+        }
+        if any_attacks {
+            self.refresh_bot_naval_slots_used();
+            self.bot_naval_cursors
+                .resize(self.state.player_lookup.len(), Default::default());
         }
 
         // ── Process all scheduled bots (no global cap) ─────
@@ -313,7 +309,7 @@ impl SowEngine {
         #[cfg(feature = "ai-metrics")]
         if std::env::var("SOW_AI_DEBUG").is_ok() {
             eprintln!(
-                "AIWORK tick={} attack_entries={} border_cells={} border_blocks={} border_directory_words={} neighbor_cells={} placement_candidates={} placement_building_checks={} naval_routes={} shoreline_candidates={} diplomacy_proposals={} diplomacy_resource_requests={} nuke_buildings={} nuke_sam_checks={} nuke_history_lookups={}",
+                "AIWORK tick={} attack_entries={} border_cells={} border_blocks={} border_directory_words={} neighbor_cells={} placement_candidates={} placement_building_checks={} naval_routes={} naval_border_candidates={} shoreline_candidates={} diplomacy_proposals={} diplomacy_resource_requests={} nuke_buildings={} nuke_sam_checks={} nuke_history_lookups={}",
                 self.state.tick,
                 self.bot_work.attack_entries_scanned_last_update,
                 self.bot_work.border_cells_examined,
@@ -323,6 +319,7 @@ impl SowEngine {
                 self.bot_work.placement_candidates_examined,
                 self.bot_work.placement_building_checks,
                 self.bot_work.naval_routes_calculated,
+                self.bot_work.naval_border_candidates_examined,
                 self.bot_work.shoreline_candidates_examined,
                 self.bot_work.diplomacy_proposals_examined,
                 self.bot_work.diplomacy_resource_requests_examined,
