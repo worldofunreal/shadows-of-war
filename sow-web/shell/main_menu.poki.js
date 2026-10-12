@@ -51,7 +51,7 @@ function renderSettings() {
                     "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.motion_animation")) + "</span>" +
                         SOW_renderDropdown({ key: "settings-motion", name: "reduced_motion", setting: "reduced_motion", value: settings.reduced_motion ? "reduced" : "full", options: [{ value: "full", label: SOW_t("menu.full") }, { value: "reduced", label: SOW_t("menu.reduced_motion") }] }) +
                     "</label>" +
-                    "<label class='sow-menu__form-field sow-menu__sticky-setting' title='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'><span>" + esc(SOW_t("menu.sticky_building_mode")) + "<small>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</small></span><input class='sow-menu__field' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + "></label>" +
+                    "<div class='sow-menu__form-field sow-menu__sticky-setting'><label for='sow-main-menu-sticky-building-mode'>" + esc(SOW_t("menu.sticky_building_mode")) + "</label><details class='sow-menu__setting-info'><summary aria-label='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'>i</summary><span role='tooltip'>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</span></details><input class='sow-menu__field' id='sow-main-menu-sticky-building-mode' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + "></div>" +
                     "<label class='sow-menu__form-field'><span>" + esc(SOW_t("menu.language")) + "</span>" +
                         SOW_renderDropdown({ key: "settings-language", name: "locale", setting: "locale", value: typeof window.SOW_getLocale === "function" ? window.SOW_getLocale() : "en", options: localeOptions() }) +
                     "</label>" +
@@ -59,7 +59,7 @@ function renderSettings() {
                     "<section class='sow-menu__settings-section'><h3>" + esc(SOW_t("menu.game_links")) + "</h3><nav class='sow-menu__settings-links' aria-label='" + esc(SOW_t("menu.game_links")) + "'>" +
                         "<button class='sow-menu__settings-link' type='button' data-command='poki_privacy'>" + esc(SOW_t("menu.privacy")) + "</button>" +
                         "<button class='sow-menu__settings-link sow-menu__source-link' type='button' data-command='poki_source'>" + esc(SOW_t("menu.source_code")) + "</button>" +
-                        "<button class='sow-menu__settings-link sow-menu__license-link' type='button' data-command='poki_license'>" + esc(SOW_t("menu.license_notice")) + "</button>" +
+                        "<button class='sow-menu__settings-link sow-menu__license-link' type='button' data-command='poki_license'>" + esc(SOW_t("menu.license")) + "</button>" +
                     "</nav></section>" +
                 "</div>" +
             "</section>" +

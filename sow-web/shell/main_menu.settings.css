@@ -109,24 +109,75 @@
 
 .sow-menu__settings-controls .sow-menu__sticky-setting {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 4px 12px;
+    gap: 4px 8px;
     text-transform: none;
 }
 
-.sow-menu__sticky-setting > span {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.sow-menu__sticky-setting > label {
+    min-width: 0;
+    cursor: pointer;
 }
 
-.sow-menu__sticky-setting small {
+.sow-menu__setting-info {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+}
+
+.sow-menu__setting-info > summary {
+    display: grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border: 1px solid var(--sow-line);
+    border-radius: 50%;
     color: var(--sow-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    list-style: none;
+    cursor: help;
+}
+
+.sow-menu__setting-info > summary::-webkit-details-marker {
+    display: none;
+}
+
+.sow-menu__setting-info > summary:focus-visible {
+    outline: 2px solid var(--sow-gold);
+    outline-offset: 2px;
+}
+
+.sow-menu__setting-info > [role="tooltip"] {
+    position: absolute;
+    top: calc(100% + 6px);
+    inset-inline-end: 0;
+    z-index: 100;
+    display: none;
+    width: max-content;
+    max-width: min(280px, calc(100vw - 48px));
+    padding: 8px 10px;
+    border: 1px solid var(--sow-line);
+    border-radius: 5px;
+    background: var(--sow-panel);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    color: #f5f1e8;
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 0;
     line-height: 1.4;
+    text-align: start;
+    text-transform: none;
+    white-space: normal;
+    pointer-events: none;
+}
+
+.sow-menu__setting-info:hover > [role="tooltip"],
+.sow-menu__setting-info:focus-within > [role="tooltip"],
+.sow-menu__setting-info[open] > [role="tooltip"] {
+    display: block;
 }
 
 .sow-menu__sticky-setting input[type="checkbox"] {

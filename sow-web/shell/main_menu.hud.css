@@ -1023,11 +1023,9 @@ html[dir="rtl"] #sow-hud .sow-hud__map {
 .sow-hud__setting-row input[type="range"] { width: 130px; accent-color: var(--sow-gold); }
 .sow-hud__setting-row + .sow-hud__setting-row { border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .sow-hud__setting-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--sow-gold); }
-.sow-hud__setting-row--hint { align-items: flex-start; }
-.sow-hud__setting-row--hint > span { display: flex; flex: 1; flex-direction: column; gap: 4px; }
-.sow-hud__setting-row--hint b { color: #f5f1e8; font-size: 11px; font-weight: 600; }
-.sow-hud__setting-row--hint small { max-width: 280px; color: var(--sow-muted); font-size: 10px; line-height: 1.4; }
-.sow-hud__setting-row--hint input[type="checkbox"] { flex: 0 0 20px; margin-top: 1px; }
+.sow-hud__setting-row--hint { align-items: center; }
+.sow-hud__setting-row--hint > label { flex: 1; min-width: 0; color: #f5f1e8; font-weight: 600; cursor: pointer; }
+.sow-hud__setting-row--hint input[type="checkbox"] { flex: 0 0 20px; margin: 0; }
 
 .sow-hud__dev-reset {
     min-height: 36px;

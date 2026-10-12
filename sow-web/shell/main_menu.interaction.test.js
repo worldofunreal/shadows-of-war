@@ -292,7 +292,7 @@ test("AGPL attribution stays visible while legal links live in settings", () => 
     }
     assert.match(shellSource, /function renderSettingsLinks\(\)/);
     assert.match(shellSource, /menu\.source_code/);
-    assert.match(shellSource, /menu\.license_notice/);
+    assert.match(shellSource, /menu\.license/);
     assert.match(shellSource, /https:\/\/shadowsofwar\.io\/terms\//);
     assert.match(shellSource, /https:\/\/shadowsofwar\.io\/privacy\//);
     assert.match(shellSource, /sourceUrl\.replace\("\/tree\/", "\/blob\/"\) \+ "\/LICENSE"/);
@@ -316,7 +316,7 @@ test("AGPL attribution stays visible while legal links live in settings", () => 
         .filter((file) => fs.existsSync(file));
     assert.equal(localeFiles.length, 15);
     for (const file of localeFiles) {
-        assert.match(fs.readFileSync(file, "utf8"), /^license_notice = ".+"$/m, `${file} lacks the notice translation`);
+        assert.match(fs.readFileSync(file, "utf8"), /^license = ".+"$/m, `${file} lacks the license label translation`);
         assert.match(fs.readFileSync(file, "utf8"), /^third_party_licenses = ".+"$/m, `${file} lacks Android OSS translation`);
         assert.match(fs.readFileSync(file, "utf8"), /^settings_preferences = ".+"$/m, `${file} lacks the settings section translation`);
     }

@@ -508,7 +508,7 @@
             renderSettingsLink("https://discord.gg/d6ZDeChSE", "menu.discord") +
             renderSettingsLink("https://t.me/shadowsofwario", "menu.telegram") +
             renderSettingsLink(sourceUrl, "menu.source_code", "sow-menu__source-link") +
-            renderSettingsLink(licenseUrl, "menu.license_notice", "sow-menu__license-link") + androidOssLicenses;
+            renderSettingsLink(licenseUrl, "menu.license", "sow-menu__license-link") + androidOssLicenses;
     }
 
     function renderMainNav(active) {
@@ -579,10 +579,11 @@
                                 "<span>" + esc(SOW_t("menu.free_zoom_out")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='free_zoom_out' data-setting='free_zoom_out'" + (settings.free_zoom_out ? " checked" : "") + ">" +
                             "</label>" +
-                            "<label class='sow-menu__form-field sow-menu__sticky-setting' title='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'>" +
-                                "<span>" + esc(SOW_t("menu.sticky_building_mode")) + "<small>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</small></span>" +
-                                "<input class='sow-menu__field' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + ">" +
-                            "</label>" +
+                            "<div class='sow-menu__form-field sow-menu__sticky-setting'>" +
+                                "<label for='sow-main-menu-sticky-building-mode'>" + esc(SOW_t("menu.sticky_building_mode")) + "</label>" +
+                                "<details class='sow-menu__setting-info'><summary aria-label='" + esc(SOW_t("menu.sticky_building_mode_hint")) + "'>i</summary><span role='tooltip'>" + esc(SOW_t("menu.sticky_building_mode_hint")) + "</span></details>" +
+                                "<input class='sow-menu__field' id='sow-main-menu-sticky-building-mode' type='checkbox' name='sticky_building_mode' data-setting='sticky_building_mode'" + (settings.sticky_building_mode ? " checked" : "") + ">" +
+                            "</div>" +
                             "<label class='sow-menu__form-field'>" +
                                 "<span>" + esc(SOW_t("menu.show_fps_ping")) + "</span>" +
                                 "<input class='sow-menu__field' type='checkbox' name='show_fps_ping' data-setting='show_fps_ping'" + (settings.show_fps_ping !== false ? " checked" : "") + ">" +
