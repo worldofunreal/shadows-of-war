@@ -6,6 +6,10 @@
 the controlled data reset; the cleanup checkpoint records the resulting zero
 state.
 
+**Historical evidence only:** this checkpoint is not a statement of current
+production state. Verify live infrastructure before using any observation as
+an operational instruction.
+
 **Current deployed release:** `0.1.2-a086aec733d3` via `./sow p`.
 
 ## Confirmed protections

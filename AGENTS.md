@@ -17,8 +17,9 @@ hostnames, paths and compatibility behavior are not production instructions.
 - Campaign Studio is the existing owner for campaign-map rendering and labels.
   Entity Atlas must reuse its rendering behavior and shared map-preview helpers;
   do not build a parallel renderer or projection for convenience.
-- Before map or thumbnail work, read `docs/maps.md` for the reviewed framing,
-  current generator limitations, and independent mobile terrain budgets.
+- Before map or thumbnail work, inspect `assets/maps/SOURCES.toml`,
+  `assets/map_sources/thumbnail_frames.json`, and the current generation code.
+  Thumbnail changes must not implicitly alter playable map data.
 - Campaign episode translations stay locked until the owner explicitly marks
   that episode finished. Do not add localized episode strings or completeness
   checks before that decision. Only add an episode ID to
@@ -210,8 +211,6 @@ an unauthenticated HTTP `/internal/lobbies` request as a health probe.
 
 ### Android evidence gate
 
-- `/home/bizkit/Github/shadows-of-war/docs/android-runtime-contract.md` is the
-  authoritative Android startup, bridge, commerce, and evidence contract.
 - Every Android claim must be labeled `SOURCE`, `DEVICE`, `PLAY_API`,
   `TRANSACTION`, or `HISTORICAL`, and must identify the artifact SHA, source
   SHA, package, versionCode, device, and timestamp when runtime is involved.
