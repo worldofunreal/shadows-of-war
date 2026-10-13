@@ -12,10 +12,6 @@
     "starting_troops": 2000
   },
   "entry": "boudica_rise_of_the_iceni_intro",
-  "menu_guide": {
-    "entry": "boudica_return_lobby",
-    "dismissible": true
-  },
   "reactions": [
     {
       "id": "contact_stonea",
@@ -1195,41 +1191,9 @@
       "type": "end",
       "title_key": "tutorial.complete",
       "presentation": "chapter"
-    },
-    {
-      "id": "boudica_return_lobby",
-      "type": "guide",
-      "title_key": "tutorial.campaign_boudica_boudica_menu_lobby_title",
-      "hint_key": "tutorial.campaign_boudica_boudica_menu_lobby_hint",
-      "trigger": {
-        "type": "ui",
-        "action": "menu_lobby",
-        "scope": "step"
-      },
-      "guide": {
-        "kind": "ui",
-        "target": "menu_lobby",
-        "gesture": "tap"
-      },
-      "next": "boudica_return_end"
-    },
-    {
-      "id": "boudica_return_end",
-      "type": "end",
-      "title_key": "tutorial.campaign_boudica_boudica_menu_ready_title",
-      "body_key": "tutorial.campaign_boudica_boudica_menu_ready_body",
-      "speaker": "boudica"
     }
   ],
   "layout": {
-    "boudica_return_lobby": {
-      "x": 70,
-      "y": 1580
-    },
-    "boudica_return_end": {
-      "x": 630,
-      "y": 1580
-    },
     "boudica_rise_of_the_iceni_intro": {
       "x": 70,
       "y": 70

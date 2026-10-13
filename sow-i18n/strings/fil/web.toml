@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "Kinukumpirma ang iyong mga gantimpala…"
+retrying_rewards = "Naputol ang koneksyon. Sinusubukang muli ang iyong mga gantimpala…"
 main_menu_navigation = "Pangunahing menu"
 game_links = "Mga link ng laro"
 shop = "Tindahan"

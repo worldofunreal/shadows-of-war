@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const editorDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(editorDir, "../../..");
 const campaignDir = path.join(root, "assets/campaign");
+const guideDir = path.join(root, "assets/guides");
 const mapsDir = path.join(root, "assets/maps");
 const entityCatalogFile = path.join(root, "assets/geo_entities.json");
 const distLocaleDir = path.join(root, "dist/web/locales");
@@ -69,6 +70,7 @@ function staticFile(pathname) {
   }
   if (pathname.startsWith("/tools/campaign-editor/")) return safeFile(editorDir, pathname.slice("/tools/campaign-editor/".length));
   if (pathname.startsWith("/assets/campaign/")) return safeFile(campaignDir, pathname.slice("/assets/campaign/".length));
+  if (pathname.startsWith("/assets/guides/")) return safeFile(guideDir, pathname.slice("/assets/guides/".length));
   if (pathname.startsWith("/assets/maps/")) return safeFile(path.join(root, "assets/maps"), pathname.slice("/assets/maps/".length));
   if (pathname.startsWith("/assets/gameplay/")) return safeFile(path.join(root, "assets/gameplay"), pathname.slice("/assets/gameplay/".length));
   if (pathname.startsWith("/assets/map_sources/")) return safeFile(path.join(root, "assets/map_sources"), pathname.slice("/assets/map_sources/".length));
@@ -280,6 +282,38 @@ async function handle(req, res) {
 
   if (req.method === "POST" && url.pathname === "/__save") {
     const file = url.searchParams.get("file") || "";
+    if (file === "menu.triggers.json") {
+      if (saving.has("menu-guides")) { reply(res, 409, "A menu-guide save is already in progress."); return; }
+      saving.add("menu-guides");
+      try {
+        let body, value;
+        try { body = await readBody(req); value = JSON.parse(body.toString("utf8")); }
+        catch (error) { reply(res, 400, error.message || "invalid JSON"); return; }
+        const target = path.join(guideDir, file);
+        const current = await fs.readFile(target);
+        if (!req.headers["if-match"] || req.headers["if-match"] !== etag(current)) {
+          reply(res, 409, "Menu guides changed since they were loaded. Reload before saving.");
+          return;
+        }
+        const result = loadCampaignRuntime().validateMenuGuides(value);
+        if (result.errors.length) {
+          reply(res, 400, result.errors.map(issue => [issue.step, issue.field, issue.message].filter(Boolean).join(" · ")).join("\n"));
+          return;
+        }
+        const temp = path.join(editorDir, ".menu-guide-save-" + randomUUID() + ".tmp");
+        try {
+          await fs.writeFile(temp, JSON.stringify(value, null, 2) + "\n", { flag: "wx" });
+          await fs.rename(temp, target);
+        } finally { await fs.rm(temp, { force: true }); }
+        const saved = await fs.readFile(target);
+        console.log("  saved assets/guides/menu.triggers.json");
+        reply(res, 200, JSON.stringify({ saved: "assets/guides/menu.triggers.json" }), "application/json; charset=utf-8", { ETag: etag(saved) });
+      } catch (error) {
+        if (error.code === "ENOENT") reply(res, 404, "menu guide file does not exist");
+        else throw error;
+      } finally { saving.delete("menu-guides"); }
+      return;
+    }
     if (!episodeFile.test(file) || file.includes("..")) { reply(res, 400, "Invalid campaign file."); return; }
     const episodeId = file.replace(/(?:\.triggers)?\.json$/, "");
     let body, value;
@@ -390,6 +424,7 @@ async function handle(req, res) {
       .map(name => name.slice(0, -".triggers.json".length))
       .filter(id => /^[a-z][a-z0-9_]{0,63}$/.test(id) && files.has(id + ".json"))
       .sort();
+    if (existsSync(path.join(guideDir, "menu.triggers.json"))) episodes.push("menu");
     reply(res, 200, JSON.stringify(episodes), "application/json; charset=utf-8");
     return;
   }

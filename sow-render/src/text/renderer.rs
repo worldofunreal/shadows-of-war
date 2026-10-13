@@ -1401,9 +1401,11 @@ mod tests {
     }
 
     #[test]
-    fn gameplay_nameplates_shape_japanese_korean_chinese_and_arabic() {
+    fn gameplay_nameplates_shape_vietnamese_cyrillic_japanese_korean_chinese_and_arabic() {
         let atlas = FontAtlas::load_static();
         for section in [
+            "vietnamese",
+            "cyrillic",
             "japanese_katakana",
             "korean_hangul",
             "chinese_simplified",

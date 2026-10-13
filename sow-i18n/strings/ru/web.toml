@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "Подтверждаем ваши награды…"
+retrying_rewards = "Соединение прервано. Повторно запрашиваем ваши награды…"
 main_menu_navigation = "Главное меню"
 game_links = "Игровые ссылки"
 shop = "Магазин"

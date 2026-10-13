@@ -235,6 +235,9 @@ impl SowApp {
                         // loader.js owns the boot presentation. Rust only publishes the phase
                         // and waits for identity/bootstrap work before exposing the menu.
                         splash_show_loading_progress(&mut self.ui.app.splash_state, 0.95);
+                        if !self.boot_db_settled || self.exit_reward_wait.is_some() {
+                            return;
+                        }
                         if self.should_portal_auto_intro() {
                             if self.boot_db_settled {
                                 self.finish_boot_route();

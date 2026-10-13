@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "Deine Belohnungen werden bestätigt…"
+retrying_rewards = "Verbindung unterbrochen. Deine Belohnungen werden erneut abgerufen…"
 main_menu_navigation = "Hauptmenü-Navigation"
 game_links = "Spiellinks"
 shop = "LADEN"

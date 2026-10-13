@@ -4,6 +4,7 @@
 //! source of truth for connection state, lobby state, identity, and match transitions.
 //! Commands cross this boundary as small JSON messages; the existing UiAction and network
 //! paths execute them unchanged.
+//! Return/reward/guide ownership and ordering: docs/player-journeys.md.
 
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
@@ -134,6 +135,15 @@ enum WebMenuCommand {
         account_id: String,
         receipt_ids: Vec<String>,
     },
+    SaveMenuGuideProgress {
+        guide_id: String,
+        completed_steps: Vec<String>,
+        #[serde(default)]
+        current_step: Option<String>,
+        status: sow_data::profile::MenuGuideStatus,
+        #[serde(default)]
+        selected_leader: Option<String>,
+    },
     OpenBrowser,
     OpenCreate,
     CloseOverlay,
@@ -251,7 +261,10 @@ enum WebMenuCommand {
     SetShowDevTools {
         value: bool,
     },
-    ReturnToMenu,
+    ReturnToMenu {
+        #[serde(default)]
+        destination: Option<String>,
+    },
     ContinueObserving,
     ZoomIn,
     ZoomOut,
@@ -566,6 +579,9 @@ impl SowApp {
                 WebMenuCommand::QuickMatch => {
                     crate::store_portals::track_product_event("menu_quick_match");
                     self.request_join(None, false, None, None);
+                    if self.join_matchmaking && self.ui.app.main_menu_state.is_waiting {
+                        self.quick_match_revision = self.quick_match_revision.wrapping_add(1);
+                    }
                 }
                 WebMenuCommand::JoinLobby { lobby_id } => {
                     crate::store_portals::track_product_event("menu_join_attempt");
@@ -819,9 +835,7 @@ impl SowApp {
                         );
                         continue;
                     }
-                    if campaign == CampaignId::Boudica {
-                        self.complete_boudica_tutorial();
-                    } else if self
+                    if campaign != CampaignId::Boudica && self
                         .progress
                         .complete_episode(campaign.episode_id(), campaign.advisor())
                     {
@@ -837,6 +851,7 @@ impl SowApp {
                                 .app
                                 .main_menu_state
                                 .set_selected_leader(leader, true);
+                            self.leader_selection_revision = self.leader_selection_revision.wrapping_add(1);
                         }
                         Err(error) => log::warn!("[WEB MENU] invalid leader: {error}"),
                     }
@@ -866,6 +881,9 @@ impl SowApp {
                     if self.progress_account_id.as_deref() == Some(account_id.as_str()) {
                         self.acknowledge_reward_receipts(receipt_ids);
                     }
+                }
+                WebMenuCommand::SaveMenuGuideProgress { guide_id, completed_steps, current_step, status, selected_leader } => {
+                    self.save_menu_guide_progress(guide_id, completed_steps, current_step, status, selected_leader);
                 }
                 WebMenuCommand::OpenBrowser => {
                     self.process_ui_actions(Some(UiAction::OpenJoinBrowser));
@@ -1129,8 +1147,12 @@ impl SowApp {
                         self.ui.leaderboard_publish_pending = false;
                     }
                 }
-                WebMenuCommand::ReturnToMenu => {
+                WebMenuCommand::ReturnToMenu { destination } => {
                     self.process_ui_actions(Some(UiAction::ReturnToMenu));
+                    if let Some(context) = &mut self.menu_return {
+                        context.requested_screen = destination.filter(|value| value == "store");
+                    }
+                    self.save_menu_return_context();
                 }
                 WebMenuCommand::ContinueObserving => {
                     self.ui.is_spectating = true;
@@ -3666,6 +3688,7 @@ pub(crate) fn publish_state(app: &mut SowApp) {
         let hud_payload = build_hud_payload(app, include_leaderboard);
         serde_json::json!({
             "phase": "Playing",
+            "account_id": app.progress_account_id,
             "loader_cycle_id": app.ui.app.splash_state.cycle_id,
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
@@ -3789,6 +3812,14 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
             "loader_status": "",
+            "loader_status_key": app.menu_return.as_ref().filter(|context| {
+                context.cycle_id == app.ui.app.splash_state.cycle_id
+                    && context.account_id == app.progress_account_id
+            }).and_then(|context| match context.status.as_str() {
+                "waiting" => Some("menu.confirming_rewards"),
+                "error" => Some("menu.retrying_rewards"),
+                _ => None,
+            }),
             "loader_done": app.ui.app.splash_state.done,
             "boot_campaign": app.boot_campaign_pending.clone(),
             "connected": state.is_connected,
@@ -3822,6 +3853,16 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "laurels": progress.laurels,
             "gems": progress.gems,
             "reward_receipts": progress.reward_receipts.values().collect::<Vec<_>>(),
+            "menu_return": app.menu_return,
+            "profile_ready": app.profile_last_applied_request > 0,
+            "menu_guides": progress.menu_guides,
+            "name_save_revision": app.name_save_revision,
+            "name_save_pending": app.pending_display_name.is_some(),
+            "leader_selection_revision": app.leader_selection_revision,
+            "purchase_revision": app.purchase_revision,
+            "quick_match_revision": app.quick_match_revision,
+            "menu_guide_save_revision": app.menu_guide_save_revision,
+            "menu_guide_save_pending": app.menu_guide_save_pending,
             "achievements": progress.unlocked_achievements,
             "campaign": campaign_payload(progress),
             "selected_skin": progress.selected_skin,

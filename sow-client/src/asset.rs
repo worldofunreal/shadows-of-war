@@ -322,6 +322,7 @@ impl SowApp {
                     }
                     crate::anonymous_identity::clear_pending_display_name();
                     self.pending_display_name = None;
+                    self.name_save_revision = self.name_save_revision.wrapping_add(1);
                     self.ui.app.main_menu_state.player_name = display_name;
                     self.ui.app.main_menu_state.error_message = None;
                     if self.profile_refresh_pending {
@@ -349,6 +350,9 @@ impl SowApp {
                     }
                 }
                 crate::player_progress::DbEvent::LoadFailed { request_id, status } => {
+                    if request_id <= self.profile_last_applied_request {
+                        continue;
+                    }
                     self.profile_request_in_flight = false;
                     if self.profile_refresh_pending && self.display_name_save_request_id.is_none() {
                         self.profile_refresh_pending = false;
@@ -358,6 +362,7 @@ impl SowApp {
                     if !self.pending_reward_receipt_ids.is_empty()
                         || self.exit_reward_wait.is_some()
                     {
+                        self.mark_menu_return_error();
                         log::warn!(
                             "[rewards] profile refresh id={request_id} failed status={status:?}; keeping retry window"
                         );
@@ -376,7 +381,11 @@ impl SowApp {
                     request_id,
                     status,
                 } => {
+                    if request_id <= self.profile_last_applied_request {
+                        continue;
+                    }
                     self.profile_request_in_flight = false;
+                    self.mark_menu_return_error();
                     log::warn!(
                         "[tutorial] completion request id={request_id} failed status={status:?}; local completion marker retained"
                     );
@@ -480,16 +489,27 @@ impl SowApp {
                 }
                 crate::player_progress::DbEvent::StoreProfileLoaded {
                     account_id,
-                    progress,
+                    mut progress,
                     operation,
                 } => {
                     if self.progress_account_id.as_deref() != Some(account_id.as_str()) {
                         log::error!(
                             "[store] ignoring {operation} response for a different account"
                         );
-                        self.ui.app.main_menu_state.store_busy = false;
                         continue;
                     }
+                    if operation == "menu guide progress" {
+                        self.progress.merge_menu_guides(progress.menu_guides);
+                        self.menu_guide_save_pending = false;
+                        self.menu_guide_save_revision = self.menu_guide_save_revision.wrapping_add(1);
+                        self.save_local_progress();
+                        continue;
+                    }
+                    if operation == "leader unlock" {
+                        self.purchase_revision = self.purchase_revision.wrapping_add(1);
+                    }
+                    let saved_guides = std::mem::take(&mut self.progress.menu_guides);
+                    progress.merge_menu_guides(saved_guides);
                     self.progress = progress;
                     self.save_local_progress();
                     self.sync_wou_collectibles();
@@ -497,7 +517,16 @@ impl SowApp {
                     self.ui.app.main_menu_state.error_message = None;
                     log::info!("[store] {operation} acknowledged by server");
                 }
-                crate::player_progress::DbEvent::StoreActionFailed { operation, status } => {
+                crate::player_progress::DbEvent::StoreActionFailed { account_id, operation, status } => {
+                    if self.progress_account_id.as_deref() != Some(account_id.as_str()) {
+                        continue;
+                    }
+                    if operation == "menu guide progress" {
+                        self.menu_guide_save_pending = false;
+                        self.menu_guide_save_revision = self.menu_guide_save_revision.wrapping_add(1);
+                        log::warn!("[menu-guide] progress save failed status={status:?}; retry remains pending");
+                        continue;
+                    }
                     self.ui.app.main_menu_state.store_busy = false;
                     self.ui.app.main_menu_state.error_message =
                         Some(crate::ui::UiText::new("store.action_unavailable"));

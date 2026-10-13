@@ -1,4 +1,5 @@
-use super::state::{ExitRewardWait, SowApp};
+//! Authoritative profile and return handoff; see docs/player-journeys.md.
+use super::state::{ExitRewardWait, MenuReturnContext, SowApp};
 use web_time::{Duration, Instant};
 
 const REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs(30);
@@ -28,6 +29,9 @@ fn apply_exit_reward_profile(
                     .is_some_and(|receipt| {
                         receipt.id.as_str() == receipt_id
                             && receipt.match_id.as_str() == receipt_id
+                            && matches!(receipt.status,
+                                sow_data::profile::RewardSettlementStatus::Applied
+                                    | sow_data::profile::RewardSettlementStatus::Presented)
                             && if wait.requires_verification {
                                 matches!(
                                     receipt.verification_status,
@@ -37,11 +41,7 @@ fn apply_exit_reward_profile(
                                     )
                                 )
                             } else {
-                                matches!(
-                                    receipt.status,
-                                    sow_data::profile::RewardSettlementStatus::Applied
-                                        | sow_data::profile::RewardSettlementStatus::Presented
-                                )
+                                true
                             }
                     })
             })
@@ -349,6 +349,26 @@ impl SowApp {
         self.fetch_cloud_progress();
     }
 
+    pub(crate) fn prepare_menu_return(&mut self, source: &str, receipt_id: Option<String>) {
+        self.menu_return = Some(MenuReturnContext {
+            account_id: self.progress_account_id.clone(),
+            cycle_id: self.ui.app.splash_state.cycle_id,
+            source: source.to_string(),
+            match_id: receipt_id.clone(),
+            receipt_ids: receipt_id.iter().cloned().collect(),
+            status: if receipt_id.is_some() { "waiting" } else { "not_applicable" }.to_string(),
+            requested_screen: None,
+        });
+        self.save_menu_return_context();
+    }
+
+    pub(crate) fn save_menu_return_context(&self) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(context) = &self.menu_return {
+            crate::anonymous_identity::save_menu_return(context);
+        }
+    }
+
     pub(crate) fn poll_reward_profile_sync(&mut self, now: Instant) {
         if self.pending_reward_receipt_ids.is_empty() && self.exit_reward_wait.is_none() {
             return;
@@ -357,7 +377,7 @@ impl SowApp {
             && self.ui.app.phase == crate::ClientPhase::Splash
             && matches!(
                 self.ui.app.splash_state.job,
-                crate::ui::loading_screen::SplashJob::ExitGame
+                crate::ui::loading_screen::SplashJob::ExitGame | crate::ui::loading_screen::SplashJob::Boot
             );
         if self.ui.app.phase != crate::ClientPhase::MainMenu && !waiting_in_exit_loader {
             return;
@@ -376,6 +396,17 @@ impl SowApp {
         }
         self.reward_profile_retry_at = Some(now + self.reward_profile_retry_interval());
         self.fetch_cloud_progress();
+    }
+
+    pub(crate) fn mark_menu_return_error(&mut self) {
+        if let Some(context) = &mut self.menu_return
+            && context.account_id == self.progress_account_id
+            && context.cycle_id == self.ui.app.splash_state.cycle_id
+            && context.status == "waiting"
+        {
+            context.status = "error".to_string();
+            self.save_menu_return_context();
+        }
     }
 
     pub(crate) fn schedule_reward_profile_retry(&mut self) {
@@ -703,16 +734,16 @@ impl SowApp {
         display_name: String,
         provider: String,
     ) {
-        apply_exit_reward_profile(&mut self.exit_reward_wait, &account_id, &cloud);
         let cloud_preferred_leader = cloud.preferred_leader.clone();
         let account_changed = self.progress_account_id.as_deref() != Some(account_id.as_str());
         let account_switch = account_changed && self.progress_account_id.is_some();
         let cloud_intro_completed = cloud.intro_completed.unwrap_or(false);
-        let retry_tutorial = !account_changed
+        let retry_tutorial = !account_switch
             && self.progress.intro_completed.unwrap_or(false)
             && !cloud_intro_completed;
         if account_changed {
             self.progress.reward_receipts.clear();
+            self.progress.menu_guides.clear();
             self.progress.unlocked_achievements.clear();
         }
         if account_switch {
@@ -720,7 +751,60 @@ impl SowApp {
             crate::anonymous_identity::clear_pending_display_name();
             self.pending_reward_receipt_ids.clear();
             self.reward_profile_retry_at = None;
+            self.exit_reward_wait = None;
+            self.menu_return = None;
+            self.name_save_revision = 0;
+            self.leader_selection_revision = 0;
+            self.purchase_revision = 0;
+            self.quick_match_revision = 0;
+            self.menu_guide_save_revision = 0;
+            self.menu_guide_save_pending = false;
+            self.net.exiting_relay = None;
         }
+        #[cfg(target_arch = "wasm32")]
+        if self.menu_return.is_none() {
+            self.menu_return = crate::anonymous_identity::load_menu_return(&account_id).map(|mut context| {
+                context.cycle_id = self.ui.app.splash_state.cycle_id;
+                context
+            });
+        }
+        if retry_tutorial && self.menu_return.is_none() {
+            self.prepare_menu_return("tutorial", Some("tutorial".to_string()));
+        }
+        if let Some(context) = &mut self.menu_return {
+            if context.account_id.is_none() {
+                context.account_id = Some(account_id.clone());
+            }
+            if context.account_id.as_deref() == Some(account_id.as_str())
+                && matches!(context.status.as_str(), "waiting" | "error")
+            {
+                self.exit_reward_wait.get_or_insert_with(|| ExitRewardWait {
+                    account_id: Some(account_id.clone()),
+                    receipt_id: context.match_id.clone(),
+                    requires_verification: context.source == "multiplayer",
+                });
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        if self.exit_reward_wait.is_some() && self.net.exiting_relay.is_none()
+            && let Some(proof) = crate::anonymous_identity::load_exit_relay_proof(&account_id)
+        {
+            self.resume_exit_relay(proof);
+        }
+        if apply_exit_reward_profile(&mut self.exit_reward_wait, &account_id, &cloud) {
+            if let Some(context) = &mut self.menu_return {
+                context.status = "confirmed".to_string();
+                context.receipt_ids = cloud.reward_receipts.values()
+                    .filter(|receipt| Some(receipt.match_id.as_str()) == context.match_id.as_deref())
+                    .map(|receipt| receipt.id.clone()).collect();
+            }
+            log::info!("[menu-flow] server confirmed return account={} cycle={}",
+                account_hint(Some(&account_id)), self.ui.app.splash_state.cycle_id);
+            self.net.exiting_relay = None;
+            #[cfg(target_arch = "wasm32")]
+            crate::anonymous_identity::save_exit_relay_proof(&account_id, None);
+        }
+        self.save_menu_return_context();
         self.pending_reward_receipt_ids.extend(
             crate::anonymous_identity::load_pending_reward_receipt_ids(&account_id),
         );
@@ -841,13 +925,28 @@ impl SowApp {
         crate::store_portals::save_portal_progress(&self.progress);
     }
 
-    fn post_store_action(
+    pub(crate) fn save_menu_guide_progress(
+        &mut self, guide_id: String, completed_steps: Vec<String>, current_step: Option<String>,
+        status: sow_data::profile::MenuGuideStatus, selected_leader: Option<String>,
+    ) {
+        let fields = serde_json::json!({
+            "guide_id": guide_id, "completed_steps": completed_steps, "current_step": current_step,
+            "status": status, "selected_leader": selected_leader,
+        });
+        if let Some(fields) = fields.as_object() {
+            self.post_profile_action("menu guide progress", "/profile/menu-guide-progress", fields.clone());
+        }
+    }
+
+    fn post_profile_action(
         &mut self,
         operation: &str,
         path: &str,
         mut fields: serde_json::Map<String, serde_json::Value>,
     ) {
-        if self.ui.app.main_menu_state.store_busy {
+        let guide_operation = operation == "menu guide progress";
+        if (guide_operation && self.menu_guide_save_pending)
+            || (!guide_operation && self.ui.app.main_menu_state.store_busy) {
             return;
         }
         let Some(account_id) = self.progress_account_id.clone() else {
@@ -855,7 +954,7 @@ impl SowApp {
                 Some(crate::ui::UiText::new("profile.loading_profile"));
             return;
         };
-        fields.insert("account_id".into(), serde_json::Value::String(account_id));
+        fields.insert("account_id".into(), serde_json::Value::String(account_id.clone()));
         if self.progress_provider == "anonymous" {
             let Some(auth_secret) = crate::anonymous_identity::load_account_secret() else {
                 self.ui.app.main_menu_state.error_message =
@@ -869,8 +968,12 @@ impl SowApp {
                 Some(crate::ui::UiText::new("store.action_unavailable"));
             return;
         };
-        self.ui.app.main_menu_state.store_busy = true;
-        self.ui.app.main_menu_state.error_message = None;
+        if guide_operation {
+            self.menu_guide_save_pending = true;
+        } else {
+            self.ui.app.main_menu_state.store_busy = true;
+            self.ui.app.main_menu_state.error_message = None;
+        }
         let url = format!(
             "{}{}",
             self.asset_config.database_base.trim_end_matches('/'),
@@ -899,6 +1002,7 @@ impl SowApp {
                     Err(error) => {
                         log::error!("[store] {operation} response parse failed: {error}");
                         let _ = tx.send(crate::player_progress::DbEvent::StoreActionFailed {
+                            account_id: account_id.clone(),
                             operation: operation.clone(),
                             status: Some(response.status),
                         });
@@ -908,6 +1012,7 @@ impl SowApp {
             Ok(response) => {
                 log::error!("[store] {operation} failed status={}", response.status);
                 let _ = tx.send(crate::player_progress::DbEvent::StoreActionFailed {
+                    account_id: account_id.clone(),
                     operation: operation.clone(),
                     status: Some(response.status),
                 });
@@ -915,6 +1020,7 @@ impl SowApp {
             Err(error) => {
                 log::error!("[store] {operation} network failed: {error}");
                 let _ = tx.send(crate::player_progress::DbEvent::StoreActionFailed {
+                    account_id: account_id.clone(),
                     operation: operation.clone(),
                     status: None,
                 });
@@ -990,19 +1096,19 @@ impl SowApp {
         let mut fields = serde_json::Map::new();
         fields.insert("leader_id".into(), serde_json::Value::String(leader_id));
         fields.insert("currency".into(), serde_json::Value::String(currency));
-        self.post_store_action("leader unlock", "/store/leaders/unlock", fields);
+        self.post_profile_action("leader unlock", "/store/leaders/unlock", fields);
     }
 
     pub(crate) fn unlock_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));
-        self.post_store_action("skin unlock", "/store/skins/unlock", fields);
+        self.post_profile_action("skin unlock", "/store/skins/unlock", fields);
     }
 
     pub(crate) fn equip_skin(&mut self, skin_id: String) {
         let mut fields = serde_json::Map::new();
         fields.insert("skin_id".into(), serde_json::Value::String(skin_id));
-        self.post_store_action("skin equip", "/store/skins/equip", fields);
+        self.post_profile_action("skin equip", "/store/skins/equip", fields);
     }
 
     pub(crate) fn load_profile(&mut self) {
@@ -1251,6 +1357,9 @@ impl SowApp {
     /// Persist tutorial completion through the current platform proof. The
     /// server owns the one-time reward; local storage is only the retry signal.
     pub(crate) fn persist_tutorial_completion(&mut self) {
+        // Remember the obligation before identity exists. A missing proof is
+        // retryable work, never permission to release the return loader.
+        self.track_reward_receipt_sync("tutorial");
         let Some(account_id) = self.progress_account_id.clone() else {
             return;
         };
@@ -1272,7 +1381,6 @@ impl SowApp {
         if !use_platform_identity && auth_secret.is_none() {
             return;
         }
-        self.track_reward_receipt_sync("tutorial");
         if self.profile_request_in_flight {
             return;
         }
@@ -1370,6 +1478,142 @@ mod reward_exit_tests {
     use sow_data::profile::{ReplayVerificationStatus, RewardReceipt, RewardSettlementStatus};
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    // Run the real HUD command, Rust app and HTTP callbacks in Node. Only the
+    // browser APIs and delayed database response are replaced; no preconfirmed
+    // menu state is injected into the return path.
+    #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+        let saved, currentProfile, completedProfile, releaseReward, tutorialRequests;
+        export function setupTutorialExit(initial, completed) {
+            const keys = ['Window', 'window', 'localStorage', 'WebSocket', 'fetch',
+                'matchMedia', 'SOW_MAPS_URL', 'SOW_ASSETS_URL', 'SOW_DATABASE_URL', 'SOW_WS_URL'];
+            saved = keys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+            globalThis.Window = class { static [Symbol.hasInstance](value) { return value === globalThis; } };
+            globalThis.window = globalThis;
+            const storage = new Map();
+            globalThis.localStorage = { getItem: key => storage.get(key) ?? null,
+                setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) };
+            globalThis.matchMedia = () => ({ matches: false });
+            globalThis.WebSocket = class {
+                constructor() { this.readyState = 0; queueMicrotask(() => { this.readyState = 1; this.onopen?.(); }); }
+                send() {}
+                close() { this.readyState = 3; this.onclose?.(); }
+            };
+            Object.assign(globalThis, { SOW_MAPS_URL: 'https://journey.invalid/maps',
+                SOW_ASSETS_URL: 'https://journey.invalid/assets', SOW_DATABASE_URL: 'https://journey.invalid/api',
+                SOW_WS_URL: 'wss://journey.invalid/ws/' });
+            currentProfile = initial; completedProfile = completed; tutorialRequests = 0;
+            globalThis.fetch = request => {
+                if (request.url.endsWith('/profile/tutorial-complete')) {
+                    tutorialRequests++;
+                    return new Promise(resolve => { releaseReward = () => {
+                        currentProfile = completedProfile;
+                        resolve(new Response(currentProfile, { status: 200 }));
+                    }; });
+                }
+                return Promise.resolve(new Response(currentProfile, { status: 200 }));
+            };
+            return JSON.parse(initial).account_id;
+        }
+        export function clickTutorialExit(source, command) {
+            const handler = source.slice(source.indexOf('function handleHudClick(event) {'),
+                source.indexOf('hudRoot.addEventListener("click", handleHudClick)'));
+            const click = new Function('send', 'renderHud',
+                'let surrenderModalOpen = true, surrenderMessage = null; ' + handler + '; return handleHudClick;')(
+                type => command(JSON.stringify({ type })), () => {});
+            const button = { dataset: { command: 'confirm_surrender' } };
+            click({ target: { closest: selector => selector === '[data-command]' ? button : null } });
+        }
+        export function rewardRequestCount() { return tutorialRequests; }
+        export function releaseTutorialReward() { releaseReward(); }
+        export function nextTutorialTurn() { return new Promise(resolve => setTimeout(resolve, 0)); }
+        export function restoreTutorialExit() {
+            for (const [key, descriptor] of saved) {
+                if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key];
+            }
+        }
+    "#)]
+    extern "C" {
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = setupTutorialExit)]
+        fn setup_tutorial_exit(initial: &str, completed: &str) -> String;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = clickTutorialExit)]
+        fn click_tutorial_exit(source: &str, command: &js_sys::Function);
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = rewardRequestCount)]
+        fn reward_request_count() -> u32;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = releaseTutorialReward)]
+        fn release_tutorial_reward();
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = nextTutorialTurn)]
+        fn next_tutorial_turn() -> js_sys::Promise;
+        #[wasm_bindgen::prelude::wasm_bindgen(js_name = restoreTutorialExit)]
+        fn restore_tutorial_exit();
+    }
+
+    #[wasm_bindgen_test]
+    async fn hud_leave_tutorial_requests_reward_before_releasing_return() {
+        use wasm_bindgen::{JsCast, closure::Closure};
+        let account_id = "0123456789abcdef0123456789abcdef";
+        let initial = serde_json::json!({ "account_id": account_id, "auth_secret": "audit-proof",
+            "display_name": "Audit", "profile": PlayerProgress::default() }).to_string();
+        let mut completed = profile_with("tutorial", None, RewardSettlementStatus::Applied);
+        completed.intro_completed = Some(true);
+        completed.xp = 100;
+        completed.level = 2;
+        completed.crowns = 100;
+        completed.reward_receipts.get_mut("tutorial").unwrap().level_before = Some(1);
+        completed.reward_receipts.get_mut("tutorial").unwrap().level_after = Some(2);
+        completed.menu_guides.insert("welcome".to_string(), Default::default());
+        let response = serde_json::json!({ "account_id": account_id,
+            "display_name": "Audit", "profile": completed }).to_string();
+        let account_id = setup_tutorial_exit(&initial, &response);
+        let mut app = crate::app::SowApp::new();
+        for _ in 0..200 {
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.update_assets();
+            if app.profile_last_applied_request > 0 { break; }
+        }
+        assert!(app.profile_last_applied_request > 0, "boot must finish its actual profile request");
+        assert_eq!(app.progress_account_id.as_deref(), Some(account_id.as_str()));
+        assert_eq!(app.progress.xp, 0);
+        assert!(app.progress.menu_guides.is_empty());
+        app.ui.app.phase = crate::ClientPhase::Playing;
+        app.net.is_offline = true;
+        app.ui.tutorial_active = true;
+        app.ui.tutorial_campaign = crate::campaign::CampaignId::Boudica;
+        let command = Closure::<dyn FnMut(String)>::new(crate::web_menu::sow_menu_command);
+        click_tutorial_exit(include_str!("../../../sow-web/shell/main_menu.hud.js"), command.as_ref().unchecked_ref());
+        app.process_web_menu_commands();
+        assert_eq!(app.ui.app.phase, crate::ClientPhase::Splash);
+        assert_eq!(app.ui.app.splash_state.job, crate::ui::loading_screen::SplashJob::ExitGame);
+        assert!(app.exit_reward_wait.is_some());
+        assert_eq!(app.menu_return.as_ref().unwrap().source, "tutorial");
+        assert_eq!(app.menu_return.as_ref().unwrap().status, "waiting");
+        assert_eq!(app.progress.xp, 0);
+        wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+        assert_eq!(reward_request_count(), 1, "the actual HUD exit must request its reward");
+        app.update_assets();
+        assert!(app.exit_reward_wait.is_some(), "a delayed server cannot release the return");
+        release_tutorial_reward();
+        // The exit's queued refresh must also finish through the real HTTP callbacks.
+        for _ in 0..200 {
+            wasm_bindgen_futures::JsFuture::from(next_tutorial_turn()).await.unwrap();
+            app.update_assets();
+            if app.exit_reward_wait.is_none() { break; }
+        }
+        assert!(app.exit_reward_wait.is_none());
+        assert_eq!(app.menu_return.as_ref().unwrap().status, "confirmed");
+        assert_eq!(app.menu_return.as_ref().unwrap().receipt_ids, ["tutorial"]);
+        assert_eq!((app.progress.xp, app.progress.level, app.progress.crowns), (100, 2, 100));
+        assert!(app.progress.menu_guides.contains_key("welcome"));
+        app.ui.app.phase = crate::ClientPhase::MainMenu;
+        crate::web_menu::publish_state(&mut app);
+        let state: serde_json::Value = serde_json::from_str(&js_sys::Reflect::get(
+            &js_sys::global(), &"SOW_MENU_STATE".into()).unwrap().as_string().unwrap()).unwrap();
+        assert_eq!(state["menu_return"]["status"], "confirmed");
+        assert_eq!(state["reward_receipts"][0]["id"], "tutorial");
+        assert_eq!(state["menu_guides"]["welcome"]["status"], "active");
+        drop(app);
+        restore_tutorial_exit();
+    }
+
     fn wait(receipt_id: &str, requires_verification: bool) -> Option<ExitRewardWait> {
         Some(ExitRewardWait {
             account_id: Some("account-a".to_string()),
@@ -1464,6 +1708,57 @@ mod reward_exit_tests {
             &profile
         ));
         assert!(expected.is_some());
+    }
+
+    #[wasm_bindgen_test]
+    fn verified_but_unapplied_receipt_cannot_release_loader() {
+        let mut expected = wait("match-a", true);
+        assert!(!apply_exit_reward_profile(&mut expected, "account-a", &profile_with(
+            "match-a", Some(ReplayVerificationStatus::Verified), RewardSettlementStatus::Pending)));
+        assert!(expected.is_some());
+    }
+
+    #[wasm_bindgen_test]
+    fn delayed_profile_cannot_rewind_completed_menu_guide() {
+        use sow_data::profile::{MenuGuideProgress, MenuGuideStatus};
+        let mut progress = PlayerProgress::default();
+        progress.menu_guides.insert("welcome".to_string(), MenuGuideProgress {
+            completed_steps: ["welcome_name".to_string(), "welcome_complete".to_string()].into_iter().collect(),
+            status: MenuGuideStatus::Completed,
+            selected_leader: None,
+            ..Default::default()
+        });
+        let mut cloud = PlayerProgress::default();
+        cloud.menu_guides.insert("welcome".to_string(), MenuGuideProgress::default());
+        progress.merge_boot_profile(cloud);
+        assert_eq!(progress.menu_guides["welcome"].status, MenuGuideStatus::Completed);
+        assert!(progress.menu_guides["welcome"].completed_steps.contains("welcome_name"));
+    }
+
+    #[wasm_bindgen_test]
+    fn confirmed_first_match_context_survives_delayed_snapshots() {
+        use sow_data::profile::MenuGuideProgress;
+        let mut progress = PlayerProgress::default();
+        let confirmed = MenuGuideProgress { source_match_id: Some("match-a".to_string()), ..Default::default() };
+        progress.merge_menu_guides(std::collections::BTreeMap::from([("first_multiplayer".to_string(), confirmed)]));
+        assert_eq!(progress.menu_guides["first_multiplayer"].source_match_id.as_deref(), Some("match-a"));
+        progress.merge_menu_guides(std::collections::BTreeMap::from([("first_multiplayer".to_string(), MenuGuideProgress::default())]));
+        assert_eq!(progress.menu_guides["first_multiplayer"].source_match_id.as_deref(), Some("match-a"));
+    }
+
+    #[wasm_bindgen_test]
+    fn tutorial_obligation_survives_identity_arriving_after_exit() {
+        let mut expected = Some(ExitRewardWait {
+            account_id: None,
+            receipt_id: Some("tutorial".to_string()),
+            requires_verification: false,
+        });
+        assert!(!apply_exit_reward_profile(&mut expected, "account-a", &PlayerProgress::default()));
+        assert_eq!(expected.as_ref().and_then(|wait| wait.account_id.as_deref()), Some("account-a"));
+        let receipt = profile_with("tutorial", None, RewardSettlementStatus::Applied);
+        assert!(!apply_exit_reward_profile(&mut expected, "account-b", &receipt));
+        assert!(apply_exit_reward_profile(&mut expected, "account-a", &receipt));
+        assert!(expected.is_none());
     }
 
     #[wasm_bindgen_test]

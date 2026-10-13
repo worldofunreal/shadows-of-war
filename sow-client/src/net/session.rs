@@ -9,6 +9,92 @@ fn should_use_exit_game_loader(phase: ClientPhase) -> bool {
 }
 
 impl SowApp {
+    pub(crate) fn resume_exit_relay(&mut self, proof: crate::app::ExitRelayProof) {
+        let (tx, rx) = crossbeam_channel::unbounded();
+        self.net.exiting_relay = Some(crate::app::ExitRelayConnection {
+            client: None,
+            proof,
+            connect_tx: crate::app::WakeSender::new(tx),
+            connect_rx: rx,
+            connecting: false,
+            retry_at: web_time::Instant::now(),
+        });
+    }
+
+    fn retain_exit_relay(&mut self) {
+        let (Some(lobby_id), Some(player_id), Some(ticket)) = (
+            self.sim.my_lobby_id, self.sim.my_player_id, self.sim.relay_reconnect_ticket.clone(),
+        ) else {
+            log::warn!("[menu-flow] exit has no relay reconnect capability");
+            return;
+        };
+        let proof = crate::app::ExitRelayProof {
+            url: self.net.ws_url.clone(), lobby_id, player_id, ticket,
+        };
+        let client = self.net.client.take();
+        self.resume_exit_relay(proof.clone());
+        if let Some(exit) = &mut self.net.exiting_relay {
+            exit.client = client;
+            if let Some(client) = &exit.client {
+                if let Ok(bytes) = bincode::serialize(&sow_core::protocol::ClientMessage::Leave {}) {
+                    client.send(bytes);
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(account_id) = self.progress_account_id.as_deref() {
+            crate::anonymous_identity::save_exit_relay_proof(account_id, Some(&proof));
+        }
+    }
+
+    pub(crate) fn poll_exit_relay(&mut self, now: web_time::Instant) {
+        let Some(exit) = &mut self.net.exiting_relay else { return; };
+        while let Ok(result) = exit.connect_rx.try_recv() {
+            exit.connecting = false;
+            match result {
+                Ok(client) => {
+                    let message = sow_core::protocol::ClientMessage::ReconnectWithTicket {
+                        lobby_id: exit.proof.lobby_id, player_id: exit.proof.player_id,
+                        ticket: exit.proof.ticket.clone(),
+                    };
+                    if let Ok(bytes) = bincode::serialize(&message) { client.send(bytes); }
+                    exit.client = Some(client);
+                }
+                Err(error) => {
+                    log::warn!("[menu-flow] reconnect for pending exit failed: {error}");
+                    exit.retry_at = now + web_time::Duration::from_secs(2);
+                }
+            }
+        }
+        if let Some(client) = &exit.client {
+            while let Ok(bytes) = client.rx.try_recv() {
+                if let Ok(sow_core::protocol::ServerMessage::RelayReconnectTicket {
+                    lobby_id, player_id, ticket,
+                }) = bincode::deserialize(&bytes) {
+                    if lobby_id == exit.proof.lobby_id && player_id == exit.proof.player_id {
+                        exit.proof.ticket = ticket;
+                        #[cfg(target_arch = "wasm32")]
+                        if let Some(account_id) = self.progress_account_id.as_deref() {
+                            crate::anonymous_identity::save_exit_relay_proof(account_id, Some(&exit.proof));
+                        }
+                        if let Ok(bytes) = bincode::serialize(&sow_core::protocol::ClientMessage::Leave {}) {
+                            client.send(bytes);
+                        }
+                    }
+                }
+            }
+            if client.is_socket_closed() {
+                exit.client = None;
+                exit.retry_at = now + web_time::Duration::from_secs(2);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        if exit.client.is_none() && !exit.connecting && now >= exit.retry_at && self.wasm_doc_was_visible {
+            exit.connecting = true;
+            crate::spawn_sow_client_connect(exit.proof.url.clone(), &exit.connect_tx);
+        }
+    }
+
     pub(crate) fn make_relay_ready_message(
         &self,
         lobby_id: u64,
@@ -154,6 +240,8 @@ impl SowApp {
         self.ui.app.phase = ClientPhase::MainMenu;
         self.ui.is_spectating = false;
         self.ui.endgame_cache = None;
+        self.exit_reward_wait = None;
+        self.prepare_menu_return("lobby", None);
     }
 
     fn clear_lobby_exit_state(&mut self) {
@@ -188,6 +276,7 @@ impl SowApp {
         let use_loader = should_use_exit_game_loader(phase);
         let was_playing = phase == crate::ClientPhase::Playing;
         let was_offline = self.net.is_offline;
+        let was_spectating = self.ui.is_spectating;
         if was_playing
             && was_offline
             && self.ui.tutorial_active
@@ -198,16 +287,24 @@ impl SowApp {
                 &serde_json::json!({ "episode_id": self.ui.tutorial_campaign.episode_id() }),
             );
         }
-        let reward_match_id = (was_playing && !self.net.is_offline)
+        let reward_match_id = (was_playing && !self.net.is_offline && self.sim.my_player_id.is_some())
             .then(|| self.sim.my_lobby_id)
             .flatten();
         let tutorial_reward_id = (was_playing
             && was_offline
+            && !was_spectating
             && self.ui.tutorial_active
-            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica
-            && self.pending_reward_receipt_ids.contains("tutorial"))
+            && self.ui.tutorial_campaign == crate::campaign::CampaignId::Boudica)
         .then(|| "tutorial".to_string());
+        // Every active tutorial exit joins the same one-time server reward and
+        // welcome handoff, including the HUD's Leave tutorial button.
+        if tutorial_reward_id.is_some() {
+            self.complete_boudica_tutorial();
+        }
         let exit_leader = self.ui.app.splash_state.loader_leader;
+        if reward_match_id.is_some() {
+            self.retain_exit_relay();
+        }
         if was_playing {
             if !self.progress_match_recorded {
                 crate::store_portals::track_product_event("match_exit");
@@ -248,15 +345,19 @@ impl SowApp {
         self.ui.endgame_cache = None;
         self.reset_progress_session();
 
+        let receipt_id = tutorial_reward_id.clone().or_else(|| reward_match_id.map(|id| id.to_string()));
+        let source = if tutorial_reward_id.is_some() { "tutorial" }
+            else if reward_match_id.is_some() { "multiplayer" }
+            else if was_playing && was_spectating { "spectator" }
+            else { "other" };
+        self.exit_reward_wait = None;
+        self.prepare_menu_return(source, receipt_id.clone());
+
         if was_playing && crate::store_portals::should_fetch_cloud_profile() {
-            if !was_offline {
-                self.begin_reward_profile_sync(reward_match_id.map(|id| id.to_string()), true);
-            } else if self.progress_account_id.is_some() {
-                if let Some(receipt_id) = tutorial_reward_id {
-                    self.begin_reward_profile_sync(Some(receipt_id), false);
-                } else {
-                    self.fetch_cloud_progress();
-                }
+            if let Some(receipt_id) = receipt_id {
+                self.begin_reward_profile_sync(Some(receipt_id), !was_offline);
+            } else {
+                self.fetch_cloud_progress();
             }
         }
     }

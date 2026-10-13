@@ -2,13 +2,7 @@
 
 Thank you for your interest in contributing!
 
-## Local workflow
-
-- `./sow` or `./sow native` opens the native client.
-- `./sow l` or `./sow local` builds and serves the browser client at
-  `http://127.0.0.1:4173` for local visual review; it is not the release gate.
-- Maintainers use `./sow p` for Web, backend, and infrastructure releases.
-- Android signing and Play uploads are handled by the owner through `./sow a`.
+For local launch instructions, see the [README](README.md#run-locally).
 
 ## Pull requests
 

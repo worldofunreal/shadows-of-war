@@ -112,6 +112,21 @@ struct TutorialCompleteRequest {
     auth_secret: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct MenuGuideProgressRequest {
+    account_id: String,
+    #[serde(default)]
+    auth_secret: Option<String>,
+    guide_id: String,
+    #[serde(default)]
+    completed_steps: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    current_step: Option<String>,
+    status: sow_data::profile::MenuGuideStatus,
+    #[serde(default)]
+    selected_leader: Option<String>,
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct MatchStartRequest {
     match_id: String,
@@ -126,14 +141,8 @@ struct MatchFinalizeRequest {
     lobby_json: Option<String>,
     #[serde(default)]
     replay_data: Option<Vec<u8>>,
-}
-
-#[derive(Deserialize)]
-struct MatchParticipantSettleRequest {
-    match_id: String,
-    account_id: String,
     #[serde(default)]
-    lobby_json: Option<String>,
+    participant_closures: Vec<sow_data::profile::MatchParticipantClosure>,
 }
 
 #[derive(Deserialize)]
@@ -2249,6 +2258,7 @@ async fn main() {
             post(handle_event).layer(DefaultBodyLimit::max(MAX_ANALYTICS_REQUEST_BYTES)),
         )
         .route("/internal/analytics", get(handle_internal_analytics))
+        .route("/internal/match-id-seed", get(handle_match_id_seed))
         .route("/profile", get(handle_get_profile))
         .route("/auth/playgames/exchange", post(handle_playgames_exchange))
         .route("/auth/playgames/consume", post(handle_playgames_consume))
@@ -2298,6 +2308,10 @@ async fn main() {
             post(handle_tutorial_complete),
         )
         .route("/profile/tutorial-complete", post(handle_tutorial_complete))
+        .route(
+            "/profile/menu-guide-progress",
+            post(handle_menu_guide_progress),
+        )
         .route("/profile/anonymous/report", post(handle_report_player))
         .route("/profile/anonymous/blocks", post(handle_blocks))
         .route("/profile/anonymous/delete", post(handle_self_delete))
@@ -2307,7 +2321,7 @@ async fn main() {
             get(handle_internal_match_start),
         )
         .route(
-            "/internal/match-participant-settle",
+            "/internal/match-participant-settle/{match_id}/{account_id}/{closure_turn}",
             post(handle_match_participant_settle),
         )
         .route("/internal/match-finalize", post(handle_match_finalize))
@@ -3125,12 +3139,62 @@ async fn handle_tutorial_complete(
     }
 }
 
+/// POST /profile/menu-guide-progress — save server-validated menu guide state.
+async fn handle_menu_guide_progress(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<MenuGuideProgressRequest>,
+) -> impl IntoResponse {
+    let account_id = match store_account_for_request(
+        &state,
+        &headers,
+        &payload.account_id,
+        payload.auth_secret.as_deref(),
+    )
+    .await
+    {
+        Ok(account_id) => account_id,
+        Err(response) => return response.into_response(),
+    };
+    let progress = sow_data::profile::MenuGuideProgress {
+        completed_steps: payload.completed_steps,
+        current_step: payload.current_step,
+        status: payload.status,
+        selected_leader: payload.selected_leader,
+        source_match_id: None,
+    };
+    match state
+        .db
+        .save_menu_guide_progress(&account_id, payload.guide_id.trim(), progress)
+        .await
+    {
+        Ok(account) => (StatusCode::OK, Json(account.without_auth_secret())).into_response(),
+        Err(error) => {
+            let message = error.to_string();
+            let status = if message.starts_with("unknown ")
+                || message.starts_with("completed menu guide")
+                || message.starts_with("selected_leader")
+                || message.starts_with("menu guide")
+            {
+                StatusCode::BAD_REQUEST
+            } else if message.contains("Account not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                error!("menu guide progress save failed: {message}");
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (status, Json(ErrorResponse { error: message })).into_response()
+        }
+    }
+}
+
 /// POST /internal/match-participant-settle — the relay is the only caller.
 /// The client never supplies a reward amount, outcome, or statistics.
 async fn handle_match_participant_settle(
     State(state): State<Arc<AppState>>,
+    Path((match_id, account_id, closure_turn)): Path<(String, String, u64)>,
     headers: HeaderMap,
-    Json(payload): Json<MatchParticipantSettleRequest>,
+    body: Bytes,
 ) -> impl IntoResponse {
     if !verify_internal_auth(&headers, &state.secret_token) {
         warn!("Unauthorized access attempt to /internal/match-participant-settle");
@@ -3142,42 +3206,182 @@ async fn handle_match_participant_settle(
         )
             .into_response();
     }
-    if payload.match_id.trim().is_empty() || payload.account_id.trim().is_empty() {
+    if match_id.parse::<u64>().is_err()
+        || account_id.len() != 32
+        || !account_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                error: "match_id and account_id are required".to_string(),
+                error: "match_id and account_id are invalid".to_string(),
             }),
         )
             .into_response();
     }
-    if payload
-        .lobby_json
-        .as_deref()
-        .is_some_and(|json| json.len() > 2 * 1024 * 1024)
-    {
+    if body.len() > MAX_REPLAY_BYTES {
         return (
             StatusCode::PAYLOAD_TOO_LARGE,
             Json(ErrorResponse {
-                error: "lobby metadata is too large".to_string(),
+                error: "personal replay prefix is too large".to_string(),
             }),
+        )
+            .into_response();
+    }
+    if body.is_empty() {
+        let rejected = match reject_participant_settlement(
+            &state.db,
+            &match_id,
+            &account_id,
+            closure_turn,
+        )
+        .await
+        {
+            Ok(rejected) => rejected,
+            Err(message) => {
+                return (
+                    participant_closure_error_status(&message),
+                    Json(ErrorResponse { error: message }),
+                )
+                    .into_response();
+            }
+        };
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": if rejected { "rejected" } else { "settled" }
+            })),
         )
             .into_response();
     }
 
-    match state
-        .db
-        .settle_match_participant(
-            payload.match_id.trim(),
-            payload.account_id.trim(),
-            payload.lobby_json.as_deref(),
-        )
+    let verifier_base = std::env::var("SOW_SERVER_HTTP_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:25566".to_string());
+    let verifier_url = format!(
+        "{}/internal/replay/verify/{match_id}/participant/{account_id}/{closure_turn}",
+        verifier_base.trim_end_matches('/')
+    );
+    let response = match state
+        .replay_verification_client
+        .post(verifier_url)
+        .bearer_auth(&state.secret_token)
+        .header("Content-Type", "application/octet-stream")
+        .body(body)
+        .send()
         .await
     {
-        Ok(Some(account)) => {
+        Ok(response) => response,
+        Err(error) => {
+            warn!("[rewards] participant verifier unavailable match={match_id}: {error}");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "participant result is not available yet".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
+    if response.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+        let rejected = match reject_participant_settlement(
+            &state.db,
+            &match_id,
+            &account_id,
+            closure_turn,
+        )
+        .await
+        {
+            Ok(rejected) => rejected,
+            Err(message) => {
+                return (
+                    participant_closure_error_status(&message),
+                    Json(ErrorResponse { error: message }),
+                )
+                    .into_response();
+            }
+        };
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": if rejected { "rejected" } else { "settled" }
+            })),
+        )
+            .into_response();
+    }
+    if !response.status().is_success() {
+        warn!(
+            "[rewards] participant verifier returned HTTP {} match={match_id}",
+            response.status()
+        );
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrorResponse {
+                error: "participant result is not available yet".to_string(),
+            }),
+        )
+            .into_response();
+    }
+    let result = match response
+        .json::<sow_data::profile::VerifiedMatchResult>()
+        .await
+    {
+        Ok(result)
+            if result.match_id == match_id
+                && result.personal_closure_turn == Some(closure_turn) =>
+        {
+            result
+        }
+        Ok(_) => {
+            warn!("[rewards] participant verifier returned mismatched closure match={match_id}");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "participant result is not available yet".to_string(),
+                }),
+            )
+                .into_response();
+        }
+        Err(error) => {
+            warn!("[rewards] participant verifier response invalid match={match_id}: {error}");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: "participant result is not available yet".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
+    if let Err(error) = state
+        .db
+        .note_match_participant_closure(&match_id, &account_id, closure_turn)
+        .await
+    {
+        let message = error.to_string();
+        warn!(
+            "[rewards] participant closure rejected match={match_id} account={} error={message}",
+            account_hint(Some(&account_id))
+        );
+        return (
+            participant_closure_error_status(&message),
+            Json(ErrorResponse { error: message }),
+        )
+            .into_response();
+    }
+    match state
+        .db
+        .apply_verified_match_participant_result(&result, &account_id, closure_turn)
+        .await
+    {
+        Ok(Some((outcome, account))) => {
+            state.db.submit_crazygames_score(&account).await;
+            if let Err(error) = state.sync_playgames_match_outcome(&outcome).await {
+                warn!(
+                    "participant Play Games outcome sync failed account={}: {error}",
+                    account_hint(Some(&outcome.account_id))
+                );
+            }
             info!(
-                "[rewards] participant settled match={} account={}",
-                payload.match_id,
+                "[rewards] participant receipt verified match={match_id} account={}",
                 account_hint(Some(&account.id))
             );
             (
@@ -3193,18 +3397,78 @@ async fn handle_match_participant_settle(
             .into_response(),
         Err(error) => {
             warn!(
-                "[rewards] participant settlement rejected match={} account={} error={error}",
-                payload.match_id,
-                account_hint(Some(&payload.account_id))
+                "[rewards] participant settlement failed match={match_id} account={} error={error}",
+                account_hint(Some(&account_id))
             );
             (
-                StatusCode::BAD_REQUEST,
+                StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {
-                    error: error.to_string(),
+                    error: "participant settlement will retry".to_string(),
                 }),
             )
                 .into_response()
         }
+    }
+}
+
+fn participant_closure_error_status(message: &str) -> StatusCode {
+    if matches!(
+        message,
+        "account is not registered in this match"
+            | "account is not a registered human participant"
+            | "only human participants can close a personal receipt"
+            | "personal receipt closure conflicts with its saved state"
+            | "personal receipt rejection conflicts with its saved state"
+    ) {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
+}
+
+async fn reject_participant_settlement(
+    db: &PlayerDb,
+    match_id: &str,
+    account_id: &str,
+    closure_turn: u64,
+) -> Result<bool, String> {
+    db.note_match_participant_closure(match_id, account_id, closure_turn)
+        .await
+        .map_err(|error| error.to_string())?;
+    let account = db
+        .reject_match_participant_result(match_id, account_id, closure_turn)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(account
+        .profile
+        .reward_receipts
+        .get(match_id)
+        .is_some_and(|receipt| {
+            receipt.verification_status
+                == Some(sow_data::profile::ReplayVerificationStatus::Rejected)
+        }))
+}
+
+#[cfg(test)]
+mod participant_closure_http_tests {
+    use super::{StatusCode, participant_closure_error_status};
+
+    #[test]
+    fn only_invalid_closures_are_permanent_http_errors() {
+        assert_eq!(
+            participant_closure_error_status("account is not registered in this match"),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            participant_closure_error_status(
+                "personal receipt rejection conflicts with its saved state"
+            ),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            participant_closure_error_status("database unavailable"),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
     }
 }
 
@@ -4024,6 +4288,21 @@ async fn handle_get_profile(
 }
 
 /// POST /match/start (internal matchmaking registration)
+async fn handle_match_id_seed(
+    State(state): State<Arc<AppState>>, headers: HeaderMap,
+) -> impl IntoResponse {
+    if !verify_internal_auth(&headers, &state.secret_token) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"Unauthorized"}))).into_response();
+    }
+    match state.db.next_match_id_seed() {
+        Ok(next_match_id) => (StatusCode::OK, Json(serde_json::json!({"next_match_id":next_match_id}))).into_response(),
+        Err(error) => {
+            error!("match ID recovery failed: {error}");
+            (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"match IDs unavailable"}))).into_response()
+        }
+    }
+}
+
 async fn handle_match_start(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -4212,6 +4491,42 @@ async fn handle_match_finalize(
                 Json(ErrorResponse {
                     error: "metadata storage unavailable".to_string(),
                 }),
+            )
+                .into_response();
+        }
+    }
+
+    let mut closure_accounts = std::collections::BTreeSet::new();
+    for closure in &payload.participant_closures {
+        if !closure_accounts.insert(closure.account_id.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "duplicate participant closure".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    }
+    for closure in &payload.participant_closures {
+        if let Err(error) = state
+            .db
+            .note_match_participant_closure(
+                &payload.match_id,
+                &closure.account_id,
+                closure.turn_number,
+            )
+            .await
+        {
+            let message = error.to_string();
+            warn!(
+                "match {} participant closure rejected account={} error={message}",
+                payload.match_id,
+                account_hint(Some(&closure.account_id))
+            );
+            return (
+                participant_closure_error_status(&message),
+                Json(ErrorResponse { error: message }),
             )
                 .into_response();
         }

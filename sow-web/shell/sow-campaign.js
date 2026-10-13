@@ -170,9 +170,21 @@
         menu_campaign: '#sow-menu [data-command="open_campaign"]',
         campaign_replay: '#sow-menu [data-command="start_campaign_episode"][data-episode-id]',
         menu_multiplayer: '#sow-menu [data-command="quick_match"]',
+        menu_home: '#sow-menu [data-nav-screen="battle"]',
         menu_lobby: '#sow-menu .sow-menu__home-public [data-lobby-card]',
         menu_heroes: '#sow-menu [data-nav-screen="heroes"]',
         menu_profile: '#sow-menu [data-nav-screen="profile"]',
+        menu_store: '#sow-menu [data-nav-screen="store"]',
+        menu_display_name: '#sow-menu [data-role="display-name"]',
+        menu_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]:not(.is-locked)',
+        menu_selected_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]',
+        menu_alternate_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]:not(.is-locked)',
+        menu_affordable_leader_card: '#sow-menu [data-screen-panel="heroes"] [data-command="preview_leader"]',
+        menu_leader_confirm: '#sow-menu [data-screen-panel="heroes"] [data-command="confirm_leader"]',
+        menu_gem_offer: '#sow-menu [data-screen-panel="heroes"] [data-hero-purchase] [data-command="unlock_leader"][data-currency="gems"]:not(:disabled)',
+        menu_profile_history: '#sow-menu [data-screen-panel="profile"] [data-command="profile_tab"][data-profile-tab="history"]',
+        menu_purchase_confirm: '#sow-menu [data-command="confirm_purchase"]',
+        menu_purchase_cancel: '#sow-menu [data-command="cancel_purchase"]',
         attack_ratio: "#sow-hud-slider",
         hud_center_camera: '#sow-hud [data-command="center_camera"]',
         hud_inbox: '#sow-hud [data-command="toggle_inbox"]',
@@ -208,6 +220,23 @@
         rankings: '#sow-hud [data-command="toggle_leaderboard"]',
         settings: '#sow-hud [data-command="toggle_settings"]'
     };
+    const MENU_GUIDE_OUTCOMES = Object.freeze({
+        heroes_ready: Object.freeze({ control: "menu_heroes", kind: "screen", screen: "heroes" }),
+        name_saved: Object.freeze({ control: "menu_display_name", kind: "counter" }),
+        leader_preview_selected: Object.freeze({ control: "menu_alternate_leader_card", kind: "counter" }),
+        leader_selected: Object.freeze({ control: "menu_leader_confirm", kind: "counter" }),
+        leader_offer_selected: Object.freeze({ control: "menu_affordable_leader_card", kind: "counter" }),
+        leader_purchase_prompt_opened: Object.freeze({ control: "menu_gem_offer", kind: "counter" }),
+        leader_purchased: Object.freeze({ control: "menu_purchase_confirm", kind: "counter" }),
+        leader_purchase_cancelled: Object.freeze({ control: "menu_purchase_cancel", kind: "counter" }),
+        leader_purchase_closed: Object.freeze({ control: "menu_purchase_cancel", kind: "counter" }),
+        home_ready: Object.freeze({ control: "menu_home", kind: "screen", screen: "home" }),
+        profile_opened: Object.freeze({ control: "menu_profile", kind: "counter" }),
+        history_current_match_ready: Object.freeze({ control: "menu_profile_history", kind: "counter" }),
+        store_ready: Object.freeze({ control: "menu_store", kind: "counter" }),
+        quick_match_accepted: Object.freeze({ control: "menu_multiplayer", kind: "counter" })
+    });
+    const MENU_GUIDE_ROUTE_FACTS = Object.freeze(["alternate_leader_available", "commerce_available", "commerce_offer_available", "leader_purchase_modal_open", "leader_purchase_confirmed"]);
 
     function zoomInputMode(info) {
         info = info || {};
@@ -392,14 +421,49 @@
         return { definition: result, adjusted };
     }
 
-    function resolveUiTarget(key, root, episodeId) {
+    function resolveUiTarget(key, root, episodeId, facts) {
         const selector = UI_TARGETS[key];
         if (!selector || !root) return null;
+        if (key === "menu_selected_leader_card") {
+            if (typeof root.querySelectorAll !== "function") return null;
+            return Array.from(root.querySelectorAll(selector)).find(node => String(node.dataset && node.dataset.leaderId) === String(facts && facts.menu_guide_selected_leader)
+                && !node.disabled && node.getClientRects().length > 0) || null;
+        }
+        if (key === "menu_alternate_leader_card") {
+            const available = new Set((facts && facts.available_leader_ids || []).map(String));
+            const selected = String(facts && facts.selected_leader || "");
+            if (!available.size || typeof root.querySelectorAll !== "function") return null;
+            return Array.from(root.querySelectorAll(selector)).find(node => {
+                const leaderId = String(node.dataset && node.dataset.leaderId || "");
+                return leaderId && leaderId !== selected && available.has(leaderId)
+                    && !node.disabled && node.getClientRects().length > 0;
+            }) || null;
+        }
+        if (key === "menu_affordable_leader_card") {
+            const affordable = new Set((facts && facts.affordable_unowned_leader_ids || []).map(String));
+            if (!affordable.size || typeof root.querySelectorAll !== "function") return null;
+            return Array.from(root.querySelectorAll(selector)).find(node => node.dataset && affordable.has(String(node.dataset.leaderId))
+                && !node.disabled && node.getClientRects().length > 0) || null;
+        }
         if (key === "campaign_replay") {
             if (!episodeId || typeof root.querySelectorAll !== "function") return null;
             return Array.from(root.querySelectorAll(selector)).find(node => node.dataset && node.dataset.episodeId === episodeId) || null;
         }
         return typeof root.querySelector === "function" ? root.querySelector(selector) : null;
+    }
+
+    // Restore access to a pending control through the same menu controls as normal play.
+    function menuGuideControl(step, facts) {
+        const target = step.guide && step.guide.target;
+        const heroControls = ["menu_alternate_leader_card", "menu_affordable_leader_card", "menu_leader_confirm", "menu_gem_offer", "menu_purchase_confirm", "menu_purchase_cancel"];
+        if (heroControls.includes(target) && facts.screen !== "heroes" && !facts.purchase_modal_phase) return { target: "menu_heroes", hint_key: "menu.guide.recover_heroes" };
+        if (target === "menu_profile_history" && facts.screen !== "profile") return { target: "menu_profile", hint_key: "menu.guide.recover_profile" };
+        if (["menu_display_name", "menu_multiplayer"].includes(target) && facts.screen !== "home") return { target: "menu_home", hint_key: "menu.guide.recover_home" };
+        const chosen = facts.menu_guide_selected_leader;
+        if (chosen && !facts.purchase_modal_phase && ["menu_leader_confirm", "menu_gem_offer", "menu_purchase_confirm"].includes(target)
+            && facts.preview_leader_id !== chosen) return { target: "menu_selected_leader_card", hint_key: "menu.guide.recover_selection" };
+        if (target === "menu_purchase_confirm" && !facts.purchase_modal_phase) return { target: "menu_gem_offer", hint_key: "menu.guide.recover_offer" };
+        return { target, hint_key: step.hint_key };
     }
 
     function resolveUiAnchor(element, spotlightElement) {
@@ -760,7 +824,7 @@
                 const trigger = step.trigger;
                 if (!object(trigger) || !Object.keys(METRICS).concat(["contact", "defeated", "eliminated", "ui", "building_selected"]).includes(trigger.type)) issue(step, "trigger", "Choose a supported objective.");
                 else {
-                    knownFields(trigger, ["type", "scope", "value", "comparison", "target", "targets", "action", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
+                    knownFields(trigger, ["type", "scope", "value", "comparison", "target", "targets", "action", "outcome", "unit", "recipient", "resources", "kind", "distance"], step, "trigger");
                     if (!["step", "episode", "total"].includes(trigger.scope)) issue(step, "trigger.scope", "Choose when the objective starts counting.");
                     if (own(trigger, "comparison") && (trigger.type !== "territory" || trigger.scope !== "total" || trigger.comparison !== "lte")) issue(step, "trigger.comparison", "Only total territory objectives can use an at-most comparison.");
                     if (trigger.targets != null && !["contact", "defeated"].includes(trigger.type)) issue(step, "trigger.targets", "Only contact and defeat objectives can list multiple factions.");
@@ -779,6 +843,7 @@
                         if (!trigger.target || (trigger.target !== "player" && roster && !rosterFactions.has(trigger.target) && !allowMissingFactionReferences)) issue(step, "trigger.target", "Choose the player or an existing faction.");
                     } else if (trigger.type === "ui") {
                         if (!own(UI_TARGETS, trigger.action)) issue(step, "trigger.action", "Choose an existing control.");
+                        if (trigger.outcome != null && (!own(MENU_GUIDE_OUTCOMES, trigger.outcome) || MENU_GUIDE_OUTCOMES[trigger.outcome].control !== trigger.action)) issue(step, "trigger.outcome", "Choose a confirmed outcome registered for this control.");
                         if (trigger.action === "map_menu_open" && !(step.marker && step.marker.target)) issue(step, "marker", "Choose whose map menu must open.");
                     } else if (trigger.type === "building_selected") {
                         if (!["City", "Farm", "Factory", "Bunker", "Port"].includes(trigger.kind)) issue(step, "trigger.kind", "Choose a supported building type.");
@@ -989,6 +1054,114 @@
         return { errors, warnings };
     }
 
+    function validateMenuGuides(definition) {
+        const errors = [];
+        const issue = (step, field, message) => errors.push({ step: step && step.id, field, message });
+        const allowedGuides = ["welcome", "first_multiplayer"];
+        if (!object(definition) || definition.version !== 1 || definition.episode_id !== "menu") {
+            issue(null, "version", "Menu guides must use version 1 and episode_id menu.");
+            return { errors, warnings: [] };
+        }
+        const allowedFields = ["version", "episode_id", "text_namespace", "menu_guides", "steps", "layout", "strings"];
+        Object.keys(definition).filter(key => !allowedFields.includes(key)).forEach(key => issue(null, key, "Unsupported menu-guide field."));
+        if (definition.text_namespace !== "menu.guide.") issue(null, "text_namespace", "Use the menu.guide. text namespace.");
+        const guides = object(definition.menu_guides) ? definition.menu_guides : {};
+        Object.keys(guides).filter(key => !allowedGuides.includes(key)).forEach(key => issue(null, "menu_guides", "Unknown menu journey: " + key));
+        allowedGuides.forEach(key => { if (!object(guides[key])) issue(null, "menu_guides", "Missing menu journey: " + key); });
+        const strings = object(definition.strings) ? definition.strings : {};
+        if (!object(definition.strings)) issue(null, "strings", "Add built-in menu copy by language.");
+        if (!object(strings.en)) issue(null, "strings.en", "English menu copy is required.");
+        Object.entries(strings).forEach(([locale, catalog]) => {
+            if (!/^[a-z]{2,3}(?:-[a-z]{2})?$/.test(locale) || !object(catalog)) issue(null, "strings", "Invalid menu-copy language: " + locale);
+            else Object.entries(catalog).forEach(([key, value]) => {
+                if (!/^menu\.guide\.[a-z][a-z0-9_.-]{0,127}$/.test(key) || typeof value !== "string" || value.length > 1000) issue(null, "strings", "Invalid built-in menu copy: " + key);
+            });
+        });
+        const steps = Array.isArray(definition.steps) ? definition.steps : [];
+        if (!steps.length || steps.length > 512) issue(null, "steps", "Use between 1 and 512 menu-guide steps.");
+        const byId = new Map();
+        steps.forEach(step => {
+            if (!object(step) || !id(step.id) || byId.has(step.id)) return issue(step, "id", "Step IDs must be valid and unique.");
+            byId.set(step.id, step);
+            if (!["scene", "choice", "guide", "end"].includes(step.type)) issue(step, "type", "Choose a scene, decision, hand guide, or ending.");
+            ["title_key", "body_key", "hint_key"].forEach(field => {
+                const key = step[field];
+                if (key != null && (typeof key !== "string" || !own(strings.en, key))) issue(step, field, "Choose built-in English menu copy.");
+            });
+            if (step.type === "guide") {
+                const trigger = step.trigger, guide = step.guide;
+                if (!object(trigger) || trigger.type !== "ui" || !own(UI_TARGETS, trigger.action)) issue(step, "trigger", "A menu hand guide needs a registered menu control.");
+                if (!object(guide) || guide.kind !== "ui" || guide.gesture !== "tap" || !own(UI_TARGETS, guide.target)) issue(step, "guide", "Point the hand at a registered menu control.");
+                const outcomes = object(trigger)
+                    ? (Array.isArray(trigger.outcomes) ? trigger.outcomes : trigger.outcome ? [trigger.outcome] : []) : [];
+                if (!outcomes.length || outcomes.some(outcome => !own(MENU_GUIDE_OUTCOMES, outcome))) {
+                    issue(step, "trigger.outcome", "A menu guide advances only on registered outcomes.");
+                } else {
+                    if (MENU_GUIDE_OUTCOMES[outcomes[0]].control !== trigger.action) issue(step, "trigger.outcome", "The primary outcome must match the guided control.");
+                    if (outcomes.length > 1 && outcomes.some(outcome => MENU_GUIDE_OUTCOMES[outcome].kind !== "counter")) issue(step, "trigger.outcomes", "Alternative outcomes must be confirmed action counters.");
+                    if (trigger.outcome != null && trigger.outcomes != null) issue(step, "trigger.outcomes", "Use either one outcome or an outcome list.");
+                    if (trigger.outcomes != null && (!Array.isArray(trigger.outcomes) || new Set(trigger.outcomes).size !== trigger.outcomes.length)) issue(step, "trigger.outcomes", "Outcome lists must contain distinct registered outcomes.");
+                }
+                if (object(trigger) && trigger.require_purchased_leader != null && typeof trigger.require_purchased_leader !== "boolean") issue(step, "trigger.require_purchased_leader", "Choose whether the confirmed selection must equip this guide's purchased hero.");
+                if (object(trigger) && object(guide) && trigger.action !== guide.target) issue(step, "guide.target", "The hand and confirmed outcome must use the same control.");
+            } else if (step.trigger || step.guide) issue(step, "trigger", "Only hand-guide steps use a menu control outcome.");
+            if (step.type === "scene" && !step.title_key && !step.body_key) issue(step, "title_key", "Add title or body copy.");
+            if (step.type === "choice") {
+                if (!Array.isArray(step.choices) || step.choices.length < 2 || step.choices.length > 4) issue(step, "choices", "A decision needs 2–4 answers.");
+                (Array.isArray(step.choices) ? step.choices : []).forEach(choice => {
+                    if (!object(choice) || !id(choice.id) || typeof choice.label_key !== "string" || !own(strings.en, choice.label_key) || !id(choice.next)) issue(step, "choices", "Each answer needs built-in copy and a destination.");
+                });
+            }
+            if (step.wait_before != null && typeof step.wait_before !== "boolean") issue(step, "wait_before", "Choose whether to pause before showing this step.");
+        });
+        function destinations(step) {
+            return [step.next]
+                .concat((Array.isArray(step.routes) ? step.routes : []).map(route => route && route.next))
+                .concat((Array.isArray(step.choices) ? step.choices : []).map(choice => choice && choice.next))
+                .filter(target => typeof target === "string");
+        }
+        steps.forEach(step => {
+            if (!object(step)) return;
+            destinations(step).forEach(target => { if (!byId.has(target)) issue(step, "next", "Unknown destination: " + target); });
+            if (step.routes != null && !Array.isArray(step.routes)) issue(step, "routes", "Routes must be a list.");
+            (Array.isArray(step.routes) ? step.routes : []).forEach(route => {
+                const when = route && route.when;
+                if (!object(route) || !object(when) || typeof when.fact !== "string" || !MENU_GUIDE_ROUTE_FACTS.includes(when.fact) || !Number.isFinite(Number(when.gte))) issue(step, "routes", "Menu routes need a published numeric fact threshold.");
+            });
+        });
+        allowedGuides.forEach(guideId => {
+            const guide = guides[guideId];
+            if (!object(guide)) return;
+            Object.keys(guide).filter(key => !["entry", "step_ids"].includes(key)).forEach(key => issue(null, "menu_guides." + guideId, "Unsupported journey field: " + key));
+            if (!id(guide.entry) || !byId.has(guide.entry) || !Array.isArray(guide.step_ids) || !guide.step_ids.length || guide.step_ids.some(stepId => !byId.has(stepId)) || new Set(guide.step_ids).size !== guide.step_ids.length || !guide.step_ids.includes(guide.entry)) {
+                issue(null, "menu_guides." + guideId, "Each journey needs an opening and its distinct known step IDs.");
+                return;
+            }
+            const reached = new Set();
+            const visit = stepId => {
+                if (reached.has(stepId) || !byId.has(stepId)) return;
+                reached.add(stepId);
+                destinations(byId.get(stepId)).forEach(visit);
+            };
+            visit(guide.entry);
+            const ends = new Set(steps.filter(step => step && step.type === "end").map(step => step.id));
+            let changed = true;
+            while (changed) {
+                changed = false;
+                byId.forEach(step => {
+                    const next = destinations(step);
+                    if (step.type !== "end" && next.length && next.every(target => ends.has(target)) && !ends.has(step.id)) { ends.add(step.id); changed = true; }
+                });
+            }
+            reached.forEach(stepId => {
+                if (!ends.has(stepId)) issue(byId.get(stepId), "next", "Every menu-guide path must reach an ending.");
+                if (!guide.step_ids.includes(stepId)) issue(byId.get(stepId), "step_ids", "Add every reachable step to the journey.");
+            });
+            guide.step_ids.forEach(stepId => { if (!reached.has(stepId)) issue(byId.get(stepId), "step_ids", "This step is not reachable from the journey opening."); });
+        });
+        return { errors, warnings: [] };
+    }
+
     function create(definition, entry, roster, clock) {
         // Each run owns its definition; editor changes cannot mutate an active game.
         definition = copy(definition);
@@ -1031,7 +1204,20 @@
                     target = 1;
                 }
             } else if (trigger.type === "ui") {
-                if (trigger.action === "attack_ratio") {
+                const outcomes = Array.isArray(trigger.outcomes) ? trigger.outcomes : trigger.outcome ? [trigger.outcome] : [];
+                if (outcomes.length) {
+                    const outcome = MENU_GUIDE_OUTCOMES[outcomes[0]];
+                    if (outcome && outcome.kind === "screen") {
+                        current = facts.screen === outcome.screen ? 1 : 0;
+                        target = 1;
+                    } else {
+                        const currentOutcomes = facts.menu_outcomes || {};
+                        const referenceOutcomes = reference.menu_outcomes || {};
+                        current = outcomes.reduce((sum, outcomeId) => sum
+                            + Number(currentOutcomes[outcomeId] || 0) - Number(referenceOutcomes[outcomeId] || 0), 0);
+                        target = 1;
+                    }
+                } else if (trigger.action === "attack_ratio") {
                     current = Number(facts.attack_ratio || 0);
                     target = Number(trigger.value || 1);
                 } else {
@@ -1039,6 +1225,7 @@
                     current = Number(ui[trigger.action] || 0) - Number(uiReference[trigger.action] || 0);
                     target = 1;
                 }
+                if (trigger.require_purchased_leader && !facts.menu_guide_selected_offer_equipped) current = 0;
             } else if (trigger.type === "building_selected") {
                 current = facts.selected_building_kind === trigger.kind ? 1 : 0;
                 target = 1;
@@ -1283,7 +1470,7 @@
         enter(entry || definition.entry);
         return { get definition() { return definition; }, state, update, advance, jump, replaceDefinition, setPaused, view };
     }
-    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, STRUCTURE_LEVEL_LIMITS, CAMPAIGN_ACTIONS, CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, emptyCampaignUnlocks, applyCampaignUnlocks, campaignAllowsBuilding, campaignAllowsAction, campaignUnlockStates, campaignUnlocksAtStep, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, resolveUiRangeGuideAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, create };
+    const api = { TYPES, TEAMS, METRICS, WAIT_MS, UI_TARGETS, menuGuideControl, MENU_GUIDE_OUTCOMES, MENU_GUIDE_ROUTE_FACTS, STRUCTURE_LEVEL_LIMITS, CAMPAIGN_ACTIONS, CAMPAIGN_ACTION_BUILDING_REQUIREMENTS, emptyCampaignUnlocks, applyCampaignUnlocks, campaignAllowsBuilding, campaignAllowsAction, campaignUnlockStates, campaignUnlocksAtStep, zoomInputMode, guideAction, zoomOutProgress, zoomOutTarget, resolveUiTarget, resolveUiAnchor, resolveUiRangeAnchor, resolveUiRangeGuideAnchor, renameFactionText, removeFactionReferences, replaceFactionStoryNames, factionReferenceIds, validate, validateMenuGuides, create };
     if (typeof module !== "undefined" && module.exports) module.exports = api;
     else host.SOWCampaign = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

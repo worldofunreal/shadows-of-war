@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "جارٍ تأكيد مكافآتك…"
+retrying_rewards = "انقطع الاتصال. جارٍ إعادة محاولة الحصول على مكافآتك…"
 main_menu_navigation = "القائمة الرئيسية"
 game_links = "روابط اللعبة"
 shop = "المتجر"

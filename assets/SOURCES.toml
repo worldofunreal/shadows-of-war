@@ -16,7 +16,6 @@ source = "ai_generated"
 tool = "Gemini / Meta AI / Midjourney (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
-ai_dossier = "docs/leaders/README.md"
 notes = "Web landing and JavaScript main menu only. Never part of the gameplay asset bundle."
 restored = [
   "alexander",
@@ -80,7 +79,6 @@ source = "ai_generated"
 tool = "Gemini / Meta AI / Midjourney (mixed, historical)"
 license = "CC-BY-SA-4.0"
 license_doc = "docs/legal/LICENSE-ASSETS"
-ai_dossier = "docs/leaders/README.md"
 notes = "Runtime gameplay HUD/nameplates/leaderboard assets. Streamed when gameplay needs them."
 
 [gameplay_ui]
@@ -134,6 +132,7 @@ notes = "Compile-time campaign data and native editor override."
 path = "assets/editor/"
 source = "original"
 notes = "Authoring sources for developer tools; never shipped as public web assets."
+
 [artwork_research_wikimedia_emblems]
 path = "artwork-research/wikimedia-emblems/"
 source = "Wikimedia Commons"

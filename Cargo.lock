@@ -3777,6 +3777,7 @@ dependencies = [
  "sha2",
  "sow-core",
  "sow-net",
+ "tempfile",
  "tokio",
  "tokio-rustls 0.24.1",
  "tokio-tungstenite",

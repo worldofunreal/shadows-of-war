@@ -175,6 +175,7 @@ impl SowApp {
             },
             net: NetState {
                 client: net_client,
+                exiting_relay: None,
                 connect_tx,
                 connect_rx,
                 ws_url,
@@ -336,6 +337,7 @@ impl SowApp {
             gpu_init_failed: false,
             progress: crate::player_progress::PlayerProgress::default(),
             exit_reward_wait: None,
+            menu_return: None,
             progress_account_id: stored_account_id,
             profile_account_id: None,
             progress_provider: if has_stored_account {
@@ -346,6 +348,12 @@ impl SowApp {
             wou_collectibles_synced: None,
             pending_display_name,
             display_name_save_request_id: None,
+            name_save_revision: 0,
+            leader_selection_revision: 0,
+            purchase_revision: 0,
+            quick_match_revision: 0,
+            menu_guide_save_revision: 0,
+            menu_guide_save_pending: false,
             profile_request_in_flight: false,
             profile_refresh_pending: false,
             pending_reward_receipt_ids,

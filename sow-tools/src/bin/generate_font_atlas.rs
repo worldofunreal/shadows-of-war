@@ -3,14 +3,15 @@
 //! Usage:
 //! cargo run -p sow-tools --bin generate-font-atlas -- \
 //!   assets/gameplay/fonts/WorkSans-Black.ttf \
+//!   sow-web/site/fonts/noto-sans-regular.ttf \
 //!   sow-web/site/fonts/noto-sans-arabic-regular.ttf \
 //!   sow-web/site/fonts/noto-sans-cjk-regular.ttc \
 //!   sow-render/src/text/unicode_name_glyphs.txt \
 //!   assets/gameplay/fonts/msdf-atlas.png \
 //!   assets/gameplay/fonts/msdf-atlas.json
 //!
-//! The corpus sections select the Japanese, Korean, Simplified Chinese, and
-//! Arabic glyphs; it is deliberately separate from the ghost-name list.
+//! The corpus sections select Vietnamese Latin diacritics, Cyrillic, Japanese,
+//! Korean, Simplified and Traditional Chinese, and Arabic glyphs; they stay separate from the ghost-name list.
 
 use ab_glyph::{Font, FontRef, GlyphId, PxScale, ScaleFont};
 use rustybuzz::{Direction, Face as ShapeFace, UnicodeBuffer};
@@ -25,17 +26,21 @@ const UPSAMPLE: u32 = 4;
 #[derive(Clone, Copy, Debug)]
 enum FontSource {
     Latin,
+    Cyrillic,
     Japanese,
     Korean,
     Chinese,
+    ChineseTraditional,
     Arabic,
 }
 
 struct FontSet<'a> {
     latin: FontRef<'a>,
+    cyrillic: FontRef<'a>,
     japanese: FontRef<'a>,
     korean: FontRef<'a>,
     chinese: FontRef<'a>,
+    chinese_traditional: FontRef<'a>,
     arabic: FontRef<'a>,
 }
 
@@ -43,9 +48,11 @@ impl FontSet<'_> {
     fn get(&self, source: FontSource) -> &FontRef<'_> {
         match source {
             FontSource::Latin => &self.latin,
+            FontSource::Cyrillic => &self.cyrillic,
             FontSource::Japanese => &self.japanese,
             FontSource::Korean => &self.korean,
             FontSource::Chinese => &self.chinese,
+            FontSource::ChineseTraditional => &self.chinese_traditional,
             FontSource::Arabic => &self.arabic,
         }
     }
@@ -74,9 +81,9 @@ struct GlyphSheet {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 7 {
+    if args.len() != 8 {
         eprintln!(
-            "Usage: {} <latin.ttf> <arabic.ttf> <cjk.ttc> <unicode-glyphs.txt> <out.png> <out.json>",
+            "Usage: {} <latin.ttf> <cyrillic.ttf> <arabic.ttf> <cjk.ttc> <unicode-glyphs.txt> <out.png> <out.json>",
             args.first()
                 .map(String::as_str)
                 .unwrap_or("generate-font-atlas")
@@ -85,11 +92,14 @@ fn main() {
     }
 
     let latin_data = std::fs::read(&args[1]).expect("Failed to read Latin font");
-    let arabic_data = std::fs::read(&args[2]).expect("Failed to read Arabic font");
-    let cjk_data = std::fs::read(&args[3]).expect("Failed to read CJK font collection");
+    let cyrillic_data = std::fs::read(&args[2]).expect("Failed to read Cyrillic font");
+    let arabic_data = std::fs::read(&args[3]).expect("Failed to read Arabic font");
+    let cjk_data = std::fs::read(&args[4]).expect("Failed to read CJK font collection");
     let glyphs_data =
-        std::fs::read_to_string(&args[4]).expect("Failed to read Unicode glyph corpus");
+        std::fs::read_to_string(&args[5]).expect("Failed to read Unicode glyph corpus");
     let latin = FontRef::try_from_slice(&latin_data).expect("Failed to parse Latin font");
+    let cyrillic =
+        FontRef::try_from_slice(&cyrillic_data).expect("Failed to parse Cyrillic font");
     let arabic = FontRef::try_from_slice(&arabic_data).expect("Failed to parse Arabic font");
     let japanese =
         FontRef::try_from_slice_and_index(&cjk_data, 0).expect("Failed to parse Japanese face");
@@ -97,11 +107,15 @@ fn main() {
         FontRef::try_from_slice_and_index(&cjk_data, 1).expect("Failed to parse Korean face");
     let chinese = FontRef::try_from_slice_and_index(&cjk_data, 2)
         .expect("Failed to parse Simplified Chinese face");
+    let chinese_traditional = FontRef::try_from_slice_and_index(&cjk_data, 3)
+        .expect("Failed to parse Traditional Chinese face");
     let fonts = FontSet {
         latin,
+        cyrillic,
         japanese,
         korean,
         chinese,
+        chinese_traditional,
         arabic,
     };
     let arabic_shaper =
@@ -122,9 +136,13 @@ fn main() {
             continue;
         }
         let source = match section {
+            "cyrillic" => FontSource::Cyrillic,
             "japanese_katakana" => FontSource::Japanese,
+            "japanese_name_handles" => FontSource::Japanese,
             "korean_hangul" => FontSource::Korean,
             "chinese_simplified" => FontSource::Chinese,
+            "chinese_traditional" => FontSource::ChineseTraditional,
+            "vietnamese" => FontSource::Latin,
             "arabic" => {
                 arabic_chars.extend(line.chars().filter(|character| !character.is_whitespace()));
                 continue;
@@ -132,7 +150,11 @@ fn main() {
             _ => panic!("unknown Unicode glyph section: {section}"),
         };
         for character in line.chars().filter(|character| !character.is_whitespace()) {
-            sources.entry(character).or_insert(source);
+            if matches!(source, FontSource::Chinese | FontSource::ChineseTraditional) {
+                sources.insert(character, source);
+            } else {
+                sources.entry(character).or_insert(source);
+            }
         }
     }
     assert!(
@@ -338,7 +360,7 @@ fn main() {
 
     let image = image::RgbImage::from_raw(ATLAS_SIZE, ATLAS_SIZE, atlas_pixels)
         .expect("Failed to create atlas image");
-    image.save(&args[5]).expect("Failed to save atlas PNG");
+    image.save(&args[6]).expect("Failed to save atlas PNG");
 
     let chars_json: Vec<serde_json::Value> = sheets
         .iter()
@@ -372,7 +394,7 @@ fn main() {
         "pages": ["msdf-atlas.png"],
         "chars": chars_json,
         "info": {
-            "face": "Work Sans + Noto Sans Arabic + Noto Sans CJK",
+            "face": "Work Sans + Noto Sans Cyrillic + Noto Sans Arabic + Noto Sans CJK JP/KR/SC/TC",
             "size": FONT_SIZE as u32,
             "bold": 0,
             "italic": 0,
@@ -404,7 +426,7 @@ fn main() {
         "kernings": [],
     });
     std::fs::write(
-        &args[6],
+        &args[7],
         serde_json::to_string_pretty(&atlas_json).expect("Failed to serialize atlas JSON"),
     )
     .expect("Failed to write atlas JSON");

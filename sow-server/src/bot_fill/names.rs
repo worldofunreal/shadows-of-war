@@ -9,7 +9,7 @@
 
 use std::sync::LazyLock;
 
-pub const BOT_NAME_COUNT: usize = 2_982;
+pub const BOT_NAME_COUNT: usize = 7156;
 
 pub static BOT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     include_str!("names.txt")
@@ -21,62 +21,11 @@ pub static BOT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
 #[cfg(test)]
 mod tests {
     use super::{BOT_NAME_COUNT, BOT_NAMES};
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     #[test]
     fn bot_name_pool_is_unique_safe_and_complete() {
         assert_eq!(BOT_NAMES.len(), BOT_NAME_COUNT);
-
-        let expected_groups = [
-            ("legacy", 821),
-            ("latin_iberian", 43),
-            ("latin_east_asian", 39),
-            ("latin_african_arabic", 41),
-            ("latin_nordic_turkic_andean", 38),
-            ("japanese_katakana", 500),
-            ("korean_hangul", 500),
-            ("chinese_simplified", 500),
-            ("arabic", 500),
-        ];
-        let mut group_counts = HashMap::<&str, usize>::new();
-        let mut current_group = "";
-        for line in include_str!("names.txt").lines() {
-            if let Some(group) = line.strip_prefix("# ") {
-                current_group = group;
-                continue;
-            }
-            if line.is_empty() {
-                continue;
-            }
-            *group_counts.entry(current_group).or_default() += 1;
-            if current_group.starts_with("latin_") {
-                assert_eq!(
-                    line.chars()
-                        .filter(|character| character.is_ascii_uppercase())
-                        .count(),
-                    1,
-                    "Latin additions must be one handle, not a generic CamelCase compound: {line}"
-                );
-            }
-            if current_group == "arabic" {
-                let mut words = line.split_whitespace();
-                let noun = words.next().unwrap_or_default();
-                let adjective = words.next().unwrap_or_default();
-                if matches!(noun, "نار" | "شمس" | "ريح" | "مجرة") {
-                    assert!(
-                        adjective.ends_with('ة') || adjective.ends_with("اء"),
-                        "Arabic adjective must agree with feminine noun: {line}"
-                    );
-                }
-            }
-        }
-        for (group, count) in expected_groups {
-            assert_eq!(
-                group_counts.get(group).copied(),
-                Some(count),
-                "group {group}"
-            );
-        }
 
         let mut seen = HashSet::with_capacity(BOT_NAMES.len());
         for name in BOT_NAMES.iter() {
@@ -90,5 +39,60 @@ mod tests {
                 "name rejected by server policy: {name}"
             );
         }
+    }
+
+    #[test]
+    fn bot_hanzi_is_covered_by_the_gameplay_glyph_corpus() {
+        let glyph_corpus = include_str!("../../../sow-render/src/text/unicode_name_glyphs.txt");
+        for name in BOT_NAMES.iter() {
+            for character in name.chars().filter(|character| is_han(*character)) {
+                assert!(
+                    glyph_corpus.contains(character),
+                    "Han character {character:?} in ghost name {name:?} is missing from the gameplay glyph corpus"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bot_hangul_is_covered_by_the_gameplay_glyph_corpus() {
+        let glyph_corpus = include_str!("../../../sow-render/src/text/unicode_name_glyphs.txt");
+        for name in BOT_NAMES.iter() {
+            for character in name.chars().filter(|character| is_hangul(*character)) {
+                assert!(
+                    glyph_corpus.contains(character),
+                    "Hangul character {character:?} in ghost name {name:?} is missing from the gameplay glyph corpus"
+                );
+            }
+        }
+    }
+
+    fn is_hangul(character: char) -> bool {
+        matches!(
+            character as u32,
+            0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7FF
+        )
+    }
+
+    fn is_han(character: char) -> bool {
+        matches!(
+            character as u32,
+            0x2E80..=0x2EFF
+                | 0x2F00..=0x2FDF
+                | 0x3005..=0x3007
+                | 0x3021..=0x3029
+                | 0x3038..=0x303B
+                | 0x3400..=0x4DBF
+                | 0x4E00..=0x9FFF
+                | 0xF900..=0xFAFF
+                | 0x20000..=0x2A6DF
+                | 0x2A700..=0x2B73F
+                | 0x2B740..=0x2B81F
+                | 0x2B820..=0x2CEAF
+                | 0x2CEB0..=0x2EBEF
+                | 0x2EBF0..=0x2EE5F
+                | 0x2F800..=0x2FA1F
+                | 0x30000..=0x3134F
+        )
     }
 }

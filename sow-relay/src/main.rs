@@ -71,6 +71,7 @@ const DEFAULT_HANDSHAKES_PER_IP: u32 = 512;
 const MAX_ADMISSION_IPS: usize = 65_536;
 const HANDSHAKE_TIMEOUT_SECS: u64 = 10;
 const REPLAY_SPOOL_RETRY_SECS: u64 = 30;
+const PARTICIPANT_CHECKPOINT_RETRY_SECS: u64 = 30;
 type HmacSha256 = Hmac<Sha256>;
 
 struct IpAdmissionState {
@@ -528,7 +529,12 @@ enum RelayEvent {
         player_id: u16,
         intent: GameplayIntent,
     },
-    Leave {
+    VoluntaryLeave {
+        player_id: u16,
+        generation: u64,
+        peer: SocketAddr,
+    },
+    Disconnected {
         player_id: u16,
         generation: u64,
         peer: SocketAddr,
@@ -565,6 +571,10 @@ fn redis_shared() -> Arc<std::sync::Mutex<Option<redis::Connection>>> {
 
 enum ReplayCommand {
     Append(Turn),
+    Checkpoint {
+        through_turn: u64,
+        reply: oneshot::Sender<Result<Vec<u8>, String>>,
+    },
     Finalize {
         reply: oneshot::Sender<Result<ReplayArtifact, String>>,
     },
@@ -579,14 +589,70 @@ struct ReplayArtifact {
 struct ReplayFinalizePayload<'a> {
     match_id: &'a str,
     lobby_json: &'a str,
-    replay_data: &'a [u8],
+    replay_data: Option<&'a [u8]>,
+    participant_closures: &'a [ParticipantClosure],
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ParticipantSettlementPayload {
     match_id: String,
     account_id: String,
+    closure_turn: u64,
+    replay_sha256: String,
+    #[serde(default)]
+    rejected: bool,
+}
+
+struct ParticipantSettlementJob {
+    payload: ParticipantSettlementPayload,
+    replay_bytes: Vec<u8>,
+    spool_path: PathBuf,
+}
+
+struct PendingParticipantSettlement {
+    account_id: String,
+    closure_turn: u64,
+    replay_bytes: Vec<u8>,
+    rejected: bool,
+    retry_count: u8,
+    direct_in_flight: bool,
+    direct_retry_after: Option<Instant>,
+    queued_at: Instant,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+struct ParticipantClosure {
+    account_id: String,
+    turn_number: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ReplaySpoolMetadata {
     lobby_json: String,
+    #[serde(default)]
+    participant_closures: Vec<ParticipantClosure>,
+    #[serde(default)]
+    rejected: bool,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum ReplaySpoolMetadataCompat {
+    Legacy(String),
+    Current(ReplaySpoolMetadata),
+}
+
+impl ReplaySpoolMetadataCompat {
+    fn into_current(self) -> ReplaySpoolMetadata {
+        match self {
+            Self::Legacy(lobby_json) => ReplaySpoolMetadata {
+                lobby_json,
+                participant_closures: Vec::new(),
+                rejected: false,
+            },
+            Self::Current(metadata) => metadata,
+        }
+    }
 }
 
 struct ReplayJournal {
@@ -642,6 +708,23 @@ impl ReplayJournal {
 
     async fn snapshot(&self) -> Vec<Turn> {
         self.live.lock().await.iter().cloned().collect()
+    }
+
+    async fn checkpoint(&self, through_turn: u64) -> Result<Vec<u8>, String> {
+        if self.finalized.load(Ordering::Acquire) {
+            return Err("replay journal already finalized".to_string());
+        }
+        if self.failed.load(Ordering::Acquire) {
+            return Err("replay writer failed".to_string());
+        }
+        let (reply, result) = oneshot::channel();
+        self.tx
+            .send(ReplayCommand::Checkpoint { through_turn, reply })
+            .await
+            .map_err(|_| "replay writer stopped".to_string())?;
+        result
+            .await
+            .map_err(|_| "replay writer dropped checkpoint response".to_string())?
     }
 
     async fn finalize(&self) -> Result<ReplayArtifact, String> {
@@ -720,6 +803,22 @@ async fn replay_writer(
                 }
                 journal_bytes = journal_bytes.saturating_add(record_bytes);
             }
+            ReplayCommand::Checkpoint {
+                through_turn,
+                reply,
+            } => {
+                let result = async {
+                    file.flush().await.map_err(|e| e.to_string())?;
+                    file.sync_all().await.map_err(|e| e.to_string())?;
+                    let bytes = tokio::fs::read(&journal_path)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let history = decode_replay_journal(&bytes)?;
+                    replay_prefix_through(&history, through_turn)
+                }
+                .await;
+                let _ = reply.send(result);
+            }
             ReplayCommand::Finalize { reply } => {
                 let result = async {
                     file.flush().await.map_err(|e| e.to_string())?;
@@ -788,6 +887,14 @@ fn decode_replay_journal(bytes: &[u8]) -> Result<Vec<Turn>, String> {
     Ok(history)
 }
 
+fn replay_prefix_through(history: &[Turn], through_turn: u64) -> Result<Vec<u8>, String> {
+    let end = history
+        .iter()
+        .rposition(|turn| turn.turn_number == through_turn)
+        .ok_or_else(|| format!("replay closure turn {through_turn} is missing"))?;
+    bincode::serialize(&history[..=end]).map_err(|error| error.to_string())
+}
+
 fn finalize_gate() -> Arc<Semaphore> {
     static GATE: OnceLock<Arc<Semaphore>> = OnceLock::new();
     GATE.get_or_init(|| Arc::new(Semaphore::new(1))).clone()
@@ -796,7 +903,8 @@ fn finalize_gate() -> Arc<Semaphore> {
 async fn post_replay_finalize(
     match_id: &str,
     lobby_json: &str,
-    replay_data: &[u8],
+    replay_data: Option<&[u8]>,
+    participant_closures: &[ParticipantClosure],
 ) -> Result<(), String> {
     let db_url = configured_db_url()?;
     let secret =
@@ -806,6 +914,7 @@ async fn post_replay_finalize(
         match_id,
         lobby_json,
         replay_data,
+        participant_closures,
     };
     let client = db_client(&db_url)?;
 
@@ -873,18 +982,42 @@ fn participant_spool_path(match_id: &str, account_id: &str) -> PathBuf {
     replay_spool_dir().join(format!("{match_id}-{safe_account}.participant"))
 }
 
+fn participant_replay_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("participant");
+    let name = name.strip_suffix(".tmp").unwrap_or(name);
+    path.with_file_name(format!("{name}.replay"))
+}
+
 fn persist_participant_spool(
     path: &Path,
     payload: &ParticipantSettlementPayload,
+    replay_bytes: &[u8],
 ) -> Result<(), String> {
     let Some(parent) = path.parent() else {
         return Err("participant spool has no parent directory".to_string());
     };
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    if hex::encode(Sha256::digest(replay_bytes)) != payload.replay_sha256 {
+        return Err("participant replay spool checksum differs".to_string());
+    }
+    let replay_path = participant_replay_path(path);
+    let replay_name = replay_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("participant.replay");
+    let replay_temp = replay_path.with_file_name(format!("{replay_name}.tmp"));
+    let mut replay_file = std::fs::File::create(&replay_temp).map_err(|error| error.to_string())?;
+    std::io::Write::write_all(&mut replay_file, replay_bytes)
+        .map_err(|error| error.to_string())?;
+    replay_file.sync_all().map_err(|error| error.to_string())?;
+    drop(replay_file);
+    std::fs::rename(&replay_temp, &replay_path).map_err(|error| error.to_string())?;
+
     let temp_path = path.with_extension("participant.tmp");
     let bytes = serde_json::to_vec(payload).map_err(|error| error.to_string())?;
-    // ponytail: one small fsync per exit closes the crash window; network I/O
-    // remains asynchronous and never blocks the match loop.
     let mut file = std::fs::File::create(&temp_path).map_err(|error| error.to_string())?;
     std::io::Write::write_all(&mut file, &bytes).map_err(|error| error.to_string())?;
     file.sync_all().map_err(|error| error.to_string())?;
@@ -896,20 +1029,27 @@ fn persist_participant_spool(
     Ok(())
 }
 
-async fn post_participant_settle(payload: &ParticipantSettlementPayload) -> Result<(), String> {
+async fn post_participant_settle(
+    payload: &ParticipantSettlementPayload,
+    replay_bytes: Vec<u8>,
+) -> Result<(), String> {
     let db_url = configured_db_url()?;
     let secret =
         std::env::var("SOW_DB_SECRET").map_err(|_| "SOW_DB_SECRET is not available".to_string())?;
     let url = format!(
-        "{}/internal/match-participant-settle",
-        db_url.trim_end_matches('/')
+        "{}/internal/match-participant-settle/{}/{}/{}",
+        db_url.trim_end_matches('/'),
+        payload.match_id,
+        payload.account_id,
+        payload.closure_turn
     );
     let client = db_client(&db_url)?;
     for attempt in 1..=5 {
         match client
             .post(&url)
             .header("Authorization", format!("Bearer {secret}"))
-            .json(payload)
+            .header("Content-Type", "application/octet-stream")
+            .body(replay_bytes.clone())
             .send()
             .await
         {
@@ -936,13 +1076,12 @@ async fn post_participant_settle(payload: &ParticipantSettlementPayload) -> Resu
 }
 
 async fn cleanup_participant_spool(path: &Path) {
-    if let Err(error) = tokio::fs::remove_file(path).await
-        && error.kind() != std::io::ErrorKind::NotFound
-    {
-        warn!(
-            "[rewards] cleanup participant spool {:?} failed: {error}",
-            path
-        );
+    for target in [path.to_path_buf(), participant_replay_path(path)] {
+        if let Err(error) = tokio::fs::remove_file(&target).await
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            warn!("[rewards] cleanup participant spool {:?} failed: {error}", target);
+        }
     }
 }
 
@@ -975,27 +1114,52 @@ async fn recover_participant_spool() {
         {
             continue;
         }
-        let payload = match tokio::fs::read(&path).await {
-            Ok(bytes) => match serde_json::from_slice::<ParticipantSettlementPayload>(&bytes) {
-                Ok(payload) => payload,
-                Err(error) => {
-                    warn!("[rewards] invalid participant spool {:?}: {error}", path);
-                    continue;
-                }
-            },
+        let payload_bytes = match tokio::fs::read(&path).await {
+            Ok(bytes) => bytes,
             Err(error) => {
-                warn!(
-                    "[rewards] read participant spool {:?} failed: {error}",
-                    path
-                );
+                warn!("[rewards] read participant spool {:?} failed: {error}", path);
                 continue;
             }
         };
+        let payload_value: serde_json::Value = match serde_json::from_slice(&payload_bytes) {
+            Ok(payload) => payload,
+            Err(error) => {
+                warn!("[rewards] invalid participant spool {:?}: {error}", path);
+                continue;
+            }
+        };
+        if payload_value.get("closure_turn").is_none() {
+            warn!("[rewards] discarding legacy participant spool without a replay prefix {:?}", path);
+            cleanup_participant_spool(&path).await;
+            continue;
+        }
+        let payload = match serde_json::from_value::<ParticipantSettlementPayload>(payload_value) {
+            Ok(payload) => payload,
+            Err(error) => {
+                warn!("[rewards] invalid participant spool {:?}: {error}", path);
+                continue;
+            }
+        };
+        let replay_bytes = match tokio::fs::read(participant_replay_path(&path)).await {
+            Ok(bytes) if hex::encode(Sha256::digest(&bytes)) == payload.replay_sha256 => bytes,
+            Ok(_) => {
+                warn!("[rewards] participant replay checksum mismatch {:?}", path);
+                continue;
+            }
+            Err(error) => {
+                warn!("[rewards] participant replay unavailable {:?}: {error}", path);
+                continue;
+            }
+        };
+        if payload.rejected != replay_bytes.is_empty() {
+            warn!("[rewards] participant spool outcome does not match its replay prefix {:?}", path);
+            continue;
+        }
         let _permit = match finalize_gate().acquire_owned().await {
             Ok(permit) => permit,
             Err(_) => return,
         };
-        if let Err(error) = post_participant_settle(&payload).await {
+        if let Err(error) = post_participant_settle(&payload, replay_bytes).await {
             warn!("[rewards] keeping participant spool {:?}: {error}", path);
         } else {
             cleanup_participant_spool(&path).await;
@@ -1003,39 +1167,143 @@ async fn recover_participant_spool() {
     }
 }
 
-fn trigger_participant_settlement(match_id: u64, account_id: String, lobby_json: String) {
+fn prepare_participant_settlements(
+    match_id: u64,
+    closures: Vec<(String, u64)>,
+    replay_bytes: Vec<u8>,
+) -> Result<Vec<ParticipantSettlementJob>, String> {
+    let mut jobs = Vec::with_capacity(closures.len());
+    for (account_id, closure_turn) in closures {
+        jobs.push(prepare_participant_settlement(
+            match_id,
+            account_id,
+            closure_turn,
+            replay_bytes.clone(),
+            false,
+        )?);
+    }
+    Ok(jobs)
+}
+
+fn prepare_participant_settlement(
+    match_id: u64,
+    account_id: String,
+    closure_turn: u64,
+    replay_bytes: Vec<u8>,
+    rejected: bool,
+) -> Result<ParticipantSettlementJob, String> {
     let payload = ParticipantSettlementPayload {
         match_id: match_id.to_string(),
         account_id,
-        lobby_json,
+        closure_turn,
+        replay_sha256: hex::encode(Sha256::digest(&replay_bytes)),
+        rejected,
     };
-    let path = participant_spool_path(&payload.match_id, &payload.account_id);
-    if let Err(error) = persist_participant_spool(&path, &payload) {
-        error!(
-            "[rewards] participant spool write failed match={} account={}: {error}",
+    let spool_path = participant_spool_path(&payload.match_id, &payload.account_id);
+    persist_participant_spool(&spool_path, &payload, &replay_bytes).map_err(|error| {
+        format!(
+            "participant spool write failed match={} account={}: {error}",
             payload.match_id, payload.account_id
-        );
-        return;
-    }
-    tokio::spawn(async move {
-        let _permit = match finalize_gate().acquire_owned().await {
-            Ok(permit) => permit,
-            Err(_) => return,
-        };
-        if let Err(error) = post_participant_settle(&payload).await {
-            warn!(
-                "[rewards] keeping participant spool match={} account={}: {error}",
-                payload.match_id, payload.account_id
-            );
-        } else {
-            cleanup_participant_spool(&path).await;
-        }
-    });
+        )
+    })?;
+    Ok(ParticipantSettlementJob {
+        payload,
+        replay_bytes,
+        spool_path,
+    })
 }
 
-fn trigger_participant_settlements(match_id: u64, lobby_json: &str, account_ids: Vec<String>) {
-    for account_id in account_ids {
-        trigger_participant_settlement(match_id, account_id, lobby_json.to_string());
+fn retry_pending_participant_settlements(
+    match_id: u64,
+    pending: &mut Vec<PendingParticipantSettlement>,
+    result_tx: &mpsc::UnboundedSender<(String, u64, bool)>,
+) {
+    let mut retry = Vec::new();
+    for mut settlement in pending.drain(..) {
+        let replay_bytes = if settlement.rejected {
+            Vec::new()
+        } else {
+            settlement.replay_bytes.clone()
+        };
+        match prepare_participant_settlement(
+            match_id,
+            settlement.account_id.clone(),
+            settlement.closure_turn,
+            replay_bytes,
+            settlement.rejected,
+        ) {
+            Ok(job) => dispatch_participant_settlements(vec![job]),
+            Err(error) => {
+                settlement.retry_count = settlement.retry_count.saturating_add(1);
+                if !settlement.rejected
+                    && settlement.queued_at.elapsed().as_secs()
+                        >= PARTICIPANT_CHECKPOINT_RETRY_SECS
+                {
+                    warn!(
+                        "[rewards] lobby {match_id} cannot persist participant prefix; recording explicit rejection for account={}",
+                        settlement.account_id
+                    );
+                    settlement.rejected = true;
+                    settlement.replay_bytes.clear();
+                    settlement.retry_count = 0;
+                } else if settlement.retry_count == 1 || settlement.retry_count % 10 == 0 {
+                    warn!("[rewards] lobby {match_id} participant spool retry failed: {error}");
+                }
+                if settlement.rejected
+                    && !settlement.direct_in_flight
+                    && settlement
+                        .direct_retry_after
+                        .is_none_or(|retry_after| retry_after <= Instant::now())
+                {
+                    let payload = ParticipantSettlementPayload {
+                        match_id: match_id.to_string(),
+                        account_id: settlement.account_id.clone(),
+                        closure_turn: settlement.closure_turn,
+                        replay_sha256: hex::encode(Sha256::digest(Vec::<u8>::new())),
+                        rejected: true,
+                    };
+                    let replay_bytes = Vec::new();
+                    let result_tx = result_tx.clone();
+                    let account_id = settlement.account_id.clone();
+                    let closure_turn = settlement.closure_turn;
+                    settlement.direct_in_flight = true;
+                    settlement.direct_retry_after =
+                        Some(Instant::now() + Duration::from_secs(REPLAY_SPOOL_RETRY_SECS));
+                    tokio::spawn(async move {
+                        let accepted = post_participant_settle(&payload, replay_bytes)
+                            .await
+                            .is_ok();
+                        let _ = result_tx.send((account_id, closure_turn, accepted));
+                    });
+                }
+                retry.push(settlement);
+            }
+        }
+    }
+    *pending = retry;
+}
+
+fn dispatch_participant_settlements(jobs: Vec<ParticipantSettlementJob>) {
+    for ParticipantSettlementJob {
+        payload,
+        replay_bytes,
+        spool_path,
+    } in jobs
+    {
+        tokio::spawn(async move {
+            let _permit = match finalize_gate().acquire_owned().await {
+                Ok(permit) => permit,
+                Err(_) => return,
+            };
+            if let Err(error) = post_participant_settle(&payload, replay_bytes).await {
+                warn!(
+                    "[rewards] keeping participant spool match={} account={}: {error}",
+                    payload.match_id, payload.account_id
+                );
+            } else {
+                cleanup_participant_spool(&spool_path).await;
+            }
+        });
     }
 }
 
@@ -1047,6 +1315,56 @@ async fn cleanup_replay_spool(replay_path: &PathBuf, metadata_path: &PathBuf) {
             }
         }
     }
+}
+
+async fn persist_rejected_replay_spool(
+    match_id: u64,
+    lobby_json: &str,
+    participant_closures: &[ParticipantClosure],
+) -> Result<(PathBuf, PathBuf), String> {
+    let replay_path = replay_spool_dir().join(format!("{match_id}.replay"));
+    let metadata_path = replay_path.with_extension("json");
+    let replay_tmp = replay_path.with_extension("replay.tmp");
+    let metadata_tmp = replay_path.with_extension("json.tmp");
+    let metadata = ReplaySpoolMetadata {
+        lobby_json: lobby_json.to_string(),
+        participant_closures: participant_closures.to_vec(),
+        rejected: true,
+    };
+    let metadata_bytes = serde_json::to_vec(&metadata).map_err(|error| error.to_string())?;
+    if let Some(parent) = replay_path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|error| error.to_string())?;
+    }
+    let replay_file = tokio::fs::File::create(&replay_tmp)
+        .await
+        .map_err(|error| error.to_string())?;
+    replay_file
+        .sync_all()
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(replay_file);
+    tokio::fs::rename(&replay_tmp, &replay_path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let metadata_file = tokio::fs::File::create(&metadata_tmp)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut metadata_file = metadata_file;
+    metadata_file
+        .write_all(&metadata_bytes)
+        .await
+        .map_err(|error| error.to_string())?;
+    metadata_file
+        .sync_all()
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(metadata_file);
+    tokio::fs::rename(&metadata_tmp, &metadata_path)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok((replay_path, metadata_path))
 }
 
 async fn recover_replay_spool() {
@@ -1082,16 +1400,23 @@ async fn recover_replay_spool() {
             continue;
         };
         let metadata_path = replay_path.with_extension("json");
-        let (replay_data, lobby_json) = match (
+        let (replay_data, metadata) = match (
             tokio::fs::read(&replay_path).await,
-            tokio::fs::read_to_string(&metadata_path).await,
+            tokio::fs::read(&metadata_path).await,
         ) {
-            (Ok(replay_data), Ok(lobby_json)) => (replay_data, lobby_json),
+            (Ok(replay_data), Ok(metadata)) => (replay_data, metadata),
             (Err(error), _) | (_, Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
                 continue;
             }
             (Err(error), _) | (_, Err(error)) => {
                 warn!("[replay] read spool match {match_id} failed: {error}");
+                continue;
+            }
+        };
+        let metadata = match serde_json::from_slice::<ReplaySpoolMetadataCompat>(&metadata) {
+            Ok(metadata) => metadata.into_current(),
+            Err(error) => {
+                warn!("[replay] invalid metadata spool match {match_id}: {error}");
                 continue;
             }
         };
@@ -1101,7 +1426,18 @@ async fn recover_replay_spool() {
             Err(_) => return,
         };
         let match_id = match_id.to_string();
-        if let Err(error) = post_replay_finalize(&match_id, &lobby_json, &replay_data).await {
+        if let Err(error) = post_replay_finalize(
+            &match_id,
+            &metadata.lobby_json,
+            if metadata.rejected {
+                None
+            } else {
+                Some(&replay_data)
+            },
+            &metadata.participant_closures,
+        )
+        .await
+        {
             warn!("[replay] keeping pending match {match_id} for a later retry: {error}");
             continue;
         }
@@ -1117,7 +1453,12 @@ async fn replay_spool_worker() {
     }
 }
 
-fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<ReplayJournal>) {
+fn trigger_match_finalize(
+    match_id: u64,
+    lobby_json: String,
+    participant_closures: Vec<ParticipantClosure>,
+    journal: Arc<ReplayJournal>,
+) {
     tokio::spawn(async move {
         let _permit = match finalize_gate().acquire_owned().await {
             Ok(permit) => permit,
@@ -1127,14 +1468,51 @@ fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<Replay
             Ok(artifact) => artifact,
             Err(e) => {
                 error!("Failed to finalize replay journal for {match_id}: {e}");
+                match persist_rejected_replay_spool(
+                    match_id,
+                    &lobby_json,
+                    &participant_closures,
+                )
+                .await
+                {
+                    Ok((replay_path, metadata_path)) => {
+                        if let Err(error) = post_replay_finalize(
+                            &match_id.to_string(),
+                            &lobby_json,
+                            None,
+                            &participant_closures,
+                        )
+                        .await
+                        {
+                            error!("[replay] keeping explicit rejected result for match {match_id}: {error}");
+                        } else {
+                            cleanup_replay_spool(&replay_path, &metadata_path).await;
+                        }
+                    }
+                    Err(error) => {
+                        error!("[replay] could not persist explicit rejected result for match {match_id}: {error}");
+                    }
+                }
                 return;
             }
         };
         let replay_path = artifact.path.clone();
         let metadata_path = replay_path.with_extension("json");
         let metadata_tmp = replay_path.with_extension("json.tmp");
+        let metadata = ReplaySpoolMetadata {
+            lobby_json: lobby_json.clone(),
+            participant_closures: participant_closures.clone(),
+            rejected: false,
+        };
+        let metadata_bytes = match serde_json::to_vec(&metadata) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                error!("Failed to encode replay metadata for {match_id}: {error}");
+                return;
+            }
+        };
         if let Err(e) = async {
-            tokio::fs::write(&metadata_tmp, lobby_json.as_bytes())
+            tokio::fs::write(&metadata_tmp, metadata_bytes)
                 .await
                 .map_err(|e| e.to_string())?;
             tokio::fs::rename(&metadata_tmp, &metadata_path)
@@ -1150,8 +1528,13 @@ fn trigger_match_finalize(match_id: u64, lobby_json: String, journal: Arc<Replay
         }
 
         let match_id_string = match_id.to_string();
-        if let Err(error) =
-            post_replay_finalize(&match_id_string, &lobby_json, &artifact.bytes).await
+        if let Err(error) = post_replay_finalize(
+            &match_id_string,
+            &lobby_json,
+            Some(&artifact.bytes),
+            &participant_closures,
+        )
+        .await
         {
             error!("[CRITICAL] Keeping pending match {match_id} in local replay spool: {error}");
             return;
@@ -1164,42 +1547,52 @@ struct MatchTracker {
     player_accounts: HashMap<u16, String>,
     human_accounts: HashSet<String>,
     in_match: HashSet<u16>,
-    logged_exits: HashSet<String>,
+    voluntary_exits: HashSet<u16>,
+    personal_closures: std::collections::BTreeMap<String, u64>,
     finalized: bool,
     tracked: bool,
     lobby_json: String,
 }
 
 impl MatchTracker {
-    fn record_exit(&mut self, player_id: u16) -> Vec<String> {
-        let mut settlements = Vec::new();
-        if !self.tracked || self.finalized {
-            self.in_match.remove(&player_id);
-            return settlements;
+    fn record_voluntary_exit(&mut self, player_id: u16) -> (bool, Option<String>) {
+        let newly_closed = self.voluntary_exits.insert(player_id);
+        if !newly_closed {
+            return (false, None);
         }
         self.in_match.remove(&player_id);
-        if let Some(account_id) = self.player_accounts.get(&player_id).cloned() {
-            if self.logged_exits.insert(account_id.clone()) {
-                info!("Recorded exit for player {player_id} (account {account_id})");
-                if self.human_accounts.contains(&account_id) {
-                    settlements.push(account_id);
-                }
-            }
-        }
-        if self.in_match.len() <= 1 {
-            if let Some(winner_id) = self.in_match.iter().copied().next() {
-                if let Some(winner_acc) = self.player_accounts.get(&winner_id).cloned() {
-                    if self.logged_exits.insert(winner_acc.clone()) {
-                        info!("Recorded remaining player {winner_id} (account {winner_acc})");
-                        if self.human_accounts.contains(&winner_acc) {
-                            settlements.push(winner_acc);
-                        }
-                    }
-                }
-            }
+        if self.tracked && self.in_match.is_empty() {
             self.finalized = true;
         }
-        settlements
+        let account_id = self
+            .player_accounts
+            .get(&player_id)
+            .filter(|account_id| self.human_accounts.contains(*account_id))
+            .cloned();
+        if let Some(account_id) = &account_id {
+            info!("Recorded voluntary exit for player {player_id} (account {account_id})");
+        }
+        (true, account_id)
+    }
+
+    fn record_committed_closure(&mut self, account_id: String, turn_number: u64) {
+        self.personal_closures.entry(account_id).or_insert(turn_number);
+    }
+
+    fn is_committed_closed(&self, player_id: u16) -> bool {
+        self.player_accounts
+            .get(&player_id)
+            .is_some_and(|account_id| self.personal_closures.contains_key(account_id))
+    }
+
+    fn participant_closures(&self) -> Vec<ParticipantClosure> {
+        self.personal_closures
+            .iter()
+            .map(|(account_id, turn_number)| ParticipantClosure {
+                account_id: account_id.clone(),
+                turn_number: *turn_number,
+            })
+            .collect()
     }
 }
 
@@ -1885,7 +2278,8 @@ async fn spawn_lobby(registry: &Registry, body: RegisterBody) -> Arc<LobbyState>
         player_accounts,
         human_accounts,
         in_match: external_player_ids,
-        logged_exits: HashSet::new(),
+        voluntary_exits: HashSet::new(),
+        personal_closures: std::collections::BTreeMap::new(),
         finalized: false,
         tracked,
         lobby_json: lobby_json.clone(),
@@ -1996,6 +2390,11 @@ async fn tick_task(
     let mut last_status = std::time::Instant::now();
     let mut generated_rematch_id: Option<u64> = None;
     let mut pending_intents = Vec::new();
+    let mut pending_closures = Vec::<(String, u64)>::new();
+    let mut pending_closure_checkpoint_since = HashMap::<u64, Instant>::new();
+    let mut pending_participant_settlements = Vec::<PendingParticipantSettlement>::new();
+    let mut replay_recording_failed = false;
+    let (settlement_result_tx, mut settlement_result_rx) = mpsc::unbounded_channel();
     let mut spawn_rate_limits = HashMap::<u16, SpawnIntentRateLimit>::new();
     let mut total_ticks: u64 = 0;
     let mut total_intents: u64 = 0;
@@ -2014,22 +2413,40 @@ async fn tick_task(
         tokio::select! {
             _ = ticker.tick() => {
                 let mut clients = state.clients.lock().await;
+                retry_pending_participant_settlements(
+                    state.id,
+                    &mut pending_participant_settlements,
+                    &settlement_result_tx,
+                );
                 let active_relay_connections = clients.len();
                 let already_finalized = state.tracker.lock().unwrap().finalized;
 
                 if active_relay_connections == 0 {
-                    active_empty_secs -= 0.05;
-                    if already_finalized || active_empty_secs <= 0.0 {
-                        info!("[relay] lobby {} empty for too long, GC", state.id);
-                        drop(clients);
-                        let lobby_json = state.tracker.lock().unwrap().lobby_json.clone();
-                        trigger_match_finalize(state.id, lobby_json, state.journal.clone());
-                        registry.write().await.remove(&state.id);
-                        release_game_port(state.relay_port).await;
-                        break;
+                    if pending_intents.is_empty()
+                        && pending_closures.is_empty()
+                        && pending_participant_settlements.is_empty()
+                    {
+                        active_empty_secs -= 0.05;
+                        if already_finalized || active_empty_secs <= 0.0 {
+                            info!("[relay] lobby {} empty for too long, GC", state.id);
+                            drop(clients);
+                            let (lobby_json, closures) = {
+                                let tracker = state.tracker.lock().unwrap();
+                                (tracker.lobby_json.clone(), tracker.participant_closures())
+                            };
+                            trigger_match_finalize(
+                                state.id,
+                                lobby_json,
+                                closures,
+                                state.journal.clone(),
+                            );
+                            registry.write().await.remove(&state.id);
+                            release_game_port(state.relay_port).await;
+                            break;
+                        }
+                        // No clients or pending exit marker: skip turn serialization/broadcast.
+                        continue;
                     }
-                    // No clients: skip turn serialization/broadcast entirely.
-                    continue;
                 } else {
                     active_empty_secs = 30.0;
                 }
@@ -2040,7 +2457,11 @@ async fn tick_task(
                 // complete replay is already on disk; only live history is RAM.
                 let is_finalized = already_finalized;
                 let is_timed_out = match_started.elapsed().as_secs() >= max_match_secs;
-                if is_finalized || is_timed_out {
+                if (is_finalized || is_timed_out)
+                    && pending_intents.is_empty()
+                    && pending_closures.is_empty()
+                    && pending_participant_settlements.is_empty()
+                {
                     let reason = if is_finalized {
                         "Match finalized".to_string()
                     } else {
@@ -2060,8 +2481,16 @@ async fn tick_task(
                         }
                     }
                     drop(clients);
-                    let lobby_json = state.tracker.lock().unwrap().lobby_json.clone();
-                    trigger_match_finalize(state.id, lobby_json, state.journal.clone());
+                    let (lobby_json, closures) = {
+                        let tracker = state.tracker.lock().unwrap();
+                        (tracker.lobby_json.clone(), tracker.participant_closures())
+                    };
+                    trigger_match_finalize(
+                        state.id,
+                        lobby_json,
+                        closures,
+                        state.journal.clone(),
+                    );
                     registry.write().await.remove(&state.id);
                     release_game_port(state.relay_port).await;
                     break;
@@ -2076,8 +2505,109 @@ async fn tick_task(
                 total_ticks += 1;
                 total_intents += turn.intents.len() as u64;
 
-                if let Err(e) = state.journal.append(turn.clone()).await {
-                    error!("[replay] lobby {} append failed: {}", state.id, e);
+                if let Err(error) = state.journal.append(turn.clone()).await {
+                    error!("[replay] lobby {} append failed; keeping match active: {error}", state.id);
+                    replay_recording_failed = true;
+                }
+
+                if replay_recording_failed {
+                    for (account_id, closure_turn) in std::mem::take(&mut pending_closures) {
+                        state.tracker.lock().unwrap().record_committed_closure(
+                            account_id.clone(),
+                            closure_turn,
+                        );
+                        pending_participant_settlements.push(PendingParticipantSettlement {
+                            account_id,
+                            closure_turn,
+                            replay_bytes: Vec::new(),
+                            rejected: true,
+                            retry_count: 0,
+                            direct_in_flight: false,
+                            direct_retry_after: None,
+                            queued_at: Instant::now(),
+                        });
+                    }
+                    pending_closure_checkpoint_since.clear();
+                } else {
+                    let mut closure_groups = std::collections::BTreeMap::<u64, Vec<String>>::new();
+                    for (account_id, closure_turn) in &pending_closures {
+                        closure_groups
+                            .entry(*closure_turn)
+                            .or_default()
+                            .push(account_id.clone());
+                    }
+                    for (closure_turn, accounts) in closure_groups {
+                        match state.journal.checkpoint(closure_turn).await {
+                            Ok(replay_bytes) => {
+                                pending_closures
+                                    .retain(|(_, turn_number)| *turn_number != closure_turn);
+                                pending_closure_checkpoint_since.remove(&closure_turn);
+                                for account_id in accounts {
+                                    state.tracker.lock().unwrap().record_committed_closure(
+                                        account_id.clone(),
+                                        closure_turn,
+                                    );
+                                    match prepare_participant_settlement(
+                                        state.id,
+                                        account_id.clone(),
+                                        closure_turn,
+                                        replay_bytes.clone(),
+                                        false,
+                                    ) {
+                                        Ok(job) => dispatch_participant_settlements(vec![job]),
+                                        Err(error) => {
+                                            error!("[rewards] lobby {} participant spool failed; retrying while match stays active: {error}", state.id);
+                                            pending_participant_settlements.push(
+                                                PendingParticipantSettlement {
+                                                    account_id,
+                                                    closure_turn,
+                                                    replay_bytes: replay_bytes.clone(),
+                                                    rejected: false,
+                                                    retry_count: 1,
+                                                    direct_in_flight: false,
+                                                    direct_retry_after: None,
+                                                    queued_at: Instant::now(),
+                                                },
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                warn!("[replay] lobby {} exit checkpoint failed; retrying: {error}", state.id);
+                                let exhausted = pending_closure_checkpoint_since
+                                    .get(&closure_turn)
+                                    .is_some_and(|since| {
+                                        since.elapsed().as_secs()
+                                            >= PARTICIPANT_CHECKPOINT_RETRY_SECS
+                                    });
+                                if exhausted {
+                                    warn!("[rewards] lobby {} personal prefix could not be recorded; recording explicit participant rejection", state.id);
+                                    pending_closures
+                                        .retain(|(_, turn_number)| *turn_number != closure_turn);
+                                    pending_closure_checkpoint_since.remove(&closure_turn);
+                                    for account_id in accounts {
+                                        state.tracker.lock().unwrap().record_committed_closure(
+                                            account_id.clone(),
+                                            closure_turn,
+                                        );
+                                        pending_participant_settlements.push(
+                                            PendingParticipantSettlement {
+                                                account_id,
+                                                closure_turn,
+                                                replay_bytes: Vec::new(),
+                                                rejected: true,
+                                                retry_count: 0,
+                                                direct_in_flight: false,
+                                                direct_retry_after: None,
+                                                queued_at: Instant::now(),
+                                            },
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 let msg = ServerTurnMessage { turn };
@@ -2098,7 +2628,7 @@ async fn tick_task(
                             if client.missed_ticks >= MAX_MISSED_TICKS {
                                 warn!("Player {player_id} dropped: {}/{} consecutive missed ticks",
                                     client.missed_ticks, MAX_MISSED_TICKS);
-                                dropped_players.push(*player_id);
+                                dropped_players.push((*player_id, client.generation));
                                 false
                             } else {
                                 if client.missed_ticks == 1 || client.missed_ticks % 10 == 0 {
@@ -2110,21 +2640,21 @@ async fn tick_task(
                         }
                         Err(TrySendError::Closed(_)) => {
                             info!("Player {player_id} channel closed, removing");
-                            dropped_players.push(*player_id);
+                            dropped_players.push((*player_id, client.generation));
                             false
                         }
                     }
                 });
 
                 if !dropped_players.is_empty() {
-                    let mut tracker = state.tracker.lock().unwrap();
-                    let mut settlements = Vec::new();
-                    for pid in dropped_players {
-                        settlements.extend(tracker.record_exit(pid));
+                    for (pid, _) in dropped_players {
+                        pending_intents.push(StampedIntent {
+                            player_id: pid,
+                            intent: GameplayIntent::MarkDisconnected {
+                                is_disconnected: true,
+                            },
+                        });
                     }
-                    let lobby_json = tracker.lobby_json.clone();
-                    drop(tracker);
-                    trigger_participant_settlements(state.id, &lobby_json, settlements);
                 }
 
                 if last_status.elapsed().as_secs() >= 10 {
@@ -2155,6 +2685,23 @@ async fn tick_task(
                     });
                 }
             }
+            Some((account_id, closure_turn, accepted)) = settlement_result_rx.recv() => {
+                if accepted {
+                    pending_participant_settlements.retain(|settlement| {
+                        settlement.account_id != account_id
+                            || settlement.closure_turn != closure_turn
+                    });
+                    info!("[rewards] participant rejection recorded match={} account={}", state.id, account_id);
+                } else if let Some(settlement) = pending_participant_settlements
+                    .iter_mut()
+                    .find(|settlement| {
+                        settlement.account_id == account_id
+                            && settlement.closure_turn == closure_turn
+                    })
+                {
+                    settlement.direct_in_flight = false;
+                }
+            }
             Some(event) = ev_rx.recv() => {
                 match event {
                     RelayEvent::Gameplay { player_id, intent } => {
@@ -2168,21 +2715,31 @@ async fn tick_task(
                         ) {
                             continue;
                         }
-                        if matches!(intent, GameplayIntent::Resign) {
-                            let (settlements, lobby_json) = {
-                                let mut tracker = state.tracker.lock().unwrap();
-                                let settlements = tracker.record_exit(player_id);
-                                (settlements, tracker.lobby_json.clone())
+                        let is_resign = matches!(&intent, GameplayIntent::Resign);
+                        let (new_exit, account_id, already_closed) = {
+                            let mut tracker = state.tracker.lock().unwrap();
+                            let already_closed = tracker.voluntary_exits.contains(&player_id);
+                            let (new_exit, account_id) = if is_resign && !already_closed {
+                                tracker.record_voluntary_exit(player_id)
+                            } else {
+                                (false, None)
                             };
-                            trigger_participant_settlements(
-                                state.id,
-                                &lobby_json,
-                                settlements,
-                            );
+                            (new_exit, account_id, already_closed)
+                        };
+                        if already_closed {
+                            continue;
+                        }
+                        if new_exit {
+                            if let Some(account_id) = account_id {
+                                pending_closure_checkpoint_since
+                                    .entry(tick_number)
+                                    .or_insert_with(Instant::now);
+                                pending_closures.push((account_id, tick_number));
+                            }
                         }
                         pending_intents.push(StampedIntent { player_id, intent });
                     }
-                    RelayEvent::Leave { player_id, generation, peer } => {
+                    RelayEvent::VoluntaryLeave { player_id, generation, peer } => {
                         let removed = {
                             let mut clients = state.clients.lock().await;
                             if clients
@@ -2204,25 +2761,52 @@ async fn tick_task(
                             !removed
                         );
                         if removed {
-                            let (settlements, lobby_json) = {
+                            let (new_exit, account_id) = {
                                 let mut tracker = state.tracker.lock().unwrap();
-                                let settlements = tracker.record_exit(player_id);
-                                (settlements, tracker.lobby_json.clone())
+                                tracker.record_voluntary_exit(player_id)
                             };
-                            trigger_participant_settlements(
-                                state.id,
-                                &lobby_json,
-                                settlements,
-                            );
-                            pending_intents.push(StampedIntent {
-                                player_id,
-                                intent: GameplayIntent::MarkDisconnected { is_disconnected: true },
-                            });
+                            if new_exit {
+                                pending_intents.push(StampedIntent {
+                                    player_id,
+                                    intent: GameplayIntent::Resign,
+                                });
+                                if let Some(account_id) = account_id {
+                                    pending_closure_checkpoint_since
+                                        .entry(tick_number)
+                                        .or_insert_with(Instant::now);
+                                    pending_closures.push((account_id, tick_number));
+                                }
+                            }
                         } else {
                             warn!(
                                 "[relay] stale disconnect ignored lobby={} player={} generation={}",
                                 state.id, player_id, generation
                             );
+                        }
+                    }
+                    RelayEvent::Disconnected { player_id, generation, peer } => {
+                        let removed = {
+                            let mut clients = state.clients.lock().await;
+                            if clients
+                                .get(&player_id)
+                                .is_some_and(|client| client.generation == generation)
+                            {
+                                clients.remove(&player_id).is_some()
+                            } else {
+                                false
+                            }
+                        };
+                        info!(
+                            "[relay] temporary disconnect lobby={} player={} peer={} generation={} removed={} stale={}",
+                            state.id, player_id, peer, generation, removed, !removed
+                        );
+                        if removed {
+                            pending_intents.push(StampedIntent {
+                                player_id,
+                                intent: GameplayIntent::MarkDisconnected {
+                                    is_disconnected: true,
+                                },
+                            });
                         }
                     }
                     RelayEvent::RematchRequest { player_id } => {
@@ -2620,6 +3204,7 @@ async fn ws_task(
     let mut ping_interval = interval(Duration::from_secs(WS_PING_SECS));
     ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut frames_out: u64 = 0;
+    let mut voluntary_leave_sent = false;
 
     loop {
         tokio::select! {
@@ -2651,7 +3236,27 @@ async fn ws_task(
                                     }
                                     ClientMessage::Leave {} => {
                                         if let (Some(lobby), Some(pid)) = (&my_lobby, &my_player_id) {
-                                            let _ = lobby.ev_tx.try_send(RelayEvent::Leave { player_id: *pid, generation, peer });
+                                            match tokio::time::timeout(
+                                                Duration::from_secs(3),
+                                                lobby.ev_tx.send(RelayEvent::VoluntaryLeave {
+                                                    player_id: *pid,
+                                                    generation,
+                                                    peer,
+                                                }),
+                                            )
+                                            .await
+                                            {
+                                                Ok(Ok(())) => {
+                                                    voluntary_leave_sent = true;
+                                                    break;
+                                                }
+                                                Ok(Err(error)) => {
+                                                    warn!("[relay] leave event queue closed lobby={} player={} error={error}", lobby.id, pid);
+                                                }
+                                                Err(_) => {
+                                                    warn!("[relay] leave event queue timed out lobby={} player={}", lobby.id, pid);
+                                                }
+                                            }
                                         }
                                     }
                                     ClientMessage::RematchRequest { .. } => {
@@ -2761,12 +3366,17 @@ async fn ws_task(
         }
     }
 
-    if let (Some(lobby), Some(pid)) = (my_lobby, my_player_id) {
-        let _ = lobby.ev_tx.try_send(RelayEvent::Leave {
-            player_id: pid,
-            generation,
-            peer,
-        });
+    if !voluntary_leave_sent
+        && let (Some(lobby), Some(pid)) = (my_lobby, my_player_id)
+    {
+        let _ = lobby
+            .ev_tx
+            .send(RelayEvent::Disconnected {
+                player_id: pid,
+                generation,
+                peer,
+            })
+            .await;
     }
 }
 
@@ -2808,6 +3418,13 @@ async fn try_register_with_admission(
     if !lobby.valid_players.contains_key(&player_id) {
         warn!(
             "[relay] invalid Ready lobby={} player={} (not a valid player)",
+            lobby_id, player_id
+        );
+        return None;
+    }
+    if lobby.tracker.lock().unwrap().is_committed_closed(player_id) {
+        warn!(
+            "[relay] rejected reconnect after personal exit was committed lobby={} player={}",
             lobby_id, player_id
         );
         return None;
@@ -3001,14 +3618,17 @@ fn lobby_info(state: &Arc<LobbyState>) -> LobbyInfo {
 #[cfg(test)]
 mod dispatcher_tests {
     use super::{
-        AdmissionState, IpAdmissionState, MatchTracker, RelayAdmissionPolicy,
-        admit_gameplay_intent, deployment_end_tick, ticket_matches,
+        AdmissionState, IpAdmissionState, MatchTracker, ParticipantClosure, ParticipantSettlementPayload,
+        RelayAdmissionPolicy, admit_gameplay_intent,
+        deployment_end_tick, participant_replay_path, persist_participant_spool,
+        replay_prefix_through, ticket_matches, Turn,
     };
     use sha2::{Digest, Sha256};
     use sow_core::game_config::GameConfig;
     use sow_core::protocol::GameplayIntent;
     use std::collections::{HashMap, HashSet};
     use std::net::SocketAddr;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::Mutex as StdMutex;
 
@@ -3141,13 +3761,83 @@ mod dispatcher_tests {
             ]),
             human_accounts: HashSet::from([human.clone(), other, third]),
             in_match: HashSet::from([1, 2, 3]),
-            logged_exits: HashSet::new(),
+            voluntary_exits: HashSet::new(),
+            personal_closures: std::collections::BTreeMap::new(),
             finalized: false,
             tracked: true,
             lobby_json: "{}".to_string(),
         };
-        assert_eq!(tracker.record_exit(1), vec![human.clone()]);
-        assert!(tracker.record_exit(1).is_empty());
-        assert!(tracker.logged_exits.contains(&human));
+        assert_eq!(tracker.record_voluntary_exit(1), (true, Some(human.clone())));
+        assert_eq!(tracker.in_match, HashSet::from([2, 3]));
+        assert!(!tracker.finalized);
+        assert!(tracker.participant_closures().is_empty());
+
+        tracker.record_committed_closure(human.clone(), 41);
+        assert!(tracker.is_committed_closed(1));
+        assert!(!tracker.is_committed_closed(2));
+        assert_eq!(
+            tracker.participant_closures(),
+            vec![ParticipantClosure {
+                account_id: human.clone(),
+                turn_number: 41,
+            }]
+        );
+
+        assert_eq!(tracker.record_voluntary_exit(1), (false, None));
+        tracker.record_committed_closure(human.clone(), 42);
+        assert_eq!(tracker.participant_closures()[0].turn_number, 41);
+    }
+
+    #[test]
+    fn participant_spool_temp_record_uses_the_durable_replay_sidecar() {
+        let temp_record = Path::new("/spool/match-account.participant.tmp");
+        assert_eq!(
+            participant_replay_path(temp_record),
+            PathBuf::from("/spool/match-account.participant.replay")
+        );
+    }
+
+    #[test]
+    fn personal_checkpoint_contains_only_the_committed_prefix() {
+        let history = vec![
+            Turn {
+                turn_number: 10,
+                intents: Vec::new(),
+            },
+            Turn {
+                turn_number: 11,
+                intents: Vec::new(),
+            },
+            Turn {
+                turn_number: 12,
+                intents: Vec::new(),
+            },
+        ];
+        let prefix = replay_prefix_through(&history, 11).unwrap();
+        let decoded: Vec<Turn> = bincode::deserialize(&prefix).unwrap();
+        assert_eq!(
+            decoded.iter().map(|turn| turn.turn_number).collect::<Vec<_>>(),
+            vec![10, 11]
+        );
+        assert!(replay_prefix_through(&history, 99).is_err());
+    }
+
+    #[test]
+    fn rejected_participant_outcome_can_be_spooled_without_a_replay() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("500-player.participant");
+        let replay_bytes = Vec::new();
+        let payload = ParticipantSettlementPayload {
+            match_id: "500".to_string(),
+            account_id: "0123456789abcdef0123456789abcdef".to_string(),
+            closure_turn: 3,
+            replay_sha256: hex::encode(Sha256::digest(&replay_bytes)),
+            rejected: true,
+        };
+        persist_participant_spool(&path, &payload, &replay_bytes).unwrap();
+        let saved: ParticipantSettlementPayload =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(saved.rejected);
+        assert!(std::fs::read(participant_replay_path(&path)).unwrap().is_empty());
     }
 }

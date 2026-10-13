@@ -250,6 +250,7 @@ fn copy_poki_assets(src: &Path, dst: &Path) -> Result<()> {
         &dst.join("gameplay/currency"),
     )?;
     copy_dir(&src.join("campaign"), &dst.join("campaign"))?;
+    copy_dir(&src.join("guides"), &dst.join("guides"))?;
     let mobile_nav = dst.join("shell/mobile-nav");
     fs::create_dir_all(&mobile_nav)?;
     for file in ["heroes.webp", "battle.webp", "profile.webp"] {
@@ -771,6 +772,11 @@ fn validate_quoted_catalog_keys(
                     })
                     .unwrap_or(rest.len());
                 let key = &rest[..end];
+                // Menu journey copy has its own catalog, checked by validateMenuGuides.
+                if key.starts_with("menu.guide.") {
+                    offset = start + end;
+                    continue;
+                }
                 if key.ends_with('.') || key.ends_with('_') {
                     if !web_catalog_has_prefix(catalog, key) {
                         bail!("{label} uses unknown localization key prefix {key}");
@@ -1060,6 +1066,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "sow-dropdown.js",
             "sow-campaign.js",
             "sow-campaign-view.js",
+            "main_menu.flow.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -1076,6 +1083,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "sow-dropdown.js",
             "sow-campaign.js",
             "sow-campaign-view.js",
+            "main_menu.flow.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -1092,6 +1100,7 @@ fn build_index(paths: &Paths, out: &Path, build: IndexBuild<'_>) -> Result<()> {
             "sow-dropdown.js",
             "sow-campaign.js",
             "sow-campaign-view.js",
+            "main_menu.flow.js",
             "main_menu.core.js",
             "main_menu.motion.js",
             "main_menu.lobbies.js",
@@ -1734,8 +1743,10 @@ fn validate_web_catalogs(report_equal_values: bool) -> Result<serde_json::Value>
 }
 
 fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
-    if web_catalog_value(catalog, "menu.loading").is_none() {
-        bail!("dynamic localization key is missing: menu.loading");
+    for key in ["menu.loading", "menu.confirming_rewards", "menu.retrying_rewards"] {
+        if web_catalog_value(catalog, key).is_none() {
+            bail!("dynamic localization key is missing: {key}");
+        }
     }
     for &(_, code, _, _) in sow_i18n::Language::registry() {
         let token = code.to_ascii_lowercase().replace('-', "_");
@@ -2057,7 +2068,7 @@ fn validate_campaign_assets(paths: &Paths, catalog: &serde_json::Value) -> Resul
             r#"
 const fs = require("node:fs");
 const campaign = require(process.argv[1]);
-const { catalog, episodes } = JSON.parse(fs.readFileSync(0, "utf8"));
+const { catalog, episodes, menuGuides } = JSON.parse(fs.readFileSync(0, "utf8"));
 const hasText = key => {
     const value = key.split(".").reduce((node, part) =>
         node && Object.prototype.hasOwnProperty.call(node, part) ? node[part] : undefined, catalog);
@@ -2073,6 +2084,11 @@ for (const { episode_id, definition, roster } of episodes) {
     }
     if (result.errors.length) process.exitCode = 1;
 }
+const menuReport = campaign.validateMenuGuides(menuGuides);
+for (const issue of menuReport.errors) {
+    console.error(["menu", issue.step, issue.field].filter(Boolean).join(".") + ": " + issue.message);
+}
+if (menuReport.errors.length) process.exitCode = 1;
 "#,
         ])
         .arg(paths.shell.join("sow-campaign.js"))
@@ -2084,7 +2100,9 @@ for (const { episode_id, definition, roster } of episodes) {
             .stdin
             .take()
             .context("open campaign validator input")?,
-        &serde_json::json!({ "catalog": catalog, "episodes": episodes }),
+        &serde_json::json!({ "catalog": catalog, "episodes": episodes,
+            "menuGuides": serde_json::from_str::<serde_json::Value>(&fs::read_to_string(
+                paths.root.join("assets/guides/menu.triggers.json"))?)? }),
     )
     .context("write campaign validator input")?;
     if !validator
@@ -2665,6 +2683,7 @@ fn package_self(paths: &Paths, out: &Path, version: &str, compile: bool) -> Resu
         &paths.root.join("assets/campaign"),
         &assets.join("campaign"),
     )?;
+    copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
     copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
     let maps = out.join("maps");
     fs::create_dir_all(&maps)?;
@@ -2842,6 +2861,7 @@ fn native_static_fingerprint(paths: &Paths) -> Result<String> {
         paths.assets_gameplay.join("buildings"),
         paths.assets_gameplay.join("music"),
         paths.root.join("assets/campaign"),
+        paths.root.join("assets/guides"),
         paths.assets_site.join("media"),
         paths.assets_site.join("icons"),
         paths.assets_maps.clone(),
@@ -2909,6 +2929,7 @@ fn package_native_web(
             &paths.root.join("assets/campaign"),
             &assets.join("campaign"),
         )?;
+        copy_dir(&paths.root.join("assets/guides"), &assets.join("guides"))?;
         copy_dir(&paths.assets_site.join("media"), &assets.join("site/media"))?;
         copy_dir(&paths.assets_maps, &out.join("maps"))?;
         refresh_map_thumbnails(&out.join("maps"), &paths.map_sources)?;
@@ -3633,6 +3654,7 @@ fn local_source_snapshot(paths: &Paths) -> Result<Vec<LocalFileStamp>> {
 fn local_file_requires_wasm(paths: &Paths, path: &Path) -> bool {
     if path == paths.root.join("assets/geo_entities.json")
         || path == paths.root.join("assets/maps/world/map.bin.br")
+        || path == paths.root.join("assets/guides/menu.triggers.json")
     {
         return true;
     }
@@ -4346,6 +4368,7 @@ mod tests {
             "main_menu.tutorial.js",
             "main_menu.shell.js",
             "main_menu.hud.js",
+            "main_menu.flow.js",
         ] {
             assert!(
                 root.join("sow-web/shell").join(required).is_file(),

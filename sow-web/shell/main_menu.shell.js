@@ -34,7 +34,13 @@
     var rewardAnimationToken = 0;
     var activeRewardStage = null;
     var rewardPresentationReady = false;
-    var menuGuideReturnPending = false;
+    var menuFlow = window.SOWMenuFlow.create();
+    window.SOW_menu_flow = menuFlow;
+    var menuOutcomeCounts = Object.create(null);
+    var menuOutcomeReady = Object.create(null);
+    var purchasedLeaderId = null;
+    var lastPurchaseRevision = 0;
+    var lastMenuFlowPhase = null;
     var displayedProgression = null;
     var progressionAnimationFrame = 0;
     var progressionAnimationTarget = null;
@@ -1005,7 +1011,7 @@
         return (state && state.reward_receipts || []).filter(function (receipt) {
             var tutorialApplied = receipt && receipt.id === "tutorial" && receipt.match_id === "tutorial" &&
                 receipt.status === "applied";
-            return receipt && receipt.id && receipt.status !== "presented" && !receipt.presented_at &&
+            return receipt && receipt.id && receipt.status === "applied" && !receipt.presented_at &&
                 (tutorialApplied || receipt.verification_status === "verified" || receipt.verification_status === "rejected");
         });
     }
@@ -1284,20 +1290,28 @@
         var canonical = progressionFromState();
         var target = canonical;
         var startLevel = (displayedProgression || canonical).level;
-        var levelStages = [];
-        for (var level = startLevel + 1; level <= target.level; level++) {
-            levelStages.push({
+        var gainedLevels = new Set();
+        receipts.forEach(function (receipt) {
+            if (Number.isSafeInteger(receipt.level_before) && Number.isSafeInteger(receipt.level_after)) {
+                for (var level = receipt.level_before + 1; level <= receipt.level_after; level++) gainedLevels.add(level);
+            }
+        });
+        if (!receipts.every(function (receipt) { return Number.isSafeInteger(receipt.level_before); })) {
+            for (var level = startLevel + 1; level <= target.level; level++) gainedLevels.add(level);
+        }
+        var levelStages = Array.from(gainedLevels).sort(function (a, b) { return a - b; }).map(function (level) {
+            return {
                 kind: "level",
                 amount: level,
                 level: level,
                 selector: "[data-progression-level-value]"
-            });
-        }
+            };
+        });
         var stages = [
             { kind: "xp", amount: totals.xp, selector: "[data-progression-xp-value]" },
-            ...levelStages,
             { kind: "crowns", amount: totals.crowns, selector: "[data-progression-crowns-value]" },
-            { kind: "laurels", amount: totals.laurels, selector: "[data-progression-laurels-value]" }
+            { kind: "laurels", amount: totals.laurels, selector: "[data-progression-laurels-value]" },
+            ...levelStages
         ].filter(function (stage) { return stage.amount > 0; });
 
         function finish(shown) {
@@ -1312,6 +1326,7 @@
             }
             writeProgression(progressionFromState());
             ids.forEach(function (id) { rewardAnimationShown.add(id); });
+            console.info("[menu-flow] rewards and levels presented", ids, "cycle", state.loader_cycle_id);
             acknowledgeShownReceipts(accountId);
             maybePresentRewards();
         }
@@ -1344,7 +1359,7 @@
                 nextValues.level = stage.level;
             } else {
                 nextValues[stage.kind] = target[stage.kind];
-                nextValues.level = stage.kind === "xp" && levelStages.length
+                nextValues.level = levelStages.length
                     ? oldLevel
                     : Math.floor(nextValues.xp / 100) + 1;
             }
@@ -1356,7 +1371,7 @@
                     window.setTimeout(function () { next(index + 1); }, 250);
                     return;
                 }
-                var heldLevel = stage.kind === "xp" && levelStages.length ? oldLevel : null;
+                var heldLevel = levelStages.length ? oldLevel : null;
                 animateProgressionTo(nextValues, 380, token, heldLevel).then(function (shown) {
                     if (!shown) { finish(false); return; }
                     pulseRewardCounter(stage.selector, false);
@@ -1370,23 +1385,82 @@
     }
 
     function maybePresentRewards() {
-        if (!state || state.phase !== "MainMenu" || root.hidden || document.visibilityState !== "visible" ||
-            !rewardPresentationReady || rewardAnimationRunning) return;
-        ensureProgressionDisplay();
+        if (!state) return;
         var pending = pendingRewardReceipts().filter(function (receipt) { return !rewardAnimationShown.has(receipt.id); });
-        if (pending.length) {
+        menuFlow.update(state, {
+            visible: !root.hidden && document.visibilityState === "visible",
+            ready: rewardPresentationReady,
+            running: rewardAnimationRunning,
+            receipts: pending,
+            screen: currentScreen()
+        });
+        if (lastMenuFlowPhase !== menuFlow.phase()) {
+            lastMenuFlowPhase = menuFlow.phase();
+            console.info("[menu-flow]", lastMenuFlowPhase, "cycle", state.loader_cycle_id,
+                "match", state.menu_return && state.menu_return.match_id);
+        }
+        var guide = window.SOW_menu_guide;
+        if (!menuFlow.canGuide() && guide) guide.pause();
+        if (menuFlow.canPresent() && !rewardAnimationRunning && pending.length) {
+            ensureProgressionDisplay();
             runRewardPresentation(pending);
             return;
         }
-        acknowledgeShownReceipts(state.account_id);
-        if (menuGuideReturnPending) {
-            menuGuideReturnPending = false;
-            window.dispatchEvent(new CustomEvent("sow:campaign-menu-guide-ready"));
+        if (state.phase === "MainMenu") acknowledgeShownReceipts(state.account_id);
+        var destination = menuFlow.takeDestination();
+        if (destination === "store" && window.SOW_PORTAL !== "poki" && window.SOW_PORTAL !== "jest") {
+            storeOpen = true;
+            render();
+            return;
         }
+        if (menuFlow.canGuide() && guide) guide.update(state, menuGuideFacts());
+    }
+
+    function menuGuideFacts() {
+        var screen = currentScreen();
+        var entry = activeProfileEntry();
+        var ownProfile = screen === "profile" && profileAccountId === state.account_id && profileDataComplete();
+        var historyReady = ownProfile && profileTab === "history" && entry && entry.historyLoaded && !entry.historyError;
+        var matchId = state.menu_return && state.menu_return.source === "multiplayer" ? state.menu_return.match_id : null;
+        var firstGuide = state.menu_guides && state.menu_guides.first_multiplayer;
+        if (firstGuide && firstGuide.status === "active" && firstGuide.source_match_id) matchId = firstGuide.source_match_id;
+        var historyIds = (profileHistory || []).map(function (item) { return item.match_id; });
+        var commerce = window.SOW_PORTAL !== "poki" && window.SOW_PORTAL !== "jest";
+        var affordable = commerce ? (state.store && state.store.leaders || []).filter(function (offer) {
+            return !offer.owned && Number(offer.cost_gems) > 0 && Number(offer.cost_gems) <= Number(state.gems);
+        }).map(function (offer) { return offer.id; }) : [];
+        var ready = {
+            profile_opened: ownProfile && profileTab === "overview",
+            history_current_match_ready: !!(historyReady && matchId && historyIds.indexOf(matchId) !== -1),
+            store_ready: commerce && screen === "store" && storeCatalogLoaded && !storeCatalogLoading
+        };
+        Object.keys(ready).forEach(function (key) {
+            if (ready[key] && !menuOutcomeReady[key]) menuOutcomeCounts[key] = (menuOutcomeCounts[key] || 0) + 1;
+            menuOutcomeReady[key] = ready[key];
+        });
+        return {
+            screen: screen, profile_tab: profileTab, profile_ready: ownProfile, own_profile_ready: ownProfile,
+            history_ready: !!historyReady, history_match_ids: historyIds, current_match_id: matchId,
+            commerce_available: commerce, affordable_unowned_leader_ids: affordable,
+            store_ready: ready.store_ready,
+            purchase_prompt_leader_id: purchaseModal && purchaseModal.type === "leader" ? purchaseModal.leaderId : null,
+            purchase_modal_phase: purchaseModal && purchaseModal.type === "leader" ? purchaseModal.phase : null,
+            purchased_leader_id: purchasedLeaderId,
+            owned_leader_ids: (state.store && state.store.leaders || []).filter(function (offer) { return offer.owned; }).map(function (offer) { return offer.id; }),
+            available_leader_ids: (state.leaders || []).filter(function (leader) { return leader.available !== false; }).map(function (leader) { return leader.id; }),
+            preview_leader_id: tempSelectedLeader,
+            menu_outcomes: Object.assign({}, menuOutcomeCounts, {
+                name_saved: Number(state.name_save_revision) || 0,
+                leader_selected: Number(state.leader_selection_revision) || 0,
+                leader_purchased: Number(state.purchase_revision) || 0,
+                quick_match_accepted: Number(state.quick_match_revision) || 0
+            })
+        };
     }
 
     function updateDynamic() {
         if (!state || root.hidden) return;
+        if (storeOpen && typeof loadStoreCatalog === "function") loadStoreCatalog();
         ensureProgressionDisplay();
         if (reducedRewardMotion() && (rewardAnimationRunning || progressionAnimationTarget)) {
             cancelRewardAnimation();
@@ -1436,6 +1510,7 @@
             if (count) count.textContent = cardLobby ? lobbyPlayerCount(cardLobby) : "";
             if (cardLobby && card) card.setAttribute("aria-label", lobbyLabel(cardLobby));
         }
+        maybePresentRewards();
     }
 
     root.addEventListener("click", function (event) {
@@ -1810,7 +1885,17 @@
         }
         if (command === "preview_leader") {
             tempSelectedLeader = target.dataset.leaderId;
+            var previewLeader = leaderById(tempSelectedLeader);
+            if (previewLeader && previewLeader.available !== false && tempSelectedLeader !== state.selected_leader) {
+                menuOutcomeCounts.leader_preview_selected = (menuOutcomeCounts.leader_preview_selected || 0) + 1;
+            }
+            var previewOffer = typeof storeLeaderById === "function" ? storeLeaderById(tempSelectedLeader) : null;
+            if (previewOffer && !previewOffer.owned && Number(previewOffer.cost_gems) > 0
+                && Number(previewOffer.cost_gems) <= Number(state && state.gems)) {
+                menuOutcomeCounts.leader_offer_selected = (menuOutcomeCounts.leader_offer_selected || 0) + 1;
+            }
             if (!updateHeroesPreview()) render();
+            maybePresentRewards();
             return;
         }
         if (command === "confirm_leader") {
@@ -1863,6 +1948,12 @@
             return;
         }
         if (command === "cancel_purchase") {
+            if (purchaseModal && purchaseModal.type === "leader" && purchaseModal.phase === "success") {
+                menuOutcomeCounts.leader_purchase_closed = (menuOutcomeCounts.leader_purchase_closed || 0) + 1;
+            }
+            if (purchaseModal && purchaseModal.type === "leader" && purchaseModal.phase === "confirm" && !purchaseModal.submitted) {
+                menuOutcomeCounts.leader_purchase_cancelled = (menuOutcomeCounts.leader_purchase_cancelled || 0) + 1;
+            }
             if (storeCheckoutProduct || storeCheckoutInstance) closeStoreCheckout();
             else {
                 if (typeof canDismissPurchaseModal === "function" && !canDismissPurchaseModal()) return;
@@ -2467,6 +2558,7 @@
 
     document.addEventListener("visibilitychange", function () {
         if (document.visibilityState !== "visible") {
+            if (window.SOW_menu_guide) window.SOW_menu_guide.pause();
             if (state && (rewardAnimationRunning || progressionAnimationTarget)) {
                 cancelRewardAnimation();
                 writeProgression(progressionFromState());
@@ -2505,12 +2597,21 @@
             if (rewardAckRetryTimer !== null) window.clearTimeout(rewardAckRetryTimer);
             rewardAckRetryTimer = null;
             displayedProgression = null;
+            menuOutcomeCounts = Object.create(null);
+            menuOutcomeReady = Object.create(null);
+            purchasedLeaderId = null;
+            lastPurchaseRevision = 0;
             rewardPresentationReady = false;
             cancelRewardAnimation();
             if (rewardAnimationTimer !== null) window.clearTimeout(rewardAnimationTimer);
             rewardAnimationTimer = null;
         }
         if (typeof resumeExternalPurchaseDelivery === "function") resumeExternalPurchaseDelivery(false);
+        var purchaseRevision = Number(state.purchase_revision) || 0;
+        if (purchaseRevision > lastPurchaseRevision && purchaseIntent && purchaseIntent.type === "leader") {
+            purchasedLeaderId = purchaseIntent.leaderId;
+        }
+        lastPurchaseRevision = purchaseRevision;
         if (typeof resolvePurchaseModal === "function") resolvePurchaseModal();
         var returnedFromGame = lastMenuPhase !== null &&
             lastMenuPhase !== "MainMenu" &&
@@ -2525,9 +2626,9 @@
             }
             if (rewardAnimationTimer !== null) window.clearTimeout(rewardAnimationTimer);
             rewardAnimationTimer = null;
+            maybePresentRewards();
         }
         if (returnedFromGame) {
-            menuGuideReturnPending = true;
             profileOpen = false;
             heroesOpen = false;
             campaignOpen = false;
@@ -2538,10 +2639,6 @@
             window.SOW_tutorial_menu_state_update(state);
         }
         syncProfilePreload(state);
-        if (state.phase === "MainMenu" && window.SOW_open_store_after_match) {
-            window.SOW_open_store_after_match = false;
-            storeOpen = true;
-        }
         if (state.waiting && passwordLobbyId != null) {
             passwordLobbyId = null;
             passwordDraft = "";

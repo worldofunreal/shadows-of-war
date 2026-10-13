@@ -4,10 +4,11 @@ use crate::metadata_db::{
     SEASONS_TABLE, VERIFIED_VICTORY_BOARD_TABLE,
 };
 use crate::profile::{
-    LeaderCareerStats, MatchRecord, MatchStartRecord, PublicLeaderSummary, PublicLeaderboardEntry,
-    PublicMatchDetail, PublicMatchParticipant, PublicMatchSummary, PublicProfileIndex,
-    PublicProfileSummary, PublicProfileView, PublicRatingView, ReplayVerificationStatus,
-    SeasonRating, SeasonRecord, VerifiedMatchResult, public_handle, win_rate,
+    LeaderCareerStats, MatchRecord, MatchStartRecord, MenuGuideProgress, MenuGuideStatus,
+    PublicLeaderSummary, PublicLeaderboardEntry, PublicMatchDetail, PublicMatchParticipant,
+    PublicMatchSummary, PublicProfileIndex, PublicProfileSummary, PublicProfileView,
+    PublicRatingView, ReplayVerificationStatus, SeasonRating, SeasonRecord, VerifiedMatchResult,
+    public_handle, win_rate,
 };
 use log::{error, info};
 use redb::ReadableTable;
@@ -311,6 +312,9 @@ pub struct PlayerProfile {
     /// id, so a retry or a concurrent finalize can only apply it once.
     #[serde(default)]
     pub reward_receipts: std::collections::BTreeMap<String, crate::profile::RewardReceipt>,
+    /// Server-persisted progress for menu journeys.
+    #[serde(default)]
+    pub menu_guides: std::collections::BTreeMap<String, MenuGuideProgress>,
     /// Server-unlocked achievements. The client can display these values but
     /// cannot create or advance them.
     #[serde(default)]
@@ -366,6 +370,7 @@ impl Default for PlayerProfile {
             purchased_skins: std::collections::BTreeSet::new(),
             purchase_history: std::collections::BTreeMap::new(),
             reward_receipts: std::collections::BTreeMap::new(),
+            menu_guides: std::collections::BTreeMap::new(),
             unlocked_achievements: std::collections::BTreeSet::new(),
             playgames_sync_revision: 0,
             playgames_synced_revision: 0,
@@ -417,6 +422,7 @@ impl PlayerProfile {
         if self.reward_receipts.contains_key(receipt_id) {
             return false;
         }
+        let level_before = self.level;
         let laurels_before = self.laurels;
         self.apply_reward(leader, reward);
         self.refresh_achievements();
@@ -432,6 +438,9 @@ impl PlayerProfile {
                 laurels: reward
                     .laurels
                     .saturating_add(self.laurels.saturating_sub(laurels_before)),
+                level_before: Some(level_before),
+                level_after: Some(self.level),
+                personal_closure_turn: None,
                 created_at,
                 status: crate::profile::RewardSettlementStatus::Applied,
                 presented_at: None,
@@ -1141,20 +1150,29 @@ impl PlayerDb {
         &self,
         record: &MatchRecord,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.persist_match_record(record, false)
+        self.persist_match_record(record, false, None)
+    }
+
+    fn save_match_record_allow_closed_update(
+        &self,
+        record: &MatchRecord,
+        account_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.persist_match_record(record, false, Some(account_id))
     }
 
     fn save_provisional_match_record(
         &self,
         record: &MatchRecord,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.persist_match_record(record, true)
+        self.persist_match_record(record, true, None)
     }
 
     fn persist_match_record(
         &self,
         record: &MatchRecord,
         merge_provisional: bool,
+        replace_closed_account: Option<&str>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let Some(db) = &self.metadata_db else {
             return Err("profile metadata database unavailable".into());
@@ -1188,6 +1206,25 @@ impl PlayerDb {
             }
             next.provisional = true;
             next.verified = false;
+        } else if let Some(saved) = &previous {
+            for participant in saved
+                .participants
+                .iter()
+                .filter(|participant| participant.personal_closure_turn.is_some())
+                .filter(|participant| {
+                    Some(participant.account_id.as_str()) != replace_closed_account
+                })
+            {
+                if let Some(current) = next
+                    .participants
+                    .iter_mut()
+                    .find(|current| current.account_id == participant.account_id)
+                {
+                    *current = participant.clone();
+                } else {
+                    next.participants.push(participant.clone());
+                }
+            }
         }
         let mut index = write_txn.open_table(PLAYER_MATCH_INDEX_TABLE)?;
         if let Some(previous) = &previous {
@@ -1852,7 +1889,100 @@ impl PlayerDb {
         account: PlayerAccount,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let account = self.ensure_starting_leader(account).await?;
-        self.ensure_welcome_grant(account).await
+        let account = self.ensure_welcome_grant(account).await?;
+        self.ensure_pending_tutorial_guide(account).await
+    }
+
+    async fn ensure_pending_tutorial_guide(
+        &self,
+        account: PlayerAccount,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        if account.profile.menu_guides.contains_key("welcome")
+            || !account
+                .profile
+                .reward_receipts
+                .get("tutorial")
+                .is_some_and(|receipt| receipt.presented_at.is_none())
+        {
+            return Ok(account);
+        }
+        let mut con = self.get_connection().await?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let account = Self::update_account_atomic(
+            &mut con,
+            &Self::account_key(&account.id),
+            |account| {
+                if !account.profile.menu_guides.contains_key("welcome")
+                    && account
+                        .profile
+                        .reward_receipts
+                        .get("tutorial")
+                        .is_some_and(|receipt| receipt.presented_at.is_none())
+                {
+                    account
+                        .profile
+                        .menu_guides
+                        .insert("welcome".to_string(), MenuGuideProgress::default());
+                    account.updated_at = now;
+                }
+            },
+        )
+        .await?;
+        self.save_player_account_to_redb(&account);
+        Ok(account)
+    }
+
+    pub async fn save_menu_guide_progress(
+        &self,
+        account_id: &str,
+        guide_id: &str,
+        progress: MenuGuideProgress,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        crate::profile::validate_menu_guide_progress(guide_id, &progress)?;
+        let mut progress = progress;
+        if let Some(leader_id) = progress.selected_leader.as_deref() {
+            let leader = crate::commerce::leader_from_id(leader_id)
+                .ok_or("unknown selected leader")?;
+            progress.selected_leader =
+                Some(crate::commerce::leader_wire_id(leader).to_string());
+        }
+        let mut con = self.get_connection().await?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut bot_account = false;
+        let mut guide_not_enrolled = false;
+        let account = Self::update_account_atomic(
+            &mut con,
+            &Self::account_key(account_id),
+            |account| {
+                if account.kind != AccountKind::Human {
+                    bot_account = true;
+                    return;
+                }
+                let saved = account.profile.menu_guides.get(guide_id);
+                if saved.is_none() {
+                    guide_not_enrolled = true;
+                    return;
+                }
+                let merged = crate::profile::merge_menu_guide_progress(saved, &progress);
+                account.profile.menu_guides.insert(guide_id.to_string(), merged);
+                account.updated_at = now;
+            },
+        )
+        .await?;
+        if bot_account {
+            return Err("menu guides are only available for human accounts".into());
+        }
+        if guide_not_enrolled {
+            return Err("menu guide is not enrolled".into());
+        }
+        self.save_player_account_to_redb(&account);
+        Ok(account)
     }
 
     /// Replace one account only if the JSON read by this request is still the
@@ -2485,33 +2615,20 @@ impl PlayerDb {
         Ok(players)
     }
 
-    /// Settle a single human participant as soon as the relay records an exit.
-    /// The match id is the receipt key, so normal finalization can safely retry
-    /// the same operation without paying twice.
-    pub async fn settle_match_participant(
+    /// Freeze one human player's receipt at the relay's committed exit turn.
+    /// Only the deterministic verifier may add replay-derived rewards later.
+    pub async fn note_match_participant_closure(
         &self,
         match_id: &str,
         account_id: &str,
-        lobby_json: Option<&str>,
-    ) -> Result<Option<PlayerAccount>, Box<dyn std::error::Error + Send + Sync>> {
-        let players = self
-            .match_participants_with_lobby(match_id, lobby_json)
-            .await?;
-        if !players.iter().any(|player| player == account_id) {
-            return Err("account is not registered in this match".into());
-        }
-
-        let mut con = self.get_connection().await?;
-        let account = Self::load_account(&mut con, account_id).await?;
-        if account.kind == AccountKind::Bot {
-            return Ok(None);
-        }
-        let settled = account.profile.reward_receipts.contains_key(match_id);
-        drop(con);
-
+        closure_turn: u64,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let start = self
             .match_start_record(match_id)?
             .ok_or("trusted match registration unavailable")?;
+        if !start.player_ids.iter().any(|player| player == account_id) {
+            return Err("account is not registered in this match".into());
+        }
         let relay_player = start
             .metadata
             .get("relay_players")
@@ -2522,23 +2639,57 @@ impl PlayerDb {
                         .get("database_account_id")
                         .and_then(serde_json::Value::as_str)
                         == Some(account_id)
+                        && player
+                            .get("is_internal")
+                            .and_then(serde_json::Value::as_bool)
+                            != Some(true)
                 })
-            });
+            })
+            .ok_or("account is not a registered human participant")?;
         let leader = relay_player
-            .and_then(|player| player.get("leader"))
+            .get("leader")
             .and_then(serde_json::Value::as_str)
             .and_then(crate::rewards::canonical_leader_name);
-        let account = if settled {
-            account
-        } else {
-            self.record_match_participation(account_id, leader.clone(), match_id)
-                .await?
-        };
-        let config = start.metadata.get("config");
+        let account = self
+            .record_match_participation(account_id, leader.clone(), match_id)
+            .await?;
+        if account.kind != AccountKind::Human {
+            return Err("only human participants can close a personal receipt".into());
+        }
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        let mut con = self.get_connection().await?;
+        let mut conflicting_turn = false;
+        let account = Self::update_account_atomic(
+            &mut con,
+            &Self::account_key(account_id),
+            |account| {
+                let Some(receipt) = account.profile.reward_receipts.get_mut(match_id) else {
+                    conflicting_turn = true;
+                    return;
+                };
+                if receipt
+                    .personal_closure_turn
+                    .is_some_and(|saved| saved != closure_turn)
+                {
+                    conflicting_turn = true;
+                    return;
+                }
+                if receipt.personal_closure_turn != Some(closure_turn) {
+                    receipt.personal_closure_turn = Some(closure_turn);
+                    account.updated_at = now;
+                }
+            },
+        )
+        .await?;
+        if conflicting_turn {
+            return Err("personal receipt closure conflicts with its saved state".into());
+        }
+        self.save_player_account_to_redb_checked(&account)?;
+
+        let config = start.metadata.get("config");
         let started_at = start
             .metadata
             .get("started_at")
@@ -2550,12 +2701,13 @@ impl PlayerDb {
             is_bot: false,
             leader,
             team: relay_player
-                .and_then(|player| player.get("team"))
+                .get("team")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string),
+            personal_closure_turn: Some(closure_turn),
             ..Default::default()
         };
-        let record = MatchRecord {
+        let mut record = self.load_match_record(match_id)?.unwrap_or_else(|| MatchRecord {
             schema_version: 1,
             match_id: match_id.to_string(),
             season_id: crate::profile::CURRENT_SEASON_ID,
@@ -2584,10 +2736,256 @@ impl PlayerDb {
             verified: false,
             provisional: true,
             rating_eligible: false,
-            participants: vec![participant],
+            participants: vec![participant.clone()],
+        });
+        if !record
+            .participants
+            .iter()
+            .any(|participant| participant.account_id == account_id)
+        {
+            record.participants.push(participant);
+        } else if let Some(saved) = record
+            .participants
+            .iter_mut()
+            .find(|participant| participant.account_id == account_id)
+        {
+            saved.personal_closure_turn = Some(closure_turn);
+        }
+        self.save_match_record_allow_closed_update(&record, account_id)?;
+        Ok(account)
+    }
+
+    /// Record a terminal rejection for one closed participant. This is used
+    /// when the trusted relay cannot provide a replay prefix or the verifier
+    /// rejects that prefix; it never changes another participant's receipt.
+    pub async fn reject_match_participant_result(
+        &self,
+        match_id: &str,
+        account_id: &str,
+        closure_turn: u64,
+    ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut conflicting_state = false;
+        let account = Self::update_account_atomic(
+            &mut con,
+            &Self::account_key(account_id),
+            |account| {
+                let Some(receipt) = account.profile.reward_receipts.get_mut(match_id) else {
+                    conflicting_state = true;
+                    return;
+                };
+                if receipt.personal_closure_turn != Some(closure_turn) {
+                    conflicting_state = true;
+                    return;
+                }
+                if receipt.verification_status == Some(ReplayVerificationStatus::Verified) {
+                    return;
+                }
+                if receipt.verification_status != Some(ReplayVerificationStatus::Rejected) {
+                    receipt.verification_status = Some(ReplayVerificationStatus::Rejected);
+                    account.updated_at = now;
+                }
+            },
+        )
+        .await?;
+        if conflicting_state {
+            return Err("personal receipt rejection conflicts with its saved state".into());
+        }
+        self.save_player_account_to_redb_checked(&account)?;
+        Ok(account)
+    }
+
+    async fn apply_verified_participant_reward(
+        &self,
+        result: &VerifiedMatchResult,
+        participant: &crate::profile::VerifiedMatchParticipant,
+        personal_closure_turn: Option<u64>,
+    ) -> Result<Option<PlayerAccount>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut con = self.get_connection().await?;
+        let existing = Self::load_account(&mut con, &participant.account_id).await?;
+        if existing.kind == AccountKind::Bot {
+            return Ok(None);
+        }
+        drop(con);
+        let mut closed_for_another_result = false;
+        let mut missing_or_rejected_receipt = false;
+        let mut con = self.get_connection().await?;
+        let bonus_id = format!("verified_bonus:{}", result.match_id);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let input = crate::rewards::RewardInput {
+            won: participant.won,
+            players_defeated: participant.players_defeated,
+            empires_defeated: participant.empires_defeated,
+            tribes_defeated: participant.tribes_defeated,
+            kills: participant.kills,
+            assists: participant.assists,
+            ..Default::default()
         };
-        self.save_provisional_match_record(&record)?;
-        Ok(Some(account))
+        let earned = crate::rewards::calculate(input);
+        let participation = crate::rewards::calculate(crate::rewards::RewardInput::default());
+        let bonus = crate::rewards::MatchReward {
+            xp: earned.xp.saturating_sub(participation.xp),
+            leader_xp: earned.leader_xp.saturating_sub(participation.leader_xp),
+            crowns: earned.crowns.saturating_sub(participation.crowns),
+            laurels: earned.laurels.saturating_sub(participation.laurels),
+        };
+        let account_key = Self::account_key(&participant.account_id);
+        let leader = participant.leader.clone();
+        let updated = Self::update_account_atomic(&mut con, &account_key, |account| {
+            let decision = verified_receipt_decision(
+                account.profile.reward_receipts.get(&result.match_id),
+                personal_closure_turn,
+            );
+            match decision {
+                VerifiedReceiptDecision::AlreadyClosed => {
+                    closed_for_another_result = true;
+                    return;
+                }
+                VerifiedReceiptDecision::Reject => {
+                    missing_or_rejected_receipt = true;
+                    return;
+                }
+                VerifiedReceiptDecision::Apply => {}
+            }
+            let receipt = account
+                .profile
+                .reward_receipts
+                .get_mut(&result.match_id)
+                .expect("verified receipt decision requires an existing receipt");
+            receipt.verification_status = Some(ReplayVerificationStatus::Verified);
+            if account.profile.reward_receipts.contains_key(&bonus_id) {
+                account.updated_at = now;
+                return;
+            }
+            let leader = leader
+                .clone()
+                .or_else(|| account.profile.preferred_leader.clone())
+                .unwrap_or_else(|| "Caesar".to_string());
+            account.profile.players_defeated = account
+                .profile
+                .players_defeated
+                .saturating_add(participant.players_defeated);
+            account.profile.empires_defeated = account
+                .profile
+                .empires_defeated
+                .saturating_add(participant.empires_defeated);
+            account.profile.tribes_defeated = account
+                .profile
+                .tribes_defeated
+                .saturating_add(participant.tribes_defeated);
+            account.profile.kills = account.profile.kills.saturating_add(participant.kills);
+            account.profile.deaths = account.profile.deaths.saturating_add(participant.deaths);
+            account.profile.assists = account.profile.assists.saturating_add(participant.assists);
+            let leader_stats = account
+                .profile
+                .leader_stats
+                .entry(leader.clone())
+                .or_default();
+            leader_stats.kills = leader_stats.kills.saturating_add(participant.kills);
+            leader_stats.deaths = leader_stats.deaths.saturating_add(participant.deaths);
+            leader_stats.assists = leader_stats.assists.saturating_add(participant.assists);
+            if participant.won {
+                account.profile.wins = account.profile.wins.saturating_add(1);
+                account.profile.verified_wins = account.profile.verified_wins.saturating_add(1);
+                leader_stats.wins = leader_stats.wins.saturating_add(1);
+                leader_stats.verified_wins = leader_stats.verified_wins.saturating_add(1);
+            }
+            account.profile.apply_reward_receipt(
+                &bonus_id,
+                &result.match_id,
+                &leader,
+                bonus,
+                now,
+            );
+            if let Some(receipt) = account.profile.reward_receipts.get_mut(&bonus_id) {
+                receipt.verification_status = Some(ReplayVerificationStatus::Verified);
+            }
+            account.updated_at = now;
+        })
+        .await?;
+        if closed_for_another_result {
+            return Ok(None);
+        }
+        if missing_or_rejected_receipt {
+            return Err("invalid verified result: participation receipt is missing or conflicts".into());
+        }
+        self.save_player_account_to_redb_checked(&updated)?;
+        Ok(Some(updated))
+    }
+
+    pub async fn apply_verified_match_participant_result(
+        &self,
+        result: &VerifiedMatchResult,
+        account_id: &str,
+        closure_turn: u64,
+    ) -> Result<Option<(PlayGamesMatchOutcome, PlayerAccount)>, Box<dyn std::error::Error + Send + Sync>> {
+        let start = self
+            .match_start_record(&result.match_id)?
+            .ok_or("trusted match registration unavailable")?;
+        validate_verified_match_result(&start, result).map_err(|error| {
+            Box::<dyn std::error::Error + Send + Sync>::from(error)
+        })?;
+        if result.personal_closure_turn != Some(closure_turn) {
+            return Err("invalid verified result: personal closure turn differs".into());
+        }
+        let participant = result
+            .participants
+            .iter()
+            .find(|participant| participant.account_id == account_id)
+            .ok_or("invalid verified result: closed participant is missing")?;
+        let account = self
+            .apply_verified_participant_reward(result, participant, Some(closure_turn))
+            .await?
+            .ok_or("invalid verified result: closed participant is not human")?;
+        let mut record = self
+            .load_match_record(&result.match_id)?
+            .ok_or("participation record is missing")?;
+        let recorded = record
+            .participants
+            .iter_mut()
+            .find(|entry| entry.account_id == account_id)
+            .ok_or("closed participant is missing from match history")?;
+        let earned = crate::rewards::calculate(crate::rewards::RewardInput {
+            won: participant.won,
+            players_defeated: participant.players_defeated,
+            empires_defeated: participant.empires_defeated,
+            tribes_defeated: participant.tribes_defeated,
+            kills: participant.kills,
+            assists: participant.assists,
+            ..Default::default()
+        });
+        recorded.won = participant.won;
+        recorded.kills = participant.kills;
+        recorded.deaths = participant.deaths;
+        recorded.assists = participant.assists;
+        recorded.players_defeated = participant.players_defeated;
+        recorded.empires_defeated = participant.empires_defeated;
+        recorded.tribes_defeated = participant.tribes_defeated;
+        recorded.placement = if participant.won { 1 } else { 0 };
+        recorded.xp = earned.xp;
+        recorded.leader_xp = earned.leader_xp;
+        recorded.crowns = earned.crowns;
+        recorded.laurels = earned.laurels;
+        recorded.personal_closure_turn = Some(closure_turn);
+        if record.provisional {
+            record.duration_seconds = result.duration_seconds;
+        }
+        self.save_match_record_allow_closed_update(&record, account_id)?;
+        let outcome = PlayGamesMatchOutcome {
+            account_id: account.id.clone(),
+            won: participant.won,
+            wins: account.profile.verified_wins,
+            sync_revision: account.profile.playgames_sync_revision,
+            unlocked_achievements: account.profile.unlocked_achievements.iter().cloned().collect(),
+        };
+        Ok(Some((outcome, account)))
     }
 
     /// Load an existing provider account without creating a new one. This is
@@ -3861,6 +4259,7 @@ impl PlayerDb {
                 }
                 return;
             }
+            enroll_first_multiplayer_guide(&mut account.profile, match_id);
             let effective_leader = account.profile.record_match_stats_with_leader(
                 false,
                 SessionDefeats::default(),
@@ -3914,6 +4313,14 @@ impl PlayerDb {
             }
             if !account.profile.reward_receipts.contains_key(match_id) {
                 return Err(format!("participation receipt is missing for {account_id}").into());
+            }
+            if account
+                .profile
+                .reward_receipts
+                .get(match_id)
+                .is_some_and(|receipt| receipt.personal_closure_turn.is_some())
+            {
+                continue;
             }
             let account_key = Self::account_key(&account_id);
             let mut changed = false;
@@ -4001,8 +4408,30 @@ impl PlayerDb {
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         let mut con = self.get_connection().await?;
         let acc_key = Self::account_key(account_id);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         let account = Self::update_account_atomic(&mut con, &acc_key, |account| {
-            if account.kind != AccountKind::Human || account.profile.intro_completed {
+            if account.kind != AccountKind::Human {
+                return;
+            }
+            // The receipt, not an old completion flag, proves this was paid.
+            if account.profile.reward_receipts.contains_key("tutorial") {
+                if account
+                    .profile
+                    .reward_receipts
+                    .get("tutorial")
+                    .is_some_and(|receipt| receipt.presented_at.is_none())
+                {
+                    if !account.profile.menu_guides.contains_key("welcome") {
+                        account
+                            .profile
+                            .menu_guides
+                            .insert("welcome".to_string(), MenuGuideProgress::default());
+                        account.updated_at = now;
+                    }
+                }
                 return;
             }
             account.profile.intro_completed = true;
@@ -4028,15 +4457,14 @@ impl PlayerDb {
                 "tutorial",
                 leader.name(),
                 reward,
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
+                now,
             );
-            account.updated_at = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
+            account
+                .profile
+                .menu_guides
+                .entry("welcome".to_string())
+                .or_default();
+            account.updated_at = now;
         })
         .await?;
         self.save_player_account_to_redb(&account);
@@ -4044,6 +4472,22 @@ impl PlayerDb {
     }
 
     /// Register expected players for an upcoming match.
+    /// Recover the single orchestrator's sequence from durable registrations and legacy history.
+    /// ponytail: one orchestrator owns allocation; use a database allocator before adding another.
+    pub fn next_match_id_seed(&self) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+        let db = self.metadata_db.as_ref().ok_or("match metadata database unavailable")?;
+        let txn = db.begin_read()?;
+        let mut maximum = 0u64;
+        for definition in [MATCH_STARTS_TABLE, MATCHES_TABLE] {
+            let table = txn.open_table(definition)?;
+            for entry in table.iter()? {
+                let (key, _) = entry?;
+                if let Ok(id) = key.value().parse::<u64>() { maximum = maximum.max(id); }
+            }
+        }
+        maximum.checked_add(1).ok_or_else(|| "match ID space exhausted".into())
+    }
+
     pub async fn register_match_start(
         &self,
         match_id: &str,
@@ -4336,6 +4780,11 @@ impl PlayerDb {
                 crowns: reward.crowns,
                 laurels: reward.laurels,
                 rating_delta: None,
+                personal_closure_turn: account
+                    .profile
+                    .reward_receipts
+                    .get(match_id)
+                    .and_then(|receipt| receipt.personal_closure_turn),
             });
 
             if is_bot {
@@ -4393,119 +4842,20 @@ impl PlayerDb {
         (Vec<PlayGamesMatchOutcome>, Vec<PlayerAccount>),
         Box<dyn std::error::Error + Send + Sync>,
     > {
+        if result.personal_closure_turn.is_some() {
+            return Err("invalid verified result: full match result contains a personal closure".into());
+        }
         let start = self
             .match_start_record(&result.match_id)?
             .ok_or("trusted match registration unavailable")?;
-        if start.match_id != result.match_id {
-            return Err("invalid verified result: match id differs from registration".into());
-        }
-        if start.replay_status == ReplayVerificationStatus::Rejected {
-            return Err("invalid verified result: replay was already rejected".into());
-        }
-
-        let trusted_players = start
-            .metadata
-            .get("relay_players")
-            .and_then(serde_json::Value::as_array)
-            .ok_or("invalid verified result: trusted match roster metadata unavailable")?;
-        let mut trusted = std::collections::BTreeMap::new();
-        for player in trusted_players {
-            let player_id = player
-                .get("player_id")
-                .and_then(serde_json::Value::as_u64)
-                .and_then(|value| u16::try_from(value).ok())
-                .ok_or("invalid verified result: trusted player id is invalid")?;
-            let account_id = player
-                .get("database_account_id")
-                .and_then(serde_json::Value::as_str)
-                .ok_or("invalid verified result: trusted player account is missing")?
-                .to_string();
-            let team = player
-                .get("team")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string);
-            let leader = player
-                .get("leader")
-                .and_then(serde_json::Value::as_str)
-                .and_then(crate::rewards::canonical_leader_name);
-            if trusted
-                .insert(player_id, (account_id, team, leader))
-                .is_some()
-            {
-                return Err("invalid verified result: duplicate trusted player id".into());
-            }
-        }
-
-        let mut seen_ids = std::collections::BTreeSet::new();
-        let mut expected_accounts = std::collections::BTreeSet::new();
-        let mut validated = Vec::with_capacity(result.participants.len());
-        for participant in &result.participants {
-            if !seen_ids.insert(participant.player_id)
-                || !expected_accounts.insert(participant.account_id.as_str())
-            {
-                return Err("invalid verified result: duplicate participant".into());
-            }
-            let Some((account_id, team, leader)) = trusted.get(&participant.player_id) else {
-                return Err(
-                    "invalid verified result: player is not in the registered roster".into(),
-                );
-            };
-            if account_id != &participant.account_id
-                || team.as_deref() != participant.team.as_deref()
-                || leader.as_deref() != participant.leader.as_deref()
-            {
-                return Err(
-                    "invalid verified result: participant differs from registered roster".into(),
-                );
-            }
-            let should_win = match (result.winner_player_id, result.winning_team.as_deref()) {
-                (Some(_), Some(team)) => participant.team.as_deref() == Some(team),
-                (Some(winner), None) => participant.player_id == winner,
-                (None, None) => false,
-                (None, Some(_)) => {
-                    return Err(
-                        "invalid verified result: winning team has no winning player".into(),
-                    );
-                }
-            };
-            if participant.won != should_win {
-                return Err("invalid verified result: victory differs from registered team".into());
-            }
-            validated.push(participant);
-        }
-        if result
-            .winner_player_id
-            .is_some_and(|winner| !trusted.contains_key(&winner))
-        {
-            return Err("invalid verified result: winner is not in the registered roster".into());
-        }
-        if let (Some(winner), Some(winning_team)) =
-            (result.winner_player_id, result.winning_team.as_deref())
-            && trusted
-                .get(&winner)
-                .and_then(|(_, team, _)| team.as_deref())
-                != Some(winning_team)
-        {
-            return Err(
-                "invalid verified result: winner does not belong to the winning team".into(),
-            );
-        }
+        validate_verified_match_result(&start, result).map_err(|error| {
+            Box::<dyn std::error::Error + Send + Sync>::from(error)
+        })?;
         let registered_accounts = start
             .player_ids
             .iter()
             .map(String::as_str)
             .collect::<std::collections::BTreeSet<_>>();
-        let metadata_accounts = trusted
-            .values()
-            .map(|(account_id, _, _)| account_id.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        let result_accounts = validated
-            .iter()
-            .map(|participant| participant.account_id.as_str())
-            .collect::<std::collections::BTreeSet<_>>();
-        if registered_accounts != metadata_accounts || registered_accounts != result_accounts {
-            return Err("invalid verified result: roster is incomplete".into());
-        }
 
         let mut record = self
             .load_match_record(&result.match_id)?
@@ -4524,13 +4874,24 @@ impl PlayerDb {
         }
         let mut playgames_outcomes = Vec::new();
         let mut mirrored_accounts = Vec::new();
-        let bonus_id = format!("verified_bonus:{}", result.match_id);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        for participant in validated {
+        for participant in &result.participants {
+            let mut con = self.get_connection().await?;
+            let account = Self::load_account(&mut con, &participant.account_id).await?;
+            let receipt = account.profile.reward_receipts.get(&result.match_id);
+            let receipt_decision = verified_receipt_decision(receipt, None);
+            if account.kind != AccountKind::Bot
+                && should_skip_full_match_participant(receipt, receipt_decision)
+            {
+                if let Some(closure_turn) = receipt.and_then(|receipt| receipt.personal_closure_turn)
+                    && let Some(recorded) = record
+                        .participants
+                        .iter_mut()
+                        .find(|entry| entry.account_id == participant.account_id)
+                {
+                    recorded.personal_closure_turn = Some(closure_turn);
+                }
+                continue;
+            }
             let Some(recorded) = record
                 .participants
                 .iter_mut()
@@ -4546,30 +4907,7 @@ impl PlayerDb {
             recorded.empires_defeated = participant.empires_defeated;
             recorded.tribes_defeated = participant.tribes_defeated;
             recorded.placement = if participant.won { 1 } else { 0 };
-
-            let mut con = self.get_connection().await?;
-            let account = Self::load_account(&mut con, &participant.account_id).await?;
-            if account.kind == AccountKind::Bot {
-                continue;
-            }
-            if !account
-                .profile
-                .reward_receipts
-                .contains_key(&result.match_id)
-            {
-                return Err("invalid verified result: participation receipt is missing".into());
-            }
-            if account
-                .profile
-                .reward_receipts
-                .get(&result.match_id)
-                .is_some_and(|receipt| {
-                    receipt.verification_status == Some(ReplayVerificationStatus::Rejected)
-                })
-            {
-                return Err("invalid verified result: participation receipt was rejected".into());
-            }
-            let input = crate::rewards::RewardInput {
+            let earned = crate::rewards::calculate(crate::rewards::RewardInput {
                 won: participant.won,
                 players_defeated: participant.players_defeated,
                 empires_defeated: participant.empires_defeated,
@@ -4577,86 +4915,18 @@ impl PlayerDb {
                 kills: participant.kills,
                 assists: participant.assists,
                 ..Default::default()
+            });
+            recorded.xp = earned.xp;
+            recorded.leader_xp = earned.leader_xp;
+            recorded.crowns = earned.crowns;
+            recorded.laurels = earned.laurels;
+            drop(con);
+            let Some(updated) = self
+                .apply_verified_participant_reward(result, participant, None)
+                .await?
+            else {
+                continue;
             };
-            let earned = crate::rewards::calculate(input);
-            let participation = crate::rewards::calculate(crate::rewards::RewardInput::default());
-            let bonus = crate::rewards::MatchReward {
-                xp: earned.xp.saturating_sub(participation.xp),
-                leader_xp: earned.leader_xp.saturating_sub(participation.leader_xp),
-                crowns: earned.crowns.saturating_sub(participation.crowns),
-                laurels: earned.laurels.saturating_sub(participation.laurels),
-            };
-            let account_key = Self::account_key(&participant.account_id);
-            let leader = participant.leader.clone();
-            let mut rejected_receipt = false;
-            let updated = Self::update_account_atomic(&mut con, &account_key, |account| {
-                if let Some(receipt) = account.profile.reward_receipts.get_mut(&result.match_id) {
-                    if receipt.verification_status == Some(ReplayVerificationStatus::Rejected) {
-                        rejected_receipt = true;
-                        return;
-                    }
-                    if receipt.verification_status != Some(ReplayVerificationStatus::Verified) {
-                        receipt.verification_status = Some(ReplayVerificationStatus::Verified);
-                        account.updated_at = now;
-                    }
-                } else {
-                    rejected_receipt = true;
-                    return;
-                }
-                if account.profile.reward_receipts.contains_key(&bonus_id) {
-                    return;
-                }
-                let leader = leader
-                    .clone()
-                    .or_else(|| account.profile.preferred_leader.clone())
-                    .unwrap_or_else(|| "Caesar".to_string());
-                account.profile.players_defeated = account
-                    .profile
-                    .players_defeated
-                    .saturating_add(participant.players_defeated);
-                account.profile.empires_defeated = account
-                    .profile
-                    .empires_defeated
-                    .saturating_add(participant.empires_defeated);
-                account.profile.tribes_defeated = account
-                    .profile
-                    .tribes_defeated
-                    .saturating_add(participant.tribes_defeated);
-                account.profile.kills = account.profile.kills.saturating_add(participant.kills);
-                account.profile.deaths = account.profile.deaths.saturating_add(participant.deaths);
-                account.profile.assists =
-                    account.profile.assists.saturating_add(participant.assists);
-                let leader_stats = account
-                    .profile
-                    .leader_stats
-                    .entry(leader.clone())
-                    .or_default();
-                leader_stats.kills = leader_stats.kills.saturating_add(participant.kills);
-                leader_stats.deaths = leader_stats.deaths.saturating_add(participant.deaths);
-                leader_stats.assists = leader_stats.assists.saturating_add(participant.assists);
-                if participant.won {
-                    account.profile.wins = account.profile.wins.saturating_add(1);
-                    account.profile.verified_wins = account.profile.verified_wins.saturating_add(1);
-                    leader_stats.wins = leader_stats.wins.saturating_add(1);
-                    leader_stats.verified_wins = leader_stats.verified_wins.saturating_add(1);
-                }
-                account.profile.apply_reward_receipt(
-                    &bonus_id,
-                    &result.match_id,
-                    &leader,
-                    bonus,
-                    now,
-                );
-                if let Some(receipt) = account.profile.reward_receipts.get_mut(&bonus_id) {
-                    receipt.verification_status = Some(ReplayVerificationStatus::Verified);
-                }
-                account.updated_at = now;
-            })
-            .await?;
-            if rejected_receipt {
-                return Err("invalid verified result: participation receipt was rejected".into());
-            }
-            self.save_player_account_to_redb_checked(&updated)?;
             playgames_outcomes.push(PlayGamesMatchOutcome {
                 account_id: updated.id.clone(),
                 won: participant.won,
@@ -4730,6 +5000,151 @@ fn validate_lobby_match_id(
     Ok(())
 }
 
+fn validate_verified_match_result(
+    start: &MatchStartRecord,
+    result: &VerifiedMatchResult,
+) -> Result<(), String> {
+    if start.match_id != result.match_id {
+        return Err("invalid verified result: match id differs from registration".to_string());
+    }
+    if start.replay_status == ReplayVerificationStatus::Rejected {
+        return Err("invalid verified result: replay was already rejected".to_string());
+    }
+    let trusted_players = start
+        .metadata
+        .get("relay_players")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "invalid verified result: trusted match roster metadata unavailable".to_string())?;
+    let mut trusted = std::collections::BTreeMap::new();
+    for player in trusted_players {
+        let player_id = player
+            .get("player_id")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok())
+            .ok_or_else(|| "invalid verified result: trusted player id is invalid".to_string())?;
+        let account_id = player
+            .get("database_account_id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "invalid verified result: trusted player account is missing".to_string())?
+            .to_string();
+        let team = player
+            .get("team")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
+        let leader = player
+            .get("leader")
+            .and_then(serde_json::Value::as_str)
+            .and_then(crate::rewards::canonical_leader_name);
+        if trusted.insert(player_id, (account_id, team, leader)).is_some() {
+            return Err("invalid verified result: duplicate trusted player id".to_string());
+        }
+    }
+
+    let mut seen_ids = std::collections::BTreeSet::new();
+    let mut result_accounts = std::collections::BTreeSet::new();
+    for participant in &result.participants {
+        if !seen_ids.insert(participant.player_id)
+            || !result_accounts.insert(participant.account_id.as_str())
+        {
+            return Err("invalid verified result: duplicate participant".to_string());
+        }
+        let Some((account_id, team, leader)) = trusted.get(&participant.player_id) else {
+            return Err("invalid verified result: player is not in the registered roster".to_string());
+        };
+        if account_id != &participant.account_id
+            || team.as_deref() != participant.team.as_deref()
+            || leader.as_deref() != participant.leader.as_deref()
+        {
+            return Err("invalid verified result: participant differs from registered roster".to_string());
+        }
+        let should_win = match (result.winner_player_id, result.winning_team.as_deref()) {
+            (Some(_), Some(team)) => participant.team.as_deref() == Some(team),
+            (Some(winner), None) => participant.player_id == winner,
+            (None, None) => false,
+            (None, Some(_)) => {
+                return Err("invalid verified result: winning team has no winning player".to_string());
+            }
+        };
+        if participant.won != should_win {
+            return Err("invalid verified result: victory differs from registered team".to_string());
+        }
+    }
+    if result
+        .winner_player_id
+        .is_some_and(|winner| !trusted.contains_key(&winner))
+    {
+        return Err("invalid verified result: winner is not in the registered roster".to_string());
+    }
+    if let (Some(winner), Some(winning_team)) =
+        (result.winner_player_id, result.winning_team.as_deref())
+        && trusted
+            .get(&winner)
+            .and_then(|(_, team, _)| team.as_deref())
+            != Some(winning_team)
+    {
+        return Err("invalid verified result: winner does not belong to the winning team".to_string());
+    }
+    let registered_accounts = start
+        .player_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let metadata_accounts = trusted
+        .values()
+        .map(|(account_id, _, _)| account_id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    if registered_accounts != metadata_accounts || registered_accounts != result_accounts {
+        return Err("invalid verified result: roster is incomplete".to_string());
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VerifiedReceiptDecision {
+    Apply,
+    AlreadyClosed,
+    Reject,
+}
+
+fn verified_receipt_decision(
+    receipt: Option<&crate::profile::RewardReceipt>,
+    personal_closure_turn: Option<u64>,
+) -> VerifiedReceiptDecision {
+    let Some(receipt) = receipt else {
+        return VerifiedReceiptDecision::Reject;
+    };
+    if receipt.verification_status == Some(ReplayVerificationStatus::Rejected) {
+        return VerifiedReceiptDecision::Reject;
+    }
+    match (receipt.personal_closure_turn, personal_closure_turn) {
+        (Some(_), None) => VerifiedReceiptDecision::AlreadyClosed,
+        (Some(saved), Some(expected)) if saved == expected => VerifiedReceiptDecision::Apply,
+        (None, None) => VerifiedReceiptDecision::Apply,
+        _ => VerifiedReceiptDecision::Reject,
+    }
+}
+
+fn should_skip_full_match_participant(
+    receipt: Option<&crate::profile::RewardReceipt>,
+    decision: VerifiedReceiptDecision,
+) -> bool {
+    decision == VerifiedReceiptDecision::AlreadyClosed
+        || (decision == VerifiedReceiptDecision::Reject
+            && receipt.is_some_and(|receipt| receipt.personal_closure_turn.is_some()))
+}
+
+fn enroll_first_multiplayer_guide(profile: &mut PlayerProfile, match_id: &str) {
+    if profile.matches_played == 0 {
+        let guide = profile
+            .menu_guides
+            .entry("first_multiplayer".to_string())
+            .or_default();
+        if guide.source_match_id.is_none() {
+            guide.source_match_id = Some(match_id.to_string());
+        }
+    }
+}
+
 fn is_valid_account_id(value: &str) -> bool {
     let value = value.trim();
     (value.len() == ACCOUNT_ID_HEX_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
@@ -4748,9 +5163,10 @@ fn is_valid_gem_grant_request_id(value: &str) -> bool {
 mod tests {
     use super::{
         AccountKind, DISPLAY_NAME_MAX_CHARS, LeaderCareerStats, MatchRecord, PlayerAccount,
-        PlayerDb, PlayerProfile, PurchaseRecord, generated_display_name, is_valid_account_id,
+        PlayerDb, PlayerProfile, PurchaseRecord, VerifiedReceiptDecision,
+        enroll_first_multiplayer_guide, generated_display_name, is_valid_account_id,
         is_valid_gem_grant_request_id, normalize_display_name, validate_lobby_match_id,
-        verified_victory_key,
+        should_skip_full_match_participant, verified_receipt_decision, verified_victory_key,
     };
 
     fn test_account(kind: AccountKind) -> PlayerAccount {
@@ -5112,6 +5528,159 @@ mod tests {
             balance
         );
         assert_eq!(profile.playgames_sync_revision, 1);
+    }
+
+    #[test]
+    fn first_multiplayer_guide_enrolls_on_first_participation_only() {
+        let mut profile = PlayerProfile::default();
+        enroll_first_multiplayer_guide(&mut profile, "first-match");
+        assert_eq!(
+            profile
+                .menu_guides
+                .get("first_multiplayer")
+                .and_then(|guide| guide.source_match_id.as_deref()),
+            Some("first-match")
+        );
+        enroll_first_multiplayer_guide(&mut profile, "later-match");
+        assert_eq!(
+            profile
+                .menu_guides
+                .get("first_multiplayer")
+                .and_then(|guide| guide.source_match_id.as_deref()),
+            Some("first-match")
+        );
+
+        profile.record_match_stats_with_leader(false, Default::default(), 0, 0, 0, None);
+        assert_eq!(profile.matches_played, 1);
+        profile.menu_guides.remove("first_multiplayer");
+        enroll_first_multiplayer_guide(&mut profile, "later-match");
+        assert!(!profile.menu_guides.contains_key("first_multiplayer"));
+    }
+
+    #[test]
+    fn match_id_seed_survives_restart_and_uses_numeric_legacy_ids() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(crate::metadata_db::init_database(temp.path().join("profile.redb")).unwrap());
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata.clone()));
+        assert_eq!(db.next_match_id_seed().unwrap(), 1);
+        let txn = metadata.begin_write().unwrap();
+        {
+            let mut starts = txn.open_table(crate::metadata_db::MATCH_STARTS_TABLE).unwrap();
+            for id in ["9", "100"] { starts.insert(id, b"{}".as_slice()).unwrap(); }
+            let mut history = txn.open_table(crate::metadata_db::MATCHES_TABLE).unwrap();
+            history.insert("9000", b"{}".as_slice()).unwrap();
+            history.insert("legacy-nonnumeric", b"{}".as_slice()).unwrap();
+        }
+        txn.commit().unwrap();
+        let restarted = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        assert_eq!(restarted.next_match_id_seed().unwrap(), 9001);
+    }
+
+    #[test]
+    fn full_match_save_preserves_personally_closed_participant_record() {
+        let temp = tempfile::tempdir().unwrap();
+        let metadata = std::sync::Arc::new(
+            crate::metadata_db::init_database(temp.path().join("profile.redb")).unwrap(),
+        );
+        let db = PlayerDb::new("redis://127.0.0.1:6379/0", None, Some(metadata));
+        let alice = "0123456789abcdef0123456789abcdef";
+        let bob = "fedcba9876543210fedcba9876543210";
+        let mut closed = MatchRecord {
+            schema_version: 1,
+            match_id: "m-closed".to_string(),
+            season_id: 1,
+            queue: "Matchmaking".to_string(),
+            mode: "FFA".to_string(),
+            map_name: "world".to_string(),
+            started_at: 10,
+            completed_at: 20,
+            duration_seconds: 10,
+            winner_account_id: None,
+            winning_team: None,
+            verified: false,
+            provisional: true,
+            rating_eligible: false,
+            participants: vec![
+                crate::profile::MatchParticipantRecord {
+                    account_id: alice.to_string(),
+                    xp: 73,
+                    crowns: 41,
+                    personal_closure_turn: Some(8),
+                    ..Default::default()
+                },
+                crate::profile::MatchParticipantRecord {
+                    account_id: bob.to_string(),
+                    ..Default::default()
+                },
+            ],
+        };
+        db.save_provisional_match_record(&closed).unwrap();
+
+        closed.provisional = false;
+        closed.verified = true;
+        closed.completed_at = 30;
+        closed.duration_seconds = 20;
+        closed.participants[0].xp = 0;
+        closed.participants[0].crowns = 0;
+        closed.participants[0].personal_closure_turn = None;
+        closed.participants[1].xp = 55;
+        db.save_match_record(&closed).unwrap();
+
+        let saved = db.load_match_record("m-closed").unwrap().unwrap();
+        let alice_saved = saved
+            .participants
+            .iter()
+            .find(|participant| participant.account_id == alice)
+            .unwrap();
+        assert_eq!(alice_saved.xp, 73);
+        assert_eq!(alice_saved.crowns, 41);
+        assert_eq!(alice_saved.personal_closure_turn, Some(8));
+        assert_eq!(
+            saved
+                .participants
+                .iter()
+                .find(|participant| participant.account_id == bob)
+                .unwrap()
+                .xp,
+            55
+        );
+    }
+
+    #[test]
+    fn full_match_verification_cannot_repay_a_closed_player() {
+        let receipt = crate::profile::RewardReceipt {
+            personal_closure_turn: Some(8),
+            ..Default::default()
+        };
+        assert_eq!(
+            verified_receipt_decision(Some(&receipt), None),
+            VerifiedReceiptDecision::AlreadyClosed
+        );
+        assert_eq!(
+            verified_receipt_decision(Some(&receipt), Some(8)),
+            VerifiedReceiptDecision::Apply
+        );
+        assert_eq!(
+            verified_receipt_decision(Some(&receipt), Some(9)),
+            VerifiedReceiptDecision::Reject
+        );
+        assert!(should_skip_full_match_participant(
+            Some(&receipt),
+            VerifiedReceiptDecision::AlreadyClosed
+        ));
+        let rejected_closed = crate::profile::RewardReceipt {
+            personal_closure_turn: Some(8),
+            verification_status: Some(crate::profile::ReplayVerificationStatus::Rejected),
+            ..Default::default()
+        };
+        assert!(should_skip_full_match_participant(
+            Some(&rejected_closed),
+            verified_receipt_decision(Some(&rejected_closed), None)
+        ));
+        assert_eq!(
+            verified_receipt_decision(None, None),
+            VerifiedReceiptDecision::Reject
+        );
     }
 
     #[test]

@@ -4,6 +4,9 @@ impl SowApp {
     pub(crate) fn complete_boudica_tutorial(&mut self) {
         if self.progress.mark_tutorial_completed() {
             self.save_local_progress();
+        }
+        // A local completion marker is not proof that the server paid the reward.
+        if !self.progress.reward_receipts.contains_key("tutorial") {
             self.persist_tutorial_completion();
         }
     }

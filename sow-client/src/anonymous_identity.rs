@@ -68,6 +68,43 @@ pub fn clear_pending_display_name() {
 }
 
 #[cfg(target_arch = "wasm32")]
+pub(crate) fn load_menu_return(account_id: &str) -> Option<crate::app::MenuReturnContext> {
+    let key = format!("sow_menu_return_v1:{account_id}");
+    let raw = load_storage(&key)?;
+    match serde_json::from_str::<crate::app::MenuReturnContext>(&raw) {
+        Ok(context) if context.account_id.as_deref() == Some(account_id) => Some(context),
+        _ => {
+            log::warn!("[menu-flow] ignored invalid saved return context");
+            None
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn save_menu_return(context: &crate::app::MenuReturnContext) {
+    let Some(account_id) = context.account_id.as_deref() else { return; };
+    let key = format!("sow_menu_return_v1:{account_id}");
+    if let Ok(raw) = serde_json::to_string(context) {
+        save_storage(&key, &raw);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn load_exit_relay_proof(account_id: &str) -> Option<crate::app::ExitRelayProof> {
+    serde_json::from_str(&load_storage(&format!("sow_pending_exit_v1:{account_id}"))?).ok()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn save_exit_relay_proof(account_id: &str, proof: Option<&crate::app::ExitRelayProof>) {
+    let key = format!("sow_pending_exit_v1:{account_id}");
+    if let Some(proof) = proof {
+        if let Ok(raw) = serde_json::to_string(proof) { save_storage(&key, &raw); }
+    } else {
+        clear_storage(&key);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 pub fn load_pending_reward_receipt_ids(account_id: &str) -> std::collections::BTreeSet<String> {
     let Some(key) = pending_reward_receipts_storage_key(account_id) else {
         return Default::default();

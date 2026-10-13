@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "Đang xác nhận phần thưởng của bạn…"
+retrying_rewards = "Kết nối bị gián đoạn. Đang thử nhận lại phần thưởng của bạn…"
 main_menu_navigation = "Menu chính"
 game_links = "Liên kết trò chơi"
 shop = "Cửa hàng"

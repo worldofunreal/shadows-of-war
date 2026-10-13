@@ -1,0 +1,93 @@
+# Registro de extracción revisada; nombres promovidos a names.txt, este archivo no se carga en runtime.
+# Fuente: OpenDota /api/proPlayers; personaname y country_code; consulta 2026-10-12.
+# country_code es la etiqueta del perfil, no una verificación de nacionalidad.
+# Filtro: nombres de 3-16 caracteres, una sola palabra, escritura latina, únicos sin distinguir mayúsculas
+# frente a names.txt y entre sí; excluidos los rechazados por la política actual del servidor.
+# Son alias de jugadores profesionales de Dota, no una muestra general; 58 de 69 quedan etiquetados PE.
+# No guardar ni incluir IDs o enlaces de perfiles.
+
+# Argentina (2)
+mortalW
+Taku.-
+
+# Bolivia (2)
+4s1
+doom
+
+# Chile (1)
+easymoneysniper-
+
+# Colombia (1)
+hassyYuz
+
+# Ecuador (3)
+-HOST-
+MightyZeus
+QQE
+
+# España (1)
+Shen
+
+# México (1)
+Gallo
+
+# Perú (58)
+[GGBT]Yaulilo
+[GHOST]
+16thShade-
+ABCDEFGHIJKLMN1
+Allison
+ArzT
+ayimus-
+BANG!
+Beetw
+Bellingham
+borracho
+CadePE
+CarL
+CaspiaN
+ChuckyGoldo73
+Costaa
+Daaaafcito
+Elecé
+FLUFFNSTUFF
+Forgiveness
+Frank.lml.
+GOOBaz
+Gun-woo
+HaixeL
+hassy
+hassyuz
+Heartless
+JEeep
+JUSTadICE
+KamiMoon
+KID-
+LGsus
+M3liodaSDota
+MliodaSDota
+moKiiit
+N@NaKo-
+nicki.nicole
+Noisy_Boy
+O.o
+ohno..
+Okkotsu
+Piero-
+Qf.S4miii.AC
+R25K
+RedHood
+SadBoy
+SH30L
+SneyderSav
+TI.Blind.Pride
+TI.EMA
+TooEasy-
+Vid-
+WarBandiT
+YA-TORO
+Youngblood
+YunMago
+Yunooo~
+zzz
+

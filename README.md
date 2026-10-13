@@ -5,7 +5,7 @@
 <h1 align="center">Shadows of War</h1>
 
 <p align="center">
-  <strong>Command historic leaders in real-time territory wars. 12 playable today, roster growing.</strong><br />
+  <strong>Command historic leaders in real-time territory wars.</strong><br />
   Build cities, factories and ports, forge alliances, betray rivals, and redraw the world map in this multiplayer game.
 </p>
 
@@ -41,8 +41,7 @@ Shadows of War is a multiplayer strategy game about taking territory and turning
 ## Run locally
 
 ```bash
-./sow          # build and open the native JavaScript/WASM client
-./sow native   # same native build
+./sow          # build and open the native Tauri/WASM game
 ./sow l        # local browser preview at 127.0.0.1:4173
 ```
 
@@ -55,6 +54,6 @@ Shadows of War is a multiplayer strategy game about taking territory and turning
 
 ## License & derivatives
 
-**Modified from OpenFrontIO. Source revision date: `2026-10-04`.** The in-game source link identifies the exact revision.
+**Modified from OpenFrontIO.** The in-game source link identifies the exact revision.
 
 Game code is licensed under [AGPL-3.0-only](LICENSE), including OpenFront's additional terms. The main menu links to the exact source revision for AGPL section 13. OpenFront-derived maps use CC BY-SA 4.0; their attribution, source, and changes are in the [map notice](assets/maps/NOTICE), served alongside map files. Other asset and client dependency notices are in [LICENSE-ASSETS](docs/legal/LICENSE-ASSETS) and [NOTICE](docs/legal/NOTICE).

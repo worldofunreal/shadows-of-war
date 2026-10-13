@@ -693,7 +693,16 @@ async fn main() {
     }
 
     let mut games: Vec<ServerLobby> = Vec::new();
-    let mut next_lobby_id: u64 = 1;
+    // Reward receipts and guide source IDs survive restarts; the match sequence must too.
+    let mut next_lobby_id = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10)).build().expect("match ID client")
+        .get(format!("{}/internal/match-id-seed", db_url.trim_end_matches('/')))
+        .bearer_auth(&db_secret).send().await.expect("match ID recovery request")
+        .error_for_status().expect("match ID recovery response")
+        .json::<serde_json::Value>().await.expect("match ID recovery payload")
+        .get("next_match_id").and_then(serde_json::Value::as_u64)
+        .filter(|id| *id > 0).expect("valid durable match ID seed");
+    log::info!("[matches] recovered next match ID {next_lobby_id}");
 
     let maps_root = map_catalog::maps_root();
     map_catalog::init(&maps_root);
@@ -1208,6 +1217,11 @@ async fn main() {
                     .layer(axum::extract::DefaultBodyLimit::max(MAX_REPLAY_BYTES)),
             )
             .route(
+                "/internal/replay/verify/{match_id}/participant/{account_id}/{closure_turn}",
+                axum::routing::post(verify_match_participant_replay_handler)
+                    .layer(axum::extract::DefaultBodyLimit::max(MAX_REPLAY_BYTES)),
+            )
+            .route(
                 "/maps/catalog.bin",
                 axum::routing::get(|| async {
                     axum::response::Response::builder()
@@ -1603,6 +1617,29 @@ async fn verify_match_replay_handler(
     headers: axum::http::HeaderMap,
     body: Bytes,
 ) -> axum::response::Response {
+    verify_match_replay(state, match_id, headers, body, None).await
+}
+
+async fn verify_match_participant_replay_handler(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    axum::extract::Path((match_id, account_id, closure_turn)): axum::extract::Path<(
+        String,
+        String,
+        u64,
+    )>,
+    headers: axum::http::HeaderMap,
+    body: Bytes,
+) -> axum::response::Response {
+    verify_match_replay(state, match_id, headers, body, Some((account_id, closure_turn))).await
+}
+
+async fn verify_match_replay(
+    state: AppState,
+    match_id: String,
+    headers: axum::http::HeaderMap,
+    body: Bytes,
+    personal_closure: Option<(String, u64)>,
+) -> axum::response::Response {
     let presented = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -1681,10 +1718,14 @@ async fn verify_match_replay_handler(
             ));
         }
     };
-    if start.replay_status != sow_data::profile::ReplayVerificationStatus::Pending {
+    if (personal_closure.is_none()
+        && start.replay_status != sow_data::profile::ReplayVerificationStatus::Pending)
+        || (personal_closure.is_some()
+            && start.replay_status == sow_data::profile::ReplayVerificationStatus::Rejected)
+    {
         return axum::response::IntoResponse::into_response((
             axum::http::StatusCode::CONFLICT,
-            axum::response::Json(serde_json::json!({"error": "replay is not pending"})),
+            axum::response::Json(serde_json::json!({"error": "replay is not eligible for verification"})),
         ));
     }
 
@@ -1693,7 +1734,13 @@ async fn verify_match_replay_handler(
     let replay = body.to_vec();
     match tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        verify_replay(&match_id_for_task, &replay, &start, &map_root)
+        verify_replay(
+            &match_id_for_task,
+            &replay,
+            &start,
+            &map_root,
+            personal_closure,
+        )
     })
     .await
     {
@@ -1739,6 +1786,7 @@ fn verify_replay(
     replay_bytes: &[u8],
     start: &sow_data::profile::MatchStartRecord,
     maps_root: &Path,
+    personal_closure: Option<(String, u64)>,
 ) -> Result<sow_data::profile::VerifiedMatchResult, ReplayVerificationError> {
     if replay_bytes.len() > MAX_REPLAY_BYTES {
         return Err(ReplayVerificationError::Invalid(
@@ -1841,6 +1889,15 @@ fn verify_replay(
             "trusted engine roster mismatch".to_string(),
         ));
     }
+    if let Some((account_id, closure_turn)) = &personal_closure {
+        validate_personal_replay_closure(
+            &turns,
+            &relay_players,
+            account_id,
+            *closure_turn,
+        )
+        .map_err(ReplayVerificationError::Invalid)?;
+    }
 
     let map_key = sow_core::maps::map_key(&config.map_name);
     if map_key.is_empty() {
@@ -1888,6 +1945,7 @@ fn verify_replay(
 
     let mut defeats = std::collections::HashMap::<u16, [u32; 3]>::new();
     let mut total_intents = 0usize;
+    let mut game_over_preceded_personal_closure = false;
     for (index, turn) in turns.iter().enumerate() {
         if turn.turn_number != index as u64 {
             return Err(ReplayVerificationError::Invalid(
@@ -1905,10 +1963,29 @@ fn verify_replay(
                 "replay has too many intents".to_string(),
             ));
         }
+        let game_over_before_turn = engine.state.phase == sow_core::game::GamePhase::GameOver;
+        if personal_closure
+            .as_ref()
+            .is_some_and(|(_, closure_turn)| *closure_turn == turn.turn_number)
+        {
+            game_over_preceded_personal_closure = game_over_before_turn;
+        }
         if engine.state.phase == sow_core::game::GamePhase::GameOver {
-            if !turn.intents.is_empty() {
+            if turn.intents.iter().any(|intent| {
+                !is_post_game_lifecycle_marker(&intent.intent)
+            })
+            {
                 return Err(ReplayVerificationError::Invalid(
-                    "gameplay continued after game over".to_string(),
+                    "only registered lifecycle markers may follow game over".to_string(),
+                ));
+            }
+            if turn
+                .intents
+                .iter()
+                .any(|intent| !external_player_ids.contains(&intent.player_id))
+            {
+                return Err(ReplayVerificationError::Invalid(
+                    "replay contains an unregistered sender".to_string(),
                 ));
             }
             continue;
@@ -1952,8 +2029,16 @@ fn verify_replay(
         }
     }
 
-    let winner_player_id = engine.state.winner;
-    let winning_team = engine.state.winning_team.map(|team| format!("{team:?}"));
+    let (winner_player_id, winning_team) = if personal_closure.is_some()
+        && !game_over_preceded_personal_closure
+    {
+        (None, None)
+    } else {
+        (
+            engine.state.winner,
+            engine.state.winning_team.map(|team| format!("{team:?}")),
+        )
+    };
     let mut participants = Vec::with_capacity(relay_players.len());
     for relay_player in relay_players {
         let Some(account_id) = relay_player.database_account_id else {
@@ -2002,8 +2087,46 @@ fn verify_replay(
         duration_seconds,
         winner_player_id,
         winning_team,
+        personal_closure_turn: personal_closure.map(|(_, turn)| turn),
         participants,
     })
+}
+
+fn validate_personal_replay_closure(
+    turns: &[sow_core::protocol::Turn],
+    relay_players: &[ReplayStartPlayer],
+    account_id: &str,
+    closure_turn: u64,
+) -> Result<u16, String> {
+    let last_turn = turns
+        .last()
+        .filter(|turn| turn.turn_number == closure_turn)
+        .ok_or_else(|| "personal replay prefix does not end at the closure turn".to_string())?;
+    let player = relay_players
+        .iter()
+        .find(|player| player.database_account_id.as_deref() == Some(account_id))
+        .filter(|player| !player.is_internal)
+        .ok_or_else(|| {
+            "personal closure account is not a registered human player".to_string()
+        })?;
+    if !last_turn.intents.iter().any(|intent| {
+        intent.player_id == player.player_id
+            && matches!(
+                &intent.intent,
+                sow_core::protocol::GameplayIntent::Resign
+            )
+    }) {
+        return Err("personal closure turn has no registered Resign intent".to_string());
+    }
+    Ok(player.player_id)
+}
+
+fn is_post_game_lifecycle_marker(intent: &sow_core::protocol::GameplayIntent) -> bool {
+    matches!(
+        intent,
+        sow_core::protocol::GameplayIntent::Resign
+            | sow_core::protocol::GameplayIntent::MarkDisconnected { .. }
+    )
 }
 
 async fn admin_status(
@@ -2232,8 +2355,94 @@ async fn catalog_json_handler() -> impl axum::response::IntoResponse {
 mod relay_worker_tests {
     use super::{
         DEFAULT_RELAY_WORKER_COUNT, RELAY_PORT_MAX, RELAY_PORT_MIN, RelayPortAllocator,
-        parse_relay_worker, send_relay_handoff_frame,
+        ReplayStartPlayer, parse_relay_worker, send_relay_handoff_frame,
+        is_post_game_lifecycle_marker, validate_personal_replay_closure,
     };
+
+    fn personal_closure_turn(turn_number: u64) -> sow_core::protocol::Turn {
+        sow_core::protocol::Turn {
+            turn_number,
+            intents: vec![sow_core::protocol::StampedIntent {
+                player_id: 7,
+                intent: sow_core::protocol::GameplayIntent::Resign,
+            }],
+        }
+    }
+
+    fn registered_human() -> ReplayStartPlayer {
+        ReplayStartPlayer {
+            player_id: 7,
+            database_account_id: Some("0123456789abcdef0123456789abcdef".to_string()),
+            leader: sow_core::player::Leader::default(),
+            team: None,
+            is_internal: false,
+        }
+    }
+
+    #[test]
+    fn personal_prefix_must_end_with_that_registered_players_resign() {
+        let player = registered_human();
+        let turns = [
+            sow_core::protocol::Turn {
+                turn_number: 0,
+                intents: Vec::new(),
+            },
+            personal_closure_turn(1),
+        ];
+        assert_eq!(
+            validate_personal_replay_closure(
+                &turns,
+                std::slice::from_ref(&player),
+                "0123456789abcdef0123456789abcdef",
+                1,
+            ),
+            Ok(7)
+        );
+        assert!(validate_personal_replay_closure(
+            &turns,
+            std::slice::from_ref(&player),
+            "0123456789abcdef0123456789abcdef",
+            0,
+        )
+        .is_err());
+
+        let no_resign = [sow_core::protocol::Turn {
+            turn_number: 1,
+            intents: Vec::new(),
+        }];
+        assert!(validate_personal_replay_closure(
+            &no_resign,
+            std::slice::from_ref(&player),
+            "0123456789abcdef0123456789abcdef",
+            1,
+        )
+        .is_err());
+        assert!(validate_personal_replay_closure(
+            &turns,
+            &[ReplayStartPlayer {
+                is_internal: true,
+                ..registered_human()
+            }],
+            "0123456789abcdef0123456789abcdef",
+            1,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn only_non_simulating_lifecycle_markers_follow_game_over() {
+        assert!(is_post_game_lifecycle_marker(
+            &sow_core::protocol::GameplayIntent::Resign
+        ));
+        assert!(is_post_game_lifecycle_marker(
+            &sow_core::protocol::GameplayIntent::MarkDisconnected {
+                is_disconnected: true
+            }
+        ));
+        assert!(!is_post_game_lifecycle_marker(
+            &sow_core::protocol::GameplayIntent::Spawn { x: 0, y: 0 }
+        ));
+    }
 
     #[test]
     fn parses_game_and_management_hosts() {

@@ -1,0 +1,624 @@
+{
+  "version": 1,
+  "episode_id": "menu",
+  "text_namespace": "menu.guide.",
+  "menu_guides": {
+    "welcome": {
+      "entry": "welcome_name",
+      "step_ids": [
+        "welcome_name",
+        "welcome_heroes",
+        "welcome_owned_selection",
+        "welcome_owned_confirm",
+        "welcome_no_alternate_home",
+        "welcome_reopen_heroes",
+        "welcome_offer_selection",
+        "welcome_purchase_choice",
+        "welcome_offer",
+        "welcome_purchase_confirm",
+        "welcome_purchase_close",
+        "welcome_equip",
+        "welcome_home",
+        "welcome_no_offer_home",
+        "welcome_skip_home",
+        "welcome_cancel_home",
+        "welcome_quick_match",
+        "welcome_complete"
+      ]
+    },
+    "first_multiplayer": {
+      "entry": "first_profile",
+      "step_ids": [
+        "first_profile",
+        "first_history",
+        "first_store",
+        "first_home",
+        "first_quick_match",
+        "first_multiplayer_complete"
+      ]
+    }
+  },
+  "strings": {
+    "en": {
+      "menu.guide.welcome_name.title": "Make the name yours",
+      "menu.guide.welcome_name.hint": "Save your display name",
+      "menu.guide.welcome_heroes.title": "Choose your commander",
+      "menu.guide.welcome_heroes.hint": "Open Heroes",
+      "menu.guide.welcome_owned_selection.title": "Choose a different available commander",
+      "menu.guide.welcome_owned_selection.hint": "Select another available commander",
+      "menu.guide.welcome_owned_confirm.title": "Confirm your new commander",
+      "menu.guide.welcome_owned_confirm.hint": "Confirm this commander",
+      "menu.guide.welcome_no_alternate_home.title": "Return to Battle to continue",
+      "menu.guide.welcome_no_alternate_home.hint": "Return to Battle",
+      "menu.guide.welcome_reopen_heroes.title": "Choose a commander to buy with gems",
+      "menu.guide.welcome_reopen_heroes.hint": "Open Heroes again",
+      "menu.guide.welcome_offer_selection.title": "Choose a commander you can afford",
+      "menu.guide.welcome_offer_selection.hint": "Select an unowned hero marked for gem purchase",
+      "menu.guide.welcome_purchase_choice.title": "A gem purchase is optional",
+      "menu.guide.welcome_purchase_choice.body": "Choose whether to buy this commander with your available gems.",
+      "menu.guide.welcome_purchase_choice.buy": "Continue to the gem offer",
+      "menu.guide.welcome_purchase_choice.skip": "Skip the purchase",
+      "menu.guide.welcome_offer.title": "Review this gem offer",
+      "menu.guide.welcome_offer.hint": "Open the gem offer",
+      "menu.guide.welcome_purchase_confirm.title": "Confirm the gem purchase, or cancel it",
+      "menu.guide.welcome_purchase_confirm.hint": "Confirm the purchase; canceling continues without a purchase",
+      "menu.guide.welcome_purchase_close.title": "Review the confirmed purchase",
+      "menu.guide.welcome_purchase_close.hint": "Continue to equip your commander",
+      "menu.guide.welcome_equip.title": "Equip the commander you bought",
+      "menu.guide.welcome_equip.hint": "Confirm the purchased commander",
+      "menu.guide.welcome_home.title": "Return to the main menu",
+      "menu.guide.welcome_home.hint": "Return to Battle",
+      "menu.guide.welcome_no_offer_home.title": "No affordable gem offer is available",
+      "menu.guide.welcome_no_offer_home.hint": "Return to Battle",
+      "menu.guide.welcome_skip_home.title": "Continue without buying a commander",
+      "menu.guide.welcome_skip_home.hint": "Return to Battle",
+      "menu.guide.welcome_cancel_home.title": "Continue without a purchase",
+      "menu.guide.welcome_cancel_home.hint": "Return to Battle",
+      "menu.guide.welcome_quick_match.title": "Ready for battle?",
+      "menu.guide.welcome_quick_match.hint": "Start a multiplayer match",
+      "menu.guide.welcome_complete.title": "You’re ready to play",
+      "menu.guide.welcome_complete.body": "Your commander is ready. Jump into a match whenever you like.",
+      "menu.guide.first_profile.title": "Check your profile",
+      "menu.guide.first_profile.hint": "Open your profile",
+      "menu.guide.first_history.title": "Find the match you just played",
+      "menu.guide.first_history.hint": "Open match history",
+      "menu.guide.first_store.title": "See what’s in the store",
+      "menu.guide.first_store.hint": "Open the store",
+      "menu.guide.first_home.title": "Return to the main menu",
+      "menu.guide.first_home.hint": "Return to Battle",
+      "menu.guide.first_quick_match.title": "Ready for another match?",
+      "menu.guide.first_quick_match.hint": "Start another multiplayer match",
+      "menu.guide.first_multiplayer_complete.title": "You’re all set",
+      "menu.guide.first_multiplayer_complete.body": "You can replay whenever you’re ready.",
+      "menu.guide.recover_heroes": "Open Heroes to continue",
+      "menu.guide.recover_profile": "Open your profile to continue",
+      "menu.guide.recover_home": "Return to Battle to continue",
+      "menu.guide.recover_selection": "Select the commander you chose",
+      "menu.guide.recover_offer": "Open the gem purchase confirmation"
+    },
+    "es": {
+      "menu.guide.welcome_name.title": "Elige tu nombre",
+      "menu.guide.welcome_name.hint": "Guarda tu nombre visible",
+      "menu.guide.welcome_heroes.title": "Elige a tu comandante",
+      "menu.guide.welcome_heroes.hint": "Abre Héroes",
+      "menu.guide.welcome_owned_selection.title": "Elige otro comandante disponible",
+      "menu.guide.welcome_owned_selection.hint": "Selecciona otro comandante disponible",
+      "menu.guide.welcome_owned_confirm.title": "Confirma a tu nuevo comandante",
+      "menu.guide.welcome_owned_confirm.hint": "Confirma este comandante",
+      "menu.guide.welcome_no_alternate_home.title": "Vuelve a Batalla para continuar",
+      "menu.guide.welcome_no_alternate_home.hint": "Vuelve a Batalla",
+      "menu.guide.welcome_reopen_heroes.title": "Elige un comandante para comprar con gemas",
+      "menu.guide.welcome_reopen_heroes.hint": "Abre Héroes de nuevo",
+      "menu.guide.welcome_offer_selection.title": "Elige un comandante que puedas pagar",
+      "menu.guide.welcome_offer_selection.hint": "Selecciona un héroe disponible para comprar con gemas",
+      "menu.guide.welcome_purchase_choice.title": "La compra con gemas es opcional",
+      "menu.guide.welcome_purchase_choice.body": "Elige si quieres comprar este comandante con las gemas disponibles.",
+      "menu.guide.welcome_purchase_choice.buy": "Ver la oferta de gemas",
+      "menu.guide.welcome_purchase_choice.skip": "Omitir la compra",
+      "menu.guide.welcome_offer.title": "Revisa esta oferta de gemas",
+      "menu.guide.welcome_offer.hint": "Abre la oferta de gemas",
+      "menu.guide.welcome_purchase_confirm.title": "Confirma la compra o cancélala",
+      "menu.guide.welcome_purchase_confirm.hint": "Confirma la compra; si la cancelas, continuarás sin comprar",
+      "menu.guide.welcome_purchase_close.title": "Revisa la compra confirmada",
+      "menu.guide.welcome_purchase_close.hint": "Continúa para equipar a tu comandante",
+      "menu.guide.welcome_equip.title": "Equipa el comandante que compraste",
+      "menu.guide.welcome_equip.hint": "Confirma el comandante comprado",
+      "menu.guide.welcome_home.title": "Vuelve al menú principal",
+      "menu.guide.welcome_home.hint": "Vuelve a Batalla",
+      "menu.guide.welcome_no_offer_home.title": "No hay una oferta de gemas que puedas pagar",
+      "menu.guide.welcome_no_offer_home.hint": "Vuelve a Batalla",
+      "menu.guide.welcome_skip_home.title": "Continúa sin comprar un comandante",
+      "menu.guide.welcome_skip_home.hint": "Vuelve a Batalla",
+      "menu.guide.welcome_cancel_home.title": "Continúa sin hacer la compra",
+      "menu.guide.welcome_cancel_home.hint": "Vuelve a Batalla",
+      "menu.guide.welcome_quick_match.title": "¿Listo para la batalla?",
+      "menu.guide.welcome_quick_match.hint": "Inicia una partida multijugador",
+      "menu.guide.welcome_complete.title": "Ya puedes jugar",
+      "menu.guide.welcome_complete.body": "Tu comandante está listo. Entra a una partida cuando quieras.",
+      "menu.guide.first_profile.title": "Revisa tu perfil",
+      "menu.guide.first_profile.hint": "Abre tu perfil",
+      "menu.guide.first_history.title": "Busca la partida que acabas de jugar",
+      "menu.guide.first_history.hint": "Abre el historial de partidas",
+      "menu.guide.first_store.title": "Mira qué hay en la tienda",
+      "menu.guide.first_store.hint": "Abre la tienda",
+      "menu.guide.first_home.title": "Vuelve al menú principal",
+      "menu.guide.first_home.hint": "Vuelve a Batalla",
+      "menu.guide.first_quick_match.title": "¿Listo para otra partida?",
+      "menu.guide.first_quick_match.hint": "Inicia otra partida multijugador",
+      "menu.guide.first_multiplayer_complete.title": "Ya estás listo",
+      "menu.guide.first_multiplayer_complete.body": "Puedes volver a jugar cuando quieras.",
+      "menu.guide.recover_heroes": "Abre Héroes para continuar",
+      "menu.guide.recover_profile": "Abre tu perfil para continuar",
+      "menu.guide.recover_home": "Vuelve a Batalla para continuar",
+      "menu.guide.recover_selection": "Selecciona el comandante que elegiste",
+      "menu.guide.recover_offer": "Abre la confirmación de compra con gemas"
+    }
+  },
+  "steps": [
+    {
+      "id": "welcome_name",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_name.title",
+      "hint_key": "menu.guide.welcome_name.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_display_name",
+        "outcome": "name_saved",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_display_name",
+        "gesture": "tap"
+      },
+      "next": "welcome_heroes"
+    },
+    {
+      "id": "welcome_heroes",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_heroes.title",
+      "hint_key": "menu.guide.welcome_heroes.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_heroes",
+        "outcome": "heroes_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_heroes",
+        "gesture": "tap"
+      },
+      "next": "welcome_no_alternate_home",
+      "routes": [
+        {
+          "when": {
+            "fact": "alternate_leader_available",
+            "gte": 1
+          },
+          "next": "welcome_owned_selection"
+        }
+      ]
+    },
+    {
+      "id": "welcome_owned_selection",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_owned_selection.title",
+      "hint_key": "menu.guide.welcome_owned_selection.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_alternate_leader_card",
+        "outcome": "leader_preview_selected",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_alternate_leader_card",
+        "gesture": "tap"
+      },
+      "next": "welcome_owned_confirm"
+    },
+    {
+      "id": "welcome_owned_confirm",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_owned_confirm.title",
+      "hint_key": "menu.guide.welcome_owned_confirm.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_leader_confirm",
+        "outcome": "leader_selected",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_leader_confirm",
+        "gesture": "tap"
+      },
+      "next": "welcome_reopen_heroes"
+    },
+    {
+      "id": "welcome_no_alternate_home",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_no_alternate_home.title",
+      "hint_key": "menu.guide.welcome_no_alternate_home.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_home",
+        "outcome": "home_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_home",
+        "gesture": "tap"
+      },
+      "next": "welcome_reopen_heroes"
+    },
+    {
+      "id": "welcome_reopen_heroes",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_reopen_heroes.title",
+      "hint_key": "menu.guide.welcome_reopen_heroes.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_heroes",
+        "outcome": "heroes_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_heroes",
+        "gesture": "tap"
+      },
+      "next": "welcome_no_offer_home",
+      "routes": [
+        {
+          "when": {
+            "fact": "commerce_offer_available",
+            "gte": 1
+          },
+          "next": "welcome_offer_selection"
+        }
+      ]
+    },
+    {
+      "id": "welcome_offer_selection",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_offer_selection.title",
+      "hint_key": "menu.guide.welcome_offer_selection.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_affordable_leader_card",
+        "outcome": "leader_offer_selected",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_affordable_leader_card",
+        "gesture": "tap"
+      },
+      "next": "welcome_purchase_choice"
+    },
+    {
+      "id": "welcome_purchase_choice",
+      "type": "choice",
+      "title_key": "menu.guide.welcome_purchase_choice.title",
+      "body_key": "menu.guide.welcome_purchase_choice.body",
+      "choices": [
+        {
+          "id": "buy",
+          "label_key": "menu.guide.welcome_purchase_choice.buy",
+          "next": "welcome_offer"
+        },
+        {
+          "id": "skip",
+          "label_key": "menu.guide.welcome_purchase_choice.skip",
+          "next": "welcome_skip_home"
+        }
+      ]
+    },
+    {
+      "id": "welcome_offer",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_offer.title",
+      "hint_key": "menu.guide.welcome_offer.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_gem_offer",
+        "outcome": "leader_purchase_prompt_opened",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_gem_offer",
+        "gesture": "tap"
+      },
+      "next": "welcome_purchase_confirm"
+    },
+    {
+      "id": "welcome_purchase_confirm",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_purchase_confirm.title",
+      "hint_key": "menu.guide.welcome_purchase_confirm.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_purchase_confirm",
+        "outcomes": [
+          "leader_purchased",
+          "leader_purchase_cancelled"
+        ],
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_purchase_confirm",
+        "gesture": "tap"
+      },
+      "next": "welcome_cancel_home",
+      "routes": [
+        {
+          "when": {
+            "fact": "leader_purchase_modal_open",
+            "gte": 1
+          },
+          "next": "welcome_purchase_close"
+        },
+        {
+          "when": {
+            "fact": "leader_purchase_confirmed",
+            "gte": 1
+          },
+          "next": "welcome_equip"
+        }
+      ]
+    },
+    {
+      "id": "welcome_purchase_close",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_purchase_close.title",
+      "hint_key": "menu.guide.welcome_purchase_close.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_purchase_cancel",
+        "outcome": "leader_purchase_closed",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_purchase_cancel",
+        "gesture": "tap"
+      },
+      "next": "welcome_cancel_home",
+      "routes": [
+        {
+          "when": {
+            "fact": "leader_purchase_confirmed",
+            "gte": 1
+          },
+          "next": "welcome_equip"
+        }
+      ]
+    },
+    {
+      "id": "welcome_equip",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_equip.title",
+      "hint_key": "menu.guide.welcome_equip.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_leader_confirm",
+        "outcome": "leader_selected",
+        "require_purchased_leader": true,
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_leader_confirm",
+        "gesture": "tap"
+      },
+      "next": "welcome_home"
+    },
+    {
+      "id": "welcome_home",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_home.title",
+      "hint_key": "menu.guide.welcome_home.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_home",
+        "outcome": "home_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_home",
+        "gesture": "tap"
+      },
+      "next": "welcome_quick_match"
+    },
+    {
+      "id": "welcome_no_offer_home",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_no_offer_home.title",
+      "hint_key": "menu.guide.welcome_no_offer_home.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_home",
+        "outcome": "home_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_home",
+        "gesture": "tap"
+      },
+      "next": "welcome_quick_match"
+    },
+    {
+      "id": "welcome_skip_home",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_skip_home.title",
+      "hint_key": "menu.guide.welcome_skip_home.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_home",
+        "outcome": "home_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_home",
+        "gesture": "tap"
+      },
+      "next": "welcome_quick_match"
+    },
+    {
+      "id": "welcome_cancel_home",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_cancel_home.title",
+      "hint_key": "menu.guide.welcome_cancel_home.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_home",
+        "outcome": "home_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_home",
+        "gesture": "tap"
+      },
+      "next": "welcome_quick_match"
+    },
+    {
+      "id": "welcome_quick_match",
+      "type": "guide",
+      "title_key": "menu.guide.welcome_quick_match.title",
+      "hint_key": "menu.guide.welcome_quick_match.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_multiplayer",
+        "outcome": "quick_match_accepted",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_multiplayer",
+        "gesture": "tap"
+      },
+      "next": "welcome_complete"
+    },
+    {
+      "id": "welcome_complete",
+      "type": "end",
+      "title_key": "menu.guide.welcome_complete.title",
+      "body_key": "menu.guide.welcome_complete.body"
+    },
+    {
+      "id": "first_profile",
+      "type": "guide",
+      "title_key": "menu.guide.first_profile.title",
+      "hint_key": "menu.guide.first_profile.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_profile",
+        "outcome": "profile_opened",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_profile",
+        "gesture": "tap"
+      },
+      "next": "first_history"
+    },
+    {
+      "id": "first_history",
+      "type": "guide",
+      "title_key": "menu.guide.first_history.title",
+      "hint_key": "menu.guide.first_history.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_profile_history",
+        "outcome": "history_current_match_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_profile_history",
+        "gesture": "tap"
+      },
+      "next": "first_home",
+      "routes": [
+        {
+          "when": {
+            "fact": "commerce_available",
+            "gte": 1
+          },
+          "next": "first_store"
+        }
+      ]
+    },
+    {
+      "id": "first_store",
+      "type": "guide",
+      "title_key": "menu.guide.first_store.title",
+      "hint_key": "menu.guide.first_store.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_store",
+        "outcome": "store_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_store",
+        "gesture": "tap"
+      },
+      "next": "first_home"
+    },
+    {
+      "id": "first_home",
+      "type": "guide",
+      "title_key": "menu.guide.first_home.title",
+      "hint_key": "menu.guide.first_home.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_home",
+        "outcome": "home_ready",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_home",
+        "gesture": "tap"
+      },
+      "next": "first_quick_match"
+    },
+    {
+      "id": "first_quick_match",
+      "type": "guide",
+      "title_key": "menu.guide.first_quick_match.title",
+      "hint_key": "menu.guide.first_quick_match.hint",
+      "trigger": {
+        "type": "ui",
+        "action": "menu_multiplayer",
+        "outcome": "quick_match_accepted",
+        "scope": "step"
+      },
+      "guide": {
+        "kind": "ui",
+        "target": "menu_multiplayer",
+        "gesture": "tap"
+      },
+      "next": "first_multiplayer_complete"
+    },
+    {
+      "id": "first_multiplayer_complete",
+      "type": "end",
+      "title_key": "menu.guide.first_multiplayer_complete.title",
+      "body_key": "menu.guide.first_multiplayer_complete.body"
+    }
+  ],
+  "layout": {}
+}

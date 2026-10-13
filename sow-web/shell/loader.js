@@ -122,16 +122,19 @@
         return prepared.promise;
     }
 
-    function localizedLoaderText() {
+    function localizedLoaderText(key) {
+        key = key || 'menu.loading';
         if (typeof window.SOW_t === 'function') {
-            const value = window.SOW_t('menu.loading');
-            if (value && value !== '[menu.loading]') return value;
+            const value = window.SOW_t(key);
+            if (value && value !== '[' + key + ']') return value;
         }
+        if (key === 'menu.confirming_rewards') return 'Confirming your rewards…';
+        if (key === 'menu.retrying_rewards') return 'Connection interrupted. Retrying your rewards…';
         return 'Loading...';
     }
 
     function refreshLoaderText() {
-        if (loaderText) loaderText.textContent = localizedLoaderText();
+        if (loaderText) loaderText.textContent = localizedLoaderText(loaderStatusKey);
     }
 
     function isCrossOriginAssetUrl(url) {
@@ -315,6 +318,7 @@
     let barFill = null;
     let barFull = null;
     let loaderText = null;
+    let loaderStatusKey = null;
     let finishing = false;
     let rafId = 0;
     let finishTimer = 0;
@@ -590,7 +594,9 @@
         }
         if (loaderText) {
             const status = typeof state.loader_status === 'string' ? state.loader_status.trim() : '';
-            loaderText.textContent = status || localizedLoaderText();
+            const statusKey = state.loader_status_key;
+            loaderStatusKey = statusKey || null;
+            loaderText.textContent = status || localizedLoaderText(loaderStatusKey);
         }
         if (root) root.setAttribute('aria-busy', 'true');
         if (state.loader_done === true) {

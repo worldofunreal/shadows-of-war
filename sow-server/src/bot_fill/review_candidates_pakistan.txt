@@ -1,0 +1,184 @@
+# Pakistan aliases promoted to names.txt on 2026-10-12; this file preserves their sources.
+# Retrieved 2026-10-12 from Liquipedia player categories through its MediaWiki API.
+# Liquipedia content is CC BY-SA 3.0; attribution/API terms: https://liquipedia.net/api-terms-of-use
+# Country/category labels are source labels, not independently verified nationality.
+# Filter: published page titles; removed only '(Pakistani player)' disambiguation; one-token ASCII handles, 3-16 characters.
+# Kept visible separators, rejected blocked names, and deduplicated case-insensitively against active names, Vietnam, India, and this file.
+# Promoted to the runtime pool; retained here for source attribution.
+# Counter-Strike (8 new handles; 9 source pages): https://liquipedia.net/counterstrike/Category:Pakistani_Players
+D0cC
+HSB
+KLnT
+Momo
+Pluto
+PokemoN
+SOULM8
+TraNz
+# Rainbow Six (12 new handles; 13 source pages): https://liquipedia.net/rainbowsix/Category:Pakistani_Players
+BarcodeOP
+Czar
+DOC7ER
+Invi
+Maker
+MightyAli
+Qikcs
+RhymesWithBuck
+Sherii
+Skywalker
+Trauf
+WishMaster
+# VALORANT (11 new handles; 14 source pages): https://liquipedia.net/valorant/Category:Pakistani_Players
+BriTSy
+DarKkKy
+Eluwu
+K1Ng
+Kasper
+Melya
+SH4KA
+ShooterR
+Storax
+STRANGER
+Tr1ck
+# Fortnite (18 new handles; 19 source pages): https://liquipedia.net/fortnite/Category:Pakistani_Players
+Cubix
+Flamors
+Hellonsteam
+Jammyz
+Killerbxy
+Kovolski
+KuKi
+Maximus
+Milo
+MrDom
+Nyle
+Originz
+Steady
+Tensa
+TrikShotz
+Twistnator
+XJam
+Zeeom
+# PUBG Mobile (67 new handles; 84 source pages): https://liquipedia.net/pubgmobile/Category:Pakistani_Players
+420Boy
+ABOOD
+ALIYAN
+AlphaBoy
+ANUBIS
+Asad
+Ashad
+AVENGER
+Baba
+BLADE
+CAIRO
+DAKU
+DESTROYER
+DIVIN333
+DRAWLIN
+EDGAR
+ESP
+EvilBoy
+FALAK
+FASTER
+FERO
+FINISHER
+FLANKY
+FREESTYLER
+GHOOST
+HELSI
+HUZAIFA
+IRON
+JHONNY
+JOKERsir
+KASHOOF
+KIYAN
+M7x
+Malik
+MAXI
+MOMTU
+Murtaza
+Nocki
+NOCTO
+NYTMARE
+PAIN
+PiKACHU
+PINKMAN
+PIREETAM
+REHMAAN
+Reveuse
+ROSHAAN
+SENIOR
+SHAHMEER
+SHAKA
+SHAPATAR
+SHAW
+SIRIUS
+SPARK
+T24OP
+TABBY
+TALHA
+THOR
+Tyrant
+UZM
+VAAZ
+VIRUS
+VOLTRUX
+WALKER
+WALOOD
+WOLVERIE
+Zibyan
+# Free Fire (21 new handles; 28 source pages): https://liquipedia.net/freefire/Category:Pakistani_Players
+Action
+AFLATOON
+Anas
+ASWAB
+Danny
+Godzilla
+GUNSHOT
+HasuEXE
+Hogo
+JAZZY
+Leo
+MOMIN
+Raptor
+RIZZ
+Sajid
+Sami
+SHARIF
+SHARKY
+Snakeye
+Top
+Waleed
+# Dota 2 (2 new handles; 3 source pages): https://liquipedia.net/dota2/Category:Pakistani_Players
+SumaiL
+YawaR
+# Call of Duty (3 new handles; 4 source pages): https://liquipedia.net/callofduty/Category:Pakistani_Players
+Crmz
+GloFrosty
+SenKa
+# Rocket League (6 new handles; 6 source pages): https://liquipedia.net/rocketleague/Category:Pakistani_Players
+Eco
+Hashir
+Itachi
+Killerninja
+Rayy14
+Taha
+# Fighting Games (19 new handles; 42 source pages): https://liquipedia.net/fighters/Category:Pakistani_Players
+Amu
+ARC
+Asim
+Bilal
+Blackbeard
+Esharib
+Farzeen
+Gosain
+Hammad
+Hazz
+Heera
+JoKa
+Khan
+NRC
+Sajawal
+Sikkify
+SilverFox
+Spag
+WhiteAshX

@@ -5,7 +5,7 @@
     var query = new URLSearchParams(location.search);
     var episodeId = /^[a-z][a-z0-9_]{0,63}$/.test(query.get("episode") || "") ? query.get("episode") : "boudica";
     var rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "iw", "nqo", "pnb", "ps", "sd", "syr", "ug", "ur", "yi"]);
-    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, previewRevealTimer: null, previewRevealToken: 0, pickingFaction: false, flow: "episode", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
+    var state = { roster: null, definition: null, etag: null, rosterEtag: null, externalChangeTag: null, dirty: false, saving: false, demoBackup: null, selected: null, previewBranch: null, previewFocusActive: false, previewActionStep: null, previewActionRatio: null, previewRevealTimer: null, previewRevealToken: 0, pickingFaction: false, flow: "episode", isMenuGuides: false, menuGuideId: "welcome", previewLanguage: "en", catalogs: {}, localeFailures: [], localeRegistryFailed: false, avatars: [], machine: null, renderer: null, facts: {}, ui: {}, mapPreview: null, mapResizeObserver: null, mapResizeFallback: false, mapPreviewLoadingId: null, zoom: 1, pan: { x: 36, y: 44 }, drag: null, wire: null, keyboardWire: null, validation: { errors: [], warnings: [] } };
     var types = ["scene", "choice", "objective", "guide", "end"];
     var triggerTypes = [
         { value: "territory", label: "Gain territory" }, { value: "kills", label: "Defeat troops" },
@@ -68,6 +68,13 @@
         return parts.reduce(function (value, part) { return value && value[part]; }, catalog);
     }
     function textValue(key, locale) {
+        if (state.isMenuGuides && key) {
+            var builtIn = state.definition && state.definition.strings || {}, language = locale || state.previewLanguage;
+            var menuText = builtIn[language] && builtIn[language][key]
+                || builtIn[String(language).split("-")[0]] && builtIn[String(language).split("-")[0]][key]
+                || builtIn.en && builtIn.en[key];
+            if (menuText) return menuText;
+        }
         var text = catalogValue(locale || state.previewLanguage, key) || catalogValue("en", key) || "";
         return window.SOWCampaign && typeof window.SOWCampaign.replaceFactionStoryNames === "function"
             ? window.SOWCampaign.replaceFactionStoryNames(text, state.definition, state.roster)
@@ -164,7 +171,12 @@
         });
     }
     function valid() {
-        if (!state.definition || !state.roster) return { errors: [], warnings: [] };
+        if (!state.definition) return { errors: [], warnings: [] };
+        if (state.isMenuGuides) {
+            syncMenuGuideSteps();
+            return window.SOWCampaign.validateMenuGuides(state.definition);
+        }
+        if (!state.roster) return { errors: [], warnings: [] };
         return window.SOWCampaign.validate(state.definition, state.roster, {
             hasText: function (key) { return Boolean(catalogValue("en", key)); },
             hasAvatar: function (avatar) { return state.avatars.includes(avatar); }
@@ -297,10 +309,191 @@
         catalogTextField(box, label, key, ["Title", "Choice label"].includes(label) ? 3 : 6);
         container.appendChild(box);
     }
+    function menuTextEditor(container, label, field) {
+        var step = state.definition.steps.find(function (item) { return item.id === state.selected; });
+        var key = step[field];
+        if (!key) {
+            key = "menu.guide." + step.id + (field === "title_key" ? ".title" : field === "hint_key" ? ".hint" : ".body");
+            step[field] = key;
+            markDirty();
+        }
+        var sectionNode = section(label);
+        sectionNode.appendChild(el("code", { class: "key-field" }, key));
+        ["en", "es"].forEach(function (locale) {
+            var input = el("textarea", { "aria-label": label + " · " + locale });
+            input.rows = 3;
+            var strings = state.definition.strings[locale] || (state.definition.strings[locale] = {});
+            input.value = strings[key] || "";
+            input.addEventListener("input", function () { strings[key] = input.value; markDirty(); });
+            sectionNode.appendChild(el("label", {}, label + " · " + locale));
+            sectionNode.appendChild(input);
+        });
+        container.appendChild(sectionNode);
+    }
+    function menuGuideOutcomeOptions() {
+        return Object.keys(window.SOWCampaign.MENU_GUIDE_OUTCOMES).map(function (outcome) {
+            var control = window.SOWCampaign.MENU_GUIDE_OUTCOMES[outcome].control;
+            return { value: outcome, label: outcome.replace(/_/g, " ") + " · " + control.replace(/_/g, " ") };
+        });
+    }
+    function menuGuideTriggerOutcomes(trigger) {
+        return Array.isArray(trigger && trigger.outcomes) ? trigger.outcomes.slice() : trigger && trigger.outcome ? [trigger.outcome] : [];
+    }
+    function setMenuGuideTrigger(step, primary, additional) {
+        var registered = window.SOWCampaign.MENU_GUIDE_OUTCOMES[primary];
+        if (!registered) return;
+        var outcomes = [primary];
+        if (additional && additional !== primary && window.SOWCampaign.MENU_GUIDE_OUTCOMES[additional]
+            && window.SOWCampaign.MENU_GUIDE_OUTCOMES[additional].kind === "counter") outcomes.push(additional);
+        var requirePurchased = Boolean(step.trigger && step.trigger.require_purchased_leader && primary === "leader_selected");
+        step.trigger = { type: "ui", action: registered.control, scope: "step" };
+        if (outcomes.length > 1) step.trigger.outcomes = outcomes;
+        else step.trigger.outcome = primary;
+        if (requirePurchased) step.trigger.require_purchased_leader = true;
+        step.guide = { kind: "ui", target: registered.control, gesture: "tap" };
+    }
+    function renderMenuGuideInspector(host, step) {
+        host.appendChild(el("div", { class: "step-validation", role: "status", hidden: true }));
+        updateStepValidation();
+        var basics = section("Menu guide step");
+        basics.appendChild(inputField("Stable ID", step.id, function (value) {
+            value = value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_");
+            if (!value || state.definition.steps.some(function (item) { return item !== step && item.id === value; })) return;
+            var old = step.id; step.id = value;
+            Object.keys(state.definition.menu_guides).forEach(function (id) { if (state.definition.menu_guides[id].entry === old) state.definition.menu_guides[id].entry = value; });
+            state.definition.steps.forEach(function (item) {
+                if (item.next === old) item.next = value;
+                (item.routes || []).forEach(function (route) { if (route.next === old) route.next = value; });
+                (item.choices || []).forEach(function (choice) { if (choice.next === old) choice.next = value; });
+            });
+            if (state.definition.layout[old]) { state.definition.layout[value] = state.definition.layout[old]; delete state.definition.layout[old]; }
+            state.selected = value; markDirty(); renderInspector();
+        }));
+        basics.appendChild(selectField("Step kind", step.type, ["guide", "scene", "choice", "end"], function (type) {
+            if (type === step.type) return;
+            var old = Object.assign({}, step), next = old.next || state.definition.steps.find(function (item) { return item.type === "end"; })?.id || "";
+            Object.keys(step).forEach(function (key) { delete step[key]; });
+            step.id = old.id; step.type = type; step.title_key = old.title_key || "menu.guide." + step.id + ".title";
+            if (type === "guide") {
+                var outcome = menuGuideTriggerOutcomes(old.trigger)[0] || "name_saved";
+                var control = window.SOWCampaign.MENU_GUIDE_OUTCOMES[outcome].control;
+                step.hint_key = old.hint_key || "menu.guide." + step.id + ".hint";
+                step.trigger = { type: "ui", action: control, outcome: outcome, scope: "step" };
+                step.guide = { kind: "ui", target: control, gesture: "tap" };
+                step.next = next;
+            } else if (type === "scene") { step.body_key = old.body_key || "menu.guide." + step.id + ".body"; step.next = next; }
+            else if (type === "choice") {
+                step.choices = [{ id: "first", label_key: "menu.guide." + step.id + ".first", next: next }, { id: "second", label_key: "menu.guide." + step.id + ".second", next: next }];
+            } else if (old.body_key) step.body_key = old.body_key;
+            markDirty(); renderInspector();
+        }));
+        menuTextEditor(basics, "Title", "title_key");
+        if (step.type === "guide") {
+            var triggerOutcomes = menuGuideTriggerOutcomes(step.trigger), primaryOutcome = triggerOutcomes[0] || "";
+            basics.appendChild(selectField("Confirmed action", primaryOutcome, menuGuideOutcomeOptions(), function (outcome) {
+                setMenuGuideTrigger(step, outcome, triggerOutcomes[1]);
+                markDirty(); renderInspector();
+            }));
+            var additionalOptions = Object.keys(window.SOWCampaign.MENU_GUIDE_OUTCOMES).filter(function (outcome) {
+                return outcome !== primaryOutcome && window.SOWCampaign.MENU_GUIDE_OUTCOMES[outcome].kind === "counter";
+            }).map(function (outcome) { return { value: outcome, label: outcome.replace(/_/g, " ") }; });
+            basics.appendChild(selectField("Also accept action", triggerOutcomes[1] || "", [{ value: "", label: "No alternate action" }].concat(additionalOptions), function (outcome) {
+                setMenuGuideTrigger(step, primaryOutcome, outcome);
+                markDirty(); renderInspector();
+            }));
+            if (primaryOutcome === "leader_selected") basics.appendChild(checkboxField("Require the selected purchased hero to be equipped", Boolean(step.trigger.require_purchased_leader), function (enabled) {
+                step.trigger.require_purchased_leader = enabled;
+                if (!enabled) delete step.trigger.require_purchased_leader;
+                markDirty(); renderInspector();
+            }));
+            menuTextEditor(basics, "Hand label", "hint_key");
+        } else if (step.type === "scene" || step.type === "end") menuTextEditor(basics, step.type === "end" ? "Closing text" : "Story text", "body_key");
+        host.appendChild(basics);
+        if (step.type === "choice") {
+            var answers = section("Answers");
+            (step.choices || []).forEach(function (choice, index) {
+                answers.appendChild(el("strong", {}, "Answer " + (index + 1)));
+                answers.appendChild(inputField("Answer ID", choice.id, function (value) { choice.id = value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_"); markDirty(); renderInspector(); }));
+                var labelKey = choice.label_key || "menu.guide." + step.id + "." + choice.id;
+                choice.label_key = labelKey;
+                ["en", "es"].forEach(function (locale) {
+                    var input = el("textarea", { "aria-label": "Answer " + locale }); input.rows = 2;
+                    var strings = state.definition.strings[locale] || (state.definition.strings[locale] = {});
+                    input.value = strings[labelKey] || ""; input.addEventListener("input", function () { strings[labelKey] = input.value; markDirty(); });
+                    answers.appendChild(el("label", {}, "Answer · " + locale)); answers.appendChild(input);
+                });
+                answers.appendChild(selectField("Next step", choice.next, destinationOptions(step.id), function (value) { choice.next = value; markDirty(); }));
+                if (step.choices.length > 2) {
+                    var remove = el("button", { type: "button", class: "danger" }, "Remove answer");
+                    remove.addEventListener("click", function () { step.choices.splice(index, 1); markDirty(); renderInspector(); }); answers.appendChild(remove);
+                }
+            });
+            if (step.choices.length < 4) {
+                var addAnswer = el("button", { type: "button" }, "Add answer");
+                addAnswer.addEventListener("click", function () { var id = uniqueId("answer", step.choices); step.choices.push({ id: id, label_key: "menu.guide." + step.id + "." + id, next: step.choices[0].next || "" }); markDirty(); renderInspector(); });
+                answers.appendChild(addAnswer);
+            }
+            host.appendChild(answers);
+        }
+        if (step.type !== "end" && step.type !== "choice") host.appendChild(selectField("Next step", step.next, destinationOptions(step.id), function (value) { step.next = value; markDirty(); }));
+        if (step.type === "guide" || step.type === "scene") {
+            var routes = section("Conditional paths");
+            (step.routes || []).forEach(function (route, index) {
+                var routeLabels = {
+                    commerce_available: "The store is available on this platform",
+                    commerce_offer_available: "An affordable gem hero is available",
+                    leader_purchase_modal_open: "The gem purchase window is open",
+                    leader_purchase_confirmed: "The selected gem hero purchase is confirmed"
+                };
+                var routeOptions = window.SOWCampaign.MENU_GUIDE_ROUTE_FACTS.map(function (fact) {
+                    return { value: fact, label: routeLabels[fact] || fact.replace(/_/g, " ") };
+                });
+                routes.appendChild(selectField("When", route.when && route.when.fact || "", routeOptions, function (fact) { route.when.fact = fact; markDirty(); }));
+                routes.appendChild(inputField("At least", route.when && route.when.gte || 1, function (value) { route.when.gte = Number(value); markDirty(); }, { type: "number", min: 1, step: 1 }));
+                routes.appendChild(selectField("Go to", route.next, destinationOptions(step.id), function (value) { route.next = value; markDirty(); }));
+                var removeRoute = el("button", { type: "button", class: "danger" }, "Remove path");
+                removeRoute.addEventListener("click", function () { step.routes.splice(index, 1); markDirty(); renderInspector(); }); routes.appendChild(removeRoute);
+            });
+            var addRoute = el("button", { type: "button" }, "Add conditional path");
+            addRoute.disabled = (step.routes || []).length >= window.SOWCampaign.MENU_GUIDE_ROUTE_FACTS.length;
+            addRoute.addEventListener("click", function () {
+                step.routes = step.routes || [];
+                var used = new Set(step.routes.map(function (route) { return route.when && route.when.fact; }));
+                var fact = window.SOWCampaign.MENU_GUIDE_ROUTE_FACTS.find(function (candidate) { return !used.has(candidate); });
+                if (!fact) return;
+                step.routes.push({ when: { fact: fact, gte: 1 }, next: step.next || "" });
+                markDirty(); renderInspector();
+            });
+            routes.appendChild(addRoute); host.appendChild(routes);
+        }
+        var flow = section("Journey");
+        if (state.definition.menu_guides[state.menuGuideId].entry !== step.id) {
+            var setOpening = el("button", { type: "button" }, "Use as journey opening");
+            setOpening.addEventListener("click", function () { state.definition.menu_guides[state.menuGuideId].entry = step.id; markDirty(); renderInspector(); renderGraph(); resetPreview(); });
+            flow.appendChild(setOpening);
+        } else flow.appendChild(el("small", {}, "This step opens the selected journey."));
+        if (!Object.keys(state.definition.menu_guides).some(function (id) { return state.definition.menu_guides[id].entry === step.id; })) {
+            var removeStep = el("button", { type: "button", class: "danger" }, "Remove step");
+            removeStep.addEventListener("click", function () {
+                if (!confirm("Remove this step and reconnect its incoming paths?")) return;
+                var fallback = step.type === "end" ? "" : step.next || "";
+                state.definition.steps.forEach(function (item) {
+                    if (item.next === step.id) item.next = fallback;
+                    (item.routes || []).forEach(function (route) { if (route.next === step.id) route.next = fallback; });
+                    (item.choices || []).forEach(function (choice) { if (choice.next === step.id) choice.next = fallback; });
+                });
+                state.definition.steps = state.definition.steps.filter(function (item) { return item !== step; });
+                delete state.definition.layout[step.id]; state.selected = flowEntry(); markDirty(); renderPalette(); renderInspector(); renderGraph(); resetPreview();
+            });
+            flow.appendChild(removeStep);
+        }
+        host.appendChild(flow);
+    }
     function renderInspector() {
         var host = $("#inspector"); host.replaceChildren();
         var step = state.definition.steps.find(function (item) { return item.id === state.selected; });
         if (!step) { setFactionPicker(false); host.appendChild(el("p", { class: "empty-state" }, "Select a step in the mission flow.")); return; }
+        if (state.isMenuGuides) { renderMenuGuideInspector(host, step); return; }
         setFactionPicker(state.pickingFaction);
         host.appendChild(el("div", { class: "step-validation", role: "status", hidden: true }));
         updateStepValidation();
@@ -814,7 +1007,25 @@
     function speakerOptions() { return [{ value: "", label: "Narrator" }].concat(Object.keys(state.definition.speakers || {}).map(function (id) { var speaker = state.definition.speakers[id], faction = state.roster.factions.find(function (item) { return item.id === speaker.faction; }); return { value: id, label: faction ? faction.name : speaker.name || id }; })); }
     function inGameUiTargets() { return Object.keys(window.SOWCampaign.UI_TARGETS).filter(function (key) { return state.flow === "menu" ? key.startsWith("menu_") || key === "campaign_replay" : !key.startsWith("menu_") && key !== "campaign_replay"; }); }
     function worldGuideTarget(type) { return ["attack", "kills"].includes(type) ? "assault" : ["contact", "defeated"].includes(type) ? "target_action" : ["hover", "camera_target"].includes(type) ? "player" : "expand"; }
-    function flowEntry() { return state.flow === "menu" ? state.definition.menu_guide && state.definition.menu_guide.entry : state.definition.entry; }
+    function syncMenuGuideSteps() {
+        if (!state.isMenuGuides || !state.definition || !state.definition.menu_guides) return;
+        var byId = new Map(state.definition.steps.map(function (step) { return [step.id, step]; }));
+        Object.keys(state.definition.menu_guides).forEach(function (guideId) {
+            var guide = state.definition.menu_guides[guideId], reached = new Set();
+            function visit(id) {
+                if (reached.has(id) || !byId.has(id)) return;
+                reached.add(id);
+                var step = byId.get(id);
+                [step.next].concat((step.routes || []).map(function (route) { return route.next; }), (step.choices || []).map(function (choice) { return choice.next; })).forEach(visit);
+            }
+            visit(guide.entry);
+            guide.step_ids = state.definition.steps.filter(function (step) { return reached.has(step.id); }).map(function (step) { return step.id; });
+        });
+    }
+    function flowEntry() {
+        return state.isMenuGuides ? state.definition.menu_guides[state.menuGuideId] && state.definition.menu_guides[state.menuGuideId].entry
+            : state.flow === "menu" ? state.definition.menu_guide && state.definition.menu_guide.entry : state.definition.entry;
+    }
     function campaignStepPolicies(choices, facts) {
         var byId = new Map(state.definition.steps.map(function (step) { return [step.id, step]; }));
         return window.SOWCampaign.campaignUnlockStates(byId, state.definition.entry, choices, facts);
@@ -843,6 +1054,7 @@
 
     function renderSettings() {
         var host = $("#settings"); host.replaceChildren();
+        if (state.isMenuGuides) { host.appendChild(el("p", { class: "empty-state" }, "Menu guides have no map or speaker settings.")); return; }
         var settings = state.definition.settings;
         host.appendChild(inputField("Starting troops", settings.starting_troops, function (value) { settings.starting_troops = Number(value); $("#sampleTroops").textContent = Number(value).toLocaleString(); markDirty(); }, { type: "number", min: 1, max: 100000, step: 100 }));
         host.appendChild(checkboxField("Allied support after milestone", Boolean(settings.campaign_support), function (enabled) {
@@ -1155,10 +1367,12 @@
             warningsByStep[issue.step] = (warningsByStep[issue.step] || 0) + 1;
         });
         state.definition.steps.forEach(function (step) { byId[step.id] = step; });
-        var policyByStep = campaignStepPolicies(state.machine && state.machine.state.choices, state.facts);
+        var policyByStep = state.isMenuGuides ? new Map() : campaignStepPolicies(state.machine && state.machine.state.choices, state.facts);
         state.definition.steps.forEach(function (step) {
             var pos = state.definition.layout[step.id] || defaultLayout(0);
-            var rootLabel = step.id === state.definition.entry ? "IN-GAME START" : state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? "MENU START" : step.id;
+            var rootLabel = state.isMenuGuides
+                ? Object.keys(state.definition.menu_guides).some(function (id) { return state.definition.menu_guides[id].entry === step.id; }) ? "JOURNEY START" : step.id
+                : step.id === state.definition.entry ? "IN-GAME START" : state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? "MENU START" : step.id;
             var stepErrors = errorsByStep[step.id] || 0;
             var stepWarnings = warningsByStep[step.id] || 0;
             var lines = Array.isArray(step.lines) ? step.lines : [];
@@ -1169,13 +1383,14 @@
                 return speaker.name_key ? textValue(speaker.name_key, state.previewLanguage) : speaker.name || speakerId;
             });
             var summary = nodeSummary(step);
-            var card = el("article", { class: "node" + (step.id === oldSelection ? " selected" : "") + (step.id === state.playingStep ? " playing" : "") + (completedSteps.has(step.id) ? " visited" : "") + (step.id === state.definition.entry ? " is-entry" : "") + (state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? " is-menu-entry" : "") + (stepErrors ? " has-error" : "") + (stepWarnings ? " has-warning" : ""), dataset: { stepId: step.id, stepType: step.type }, tabindex: "0", role: "group", "aria-label": step.type + ": " + (translated(step.title_key, state.previewLanguage) || step.id) + " · " + summary + (castNames.length ? " · " + castNames.join(", ") : "") });
+            var menuOpening = state.isMenuGuides && Object.keys(state.definition.menu_guides).some(function (id) { return state.definition.menu_guides[id].entry === step.id; });
+            var card = el("article", { class: "node" + (step.id === oldSelection ? " selected" : "") + (step.id === state.playingStep ? " playing" : "") + (completedSteps.has(step.id) ? " visited" : "") + (step.id === state.definition.entry ? " is-entry" : "") + (menuOpening || state.definition.menu_guide && step.id === state.definition.menu_guide.entry ? " is-menu-entry" : "") + (stepErrors ? " has-error" : "") + (stepWarnings ? " has-warning" : ""), dataset: { stepId: step.id, stepType: step.type }, tabindex: "0", role: "group", "aria-label": step.type + ": " + (translated(step.title_key, state.previewLanguage) || step.id) + " · " + summary + (castNames.length ? " · " + castNames.join(", ") : "") });
             card.style.left = pos.x + "px"; card.style.top = pos.y + "px";
             var head = el("header", { class: "node-hd" }); head.append(el("span", {}, step.type), el("small", { title: step.id, "aria-label": step.id }, rootLabel)); card.appendChild(head);
             card.appendChild(el("div", { class: "node-title" }, translated(step.title_key, state.previewLanguage) || step.title_key || "Untitled"));
             card.appendChild(el("div", { class: "node-summary", title: summary }, summary));
-            var effectiveUnlocks = window.SOWCampaign.applyCampaignUnlocks(policyByStep.get(step.id), step.unlocks);
-            var availability = campaignUnlockLabel(effectiveUnlocks);
+            var effectiveUnlocks = state.isMenuGuides ? null : window.SOWCampaign.applyCampaignUnlocks(policyByStep.get(step.id), step.unlocks);
+            var availability = state.isMenuGuides ? "" : campaignUnlockLabel(effectiveUnlocks);
             if (availability) card.appendChild(el("div", { class: "node-summary" }, "Available: " + availability));
             if (castIds.length) {
                 var cast = el("div", { class: "node-cast", "aria-hidden": "true" });
@@ -1229,7 +1444,7 @@
         }
         drawWires();
         $("#stepCount").textContent = state.definition.steps.length + " steps";
-        $("#episodeLabel").textContent = episodeId.replace(/_/g, " ").toUpperCase();
+        $("#episodeLabel").textContent = state.isMenuGuides ? "Menu guides" : episodeId.replace(/_/g, " ").toUpperCase();
         renderPreviewBranchOptions();
     }
     function selectStep(id) {
@@ -1309,6 +1524,7 @@
         });
     }
     function addStep(type, branch) {
+        if (state.isMenuGuides) { addMenuGuideStep(type); return; }
         var index = state.definition.steps.length, id = uniqueId(type + "_" + (index + 1), state.definition.steps), previous = branch ? branch.step : state.definition.steps.find(function (step) { return step.id === state.selected; });
         if (!branch && previous && previous.type === "choice") { notice("Choose the answer to branch from in the inspector."); return; }
         var ending = state.definition.steps.find(function (item) { return item.type === "end"; });
@@ -1352,9 +1568,36 @@
         if (type === "end") state.definition.steps.forEach(function (item) { if (item.type !== "end" && !item.next && item.type !== "choice") item.next = id; });
         markDirty(); selectStep(id); revealStep(id);
     }
+    function addMenuGuideStep(type) {
+        var index = state.definition.steps.length, id = uniqueId(type + "_" + (index + 1), state.definition.steps);
+        var previous = state.definition.steps.find(function (step) { return step.id === state.selected; });
+        if (previous && previous.type === "choice") { notice("Choose an answer path in the inspector first."); return; }
+        var ending = state.definition.steps.find(function (step) { return step.type === "end"; });
+        var next = previous && previous.type !== "end" ? previous.next || ending && ending.id || "" : ending && ending.id || "";
+        var position = defaultLayout(index), origin = previous && state.definition.layout[previous.id];
+        if (origin) position = { x: origin.x + 320, y: origin.y };
+        var step = { id: id, type: type, title_key: "menu.guide." + id + ".title" };
+        if (type === "end") step.body_key = "menu.guide." + id + ".body";
+        else if (type === "scene") { step.body_key = "menu.guide." + id + ".body"; step.next = next; }
+        else if (type === "choice") step.choices = [
+            { id: "first", label_key: "menu.guide." + id + ".first", next: next },
+            { id: "second", label_key: "menu.guide." + id + ".second", next: next }
+        ];
+        else {
+            var outcome = menuGuideOutcomeOptions()[0].value, control = window.SOWCampaign.MENU_GUIDE_OUTCOMES[outcome].control;
+            step.hint_key = "menu.guide." + id + ".hint";
+            step.trigger = { type: "ui", action: control, outcome: outcome, scope: "step" };
+            step.guide = { kind: "ui", target: control, gesture: "tap" };
+            step.next = next;
+        }
+        if (previous && previous.type !== "end" && previous.type !== "choice") previous.next = id;
+        state.definition.steps.push(step); state.definition.layout[id] = position;
+        ["en", "es"].forEach(function (locale) { state.definition.strings[locale] = state.definition.strings[locale] || {}; });
+        state.selected = id; markDirty(); renderPalette(); renderInspector(); renderGraph(); resetPreview(); revealStep(id);
+    }
     function renderPalette() {
         var host = $("#palette"); host.replaceChildren();
-        types.forEach(function (type) { var button = el("button", { type: "button" }, type === "scene" ? "Scene" : type === "choice" ? "Decision" : type === "objective" ? "Objective" : type === "guide" ? "Guide" : "Ending"); button.addEventListener("click", function () { addStep(type); }); host.appendChild(button); });
+        (state.isMenuGuides ? ["scene", "choice", "guide", "end"] : types).forEach(function (type) { var button = el("button", { type: "button" }, type === "scene" ? "Scene" : type === "choice" ? "Decision" : type === "objective" ? "Objective" : type === "guide" ? "Guide" : "Ending"); button.addEventListener("click", function () { addStep(type); }); host.appendChild(button); });
     }
 
     function paintPreview(updateMachine) {
@@ -1362,6 +1605,7 @@
         clearPreviewRevealTimer();
         $("#previewFrame").dataset.device = $("#device").value;
         state.facts.touch_controls = $("#device").value === "mobile" ? 1 : 0;
+        if (state.isMenuGuides) syncMenuPreviewFacts();
         var model;
         var previousStep = state.playingStep;
         try { model = updateMachine === false ? state.machine.view() : state.machine.update(state.facts, state.ui); }
@@ -1378,7 +1622,9 @@
             state.previewActionRatio = actionRatio;
             if (actionRatio != null) $("#sow-hud-slider").value = String(Math.round(actionRatio * 100));
         }
-        var anchor = previewAnchor(model.step);
+        var menuControl = state.isMenuGuides ? window.SOWCampaign.menuGuideControl(model.step, state.facts) : null;
+        var anchorStep = menuControl ? Object.assign({}, model.step, { guide: Object.assign({}, model.step.guide, { target: menuControl.target }) }) : model.step;
+        var anchor = previewAnchor(anchorStep, state.facts);
         var previewPlatform = window.navigator && window.navigator.userAgentData && window.navigator.userAgentData.platform
             || window.navigator && window.navigator.platform || "";
         var zoomMode = $("#device").value === "mobile" ? "pinch" : window.SOWCampaign.zoomInputMode({ platform: previewPlatform });
@@ -1412,9 +1658,12 @@
         } else if (!zoomGuide && model.step.trigger && model.step.trigger.type === "camera_target" && Number.isFinite(Number(model.step.trigger.distance)) && Number.isFinite(Number(state.facts.camera_target_distance))) {
             guideMetric = { text: previewMetric(stepTextKey(model.step, "_progress"), { current: Math.ceil(Number(state.facts.camera_target_distance)), target: model.step.trigger.distance }) };
         }
-        try { state.renderer.render(model.waiting ? null : model, { anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel }); }
+        if (menuControl) gestureLabel = translated(menuControl.hint_key, state.previewLanguage);
+        try { state.renderer.render(model.waiting ? null : model, { hideObjective: state.isMenuGuides, anchor: anchor, reducedMotion: $("#reducedMotion").checked, direction: rtlLanguages.has(state.previewLanguage.toLowerCase().split("-")[0]) ? "rtl" : "ltr", localeScript: previewLocaleScript(state.previewLanguage), zoomMode: zoomMode, hintOverride: previewHint, guideMetric: guideMetric, gestureLabel: gestureLabel }); }
         catch (error) { $("#previewStatus").textContent = "Preview unavailable: " + error.message; return; }
-        $("#engineState").textContent = JSON.stringify({ step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, unlocks: model.unlocks, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
+        $("#engineState").textContent = JSON.stringify(state.isMenuGuides
+            ? { journey: state.menuGuideId, step: model.step.id, type: model.step.type, progress: model.progress, facts: state.facts }
+            : { step: model.step.id, type: model.step.type, waiting: model.waiting, wait_remaining_ms: model.wait_remaining_ms, unlocks: model.unlocks, campaign_assault_on_enter: model.step.campaign_assault_on_enter || null, reaction: model.reaction || null, progress: model.progress, choices: model.state.choices, reactionsShown: model.state.reactionsShown }, null, 2);
         var guideTarget = model.step.guide && model.step.guide.kind === "ui" ? model.step.guide.target : "";
         var requiredMenu = /^map_(?:build|upgrade)_/.test(guideTarget) ? "build" : "";
         var menuHint = requiredMenu && $("#sow-hud").dataset.previewMapMenu !== requiredMenu ? " · open the " + requiredMenu + " submenu in the preview to reveal this guide" : "";
@@ -1448,7 +1697,7 @@
         if (state.machine && state.machine.replaceDefinition(state.definition)) paintPreview();
         else renderPreview();
     }
-    function previewAnchor(step) {
+    function previewAnchor(step, facts) {
         var frame = $("#previewFrame");
         frame.querySelectorAll(".is-guide-target").forEach(function (marker) { marker.classList.remove("is-guide-target"); });
         if (!step.guide) return null;
@@ -1457,7 +1706,7 @@
         var target;
         if (guide.kind === "world") target = previewWorldMarker(frame, guide.target, step);
         else {
-            target = window.SOWCampaign.resolveUiTarget(guide.target, document, episodeId);
+            target = window.SOWCampaign.resolveUiTarget(guide.target, document, episodeId, facts);
             if (target && !frame.contains(target)) target = null;
         }
         if (!target || target.getClientRects().length === 0) return null;
@@ -1551,6 +1800,8 @@
         var frame = $("#previewFrame"); frame.dataset.device = $("#device").value;
         frame.dataset.flow = state.flow;
         $("#sow-menu").hidden = state.flow !== "menu";
+        $("#previewFrame .sample-world").hidden = state.isMenuGuides;
+        $("#sow-hud").hidden = state.isMenuGuides;
         var steps = Array.isArray(state.definition.steps) ? state.definition.steps : [];
         var candidates = [forceStep, state.machine && state.machine.state.id, state.selected, flowEntry(), state.definition.entry];
         var start = candidates.find(function (id) { return id && steps.some(function (step) { return step && step.id === id; }); });
@@ -1582,8 +1833,163 @@
         });
         paintPreview();
     }
+    function syncMenuPreviewFacts() {
+        var facts = state.facts;
+        facts.menu_outcomes = facts.menu_outcomes || {};
+        var available = Array.isArray(facts.affordable_unowned_leader_ids) ? facts.affordable_unowned_leader_ids.map(String) : [];
+        var owned = Array.isArray(facts.owned_leader_ids) ? facts.owned_leader_ids.map(String) : [];
+        var selectedOffer = String(facts.menu_guide_selected_leader || "");
+        facts.commerce_offer_available = facts.commerce_available && available.length ? 1 : 0;
+        facts.leader_purchase_modal_open = facts.purchase_modal_phase ? 1 : 0;
+        facts.alternate_leader_available = (facts.available_leader_ids || []).some(function (id) { return String(id) !== String(facts.selected_leader || ""); }) ? 1 : 0;
+        facts.leader_purchase_confirmed = selectedOffer && (String(facts.purchased_leader_id || "") === selectedOffer || owned.includes(selectedOffer)) ? 1 : 0;
+        facts.menu_guide_selected_offer_equipped = Boolean(selectedOffer && String(facts.selected_leader || "") === selectedOffer && owned.includes(selectedOffer));
+        var storeNav = document.querySelector("#sow-menu [data-nav-screen='store']");
+        if (storeNav) storeNav.disabled = !facts.commerce_available;
+        var purchaseConfirm = document.querySelector("#sow-menu [data-command='confirm_purchase']");
+        var purchaseClose = document.querySelector("#sow-menu [data-command='cancel_purchase']");
+        document.querySelectorAll("#sow-menu [data-nav-screen]").forEach(function (button) {
+            button.disabled = Boolean(facts.purchase_modal_phase) || button.dataset.navScreen === "store" && !facts.commerce_available;
+        });
+        if (purchaseConfirm) purchaseConfirm.hidden = facts.purchase_modal_phase === "success";
+        if (purchaseClose) purchaseClose.textContent = facts.purchase_modal_phase === "success" ? "CONTINUE" : "CANCEL";
+        document.querySelectorAll("#sow-menu [data-command='preview_leader']").forEach(function (button) {
+            var leaderId = String(button.dataset.leaderId || "");
+            button.disabled = !(facts.available_leader_ids || []).map(String).includes(leaderId) && !available.includes(leaderId);
+            button.classList.toggle("is-locked", !(facts.available_leader_ids || []).map(String).includes(leaderId));
+        });
+        document.querySelectorAll("#sow-menu [data-command='unlock_leader']").forEach(function (button) {
+            button.disabled = !available.includes(String(button.dataset.leaderId || ""));
+        });
+    }
+    function incrementMenuOutcome(outcome) {
+        var counts = state.facts.menu_outcomes || (state.facts.menu_outcomes = {});
+        counts[outcome] = Number(counts[outcome] || 0) + 1;
+    }
+    function handleMenuPreviewClick(event) {
+        if (!state.isMenuGuides) return false;
+        var target = event.target.closest("button, [data-lobby-card]");
+        if (!target || target.disabled) return true;
+        var nav = target.closest("[data-nav-screen]");
+        if (nav) {
+            var nextScreen = nav.dataset.navScreen === "battle" ? "home" : nav.dataset.navScreen;
+            setPreviewMenuScreen(nextScreen);
+            if (nextScreen === "profile") {
+                state.facts.profile_ready = true;
+                state.facts.own_profile_ready = true;
+                incrementMenuOutcome("profile_opened");
+            } else if (nextScreen === "store") {
+                state.facts.store_ready = true;
+                incrementMenuOutcome("store_ready");
+            }
+            syncMenuPreviewFacts(); paintPreview(); return true;
+        }
+        var command = target.dataset.command;
+        if (command === "open_campaign") { setPreviewMenuScreen("campaign"); paintPreview(); return true; }
+        if (target.matches("[data-preview-menu-back]")) { setPreviewMenuScreen("home"); paintPreview(); return true; }
+        if (command === "preview_leader") {
+            var leaderId = String(target.dataset.leaderId || "");
+            state.facts.preview_leader_id = leaderId;
+            if ((state.facts.available_leader_ids || []).map(String).includes(leaderId) && leaderId !== state.facts.selected_leader) incrementMenuOutcome("leader_preview_selected");
+            if (Array.isArray(state.facts.affordable_unowned_leader_ids)
+                && state.facts.affordable_unowned_leader_ids.map(String).includes(leaderId)) {
+                state.facts.menu_guide_selected_leader = leaderId;
+                incrementMenuOutcome("leader_offer_selected");
+            }
+            syncMenuPreviewFacts(); paintPreview(); return true;
+        }
+        if (command === "confirm_leader") {
+            var selected = String(state.facts.preview_leader_id || "");
+            var currentStep = state.machine && state.machine.view().step;
+            var trigger = currentStep && currentStep.trigger || {};
+            if (trigger.require_purchased_leader) selected = String(state.facts.menu_guide_selected_leader || "");
+            var owned = (state.facts.owned_leader_ids || []).map(String);
+            if (selected && (state.facts.available_leader_ids || []).map(String).includes(selected) && (!trigger.require_purchased_leader || selected === state.facts.menu_guide_selected_leader)) {
+                state.facts.selected_leader = selected;
+                incrementMenuOutcome("leader_selected");
+                setPreviewMenuScreen("home");
+                syncMenuPreviewFacts(); paintPreview();
+            }
+            return true;
+        }
+        if (command === "unlock_leader") {
+            var offerId = String(target.dataset.leaderId || "");
+            if (!(state.facts.affordable_unowned_leader_ids || []).map(String).includes(offerId)) return true;
+            state.facts.purchase_prompt_leader_id = offerId;
+            state.facts.purchase_modal_phase = "confirm";
+            incrementMenuOutcome("leader_purchase_prompt_opened");
+            setPreviewMenuScreen("purchase"); paintPreview(); return true;
+        }
+        if (command === "confirm_purchase") {
+            var purchaseId = String(state.facts.purchase_prompt_leader_id || "");
+            if (!purchaseId || !(state.facts.affordable_unowned_leader_ids || []).map(String).includes(purchaseId)) return true;
+            state.facts.purchased_leader_id = purchaseId;
+            state.facts.available_leader_ids = Array.from(new Set((state.facts.available_leader_ids || []).map(String).concat(purchaseId)));
+            state.facts.owned_leader_ids = Array.from(new Set((state.facts.owned_leader_ids || []).map(String).concat(purchaseId)));
+            state.facts.affordable_unowned_leader_ids = (state.facts.affordable_unowned_leader_ids || []).filter(function (id) { return String(id) !== purchaseId; });
+            incrementMenuOutcome("leader_purchased");
+            state.facts.purchase_modal_phase = "success";
+            setPreviewMenuScreen("purchase");
+            syncMenuPreviewFacts(); paintPreview(); return true;
+        }
+        if (command === "cancel_purchase") {
+            if (state.facts.purchase_modal_phase === "success") incrementMenuOutcome("leader_purchase_closed");
+            else if (state.facts.purchase_modal_phase === "confirm" && state.facts.purchase_prompt_leader_id) incrementMenuOutcome("leader_purchase_cancelled");
+            state.facts.purchase_modal_phase = null;
+            state.facts.purchase_prompt_leader_id = null;
+            setPreviewMenuScreen("heroes"); syncMenuPreviewFacts(); paintPreview(); return true;
+        }
+        if (command === "profile_tab" && target.dataset.profileTab === "history") {
+            state.facts.profile_tab = "history";
+            state.facts.history_ready = true;
+            state.facts.history_match_ids = [state.facts.current_match_id];
+            incrementMenuOutcome("history_current_match_ready");
+            paintPreview(); return true;
+        }
+        if (command === "quick_match") {
+            incrementMenuOutcome("quick_match_accepted");
+            setPreviewMenuScreen("matchmaking"); paintPreview(); return true;
+        }
+        if (command === "open_campaign" || command === "start_campaign_episode") return true;
+        return true;
+    }
+    function renderMenuGuideFactControls(model, host) {
+        var trigger = model.step.trigger;
+        var outcome = menuGuideTriggerOutcomes(trigger)[0];
+        var label = outcome ? outcome.replace(/_/g, " ") : model.step.type;
+        host.appendChild(el("small", {}, "Preview only · the guide waits for the simulated action: " + label + "."));
+        if (model.step.id === "welcome_reopen_heroes") {
+            var noOffer = el("button", { type: "button" }, "Simulate no affordable gem offer");
+            noOffer.addEventListener("click", function () {
+                state.facts.affordable_unowned_leader_ids = [];
+                syncMenuPreviewFacts(); paintPreview();
+            });
+            host.appendChild(noOffer);
+        }
+        if (model.step.id === "welcome_purchase_confirm") {
+            host.appendChild(el("small", {}, "A failed purchase keeps this step pending. Use Cancel to continue without buying."));
+            var failed = el("button", { type: "button" }, "Simulate failed purchase · no progress");
+            failed.addEventListener("click", function () { $("#previewStatus").textContent = "Simulated purchase failure · the guide remains on this step."; });
+            host.appendChild(failed);
+        }
+        if (model.step.id === "first_history") {
+            var noCommerce = el("button", { type: "button" }, "Simulate a platform without the store");
+            noCommerce.addEventListener("click", function () { state.facts.commerce_available = false; syncMenuPreviewFacts(); paintPreview(); });
+            host.appendChild(noCommerce);
+        }
+        if (model.step.id === "welcome_name") {
+            var rejectedName = el("button", { type: "button" }, "Simulate rejected name · no progress");
+            rejectedName.addEventListener("click", function () { $("#previewStatus").textContent = "Simulated name rejection · the guide remains on this step."; });
+            host.appendChild(rejectedName);
+        }
+    }
     function renderFactControls(model) {
         var host = $("#factControls"); host.replaceChildren();
+        if (state.isMenuGuides) {
+            $("#simulateBtn").hidden = true; $("#tickBtn").hidden = true;
+            renderMenuGuideFactControls(model, host);
+            return;
+        }
         if (model.waiting) { host.appendChild(el("small", {}, "Scene appears in " + (model.wait_remaining_ms / 1000).toFixed(1) + " seconds.")); return; }
         var trigger = model.step.trigger;
         var timedRoute = (model.step.routes || []).some(function (route) { return route.when && route.when.fact === "elapsed_seconds"; });
@@ -1741,11 +2147,25 @@
         }
         paintPreview();
     }
-    function freshFacts() { return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], eliminated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 }; }
+    function freshFacts() {
+        if (state.isMenuGuides) return {
+            screen: "home", profile_tab: "overview", profile_ready: false, history_ready: false,
+            own_profile_ready: false, history_match_ids: [], current_match_id: "studio-match", commerce_available: true,
+            affordable_unowned_leader_ids: ["gem_offer"], owned_leader_ids: ["owned"], available_leader_ids: ["owned", "free"],
+            selected_leader: "owned", preview_leader_id: "owned", purchased_leader_id: null,
+            purchase_prompt_leader_id: null, purchase_modal_phase: null, store_ready: false, menu_guide_selected_leader: null,
+            commerce_offer_available: 1, leader_purchase_modal_open: 0, leader_purchase_confirmed: 0, menu_guide_selected_offer_equipped: false,
+            menu_outcomes: { name_saved: 0, leader_selected: 0, leader_offer_selected: 0,
+                leader_purchase_prompt_opened: 0, leader_purchased: 0, leader_purchase_cancelled: 0, leader_purchase_closed: 0,
+                profile_opened: 0, history_current_match_ready: 0, store_ready: 0, quick_match_accepted: 0 }
+        };
+        return { tiles: 0, tiles_gained: 0, kills: 0, troops: Number(state.definition.settings && state.definition.settings.starting_troops) || 0, buildings: 0, cities: 0, ally_support_deliveries: 0, support_deliveries_by_faction_id: {}, structure_levels: {}, fleets: 0, fleets_by_type: {}, transport_fleets_by_faction_id: {}, nukes: 0, attacks: 0, attacks_by_faction_id: {}, camera_drag_events: 0, camera_key_pan_events: 0, hover_events: 0, zoom_out_events: 0, zoom_in_events: 0, zoom_out_complete: 0, zoom_in_complete: 0, camera_target: 0, camera_target_distance: 30, camera_zoom: 1, camera_zoom_start: 1, camera_zoom_floor: 0.25, camera_zoom_target: 0.8, touch_controls: 0, contact_faction_ids: [], defeated_faction_ids: [], eliminated_faction_ids: [], resource_transfers: 0, resource_transfers_by_recipient_faction_id: {}, alliance_faction_ids: [], elapsed_ticks: 0, elapsed_seconds: 0 };
+    }
     function setPreviewMenuScreen(screen) {
         var menu = $("#sow-menu");
         menu.dataset.previewScreen = screen;
         menu.querySelectorAll("[data-preview-menu-screen]").forEach(function (panel) { panel.hidden = panel.dataset.previewMenuScreen !== screen; });
+        if (state.isMenuGuides && state.facts) state.facts.screen = screen;
     }
     function resetPreview() {
         clearPreviewRevealTimer();
@@ -1791,13 +2211,44 @@
         }
     }
 
+    function syncStudioMode() {
+        $("#flowControl").hidden = state.isMenuGuides;
+        $("#menuGuideControl").hidden = !state.isMenuGuides;
+        $("#menuGuideBtn").hidden = state.isMenuGuides;
+        $("#mapLink").hidden = state.isMenuGuides;
+        $(".episode-settings").hidden = state.isMenuGuides;
+        $("#flowEntryBtn").textContent = state.isMenuGuides ? "Use selected as journey opening" : "Use selected as opening";
+        $("#menuGuideSelect").value = state.menuGuideId;
+        $("#episodeLabel").textContent = state.isMenuGuides ? "Menu guides" : episodeId.replace(/_/g, " ").toUpperCase();
+    }
+
     async function load() {
         status("Loading…"); notice("");
+        if (episodeId === "menu") {
+            var guideResponse = await fetch("/assets/guides/menu.triggers.json", { cache: "no-store" });
+            if (!guideResponse.ok) throw new Error("Could not load the published menu guide definition.");
+            var guideDefinition = await guideResponse.json();
+            var guideReport = window.SOWCampaign.validateMenuGuides(guideDefinition);
+            if (guideReport.errors.length) throw new Error("Menu guide definition is invalid: " + guideReport.errors[0].message);
+            state.roster = null; state.definition = guideDefinition; state.rosterEtag = null;
+            state.etag = guideResponse.headers.get("ETag"); state.externalChangeTag = null; state.dirty = false;
+            state.isMenuGuides = true; state.flow = "menu";
+            state.menuGuideId = state.definition.menu_guides[state.menuGuideId] ? state.menuGuideId : "welcome";
+            state.selected = flowEntry();
+            normalizeStrings(state.definition); ensureLayout(); syncMenuGuideSteps();
+            $("#episodeSelect").value = "menu";
+            $("#flowSelect").value = "menu";
+            $("#previewFrame").dataset.flow = "menu";
+            $("#logicLink").href = "logic.html?episode=menu";
+            syncStudioMode();
+            renderPalette(); renderSettings(); renderInspector(); refresh(); resetPreview(); status("Saved");
+            return;
+        }
         var rosterResponse = await fetch("/assets/campaign/" + episodeId + ".json", { cache: "no-store" });
         var logicResponse = await fetch("/assets/campaign/" + episodeId + ".triggers.json", { cache: "no-store" });
         if (!rosterResponse.ok || !logicResponse.ok) throw new Error("Could not load both map and story files for " + episodeId + ".");
         var files = await Promise.all([rosterResponse.json(), logicResponse.json()]);
-        state.roster = files[0]; state.definition = files[1]; state.rosterEtag = rosterResponse.headers.get("ETag"); state.etag = logicResponse.headers.get("ETag"); state.externalChangeTag = null; state.dirty = false; state.flow = "episode"; state.selected = state.definition.entry;
+        state.roster = files[0]; state.definition = files[1]; state.rosterEtag = rosterResponse.headers.get("ETag"); state.etag = logicResponse.headers.get("ETag"); state.externalChangeTag = null; state.dirty = false; state.flow = "episode"; state.isMenuGuides = false; state.selected = state.definition.entry;
         renderRosterMapPreview();
         normalizeStrings(state.definition); ensureLayout();
         var title = $("#episodeSelect"); title.value = episodeId;
@@ -1810,6 +2261,7 @@
         $("#flowSelect").value = state.flow;
         $("#mapLink").href = "index.html?episode=" + encodeURIComponent(episodeId);
         $("#logicLink").href = "logic.html?episode=" + encodeURIComponent(episodeId);
+        syncStudioMode();
         renderPalette(); renderSettings(); renderInspector(); refresh(); resetPreview(); status("Saved");
     }
     async function save() {
@@ -1820,7 +2272,8 @@
         var savedDraft = JSON.stringify(state.definition, null, 2) + "\n";
         state.saving = true; $("#exportBtn").disabled = true; status("Saving…");
         try {
-            var response = await fetch("/__save?file=" + encodeURIComponent(episodeId + ".triggers.json"), {
+            var targetFile = state.isMenuGuides ? "menu.triggers.json" : episodeId + ".triggers.json";
+            var response = await fetch("/__save?file=" + encodeURIComponent(targetFile), {
                 method: "POST", headers: { "Content-Type": "application/json", "If-Match": state.etag || "" },
                 body: savedDraft
             });
@@ -1836,13 +2289,17 @@
     async function watchExternalFiles() {
         if (state.demoBackup || document.visibilityState !== "visible" || !state.definition) return;
         try {
-            var responses = await Promise.all([
-                fetch("/assets/campaign/" + episodeId + ".json", { method: "HEAD", cache: "no-store" }),
-                fetch("/assets/campaign/" + episodeId + ".triggers.json", { method: "HEAD", cache: "no-store" })
-            ]);
+            var responses = state.isMenuGuides
+                ? [await fetch("/assets/guides/menu.triggers.json", { method: "HEAD", cache: "no-store" })]
+                : await Promise.all([
+                    fetch("/assets/campaign/" + episodeId + ".json", { method: "HEAD", cache: "no-store" }),
+                    fetch("/assets/campaign/" + episodeId + ".triggers.json", { method: "HEAD", cache: "no-store" })
+                ]);
             if (responses.some(function (response) { return !response.ok; })) return;
             var externalTag = responses.map(function (response) { return response.headers.get("ETag"); }).join("\n");
-            if (responses[0].headers.get("ETag") === state.rosterEtag && responses[1].headers.get("ETag") === state.etag) { state.externalChangeTag = null; return; }
+            var unchanged = state.isMenuGuides ? responses[0].headers.get("ETag") === state.etag
+                : responses[0].headers.get("ETag") === state.rosterEtag && responses[1].headers.get("ETag") === state.etag;
+            if (unchanged) { state.externalChangeTag = null; return; }
             if (state.dirty) {
                 if (externalTag === state.externalChangeTag) return;
                 state.externalChangeTag = externalTag;
@@ -1858,7 +2315,8 @@
     function download() {
         if (state.demoBackup) return;
         var blob = new Blob([JSON.stringify(state.definition, null, 2) + "\n"], { type: "application/json" });
-        var anchor = el("a", { href: URL.createObjectURL(blob), download: episodeId + ".triggers.json" }); anchor.click(); URL.revokeObjectURL(anchor.href);
+        var filename = state.isMenuGuides ? "menu.triggers.json" : episodeId + ".triggers.json";
+        var anchor = el("a", { href: URL.createObjectURL(blob), download: filename }); anchor.click(); URL.revokeObjectURL(anchor.href);
     }
     function setDemoMode(active) {
         $("#graphPanel").inert = active;
@@ -1976,11 +2434,18 @@
             $("#sow-menu").hidden = state.flow !== "menu";
             renderSettings(); renderInspector(); resetPreview();
         });
+        $("#menuGuideSelect").addEventListener("change", function () {
+            if (!state.isMenuGuides || !state.definition.menu_guides[this.value]) return;
+            state.menuGuideId = this.value;
+            state.selected = flowEntry(); state.previewBranch = null;
+            renderInspector(); renderGraph(); resetPreview();
+        });
         $("#flowEntryBtn").addEventListener("click", function () {
             if (!state.selected) return;
-            if (state.flow === "menu") state.definition.menu_guide = { entry: state.selected, dismissible: true };
+            if (state.isMenuGuides) state.definition.menu_guides[state.menuGuideId].entry = state.selected;
+            else if (state.flow === "menu") state.definition.menu_guide = { entry: state.selected, dismissible: true };
             else state.definition.entry = state.selected;
-            markDirty(); renderSettings(); resetPreview();
+            markDirty(); renderSettings(); renderInspector(); renderGraph(); resetPreview();
         });
         $("#playSelected").addEventListener("click", function () { state.facts = freshFacts(); state.ui = {}; renderPreview(state.selected); });
         $("#previewBranchSelect").addEventListener("change", function () {
@@ -2022,6 +2487,12 @@
         document.addEventListener("visibilitychange", watchExternalFiles);
         window.setInterval(watchExternalFiles, 1500);
         function previewUiAction(event) {
+            if (state.isMenuGuides) {
+                if (event.type === "change" && event.target.matches('[data-role="display-name"]') && event.target.value.trim()) {
+                    incrementMenuOutcome("name_saved"); paintPreview();
+                }
+                return;
+            }
             if (!state.machine) return;
             var trigger = state.machine.view().step.trigger;
             if (!trigger || trigger.type !== "ui") return;
@@ -2033,6 +2504,7 @@
         $("#previewFrame").addEventListener("click", function (event) {
             var menu = $("#sow-menu");
             if (menu && menu.contains(event.target)) {
+                if (state.isMenuGuides) { handleMenuPreviewClick(event); return; }
                 if (event.target.closest('[data-command="open_campaign"]')) setPreviewMenuScreen("campaign");
                 else if (event.target.closest("[data-preview-menu-back]")) setPreviewMenuScreen("home");
                 else return;
@@ -2059,7 +2531,7 @@
         });
         ["click", "change"].forEach(function (type) { $("#previewFrame").addEventListener(type, previewUiAction); });
         $("#episodeSelect").addEventListener("change", function () { if (state.dirty && !confirm("Discard unsaved changes and switch episode?")) { this.value = episodeId; return; } location.href = "logic.html?episode=" + encodeURIComponent(this.value); });
-        $("#fileIn").addEventListener("change", function () { var file = this.files[0]; if (!file) return; if (state.dirty && !confirm("Replace the unsaved draft with this file?")) { this.value = ""; return; } var reader = new FileReader(); reader.onload = function () { try { var next = JSON.parse(reader.result); if (next.episode_id !== episodeId) throw new Error("Episode ID does not match this editor tab."); state.definition = next; normalizeStrings(next); ensureLayout(); state.dirty = true; state.flow = "episode"; $("#flowSelect").value = "episode"; state.selected = next.entry; status("Imported draft", "dirty"); renderSettings(); renderInspector(); refresh(); resetPreview(); } catch (error) { notice(error.message); } }; reader.readAsText(file); });
+        $("#fileIn").addEventListener("change", function () { var file = this.files[0]; if (!file) return; if (state.dirty && !confirm("Replace the unsaved draft with this file?")) { this.value = ""; return; } var reader = new FileReader(); reader.onload = function () { try { var next = JSON.parse(reader.result); if (next.episode_id !== episodeId) throw new Error("Episode ID does not match this editor tab."); if (state.isMenuGuides) { var report = window.SOWCampaign.validateMenuGuides(next); if (report.errors.length) throw new Error(report.errors[0].message); } state.definition = next; normalizeStrings(next); ensureLayout(); state.dirty = true; if (state.isMenuGuides) { state.menuGuideId = next.menu_guides[state.menuGuideId] ? state.menuGuideId : "welcome"; state.flow = "menu"; state.selected = flowEntry(); syncMenuGuideSteps(); } else { state.flow = "episode"; state.selected = next.entry; } $("#flowSelect").value = state.flow; syncStudioMode(); status("Imported draft", "dirty"); renderPalette(); renderSettings(); renderInspector(); refresh(); resetPreview(); } catch (error) { notice(error.message); } }; reader.readAsText(file); });
         $("#stage").addEventListener("pointermove", function (event) {
             if (!state.drag) return;
             var scale = state.zoom;
@@ -2141,7 +2613,10 @@
     function arrangeGraph() {
         var steps = state.definition.steps, byId = Object.create(null), depth = Object.create(null), queue = [];
         steps.forEach(function (step) { byId[step.id] = step; });
-        [state.definition.entry, state.definition.menu_guide && state.definition.menu_guide.entry].forEach(function (entry) {
+        var entries = state.isMenuGuides
+            ? Object.keys(state.definition.menu_guides).map(function (id) { return state.definition.menu_guides[id].entry; })
+            : [state.definition.entry, state.definition.menu_guide && state.definition.menu_guide.entry];
+        entries.forEach(function (entry) {
             if (byId[entry] && depth[entry] == null) { depth[entry] = 0; queue.push(entry); }
         });
         for (var index = 0; index < queue.length; index++) {

@@ -62,6 +62,7 @@
     /* POKI_STRIPE_STATE_END */
     var storeCatalogLoading = false;
     var storeCatalogLoaded = false;
+    var storeCatalogRetryAt = 0;
     var pendingCommands = [];
 
     var LEADER_REGIONS = {

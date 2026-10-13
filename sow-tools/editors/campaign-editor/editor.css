@@ -91,6 +91,8 @@ body.logic-editor {
 #previewRoot { z-index: 4; }
 .sample-menu-screen { display: grid; justify-items: center; align-content: center; gap: 12px; width: min(100%, 460px); }
 .sample-menu-screen[hidden] { display: none; }
+.sample-menu-nav { position: absolute; z-index: 2; top: 12px; left: 50%; display: flex; gap: 6px; width: max-content; max-width: calc(100% - 24px); transform: translateX(-50%); }
+.sample-menu-nav button { min-width: 0; padding: 8px 10px; font-size: 10px; }
 .sample-menu-screen--campaign { grid-template-columns: 1fr; justify-items: stretch; padding: clamp(18px, 5cqw, 34px); border: 1px solid #c9ae7166; background: linear-gradient(135deg, #192326f2, #101719f5); box-shadow: 0 20px 55px #0009; }
 .sample-campaign-back { justify-self: start; min-width: 0 !important; padding: 8px 12px !important; }
 .sample-campaign-card { display: grid; gap: 10px; padding: 18px; border: 1px solid #ffffff20; background: #0b1114b8; }

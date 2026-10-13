@@ -31,6 +31,16 @@ pub struct RewardReceipt {
     pub leader_xp: u32,
     pub crowns: u64,
     pub laurels: u64,
+    /// Player level immediately before and after this receipt was applied.
+    /// Older receipts omit these fields and deserialize as `None`.
+    #[serde(default)]
+    pub level_before: Option<u32>,
+    #[serde(default)]
+    pub level_after: Option<u32>,
+    /// Last committed replay turn included when this player voluntarily left.
+    /// A later whole-match result must not replace this player's personal result.
+    #[serde(default)]
+    pub personal_closure_turn: Option<u64>,
     pub created_at: u64,
     /// Applied is written atomically with the balance update. Pending lives
     /// in the relay's durable participant/replay spool until the server accepts it.
@@ -43,6 +53,113 @@ pub struct RewardReceipt {
     /// Replay verification is independent of presentation and settlement.
     #[serde(default)]
     pub verification_status: Option<ReplayVerificationStatus>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MenuGuideStatus {
+    #[default]
+    Active,
+    Completed,
+    Skipped,
+}
+
+impl MenuGuideStatus {
+    pub fn is_terminal(self) -> bool {
+        matches!(self, Self::Completed | Self::Skipped)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct MenuGuideProgress {
+    #[serde(default)]
+    pub completed_steps: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub current_step: Option<String>,
+    #[serde(default)]
+    pub status: MenuGuideStatus,
+    #[serde(default)]
+    pub selected_leader: Option<String>,
+    /// First server-registered match that made this guide available.
+    /// Client progress writes cannot set or replace this value.
+    #[serde(default)]
+    pub source_match_id: Option<String>,
+}
+
+pub fn merge_menu_guide_progress(
+    saved: Option<&MenuGuideProgress>,
+    incoming: &MenuGuideProgress,
+) -> MenuGuideProgress {
+    let mut merged = incoming.clone();
+    if let Some(saved) = saved {
+        merged.completed_steps.extend(saved.completed_steps.iter().cloned());
+        if !incoming.completed_steps.is_superset(&saved.completed_steps) || saved.status.is_terminal() {
+            merged.current_step = saved.current_step.clone();
+        }
+        if saved.status.is_terminal() {
+            merged.status = saved.status;
+        }
+        if merged.selected_leader.is_none() {
+            merged.selected_leader = saved.selected_leader.clone();
+        }
+        merged.source_match_id = saved.source_match_id.clone();
+    } else {
+        // Enrollment is server-owned; a client cannot create guide eligibility.
+        merged.source_match_id = None;
+    }
+    merged
+}
+
+pub fn validate_menu_guide_progress(
+    guide_id: &str,
+    progress: &MenuGuideProgress,
+) -> Result<(), String> {
+    let catalog: serde_json::Value = serde_json::from_str(include_str!(
+        "../../assets/guides/menu.triggers.json"
+    ))
+    .map_err(|error| format!("menu guide definitions are invalid: {error}"))?;
+    let guide = catalog
+        .get("menu_guides")
+        .and_then(|guides| guides.get(guide_id))
+        .ok_or_else(|| "unknown menu guide".to_string())?;
+    let step_ids = guide
+        .get("step_ids")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "menu guide step definitions are invalid".to_string())?;
+    let steps = step_ids
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    if steps.len() != step_ids.len()
+        || progress
+            .completed_steps
+            .iter()
+            .any(|step| !steps.contains(step.as_str()))
+    {
+        return Err("unknown menu guide step".to_string());
+    }
+    if progress.current_step.as_deref().is_some_and(|step| !steps.contains(step)) {
+        return Err("unknown current menu guide step".to_string());
+    }
+    if progress.status == MenuGuideStatus::Completed
+        && step_ids
+            .last()
+            .and_then(serde_json::Value::as_str)
+            .is_none_or(|end_step| !progress.completed_steps.contains(end_step))
+    {
+        return Err("completed menu guide must include its end step".to_string());
+    }
+    if guide_id != "welcome" && progress.selected_leader.is_some() {
+        return Err("selected_leader is only valid for the welcome guide".to_string());
+    }
+    if progress
+        .selected_leader
+        .as_deref()
+        .is_some_and(|leader| crate::commerce::leader_from_id(leader).is_none())
+    {
+        return Err("unknown selected leader".to_string());
+    }
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -92,6 +209,15 @@ pub struct MatchParticipantRecord {
     #[serde(default)]
     pub laurels: u64,
     pub rating_delta: Option<i16>,
+    /// Last committed replay turn included when this player voluntarily left.
+    #[serde(default)]
+    pub personal_closure_turn: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct MatchParticipantClosure {
+    pub account_id: String,
+    pub turn_number: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -138,6 +264,9 @@ pub struct VerifiedMatchResult {
     pub duration_seconds: u32,
     pub winner_player_id: Option<u16>,
     pub winning_team: Option<String>,
+    /// Set only by the verifier's personal-exit path.
+    #[serde(default)]
+    pub personal_closure_turn: Option<u64>,
     pub participants: Vec<VerifiedMatchParticipant>,
 }
 
@@ -389,4 +518,82 @@ pub fn tier_for_score(score: u16) -> (&'static str, Option<String>) {
         None
     };
     (tier, division)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        MenuGuideProgress, MenuGuideStatus, RewardReceipt, merge_menu_guide_progress,
+        validate_menu_guide_progress,
+    };
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn menu_guide_progress_uses_published_ids_and_keeps_terminal_state() {
+        let saved = MenuGuideProgress {
+            completed_steps: BTreeSet::from(["welcome_name".to_string()]),
+            status: MenuGuideStatus::Completed,
+            selected_leader: Some("boudica".to_string()),
+            source_match_id: None,
+            current_step: Some("welcome_heroes".to_string()),
+        };
+        let stale = MenuGuideProgress {
+            completed_steps: BTreeSet::from(["welcome_heroes".to_string()]),
+            status: MenuGuideStatus::Active,
+            selected_leader: None,
+            source_match_id: Some("client-fake-match".to_string()),
+            current_step: Some("welcome_name".to_string()),
+        };
+        let merged = merge_menu_guide_progress(Some(&saved), &stale);
+        assert_eq!(merged.status, MenuGuideStatus::Completed);
+        assert_eq!(merged.completed_steps.len(), 2);
+        assert_eq!(merged.selected_leader.as_deref(), Some("boudica"));
+        assert_eq!(merged.source_match_id, None);
+
+        let saved_first_match = MenuGuideProgress {
+            source_match_id: Some("first-match".to_string()),
+            ..Default::default()
+        };
+        let stale_first_match = MenuGuideProgress {
+            source_match_id: Some("later-client-match".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            merge_menu_guide_progress(Some(&saved_first_match), &stale_first_match)
+                .source_match_id
+                .as_deref(),
+            Some("first-match")
+        );
+
+        let invalid = MenuGuideProgress {
+            completed_steps: BTreeSet::from(["unknown".to_string()]),
+            ..Default::default()
+        };
+        assert!(validate_menu_guide_progress("welcome", &invalid).is_err());
+        assert!(validate_menu_guide_progress("unknown", &MenuGuideProgress::default()).is_err());
+
+        let unfinished = MenuGuideProgress {
+            completed_steps: BTreeSet::from(["welcome_name".to_string()]),
+            status: MenuGuideStatus::Completed,
+            ..Default::default()
+        };
+        assert!(validate_menu_guide_progress("welcome", &unfinished).is_err());
+        let finished = MenuGuideProgress {
+            completed_steps: BTreeSet::from(["welcome_complete".to_string()]),
+            status: MenuGuideStatus::Completed,
+            ..Default::default()
+        };
+        assert!(validate_menu_guide_progress("welcome", &finished).is_ok());
+    }
+
+    #[test]
+    fn old_reward_receipts_load_without_level_or_closure_fields() {
+        let receipt: RewardReceipt = serde_json::from_str(
+            r#"{"id":"m1","match_id":"m1","xp":20,"leader_xp":20,"crowns":25,"laurels":0,"created_at":1}"#,
+        )
+        .unwrap();
+        assert_eq!(receipt.level_before, None);
+        assert_eq!(receipt.level_after, None);
+        assert_eq!(receipt.personal_closure_turn, None);
+    }
 }

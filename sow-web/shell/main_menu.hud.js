@@ -2890,8 +2890,7 @@
                 send("return_to_menu");
             } else if (cmd === "open_store") {
                 if (window.SOW_PORTAL === "poki" || window.SOW_PORTAL === "jest") return;
-                window.SOW_open_store_after_match = true;
-                send("return_to_menu");
+                send("return_to_menu", { destination: "store" });
             } else if (cmd === "continue_observing") {
                 send("continue_observing");
             }

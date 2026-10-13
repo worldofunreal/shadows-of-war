@@ -459,6 +459,7 @@
         state.error = null;
         purchaseIntent = { type: "leader", leaderId: offer.id };
         purchaseModal = { type: "leader", leaderId: offer.id, currency: currency, phase: "confirm", submitted: false };
+        menuOutcomeCounts.leader_purchase_prompt_opened = (menuOutcomeCounts.leader_purchase_prompt_opened || 0) + 1;
         render();
     }
 
@@ -767,7 +768,7 @@
     }
 
     function loadStoreCatalog() {
-        if (storeCatalogLoading || storeCatalogLoaded) return;
+        if (storeCatalogLoading || storeCatalogLoaded || Date.now() < storeCatalogRetryAt) return;
         storeCatalogLoading = true;
         fetch(profileApi("/store/catalog"), { headers: { "Accept": "application/json" } })
             .then(function (response) {
@@ -797,8 +798,11 @@
                     crowns: current.crowns == null ? 0 : current.crowns
                 });
                 storeCatalogLoaded = true;
-                render();
             })
-            .catch(function () { storeCatalogLoaded = true; })
-            .finally(function () { storeCatalogLoading = false; });
+            .catch(function (error) {
+                storeCatalogLoaded = false;
+                storeCatalogRetryAt = Date.now() + 2000;
+                console.warn("[store] catalog unavailable", error);
+            })
+            .finally(function () { storeCatalogLoading = false; render(); });
     }

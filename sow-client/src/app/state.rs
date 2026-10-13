@@ -197,6 +197,7 @@ impl LoadTelemetry {
 
 pub struct NetState {
     pub client: Option<sow_net::client::SowClient>,
+    pub(crate) exiting_relay: Option<ExitRelayConnection>,
     pub connect_tx: WakeSender<Result<sow_net::client::SowClient, String>>,
     pub connect_rx: crossbeam_channel::Receiver<Result<sow_net::client::SowClient, String>>,
     pub ws_url: String,
@@ -214,6 +215,25 @@ pub struct NetState {
     /// Set when the orchestrator handed us off to a game relay (Start carried
     /// relay_host). The loader uses this instead of string-matching ws_url.
     pub relay_handoff_done: bool,
+}
+
+/// Private reconnect capability for completing an explicit exit. Never exposed
+/// in SOW_MENU_STATE; the server profile is the settlement acknowledgement.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ExitRelayProof {
+    pub url: String,
+    pub lobby_id: u64,
+    pub player_id: u16,
+    pub ticket: String,
+}
+
+pub(crate) struct ExitRelayConnection {
+    pub client: Option<sow_net::client::SowClient>,
+    pub proof: ExitRelayProof,
+    pub connect_tx: WakeSender<Result<sow_net::client::SowClient, String>>,
+    pub connect_rx: crossbeam_channel::Receiver<Result<sow_net::client::SowClient, String>>,
+    pub connecting: bool,
+    pub retry_at: Instant,
 }
 
 pub struct SimState {
@@ -824,6 +844,19 @@ pub(crate) struct ExitRewardWait {
     pub requires_verification: bool,
 }
 
+/// The durable handoff consumed by main_menu.flow.js. An empty receipt list
+/// never means a reward-bearing return has finished.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct MenuReturnContext {
+    pub account_id: Option<String>,
+    pub cycle_id: u32,
+    pub source: String,
+    pub match_id: Option<String>,
+    pub receipt_ids: Vec<String>,
+    pub status: String,
+    pub requested_screen: Option<String>,
+}
+
 pub struct SowApp {
     pub gfx: GraphicsState,
     pub net: NetState,
@@ -844,6 +877,7 @@ pub struct SowApp {
     pub progress: crate::player_progress::PlayerProgress,
     /// The ExitGame loader stays up until this account's server receipt is ready.
     pub(crate) exit_reward_wait: Option<ExitRewardWait>,
+    pub(crate) menu_return: Option<MenuReturnContext>,
     pub progress_account_id: Option<String>,
     pub profile_account_id: Option<String>,
     pub progress_provider: String,
@@ -854,6 +888,12 @@ pub struct SowApp {
     /// Last requested name, kept until the canonical profile acknowledges it.
     pub pending_display_name: Option<String>,
     pub display_name_save_request_id: Option<u64>,
+    pub(crate) name_save_revision: u64,
+    pub(crate) leader_selection_revision: u64,
+    pub(crate) purchase_revision: u64,
+    pub(crate) quick_match_revision: u64,
+    pub(crate) menu_guide_save_revision: u64,
+    pub(crate) menu_guide_save_pending: bool,
     /// Prevents a profile refresh from racing an in-flight rename.
     pub profile_request_in_flight: bool,
     pub profile_refresh_pending: bool,

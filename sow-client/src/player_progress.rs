@@ -75,6 +75,8 @@ pub struct PlayerProgress {
     #[serde(default)]
     pub reward_receipts: std::collections::BTreeMap<String, sow_data::profile::RewardReceipt>,
     #[serde(default)]
+    pub menu_guides: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>,
+    #[serde(default)]
     pub unlocked_achievements: std::collections::BTreeSet<String>,
 }
 
@@ -149,6 +151,7 @@ pub enum DbEvent {
         operation: String,
     },
     StoreActionFailed {
+        account_id: String,
         operation: String,
         status: Option<u16>,
     },
@@ -260,6 +263,7 @@ impl PlayerProgress {
         let local_episodes = std::mem::take(&mut self.completed_episodes);
         let local_receipts = std::mem::take(&mut self.reward_receipts);
         let local_achievements = std::mem::take(&mut self.unlocked_achievements);
+        let local_guides = std::mem::take(&mut self.menu_guides);
         if cloud.has_history() || !self.has_history() {
             *self = cloud;
         }
@@ -271,6 +275,21 @@ impl PlayerProgress {
             self.reward_receipts.entry(id).or_insert(receipt);
         }
         self.unlocked_achievements.extend(local_achievements);
+        let confirmed_guides = std::mem::replace(&mut self.menu_guides, local_guides);
+        self.merge_menu_guides(confirmed_guides);
+    }
+
+    pub(crate) fn merge_menu_guides(&mut self, incoming: std::collections::BTreeMap<String, sow_data::profile::MenuGuideProgress>) {
+        for (id, progress) in incoming {
+            let saved = self.menu_guides.get(&id);
+            let source_match_id = progress.source_match_id.clone()
+                .or_else(|| saved.and_then(|record| record.source_match_id.clone()));
+            let mut merged = sow_data::profile::merge_menu_guide_progress(saved, &progress);
+            // These snapshots came from the server; the shared write merger
+            // deliberately strips this field from untrusted client requests.
+            merged.source_match_id = source_match_id;
+            self.menu_guides.insert(id, merged);
+        }
     }
 
     pub fn replace_account_profile(&mut self, cloud: PlayerProgress) {

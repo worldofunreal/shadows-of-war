@@ -7,6 +7,9 @@ const vm = require("node:vm");
 const shell = __dirname;
 const coreSource = fs.readFileSync(path.join(shell, "main_menu.core.js"), "utf8");
 const shellSource = fs.readFileSync(path.join(shell, "main_menu.shell.js"), "utf8");
+const menuGuideDefinition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/guides/menu.triggers.json"), "utf8"));
+const menuFlowApi = require(path.join(shell, "main_menu.flow.js"));
+const campaignRuntime = require(path.join(shell, "sow-campaign.js"));
 const portalSource = fs.readFileSync(path.join(shell, "sdk/store_portals.js"), "utf8");
 const storeSource = fs.readFileSync(path.join(shell, "main_menu.store.js"), "utf8");
 const heroesSource = fs.readFileSync(path.join(shell, "main_menu.heroes.js"), "utf8");
@@ -31,7 +34,6 @@ const webCatalogEn = fs.readFileSync(path.join(shell, "../../sow-i18n/strings/en
 const campaignEngine = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
 const campaignView = fs.readFileSync(path.join(shell, "sow-campaign-view.js"), "utf8");
 const storyCss = fs.readFileSync(path.join(shell, "main_menu.tutorial.css"), "utf8");
-const boudicaTriggers = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
 const campaignEditor = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/editor.js"), "utf8");
 const localeRuntime = fs.readFileSync(path.join(shell, "sow-i18n.js"), "utf8");
 const campaignEditorServer = fs.readFileSync(path.join(shell, "../../sow-tools/editors/campaign-editor/server.mjs"), "utf8");
@@ -116,6 +118,194 @@ function renderSettingsBody(source, endMarker) {
     assert.notEqual(start, -1);
     assert.notEqual(end, -1);
     return source.slice(start, end);
+}
+
+function makeMenuGuideHarness(storage = new Map()) {
+    const calls = [], renderedSteps = [], saveTimers = [];
+    let clockNow = Date.now();
+    let destroyedViews = 0;
+    let chooseMenuGuideStep = null;
+    class FakeElement {
+        constructor() {
+            this.hidden = false;
+            this.isConnected = false;
+            this.dataset = {};
+            this.style = {};
+            const classes = new Set();
+            this.classList = {
+                add: (...names) => names.forEach(name => classes.add(name)),
+                remove: (...names) => names.forEach(name => classes.delete(name)),
+                contains: name => classes.has(name),
+                toggle: (name, force) => force ? classes.add(name) : classes.delete(name)
+            };
+        }
+        appendChild(child) { child.isConnected = true; return child; }
+        contains() { return false; }
+        querySelector() { return null; }
+        querySelectorAll() { return []; }
+        addEventListener() {}
+        removeEventListener() {}
+    }
+    const body = new FakeElement();
+    const document = {
+        body,
+        documentElement: { lang: "en", dir: "ltr", dataset: {} },
+        visibilityState: "visible",
+        getElementById: () => null,
+        createElement: () => new FakeElement(),
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        addEventListener() {}
+    };
+    const window = {
+        SOW_ASSETS_URL: "/assets",
+        SOWCampaign: campaignRuntime,
+        SOWCampaignView: {
+            mount(_root, options) {
+                chooseMenuGuideStep = options && options.onChoice;
+                return {
+                    render(model) { if (model && model.step) renderedSteps.push(model.step.id); },
+                    destroy() { destroyedViews++; chooseMenuGuideStep = null; }
+                };
+            }
+        },
+        SOW_menu_flow: menuFlowApi.create(),
+        localStorage: {
+            getItem: key => storage.has(key) ? storage.get(key) : null,
+            setItem: (key, value) => storage.set(key, String(value)),
+            removeItem: key => storage.delete(key)
+        },
+        SOW_menu_command: payload => calls.push(JSON.parse(payload)),
+        setTimeout: callback => { saveTimers.push(callback); return saveTimers.length; }, clearTimeout() {},
+        addEventListener() {}
+    };
+    body.appendChild = child => { child.isConnected = true; return child; };
+    const context = {
+        document,
+        window,
+        Date: class extends Date { static now() { return clockNow; } },
+        fetch: async () => ({ ok: true, json: async () => menuGuideDefinition }),
+        console: { error: console.error }
+    };
+    vm.runInNewContext(tutorial, context, { filename: "main_menu.tutorial.js" });
+    return {
+        flushSaveRetries() { clockNow += 2500; saveTimers.splice(0).forEach(callback => callback()); },
+        calls, renderedSteps, storage, flow: window.SOW_menu_flow,
+        guide: window.SOW_menu_guide,
+        choose: choice => { if (chooseMenuGuideStep) chooseMenuGuideStep(choice); },
+        window, document,
+        get destroyedViews() { return destroyedViews; }
+    };
+}
+
+function makeMenuShellRewardHarness(guideHarness, initialState, initialScreen = "home") {
+    const progressionStart = shellSource.indexOf("    function progressionFromState()");
+    const progressionEnd = shellSource.indexOf("    function animateProgressionTo(", progressionStart);
+    const presentationStart = shellSource.indexOf("    function runRewardPresentation(receipts)");
+    const presentationEnd = shellSource.indexOf("    function maybePresentRewards()", presentationStart);
+    const flowEnd = shellSource.indexOf("    function updateDynamic()", presentationEnd);
+    assert.ok(progressionStart >= 0 && progressionEnd > progressionStart
+        && presentationStart >= 0 && presentationEnd > presentationStart && flowEnd > presentationEnd,
+    "the shell reward presenter and guide handoff are present");
+    const rewardStageSets = [], rewardStageRuns = [], rewardPulses = [], acknowledgements = [], logs = [];
+    let holdReveal = false, releaseReveal = null;
+    const context = {
+        window: Object.assign(guideHarness.window, { SOW_PORTAL: "site" }),
+        document: { visibilityState: "visible" },
+        Object, Number, Array, Math,
+        state: initialState,
+        rewardStageSets, rewardStageRuns, rewardPulses, acknowledgements, logs,
+        screen: initialScreen,
+        menuFlow: guideHarness.flow,
+        rewardPresentationReady: true,
+        lastMenuFlowPhase: null,
+        holdPresentation() { holdReveal = true; },
+        releasePresentation() { holdReveal = false; if (releaseReveal) releaseReveal(true); releaseReveal = null; },
+        rewardAnimationRunning: false,
+        rewardAnimationToken: 0,
+        rewardAnimationShown: new Set(),
+        displayedProgression: null,
+        canonicalProgression: null,
+        activeRewardStage: null,
+        root: { hidden: false, querySelector: () => null },
+        menuOutcomeCounts: Object.create(null),
+        menuOutcomeReady: Object.create(null),
+        profileAccountId: null,
+        profileTab: "overview",
+        profileHistory: [],
+        purchaseModal: null,
+        purchasedLeaderId: null,
+        tempSelectedLeader: null,
+        storeCatalogLoaded: false,
+        storeCatalogLoading: false,
+        storeOpen: false,
+        profileEntry: null,
+        profileDataIsComplete: false,
+        currentScreen: () => context.screen,
+        activeProfileEntry: () => context.profileEntry,
+        profileDataComplete: () => context.profileDataIsComplete,
+        SOW_t: key => key,
+        createRewardStage(stages) {
+            rewardStageSets.push(stages.map(stage => ({ kind: stage.kind, amount: stage.amount, level: stage.level })));
+            const layer = { classList: { add() {} } };
+            context.activeRewardStage = layer;
+            return stages.map(stage => ({ stage, card: { style: {} }, amount: { textContent: "" } }));
+        },
+        revealRewardAmounts(items) {
+            if (!holdReveal) return Promise.resolve(true);
+            return new Promise(resolve => { releaseReveal = resolve; });
+        },
+        flyRewardCard(item) {
+            rewardStageRuns.push({ kind: item.stage.kind, level: item.stage.level });
+            return Promise.resolve(true);
+        },
+        pulseRewardCounter(selector, levelUp) {
+            rewardPulses.push({ selector, levelUp, level: context.displayedProgression && context.displayedProgression.level });
+        },
+        removeRewardStage() { context.activeRewardStage = null; },
+        acknowledgeShownReceipts(accountId) { acknowledgements.push(accountId); },
+        console: { info(...args) { logs.push(args); }, error() {} },
+        Date,
+        Promise,
+        Set,
+        render: () => { context.screen = context.storeOpen ? "store" : context.screen; }
+    };
+    const scheduleSave = context.window.setTimeout;
+    context.window.setTimeout = (callback, delay) => { if (Number(delay) >= 2000) return scheduleSave(callback); callback(); return 1; };
+    context.window.clearTimeout = () => {};
+    context.window.matchMedia = () => ({ matches: false });
+    context.window.SOW_menu_guide = guideHarness.guide;
+    context.window.SOW_PORTAL = "site";
+    context.console = { info(...args) { logs.push(args); }, error() {} };
+    const rewardSource = shellSource.slice(progressionStart, progressionEnd)
+        + shellSource.slice(presentationStart, presentationEnd)
+        + shellSource.slice(presentationEnd, flowEnd);
+    const animationShim = "function animateProgressionTo(target, duration, token, levelOverride) { var values = Object.assign({}, target); if (levelOverride != null) values.level = levelOverride; writeProgression(values); return Promise.resolve(true); }\n";
+    vm.runInNewContext(rewardSource + animationShim +
+        "this.menuRewardApi = { maybePresentRewards, menuGuideFacts, setState(value) { state = value; }, setOutcome(name, value) { menuOutcomeCounts[name] = value; }, setPurchasePrompt(id, phase) { purchaseModal = id ? { type: 'leader', leaderId: id, phase: phase || 'confirm' } : null; }, setPurchasedLeader(id) { purchasedLeaderId = id; }, setPreviewLeader(id) { tempSelectedLeader = id; }, setRunning(value) { rewardAnimationRunning = value; }, setScreen(value) { screen = value; storeOpen = false; }, getScreen() { return screen; }, setProfile(value) { profileAccountId = value.accountId; profileTab = value.tab || 'overview'; profileEntry = value.entry || null; profileHistory = value.history || []; profileDataIsComplete = value.complete === true; }, setStoreReady(loaded, loading) { storeCatalogLoaded = loaded; storeCatalogLoading = loading; }, holdPresentation, releasePresentation, get phase() { return menuFlow.phase(); }, get shownReceipts() { return Array.from(rewardAnimationShown); }, get pendingReceipts() { return pendingRewardReceipts().map(function (receipt) { return receipt.id; }); }, get progression() { return displayedProgression; }, get facts() { return menuGuideFacts(); }, rewardStageSets, rewardStageRuns, rewardPulses, acknowledgements, logs };",
+    context);
+    return context.menuRewardApi;
+}
+
+function confirmedMenuReturn(overrides = {}) {
+    const receipt = { id: "tutorial", match_id: "tutorial", status: "applied", level_before: 1, level_after: 2 };
+    const state = {
+        phase: "MainMenu",
+        account_id: "account-a",
+        loader_cycle_id: "cycle-1",
+        profile_ready: true,
+        menu_return: {
+            account_id: "account-a", cycle_id: "cycle-1", source: "tutorial", match_id: "tutorial",
+            receipt_ids: ["tutorial"], status: "confirmed", requested_screen: null
+        },
+        reward_receipts: [receipt],
+        menu_guides: { welcome: { completed_steps: [], status: "active", selected_leader: null } },
+        selected_leader: "caesar",
+        leaders: [{ id: "caesar", available: true }, { id: "boudica", available: true }],
+        menu_guide_save_revision: 0,
+        menu_guide_save_pending: false
+    };
+    return { state: Object.assign(state, overrides), receipt };
 }
 
 test("public landing keeps the video hero, interactive leader roster, community links, and FAQ", () => {
@@ -436,9 +626,9 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.doesNotMatch(progressSource, /submit_online_stats|SubmitMatchReport|SubmitStatsWithLeader/);
     assert.doesNotMatch(progressSource, /capture_online_reward_preview|preview_participation_laurels/);
     assert.doesNotMatch(progressSource, /capture_tutorial_reward_preview|store_exit_reward_preview/);
-    assert.match(sessionSource, /pending_reward_receipt_ids\.contains\("tutorial"\)[\s\S]*begin_reward_profile_sync\(Some\(receipt_id\), false\)/);
+    assert.match(sessionSource, /tutorial_reward_id[\s\S]*begin_reward_profile_sync\(Some\(receipt_id\), !was_offline\)/);
     assert.doesNotMatch(shellSource, /priorTarget|preview\["base_"/);
-    assert.match(sessionSource, /begin_reward_profile_sync\(reward_match_id\.map\(\|id\| id\.to_string\(\)\), true\)/);
+    assert.match(sessionSource, /reward_match_id\.map\(\|id\| id\.to_string\(\)\)[\s\S]*begin_reward_profile_sync\(Some\(receipt_id\), !was_offline\)/);
     assert.doesNotMatch(progressSource, /reward_cache/);
     assert.match(dataDbSource, /pub async fn record_match_participation/);
     assert.match(dataDbSource, /reward_receipts\.contains_key/);
@@ -449,7 +639,7 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     assert.match(shellSource, /for \(var level = startLevel \+ 1; level <= target\.level; level\+\+\)/);
     assert.match(shellSource, /kind: "level",[\s\S]*selector: "\[data-progression-level-value\]"/);
     assert.match(shellSource, /SOW_t\("profile\.level", \{ level: stage\.level \}\)/);
-    assert.match(shellSource, /stage\.kind === "xp" && levelStages\.length[\s\S]*animateProgressionTo\(nextValues, 380, token, heldLevel\)/);
+    assert.match(shellSource, /var heldLevel = levelStages\.length \? oldLevel : null;[\s\S]*animateProgressionTo\(nextValues, 380, token, heldLevel\)/);
     assert.match(shellSource, /layer\.addEventListener\("click", function \(event\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*skip\(\);\s*\}\);/);
     assert.match(shellSource, /createRewardStage\(stages, function \(\) \{ finish\(true\); \}\)/);
     assert.match(shellSource, /revealRewardAmounts\(items, token\)/);
@@ -478,20 +668,365 @@ test("match rewards present in the main menu, while endgame keeps only match sta
     // "heroes featured art follows the panel shape, not the device name".
 });
 
-test("tutorial rewards and level animations finish before the lobby follow-up", () => {
-    assert.equal(boudicaTriggers.menu_guide.entry, "boudica_return_lobby");
-    const lobbyGuide = boudicaTriggers.steps.find((step) => step.id === boudicaTriggers.menu_guide.entry);
-    assert.equal(lobbyGuide.guide.target, "menu_lobby");
-    assert.match(tutorial, /pendingMenuGuide = \{ episodeId: runtime\.episodeId \}/);
-    assert.match(tutorial, /window\.addEventListener\("sow:campaign-menu-guide-ready", startMenuGuide\)/);
+test("menu return waits for its exact server receipt and finished presentation", () => {
+    const flow = menuFlowApi.create();
+    const { state, receipt } = confirmedMenuReturn();
+    const view = { visible: true, ready: true, running: false, receipts: [], screen: "home" };
+    const attempt = candidate => flow.update(candidate, view);
 
-    const start = shellSource.indexOf("    function maybePresentRewards()");
-    const end = shellSource.indexOf("    function updateDynamic()", start);
-    assert.ok(start >= 0 && end > start);
-    const presentationGate = shellSource.slice(start, end);
-    assert.match(presentationGate,
-        /if \(pending\.length\) \{\s*runRewardPresentation\(pending\);\s*return;\s*\}[\s\S]*if \(menuGuideReturnPending\) \{[\s\S]*dispatchEvent\(new CustomEvent\("sow:campaign-menu-guide-ready"\)\)/);
-    assert.match(shellSource, /ids\.forEach\(function \(id\) \{ rewardAnimationShown\.add\(id\); \}\)[\s\S]*maybePresentRewards\(\);/);
+    assert.equal(attempt({ ...state, menu_return: { ...state.menu_return, status: "waiting" } }), "waiting");
+    assert.equal(attempt({ ...state, menu_return: { ...state.menu_return, status: "error" } }), "waiting");
+    assert.equal(attempt({ ...state, menu_return: { ...state.menu_return, account_id: "account-b" } }), "waiting");
+    assert.equal(attempt({ ...state, menu_return: { ...state.menu_return, cycle_id: "cycle-old" } }), "waiting");
+    assert.equal(attempt({ ...state, menu_return: { ...state.menu_return, receipt_ids: [] } }), "waiting");
+    assert.equal(attempt({ ...state, reward_receipts: [] }), "waiting", "a confirmed response without its receipt stays blocked");
+    assert.equal(attempt({ ...state, reward_receipts: [{ ...receipt, match_id: "other-match" }] }), "waiting");
+    assert.equal(attempt({ ...state, reward_receipts: [{ ...receipt, status: "pending" }] }), "waiting");
+
+    assert.equal(flow.update(state, { ...view, ready: false }), "waiting");
+    assert.equal(flow.update(state, { ...view, visible: false }), "waiting");
+    assert.equal(flow.update({ ...state, phase: "ExitLoader" }, view), "waiting");
+    assert.equal(flow.update(state, { ...view, receipts: [receipt] }), "rewards", "late receipt starts presentation");
+    assert.equal(flow.canPresent(), true);
+    assert.equal(flow.canGuide(), false);
+    assert.equal(flow.update(state, { ...view, running: true }), "rewards", "guide stays held until animation completion");
+    assert.equal(flow.update(state, view), "guide");
+    assert.equal(flow.canGuide(), true);
+
+    const noReward = { ...state, menu_return: { ...state.menu_return, status: "not_applicable", receipt_ids: [] }, reward_receipts: [] };
+    assert.equal(flow.update(noReward, view), "guide", "only an explicit no-reward result releases the gate");
+    assert.equal(flow.update({ ...state, menu_return: undefined, profile_ready: false }, view), "waiting");
+    assert.equal(flow.update({ ...state, menu_return: undefined, profile_ready: true }, view), "guide");
+
+    const storeFlow = menuFlowApi.create();
+    const storeReturn = {
+        ...state,
+        menu_return: { ...state.menu_return, requested_screen: "store" }
+    };
+    assert.equal(storeFlow.update(storeReturn, { ...view, receipts: [receipt] }), "rewards");
+    assert.equal(storeFlow.update(storeReturn, view), "destination");
+    assert.equal(storeFlow.takeDestination(), "store");
+    assert.equal(storeFlow.takeDestination(), null, "a destination is delivered once");
+    assert.equal(storeFlow.update(storeReturn, { ...view, screen: "store" }), "destination");
+    assert.equal(storeFlow.canGuide(), false, "a selected screen holds the guide until home is ready");
+    assert.equal(storeFlow.update(storeReturn, view), "guide");
+
+    const nextReturn = {
+        ...state,
+        loader_cycle_id: "cycle-2",
+        menu_return: { ...state.menu_return, cycle_id: "cycle-2", source: "multiplayer", match_id: "match-2", receipt_ids: ["match-2"], requested_screen: null },
+        reward_receipts: [{ id: "match-2", match_id: "match-2", status: "applied", level_before: 2, level_after: 4 }]
+    };
+    assert.equal(storeFlow.update(nextReturn, { ...view, receipts: nextReturn.reward_receipts }), "rewards", "a later match gets a new return cycle");
+    assert.equal(storeFlow.update(nextReturn, view), "guide");
+});
+
+test("the shell presents only settled receipts and accepts a final rejected verification", () => {
+    const { state } = confirmedMenuReturn();
+    state.menu_return = undefined;
+    state.reward_receipts = [
+        { id: "tutorial", match_id: "tutorial", status: "applied" },
+        { id: "verified", match_id: "match-v", status: "applied", verification_status: "verified" },
+        { id: "rejected", match_id: "match-r", status: "applied", verification_status: "rejected" },
+        { id: "pending-verified", match_id: "match-pv", status: "pending", verification_status: "verified" },
+        { id: "pending-rejected", match_id: "match-pr", status: "pending", verification_status: "rejected" },
+        { id: "presented", match_id: "match-old", status: "presented", verification_status: "verified" }
+    ];
+    const shell = makeMenuShellRewardHarness(makeMenuGuideHarness(), state);
+    assert.deepEqual(Array.from(shell.pendingReceipts), ["tutorial", "verified", "rejected"]);
+});
+
+test("menu return shows every server receipt level before releasing its guide", async () => {
+    const harness = makeMenuGuideHarness();
+    const { state: baseState, receipt: baseReceipt } = confirmedMenuReturn();
+    const receipt = { ...baseReceipt, xp: 350, crowns: 25, laurels: 3, level_after: 4 };
+    const state = { ...baseState, xp: 350, level: 4, crowns: 25, laurels: 3, reward_receipts: [receipt] };
+    const shell = makeMenuShellRewardHarness(harness, { ...state, menu_return: { ...state.menu_return, status: "waiting" } });
+    shell.holdPresentation();
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(harness.renderedSteps, [], "waiting for the server cannot release the hand guide");
+    assert.deepEqual(shell.rewardStageSets, [], "the shell does not animate an unconfirmed local guess");
+
+    shell.setState(state);
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(shell.phase, "rewards");
+    assert.equal(shell.rewardStageSets.length, 1, "the real shell presenter created reward cards");
+    assert.deepEqual(Array.from(shell.rewardStageSets[0], stage => [stage.kind, stage.level]), [
+        ["xp", undefined], ["crowns", undefined], ["laurels", undefined], ["level", 2], ["level", 3], ["level", 4]
+    ]);
+    assert.deepEqual(harness.renderedSteps, [], "the guide stays paused while reward cards are on screen");
+    assert.deepEqual(shell.rewardStageRuns, [], "the first card waits for its reveal animation");
+
+    shell.releasePresentation();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(shell.rewardStageRuns.map(stage => [stage.kind, stage.level]), [
+        ["xp", undefined], ["crowns", undefined], ["laurels", undefined], ["level", 2], ["level", 3], ["level", 4]
+    ]);
+    assert.deepEqual(shell.rewardPulses.map(pulse => pulse.level), [1, 1, 1, 2, 3, 4],
+        "the level counter changes after currency cards, once for each earned level");
+    assert.deepEqual(Array.from(shell.shownReceipts), ["tutorial"]);
+    assert.equal(shell.phase, "guide", "only the completed reward presentation releases the guide");
+    assert.equal(harness.renderedSteps.at(-1), "welcome_name");
+
+    shell.setState({ ...state, name_save_pending: true, name_save_revision: 0 });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "welcome_name", "a rejected or pending name save does not advance");
+
+    shell.setState({ ...state, name_save_pending: false, name_save_revision: 1 });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "welcome_heroes", "the server-confirmed revision advances the guide");
+    assert.ok(harness.calls.some(call => call.type === "save_menu_guide_progress" && call.completed_steps.includes("welcome_name")));
+
+    harness.guide.pause();
+    const rendersBeforeResume = harness.renderedSteps.length;
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "welcome_heroes", "pausing and resuming preserves the current step");
+    assert.ok(harness.renderedSteps.length > rendersBeforeResume);
+
+    const reloaded = makeMenuGuideHarness(harness.storage);
+    const bootState = {
+        ...state, menu_return: undefined, profile_ready: true,
+        reward_receipts: [{ ...receipt, status: "presented", presented_at: 1 }]
+    };
+    const reloadedShell = makeMenuShellRewardHarness(reloaded, bootState);
+    reloadedShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(reloaded.renderedSteps.at(-1), "welcome_heroes", "reload resumes the saved server-confirmed step");
+
+    const otherAccount = makeMenuGuideHarness(harness.storage);
+    const otherState = { ...bootState, account_id: "account-b", reward_receipts: [] };
+    const otherAccountShell = makeMenuShellRewardHarness(otherAccount, otherState);
+    otherAccountShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(otherAccount.renderedSteps.at(-1), "welcome_name", "one account cannot inherit another account's saved step");
+});
+
+test("welcome teaches a different available hero before confirming it", async () => {
+    const { state } = confirmedMenuReturn();
+    state.menu_return = undefined; state.reward_receipts = [];
+    state.menu_guides.welcome = { status: "active", completed_steps: ["welcome_name"], current_step: "welcome_heroes" };
+    const harness = makeMenuGuideHarness(), shell = makeMenuShellRewardHarness(harness, state);
+    shell.maybePresentRewards(); await new Promise(resolve => setImmediate(resolve));
+    shell.setScreen("heroes"); shell.maybePresentRewards(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "welcome_owned_selection");
+    const nodes = ["caesar", "boudica", "locked"].map(id => ({ dataset: { leaderId: id }, getClientRects: () => [1] }));
+    assert.equal(campaignRuntime.resolveUiTarget("menu_alternate_leader_card", { querySelectorAll: () => nodes }, null,
+        { available_leader_ids: ["caesar", "boudica"], owned_leader_ids: ["caesar"], selected_leader: "caesar" }), nodes[1]);
+    shell.setPreviewLeader("boudica"); shell.setOutcome("leader_preview_selected", 1);
+    shell.maybePresentRewards(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "welcome_owned_confirm");
+    shell.setState({ ...state, selected_leader: "boudica", leader_selection_revision: 1 });
+    shell.setScreen("home"); shell.maybePresentRewards(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "welcome_reopen_heroes");
+});
+
+test("a saved menu step recovers navigation and the exact selected hero", () => {
+    const equip = menuGuideDefinition.steps.find(step => step.id === "welcome_equip");
+    const facts = { screen: "home", menu_guide_selected_leader: "boudica", preview_leader_id: "caesar" };
+    assert.equal(campaignRuntime.menuGuideControl(equip, facts).target, "menu_heroes");
+    assert.equal(campaignRuntime.menuGuideControl(equip, { ...facts, screen: "heroes" }).target, "menu_selected_leader_card");
+    assert.equal(campaignRuntime.menuGuideControl(equip, { ...facts, screen: "heroes", preview_leader_id: "boudica" }).target, "menu_leader_confirm");
+    const history = menuGuideDefinition.steps.find(step => step.id === "first_history");
+    assert.equal(campaignRuntime.menuGuideControl(history, facts).target, "menu_profile");
+});
+
+test("welcome purchase waits for the exact server delivery and equipped leader", async () => {
+    async function atPurchaseConfirm() {
+        const { state } = confirmedMenuReturn();
+        state.menu_return = undefined;
+        state.reward_receipts = [];
+        state.store = { leaders: [{ id: "cleopatra", owned: false, cost_gems: 10 }] };
+        state.gems = 20;
+        state.menu_guides = {
+            welcome: {
+                completed_steps: ["welcome_name", "welcome_heroes", "welcome_owned_selection", "welcome_owned_confirm", "welcome_reopen_heroes",
+                    "welcome_offer_selection", "welcome_purchase_choice", "welcome_offer"],
+                status: "active", selected_leader: "cleopatra"
+            }
+        };
+        const harness = makeMenuGuideHarness();
+        const shell = makeMenuShellRewardHarness(harness, state, "heroes");
+        shell.setPurchasePrompt("cleopatra");
+        shell.setOutcome("leader_purchase_prompt_opened", 1);
+        shell.maybePresentRewards();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(harness.renderedSteps.at(-1), "welcome_purchase_confirm");
+        return { state, harness, shell };
+    }
+
+    const failed = await atPurchaseConfirm();
+    failed.shell.setPurchasePrompt(null);
+    failed.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(failed.harness.renderedSteps.at(-1), "welcome_purchase_confirm",
+        "a dismissed prompt or failed request without a server revision leaves the step incomplete");
+
+    const cancelled = await atPurchaseConfirm();
+    cancelled.shell.setPurchasePrompt(null);
+    cancelled.shell.setOutcome("leader_purchase_cancelled", 1);
+    cancelled.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(cancelled.harness.renderedSteps.at(-1), "welcome_cancel_home",
+        "an explicit cancellation follows the no-purchase route");
+
+    const mismatch = await atPurchaseConfirm();
+    mismatch.shell.setPurchasePrompt("dido", "success");
+    mismatch.shell.setPurchasedLeader("dido");
+    mismatch.shell.setState({ ...mismatch.state, purchase_revision: 1 });
+    mismatch.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(mismatch.harness.renderedSteps.at(-1), "welcome_purchase_close",
+        "a successful purchase waits for the existing success modal to close");
+    mismatch.shell.setOutcome("leader_purchase_closed", 1);
+    mismatch.shell.setPurchasePrompt(null);
+    mismatch.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(mismatch.harness.renderedSteps.at(-1), "welcome_cancel_home",
+        "closing a different purchased hero follows the no-purchase route");
+
+    const spending = await atPurchaseConfirm();
+    spending.shell.setPurchasePrompt("cleopatra", "spending");
+    spending.shell.setPurchasedLeader("cleopatra");
+    spending.shell.setState({ ...spending.state, purchase_revision: 1 });
+    spending.shell.maybePresentRewards(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(spending.harness.renderedSteps.at(-1), "welcome_purchase_confirm", "the hand hides while the existing purchase animation runs");
+    assert.ok(spending.harness.destroyedViews > 0);
+    spending.shell.setPurchasePrompt("cleopatra", "success");
+    spending.shell.maybePresentRewards(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(spending.harness.renderedSteps.at(-1), "welcome_purchase_close");
+
+    const success = await atPurchaseConfirm();
+    success.shell.setPurchasePrompt("cleopatra", "success");
+    success.shell.setPurchasedLeader("cleopatra");
+    success.shell.setState({ ...success.state, purchase_revision: 1 });
+    success.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(success.harness.renderedSteps.at(-1), "welcome_purchase_close");
+
+    success.shell.setOutcome("leader_purchase_closed", 1);
+    success.shell.setPurchasePrompt(null);
+    success.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(success.harness.renderedSteps.at(-1), "welcome_equip",
+        "the exact purchased offer reaches equip only after the success modal closes");
+
+    success.shell.setState({
+        ...success.state, purchase_revision: 1, leader_selection_revision: 1, selected_leader: "caesar",
+        store: { leaders: [{ id: "cleopatra", owned: true, cost_gems: 10 }] }
+    });
+    success.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(success.harness.renderedSteps.at(-1), "welcome_equip",
+        "confirming a different owned leader cannot satisfy the purchased leader step");
+
+    success.shell.setState({
+        ...success.state, purchase_revision: 1, leader_selection_revision: 2, selected_leader: "cleopatra",
+        store: { leaders: [{ id: "cleopatra", owned: true, cost_gems: 10 }] }
+    });
+    success.shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(success.harness.renderedSteps.at(-1), "welcome_home",
+        "the guide advances only after the purchased leader is equipped");
+
+    const recoveredState = {
+        ...success.state, selected_leader: "cleopatra", purchase_revision: 1,
+        store: { leaders: [{ id: "cleopatra", owned: true, cost_gems: 10 }] },
+        menu_guides: {
+            welcome: {
+                completed_steps: ["welcome_name", "welcome_heroes", "welcome_owned_selection", "welcome_owned_confirm", "welcome_reopen_heroes",
+                    "welcome_offer_selection", "welcome_purchase_choice", "welcome_offer", "welcome_purchase_confirm"],
+                status: "active", selected_leader: "cleopatra"
+            }
+        }
+    };
+    const recoveredGuide = makeMenuGuideHarness(new Map());
+    const recoveredShell = makeMenuShellRewardHarness(recoveredGuide, recoveredState, "heroes");
+    recoveredShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(recoveredGuide.renderedSteps.at(-1), "welcome_equip",
+        "an exact owned offer resumes at equip without waiting for a closed success modal");
+});
+
+test("welcome guide routes unavailable offers and an explicit skip through the shared machine", async () => {
+    const { state: noOfferState } = confirmedMenuReturn();
+    noOfferState.menu_return = undefined;
+    noOfferState.reward_receipts = [];
+    noOfferState.store = { leaders: [] };
+    noOfferState.gems = 0;
+    noOfferState.menu_guides = {
+        welcome: {
+            completed_steps: ["welcome_name", "welcome_heroes", "welcome_owned_selection", "welcome_owned_confirm"],
+            status: "active", selected_leader: null
+        }
+    };
+    const noOfferGuide = makeMenuGuideHarness();
+    const noOfferShell = makeMenuShellRewardHarness(noOfferGuide, noOfferState);
+    noOfferShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(noOfferGuide.renderedSteps.at(-1), "welcome_reopen_heroes");
+    noOfferShell.setScreen("heroes");
+    noOfferShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(noOfferGuide.renderedSteps.at(-1), "welcome_no_offer_home", "no affordable offer takes the explicit no-offer route");
+
+    const { state: skipState } = confirmedMenuReturn();
+    skipState.menu_return = undefined;
+    skipState.reward_receipts = [];
+    skipState.store = { leaders: [{ id: "cleopatra", owned: false, cost_gems: 10 }] };
+    skipState.gems = 20;
+    skipState.menu_guides = {
+        welcome: {
+            completed_steps: ["welcome_name", "welcome_heroes", "welcome_owned_selection", "welcome_owned_confirm", "welcome_reopen_heroes"],
+            status: "active", selected_leader: "cleopatra"
+        }
+    };
+    const skipGuide = makeMenuGuideHarness();
+    const skipShell = makeMenuShellRewardHarness(skipGuide, skipState, "heroes");
+    skipShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(skipGuide.renderedSteps.at(-1), "welcome_offer_selection");
+    skipShell.setPreviewLeader("cleopatra");
+    skipShell.setOutcome("leader_offer_selected", 1);
+    skipShell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(skipGuide.renderedSteps.at(-1), "welcome_purchase_choice");
+    assert.ok(skipGuide.calls.some(call => call.type === "save_menu_guide_progress" && call.selected_leader === "cleopatra"),
+        "the exact affordable offer is persisted before the optional choice");
+    skipGuide.choose("skip");
+    assert.equal(skipGuide.renderedSteps.at(-1), "welcome_skip_home", "the player's skip choice uses its own guided route");
+    const reloaded = makeMenuGuideHarness(skipGuide.storage);
+    makeMenuShellRewardHarness(reloaded, skipState, "home").maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(reloaded.renderedSteps.at(-1), "welcome_quick_match", "reload preserves the skip branch and its pending navigation");
+});
+
+test("menu shell honors the requested store return before releasing the first-match guide", async () => {
+    const { state, receipt } = confirmedMenuReturn();
+    state.menu_return = {
+        ...state.menu_return, source: "multiplayer", match_id: "match-1", receipt_ids: ["match-1"], requested_screen: "store"
+    };
+    state.reward_receipts = [{ ...receipt, id: "match-1", match_id: "match-1", verification_status: "verified" }];
+    state.menu_guides = { first_multiplayer: { completed_steps: [], status: "active", selected_leader: null, source_match_id: "match-1" } };
+    const guideHarness = makeMenuGuideHarness();
+    const shell = makeMenuShellRewardHarness(guideHarness, state);
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(shell.getScreen(), "store", "the chosen destination opens after rewards");
+    assert.deepEqual(Array.from(shell.shownReceipts), ["match-1"]);
+    assert.deepEqual(guideHarness.renderedSteps, [], "the guide remains paused in the requested screen");
+
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(guideHarness.renderedSteps, [], "being in the store does not release the guide");
+    shell.setScreen("home");
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(guideHarness.renderedSteps.at(-1), "first_profile", "the guide starts only after the player returns home");
 });
 
 test("participation receipt stays synced until replay verification resolves", () => {
@@ -502,7 +1037,7 @@ test("participation receipt stays synced until replay verification resolves", ()
     assert.match(accountSource, /receipt\.verification_status\s*!=\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
     assert.match(accountSource, /receipt\.verification_status\s*==\s*Some\(sow_data::profile::ReplayVerificationStatus::Pending\)/);
     assert.match(coreSource, /receipt\.verification_status/);
-    assert.match(accountSource, /fn apply_exit_reward_profile[\s\S]*wait\.account_id[\s\S]*wait\.receipt_id[\s\S]*wait\.requires_verification[\s\S]*ReplayVerificationStatus::Verified[\s\S]*ReplayVerificationStatus::Rejected[\s\S]*RewardSettlementStatus::Applied[\s\S]*RewardSettlementStatus::Presented[\s\S]*\*wait = None/);
+    assert.match(accountSource, /fn apply_exit_reward_profile[\s\S]*wait\.account_id[\s\S]*wait\.receipt_id[\s\S]*RewardSettlementStatus::Applied[\s\S]*RewardSettlementStatus::Presented[\s\S]*wait\.requires_verification[\s\S]*ReplayVerificationStatus::Verified[\s\S]*ReplayVerificationStatus::Rejected[\s\S]*\*wait = None/);
     assert.match(accountSource, /tutorial_exit_waits_for_its_applied_server_receipt/);
     assert.match(accountSource, /EXIT_REWARD_PROFILE_RETRY_INTERVAL: Duration = Duration::from_secs\(2\)/);
     assert.match(accountSource, /waiting_in_exit_loader[\s\S]*SplashJob::ExitGame/);
@@ -595,7 +1130,7 @@ test("game exit resets Battle and replays the screen entrance after the loader",
     assert.match(shellSource, /previousScreen = null;[\s\S]*render\(\);/);
     assert.match(loaderSource, /sow:loader-cycle-ready/);
     assert.match(loaderSource, /if \(!loaderReadyDispatched\)/);
-    assert.ok(shellSource.indexOf("if (returnedFromGame)") < shellSource.indexOf("SOW_open_store_after_match"));
+    assert.doesNotMatch(shellSource, /SOW_open_store_after_match/);
     assert.match(menuCss["main_menu.layout.css"], /sow-screen-panel-enter 240ms/);
 });
 
@@ -631,7 +1166,7 @@ test("first-run tutorial keeps one boot loader and splash art until Rust signals
     assert.match(bootIntro, /boot_campaign_pending = Some\(campaign\.episode_id\(\)\.to_string\(\)\)/);
     assert.match(bootIntro, /begin_enter_game_loader\(campaign\.advisor\(\)\)/);
     assert.doesNotMatch(bootIntro, /hide_web_loader|splash_state\.done = true|phase = ClientPhase::MainMenu/);
-    assert.match(webMenu, /"phase": "Playing",\s*"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id,\s*"loader_job": splash_job_name\(&app\.ui\.app\.splash_state\.job\),\s*"loader_leader": app\.ui\.app\.splash_state\.loader_leader\.map\(leader_id\),\s*"loader_progress": app\.ui\.app\.splash_state\.progress\.clamp\(0\.0, 1\.0\),\s*"loader_done": app\.ui\.app\.splash_state\.done/);
+    assert.match(webMenu, /"phase": "Playing",\s*"account_id": app\.progress_account_id,\s*"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id,\s*"loader_job": splash_job_name\(&app\.ui\.app\.splash_state\.job\),\s*"loader_leader": app\.ui\.app\.splash_state\.loader_leader\.map\(leader_id\),\s*"loader_progress": app\.ui\.app\.splash_state\.progress\.clamp\(0\.0, 1\.0\),\s*"loader_done": app\.ui\.app\.splash_state\.done/);
     assert.match(webMenu, /"loader_cycle_id": app\.ui\.app\.splash_state\.cycle_id/);
     assert.match(loaderSource, /if \(loaderArtKey === key \|\| loaderArtKey === key \+ ':failed'\) return null;/);
     assert.match(loaderSource, /if \(!prepared\.ready\) \{[\s\S]*?return state\.loader_job === 'ExitGame' \? prepared : null;\s*\}\s*const image = prepared\.image;/,
@@ -1839,7 +2374,7 @@ test("Boudica reveal beats share a fixed 1.1-second wait while tribal contact st
     assert.match(tutorial, /function clearStepRevealTimer\(\)[\s\S]*stepRevealToken\+\+[\s\S]*window\.clearTimeout/);
     assert.match(campaignEditor, /function clearPreviewRevealTimer\(\)[\s\S]*previewRevealToken\+\+[\s\S]*window\.clearTimeout/);
     assert.match(campaignView, /\}, host\.SOWCampaign\.WAIT_MS\);/);
-    assert.match(tutorial, /window\.setTimeout\(updateMenuGuide, 650\)/);
+    assert.doesNotMatch(tutorial, /window\.setTimeout\(updateMenuGuide/);
     for (const [type, legacyField] of [["scene", "start_delay_seconds"], ["objective", "advance_delay_seconds"]]) {
         const legacyStep = { id: "wait", type, title_key: "tutorial.wait", next: "end", [legacyField]: 1 };
         if (type === "objective") legacyStep.trigger = { type: "elapsed", scope: "step", value: 1 };
@@ -3508,7 +4043,7 @@ test("campaign saves use the current validator and call Save by its real action"
     assert.equal(report.errors.some(issue => issue.field === "campaign" && issue.message.includes("text_namespace")), false);
     assert.match(campaignEditor, /function storyKey\(suffix\) \{ return \(state\.definition\.text_namespace \|\| "tutorial\."\) \+ suffix; \}/);
     assert.match(campaignEditor, /catalogTextField\(container, label, key, rows\)/);
-    assert.doesNotMatch(campaignEditor, /state\.definition\.strings\[[^\]]+\]\s*=/);
+    assert.match(campaignEditor, /if \(state\.isMenuGuides\)/);
     assert.match(campaignEditorServer, /key\.replace\(\/\^tutorial\\\./);
     assert.match(campaignEditorServer, /sow-i18n\/strings\/en\/web\.toml/);
     assert.match(campaignEditor, /Allow camera controls only while paused/);
@@ -5107,15 +5642,120 @@ test("tutorial collapses an empty action dock and releases its combat-operation 
     assert.match(hudCss, /#sow-hud\[data-compact="true"\] \.sow-hud__dock-stack\s*\{[^}]*flex-direction: column-reverse/);
 });
 
-// Owner decision: the return guide in the main menu is the hand only. The
-// objective card had no close button, and the closing "You're ready" panel was
-// the same nuisance, so both stay hidden until the tour is redesigned.
-test("the main menu guide points the hand at a lobby and never shows a card", () => {
-    assert.match(campaignEngine, /menu_lobby: '#sow-menu \.sow-menu__home-public \[data-lobby-card\]'/);
-    assert.match(tutorial, /if \(machineView\.done \|\| machineView\.step\.type === "end"\) \{ dismissMenuGuide\(\); return; \}/);
-    assert.match(tutorial, /context\.hideObjective = true/);
-    // Dialogs own their copy; the objective card stays for non-modal gameplay steps.
-    assert.match(campaignView, /objective\.hidden = modal \|\| context\.hideObjective === true/);
+test("first multiplayer guide waits for confirmed outcomes and stays completed", async () => {
+    const { state, receipt } = confirmedMenuReturn();
+    state.menu_return = {
+        ...state.menu_return, source: "multiplayer", match_id: "match-1", receipt_ids: ["match-1"]
+    };
+    state.reward_receipts = [{ ...receipt, id: "match-1", match_id: "match-1", verification_status: "verified" }];
+    state.menu_guides = { first_multiplayer: { completed_steps: [], status: "active", selected_leader: null, source_match_id: "match-1" } };
+    const harness = makeMenuGuideHarness();
+    const shell = makeMenuShellRewardHarness(harness, state);
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_profile");
+    shell.setProfile({ accountId: "account-a", tab: "overview", complete: true });
+    shell.setScreen("profile");
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_history", "a ready own profile confirms the first step");
+
+    shell.setProfile({
+        accountId: "account-a", tab: "history", complete: true,
+        entry: { historyLoaded: true, historyError: false }, history: [{ match_id: "match-1" }]
+    });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_store", "the return match must appear in the loaded history");
+
+    shell.setStoreReady(true, false);
+    shell.setScreen("store");
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_home", "the store advances only when its catalog is ready");
+
+    shell.setScreen("home");
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_quick_match");
+    shell.setState({ ...state, quick_match_revision: 1 });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_quick_match", "the accepted match closes the guide");
+    harness.flushSaveRetries();
+    assert.ok(harness.calls.some(call => call.type === "save_menu_guide_progress" && call.status === "completed"));
+
+    const completedState = {
+        ...state,
+        menu_guides: { first_multiplayer: { completed_steps: menuGuideDefinition.menu_guides.first_multiplayer.step_ids, status: "completed", selected_leader: null, source_match_id: "match-1" } }
+    };
+    const reloaded = makeMenuGuideHarness(harness.storage);
+    makeMenuShellRewardHarness(reloaded, completedState).maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(reloaded.renderedSteps, [], "a server-completed first-match guide does not replay");
+});
+
+test("first multiplayer guide waits for its exact settled receipt after reload", async () => {
+    const { state, receipt } = confirmedMenuReturn();
+    state.menu_return = undefined;
+    const missingSourceState = {
+        ...state,
+        menu_guides: { first_multiplayer: { completed_steps: [], status: "active", selected_leader: null } },
+        reward_receipts: [{ ...receipt, id: "match-1", match_id: "match-1", verification_status: "verified" }]
+    };
+    const missingSourceGuide = makeMenuGuideHarness();
+    makeMenuShellRewardHarness(missingSourceGuide, missingSourceState).maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(missingSourceGuide.renderedSteps, [], "a missing server source ID never falls back to a client guess");
+
+    state.menu_guides = {
+        first_multiplayer: { completed_steps: [], status: "active", selected_leader: null, source_match_id: "match-1" }
+    };
+    state.reward_receipts = [{ ...receipt, id: "other-match", match_id: "other-match", verification_status: "verified" }];
+    const harness = makeMenuGuideHarness();
+    const shell = makeMenuShellRewardHarness(harness, state);
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(harness.renderedSteps, [], "a different settled match cannot start the first-match guide on boot");
+
+    shell.setState({
+        ...state,
+        reward_receipts: [
+            { ...receipt, id: "other-match", match_id: "other-match", status: "presented", presented_at: 1, verification_status: "verified" },
+            { ...receipt, id: "match-1", match_id: "match-1", status: "pending", verification_status: "pending" }
+        ]
+    });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(harness.renderedSteps, [], "the exact source match still waits for final server settlement");
+
+    shell.setState({
+        ...state,
+        reward_receipts: [{ ...receipt, id: "match-1", match_id: "match-1", verification_status: "rejected" }]
+    });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_profile", "the exact final applied receipt releases it after presentation");
+
+    shell.setProfile({ accountId: "account-a", tab: "overview", complete: true });
+    shell.setScreen("profile");
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_history");
+    shell.setProfile({
+        accountId: "account-a", tab: "history", complete: true,
+        entry: { historyLoaded: true, historyError: false }, history: [{ match_id: "other-match" }]
+    });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_history", "another match in history cannot satisfy the stored source ID");
+    shell.setProfile({
+        accountId: "account-a", tab: "history", complete: true,
+        entry: { historyLoaded: true, historyError: false }, history: [{ match_id: "match-1" }]
+    });
+    shell.maybePresentRewards();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(harness.renderedSteps.at(-1), "first_store", "history must contain the exact source match");
 });
 
 // Owner decision: episode 1 ("Arrival") is not finished yet, so the whole Six Sky
@@ -5134,8 +5774,8 @@ test("campaign episode 1 stays locked so only the tutorial can be replayed", () 
 
 test("tutorial locale and UI guides resolve per episode and point to actual HUD controls", () => {
     assert.match(tutorial, /window\.SOW_t\(key\)/);
-    assert.doesNotMatch(tutorial, /definition\.strings/);
-    assert.match(tutorial, /SOWCampaign\.resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
+    assert.match(tutorial, /function menuGuideTranslate\(key\)/);
+    assert.match(tutorial, /SOWCampaign\.resolveUiTarget\(guide\.target, document, runtime\.episodeId, guideFacts\)/);
     assert.match(tutorial, /if \(!source \|\| source\.disabled \|\| source\.getClientRects\(\)\.length === 0\) return null/);
     assert.match(tutorial, /tutorial\[guide\.target\]/);
     assert.match(campaignView, /sow-story__gesture/);
@@ -5193,7 +5833,7 @@ test("campaign studio preview matches the real build submenu and direct nuke act
     assert.doesNotMatch(campaignEditor, /syncPreviewMapMenu/);
     assert.match(campaignEditor, /else if \(group\) hudRoot\.dataset\.previewMapMenu = group\.dataset\.mapGroup;[\s\S]*?paintPreview\(\);/);
     assert.match(campaignEditor, /var menuHint = requiredMenu && \$\("#sow-hud"\)\.dataset\.previewMapMenu !== requiredMenu/);
-    assert.match(campaignEditor, /function previewAnchor\(step\)[\s\S]*?target\.getClientRects\(\)\.length/);
+    assert.match(campaignEditor, /function previewAnchor\(step, facts\)[\s\S]*?target\.getClientRects\(\)\.length/);
 });
 
 test("campaign menu-guide preview opens Campaign before exposing the replay target", () => {
@@ -5215,7 +5855,7 @@ test("campaign replay hand resolves the selected episode card, not always Boudic
     assert.equal(campaign.resolveUiTarget("campaign_replay", root, "six_sky_ep2"), sixSky);
     assert.equal(campaign.resolveUiTarget("campaign_replay", root, "unknown_episode"), null);
     assert.equal(campaign.resolveUiTarget("campaign_replay", root), null);
-    assert.match(tutorial, /resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
+    assert.match(tutorial, /resolveUiTarget\(guide\.target, document, runtime\.episodeId, guideFacts\)/);
     assert.doesNotMatch(campaignEngine, /data-episode-id="boudica"/);
 });
 
@@ -5247,7 +5887,7 @@ test("tutorial X is not wired to leave match and menu exit clears runtime", () =
     assert.match(tutorial, /data-command=.*prompt_surrender/);
     assert.match(tutorial, /function update\(hud\) \{\s*if \(!runtime\.machine \|\| runtime\.modalOpen \|\|/);
     assert.match(tutorial, /runtime\.machine\.setPaused\(open\)/);
-    assert.match(tutorial, /onDismiss: runtime\.menuGuide[\s\S]*?: null/);
+    assert.match(tutorial, /onDismiss: skipMenuGuide/);
     assert.match(tutorial, /SOW_tutorial_menu_state_update/);
     assert.match(tutorial, /function reset\(\)/);
     assert.match(hud, /id="sow-hud-surrender-modal"/);
@@ -6007,7 +6647,7 @@ test("a UI step uses its configured target and device-specific hand labels", () 
     const anchorStart = tutorial.indexOf("    function anchorFor(");
     const anchorEnd = tutorial.indexOf("\n    function syncTransferGuide(", anchorStart);
     const anchorSource = tutorial.slice(anchorStart, anchorEnd);
-    assert.match(anchorSource, /resolveUiTarget\(guide\.target, document, runtime\.episodeId\)/);
+    assert.match(anchorSource, /resolveUiTarget\(guide\.target, document, runtime\.episodeId, guideFacts\)/);
     assert.match(anchorSource, /step\.id === "boudica_transfer_send"[\s\S]*resolveUiAnchor\(source, spotlightPanel\)/);
     assert.doesNotMatch(anchorSource, /guide\.target === "hud_center_camera"[\s\S]*root\.clientWidth/);
     assert.doesNotMatch(anchorSource, /delete result\.(?:width|height)/);
@@ -6037,7 +6677,7 @@ test("campaign tap guides use shared action labels and localized fallback", () =
         .map(step => ({ definition, step })));
     assert.ok(tapSteps.length > 0, "campaigns must contain tap guides to check");
     const categories = new Set(tapSteps.map(({ step }) => campaign.guideAction(step)));
-    assert.deepEqual([...categories].sort(), ["attack", "build", "contact", "expand", "home", "return", "select", "send", "upgrade", "upgrade_progress"].sort());
+    assert.deepEqual([...categories].sort(), ["attack", "build", "contact", "expand", "home", "select", "send", "upgrade", "upgrade_progress"].sort());
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "expand", gesture: "tap" }, trigger: { type: "contact" } }), "expand");
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "target_action", gesture: "tap" }, trigger: { type: "contact" } }), "contact");
     assert.equal(campaign.guideAction({ guide: { kind: "world", target: "upgrade_building", gesture: "tap" }, trigger: { type: "structure_level" } }), "upgrade_progress");
@@ -6091,8 +6731,7 @@ test("Boudica UI guides spotlight the requested controls and Legion IX attack sl
     const campaignSource = fs.readFileSync(path.join(shell, "sow-campaign.js"), "utf8");
     const definition = JSON.parse(fs.readFileSync(path.join(shell, "../../assets/campaign/boudica.triggers.json"), "utf8"));
     const requested = [
-        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade",
-        "boudica_return_lobby"
+        "boudica_transfer_choose", "boudica_transfer_send", "boudica_choose_city", "boudica_structure_upgrade"
     ];
     const uiSteps = definition.steps.filter(step => step.guide && step.guide.kind === "ui").map(step => step.id).sort();
     const ratioStepId = "boudica_ninth_legion_set_attack_ratio";

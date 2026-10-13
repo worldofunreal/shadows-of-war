@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "正在确认你的奖励…"
+retrying_rewards = "连接已中断。正在重新获取你的奖励…"
 main_menu_navigation = "主菜单导航"
 game_links = "游戏链接"
 shop = "商店"

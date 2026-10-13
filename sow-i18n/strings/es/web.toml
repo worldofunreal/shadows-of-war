@@ -1,4 +1,6 @@
 [menu]
+confirming_rewards = "Confirmando tus recompensas…"
+retrying_rewards = "Conexión interrumpida. Reintentando tus recompensas…"
 main_menu_navigation = "Navegación del menú principal"
 game_links = "Enlaces del juego"
 shop = "TIENDA"

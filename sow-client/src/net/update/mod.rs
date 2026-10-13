@@ -8,6 +8,7 @@ mod messages;
 
 impl SowApp {
     pub fn update_net(&mut self, now: Instant) {
+        self.poll_exit_relay(now);
         self.poll_portal_intents();
 
         #[cfg(target_arch = "wasm32")]

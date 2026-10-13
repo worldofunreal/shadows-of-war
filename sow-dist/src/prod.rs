@@ -609,6 +609,12 @@ fn preflight(paths: &Paths, config: &Config) -> Result<()> {
             "--locked",
             "-p",
             "sow-core",
+            "-p",
+            "sow-data",
+            "-p",
+            "sow-server",
+            "--features",
+            "sow-data/server",
             "--",
             "--test-threads=1",
         ],
@@ -1428,6 +1434,7 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
             &paths.assets_site,
             &paths.assets_maps,
             &paths.root.join("assets/campaign"),
+            &paths.root.join("assets/guides"),
             &paths.map_sources,
             &paths.root.join("sow-i18n/src"),
             &paths.root.join("sow-i18n/strings"),
@@ -1450,6 +1457,7 @@ fn freebsd_build_fingerprint(root: &Path) -> Result<String> {
             &root.join("sow-server"),
             // Compile-time assets referenced from outside the Rust crates.
             &root.join("assets/geo_entities.json"),
+            &root.join("assets/guides"),
             &root.join("assets/maps/world/map.bin.br"),
         ],
     )
@@ -1690,7 +1698,8 @@ fn build_relay(paths: &Paths, config: &Config) -> Result<PathBuf> {
     let build = format!(
         "set -eu; export PATH=$HOME/.cargo/bin:$PATH; \
          export FSTACK_LIB_DIR={}; \
-         cd {} && cargo build --release -p sow-relay; \
+         cd {}; cargo test --locked --release -p sow-relay -- --test-threads=1; \
+         cargo build --locked --release -p sow-relay; \
          chown -R 1000:1000 {}/target {}/lib 2>/dev/null || true",
         shell_quote(&format!("{}/lib", config.fstack_repo)),
         shell_quote(&paths.root.display().to_string()),
