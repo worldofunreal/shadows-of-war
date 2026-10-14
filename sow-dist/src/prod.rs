@@ -1439,6 +1439,10 @@ pub(crate) fn web_fingerprint(paths: &Paths, version: &str) -> Result<String> {
             &paths.root.join("sow-i18n/src"),
             &paths.root.join("sow-i18n/strings"),
             &paths.root.join("sow-web/site"),
+            &paths.root.join("LICENSE"),
+            &paths.root.join("docs/legal/NOTICE"),
+            &paths.root.join("docs/legal/LICENSE-ASSETS"),
+            &paths.root.join("docs/legal/WASM-THIRD-PARTY-NOTICES.zip"),
             &paths.root.join("sow-dist/src/main.rs"),
         ],
     )

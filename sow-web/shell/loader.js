@@ -122,19 +122,16 @@
         return prepared.promise;
     }
 
-    function localizedLoaderText(key) {
-        key = key || 'menu.loading';
+    function localizedLoaderText() {
         if (typeof window.SOW_t === 'function') {
-            const value = window.SOW_t(key);
-            if (value && value !== '[' + key + ']') return value;
+            const value = window.SOW_t('menu.loading');
+            if (value && value !== '[menu.loading]') return value;
         }
-        if (key === 'menu.confirming_rewards') return 'Confirming your rewards…';
-        if (key === 'menu.retrying_rewards') return 'Connection interrupted. Retrying your rewards…';
         return 'Loading...';
     }
 
     function refreshLoaderText() {
-        if (loaderText) loaderText.textContent = localizedLoaderText(loaderStatusKey);
+        if (loaderText) loaderText.textContent = localizedLoaderText();
     }
 
     function isCrossOriginAssetUrl(url) {
@@ -318,7 +315,6 @@
     let barFill = null;
     let barFull = null;
     let loaderText = null;
-    let loaderStatusKey = null;
     let finishing = false;
     let rafId = 0;
     let finishTimer = 0;
@@ -593,10 +589,7 @@
             if (barFill) barFill.style.width = (reportedProgress * 100).toFixed(1) + '%';
         }
         if (loaderText) {
-            const status = typeof state.loader_status === 'string' ? state.loader_status.trim() : '';
-            const statusKey = state.loader_status_key;
-            loaderStatusKey = statusKey || null;
-            loaderText.textContent = status || localizedLoaderText(loaderStatusKey);
+            loaderText.textContent = localizedLoaderText();
         }
         if (root) root.setAttribute('aria-busy', 'true');
         if (state.loader_done === true) {

@@ -1,5 +1,5 @@
 use crate::context::RenderContext;
-use crate::text::msdf::FontAtlas;
+use crate::text::msdf::{FontAtlas, MsdfChar};
 use crate::text::texture::FontAtlasTexture;
 use crate::text::types::{
     AVATAR_CELL, AVATAR_COLS, AVATAR_CORNER_RADIUS_RATIO, AVATAR_ROWS, AVATAR_SLOT_COUNT, KIND_ARC,
@@ -379,10 +379,32 @@ fn shape_arabic_run(
     let infos = shaped.glyph_infos();
     let positions = shaped.glyph_positions();
     let font_scale = atlas.atlas.info.size.max(1) as f32 / face.units_per_em().max(1) as f32;
+    let glyphs: Vec<Option<(&MsdfChar, bool)>> = infos
+        .iter()
+        .map(|info| {
+            atlas
+                .arabic_glyph_map
+                .get(&info.glyph_id)
+                .map(|glyph| (glyph, false))
+                .or_else(|| {
+                    let character = text
+                        .get(info.cluster as usize..)
+                        .and_then(|tail| tail.chars().next())
+                        .filter(|character| {
+                            !is_arabic_character(*character) && !character.is_whitespace()
+                        })?;
+                    atlas.char_map.get(&character).map(|glyph| (glyph, true))
+                })
+        })
+        .collect();
     let advances: Vec<f32> = positions
         .iter()
-        .map(|position| {
-            let advance = position.x_advance as f32 * font_scale * char_spacing;
+        .zip(&glyphs)
+        .map(|(position, glyph)| {
+            let advance = match glyph {
+                Some((glyph, true)) => glyph.xadvance as f32 * char_spacing,
+                _ => position.x_advance as f32 * font_scale * char_spacing,
+            };
             if right_to_left {
                 advance.abs()
             } else {
@@ -401,8 +423,10 @@ fn shape_arabic_run(
     let base = atlas.atlas.common.base as f32;
     let mut item_count = 0usize;
 
-    for ((info, position), advance) in infos.iter().zip(positions).zip(advances) {
-        let glyph = atlas.arabic_glyph_map.get(&info.glyph_id);
+    for (((info, position), advance), glyph) in
+        infos.iter().zip(positions).zip(advances).zip(glyphs)
+    {
+        let glyph = glyph.map(|(glyph, _)| glyph);
         if let Some(glyph) = glyph {
             emit(PreparedTextItem {
                 kind: PreparedTextKind::Glyph,
@@ -1367,6 +1391,7 @@ mod tests {
     fn gameplay_atlas_covers_unicode_name_glyph_corpus() {
         let atlas = FontAtlas::load_static();
         let face = rustybuzz::Face::from_slice(ARABIC_FONT_BYTES, 0).unwrap();
+        let space_glyph = face.glyph_index(' ').map(|glyph| u32::from(glyph.0));
         let mut section = "";
 
         for glyphs in include_str!("unicode_name_glyphs.txt").lines() {
@@ -1378,11 +1403,22 @@ mod tests {
                 continue;
             }
             if section == "arabic" {
+                let arabic_text: String = glyphs
+                    .chars()
+                    .filter(|character| is_arabic_character(*character))
+                    .collect();
+                if arabic_text.is_empty() {
+                    continue;
+                }
                 let mut buffer = rustybuzz::UnicodeBuffer::new();
-                buffer.push_str(glyphs);
+                buffer.push_str(&arabic_text);
                 buffer.set_direction(rustybuzz::Direction::RightToLeft);
                 buffer.guess_segment_properties();
                 for glyph in rustybuzz::shape(&face, &[], buffer).glyph_infos() {
+                    // Spaces affect run advance but intentionally have no atlas bitmap.
+                    if Some(glyph.glyph_id) == space_glyph {
+                        continue;
+                    }
                     assert!(
                         atlas.arabic_glyph_map.contains_key(&glyph.glyph_id),
                         "Arabic glyph {} missing from Unicode corpus",
@@ -1434,6 +1470,15 @@ mod tests {
         assert!(
             arabic_name.advance_width > 0.0,
             "no Arabic nameplate text width"
+        );
+
+        let arabic_only = prepared_test_text(&atlas, "يوبي", 0.95);
+        let arabic_mixed = prepared_test_text(&atlas, "يوبي_73", 0.95);
+        assert!(arabic_mixed.complete, "incomplete mixed Arabic nameplate");
+        assert_eq!(
+            arabic_mixed.instance_count(),
+            arabic_only.instance_count() + 3,
+            "mixed Arabic nameplate must preserve its ASCII handle suffix"
         );
     }
 

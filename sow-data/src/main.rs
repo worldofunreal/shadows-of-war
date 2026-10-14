@@ -3206,10 +3206,8 @@ async fn handle_match_participant_settle(
         )
             .into_response();
     }
-    if match_id.parse::<u64>().is_err()
-        || account_id.len() != 32
-        || !account_id.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
+    let account_id = account_id.trim();
+    if !valid_match_participant_settlement_params(&match_id, account_id) {
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
@@ -3411,6 +3409,10 @@ async fn handle_match_participant_settle(
     }
 }
 
+fn valid_match_participant_settlement_params(match_id: &str, account_id: &str) -> bool {
+    match_id.parse::<u64>().is_ok() && sow_data::profile::is_valid_account_id(account_id)
+}
+
 fn participant_closure_error_status(message: &str) -> StatusCode {
     if matches!(
         message,
@@ -3451,7 +3453,30 @@ async fn reject_participant_settlement(
 
 #[cfg(test)]
 mod participant_closure_http_tests {
-    use super::{StatusCode, participant_closure_error_status};
+    use super::{
+        StatusCode, participant_closure_error_status,
+        valid_match_participant_settlement_params,
+    };
+
+    #[test]
+    fn settlement_accepts_supported_account_id_formats_only() {
+        assert!(valid_match_participant_settlement_params(
+            "15381",
+            "0123456789abcdef0123456789abcdef"
+        ));
+        assert!(valid_match_participant_settlement_params(
+            "15381",
+            "52948534-1c9f-4def-bc8e-80390d3287a6"
+        ));
+        assert!(!valid_match_participant_settlement_params(
+            "15381",
+            "guest_0123456789abcdef0123456789abcdef"
+        ));
+        assert!(!valid_match_participant_settlement_params(
+            "not-a-match",
+            "0123456789abcdef0123456789abcdef"
+        ));
+    }
 
     #[test]
     fn only_invalid_closures_are_permanent_http_errors() {

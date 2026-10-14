@@ -8,7 +8,7 @@ use crate::profile::{
     PublicLeaderSummary, PublicLeaderboardEntry, PublicMatchDetail, PublicMatchParticipant,
     PublicMatchSummary, PublicProfileIndex, PublicProfileSummary, PublicProfileView,
     PublicRatingView, ReplayVerificationStatus, SeasonRating, SeasonRecord, VerifiedMatchResult,
-    public_handle, win_rate,
+    is_valid_account_id, public_handle, win_rate,
 };
 use log::{error, info};
 use redb::ReadableTable;
@@ -24,7 +24,6 @@ fn verified_victory_key(wins: u32, account_id: &str) -> String {
 /// display_name field; the bot allocator may choose its presentation name.
 const BOT_POOL_KEY: &str = "sow:bot:pool";
 
-const ACCOUNT_ID_HEX_LEN: usize = 32;
 pub const DISPLAY_NAME_MAX_CHARS: usize = crate::name_policy::MAX_CHARS;
 const ANALYTICS_TTL_SECONDS: i64 = 90 * 24 * 60 * 60;
 
@@ -2148,9 +2147,8 @@ impl PlayerDb {
         &self,
         account_id: &str,
     ) -> Result<DeleteAccountReport, Box<dyn std::error::Error + Send + Sync>> {
-        if account_id.len() != ACCOUNT_ID_HEX_LEN
-            || !account_id.bytes().all(|b| b.is_ascii_hexdigit())
-        {
+        let account_id = account_id.trim();
+        if !is_valid_account_id(account_id) {
             return Err("invalid account_id".into());
         }
         let mut con = self.get_connection().await?;
@@ -3396,7 +3394,7 @@ impl PlayerDb {
         secret: &str,
     ) -> Result<String, String> {
         if !is_valid_account_id(account_id) {
-            return Err("account_id must be exactly 32 hexadecimal characters".to_string());
+            return Err("invalid account_id".to_string());
         }
         let mut con = self
             .get_connection()
@@ -4201,7 +4199,7 @@ impl PlayerDb {
         display_name: &str,
     ) -> Result<PlayerAccount, Box<dyn std::error::Error + Send + Sync>> {
         if !is_valid_account_id(account_id) {
-            return Err("account_id must be exactly 32 hexadecimal characters".into());
+            return Err("invalid account_id".into());
         }
         let display_name = normalize_display_name(display_name).map_err(str::to_string)?;
         let mut con = self.get_connection().await?;
@@ -5145,16 +5143,6 @@ fn enroll_first_multiplayer_guide(profile: &mut PlayerProfile, match_id: &str) {
     }
 }
 
-fn is_valid_account_id(value: &str) -> bool {
-    let value = value.trim();
-    (value.len() == ACCOUNT_ID_HEX_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        || (value.len() == 36
-            && value.bytes().enumerate().all(|(index, byte)| {
-                matches!(index, 8 | 13 | 18 | 23) && byte == b'-'
-                    || !matches!(index, 8 | 13 | 18 | 23) && byte.is_ascii_hexdigit()
-            }))
-}
-
 fn is_valid_gem_grant_request_id(value: &str) -> bool {
     value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
@@ -5213,8 +5201,8 @@ mod tests {
     fn validates_canonical_account_ids() {
         assert!(is_valid_account_id("0123456789abcdef0123456789abcdef"));
         assert!(is_valid_account_id("52948534-1c9f-4def-bc8e-80390d3287a6"));
-        // The removed guest_<hex> format is intentionally rejected; only the
-        // 32-hex canonical account ID is accepted by the live API.
+        // The removed guest_<hex> format is intentionally rejected; account
+        // IDs use either compact hex or the dashed UUID form.
         assert!(!is_valid_account_id(
             "guest_0123456789abcdef0123456789abcdef"
         ));

@@ -25,6 +25,199 @@ Twemoji graphics copyright 2019 Twitter, Inc. and other contributors, CC BY 4.0:
 https://github.com/twitter/twemoji/blob/master/LICENSE-GRAPHICS
 The curated glyph atlas is packed by Shadows of War from Twemoji 14.0.2.
 
+Ghost-name pool
+---------------
+The matchmaking server uses a curated pool of player handles and aliases. The runtime list contains names only; this notice carries the source records. The pool combines sources with different terms, so no single license is asserted for the entire pool.
+
+Liquipedia-derived aliases are attributed to Liquipedia contributors and licensed under CC BY-SA 3.0. This selection has been filtered against the server's name policy and deduplicated; these are modifications to the sourced material. The Liquipedia-derived portion remains available under CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/ . API terms: https://liquipedia.net/api-terms-of-use .
+
+The Steam sample comes from the nyuuzyou/steambans dataset, marked CC0 1.0: https://huggingface.co/datasets/nyuuzyou/steambans .
+
+OpenDota's pro-player API is recorded as a source, but its reviewed API documentation does not state a license for returned data. OpenDota's MIT code license is not treated as a data license: https://docs.opendota.com/ and https://api.opendota.com/api/proPlayers . The retained legacy set has no source or license record in the repository.
+
+SAHA's public site displays "All rights reserved" and no separate reuse license was found in the reviewed pages. Its source links are retained below as attribution, not as permission to reuse. The same applies to the listed individual creator pages unless their owners grant permission. This notice does not claim those sources are cleared for reuse: https://saha.gg/leaderboard .
+
+Source records migrated from sow-server/src/bot_fill/names.txt:
+- legacy
+- OpenDota proPlayers; profile country_code is a label, not verified nationality.
+- Steam nyuuzyou/steambans (CC0-1.0); global sample, no country field.
+- Brazil aliases promoted 2026-10-12: 1,534 handles (36 OpenDota; 1,498 Liquipedia).
+- Liquipedia-derived section is CC BY-SA 3.0; attribution and terms: https://liquipedia.net/api-terms-of-use
+- OpenDota source: https://api.opendota.com/api/proPlayers; country_code=BR is a profile label, not verified nationality.
+- Full source audit trail: sow-server/src/bot_fill/review_candidates_brazil.txt
+- OpenDota, Brazil profile label (36):
+- Liquipedia Counter-Strike (260), CC BY-SA 3.0: https://liquipedia.net/counterstrike/Category:Brazilian_Players
+- Liquipedia Rainbow Six (230), CC BY-SA 3.0: https://liquipedia.net/rainbowsix/Category:Brazilian_Players
+- Liquipedia League of Legends (222), CC BY-SA 3.0: https://liquipedia.net/leagueoflegends/Category:Brazilian_Players
+- Liquipedia VALORANT (206), CC BY-SA 3.0: https://liquipedia.net/valorant/Category:Brazilian_Players
+- Liquipedia Fortnite (282), CC BY-SA 3.0: https://liquipedia.net/fortnite/Category:Brazilian_Players
+- Liquipedia PUBG Mobile (89), CC BY-SA 3.0: https://liquipedia.net/pubgmobile/Category:Brazilian_Players
+- Liquipedia PUBG (100), CC BY-SA 3.0: https://liquipedia.net/pubg/Category:Brazilian_Players
+- Liquipedia Call of Duty (58), CC BY-SA 3.0: https://liquipedia.net/callofduty/Category:Brazilian_Players
+- Liquipedia Brawl Stars (51), CC BY-SA 3.0: https://liquipedia.net/brawlstars/Category:Brazilian_Players
+- Vietnamese player handles promoted 2026-10-12; Liquipedia category titles, CC BY-SA 3.0.
+- Attribution/API terms: https://liquipedia.net/api-terms-of-use; country labels are source labels.
+- Counter-Strike (19): https://liquipedia.net/counterstrike/Category:Vietnamese_Players
+- Rainbow Six (3): https://liquipedia.net/rainbowsix/Category:Vietnamese_Players
+- League of Legends (164): https://liquipedia.net/leagueoflegends/Category:Vietnamese_Players
+- VALORANT (83): https://liquipedia.net/valorant/Category:Vietnamese_Players
+- Fortnite (12): https://liquipedia.net/fortnite/Category:Vietnamese_Players
+- PUBG Mobile (67): https://liquipedia.net/pubgmobile/Category:Vietnamese_Players
+- PUBG (78): https://liquipedia.net/pubg/Category:Vietnamese_Players
+- Mobile Legends: Bang Bang (17): https://liquipedia.net/mobilelegends/Category:Vietnamese_Players
+- Free Fire (83): https://liquipedia.net/freefire/Category:Vietnamese_Players
+- Dota 2 (8): https://liquipedia.net/dota2/Category:Vietnamese_Players
+- India player handles promoted 2026-10-12; Liquipedia category titles, CC BY-SA 3.0.
+- Attribution/API terms: https://liquipedia.net/api-terms-of-use; country labels are source labels.
+- Counter-Strike (57): https://liquipedia.net/counterstrike/Category:Indian_Players
+- Rainbow Six (36): https://liquipedia.net/rainbowsix/Category:Indian_Players
+- League of Legends (4): https://liquipedia.net/leagueoflegends/Category:Indian_Players
+- VALORANT (74): https://liquipedia.net/valorant/Category:Indian_Players
+- Fortnite (17): https://liquipedia.net/fortnite/Category:Indian_Players
+- PUBG Mobile (244): https://liquipedia.net/pubgmobile/Category:Indian_Players
+- PUBG (12): https://liquipedia.net/pubg/Category:Indian_Players
+- Free Fire (83): https://liquipedia.net/freefire/Category:Indian_Players
+- Dota 2 (5): https://liquipedia.net/dota2/Category:Indian_Players
+- Call of Duty (52): https://liquipedia.net/callofduty/Category:Indian_Players
+- Brawl Stars (28): https://liquipedia.net/brawlstars/Category:Indian_Players
+- Mobile Legends (4): https://liquipedia.net/mobilelegends/Category:Indian_Players
+- Pakistan player handles promoted 2026-10-12; Liquipedia category titles, CC BY-SA 3.0.
+- Attribution/API terms: https://liquipedia.net/api-terms-of-use; country labels are source labels.
+- Counter-Strike (8): https://liquipedia.net/counterstrike/Category:Pakistani_Players
+- Rainbow Six (12): https://liquipedia.net/rainbowsix/Category:Pakistani_Players
+- VALORANT (11): https://liquipedia.net/valorant/Category:Pakistani_Players
+- Fortnite (18): https://liquipedia.net/fortnite/Category:Pakistani_Players
+- PUBG Mobile (67): https://liquipedia.net/pubgmobile/Category:Pakistani_Players
+- Free Fire (21): https://liquipedia.net/freefire/Category:Pakistani_Players
+- Dota 2 (2): https://liquipedia.net/dota2/Category:Pakistani_Players
+- Call of Duty (3): https://liquipedia.net/callofduty/Category:Pakistani_Players
+- Rocket League (6): https://liquipedia.net/rocketleague/Category:Pakistani_Players
+- Fighting Games (19): https://liquipedia.net/fighters/Category:Pakistani_Players
+- Philippines player handles promoted 2026-10-12; Liquipedia categories, CC BY-SA 3.0.
+- API terms and attribution: https://liquipedia.net/api-terms-of-use
+- Country/category labels are source labels, not independently verified nationality.
+- Retained published titles; removed only Filipino-player disambiguation; one-token, 3-16 chars, server-approved; deduplicated ignoring case.
+- Dota 2 (76): https://liquipedia.net/dota2/Category:Filipino_Players
+- League of Legends (58): https://liquipedia.net/leagueoflegends/Category:Filipino_Players
+- Mobile Legends: Bang Bang (190): https://liquipedia.net/mobilelegends/Category:Filipino_Players
+- Honor of Kings (43): https://liquipedia.net/honorofkings/Category:Filipino_Players
+- Overwatch (12): https://liquipedia.net/overwatch/Category:Filipino_Players
+- VALORANT (113): https://liquipedia.net/valorant/Category:Filipino_Players
+- Counter-Strike (7): https://liquipedia.net/counterstrike/Category:Filipino_Players
+- Rainbow Six (5): https://liquipedia.net/rainbowsix/Category:Filipino_Players
+- PUBG Mobile (37): https://liquipedia.net/pubgmobile/Category:Filipino_Players
+- Free Fire (11): https://liquipedia.net/freefire/Category:Filipino_Players
+- Malaysia, Indonesia, and Singapore player handles added 2026-10-12; titles from Liquipedia player categories.
+- Liquipedia text is CC BY-SA 3.0. API terms and attribution: https://liquipedia.net/api-terms-of-use
+- Country categories are source labels, not independently verified nationality.
+- Filter: published one-token titles, 3-16 Unicode characters, server name policy; exact matching country disambiguation removed; case-insensitive dedupe against active pool and this batch.
+- Malaysia / Dota 2 (46 new of 59 pages): https://liquipedia.net/dota2/Category:Malaysian_Players
+- Malaysia / League of Legends (22 new of 23 pages): https://liquipedia.net/leagueoflegends/Category:Malaysian_Players
+- Malaysia / Mobile Legends: Bang Bang (106 new of 116 pages): https://liquipedia.net/mobilelegends/Category:Malaysian_Players
+- Malaysia / Honor of Kings (49 new of 67 pages): https://liquipedia.net/honorofkings/Category:Malaysian_Players
+- Malaysia / VALORANT (30 new of 33 pages): https://liquipedia.net/valorant/Category:Malaysian_Players
+- Malaysia / Counter-Strike (21 new of 24 pages): https://liquipedia.net/counterstrike/Category:Malaysian_Players
+- Malaysia / PUBG Mobile (114 new of 127 pages): https://liquipedia.net/pubgmobile/Category:Malaysian_Players
+- Malaysia / Free Fire (56 new of 60 pages): https://liquipedia.net/freefire/Category:Malaysian_Players
+- Malaysia / Rocket League (7 new of 9 pages): https://liquipedia.net/rocketleague/Category:Malaysian_Players
+- Malaysia / Fortnite (5 new of 7 pages): https://liquipedia.net/fortnite/Category:Malaysian_Players
+- Malaysia / Apex Legends (17 new of 18 pages): https://liquipedia.net/apexlegends/Category:Malaysian_Players
+- Malaysia / Call of Duty (16 new of 20 pages): https://liquipedia.net/callofduty/Category:Malaysian_Players
+- Indonesia / Dota 2 (37 new of 40 pages): https://liquipedia.net/dota2/Category:Indonesian_Players
+- Indonesia / League of Legends (1 new of 2 pages): https://liquipedia.net/leagueoflegends/Category:Indonesian_Players
+- Indonesia / Mobile Legends: Bang Bang (282 new of 317 pages): https://liquipedia.net/mobilelegends/Category:Indonesian_Players
+- Indonesia / Honor of Kings (55 new of 63 pages): https://liquipedia.net/honorofkings/Category:Indonesian_Players
+- Indonesia / VALORANT (73 new of 76 pages): https://liquipedia.net/valorant/Category:Indonesian_Players
+- Indonesia / Counter-Strike (10 new of 15 pages): https://liquipedia.net/counterstrike/Category:Indonesian_Players
+- Indonesia / PUBG Mobile (151 new of 158 pages): https://liquipedia.net/pubgmobile/Category:Indonesian_Players
+- Indonesia / Free Fire (159 new of 172 pages): https://liquipedia.net/freefire/Category:Indonesian_Players
+- Indonesia / Rocket League (15 new of 17 pages): https://liquipedia.net/rocketleague/Category:Indonesian_Players
+- Indonesia / Fortnite (16 new of 17 pages): https://liquipedia.net/fortnite/Category:Indonesian_Players
+- Indonesia / Apex Legends (32 new of 35 pages): https://liquipedia.net/apexlegends/Category:Indonesian_Players
+- Indonesia / Call of Duty (16 new of 20 pages): https://liquipedia.net/callofduty/Category:Indonesian_Players
+- Singapore / Dota 2 (18 new of 22 pages): https://liquipedia.net/dota2/Category:Singaporean_Players
+- Singapore / League of Legends (36 new of 42 pages): https://liquipedia.net/leagueoflegends/Category:Singaporean_Players
+- Singapore / Mobile Legends: Bang Bang (43 new of 57 pages): https://liquipedia.net/mobilelegends/Category:Singaporean_Players
+- Singapore / Honor of Kings (11 new of 15 pages): https://liquipedia.net/honorofkings/Category:Singaporean_Players
+- Singapore / VALORANT (54 new of 61 pages): https://liquipedia.net/valorant/Category:Singaporean_Players
+- Singapore / Counter-Strike (16 new of 19 pages): https://liquipedia.net/counterstrike/Category:Singaporean_Players
+- Singapore / PUBG Mobile (1 new of 1 pages): https://liquipedia.net/pubgmobile/Category:Singaporean_Players
+- Singapore / Free Fire (0 new of 0 pages): https://liquipedia.net/freefire/Category:Singaporean_Players
+- Singapore / Rocket League (17 new of 23 pages): https://liquipedia.net/rocketleague/Category:Singaporean_Players
+- Singapore / Fortnite (11 new of 17 pages): https://liquipedia.net/fortnite/Category:Singaporean_Players
+- Singapore / Apex Legends (3 new of 4 pages): https://liquipedia.net/apexlegends/Category:Singaporean_Players
+- Singapore / Call of Duty (6 new of 6 pages): https://liquipedia.net/callofduty/Category:Singaporean_Players
+- Japan player IDs added 2026-10-12 from Liquipedia local-ID and alternate-ID fields.
+- Category membership is the source attribution; no names were generated.
+- Japan / Fighting games (64 new; names contain Japanese script): https://liquipedia.net/fighters/Category:Japanese_Players
+- Japan / Super Smash Bros. (76 new; names contain Japanese script): https://liquipedia.net/smash/Category:Japanese_Players
+- Japan / Splatoon (48 new; names contain Japanese script): https://liquipedia.net/splatoon/Category:Japanese_Players
+- Japan / Apex Legends (23 new; names contain Japanese script): https://liquipedia.net/apexlegends/Category:Japanese_Players
+- Japan / Identity V (42 new; names contain Japanese script): https://liquipedia.net/identityv/Category:Japanese_Players
+- Japan / Teamfight Tactics (15 new; names contain Japanese script): https://liquipedia.net/tft/Category:Japanese_Players
+- Japan / VALORANT (1 new; names contain Japanese script): https://liquipedia.net/valorant/Category:Japanese_Players
+- Japan / Overwatch (18 new; names contain Japanese script): https://liquipedia.net/overwatch/Category:Japanese_Players
+- Japan / League of Legends (3 new; names contain Japanese script): https://liquipedia.net/leagueoflegends/Category:Japanese_Players
+- Japan / PUBG Mobile (7 new; names contain Japanese script): https://liquipedia.net/pubgmobile/Category:Japanese_Players
+- Japan / Honor of Kings (1 new; names contain Japanese script): https://liquipedia.net/honorofkings/Category:Japanese_Players
+- Japan / Call of Duty (4 new; names contain Japanese script): https://liquipedia.net/callofduty/Category:Japanese_Players
+- Japan / Fortnite (38 new; names contain Japanese script): https://liquipedia.net/fortnite/Category:Japanese_Players
+- Japan / Hearthstone (5 new; names contain Japanese script): https://liquipedia.net/hearthstone/Category:Japanese_Players
+- Liquipedia handle data attribution (CC BY-SA 3.0); source links are recorded by group.
+- Russia / Dota 2: https://liquipedia.net/dota2/Category:Russian_Players https://liquipedia.net/dota2/KingR
+- Russia / Mobile Legends: Bang Bang: https://liquipedia.net/mobilelegends/Yustinian https://liquipedia.net/mobilelegends/Saba
+- Russia / StarCraft II: https://liquipedia.net/starcraft2/SKillous https://liquipedia.net/starcraft2/Abver
+- Ukraine / StarCraft II: https://liquipedia.net/starcraft2/Category:Ukrainian_Players
+- Mongolia / Dota 2: https://liquipedia.net/dota2/11
+- China and Taiwan player aliases retrieved 2026-10-13 from Liquipedia category pages.
+- Only profile id, ids, and localid fields were considered; names were not generated.
+- Source license/API terms: https://liquipedia.net/api-terms-of-use (CC BY-SA 3.0 attribution).
+- China / Honor of Kings: https://liquipedia.net/honorofkings/Category:Chinese_Players
+- China / Dota 2: https://liquipedia.net/dota2/Category:Chinese_Players
+- China / League of Legends: https://liquipedia.net/leagueoflegends/Category:Chinese_Players
+- China / PUBG Mobile: https://liquipedia.net/pubgmobile/Category:Chinese_Players
+- China / Counter-Strike: https://liquipedia.net/counterstrike/Category:Chinese_Players
+- China / VALORANT: https://liquipedia.net/valorant/Category:Chinese_Players
+- China / StarCraft II: https://liquipedia.net/starcraft2/Category:Chinese_Players
+- China / Warcraft III: https://liquipedia.net/warcraft/Category:Chinese_Players
+- China / Overwatch: https://liquipedia.net/overwatch/Category:Chinese_Players
+- China / Hearthstone: https://liquipedia.net/hearthstone/Category:Chinese_Players
+- China / Mobile Legends: Bang Bang: https://liquipedia.net/mobilelegends/Category:Chinese_Players
+- China / Age of Empires: https://liquipedia.net/ageofempires/Category:Chinese_Players
+- Taiwan / Honor of Kings: https://liquipedia.net/honorofkings/Category:Taiwanese_Players
+- Taiwan / League of Legends: https://liquipedia.net/leagueoflegends/Category:Taiwanese_Players
+- Taiwan / PUBG Mobile: https://liquipedia.net/pubgmobile/Category:Taiwanese_Players
+- Taiwan / Counter-Strike: https://liquipedia.net/counterstrike/Category:Taiwanese_Players
+- Taiwan / VALORANT: https://liquipedia.net/valorant/Category:Taiwanese_Players
+- Taiwan / StarCraft II: https://liquipedia.net/starcraft2/Category:Taiwanese_Players
+- Taiwan / Overwatch: https://liquipedia.net/overwatch/Category:Taiwanese_Players
+- Taiwan / Hearthstone: https://liquipedia.net/hearthstone/Category:Taiwanese_Players
+- Taiwan / Age of Empires: https://liquipedia.net/ageofempires/Category:Taiwanese_Players
+- South Korean player aliases added 2026-10-13 from Liquipedia profile ID fields.
+- Only id, ids, and localid values were used; name-field values were excluded.
+- Liquipedia text is CC BY-SA 3.0; attribution/API terms: https://liquipedia.net/api-terms-of-use
+- South Korea / StarCraft II (13 aliases): https://liquipedia.net/starcraft2/Category:Korean_Players
+- South Korea / StarCraft Brood War (46 aliases): https://liquipedia.net/starcraft/Category:Korean_Players
+- South Korea / Overwatch (6 aliases): https://liquipedia.net/overwatch/Category:Korean_Players
+- South Korea / VALORANT (5 aliases): https://liquipedia.net/valorant/Category:Korean_Players
+- South Korea / PUBG Mobile (1 alias): https://liquipedia.net/pubgmobile/Category:Korean_Players
+- South Korea / Hearthstone (18 aliases): https://liquipedia.net/hearthstone/Category:Korean_Players
+- South Korea / Rainbow Six Siege (38 aliases): https://liquipedia.net/rainbowsix/Category:Korean_Players
+- South Korea / Apex Legends (13 aliases): https://liquipedia.net/apexlegends/Category:Korean_Players
+- Arab esports IDs with Arabic-script aliases (4).
+- Liquipedia text is CC BY-SA 3.0; attribution/API terms: https://liquipedia.net/api-terms-of-use
+- Free Fire Arab Championship Season 2: https://liquipedia.net/freefire/Free_Fire_Arab_Championship/Season_2
+- Oman Fortnite and Qatar Call of Duty profiles:
+- https://liquipedia.net/fortnite/Njby
+- https://liquipedia.net/callofduty/IR7aL
+- Arab gaming creator aliases (14 Arabic display names): https://saha.gg/leaderboard
+- Additional Arabic-script creator handles from SAHA country directories:
+- https://saha.gg/country/sa https://saha.gg/country/kw https://saha.gg/country/om
+- https://saha.gg/country/jo https://saha.gg/country/bh https://saha.gg/country/lb
+- https://saha.gg/country/ae
+- Established Arab gaming creator handles:
+- https://aboflah.org/ https://linktr.ee/banderitax
+
 Other assets
 ------------
 Other shipped art uses the terms in LICENSE-ASSETS.

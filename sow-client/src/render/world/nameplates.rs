@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 use web_time::{Duration, Instant};
 
 const NAMEPLATE_WORLD_SCALE: f32 = 0.05;
+const NAMEPLATE_TEXT_COLOR: [f32; 4] = [1.0; 4];
 const NAMEPLATE_MIN_FONT: f32 = 8.0;
 const NAMEPLATE_MAX_FONT: f32 = 32.0;
 const NAMEPLATE_HIDE_ZOOM: f32 = 1.5;
@@ -131,7 +132,6 @@ enum AvatarContent {
 struct TextPlan {
     position: [f32; 2],
     final_font_size: f32,
-    color: [f32; 4],
 }
 
 #[derive(Clone, Copy)]
@@ -774,7 +774,6 @@ fn prepare_full_nameplate(
             [anchor.0[0] * sf, anchor.0[1] * sf]
         },
         final_font_size: name_font_size * sf * fit_scale,
-        color,
     });
     let troops = dev.vfx_nameplate_troops.then(|| {
         let (icon_center, icon_diameter) = layout.troops_icon(center);
@@ -785,7 +784,6 @@ fn prepare_full_nameplate(
             text: TextPlan {
                 position: [text_anchor.0[0] * sf, text_anchor.0[1] * sf],
                 final_font_size: troops_font_size * sf * fit_scale,
-                color,
             },
         }
     });
@@ -937,6 +935,7 @@ fn paint_prepared_nameplate(
     plan: FullNameplate,
 ) {
     let before = text.instance_count();
+    let icon_color = player_color(player);
     if let Some(avatar) = plan.avatar {
         paint_prepared_avatar(text, avatar, plan.emoji_outline, 1.0);
     }
@@ -977,7 +976,7 @@ fn paint_prepared_nameplate(
             &state.prepared_name,
             name.position,
             name.final_font_size,
-            name.color,
+            NAMEPLATE_TEXT_COLOR,
             plan.text_style,
         );
     }
@@ -987,7 +986,7 @@ fn paint_prepared_nameplate(
             "⚔",
             troops.icon_center,
             troops.icon_diameter,
-            troops.text.color,
+            icon_color,
             plan.emoji_outline,
             1.0,
         );
@@ -995,7 +994,7 @@ fn paint_prepared_nameplate(
             &state.prepared_troops,
             troops.text.position,
             troops.text.final_font_size,
-            troops.text.color,
+            NAMEPLATE_TEXT_COLOR,
             plan.text_style,
         );
     }

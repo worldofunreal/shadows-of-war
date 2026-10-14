@@ -1,5 +1,7 @@
 use crate::app::{InputState, SimState, TransportTargetMarker, UiState};
-use crate::death_nameplate::{death_animation, death_emoji};
+use crate::death_nameplate::{
+    GOLD_REWARD_DURATION, death_animation, death_emoji, gold_reward_elapsed,
+};
 use crate::render::gpu::TextRenderer;
 use crate::render::world::overlays::{INLINE_EMOJI_SCALE, world_to_screen};
 use crate::render::{dev_emoji_outline, dev_text_style};
@@ -11,7 +13,7 @@ use web_time::Instant;
 const CLICK_MARKER_DURATION: f32 = 0.16;
 const ATTACK_LAUNCH_NOTICE_DURATION: f32 = 1.5;
 const ATTACK_LAUNCH_NOTICE_FONT_SIZE: f32 = 14.0;
-const ATTACK_LAUNCH_NOTICE_RISE: f32 = 6.5;
+const FLOATING_NOTICE_RISE: f32 = 6.5;
 const TRANSPORT_TARGET_FADE_IN_SECS: f32 = 0.2;
 const TRANSPORT_TARGET_FADE_OUT_SECS: f32 = 0.3;
 const TRANSPORT_TARGET_ROTATIONS_PER_SEC: f32 = 1.0;
@@ -20,6 +22,7 @@ const TRANSPORT_IMPACT_DURATION_SECS: f32 = 0.62;
 const DEATH_NAMEPLATE_FONT_SIZE: f32 = 18.0;
 const DEATH_NAMEPLATE_RISE: f32 = 5.0;
 const DEATH_NAMEPLATE_ARC_OFFSET: f32 = 0.75;
+const GOLD_REWARD_FONT_SIZE: f32 = 14.0;
 const ATTACK_BADGE_FONT_SIZE: f32 = 13.0;
 const ATTACK_BADGE_UPDATE_SECS: f32 = 0.09;
 
@@ -87,7 +90,7 @@ fn render_attack_launch_notices(
     ui.attack_launch_notices.retain(|notice| {
         let elapsed = now.duration_since(notice.start_time).as_secs_f32();
         let Some((progress, rise, scale)) =
-            attack_launch_notice_animation(elapsed, ATTACK_LAUNCH_NOTICE_DURATION)
+            floating_notice_animation(elapsed, ATTACK_LAUNCH_NOTICE_DURATION)
         else {
             return false;
         };
@@ -116,7 +119,7 @@ fn render_attack_launch_notices(
     });
 }
 
-fn attack_launch_notice_animation(elapsed: f32, duration: f32) -> Option<(f32, f32, f32)> {
+fn floating_notice_animation(elapsed: f32, duration: f32) -> Option<(f32, f32, f32)> {
     if !elapsed.is_finite() || !duration.is_finite() || duration <= 0.0 || elapsed >= duration {
         return None;
     }
@@ -128,7 +131,7 @@ fn attack_launch_notice_animation(elapsed: f32, duration: f32) -> Option<(f32, f
     } else {
         1.0
     };
-    Some((progress, progress * ATTACK_LAUNCH_NOTICE_RISE, scale))
+    Some((progress, progress * FLOATING_NOTICE_RISE, scale))
 }
 
 #[inline]
@@ -370,7 +373,37 @@ fn render_death_nameplates(
     ui.death_nameplates.retain(|animation| {
         let elapsed = now.duration_since(animation.start_time).as_secs_f32();
         let Some((_, eased, alpha)) = death_animation(elapsed) else {
-            return false;
+            let Some(reward) = animation.reward.as_ref() else {
+                return false;
+            };
+            let Some(reward_elapsed) = gold_reward_elapsed(elapsed) else {
+                return false;
+            };
+            let Some((progress, rise, scale)) =
+                floating_notice_animation(reward_elapsed, GOLD_REWARD_DURATION)
+            else {
+                return false;
+            };
+            let screen = world_to_screen(reward.world_x, reward.world_y - rise, input, sf);
+            if screen[0] < -150.0
+                || screen[0] > screen_w + 150.0
+                || screen[1] < -150.0
+                || screen[1] > screen_h + 150.0
+            {
+                return true;
+            }
+            let alpha = 1.0 - progress;
+            let base_color = crate::rgb(250, 204, 21);
+            let color = [base_color[0], base_color[1], base_color[2], alpha];
+            text.push_string(
+                &reward.text,
+                [screen[0] * sf, screen[1] * sf],
+                GOLD_REWARD_FONT_SIZE * scale * font_scale * sf,
+                color,
+                dev_text_style(dev, sf, [0.0, 0.0, 0.0, alpha]),
+                (0.5, char_spacing, INLINE_EMOJI_SCALE),
+            );
+            return true;
         };
         if alpha <= 0.0 {
             return true;
@@ -662,28 +695,25 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn attack_launch_notice_rises_fades_and_expires() {
-        let start = attack_launch_notice_animation(0.0, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
-        let middle = attack_launch_notice_animation(0.75, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
-        let rebound = attack_launch_notice_animation(1.3, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
+    fn floating_notice_rises_fades_and_expires() {
+        let start = floating_notice_animation(0.0, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
+        let middle = floating_notice_animation(0.75, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
+        let rebound = floating_notice_animation(1.3, ATTACK_LAUNCH_NOTICE_DURATION).unwrap();
         assert_eq!(start.0, 0.0);
         assert_eq!(start.1, 0.0);
         assert_eq!(middle.0, 0.5);
         assert_eq!(1.0 - middle.0, 0.5);
-        assert_eq!(middle.1, ATTACK_LAUNCH_NOTICE_RISE * 0.5);
+        assert_eq!(middle.1, FLOATING_NOTICE_RISE * 0.5);
         assert_eq!(middle.2, 1.0);
         assert_eq!(rebound.2, 1.2);
         assert!(
-            attack_launch_notice_animation(
-                ATTACK_LAUNCH_NOTICE_DURATION,
-                ATTACK_LAUNCH_NOTICE_DURATION
-            )
-            .is_none()
+            floating_notice_animation(ATTACK_LAUNCH_NOTICE_DURATION, ATTACK_LAUNCH_NOTICE_DURATION)
+                .is_none()
         );
     }
 
     #[wasm_bindgen_test]
-    fn attack_launch_notice_spring_starts_at_zero() {
+    fn floating_notice_spring_starts_at_zero() {
         assert_eq!(spring_overshoot(0.0), 0.0);
     }
 }

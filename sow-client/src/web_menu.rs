@@ -3811,15 +3811,6 @@ pub(crate) fn publish_state(app: &mut SowApp) {
             "loader_job": splash_job_name(&app.ui.app.splash_state.job),
             "loader_leader": app.ui.app.splash_state.loader_leader.map(leader_id),
             "loader_progress": app.ui.app.splash_state.progress.clamp(0.0, 1.0),
-            "loader_status": "",
-            "loader_status_key": app.menu_return.as_ref().filter(|context| {
-                context.cycle_id == app.ui.app.splash_state.cycle_id
-                    && context.account_id == app.progress_account_id
-            }).and_then(|context| match context.status.as_str() {
-                "waiting" => Some("menu.confirming_rewards"),
-                "error" => Some("menu.retrying_rewards"),
-                _ => None,
-            }),
             "loader_done": app.ui.app.splash_state.done,
             "boot_campaign": app.boot_campaign_pending.clone(),
             "connected": state.is_connected,

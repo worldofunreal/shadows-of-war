@@ -88,8 +88,8 @@ aplicables y error.
   llama a `complete_boudica_tutorial` antes de desmontar la partida; terminar
   el último paso converge allí. Un indicador antiguo de tutorial terminado
   no sustituye el comprobante del premio ni impide recuperarlo.
-- Error o demora: explicar la espera y reintentar desde el loader. No volver al
-  menú con una estimación local.
+- Error o demora: mantener abierto el loader y reintentar ahí. No volver al menú
+  con una estimación local.
 - Recargar conserva el regreso pendiente. Cambiar de cuenta separa todos sus
   pendientes, comprobantes y recorridos.
 - Salir voluntariamente de multijugador confirma lo ganado hasta la salida

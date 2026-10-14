@@ -9,13 +9,10 @@
 
 use std::sync::LazyLock;
 
-pub const BOT_NAME_COUNT: usize = 7156;
+pub const BOT_NAME_COUNT: usize = 7199;
 
 pub static BOT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-    include_str!("names.txt")
-        .lines()
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .collect()
+    include_str!("names.txt").lines().collect()
 });
 
 #[cfg(test)]
@@ -25,6 +22,12 @@ mod tests {
 
     #[test]
     fn bot_name_pool_is_unique_safe_and_complete() {
+        assert!(
+            include_str!("names.txt")
+                .lines()
+                .all(|line| !line.is_empty() && !line.starts_with('#')),
+            "names.txt must contain names only, without blank lines or annotations"
+        );
         assert_eq!(BOT_NAMES.len(), BOT_NAME_COUNT);
 
         let mut seen = HashSet::with_capacity(BOT_NAMES.len());
@@ -67,10 +70,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn bot_arabic_is_covered_by_the_gameplay_glyph_corpus() {
+        let glyph_corpus = include_str!("../../../sow-render/src/text/unicode_name_glyphs.txt");
+        let mut in_arabic_section = false;
+        let mut arabic_glyphs = HashSet::new();
+
+        for line in glyph_corpus.lines() {
+            if let Some(section) = line.strip_prefix("# ") {
+                in_arabic_section = section == "arabic";
+            } else if in_arabic_section {
+                arabic_glyphs.extend(line.chars().filter(|character| is_arabic(*character)));
+            }
+        }
+
+        for name in BOT_NAMES.iter() {
+            for character in name.chars().filter(|character| is_arabic(*character)) {
+                assert!(
+                    arabic_glyphs.contains(&character),
+                    "Arabic character {character:?} in ghost name {name:?} is missing from the gameplay glyph corpus"
+                );
+            }
+        }
+    }
+
     fn is_hangul(character: char) -> bool {
         matches!(
             character as u32,
             0x1100..=0x11FF | 0x3130..=0x318F | 0xA960..=0xA97F | 0xAC00..=0xD7FF
+        )
+    }
+
+    fn is_arabic(character: char) -> bool {
+        matches!(
+            character as u32,
+            0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF
         )
     }
 

@@ -1,4 +1,3 @@
-# legacy
 mir5
 OloF
 rezx
@@ -820,8 +819,6 @@ FLUS4
 RUS2
 vzEus
 DEV11
-
-# OpenDota proPlayers; profile country_code is a label, not verified nationality.
 mortalW
 Taku.-
 4s1
@@ -891,8 +888,6 @@ Youngblood
 YunMago
 Yunooo~
 zzz
-
-# Steam nyuuzyou/steambans (CC0-1.0); global sample, no country field.
 _-KS-_
 _Bulld0G_
 _deKi99
@@ -1393,12 +1388,6 @@ Zied__
 zxc_dream
 zxcobeer
 zzzzzz....
-# Brazil aliases promoted 2026-10-12: 1,534 handles (36 OpenDota; 1,498 Liquipedia).
-# Liquipedia-derived section is CC BY-SA 3.0; attribution and terms: https://liquipedia.net/api-terms-of-use
-# OpenDota source: https://api.opendota.com/api/proPlayers; country_code=BR is a profile label, not verified nationality.
-# Full source audit trail: sow-server/src/bot_fill/review_candidates_brazil.txt
-
-# OpenDota, Brazil profile label (36):
 Rendan
 Kingao
 lucas
@@ -1435,8 +1424,6 @@ iSonic
 hanedota
 naytemsc
 venividivici
-
-# Liquipedia Counter-Strike (260), CC BY-SA 3.0: https://liquipedia.net/counterstrike/Category:Brazilian_Players
 AbleJ
 Abr
 Aliche
@@ -1697,8 +1684,6 @@ Zam
 Zede
 Zevy
 Zmb
-
-# Liquipedia Rainbow Six (230), CC BY-SA 3.0: https://liquipedia.net/rainbowsix/Category:Brazilian_Players
 AGrazi
 Akirex
 Alem4o
@@ -1929,8 +1914,6 @@ ZFuzioNN
 ZiGueira
 ZLukLok
 Zyon
-
-# Liquipedia League of Legends (222), CC BY-SA 3.0: https://liquipedia.net/leagueoflegends/Category:Brazilian_Players
 4LaN
 Accez
 Aegis
@@ -2153,8 +2136,6 @@ Zay
 Zekas
 Zemnas
 Zynts
-
-# Liquipedia VALORANT (206), CC BY-SA 3.0: https://liquipedia.net/valorant/Category:Brazilian_Players
 Akemy
 Allie
 AmbitioN
@@ -2361,8 +2342,6 @@ Zakkv
 Zanatsu
 Zap
 Zotie
-
-# Liquipedia Fortnite (282), CC BY-SA 3.0: https://liquipedia.net/fortnite/Category:Brazilian_Players
 916Gon
 AG1RRE
 Akla
@@ -2645,8 +2624,6 @@ ZEN
 Zugorow
 Zuin
 Zuusboy
-
-# Liquipedia PUBG Mobile (89), CC BY-SA 3.0: https://liquipedia.net/pubgmobile/Category:Brazilian_Players
 AdriaN
 Alanzin
 Arturzin
@@ -2736,8 +2713,6 @@ Vitali
 Vitinn
 WAGNERZADA
 Zeusboy
-
-# Liquipedia PUBG (100), CC BY-SA 3.0: https://liquipedia.net/pubg/Category:Brazilian_Players
 7bee
 Afrodite
 And1FPS
@@ -2838,8 +2813,6 @@ ZFluxxx
 ZkrakeN
 Znowa
 ZoDK
-
-# Liquipedia Call of Duty (58), CC BY-SA 3.0: https://liquipedia.net/callofduty/Category:Brazilian_Players
 Araujo
 B1godera
 Caio
@@ -2898,8 +2871,6 @@ TriXziN
 Tubarão
 Vieira
 XLNC
-
-# Liquipedia Brawl Stars (51), CC BY-SA 3.0: https://liquipedia.net/brawlstars/Category:Brazilian_Players
 BeTo
 Bicho
 Bielz
@@ -2951,18 +2922,6 @@ Toodyxz
 Tufa
 Wesley
 Yichy
-# Vietnamese player handles promoted 2026-10-12; Liquipedia category titles, CC BY-SA 3.0.
-# Attribution/API terms: https://liquipedia.net/api-terms-of-use; country labels are source labels.
-# Counter-Strike (19): https://liquipedia.net/counterstrike/Category:Vietnamese_Players
-# Rainbow Six (3): https://liquipedia.net/rainbowsix/Category:Vietnamese_Players
-# League of Legends (164): https://liquipedia.net/leagueoflegends/Category:Vietnamese_Players
-# VALORANT (83): https://liquipedia.net/valorant/Category:Vietnamese_Players
-# Fortnite (12): https://liquipedia.net/fortnite/Category:Vietnamese_Players
-# PUBG Mobile (67): https://liquipedia.net/pubgmobile/Category:Vietnamese_Players
-# PUBG (78): https://liquipedia.net/pubg/Category:Vietnamese_Players
-# Mobile Legends: Bang Bang (17): https://liquipedia.net/mobilelegends/Category:Vietnamese_Players
-# Free Fire (83): https://liquipedia.net/freefire/Category:Vietnamese_Players
-# Dota 2 (8): https://liquipedia.net/dota2/Category:Vietnamese_Players
 Anlelele
 CLb
 Crazyguy
@@ -3497,21 +3456,6 @@ Hunghung
 Red
 Vivian
 Yasy
-
-# India player handles promoted 2026-10-12; Liquipedia category titles, CC BY-SA 3.0.
-# Attribution/API terms: https://liquipedia.net/api-terms-of-use; country labels are source labels.
-# Counter-Strike (57): https://liquipedia.net/counterstrike/Category:Indian_Players
-# Rainbow Six (36): https://liquipedia.net/rainbowsix/Category:Indian_Players
-# League of Legends (4): https://liquipedia.net/leagueoflegends/Category:Indian_Players
-# VALORANT (74): https://liquipedia.net/valorant/Category:Indian_Players
-# Fortnite (17): https://liquipedia.net/fortnite/Category:Indian_Players
-# PUBG Mobile (244): https://liquipedia.net/pubgmobile/Category:Indian_Players
-# PUBG (12): https://liquipedia.net/pubg/Category:Indian_Players
-# Free Fire (83): https://liquipedia.net/freefire/Category:Indian_Players
-# Dota 2 (5): https://liquipedia.net/dota2/Category:Indian_Players
-# Call of Duty (52): https://liquipedia.net/callofduty/Category:Indian_Players
-# Brawl Stars (28): https://liquipedia.net/brawlstars/Category:Indian_Players
-# Mobile Legends (4): https://liquipedia.net/mobilelegends/Category:Indian_Players
 Ace
 Amaterasu
 Antidote
@@ -4128,19 +4072,6 @@ Abhi
 Duba
 Kimyy
 VVitch
-
-# Pakistan player handles promoted 2026-10-12; Liquipedia category titles, CC BY-SA 3.0.
-# Attribution/API terms: https://liquipedia.net/api-terms-of-use; country labels are source labels.
-# Counter-Strike (8): https://liquipedia.net/counterstrike/Category:Pakistani_Players
-# Rainbow Six (12): https://liquipedia.net/rainbowsix/Category:Pakistani_Players
-# VALORANT (11): https://liquipedia.net/valorant/Category:Pakistani_Players
-# Fortnite (18): https://liquipedia.net/fortnite/Category:Pakistani_Players
-# PUBG Mobile (67): https://liquipedia.net/pubgmobile/Category:Pakistani_Players
-# Free Fire (21): https://liquipedia.net/freefire/Category:Pakistani_Players
-# Dota 2 (2): https://liquipedia.net/dota2/Category:Pakistani_Players
-# Call of Duty (3): https://liquipedia.net/callofduty/Category:Pakistani_Players
-# Rocket League (6): https://liquipedia.net/rocketleague/Category:Pakistani_Players
-# Fighting Games (19): https://liquipedia.net/fighters/Category:Pakistani_Players
 D0cC
 HSB
 KLnT
@@ -4308,11 +4239,6 @@ Sikkify
 SilverFox
 Spag
 WhiteAshX
-# Philippines player handles promoted 2026-10-12; Liquipedia categories, CC BY-SA 3.0.
-# API terms and attribution: https://liquipedia.net/api-terms-of-use
-# Country/category labels are source labels, not independently verified nationality.
-# Retained published titles; removed only Filipino-player disambiguation; one-token, 3-16 chars, server-approved; deduplicated ignoring case.
-# Dota 2 (76): https://liquipedia.net/dota2/Category:Filipino_Players
 Ab1ng
 Abat
 Abed
@@ -4389,7 +4315,6 @@ Yopaj
 YoungGod
 Yowe
 Zenki
-# League of Legends (58): https://liquipedia.net/leagueoflegends/Category:Filipino_Players
 Act
 Agrona
 Austerity
@@ -4448,7 +4373,6 @@ Yjy
 Yukz
 Yume
 Zensho
-# Mobile Legends: Bang Bang (190): https://liquipedia.net/mobilelegends/Category:Filipino_Players
 3MarTzy
 Aaronqt
 Aezu
@@ -4639,7 +4563,6 @@ Z4pnu
 Zaida
 Zaishii
 ZIA
-# Honor of Kings (43): https://liquipedia.net/honorofkings/Category:Filipino_Players
 1717
 3SH
 611
@@ -4683,7 +4606,6 @@ Vane
 Zaopi
 Zeipee
 Zel
-# Overwatch (12): https://liquipedia.net/overwatch/Category:Filipino_Players
 AGO
 AmeKen
 Caladbolg
@@ -4696,7 +4618,6 @@ Revzi
 SuperLocs
 Whome
 Zyrille
-# VALORANT (113): https://liquipedia.net/valorant/Category:Filipino_Players
 2GE
 ABATMAN
 Aeonyx
@@ -4810,7 +4731,6 @@ Zekken
 Zey
 Zini
 ZYND
-# Counter-Strike (7): https://liquipedia.net/counterstrike/Category:Filipino_Players
 Clyd1e
 EasTor
 Kathi
@@ -4818,13 +4738,11 @@ Kenzyy
 Nokz
 Pro.
 Salazar
-# Rainbow Six (5): https://liquipedia.net/rainbowsix/Category:Filipino_Players
 JayDog
 Kiyoshi
 Miku
 Yannis
 Zman
-# PUBG Mobile (37): https://liquipedia.net/pubgmobile/Category:Filipino_Players
 4thRow
 762
 Aesor
@@ -4862,7 +4780,6 @@ VeryNice
 VeryYummy
 Vigor
 WAKO
-# Free Fire (11): https://liquipedia.net/freefire/Category:Filipino_Players
 Blank
 BRENTTEU
 FORBIDS
@@ -4874,11 +4791,6 @@ RAYMIEL
 RETOOHS
 TANAMO
 WINE
-# Malaysia, Indonesia, and Singapore player handles added 2026-10-12; titles from Liquipedia player categories.
-# Liquipedia text is CC BY-SA 3.0. API terms and attribution: https://liquipedia.net/api-terms-of-use
-# Country categories are source labels, not independently verified nationality.
-# Filter: published one-token titles, 3-16 Unicode characters, server name policy; exact matching country disambiguation removed; case-insensitive dedupe against active pool and this batch.
-# Malaysia / Dota 2 (46 new of 59 pages): https://liquipedia.net/dota2/Category:Malaysian_Players
 AhJit
 Aikster
 Ben
@@ -4925,7 +4837,6 @@ YamateH
 Ysaera
 Zacky
 Zeal
-# Malaysia / League of Legends (22 new of 23 pages): https://liquipedia.net/leagueoflegends/Category:Malaysian_Players
 13Ghost
 781
 Arashi
@@ -4948,7 +4859,6 @@ TaintedOnes
 WAhzleNs
 XXF
 Yijie
-# Malaysia / Mobile Legends: Bang Bang (106 new of 116 pages): https://liquipedia.net/mobilelegends/Category:Malaysian_Players
 2ez4Jepv
 4Meyz
 Aim
@@ -5055,7 +4965,6 @@ Zaraki
 Zee
 Zeno
 Zqeef
-# Malaysia / Honor of Kings (49 new of 67 pages): https://liquipedia.net/honorofkings/Category:Malaysian_Players
 Anda
 BAI
 Care
@@ -5105,7 +5014,6 @@ Xuann
 ZenShao
 ZhanQ
 ZhiHong
-# Malaysia / VALORANT (30 new of 33 pages): https://liquipedia.net/valorant/Category:Malaysian_Players
 1van
 3nable
 Aduka
@@ -5136,7 +5044,6 @@ TheDoctorr
 Toggle
 Xan
 Zeeq
-# Malaysia / Counter-Strike (21 new of 24 pages): https://liquipedia.net/counterstrike/Category:Malaysian_Players
 AcAp
 AimaNNN
 Anasasis
@@ -5158,7 +5065,6 @@ Taymore
 Wanr0
 XevR
 YooNgHwe1
-# Malaysia / PUBG Mobile (114 new of 127 pages): https://liquipedia.net/pubgmobile/Category:Malaysian_Players
 Aboyy
 Adibz
 Aisyy
@@ -5273,7 +5179,6 @@ YeN
 ZigZag
 Zully
 Zykz
-# Malaysia / Free Fire (56 new of 60 pages): https://liquipedia.net/freefire/Category:Malaysian_Players
 2Bad
 2fast
 4Eyes
@@ -5330,7 +5235,6 @@ Yasta
 Yazidd
 ZennOP
 Zuezz
-# Malaysia / Rocket League (7 new of 9 pages): https://liquipedia.net/rocketleague/Category:Malaysian_Players
 Buroskii
 Byro
 PanJ
@@ -5338,13 +5242,11 @@ Quboyd
 Sanyo
 Sphinx
 Vapour
-# Malaysia / Fortnite (5 new of 7 pages): https://liquipedia.net/fortnite/Category:Malaysian_Players
 AdaM
 Frenzy
 Kygo
 Sickerz
 Syaz
-# Malaysia / Apex Legends (17 new of 18 pages): https://liquipedia.net/apexlegends/Category:Malaysian_Players
 Akim
 BunnyH0p
 EixWais
@@ -5362,7 +5264,6 @@ XKenN
 XoyoBda
 YaSe
 Yraz
-# Malaysia / Call of Duty (16 new of 20 pages): https://liquipedia.net/callofduty/Category:Malaysian_Players
 Azmal
 B1ngo
 ConcepT
@@ -5379,7 +5280,6 @@ X3Jasmine
 Xell
 ZariF
 Zh3ngYu
-# Indonesia / Dota 2 (37 new of 40 pages): https://liquipedia.net/dota2/Category:Indonesian_Players
 2hoi
 Acil
 Azur4
@@ -5417,9 +5317,7 @@ Varizh
 Whitemon
 Womy
 Xepher
-# Indonesia / League of Legends (1 new of 2 pages): https://liquipedia.net/leagueoflegends/Category:Indonesian_Players
 Raphael
-# Indonesia / Mobile Legends: Bang Bang (282 new of 317 pages): https://liquipedia.net/mobilelegends/Category:Indonesian_Players
 AeronnShikii
 Aether
 Agatha
@@ -5702,7 +5600,6 @@ YoR
 Yuraa
 Zhiry
 Zoeybit
-# Indonesia / Honor of Kings (55 new of 63 pages): https://liquipedia.net/honorofkings/Category:Indonesian_Players
 44ape
 663
 Ahem
@@ -5758,7 +5655,6 @@ Xena
 Yoloo
 Zaan
 ZeroZero
-# Indonesia / VALORANT (73 new of 76 pages): https://liquipedia.net/valorant/Category:Indonesian_Players
 Adrnking
 AmerNone
 BEASTJefz
@@ -5832,7 +5728,6 @@ Xffero
 Yaamorii
 Zhar
 Zneider
-# Indonesia / Counter-Strike (10 new of 15 pages): https://liquipedia.net/counterstrike/Category:Indonesian_Players
 BnTeT
 FrgdibtJ
 FrostMisty
@@ -5843,7 +5738,6 @@ Roseau
 Soifong
 WasteOfAmmo
 Xccurate
-# Indonesia / PUBG Mobile (151 new of 158 pages): https://liquipedia.net/pubgmobile/Category:Indonesian_Players
 1SlayeR
 2youl
 Acull
@@ -5995,7 +5889,6 @@ Zao
 Zeta
 Ziro
 Zuxxy
-# Indonesia / Free Fire (159 new of 172 pages): https://liquipedia.net/freefire/Category:Indonesian_Players
 18Deer
 AbaaaX
 Abay
@@ -6155,7 +6048,6 @@ YamiL
 Yannn
 Yoss
 Zaxx
-# Indonesia / Rocket League (15 new of 17 pages): https://liquipedia.net/rocketleague/Category:Indonesian_Players
 Deprvty
 Ficeo
 Gon
@@ -6171,7 +6063,6 @@ Ripoopi
 SeaDog
 Squirrel
 Sycho
-# Indonesia / Fortnite (16 new of 17 pages): https://liquipedia.net/fortnite/Category:Indonesian_Players
 Annialis
 Birelta
 Danielbieje
@@ -6188,7 +6079,6 @@ NetloV
 NotWibu
 Qbo
 Zenox
-# Indonesia / Apex Legends (32 new of 35 pages): https://liquipedia.net/apexlegends/Category:Indonesian_Players
 ApriaN
 Aviisan
 AxiliC
@@ -6221,7 +6111,6 @@ Veeycy
 Wiffuu
 Xboltz7
 Zaratass
-# Indonesia / Call of Duty (16 new of 20 pages): https://liquipedia.net/callofduty/Category:Indonesian_Players
 A1MER
 Clove
 Ehann
@@ -6238,7 +6127,6 @@ Skepta
 Trixterz
 Zennnn
 ZezeX
-# Singapore / Dota 2 (18 new of 22 pages): https://liquipedia.net/dota2/Category:Singaporean_Players
 Barry
 Chains
 Chawy
@@ -6257,7 +6145,6 @@ Tudi
 XMusiCa
 Xsilearn
 Xy-
-# Singapore / League of Legends (36 new of 42 pages): https://liquipedia.net/leagueoflegends/Category:Singaporean_Players
 Arkane
 Arykelic
 Ataraxia
@@ -6294,7 +6181,6 @@ Valkyrie
 Vera
 Windowlicka
 Zappy
-# Singapore / Mobile Legends: Bang Bang (43 new of 57 pages): https://liquipedia.net/mobilelegends/Category:Singaporean_Players
 505
 A1a2
 Adammir
@@ -6338,7 +6224,6 @@ Vanix
 WQxD
 Xian
 Yaawn
-# Singapore / Honor of Kings (11 new of 15 pages): https://liquipedia.net/honorofkings/Category:Singaporean_Players
 813
 Aris
 Dusk
@@ -6350,7 +6235,6 @@ Seira
 Tenmo
 Tym
 Zeys
-# Singapore / VALORANT (54 new of 61 pages): https://liquipedia.net/valorant/Category:Singaporean_Players
 Akame
 Artn
 Azami
@@ -6405,7 +6289,6 @@ Twelve
 Wayne
 Wink
 ZesBeeW
-# Singapore / Counter-Strike (16 new of 19 pages): https://liquipedia.net/counterstrike/Category:Singaporean_Players
 Benkai
 Bobosaur
 Dejavux
@@ -6422,10 +6305,7 @@ Splashske
 Squall
 Techduck
 Tommy
-# Singapore / PUBG Mobile (1 new of 1 pages): https://liquipedia.net/pubgmobile/Category:Singaporean_Players
 Sane
-# Singapore / Free Fire (0 new of 0 pages): https://liquipedia.net/freefire/Category:Singaporean_Players
-# Singapore / Rocket League (17 new of 23 pages): https://liquipedia.net/rocketleague/Category:Singaporean_Players
 Ballerrees
 Claw-Z
 Commutator
@@ -6443,7 +6323,6 @@ Risk
 Squigly
 TBYUBD
 ZiNX
-# Singapore / Fortnite (11 new of 17 pages): https://liquipedia.net/fortnite/Category:Singaporean_Players
 Cursive
 Gghfhghff
 Howl
@@ -6455,22 +6334,15 @@ Salvo
 Standry
 Wisa
 Zuity
-# Singapore / Apex Legends (3 new of 4 pages): https://liquipedia.net/apexlegends/Category:Singaporean_Players
 RobinFTW
 Rosmontis
 SaviourHeavier
-# Singapore / Call of Duty (6 new of 6 pages): https://liquipedia.net/callofduty/Category:Singaporean_Players
 Bloo
 Heaven
 Incendió
 IrfanJ
 SeaN
 Skywhite
-
-# Japan player IDs added 2026-10-12 from Liquipedia local-ID and alternate-ID fields.
-# Category membership is the source attribution; no names were generated.
-
-# Japan / Fighting games (64 new; names contain Japanese script): https://liquipedia.net/fighters/Category:Japanese_Players
 ウメハラ
 ボンちゃん
 ももち
@@ -6535,8 +6407,6 @@ Y・S・B
 ザンドリ
 ザベス
 ゆうちゃそ
-
-# Japan / Super Smash Bros. (76 new; names contain Japanese script): https://liquipedia.net/smash/Category:Japanese_Players
 フラッシュ
 ルドルフ
 丈助
@@ -6613,8 +6483,6 @@ Yン
 ヨピ
 つくね
 わいあい
-
-# Japan / Splatoon (48 new; names contain Japanese script): https://liquipedia.net/splatoon/Category:Japanese_Players
 たいじ
 バズ
 バズ900
@@ -6663,8 +6531,6 @@ Yン
 れき
 まるがめうどんマン
 スリュー
-
-# Japan / Apex Legends (23 new; names contain Japanese script): https://liquipedia.net/apexlegends/Category:Japanese_Players
 パンタシア
 タマナハ
 うるか
@@ -6688,8 +6554,6 @@ Yン
 きんた
 ことり
 みはちん
-
-# Japan / Identity V (42 new; names contain Japanese script): https://liquipedia.net/identityv/Category:Japanese_Players
 あかまじゅ
 あるふ
 あっと
@@ -6732,8 +6596,6 @@ Yン
 そ〜ら
 そ〜ら^^
 もねいろ
-
-# Japan / Teamfight Tactics (15 new; names contain Japanese script): https://liquipedia.net/tft/Category:Japanese_Players
 たいとる
 ぬこ丸
 しかめまどか
@@ -6749,11 +6611,7 @@ Best 佐藤
 ふぁんでるかーん
 りーり
 うに軍
-
-# Japan / VALORANT (1 new; names contain Japanese script): https://liquipedia.net/valorant/Category:Japanese_Players
 ほっちょこ
-
-# Japan / Overwatch (18 new; names contain Japanese script): https://liquipedia.net/overwatch/Category:Japanese_Players
 だいりてん
 りん
 らりるれろ
@@ -6772,13 +6630,9 @@ Best 佐藤
 铃玉
 くき2525
 にんじゃはむぞー
-
-# Japan / League of Legends (3 new; names contain Japanese script): https://liquipedia.net/leagueoflegends/Category:Japanese_Players
 りきゃっぷ
 きなつ
 ぷりも
-
-# Japan / PUBG Mobile (7 new; names contain Japanese script): https://liquipedia.net/pubgmobile/Category:Japanese_Players
 アナツ
 そらやん
 北茂樹
@@ -6786,17 +6640,11 @@ Best 佐藤
 へこ
 旬の駿
 PINE喰
-
-# Japan / Honor of Kings (1 new; names contain Japanese script): https://liquipedia.net/honorofkings/Category:Japanese_Players
 けーあいえぬじ
-
-# Japan / Call of Duty (4 new; names contain Japanese script): https://liquipedia.net/callofduty/Category:Japanese_Players
 にこちゃん
 べブラ
 にる
 はんてぃ
-
-# Japan / Fortnite (38 new; names contain Japanese script): https://liquipedia.net/fortnite/Category:Japanese_Players
 るり
 みや
 まうふぃん
@@ -6835,42 +6683,24 @@ PINE喰
 せこさま
 ぼっと
 つが
-
-# Japan / Hearthstone (5 new; names contain Japanese script): https://liquipedia.net/hearthstone/Category:Japanese_Players
 あれっくす
 ペンギンさん
 蒼汁
 執念の蒼汁
 白うさ
-
-# Liquipedia handle data attribution (CC BY-SA 3.0); source links are recorded by group.
-# Russia / Dota 2: https://liquipedia.net/dota2/Category:Russian_Players https://liquipedia.net/dota2/KingR
 Женя
 чевчелиус
 Мистер мораль
-
-# Russia / Mobile Legends: Bang Bang: https://liquipedia.net/mobilelegends/Yustinian https://liquipedia.net/mobilelegends/Saba
 сашок2006
 юстик
 юстиниан
-
-# Russia / StarCraft II: https://liquipedia.net/starcraft2/SKillous https://liquipedia.net/starcraft2/Abver
 Молодой
 ОпытРешает
-
-# Ukraine / StarCraft II: https://liquipedia.net/starcraft2/Category:Ukrainian_Players
 Жужа
 Пчёл
-
-# Mongolia / Dota 2: https://liquipedia.net/dota2/11
 элэвэн
-
-# China and Taiwan player aliases retrieved 2026-10-13 from Liquipedia category pages.
-# Only profile id, ids, and localid fields were considered; names were not generated.
-# Source license/API terms: https://liquipedia.net/api-terms-of-use (CC BY-SA 3.0 attribution).
-# China / Honor of Kings: https://liquipedia.net/honorofkings/Category:Chinese_Players
 微信wxtTiamo
-老帅
+老帅adan
 飞牛
 爱吃钱的牛坦
 晨阳
@@ -6925,8 +6755,6 @@ PINE喰
 我要蹭钱兄弟
 三藏
 九月
-
-# China / Dota 2: https://liquipedia.net/dota2/Category:Chinese_Players
 御剑飞行
 不听话
 Somnus丶M
@@ -6938,11 +6766,7 @@ Somnus丶M
 一方通行
 佞臣
 队长给我球
-
-# China / League of Legends: https://liquipedia.net/leagueoflegends/Category:Chinese_Players
 司马老贼
-
-# China / PUBG Mobile: https://liquipedia.net/pubgmobile/Category:Chinese_Players
 伞兵
 白猫
 尧仔
@@ -6989,8 +6813,6 @@ Somnus丶M
 诚c
 珊志
 释怀
-
-# China / Counter-Strike: https://liquipedia.net/counterstrike/Category:Chinese_Players
 稳中带狠-
 真不错
 大宗师
@@ -7016,11 +6838,7 @@ Sideny蛇
 李乐炜的Sg553
 CHEATER肥7
 地狱修罗点夜宵了
-
-# China / VALORANT: https://liquipedia.net/valorant/Category:Chinese_Players
 午夜
-
-# China / StarCraft II: https://liquipedia.net/starcraft2/Category:Chinese_Players
 神气宝贝
 Thpj.喵帕斯
 [THpj]三族统领随机娜
@@ -7049,8 +6867,6 @@ NT.诡计
 六夜
 萌思课
 抖音小齐
-
-# China / Warcraft III: https://liquipedia.net/warcraft/Category:Chinese_Players
 玉米
 虎王
 浪漫
@@ -7068,8 +6884,6 @@ NT.诡计
 西爷
 小凯
 无道oc
-
-# China / Overwatch: https://liquipedia.net/overwatch/Category:Chinese_Players
 夺魂
 鹅皇
 花江夏樹
@@ -7078,8 +6892,6 @@ NT.诡计
 无敌小棉祅
 小学生
 喜欢怨
-
-# China / Hearthstone: https://liquipedia.net/hearthstone/Category:Chinese_Players
 太极剑
 夏末逍遥
 星苏
@@ -7115,8 +6927,6 @@ NT.诡计
 昙天
 瓦莉拉
 贪睡之萨满
-
-# China / Mobile Legends: Bang Bang: https://liquipedia.net/mobilelegends/Category:Chinese_Players
 景泽
 晴一
 黎兮
@@ -7124,8 +6934,6 @@ NT.诡计
 风回
 小渡
 渡一
-
-# China / Age of Empires: https://liquipedia.net/ageofempires/Category:Chinese_Players
 找个厂上班吧
 斗鱼TV肥龙最帅最牛B
 空心
@@ -7162,38 +6970,26 @@ b站 可爱小羊毛
 雨神
 明日
 武力
-
-# Taiwan / Honor of Kings: https://liquipedia.net/honorofkings/Category:Taiwanese_Players
 尼歐
 小霖
 小霖眼鏡
 可愛
 楷
-
-# Taiwan / League of Legends: https://liquipedia.net/leagueoflegends/Category:Taiwanese_Players
 蛇蛇
 楓棠
-
-# Taiwan / PUBG Mobile: https://liquipedia.net/pubgmobile/Category:Taiwanese_Players
 居米
 弘弘
 皇儿
 小7
 小七
 玩偶
-
-# Taiwan / Counter-Strike: https://liquipedia.net/counterstrike/Category:Taiwanese_Players
 太陽的兒子mMm
 賽德瑞克mMm
 小藍天
 小E
-
-# Taiwan / VALORANT: https://liquipedia.net/valorant/Category:Taiwanese_Players
 阿森
 阿罵
 寧榮榮
-
-# Taiwan / StarCraft II: https://liquipedia.net/starcraft2/Category:Taiwanese_Players
 愛蜜莉雅
 休閒玩家
 黒羽快斗
@@ -7201,8 +6997,6 @@ b站 可爱小羊毛
 奶雞
 荔枝
 披薩
-
-# Taiwan / Overwatch: https://liquipedia.net/overwatch/Category:Taiwanese_Players
 古怪烏龜
 小林
 諾亞
@@ -7211,8 +7005,6 @@ b站 可爱小羊毛
 阿包
 见面半血摸到一丝
 番茄
-
-# Taiwan / Hearthstone: https://liquipedia.net/hearthstone/Category:Taiwanese_Players
 承泰不要
 紹安
 撒旦降臨
@@ -7220,16 +7012,8 @@ b站 可爱小羊毛
 威傅
 西陵珩
 星殞晨風
-
-# Taiwan / Age of Empires: https://liquipedia.net/ageofempires/Category:Taiwanese_Players
 小瑜寶寶
 天空熊
-
-# South Korean player aliases added 2026-10-13 from Liquipedia profile ID fields.
-# Only id, ids, and localid values were used; name-field values were excluded.
-# Liquipedia text is CC BY-SA 3.0; attribution/API terms: https://liquipedia.net/api-terms-of-use
-
-# South Korea / StarCraft II (13 aliases): https://liquipedia.net/starcraft2/Category:Korean_Players
 과일장수
 하안사거리
 슬레이어스셀라
@@ -7243,8 +7027,6 @@ b站 可爱小羊毛
 동래굴링
 탐사정
 삼점슛
-
-# South Korea / StarCraft Brood War (46 aliases): https://liquipedia.net/starcraft/Category:Korean_Players
 도브
 깨모다
 얍삽e
@@ -7291,26 +7073,18 @@ b站 可爱小羊毛
 지두두
 쿨지지
 연다람지
-
-# South Korea / Overwatch (6 aliases): https://liquipedia.net/overwatch/Category:Korean_Players
 에이특공대
 버드링
 베르나르
 베르
 새별비
 은평구꽃사슴
-
-# South Korea / VALORANT (5 aliases): https://liquipedia.net/valorant/Category:Korean_Players
 맥도날드알바생
 실반
 조조
 진붕
 진붕이
-
-# South Korea / PUBG Mobile (1 alias): https://liquipedia.net/pubgmobile/Category:Korean_Players
 빛날래
-
-# South Korea / Hearthstone (18 aliases): https://liquipedia.net/hearthstone/Category:Korean_Players
 서렌더
 광역맞으면서렌함
 레니아워
@@ -7329,8 +7103,6 @@ b站 可爱小羊毛
 잔양
 엉큼한거북이
 철면수심
-
-# South Korea / Rainbow Six Siege (38 aliases): https://liquipedia.net/rainbowsix/Category:Korean_Players
 네일요
 스태틱
 헤디
@@ -7369,8 +7141,6 @@ b站 可爱小羊毛
 메피
 굿보이
 가키
-
-# South Korea / Apex Legends (13 aliases): https://liquipedia.net/apexlegends/Category:Korean_Players
 라스
 히야
 민성띠
@@ -7384,4 +7154,46 @@ b站 可爱小羊毛
 비헹기
 위스퍼
 째원님
-
+.حمودي
+تمساح
+نجبي
+رحال
+وسكر
+بيبوريج
+زيزو
+هاش
+سبايرو
+سبايكس
+موكي
+ساث
+راايدر
+تيكنو
+زيكوكوكيز
+ميوش
+نوڤا ٢٥
+أبو عمو
+اش
+أبو العز
+أيس كريم
+لايون سين
+ابوعميم
+ابوالري
+روكي في
+شي شبايدا
+ماو
+وايت موكا
+تايسون
+ايكاروس
+قتسي
+سنايبر
+سوسكن_جيمرز
+مالوري
+عمرتي
+ايفريت
+روق أوجي
+هايبر كيوب
+ستاريا
+يوبي_73
+ككزر
+أبو فلة
+بندريتا

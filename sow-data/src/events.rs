@@ -4,6 +4,7 @@
 //! appended to one daily file. Account IDs are replaced by channel-scoped
 //! server hashes before reaching this sink.
 
+use crate::profile::is_valid_account_id;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -111,7 +112,7 @@ impl AnalyticsEvent {
             return Err("invalid session_id");
         }
         if let Some(id) = &self.account_id
-            && (id.len() != 32 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()))
+            && !is_valid_account_id(id)
         {
             return Err("invalid account_id");
         }
@@ -382,7 +383,8 @@ impl EventSink {
         account_id: &str,
         subject_ids: &[String],
     ) -> std::io::Result<u64> {
-        if account_id.len() != 32 || !account_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        let account_id = account_id.trim();
+        if !is_valid_account_id(account_id) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "invalid account_id",
@@ -548,6 +550,17 @@ mod tests {
     }
 
     #[test]
+    fn account_ids_use_the_shared_profile_format() {
+        let mut event = sample("boot_start");
+        event.account_id = Some("0123456789abcdef0123456789abcdef".to_string());
+        assert!(event.validate(NOW_MS).is_ok());
+        event.account_id = Some("52948534-1c9f-4def-bc8e-80390d3287a6".to_string());
+        assert!(event.validate(NOW_MS).is_ok());
+        event.account_id = Some("guest_0123456789abcdef0123456789abcdef".to_string());
+        assert_eq!(event.validate(NOW_MS), Err("invalid account_id"));
+    }
+
+    #[test]
     fn rejects_unknown_name_and_bad_version_and_bad_ts() {
         assert_eq!(
             sample("not_an_event").validate(NOW_MS),
@@ -697,6 +710,23 @@ mod tests {
         let contents =
             std::fs::read_to_string(dir.path().join(format!("events-{today}.jsonl"))).unwrap();
         assert_eq!(contents.lines().count(), 2);
+    }
+
+    #[test]
+    fn sink_erases_events_for_uuid_account_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        let account_id = "52948534-1c9f-4def-bc8e-80390d3287a6";
+        let mut event = sample("boot_start");
+        event.account_id = Some(account_id.to_string());
+        let mut sink = EventSink::new(dir.path()).unwrap();
+        sink.append_line(&serde_json::to_string(&event).unwrap())
+            .unwrap();
+
+        assert_eq!(sink.erase_account_id(account_id).unwrap(), 1);
+        let today = utc_date_string();
+        let contents =
+            std::fs::read_to_string(dir.path().join(format!("events-{today}.jsonl"))).unwrap();
+        assert!(contents.trim().is_empty());
     }
 
     #[test]

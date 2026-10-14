@@ -9,6 +9,18 @@ use serde::{Deserialize, Serialize};
 pub const CURRENT_SEASON_ID: u32 = 1;
 pub const CURRENT_SEASON_NAME: &str = "Season 1";
 
+/// Account IDs accepted by profile and settlement APIs: compact hexadecimal
+/// IDs and the dashed UUID form used by older account records.
+pub fn is_valid_account_id(value: &str) -> bool {
+    let value = value.trim();
+    (value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        || (value.len() == 36
+            && value.bytes().enumerate().all(|(index, byte)| {
+                matches!(index, 8 | 13 | 18 | 23) && byte == b'-'
+                    || !matches!(index, 8 | 13 | 18 | 23) && byte.is_ascii_hexdigit()
+            }))
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum RewardSettlementStatus {

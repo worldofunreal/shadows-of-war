@@ -1,4 +1,7 @@
-pub use crate::death_nameplate::{DeathNameplateAnimation, MAX_DEATH_NAMEPLATES};
+pub use crate::death_nameplate::{
+    DeathNameplateAnimation, DeathNameplateReward, MAX_DEATH_NAMEPLATES,
+};
+pub(crate) use crate::death_nameplate::local_gold_reward;
 use web_time::{Duration, Instant};
 
 /// Subset of [`sow_core::protocol::ProjectileSnapshot`] for detonation / launch detection.

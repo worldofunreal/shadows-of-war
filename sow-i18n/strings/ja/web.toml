@@ -1,6 +1,4 @@
 [menu]
-confirming_rewards = "報酬を確認しています…"
-retrying_rewards = "接続が切れました。報酬の確認を再試行しています…"
 main_menu_navigation = "メインメニュー"
 game_links = "ゲームリンク"
 shop = "ショップ"

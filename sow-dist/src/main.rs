@@ -1743,7 +1743,7 @@ fn validate_web_catalogs(report_equal_values: bool) -> Result<serde_json::Value>
 }
 
 fn validate_dynamic_web_keys(catalog: &serde_json::Value) -> Result<()> {
-    for key in ["menu.loading", "menu.confirming_rewards", "menu.retrying_rewards"] {
+    for key in ["menu.loading"] {
         if web_catalog_value(catalog, key).is_none() {
             bail!("dynamic localization key is missing: {key}");
         }

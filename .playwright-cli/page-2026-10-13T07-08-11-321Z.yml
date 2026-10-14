@@ -1,0 +1,252 @@
+- generic [active] [ref=f1e1]:
+  - banner [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - link "Shadows of War home" [ref=f1e4] [cursor=pointer]:
+        - /url: /
+        - img "Shadows of War" [ref=f1e5]
+      - generic [ref=f1e6]:
+        - generic "Select language" [ref=f1e7]:
+          - button "Select language" [ref=f1e9] [cursor=pointer]:
+            - generic [ref=f1e10]: English
+            - generic [ref=f1e11]: ⌄
+        - link "PLAY NOW" [ref=f1e12] [cursor=pointer]:
+          - /url: /play/
+  - main [ref=f1e13]:
+    - generic [ref=f1e16]:
+      - heading [level=1] [ref=f1e17]:
+        - text: COMMAND
+        - emphasis [ref=f1e18]: THE MAP.
+      - paragraph [ref=f1e19]: Pick 1 of 12 leaders. Take land, build cities, factories, ports and bunkers, and fight for the map. 12 live now, roster growing.
+      - generic [ref=f1e20]:
+        - link "PLAY" [ref=f1e21] [cursor=pointer]:
+          - /url: /play/
+        - link "WATCH GAMEPLAY" [ref=f1e23] [cursor=pointer]:
+          - /url: "#media"
+          - generic [ref=f1e25]: ▶
+      - group [ref=f1e26]:
+        - paragraph [ref=f1e27]: MOBILE ALPHA TESTING
+        - generic [ref=f1e28]:
+          - link "JOIN ON TestFlight" [ref=f1e29] [cursor=pointer]:
+            - /url: https://testflight.apple.com/join/Y8fu4zch
+            - generic [ref=f1e31]:
+              - generic [ref=f1e32]: JOIN ON
+              - generic [ref=f1e33]: TestFlight
+          - link "GET IT ON Google Play" [ref=f1e34] [cursor=pointer]:
+            - /url: https://play.google.com/apps/testing/com.shadowsofwar
+            - generic [ref=f1e36]:
+              - generic [ref=f1e37]: GET IT ON
+              - generic [ref=f1e38]: Google Play
+    - generic [ref=f1e40]:
+      - generic [ref=f1e41]:
+        - generic [ref=f1e42]:
+          - paragraph [ref=f1e43]: How matches work
+          - heading [level=2] [ref=f1e44]:
+            - text: BUILD, EXPAND,
+            - emphasis [ref=f1e45]: FIGHT.
+        - paragraph [ref=f1e46]: Start small, turn territory into an economy, and decide when cooperation ends. Any alliance can break at any time; whoever holds most of the map wins.
+      - generic [ref=f1e47]:
+        - article [ref=f1e48]:
+          - img "King Leonidas leader selection screen in Shadows of War" [ref=f1e49]
+          - generic [ref=f1e50]:
+            - generic [ref=f1e51]: "01"
+            - generic [ref=f1e52]:
+              - heading "Choose your leader" [level=3] [ref=f1e53]
+              - paragraph [ref=f1e54]: Each gives one bonus. Pick yours.
+        - article [ref=f1e55]:
+          - img "Territory expansion gameplay in Shadows of War" [ref=f1e56]
+          - generic [ref=f1e57]:
+            - generic [ref=f1e58]: "02"
+            - generic [ref=f1e59]:
+              - heading "Take land" [level=3] [ref=f1e60]
+              - paragraph [ref=f1e61]: Every tile you hold pays gold and troops.
+        - article [ref=f1e62]:
+          - img "Several empires competing on the world map in Shadows of War" [ref=f1e63]
+          - generic [ref=f1e64]:
+            - generic [ref=f1e65]: "03"
+            - generic [ref=f1e66]:
+              - heading "Break the frontier" [level=3] [ref=f1e67]
+              - paragraph [ref=f1e68]: Attack, ally, betray. Hold the map to win.
+    - generic [ref=f1e70]:
+      - generic [ref=f1e71]:
+        - generic [ref=f1e72]:
+          - paragraph [ref=f1e73]: Leaders
+          - heading [level=2] [ref=f1e74]:
+            - text: Choose
+            - emphasis [ref=f1e75]: a leader.
+        - paragraph [ref=f1e76]: "Choose a leader that matches how you play: economy, expansion, defense, production, or border pressure."
+      - generic [ref=f1e77]:
+        - generic [ref=f1e78]:
+          - button "Inspect Julius Caesar" [pressed] [ref=f1e79] [cursor=pointer]:
+            - img "Julius Caesar leader artwork" [ref=f1e81]
+            - generic [ref=f1e82]:
+              - generic [ref=f1e83]: Julius Caesar
+              - generic [ref=f1e84]: Roman Empire
+          - button "Inspect Cleopatra VII" [ref=f1e85] [cursor=pointer]:
+            - img "Cleopatra VII leader artwork" [ref=f1e87]
+            - generic [ref=f1e88]:
+              - generic [ref=f1e89]: Cleopatra VII
+              - generic [ref=f1e90]: Egyptian Empire
+          - button "Inspect Ragnar Lothbrok" [ref=f1e91] [cursor=pointer]:
+            - img "Ragnar Lothbrok leader artwork" [ref=f1e93]
+            - generic [ref=f1e94]:
+              - generic [ref=f1e95]: Ragnar Lothbrok
+              - generic [ref=f1e96]: Norse Kingdom
+          - button "Inspect Sun Tzu" [ref=f1e97] [cursor=pointer]:
+            - img "Sun Tzu leader artwork" [ref=f1e99]
+            - generic [ref=f1e100]:
+              - generic [ref=f1e101]: Sun Tzu
+              - generic [ref=f1e102]: Chinese Empire
+          - button "Inspect Alexander the Great" [ref=f1e103] [cursor=pointer]:
+            - img "Alexander the Great leader artwork" [ref=f1e105]
+            - generic [ref=f1e106]:
+              - generic [ref=f1e107]: Alexander the Great
+              - generic [ref=f1e108]: Macedonian Empire
+          - button "Inspect Genghis Khan" [ref=f1e109] [cursor=pointer]:
+            - img "Genghis Khan leader artwork" [ref=f1e111]
+            - generic [ref=f1e112]:
+              - generic [ref=f1e113]: Genghis Khan
+              - generic [ref=f1e114]: Mongol Horde
+          - button "Inspect Richard the Lionheart" [ref=f1e115] [cursor=pointer]:
+            - img "Richard the Lionheart leader artwork" [ref=f1e117]
+            - generic [ref=f1e118]:
+              - generic [ref=f1e119]: Richard the Lionheart
+              - generic [ref=f1e120]: Angevin Empire
+          - button "Inspect Vercingetorix" [ref=f1e121] [cursor=pointer]:
+            - img "Vercingetorix leader artwork" [ref=f1e123]
+            - generic [ref=f1e124]:
+              - generic [ref=f1e125]: Vercingetorix
+              - generic [ref=f1e126]: Gallic Tribes
+          - button "Inspect Boudica" [ref=f1e127] [cursor=pointer]:
+            - img "Boudica leader artwork" [ref=f1e129]
+            - generic [ref=f1e130]:
+              - generic [ref=f1e131]: Boudica
+              - generic [ref=f1e132]: Iceni Kingdom
+          - button "Inspect Lady Six Sky" [ref=f1e133] [cursor=pointer]:
+            - img "Lady Six Sky leader artwork" [ref=f1e135]
+            - generic [ref=f1e136]:
+              - generic [ref=f1e137]: Lady Six Sky
+              - generic [ref=f1e138]: Maya Civilization
+          - button "Inspect King Leonidas" [ref=f1e139] [cursor=pointer]:
+            - img "King Leonidas leader artwork" [ref=f1e141]
+            - generic [ref=f1e142]:
+              - generic [ref=f1e143]: King Leonidas
+              - generic [ref=f1e144]: Sparta
+          - button "Inspect Napoleon Bonaparte" [ref=f1e145] [cursor=pointer]:
+            - img "Napoleon Bonaparte leader artwork" [ref=f1e147]
+            - generic [ref=f1e148]:
+              - generic [ref=f1e149]: Napoleon Bonaparte
+              - generic [ref=f1e150]: Kingdom of France
+        - complementary [ref=f1e151]:
+          - img "Julius Caesar leader artwork" [ref=f1e154]
+          - generic [ref=f1e155]:
+            - paragraph [ref=f1e156]: ROM · 01
+            - heading "Julius Caesar" [level=3] [ref=f1e157]
+            - paragraph [ref=f1e158]: Gaius Julius Caesar
+            - paragraph [ref=f1e159]: Roman Empire
+            - paragraph [ref=f1e161]: COMMAND TRAIT
+            - paragraph [ref=f1e162]: Legions of Rome
+            - paragraph [ref=f1e163]: Armies fight 10% stronger.
+    - generic [ref=f1e165]:
+      - generic [ref=f1e166]:
+        - generic [ref=f1e167]:
+          - paragraph [ref=f1e168]: Gameplay
+          - heading [level=2] [ref=f1e169]:
+            - text: Watch
+            - emphasis [ref=f1e170]: the game.
+        - paragraph [ref=f1e171]: "One match, start to end: land, buildings, broken alliances, final borders."
+      - generic [ref=f1e172]:
+        - generic [ref=f1e173]:
+          - generic "Shadows of War gameplay capture" [ref=f1e174]
+          - generic [ref=f1e175]: GAMEPLAY · 00:28
+        - generic [ref=f1e177]:
+          - img "A contested frontier in Shadows of War" [ref=f1e178]
+          - img "A late-game empire on the world map" [ref=f1e179]
+    - generic [ref=f1e181]:
+      - generic [ref=f1e182]:
+        - generic [ref=f1e183]:
+          - paragraph [ref=f1e184]: Game systems
+          - heading [level=2] [ref=f1e185]:
+            - text: How matches
+            - emphasis [ref=f1e186]: work.
+        - paragraph [ref=f1e187]: Land control wins, districts pay, terrain punishes attackers, modes rotate.
+      - generic [ref=f1e188]:
+        - group [ref=f1e189]:
+          - generic "How do I start a match? −" [ref=f1e190] [cursor=pointer]
+          - paragraph [ref=f1e191]: Open the game, choose a leader, and join an active lobby.
+        - group [ref=f1e192]:
+          - generic "What happens during a match? +" [ref=f1e193] [cursor=pointer]
+        - group [ref=f1e194]:
+          - generic "Which game modes are available? +" [ref=f1e195] [cursor=pointer]
+        - group [ref=f1e196]:
+          - generic "Do I need an account? +" [ref=f1e197] [cursor=pointer]
+        - group [ref=f1e198]:
+          - generic "What do leaders change? +" [ref=f1e199] [cursor=pointer]
+    - generic [ref=f1e201]:
+      - generic [ref=f1e202]:
+        - paragraph [ref=f1e203]: Are you ready?
+        - heading [level=2] [ref=f1e204]:
+          - text: Play
+          - emphasis [ref=f1e205]: now!
+        - paragraph [ref=f1e206]: Join a lobby, ally, betray, and take the map.
+      - generic [ref=f1e207]:
+        - link "◎ Open game shadowsofwar.io" [ref=f1e208] [cursor=pointer]:
+          - /url: /play/
+          - generic [ref=f1e209]: ◎
+          - generic [ref=f1e210]:
+            - generic [ref=f1e211]: Open game
+            - generic [ref=f1e212]: shadowsofwar.io
+        - link "◌ Discord Community" [ref=f1e213] [cursor=pointer]:
+          - /url: https://discord.gg/d6ZDeChSE
+          - generic [ref=f1e214]: ◌
+          - generic [ref=f1e215]:
+            - generic [ref=f1e216]: Discord
+            - generic [ref=f1e217]: Community
+        - link "✈ Telegram Official Group" [ref=f1e218] [cursor=pointer]:
+          - /url: https://t.me/shadowsofwario
+          - generic [ref=f1e219]: ✈
+          - generic [ref=f1e220]:
+            - generic [ref=f1e221]: Telegram
+            - generic [ref=f1e222]: Official Group
+  - contentinfo [ref=f1e223]:
+    - generic [ref=f1e224]:
+      - generic [ref=f1e225]:
+        - generic [ref=f1e226]:
+          - paragraph [ref=f1e227]: Updates
+          - heading "Game updates." [level=2] [ref=f1e228]
+          - paragraph [ref=f1e229]: New builds, demos, and release news.
+        - generic [ref=f1e230]:
+          - link "Discord" [ref=f1e231] [cursor=pointer]:
+            - /url: https://discord.gg/d6ZDeChSE
+          - link "Telegram" [ref=f1e232] [cursor=pointer]:
+            - /url: https://t.me/shadowsofwario
+      - generic [ref=f1e233]:
+        - link "Shadows of War home" [ref=f1e234] [cursor=pointer]:
+          - /url: "#top"
+          - img "Shadows of War" [ref=f1e235]
+        - generic [ref=f1e236]:
+          - link "FAQ" [ref=f1e237] [cursor=pointer]:
+            - /url: /#faq
+          - link "Support" [ref=f1e238] [cursor=pointer]:
+            - /url: /support/
+          - link "Privacy" [ref=f1e239] [cursor=pointer]:
+            - /url: /privacy/
+          - link "Cookies" [ref=f1e240] [cursor=pointer]:
+            - /url: /cookies/
+          - link "Terms" [ref=f1e241] [cursor=pointer]:
+            - /url: /terms/
+          - link "Discord" [ref=f1e242] [cursor=pointer]:
+            - /url: https://discord.gg/d6ZDeChSE
+          - link "Telegram" [ref=f1e243] [cursor=pointer]:
+            - /url: https://t.me/shadowsofwario
+          - link "GitHub" [ref=f1e244] [cursor=pointer]:
+            - /url: https://github.com/worldofunreal/shadows-of-war
+          - button "Cookie settings" [ref=f1e245] [cursor=pointer]
+    - generic [ref=f1e246]: © 2026 World of Unreal
+  - region [ref=f1e248]:
+    - heading "Optional analytics" [level=2] [ref=f1e249]
+    - paragraph [ref=f1e250]: We use site and game activity to improve Shadows of War. It stays off unless you allow it.
+    - link "Cookie details" [ref=f1e251] [cursor=pointer]:
+      - /url: /cookies/
+    - generic [ref=f1e252]:
+      - button "Allow" [ref=f1e253] [cursor=pointer]
+      - button "Reject" [ref=f1e254] [cursor=pointer]

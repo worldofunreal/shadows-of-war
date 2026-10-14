@@ -144,7 +144,10 @@ fn main() {
             "chinese_traditional" => FontSource::ChineseTraditional,
             "vietnamese" => FontSource::Latin,
             "arabic" => {
-                arabic_chars.extend(line.chars().filter(|character| !character.is_whitespace()));
+                arabic_chars.extend(
+                    line.chars()
+                        .filter(|character| is_arabic_character(*character)),
+                );
                 continue;
             }
             _ => panic!("unknown Unicode glyph section: {section}"),
@@ -431,6 +434,13 @@ fn main() {
     )
     .expect("Failed to write atlas JSON");
     eprintln!("Done! {} glyphs packed.", sheets.len());
+}
+
+fn is_arabic_character(character: char) -> bool {
+    matches!(
+        character as u32,
+        0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF
+    )
 }
 
 fn compute_sdf(mask: &[u8], width: usize, height: usize, spread: f32) -> Vec<f32> {

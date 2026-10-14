@@ -3630,7 +3630,7 @@ test("all HUD message classes have one explicit presentation", () => {
         "alliance_request_pending", "alliance_renewal_pending", "resources_allies_only"
     ];
     const global = [
-        "elimination", "elimination_bounty", "elimination_assist", "attack_incoming",
+        "elimination", "attack_incoming",
         "alliance_request", "alliance_request_sent", "resource_request", "alliance_formed", "alliance_renewed",
         "betrayal", "alliance_ended", "nuke_struck", "resource_received_both",
         "resource_received_gold", "resource_received_troops", "resource_request_declined",
@@ -3643,14 +3643,19 @@ test("all HUD message classes have one explicit presentation", () => {
     ];
     const all = [...local, ...global, ...silent];
     assert.equal(local.length, 23);
-    assert.equal(global.length, 20);
+    assert.equal(global.length, 18);
     assert.equal(silent.length, 10);
-    assert.equal(new Set(all).size, 53);
+    assert.equal(new Set(all).size, 51);
     const emitters = [mapClick, simEventsSource, eliminationSource, snapshotFxSource, simUpdateSource].join("\n");
     const localEmitters = [mapClick, intentInput].join("\n");
     for (const key of local) assert.ok(localEmitters.includes(`hud.${key}`), `missing local feedback: ${key}`);
     for (const key of global) assert.ok(emitters.includes(`hud.${key}`), `missing global message: ${key}`);
     for (const key of silent) assert.ok(!emitters.includes(`hud.${key}`), `silent message still emitted: ${key}`);
+    assert.ok(!emitters.includes("hud.elimination_bounty"), "gold bounty uses the staged Rust world effect, not a duplicate HUD card");
+    assert.ok(!emitters.includes("hud.elimination_assist"), "assist gold uses the staged Rust world effect, not a duplicate HUD card");
+    assert.ok(eliminationSource.includes("DeathNameplateReward"));
+    assert.ok(eliminationSource.includes('"+{} Gold"'));
+    assert.ok(eliminationSource.includes('"+{} Gold (Assist)"'));
     const localeRoot = path.join(shell, "../../sow-i18n/strings");
     const locales = fs.readdirSync(localeRoot).filter(locale => fs.existsSync(path.join(localeRoot, locale, "web.toml")));
     assert.equal(locales.length, 15);
